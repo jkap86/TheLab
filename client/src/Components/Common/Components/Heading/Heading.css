@@ -1,0 +1,173 @@
+h1,
+h2 {
+    font-size: 3rem;
+}
+
+h1 {
+    margin-top: 0;
+}
+
+a.home {
+    font-size: 3rem;
+    display: block;
+    width: fit-content;
+    padding: 2rem;
+}
+
+div.heading h1 {
+    color: var(--color2);
+    filter: brightness(1.5);
+}
+
+p.image {
+    position: relative;
+    line-height: 15rem;
+    display: flex;
+    flex-direction: column;
+}
+
+div.switch button {
+    border-radius: 2rem;
+}
+
+p.image img {
+    border-radius: 50%;
+    width: 15rem;
+    height: 15rem;
+    margin: auto;
+    position: absolute;
+    margin: auto;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 0;
+    opacity: 0.85;
+    box-shadow: 0 0 1rem white;
+}
+
+p.image strong {
+    position: relative;
+    z-index: 2;
+    font-size: 7rem;
+    text-shadow: 0 0 3rem black;
+    font-family: "Pulang", sans-serif;
+    color: var(--color2);
+}
+
+div.navbar {
+    width: fit-content;
+    height: fit-content;
+    background-color: transparent;
+    margin: auto;
+    margin-bottom: 2rem;
+    position: relative;
+    display: flex;
+    padding: 0;
+    border-radius: 2rem;
+}
+
+p.select {
+    font-size: 3rem;
+    width: fit-content;
+    height: fit-content;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    color: var(--color2);
+    white-space: nowrap;
+
+    margin: auto;
+    font-family: var(--font3);
+    filter: brightness(1.5);
+    text-align: center;
+}
+
+select.nav {
+    background-color: rgb(41, 40, 40);
+    border: none;
+    padding: 0.5rem;
+    border: 0.25rem solid transparent;
+    font-size: 3rem;
+    text-align: center;
+    opacity: 0;
+    width: fit-content;
+    height: fit-content;
+    margin: 0;
+    color: var(--te);
+    font-family: var(--font3);
+    width: 100%;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 100%;
+}
+
+div.switch_wrapper {
+    max-width: 100%;
+    justify-content: space-evenly;
+    box-sizing: border-box;
+    margin: auto;
+    display: flex;
+    margin: auto;
+    padding: 0;
+    height: fit-content;
+}
+
+div.switch {
+    display: flex;
+    width: fit-content;
+    background-color: black;
+    border-radius: 2rem;
+    filter: drop-shadow(0 0 0.5rem white) brightness(2);
+    height: fit-content;
+}
+
+div.switch button.sw {
+    background-color: inherit;
+    color: var(--color4);
+    padding: 1rem;
+    border: none;
+    border: 0.25rem solid transparent;
+    font-family: "GROUPE", sans-serif;
+    font-size: 3rem;
+    text-align: center;
+    height: fit-content;
+}
+
+div.switch button.sw:first-of-type,
+div.switch button.sw:last-of-type {
+    width: 50%;
+}
+
+div.switch button.sw.active {
+    color: var(--color2);
+    filter: brightness(1.5);
+    text-shadow: 0 0 0.25rem black;
+    font-family: "GROUPE", sans-serif;
+    background-color: var(--color1);
+    border-radius: 2rem;
+    border: 0.25rem solid var(--color2);
+}
+
+div.sh_nav {
+    display: flex;
+    justify-content: space-evenly;
+    font-size: 2.5rem;
+    max-width: 100%;
+flex-wrap: wrap;
+background-color: black;
+box-shadow:  0 0 2.5rem white;
+}
+
+div.sh_nav >a {
+    margin: 1.5rem 3rem
+}
+
+div.sh_nav >a:hover,
+a.home:hover {
+    color: var(--color2)
+}

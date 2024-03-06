@@ -1,0 +1,123 @@
+div.loading {
+    justify-content: center;
+    display: flex;
+    align-items: center;
+    width: 90%;
+    height: 100%;
+    margin: auto;
+}
+
+img.loading {
+    width: 95rem;
+    height: auto;
+    margin: auto;
+    vertical-align: middle;
+    padding: 12.5rem;
+    filter: drop-shadow(0 0 3rem var(--color2));
+ 
+}
+
+.z_1,
+.z_2,
+.z_3,
+.z_4,
+.z_5 {
+    position: absolute;
+    width: 5rem;
+    color: rgb(0, 195, 255);
+    filter: brightness(2);
+    animation-timing-function: ease-out;
+    animation-iteration-count: infinite;
+   
+}
+
+.z_1 {
+    width:  5rem;
+    transform: translateY(4rem) translateX(-5rem);
+    animation-name: bubble1;
+   animation-duration: 9s;
+}
+.z_2 {
+     width: 7rem;
+    transform: translateY(4rem) translateX(-2.5rem);
+    animation-name: bubble1;
+     animation-duration: 7s;
+}
+
+.z_3 { 
+    width: 3rem;
+    transform: translateY(4rem) translateX(0rem);
+        animation-name: bubble1;
+    animation-duration: 6s;
+}
+
+.z_4 { 
+    width: 4rem;
+    transform: translateY(4rem) translateX(1.5rem);
+        animation-name: bubble1;
+  animation-duration: 8s;
+}
+
+.z_5 { 
+    width: 6rem;
+    transform: translateY(4rem) translateX(3rem);
+        animation-name: bubble1;
+  animation-duration: 10s;
+}
+
+@keyframes bubble1 {
+    0% {
+        transform: translateY(3.5rem) translateX(-3.5rem) ;
+        opacity: 1;
+    }
+
+    10% {
+        transform: translateY(3rem) translateX(3rem) ;
+        opacity: .5;
+    }
+
+    20% {
+        transform: translateY(4.75rem) translateX(0rem) ;
+        opacity: .75;
+    }
+
+    30% {
+        transform: translateY(3rem) translateX(-1.2rem) ;
+        opacity: .5;
+    }
+
+     40% {
+        transform: translateY(4.75rem) translateX(0rem) ;
+        opacity: .75;
+    }
+
+      50% {
+        transform: translateY(3rem) translateX(.2rem) ;
+        opacity: .5;
+    }
+
+      60% {
+        transform: translateY(2.5rem) translateX(-1.3rem) ;
+        opacity: .5;
+    }
+
+      70% {
+        transform: translateY(1.5rem) translateX(1.5rem) ;
+        opacity: .5;
+    }
+
+      80% {
+        transform: translateY(-10rem) translateX(0rem) ;
+        opacity: 1;
+    }
+
+    90% {
+        transform: translateY(-10rem) translateX(-2rem) ;
+        opacity: .75;
+    }
+
+    100% {
+        transform: translateY(-15rem) ;
+        opacity:0;
+    }
+}
