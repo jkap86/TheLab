@@ -117,7 +117,7 @@ const useFetchUserInfo = () => {
   }, [dispatch, allplayers, leagues]);
 
   // Fetch ADP data for leaguemates if not already loaded
-  /*
+
   useEffect(() => {
     if (lmLeagueIds && allplayers && !adpLm) {
       checkIndexedDB(
@@ -132,7 +132,6 @@ const useFetchUserInfo = () => {
       );
     }
   }, [dispatch, lmLeagueIds, adpLm, user_id, allplayers]);
-*/
 };
 
 export default useFetchUserInfo;

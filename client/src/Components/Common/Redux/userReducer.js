@@ -22,7 +22,11 @@ const initialState = {
   type1: "All",
   type2: "All",
   lmLeagueIds: false,
+  isLoadingLmLeagueIds: false,
+  errorLmLeagueIds: false,
   adpLm: false,
+  isLoadingAdp: false,
+  errorAdp: false,
 };
 
 const userReducer = (state = initialState, action) => {

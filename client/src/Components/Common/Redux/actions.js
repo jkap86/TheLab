@@ -104,8 +104,6 @@ export const fetchLeagues = (user_id, season) => {
           }
           const matches = leagues.match(/{"league_id":/g);
 
-          console.log({ leagues, matches });
-
           let count = 0;
 
           if (matches && matches.length > 0) {
@@ -228,6 +226,8 @@ export const fetchLmLeagueIds = (user_id, type1, type2) => async (dispatch) => {
 
 export const fetchAdp =
   (league_ids, user_id, allplayers) => async (dispatch) => {
+    dispatch({ type: "SET_STATE_USER", payload: { isLoadingAdp: true } });
+
     try {
       const adp = await axios.post("/draft/adp", {
         league_ids: league_ids,
@@ -342,13 +342,19 @@ export const fetchAdp =
         Redraft_auction: adp_redraft_auction,
         Dynasty_auction: adp_dynasty_auction,
       };
-      dispatch({ type: "SET_STATE_USER", payload: { adpLm: adp_object } });
+      dispatch({
+        type: "SET_STATE_USER",
+        payload: { adpLm: adp_object, isLoadingAdp: false },
+      });
 
       saveToDB(user_id, "lmAdp", {
         timestamp: new Date().getTime() + 60 * 60 * 10000,
         data: adp_object,
       });
     } catch (err) {
-      console.log(err.message);
+      dispatch({
+        type: "SET_STATE_USER",
+        payload: { errorAdp: err.message },
+      });
     }
   };

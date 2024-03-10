@@ -1,0 +1,11 @@
+select.hidden_behind {
+  bottom: 0;
+  left: 0;
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 100%;
+  font-size: inherit;
+  z-index: 1;
+}

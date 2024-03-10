@@ -13,14 +13,10 @@ body {
   --rb: #00ceb8;
   --wr: #58a7ff;
   --te: #ffae58;
-  --font1: 'Ubuntu Mono',
-    sans-serif;
-  --font2: 'Pulang',
-    sans-serif;
-  --font3: 'GROUPE',
-    sans-serif;
-  --font4: 'Monomaniac One',
-    sans-serif;
+  --font1: "Ubuntu Mono", sans-serif;
+  --font2: "Pulang", sans-serif;
+  --font3: "GROUPE", sans-serif;
+  --font4: "Monomaniac One", sans-serif;
   font-size: 1vmin;
   background-color: var(--color1);
   text-align: center;
@@ -28,7 +24,7 @@ body {
   overflow-x: hidden;
   width: 100%;
   height: 100%;
-  font-family: 'Ubuntu Mono', sans-serif;
+  font-family: "Ubuntu Mono", sans-serif;
   margin: auto;
   margin: 0;
   padding: 0;
@@ -40,10 +36,16 @@ body {
 }
 
 a {
-    text-decoration: none;
-    color: inherit;
+  text-decoration: none;
+  color: inherit;
 }
 
 p {
-  margin: 0
+  margin: 0;
+}
+
+.fa-spinner {
+  font-size: inherit;
+  color: var(--color2);
+  text-shadow: 0 0 1rem black;
 }
