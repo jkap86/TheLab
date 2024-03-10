@@ -24,5 +24,7 @@ module.exports = (app) => {
     league.upsert
   );
 
+  router.get("/leaguemate", [], league.leaguemate);
+
   app.use("/league", router);
 };

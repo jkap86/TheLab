@@ -241,8 +241,8 @@ const upsertLeagues = async (leagues) => {
 
   leagues_to_add.forEach((league) => {
     league.rosters
-      .filter((roster) => roster.players?.length > 0)
-      .forEach((roster) => {
+      ?.filter((roster) => roster.players?.length > 0)
+      ?.forEach((roster) => {
         if (parseInt(roster.user_id) > 0) {
           if (!user_data.find((u) => u.user_id === roster.user_id)) {
             user_data.push({

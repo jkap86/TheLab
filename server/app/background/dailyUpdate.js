@@ -5,7 +5,11 @@ const path = require("path");
 
 module.exports = async (app) => {
   setTimeout(() => {
-    console.log("Daily update starting...");
+    console.log(
+      `Daily update starting at ${new Date().toLocaleString("en-US", {
+        timeZone: "America/New_York",
+      })} ...`
+    );
 
     const worker = new Worker(
       path.resolve(__dirname, "../helpers/dailyUpdateHelpers.js")
@@ -15,7 +19,11 @@ module.exports = async (app) => {
     worker.on("error", (error) => console.error(error));
     worker.on("exit", (code) => {
       if (code === 0) {
-        console.log("Daily update complete...");
+        console.log(
+          `Daily update completed at ${new Date().toLocaleString("en-US", {
+            timeZone: "America/New_York",
+          })} ...`
+        );
       } else {
         console.error(`Worker stopped with exit code ${code}`);
       }

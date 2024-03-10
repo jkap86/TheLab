@@ -6,6 +6,7 @@ const League = db.leagues;
 const Op = db.Sequelize.Op;
 const { fetchUserLeagues } = require("../api/sleeperApi");
 const { upsertLeagues, splitLeagues } = require("../helpers/upsertLeagues");
+const { getLeaguemateLeagues } = require("../helpers/leaguemateLeagues");
 const JSONStream = require("JSONStream");
 
 exports.upsert = async (req, res) => {
@@ -59,4 +60,18 @@ exports.upsert = async (req, res) => {
     stream.write(data);
   }
   stream.end();
+};
+
+exports.leaguemate = async (req, res) => {
+  try {
+    const leaguemateLeagues = await getLeaguemateLeagues(
+      req.query.user_id,
+      League,
+      User
+    );
+
+    res.send(leaguemateLeagues.map((league) => league.dataValues.league_id));
+  } catch (err) {
+    console.log(err.message);
+  }
 };
