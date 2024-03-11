@@ -12,10 +12,16 @@ import { getOptimalLineupADP } from "../../Common/Helpers/getOptimalLineupADP";
 
 const LeaguesCheck = ({ secondaryTable }) => {
   const dispatch = useDispatch();
-  const { allplayers } = useSelector((state) => state.common);
-  const { leagues, type1, type2, adpLm, isLoadingAdp } = useSelector(
-    (state) => state.user
-  );
+  const { allplayers, state } = useSelector((state) => state.common);
+  const {
+    leagues,
+    type1,
+    type2,
+    adpLm,
+    isLoadingAdp,
+    isLoadingUser,
+    isLoadingLeagues,
+  } = useSelector((state) => state.user);
   const { column1, column2, column3, column4, itemActive } = useSelector(
     (state) => state.leagues.LeaguesCheck
   );
@@ -90,6 +96,8 @@ const LeaguesCheck = ({ secondaryTable }) => {
     ],
   ];
 
+  const isLoading = !adpLm;
+
   const body = filterLeagues(leagues, type1, type2).map((league) => {
     const standings_detail = league.rosters.map((roster) => {
       const dynasty_picks = getRosterPicksValue(
@@ -99,7 +107,31 @@ const LeaguesCheck = ({ secondaryTable }) => {
         league.season
       );
 
-      const dynasty_players = getPlayersValue(roster.players, "Dynasty", adpLm);
+      const dynasty_optimal = getOptimalLineupADP({
+        roster,
+        roster_positions: league.roster_positions,
+        adpLm,
+        allplayers,
+        type: "Dynasty",
+      });
+
+      const optimal_dynasty_player_ids = dynasty_optimal.map(
+        (slot) => slot.player_id
+      );
+
+      const dynasty_starters = getPlayersValue(
+        optimal_dynasty_player_ids,
+        "Dynasty",
+        adpLm
+      );
+
+      const dynasty_bench = getPlayersValue(
+        roster.players?.filter(
+          (player_id) => !optimal_dynasty_player_ids.includes(player_id)
+        ),
+        "Dynasty",
+        adpLm
+      );
 
       const redraft_optimal = getOptimalLineupADP({
         roster,
@@ -109,19 +141,19 @@ const LeaguesCheck = ({ secondaryTable }) => {
         type: "Redraft",
       });
 
-      const optimal_starters_player_ids = redraft_optimal.map(
+      const optimal_redraft_player_ids = redraft_optimal.map(
         (slot) => slot.player_id
       );
 
       const redraft_starters = getPlayersValue(
-        optimal_starters_player_ids,
+        optimal_redraft_player_ids,
         "Redraft",
         adpLm
       );
 
       const redraft_bench = getPlayersValue(
         roster.players?.filter(
-          (player_id) => !optimal_starters_player_ids.includes(player_id)
+          (player_id) => !optimal_redraft_player_ids.includes(player_id)
         ),
         "Redraft",
         adpLm
@@ -130,15 +162,15 @@ const LeaguesCheck = ({ secondaryTable }) => {
       return {
         ...roster,
         dynasty_picks,
-        dynasty_players,
+        dynasty_starters,
+        dynasty_bench,
         redraft_starters,
         redraft_bench,
+        dynasty_optimal,
+        redraft_optimal,
       };
     });
 
-    if (league.name.includes("Wreck")) {
-      console.log({ standings_detail });
-    }
     return {
       id: league.league_id,
       search: {
@@ -160,19 +192,25 @@ const LeaguesCheck = ({ secondaryTable }) => {
           },
         },
         {
-          ...getColumnValue(league, column1, isLoadingAdp, standings_detail),
+          ...getColumnValue(league, column1, isLoading, standings_detail),
         },
         {
-          ...getColumnValue(league, column2, isLoadingAdp, standings_detail),
+          ...getColumnValue(league, column2, isLoading, standings_detail),
         },
         {
-          ...getColumnValue(league, column3, isLoadingAdp, standings_detail),
+          ...getColumnValue(league, column3, isLoading, standings_detail),
         },
         {
-          ...getColumnValue(league, column4, isLoadingAdp, standings_detail),
+          ...getColumnValue(league, column4, isLoading, standings_detail),
         },
       ],
-      secondary_table: <h2>SECONDARY TABLE</h2>,
+      secondary_table: secondaryTable({
+        league: {
+          ...league,
+          rosters: standings_detail,
+        },
+        type: "secondary",
+      }),
     };
   });
 

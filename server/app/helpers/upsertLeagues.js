@@ -277,7 +277,7 @@ const upsertLeagues = async (leagues) => {
       });
 
     league.drafts
-      .filter(
+      ?.filter(
         (draft) =>
           !draft.settings.slots_dl &&
           !draft.settings.slots_lb &&
@@ -285,7 +285,7 @@ const upsertLeagues = async (leagues) => {
           !draft.settings.slots_idp_flex &&
           !draft.settings.slots_def
       )
-      .forEach((draft) => {
+      ?.forEach((draft) => {
         const {
           draft_id,
           type,

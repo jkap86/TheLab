@@ -154,6 +154,7 @@ const TableMain = ({
           <tbody>
             {body
               ?.filter((x) => x)
+              ?.sort((a, b) => b.sort - a.sort)
               ?.slice(
                 Math.max(((page || 1) - 1) * 25, 0),
                 page
@@ -202,7 +203,11 @@ const TableMain = ({
                               <td
                                 key={index}
                                 colSpan={key.colSpan}
-                                className={type + " " + key.className}
+                                className={
+                                  type +
+                                  " " +
+                                  (key.className ? key.className : "")
+                                }
                               >
                                 {key.image ? (
                                   <>

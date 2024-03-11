@@ -1,4 +1,4 @@
-import { getTrendColor } from "../../Common/Helpers/getTrendColor";
+import { getTrendColorRank } from "../../Common/Helpers/getTrendColor";
 
 export const getColumnValue = (
   league,
@@ -21,9 +21,10 @@ export const getColumnValue = (
         text = (
           <span
             className="stat"
-            style={getTrendColor(
-              league.rosters.length + 1 - rank_dynasty_picks,
-              league.rosters.length + 1
+            style={getTrendColorRank(
+              league.rosters.length - rank_dynasty_picks + 1,
+              1,
+              league.rosters.length
             )}
           >
             {rank_dynasty_picks}
@@ -33,16 +34,26 @@ export const getColumnValue = (
       case "Players Rank D":
         const rank_dynasty_players =
           standings_detail
-            .sort((a, b) => b.dynasty_players - a.dynasty_players)
+            .sort(
+              (a, b) =>
+                b.dynasty_starters +
+                b.dynasty_bench -
+                (a.dynasty_starters + b.dynasty_bench)
+            )
             .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
           1;
 
         text = (
           <span
             className="stat"
-            style={getTrendColor(
-              league.rosters.length + 1 - rank_dynasty_players,
-              league.rosters.length + 1
+            style={getTrendColorRank(
+              league.rosters.length - rank_dynasty_players,
+              1,
+              league.rosters.length,
+              Array.from(Array(league.rosters.length))
+                .keys()
+                .map((key) => key + 1)
+                .reduce((acc, cur) => acc + cur, 0) / league.rosters.length
             )}
           >
             {rank_dynasty_players}
@@ -54,9 +65,10 @@ export const getColumnValue = (
           standings_detail
             .sort(
               (a, b) =>
-                b.dynasty_players +
+                b.dynasty_starters +
+                b.dynasty_bench +
                 b.dynasty_picks -
-                (a.dynasty_players + a.dynasty_picks)
+                (a.dynasty_starters + a.dynasty_bench + a.dynasty_picks)
             )
             .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
           1;
@@ -64,9 +76,10 @@ export const getColumnValue = (
         text = (
           <span
             className="stat"
-            style={getTrendColor(
-              league.rosters.length + 1 - rank_dynasty,
-              league.rosters.length + 1
+            style={getTrendColorRank(
+              league.rosters.length - rank_dynasty,
+              1,
+              league.rosters.length
             )}
           >
             {rank_dynasty}
@@ -88,9 +101,10 @@ export const getColumnValue = (
         text = (
           <span
             className="stat"
-            style={getTrendColor(
-              league.rosters.length + 1 - rank_redraft,
-              league.rosters.length + 1
+            style={getTrendColorRank(
+              league.rosters.length - rank_redraft,
+              1,
+              league.rosters.length
             )}
           >
             {rank_redraft}
