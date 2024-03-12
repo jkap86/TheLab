@@ -1,14 +1,24 @@
 import TableMain from "../TableMain";
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { getAdpFormatted } from "../../Helpers/getAdpFormatted";
 import { getTrendColorRank } from "../../Helpers/getTrendColor";
+import HeaderDropdown from "../HeaderDropdown";
 
-const Roster = ({ roster, league, type, standingsType, setStandingsType }) => {
+const Roster = ({ roster, league, type }) => {
   const [filter, setFilter] = useState("All");
   const [ppgType, setPpgType] = useState("ADP");
+  const [standingsType, setStandingsType] = useState("");
   const { state, allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
+
+  useEffect(() => {
+    if (league.settings.type !== 0) {
+      setStandingsType("Dynasty");
+    } else {
+      setStandingsType("Redraft");
+    }
+  }, [league]);
 
   const position_abbrev = {
     QB: "QB",
@@ -26,21 +36,11 @@ const Roster = ({ roster, league, type, standingsType, setStandingsType }) => {
     [
       {
         text: (
-          <>
-            <span>{filter}</span>
-            <select
-              className="hidden_behind"
-              onChange={(e) => setFilter(e.target.value)}
-              value={filter}
-            >
-              <option>All</option>
-              <option>QB</option>
-              <option>RB</option>
-              <option>WR</option>
-              <option>TE</option>
-              <option>Picks</option>
-            </select>
-          </>
+          <HeaderDropdown
+            column_text={filter}
+            columnOptions={["All", "QB", "RB", "WR", "TE", "Picks"]}
+            setState={setFilter}
+          />
         ),
         colSpan: 4,
         className: "half",
@@ -52,17 +52,11 @@ const Roster = ({ roster, league, type, standingsType, setStandingsType }) => {
       },
       {
         text: (
-          <>
-            <span>{standingsType}</span>
-            <select
-              onChange={(e) => setStandingsType(e.target.value)}
-              className="hidden_behind"
-              value={standingsType}
-            >
-              <option>Dynasty</option>
-              <option>Redraft</option>
-            </select>
-          </>
+          <HeaderDropdown
+            column_text={standingsType}
+            columnOptions={["Dynasty", "Redraft"]}
+            setState={(value) => setStandingsType(value)}
+          />
         ),
         colSpan: 9,
         className: "half",
@@ -80,24 +74,29 @@ const Roster = ({ roster, league, type, standingsType, setStandingsType }) => {
         className: "half",
       },
       {
-        text: <span>{ppgType === "ADP" ? "Draft" : "PPG"}</span>,
-        colSpan: 5,
+        text: (
+          <HeaderDropdown
+            column_text={ppgType}
+            columnOptions={["ADP", "Auction %"]}
+            setState={setPpgType}
+          />
+        ),
+        colSpan: 9,
         className: "half",
-      },
-      {
-        text: <span>{ppgType === "ADP" ? "Auction" : "#"}</span>,
-        colSpan: 4,
-        className: "half end",
       },
     ],
   ];
 
   const getBody = () => {
-    if (filter === "All") {
-      return [
-        ...(roster.starters || []),
-        ...(roster.players || [])
-          .filter((player_id) => !roster.starters.includes(player_id))
+    return [
+      ...[
+        ...((filter === "All" && roster.starters) || []),
+        ...((filter !== "Picks" && roster.players) || [])
+          .filter(
+            (player_id) =>
+              (filter === "All" && !roster.starters.includes(player_id)) ||
+              allplayers[player_id]?.position === filter
+          )
           .sort((a, b) => {
             const getPositionValue = (player_id) => {
               const position = allplayers[player_id]?.position;
@@ -151,34 +150,106 @@ const Roster = ({ roster, league, type, standingsType, setStandingsType }) => {
             {
               text: (
                 <span
-                  className="stat"
+                  className="stat adp"
                   style={getTrendColorRank(
                     roster.starters.length * league.rosters.length -
-                      adpLm?.["Dynasty"]?.[player_id]?.adp,
+                      adpLm?.[standingsType]?.[player_id]?.adp,
                     1,
                     roster.starters.length * league.rosters.length
                   )}
                 >
-                  {(adpLm?.["Dynasty"]?.[player_id]?.adp &&
-                    getAdpFormatted(adpLm?.["Dynasty"]?.[player_id]?.adp)) ||
+                  {(adpLm?.[standingsType]?.[player_id]?.adp &&
+                    getAdpFormatted(
+                      adpLm?.[standingsType]?.[player_id]?.adp
+                    )) ||
                     "-"}
                 </span>
               ),
-              colSpan: 5,
-            },
-            {
-              text:
-                (adpLm?.["Dynasty_auction"]?.[player_id]?.adp?.toFixed(0) ||
-                  "0") + "%",
-              colSpan: 4,
+              colSpan: 9,
             },
           ],
         };
-      });
-    }
+      }),
+      ...(["All", "Picks"].includes(filter) ? roster.draft_picks : [])
+        ?.sort(
+          (a, b) =>
+            a.season - b.season || a.round - b.round || a.order - b.order
+        )
+        ?.map((pick) => {
+          const adp =
+            adpLm["Dynasty"]?.[
+              "R" +
+                ((pick.round - 1) * 12 +
+                  (parseInt(
+                    pick.season === parseInt(league.season) && pick.order
+                  ) ||
+                    Math.min(
+                      6 + (parseInt(pick.season) - parseInt(league.season)) * 3,
+                      12
+                    )))
+            ]?.adp;
+
+          const auction_value =
+            adpLm["Dynasty_auction"]?.[
+              "R" +
+                ((pick.round - 1) * 12 +
+                  (parseInt(
+                    pick.season === parseInt(league.season) && pick.order
+                  ) ||
+                    Math.min(
+                      6 + (parseInt(pick.season) - parseInt(league.season)) * 3,
+                      12
+                    )))
+            ]?.adp;
+
+          return {
+            id: `${pick.season}_${pick.round}_${pick.original_user.user_id}`,
+            list: [
+              {
+                text: <span>PICK</span>,
+                colSpan: 4,
+              },
+              {
+                text: (
+                  <span className="left">
+                    {`${pick.season} Round ${pick.round}${
+                      parseInt(pick.order) &&
+                      pick.season === parseInt(state.league_season)
+                        ? `.${pick.order.toLocaleString("en-US", {
+                            minimumIntegerDigits: 2,
+                          })}`
+                        : pick.original_user.user_id === roster?.user_id
+                        ? ""
+                        : ` (${pick.original_user?.username || "Orphan"})`
+                    }`.toString()}
+                  </span>
+                ),
+                colSpan: 15,
+                className: "left",
+              },
+              {
+                text: (
+                  <span
+                    className="stat adp"
+                    style={getTrendColorRank(
+                      roster.starters.length * league.rosters.length - adp,
+                      1,
+                      roster.starters.length * league.rosters.length
+                    )}
+                  >
+                    {(adp && getAdpFormatted(adp)) || "-"}
+                  </span>
+                ),
+                colSpan: 9,
+              },
+            ],
+          };
+        }),
+      ,
+    ];
   };
 
-  return <TableMain type={`${type} half`} headers={headers} body={getBody()} />;
+  return <TableMain type={`${type}`} headers={headers} body={getBody()} />;
 };
 
 export default Roster;

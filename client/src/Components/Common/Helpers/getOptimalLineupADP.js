@@ -68,11 +68,12 @@ export const getOptimalLineupADP = ({
       players = players.filter((x) => x.player_id !== optimal_player);
 
       optimal_lineup.push({
+        index: s.index,
         slot_raw: s.slot,
         slot: position_abbrev[s.slot],
         player_id: optimal_player || 0,
       });
     });
 
-  return optimal_lineup;
+  return optimal_lineup.sort((a, b) => a.index - b.index);
 };

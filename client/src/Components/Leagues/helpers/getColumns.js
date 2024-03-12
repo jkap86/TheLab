@@ -38,7 +38,7 @@ export const getColumnValue = (
               (a, b) =>
                 b.dynasty_starters +
                 b.dynasty_bench -
-                (a.dynasty_starters + b.dynasty_bench)
+                (a.dynasty_starters + a.dynasty_bench)
             )
             .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
           1;
@@ -50,10 +50,9 @@ export const getColumnValue = (
               league.rosters.length - rank_dynasty_players,
               1,
               league.rosters.length,
-              Array.from(Array(league.rosters.length))
-                .keys()
-                .map((key) => key + 1)
-                .reduce((acc, cur) => acc + cur, 0) / league.rosters.length
+              Array.from(Array(league.rosters.length)).keys() ||
+                [].map((key) => key + 1).reduce((acc, cur) => acc + cur, 0) /
+                  league.rosters.length
             )}
           >
             {rank_dynasty_players}

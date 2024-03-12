@@ -3,6 +3,41 @@ div.half {
   display: inline-block;
   vertical-align: top;
 }
+div.secondary.half {
+  position: sticky;
+  top: 21rem;
+  z-index: 6;
+}
+
+div.nav {
+  height: 7rem;
+  background-color: var(--color4);
+  display: flex;
+  filter: drop-shadow(0 0 0.5rem silver);
+  justify-content: space-evenly;
+  position: sticky;
+}
+
+div.nav > div {
+  width: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-image: radial-gradient(black -50%, white 500%);
+}
+
+div.nav i.fa-compress,
+div.nav i.fa-expand {
+  color: var(--color2);
+  font-size: 7rem;
+}
+
+div.secondary.nav {
+  top: 14rem;
+  z-index: 8;
+}
+
 table {
   border-collapse: collapse;
   border-spacing: 0;
@@ -19,6 +54,11 @@ thead {
 table.primary > thead {
   top: 0;
   z-index: 10;
+}
+
+table.secondary > thead {
+  top: 21rem;
+  z-index: 7;
 }
 
 th {
@@ -45,6 +85,7 @@ th > span.username {
   font-family: var(--font2);
   letter-spacing: 0.5rem;
 }
+
 td > span.image {
   text-align: left;
 }
@@ -56,7 +97,7 @@ td > span.stat {
 }
 
 td.half > span.stat {
-  font-size: 3rem;
+  font-size: 3.5rem;
 }
 
 th > span,
@@ -112,11 +153,29 @@ td {
 table.primary {
 }
 
-tr.active > td.primary {
-  background-image: radial-gradient(var(--color4) -50%, var(--color2) 100%);
+table.secondary.half tr.active_wrapper {
   position: sticky;
+  top: 28rem;
+  z-index: 6;
+}
+tr.active {
+  filter: drop-shadow(0 0 1rem silver);
+  position: sticky;
+}
+
+table.primary tr.active {
   z-index: 9;
   top: 7rem;
+}
+
+table.secondary tr.active {
+  z-index: 6;
+  top: 28rem;
+}
+
+tr.active > td.primary,
+tr.active > td.secondary {
+  background-image: radial-gradient(var(--color4) -50%, var(--color2) 100%);
 }
 td.primary {
   background-image: radial-gradient(var(--wr) -300%, var(--color4) 100%);
@@ -126,7 +185,7 @@ td.secondary {
   background-image: radial-gradient(var(--color3) 0%, rgb(65, 0, 0) 300%);
 }
 
-div.half td.half {
+td.half {
   background-image: radial-gradient(black -50%, orchid 250%);
 }
 
@@ -142,7 +201,7 @@ ol.page_numbers {
   margin: auto;
   max-width: 80%;
   overflow: auto;
-  padding: 1rem 0;
+  padding: 0;
   width: fit-content;
 }
 

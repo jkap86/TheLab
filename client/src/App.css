@@ -44,8 +44,26 @@ p {
   margin: 0;
 }
 
+ol {
+  list-style: none;
+}
+
+.left {
+  text-align: left;
+}
+
 .fa-spinner {
   font-size: inherit;
   color: var(--color2);
   text-shadow: 0 0 1rem black;
+}
+
+::-webkit-scrollbar {
+  background-color: transparent;
+  width: 1rem;
+  height: 1rem;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color2);
 }

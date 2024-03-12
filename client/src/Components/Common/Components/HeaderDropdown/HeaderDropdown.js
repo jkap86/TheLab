@@ -3,7 +3,7 @@ import "./HeaderDropdown.css";
 const HeaderDropdown = ({ column_text, columnOptions, setState }) => {
   return (
     <>
-      <span>{column_text}</span>
+      <span className="dropdown">{column_text}</span>
       <select
         value={column_text}
         className="hidden_behind click"

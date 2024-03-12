@@ -24,7 +24,7 @@ const getAllPlayers = async () => {
       .filter(
         (player_id) =>
           sleeper_players[player_id].active &&
-          !["OL", "T", "OT", "G", "OG", "C"].includes(
+          ["QB", "RB", "FB", "WR", "TE", "K"].includes(
             sleeper_players[player_id].position
           )
       )

@@ -22,7 +22,7 @@ const LeaguesCheck = ({ secondaryTable }) => {
     isLoadingUser,
     isLoadingLeagues,
   } = useSelector((state) => state.user);
-  const { column1, column2, column3, column4, itemActive } = useSelector(
+  const { column1, column2, column3, column4, itemActive, page } = useSelector(
     (state) => state.leagues.LeaguesCheck
   );
 
@@ -119,6 +119,13 @@ const LeaguesCheck = ({ secondaryTable }) => {
         (slot) => slot.player_id
       );
 
+      if (
+        league.name.includes("UCTION") &&
+        roster.roster_id === league.userRoster.roster_id
+      ) {
+        console.log({ dynasty_optimal });
+      }
+
       const dynasty_starters = getPlayersValue(
         optimal_dynasty_player_ids,
         "Dynasty",
@@ -168,6 +175,8 @@ const LeaguesCheck = ({ secondaryTable }) => {
         redraft_bench,
         dynasty_optimal,
         redraft_optimal,
+        starters_optimal_dynasty: optimal_dynasty_player_ids,
+        starters_optimal_redraft: optimal_redraft_player_ids,
       };
     });
 
@@ -223,6 +232,8 @@ const LeaguesCheck = ({ secondaryTable }) => {
       setItemActive={(value) =>
         dispatch(setStateLeaguesCheck({ itemActive: value }))
       }
+      page={page}
+      setPage={(value) => dispatch(setStateLeaguesCheck({ page: value }))}
     />
   );
 };

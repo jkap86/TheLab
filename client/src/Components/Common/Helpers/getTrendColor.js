@@ -53,6 +53,4 @@ export const getTrendColorValue = (stat, values) => {
       color: `rgb(${255}, ${255 - adj}, ${255 - adj})`,
     };
   }
-
-  console.log({ stat, std, mean, range });
 };
