@@ -4,7 +4,8 @@ export const getColumnValue = (
   league,
   header,
   isLoadingAdp,
-  standings_detail
+  standings_detail,
+  sorted
 ) => {
   let text;
   if ((header.includes("Rank") || header.includes("Value")) && isLoadingAdp) {
@@ -120,5 +121,6 @@ export const getColumnValue = (
   return {
     text: text,
     colSpan: 3,
+    className: sorted ? "sorted" : "",
   };
 };

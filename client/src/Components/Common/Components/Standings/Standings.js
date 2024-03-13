@@ -333,13 +333,27 @@ const Standings = ({ league, type }) => {
     <>
       <div className="secondary nav">
         <div>
-          <HeaderDropdown
-            column_text={standingsType}
-            columnOptions={["Dynasty", "Redraft"]}
-            setState={setStandingsType}
-          />
+          <div>
+            <HeaderDropdown
+              column_text={standingsType}
+              columnOptions={["Dynasty", "Redraft"]}
+              setState={setStandingsType}
+            />
+          </div>
         </div>
         <div>
+          <div>
+            <div>
+              <HeaderDropdown
+                column_text={filter}
+                columnOptions={["All", "QB", "RB", "WR", "TE", "Picks"]}
+                setState={setFilter}
+              />
+            </div>
+          </div>
+          <span className="username">
+            {active_roster ? active_roster.username : "Available"}
+          </span>
           {expandRoster ? (
             <i
               className="fa-solid fa-compress click"
@@ -376,7 +390,8 @@ const Standings = ({ league, type }) => {
           }}
           league={league}
           standingsType={standingsType}
-          setStandingsType={(value) => setStandingsType(value)}
+          filter={filter}
+          setFilter={setFilter}
         />
       ) : (
         <TableMain

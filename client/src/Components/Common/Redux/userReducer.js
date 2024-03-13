@@ -59,7 +59,14 @@ const userReducer = (state = initialState, action) => {
     case "FETCH_LEAGUES_SUCCESS":
       const leaguemate_ids = [];
 
-      const leagues = action.payload.filter((l) => l.userRoster);
+      const leagues = action.payload
+        .filter((l) => l.userRoster)
+        .map((league, index) => {
+          return {
+            ...league,
+            index: index,
+          };
+        });
 
       leagues.forEach((league) => {
         league.rosters

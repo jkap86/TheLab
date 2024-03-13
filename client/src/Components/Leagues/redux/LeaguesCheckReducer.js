@@ -3,10 +3,14 @@ const initialState = {
   itemActive: "",
   searched: "",
   tabSecondary: "Standings",
-  column1: "Picks Rank",
-  column2: "Players Rank D",
-  column3: "Rank D",
-  column4: "Rank R",
+  column2: "Picks Rank",
+  column3: "Players Rank D",
+  column4: "Rank D",
+  column5: "Rank R",
+  sortBy: {
+    column: 1,
+    asc: true,
+  },
 };
 
 const LeaguesCheckReducer = (state = initialState, action) => {

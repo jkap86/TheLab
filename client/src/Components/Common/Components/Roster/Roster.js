@@ -5,20 +5,10 @@ import { getAdpFormatted } from "../../Helpers/getAdpFormatted";
 import { getTrendColorRank } from "../../Helpers/getTrendColor";
 import HeaderDropdown from "../HeaderDropdown";
 
-const Roster = ({ roster, league, type }) => {
-  const [filter, setFilter] = useState("All");
+const Roster = ({ roster, league, type, standingsType, filter, setFilter }) => {
   const [ppgType, setPpgType] = useState("ADP");
-  const [standingsType, setStandingsType] = useState("");
   const { state, allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
-
-  useEffect(() => {
-    if (league.settings.type !== 0) {
-      setStandingsType("Dynasty");
-    } else {
-      setStandingsType("Redraft");
-    }
-  }, [league]);
 
   const position_abbrev = {
     QB: "QB",
@@ -33,6 +23,7 @@ const Roster = ({ roster, league, type }) => {
   };
 
   const headers = [
+    /*
     [
       {
         text: (
@@ -62,16 +53,15 @@ const Roster = ({ roster, league, type }) => {
         className: "half",
       },
     ],
+    */
     [
       {
         text: <span>Slot</span>,
         colSpan: 4,
-        className: "half",
       },
       {
         text: <span>Player</span>,
         colSpan: 15,
-        className: "half",
       },
       {
         text: (
@@ -82,7 +72,6 @@ const Roster = ({ roster, league, type }) => {
           />
         ),
         colSpan: 9,
-        className: "half",
       },
     ],
   ];

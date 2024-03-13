@@ -22,9 +22,8 @@ const LeaguesCheck = ({ secondaryTable }) => {
     isLoadingUser,
     isLoadingLeagues,
   } = useSelector((state) => state.user);
-  const { column1, column2, column3, column4, itemActive, page } = useSelector(
-    (state) => state.leagues.LeaguesCheck
-  );
+  const { column2, column3, column4, column5, itemActive, page, sortBy } =
+    useSelector((state) => state.leagues.LeaguesCheck);
 
   const columnOptions = [
     "Picks Rank",
@@ -34,25 +33,63 @@ const LeaguesCheck = ({ secondaryTable }) => {
     "League ID",
   ];
 
+  const displaySort = (colNum) => {
+    return (
+      <div
+        onClick={() =>
+          dispatch(
+            setStateLeaguesCheck({
+              sortBy: {
+                column: colNum,
+                asc: sortBy.column === colNum ? !sortBy.asc : sortBy.asc,
+              },
+            })
+          )
+        }
+        className={sortBy?.column === colNum ? "active" : ""}
+      >
+        {sortBy?.column === colNum ? (
+          sortBy?.asc ? (
+            <i className="fa-solid fa-caret-down"></i>
+          ) : (
+            <i className="fa-solid fa-caret-up"></i>
+          )
+        ) : (
+          ""
+        )}
+      </div>
+    );
+  };
   const headers = [
+    [
+      { text: displaySort(1), colSpan: 6, className: "sort" },
+      {
+        text: displaySort(2),
+        colSpan: 3,
+        className: "sort",
+      },
+      {
+        text: displaySort(3),
+        colSpan: 3,
+        className: "sort",
+      },
+      {
+        text: displaySort(4),
+        colSpan: 3,
+        className: "sort",
+      },
+      {
+        text: displaySort(5),
+        colSpan: 3,
+        className: "sort",
+      },
+    ],
     [
       {
         text: <span>League</span>,
         colSpan: 6,
         rowSpan: 2,
-      },
-      {
-        text: (
-          <HeaderDropdown
-            column_text={column1}
-            columnOptions={columnOptions}
-            setState={(value) =>
-              dispatch(setStateLeaguesCheck({ column1: value }))
-            }
-          />
-        ),
-        colSpan: 3,
-        className: "left",
+        className: sortBy.column === 1 ? "sorted" : "",
       },
       {
         text: (
@@ -93,135 +130,180 @@ const LeaguesCheck = ({ secondaryTable }) => {
         colSpan: 3,
         className: "left",
       },
+      {
+        text: (
+          <HeaderDropdown
+            column_text={column5}
+            columnOptions={columnOptions}
+            setState={(value) =>
+              dispatch(setStateLeaguesCheck({ column5: value }))
+            }
+          />
+        ),
+        colSpan: 3,
+        className: "left",
+      },
     ],
   ];
 
   const isLoading = !adpLm;
 
-  const body = filterLeagues(leagues, type1, type2).map((league) => {
-    const standings_detail = league.rosters.map((roster) => {
-      const dynasty_picks = getRosterPicksValue(
-        roster.draft_picks,
-        "Dynasty",
-        adpLm,
-        league.season
-      );
+  const body = filterLeagues(leagues, type1, type2)
+    .map((league) => {
+      const standings_detail = league.rosters.map((roster) => {
+        const dynasty_picks = getRosterPicksValue(
+          roster.draft_picks,
+          "Dynasty",
+          adpLm,
+          league.season
+        );
 
-      const dynasty_optimal = getOptimalLineupADP({
-        roster,
-        roster_positions: league.roster_positions,
-        adpLm,
-        allplayers,
-        type: "Dynasty",
+        const dynasty_optimal = getOptimalLineupADP({
+          roster,
+          roster_positions: league.roster_positions,
+          adpLm,
+          allplayers,
+          type: "Dynasty",
+        });
+
+        const optimal_dynasty_player_ids = dynasty_optimal.map(
+          (slot) => slot.player_id
+        );
+
+        const dynasty_starters = getPlayersValue(
+          optimal_dynasty_player_ids,
+          "Dynasty",
+          adpLm
+        );
+
+        const dynasty_bench = getPlayersValue(
+          roster.players?.filter(
+            (player_id) => !optimal_dynasty_player_ids.includes(player_id)
+          ),
+          "Dynasty",
+          adpLm
+        );
+
+        const redraft_optimal = getOptimalLineupADP({
+          roster,
+          roster_positions: league.roster_positions,
+          adpLm,
+          allplayers,
+          type: "Redraft",
+        });
+
+        const optimal_redraft_player_ids = redraft_optimal.map(
+          (slot) => slot.player_id
+        );
+
+        const redraft_starters = getPlayersValue(
+          optimal_redraft_player_ids,
+          "Redraft",
+          adpLm
+        );
+
+        const redraft_bench = getPlayersValue(
+          roster.players?.filter(
+            (player_id) => !optimal_redraft_player_ids.includes(player_id)
+          ),
+          "Redraft",
+          adpLm
+        );
+
+        return {
+          ...roster,
+          dynasty_picks,
+          dynasty_starters,
+          dynasty_bench,
+          redraft_starters,
+          redraft_bench,
+          dynasty_optimal,
+          redraft_optimal,
+          starters_optimal_dynasty: optimal_dynasty_player_ids,
+          starters_optimal_redraft: optimal_redraft_player_ids,
+        };
       });
-
-      const optimal_dynasty_player_ids = dynasty_optimal.map(
-        (slot) => slot.player_id
-      );
-
-      if (
-        league.name.includes("UCTION") &&
-        roster.roster_id === league.userRoster.roster_id
-      ) {
-        console.log({ dynasty_optimal });
-      }
-
-      const dynasty_starters = getPlayersValue(
-        optimal_dynasty_player_ids,
-        "Dynasty",
-        adpLm
-      );
-
-      const dynasty_bench = getPlayersValue(
-        roster.players?.filter(
-          (player_id) => !optimal_dynasty_player_ids.includes(player_id)
-        ),
-        "Dynasty",
-        adpLm
-      );
-
-      const redraft_optimal = getOptimalLineupADP({
-        roster,
-        roster_positions: league.roster_positions,
-        adpLm,
-        allplayers,
-        type: "Redraft",
-      });
-
-      const optimal_redraft_player_ids = redraft_optimal.map(
-        (slot) => slot.player_id
-      );
-
-      const redraft_starters = getPlayersValue(
-        optimal_redraft_player_ids,
-        "Redraft",
-        adpLm
-      );
-
-      const redraft_bench = getPlayersValue(
-        roster.players?.filter(
-          (player_id) => !optimal_redraft_player_ids.includes(player_id)
-        ),
-        "Redraft",
-        adpLm
-      );
 
       return {
-        ...roster,
-        dynasty_picks,
-        dynasty_starters,
-        dynasty_bench,
-        redraft_starters,
-        redraft_bench,
-        dynasty_optimal,
-        redraft_optimal,
-        starters_optimal_dynasty: optimal_dynasty_player_ids,
-        starters_optimal_redraft: optimal_redraft_player_ids,
-      };
-    });
-
-    return {
-      id: league.league_id,
-      search: {
-        text: league.name,
-        image: {
-          src: league.avatar,
-          alt: "league avatar",
-          type: "league",
-        },
-      },
-      list: [
-        {
+        id: league.league_id,
+        sortBy:
+          sortBy.column === 1
+            ? league.index
+            : getColumnValue(
+                league,
+                [column2, column3, column4, column5][sortBy.column - 2],
+                isLoading,
+                standings_detail,
+                true
+              ).text.props.children,
+        search: {
           text: league.name,
-          colSpan: 6,
           image: {
             src: league.avatar,
-            alt: league.name,
+            alt: "league avatar",
             type: "league",
           },
         },
-        {
-          ...getColumnValue(league, column1, isLoading, standings_detail),
-        },
-        {
-          ...getColumnValue(league, column2, isLoading, standings_detail),
-        },
-        {
-          ...getColumnValue(league, column3, isLoading, standings_detail),
-        },
-        {
-          ...getColumnValue(league, column4, isLoading, standings_detail),
-        },
-      ],
-      secondary_table: secondaryTable({
-        league: {
-          ...league,
-          rosters: standings_detail,
-        },
-        type: "secondary",
-      }),
-    };
-  });
+        list: [
+          {
+            text: league.name,
+            colSpan: 6,
+            image: {
+              src: league.avatar,
+              alt: league.name,
+              type: "league",
+            },
+            className: sortBy.column === 1 ? "sorted" : "",
+          },
+          {
+            ...getColumnValue(
+              league,
+              column2,
+              isLoading,
+              standings_detail,
+              sortBy.column === 2
+            ),
+          },
+          {
+            ...getColumnValue(
+              league,
+              column3,
+              isLoading,
+              standings_detail,
+              sortBy.column === 3
+            ),
+          },
+          {
+            ...getColumnValue(
+              league,
+              column4,
+              isLoading,
+              standings_detail,
+              sortBy.column === 4
+            ),
+          },
+          {
+            ...getColumnValue(
+              league,
+              column5,
+              isLoading,
+              standings_detail,
+              sortBy.column === 5
+            ),
+          },
+        ],
+        secondary_table: secondaryTable({
+          league: {
+            ...league,
+            rosters: standings_detail,
+          },
+          type: "secondary",
+        }),
+      };
+    })
+    .sort((a, b) =>
+      sortBy.asc ? (a.sortBy > b.sortBy ? 1 : -1) : a.sortBy < b.sortBy ? 1 : -1
+    );
 
   return (
     <TableMain
@@ -234,6 +316,12 @@ const LeaguesCheck = ({ secondaryTable }) => {
       }
       page={page}
       setPage={(value) => dispatch(setStateLeaguesCheck({ page: value }))}
+      colgroup={
+        <colgroup>
+          <col span={6} className={sortBy.column === 1 ? "sorted" : ""} />
+          <col span={3} className={sortBy.column === 2 ? "sorted" : ""} />
+        </colgroup>
+      }
     />
   );
 };
