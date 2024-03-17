@@ -3,12 +3,27 @@ select.hidden_behind {
   left: 0;
   color: transparent;
   background-color: transparent;
-  border: 1rem ridge var(--color4);
-  box-shadow: inset 0 0 1rem var(--wr);
+  border: none;
+  height: 100%;
   position: absolute;
   right: 0;
   top: 0;
   width: 100%;
   font-size: inherit;
   z-index: 1;
+}
+
+span.dropdown {
+  box-shadow: inset 0 0 3rem var(--wr);
+  border: 0.75rem ridge silver;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+span.dropdown > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

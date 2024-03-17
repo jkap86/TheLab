@@ -116,21 +116,17 @@ div.switch_wrapper {
 div.switch {
   display: flex;
   width: fit-content;
-  background-color: black;
   border-radius: 2rem;
-  filter: drop-shadow(0 0 0.5rem white);
   height: fit-content;
   border-radius: 2rem;
   overflow: hidden;
-  border: 0.5rem ridge var(--wr);
+  border: 0.25rem double var(--wr);
+  background-image: radial-gradient(gray 0%, var(--color1) 100%);
 }
 
 div.switch button.sw {
-  background-color: inherit;
-  text-shadow: 0 0 2rem white;
-  box-shadow: inset 0 0 2.5rem white;
   color: black;
-
+  background-color: transparent;
   padding: 1rem;
   border: none;
   border: 0.25rem solid transparent;

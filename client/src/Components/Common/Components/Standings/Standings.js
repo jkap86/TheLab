@@ -1,16 +1,20 @@
 import { getTrendColorValue } from "../../Helpers/getTrendColor";
 import React, { useState, useEffect, useMemo } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { getAdpFormatted } from "../../Helpers/getAdpFormatted";
 import HeaderDropdown from "../HeaderDropdown";
 import { getTrendColorRank } from "../../Helpers/getTrendColor";
+import { setStateStandings } from "../../Redux/actions";
 const Roster = React.lazy(() => import("../Roster/Roster"));
 const TableMain = React.lazy(() => import("../TableMain"));
 
 const Standings = ({ league, type }) => {
+  const dispatch = useDispatch();
   const { allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
-  const [standingsType, setStandingsType] = useState("Dynasty");
+  const { column2, column3, standingsType } = useSelector(
+    (state) => state.standings
+  );
   const [valueType, setValueType] = useState("ADP");
   const [itemActive2, setItemActive2] = useState(league?.userRoster?.roster_id);
   const [expandRoster, setExpandRoster] = useState(false);
@@ -20,75 +24,59 @@ const Standings = ({ league, type }) => {
   const active_roster = league.rosters.find((x) => x.roster_id === itemActive2);
 
   useEffect(() => {
-    if (league.settings.type !== 0) {
-      setStandingsType("Dynasty");
-    } else {
-      setStandingsType("Redraft");
+    if (league.settings.type === 0) {
+      dispatch(setStateStandings({ standingsType: "Redraft" }));
     }
   }, [league]);
 
+  const columnOptions = [
+    "Starters",
+    "Bench",
+    "Players",
+    "Total",
+    ...(standingsType === "Dynasty" ? ["Picks"] : ""),
+  ];
   const standings_headers = [
     [
       {
         text: "Manager",
         colSpan: 5,
       },
-      ...(standingsType === "Dynasty"
-        ? [
-            {
-              text: "Players",
-              colSpan: 2,
-            },
-            {
-              text: "Picks",
-              colSpan: 2,
-            },
-            {
-              text: "Total",
-              colSpan: 2,
-            },
-          ]
-        : [
-            { text: "Starters", colSpan: 2 },
-            {
-              text: "Bench",
-              colSpan: 2,
-            },
-            {
-              text: "Total",
-              colSpan: 2,
-            },
-          ]),
+
+      {
+        text: (
+          <HeaderDropdown
+            column_text={column2}
+            columnOptions={columnOptions}
+            setState={(value) =>
+              dispatch(setStateStandings({ column2: value }))
+            }
+          />
+        ),
+        colSpan: 3,
+      },
+      {
+        text: (
+          <HeaderDropdown
+            column_text={column3}
+            columnOptions={columnOptions}
+            setState={(value) =>
+              dispatch(setStateStandings({ column3: value }))
+            }
+          />
+        ),
+        colSpan: 3,
+      },
     ],
   ];
 
-  const roster_values_dynasty_players = league.rosters.map(
-    (roster) => roster.dynasty_starters + roster.dynasty_bench
-  );
-
-  const roster_values_dynasty_picks = league.rosters.map(
-    (roster) => roster.dynasty_picks
-  );
-
-  const roster_values_dynasty_total = league.rosters.map(
-    (roster) =>
-      roster.dynasty_starters + roster.dynasty_bench + roster.dynasty_picks
-  );
-
-  const roster_values_redraft_starters = league.rosters.map(
-    (roster) => roster.redraft_starters
-  );
-
-  const roster_values_redraft_bench = league.rosters.map(
-    (roster) => roster.redraft_bench
-  );
-
-  const roster_values_redraft_total = league.rosters.map(
-    (roster) => roster.redraft_starters + roster.redraft_bench
-  );
-
   const standings_body = league.rosters.map((roster) => {
-    const dynasty_players = roster.dynasty_starters + roster.dynasty_bench;
+    const key1 = `${standingsType.toLowerCase()}_${column2.toLowerCase()}`;
+    const stat1 = roster?.[key1];
+
+    const key2 = `${standingsType.toLowerCase()}_${column3.toLowerCase()}`;
+    const stat2 = roster?.[key2];
+
     return {
       id: roster.roster_id,
       search: {
@@ -99,12 +87,7 @@ const Standings = ({ league, type }) => {
           type: "user",
         },
       },
-      sort:
-        standingsType === "Dynasty"
-          ? roster.dynasty_starters +
-            roster.dynasty_bench +
-            roster.dynasty_picks
-          : roster.redraft_starters + roster.redraft_bench,
+      sort: stat2,
       list: [
         {
           text: roster.username || <em>Orphan</em>,
@@ -115,103 +98,35 @@ const Standings = ({ league, type }) => {
           },
           colSpan: 5,
         },
-        ...(standingsType === "Dynasty"
-          ? [
-              {
-                text: (
-                  <span
-                    className="stat"
-                    style={getTrendColorValue(
-                      dynasty_players,
-                      roster_values_dynasty_players
-                    )}
-                  >
-                    {dynasty_players.toFixed(0)}
-                  </span>
-                ),
-                colSpan: 2,
-              },
-              {
-                text: (
-                  <span
-                    className="stat"
-                    style={getTrendColorValue(
-                      roster.dynasty_picks,
-                      roster_values_dynasty_picks
-                    )}
-                  >
-                    {roster.dynasty_picks.toFixed(0)}
-                  </span>
-                ),
-                colSpan: 2,
-              },
-              {
-                text: (
-                  <span
-                    className="stat"
-                    style={getTrendColorValue(
-                      roster.dynasty_starters +
-                        roster.dynasty_bench +
-                        roster.dynasty_picks,
-                      roster_values_dynasty_total
-                    )}
-                  >
-                    {(
-                      roster.dynasty_starters +
-                      roster.dynasty_bench +
-                      roster.dynasty_picks
-                    ).toFixed(0)}
-                  </span>
-                ),
-                colSpan: 2,
-              },
-            ]
-          : [
-              {
-                text: (
-                  <span
-                    className="stat"
-                    style={getTrendColorValue(
-                      roster.redraft_starters,
-                      roster_values_redraft_starters
-                    )}
-                  >
-                    {roster.redraft_starters.toFixed(0)}
-                  </span>
-                ),
-                colSpan: 2,
-              },
-              {
-                text: (
-                  <span
-                    className="stat"
-                    style={getTrendColorValue(
-                      roster.redraft_bench,
-                      roster_values_redraft_bench
-                    )}
-                  >
-                    {roster.redraft_bench.toFixed(0)}
-                  </span>
-                ),
-                colSpan: 2,
-              },
-              {
-                text: (
-                  <span
-                    className="stat"
-                    style={getTrendColorValue(
-                      roster.redraft_starters + roster.redraft_bench,
-                      roster_values_redraft_total
-                    )}
-                  >
-                    {(roster.redraft_starters + roster.redraft_bench).toFixed(
-                      0
-                    )}
-                  </span>
-                ),
-                colSpan: 2,
-              },
-            ]),
+        {
+          text: (
+            <span
+              className="stat"
+              style={getTrendColorValue(
+                stat1,
+                league.rosters.map((r) => r?.[key1])
+              )}
+            >
+              {stat1?.toFixed(0)}
+            </span>
+          ),
+          colSpan: 3,
+        },
+        {
+          text: (
+            <span
+              className="stat"
+              style={getTrendColorValue(
+                stat2,
+                league.rosters.map((r) => r?.[key2])
+              )}
+            >
+              {stat2?.toFixed(0)}
+            </span>
+          ),
+          colSpan: 3,
+          className: "sorted",
+        },
       ],
     };
   });
@@ -219,43 +134,12 @@ const Standings = ({ league, type }) => {
   const available_headers = [
     [
       {
-        text: (
-          <HeaderDropdown
-            column_text={filter}
-            setState={setFilter}
-            columnOptions={["All", "QB", "RB", "WR", "TE"]}
-          />
-        ),
-        colSpan: 4,
-        className: "half",
-      },
-      {
-        text: <p className="">Available</p>,
-        colSpan: 15,
-        className: "half",
-      },
-      {
-        text: (
-          <HeaderDropdown
-            column_text={standingsType}
-            setState={setStandingsType}
-            columnOptions={["Dynasty", "Redraft"]}
-          />
-        ),
-        colSpan: 9,
-        className: "half",
-      },
-    ],
-    [
-      {
         text: "Slot",
         colSpan: 4,
-        className: "half",
       },
       {
         text: "Player",
         colSpan: 15,
-        className: "half",
       },
       {
         text: (
@@ -266,7 +150,6 @@ const Standings = ({ league, type }) => {
           />
         ),
         colSpan: 9,
-        className: "half",
       },
     ],
   ];
@@ -331,25 +214,25 @@ const Standings = ({ league, type }) => {
 
   return (
     <>
-      <div className="secondary nav">
+      <div className={type + " nav"}>
         <div>
           <div>
             <HeaderDropdown
               column_text={standingsType}
               columnOptions={["Dynasty", "Redraft"]}
-              setState={setStandingsType}
+              setState={(value) =>
+                dispatch(setStateStandings({ standingsType: value }))
+              }
             />
           </div>
         </div>
         <div>
           <div>
-            <div>
-              <HeaderDropdown
-                column_text={filter}
-                columnOptions={["All", "QB", "RB", "WR", "TE", "Picks"]}
-                setState={setFilter}
-              />
-            </div>
+            <HeaderDropdown
+              column_text={filter}
+              columnOptions={["All", "QB", "RB", "WR", "TE", "Picks"]}
+              setState={setFilter}
+            />
           </div>
           <span className="username">
             {active_roster ? active_roster.username : "Available"}

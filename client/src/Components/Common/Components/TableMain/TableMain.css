@@ -35,7 +35,6 @@ div.nav > div {
 }
 div.nav > div > div {
   position: relative;
-  padding: 2rem;
 }
 
 div.nav > div > div:only-child {
@@ -117,9 +116,11 @@ th > span.username {
   letter-spacing: 0.5rem;
 }
 
-td.sorted > span {
-  background-image: radial-gradient(transparent 0%, goldenrod 500%);
-  height: 100%;
+td.sorted,
+th.sorted {
+  border-left: 0.5rem double goldenrod;
+  border-right: 0.5rem double goldenrod;
+  box-shadow: inset 0 0 3.5rem rgba(255, 255, 0, 0.25);
 }
 
 td > span.image {

@@ -13,15 +13,7 @@ import { getOptimalLineupADP } from "../../Common/Helpers/getOptimalLineupADP";
 const LeaguesCheck = ({ secondaryTable }) => {
   const dispatch = useDispatch();
   const { allplayers, state } = useSelector((state) => state.common);
-  const {
-    leagues,
-    type1,
-    type2,
-    adpLm,
-    isLoadingAdp,
-    isLoadingUser,
-    isLoadingLeagues,
-  } = useSelector((state) => state.user);
+  const { leagues, type1, type2, adpLm } = useSelector((state) => state.user);
   const { column2, column3, column4, column5, itemActive, page, sortBy } =
     useSelector((state) => state.leagues.LeaguesCheck);
 
@@ -102,7 +94,7 @@ const LeaguesCheck = ({ secondaryTable }) => {
           />
         ),
         colSpan: 3,
-        className: "left",
+        className: sortBy.column === 2 ? "sorted" : "",
       },
       {
         text: (
@@ -115,7 +107,7 @@ const LeaguesCheck = ({ secondaryTable }) => {
           />
         ),
         colSpan: 3,
-        className: "left",
+        className: sortBy.column === 3 ? "sorted" : "",
       },
       {
         text: (
@@ -128,7 +120,7 @@ const LeaguesCheck = ({ secondaryTable }) => {
           />
         ),
         colSpan: 3,
-        className: "left",
+        className: sortBy.column === 4 ? "sorted" : "",
       },
       {
         text: (
@@ -141,7 +133,7 @@ const LeaguesCheck = ({ secondaryTable }) => {
           />
         ),
         colSpan: 3,
-        className: "left",
+        className: sortBy.column === 5 ? "sorted" : "",
       },
     ],
   ];
@@ -215,8 +207,11 @@ const LeaguesCheck = ({ secondaryTable }) => {
           dynasty_picks,
           dynasty_starters,
           dynasty_bench,
+          dynasty_players: dynasty_starters + dynasty_bench,
+          dynasty_total: dynasty_starters + dynasty_bench + dynasty_picks,
           redraft_starters,
           redraft_bench,
+          redraft_total: redraft_starters + redraft_bench,
           dynasty_optimal,
           redraft_optimal,
           starters_optimal_dynasty: optimal_dynasty_player_ids,
@@ -316,12 +311,6 @@ const LeaguesCheck = ({ secondaryTable }) => {
       }
       page={page}
       setPage={(value) => dispatch(setStateLeaguesCheck({ page: value }))}
-      colgroup={
-        <colgroup>
-          <col span={6} className={sortBy.column === 1 ? "sorted" : ""} />
-          <col span={3} className={sortBy.column === 2 ? "sorted" : ""} />
-        </colgroup>
-      }
     />
   );
 };

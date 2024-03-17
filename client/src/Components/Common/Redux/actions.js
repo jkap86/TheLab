@@ -15,6 +15,11 @@ export const setStateCommon = (state_obj) => ({
   payload: state_obj,
 });
 
+export const setStateStandings = (state_obj) => ({
+  type: "SET_STATE_STANDINGS",
+  payload: state_obj,
+});
+
 export const fetchCommon = (item) => {
   return async (dispatch) => {
     dispatch({ type: "FETCH_COMMON_START", payload: { item: item } });
