@@ -1,12 +1,21 @@
 import TableMain from "../TableMain";
-import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { getAdpFormatted } from "../../Helpers/getAdpFormatted";
-import { getTrendColorRank } from "../../Helpers/getTrendColor";
+import {
+  getTrendColorRank,
+  getTrendColorValue,
+} from "../../Helpers/getTrendColor";
 import HeaderDropdown from "../HeaderDropdown";
 
-const Roster = ({ roster, league, type, standingsType, filter, setFilter }) => {
-  const [ppgType, setPpgType] = useState("ADP");
+const Roster = ({
+  roster,
+  league,
+  type,
+  standingsType,
+  filter,
+  valueType,
+  setValueType,
+}) => {
   const { state, allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
 
@@ -23,37 +32,6 @@ const Roster = ({ roster, league, type, standingsType, filter, setFilter }) => {
   };
 
   const headers = [
-    /*
-    [
-      {
-        text: (
-          <HeaderDropdown
-            column_text={filter}
-            columnOptions={["All", "QB", "RB", "WR", "TE", "Picks"]}
-            setState={setFilter}
-          />
-        ),
-        colSpan: 4,
-        className: "half",
-      },
-      {
-        text: <span className="username">{roster.username}</span>,
-        colSpan: 15,
-        className: "half",
-      },
-      {
-        text: (
-          <HeaderDropdown
-            column_text={standingsType}
-            columnOptions={["Dynasty", "Redraft"]}
-            setState={(value) => setStandingsType(value)}
-          />
-        ),
-        colSpan: 9,
-        className: "half",
-      },
-    ],
-    */
     [
       {
         text: <span>Slot</span>,
@@ -66,15 +44,19 @@ const Roster = ({ roster, league, type, standingsType, filter, setFilter }) => {
       {
         text: (
           <HeaderDropdown
-            column_text={ppgType}
+            column_text={valueType}
             columnOptions={["ADP", "Auction %"]}
-            setState={setPpgType}
+            setState={setValueType}
           />
         ),
         colSpan: 9,
       },
     ],
   ];
+
+  const adp_key = `${standingsType}${
+    valueType === "Auction %" ? "_auction" : ""
+  }`;
 
   const getBody = () => {
     return [
@@ -140,17 +122,27 @@ const Roster = ({ roster, league, type, standingsType, filter, setFilter }) => {
               text: (
                 <span
                   className="stat adp"
-                  style={getTrendColorRank(
-                    roster.starters.length * league.rosters.length -
-                      adpLm?.[standingsType]?.[player_id]?.adp,
-                    1,
-                    roster.starters.length * league.rosters.length
-                  )}
+                  style={
+                    valueType === "ADP"
+                      ? getTrendColorRank(
+                          roster.starters.length * league.rosters.length -
+                            adpLm?.[adp_key]?.[player_id]?.adp,
+                          1,
+                          roster.starters.length * league.rosters.length
+                        )
+                      : getTrendColorValue(
+                          adpLm?.[adp_key]?.[player_id]?.adp,
+                          Object.keys(adpLm?.[adp_key] || {}).map(
+                            (player_id) =>
+                              adpLm?.[adp_key]?.[player_id]?.adp || 0
+                          )
+                        )
+                  }
                 >
-                  {(adpLm?.[standingsType]?.[player_id]?.adp &&
-                    getAdpFormatted(
-                      adpLm?.[standingsType]?.[player_id]?.adp
-                    )) ||
+                  {(adpLm?.[adp_key]?.[player_id]?.adp &&
+                    (valueType === "ADP"
+                      ? getAdpFormatted(adpLm?.[adp_key]?.[player_id]?.adp)
+                      : adpLm?.[adp_key]?.[player_id]?.adp?.toFixed(0))) ||
                     "-"}
                 </span>
               ),
@@ -165,8 +157,8 @@ const Roster = ({ roster, league, type, standingsType, filter, setFilter }) => {
             a.season - b.season || a.round - b.round || a.order - b.order
         )
         ?.map((pick) => {
-          const adp =
-            adpLm["Dynasty"]?.[
+          const value =
+            adpLm[adp_key]?.[
               "R" +
                 ((pick.round - 1) * 12 +
                   (parseInt(
@@ -220,13 +212,28 @@ const Roster = ({ roster, league, type, standingsType, filter, setFilter }) => {
                 text: (
                   <span
                     className="stat adp"
-                    style={getTrendColorRank(
-                      roster.starters.length * league.rosters.length - adp,
-                      1,
-                      roster.starters.length * league.rosters.length
-                    )}
+                    style={
+                      valueType === "ADP"
+                        ? getTrendColorRank(
+                            roster.starters.length * league.rosters.length -
+                              value,
+                            1,
+                            roster.starters.length * league.rosters.length
+                          )
+                        : getTrendColorValue(
+                            value,
+                            Object.keys(adpLm?.[adp_key] || {}).map(
+                              (player_id) =>
+                                adpLm?.[adp_key]?.[player_id]?.adp || 0
+                            )
+                          )
+                    }
                   >
-                    {(adp && getAdpFormatted(adp)) || "-"}
+                    {(value &&
+                      (valueType === "ADP"
+                        ? getAdpFormatted(value)
+                        : value?.toFixed(0))) ||
+                      "-"}
                   </span>
                 ),
                 colSpan: 9,

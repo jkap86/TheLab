@@ -12,10 +12,9 @@ const Standings = ({ league, type }) => {
   const dispatch = useDispatch();
   const { allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
-  const { column2, column3, standingsType } = useSelector(
+  const { column2, column3, standingsType, valueType } = useSelector(
     (state) => state.standings
   );
-  const [valueType, setValueType] = useState("ADP");
   const [itemActive2, setItemActive2] = useState(league?.userRoster?.roster_id);
   const [expandRoster, setExpandRoster] = useState(false);
   const [filter, setFilter] = useState("All");
@@ -29,10 +28,31 @@ const Standings = ({ league, type }) => {
     }
   }, [league]);
 
+  const handleColumnChange = (value, colIndex) => {
+    const columns = {
+      2: column2,
+      3: column3,
+    };
+
+    Object.keys(columns)
+      .filter((key) => key !== colIndex)
+      .map((key) => {
+        if (columns[key] === value) {
+          dispatch(
+            setStateStandings({
+              [`column${key}`]: columns[colIndex],
+            })
+          );
+        }
+      });
+
+    dispatch(setStateStandings({ [`column${colIndex}`]: value }));
+  };
+
   const columnOptions = [
     "Starters",
     "Bench",
-    "Players",
+    ...(standingsType === "Dynasty" ? ["Players"] : ""),
     "Total",
     ...(standingsType === "Dynasty" ? ["Picks"] : ""),
   ];
@@ -48,9 +68,7 @@ const Standings = ({ league, type }) => {
           <HeaderDropdown
             column_text={column2}
             columnOptions={columnOptions}
-            setState={(value) =>
-              dispatch(setStateStandings({ column2: value }))
-            }
+            setState={(value) => handleColumnChange(value, 2)}
           />
         ),
         colSpan: 3,
@@ -60,15 +78,17 @@ const Standings = ({ league, type }) => {
           <HeaderDropdown
             column_text={column3}
             columnOptions={columnOptions}
-            setState={(value) =>
-              dispatch(setStateStandings({ column3: value }))
-            }
+            setState={(value) => handleColumnChange(value, 3)}
           />
         ),
         colSpan: 3,
       },
     ],
   ];
+
+  const adp_key = `${standingsType}${
+    valueType === "Auction %" ? "_auction" : ""
+  }`;
 
   const standings_body = league.rosters.map((roster) => {
     const key1 = `${standingsType.toLowerCase()}_${column2.toLowerCase()}`;
@@ -145,7 +165,9 @@ const Standings = ({ league, type }) => {
         text: (
           <HeaderDropdown
             column_text={valueType}
-            setState={setValueType}
+            setState={(value) =>
+              dispatch(setStateStandings({ valueType: value }))
+            }
             columnOptions={["ADP", "Auction %"]}
           />
         ),
@@ -195,14 +217,16 @@ const Standings = ({ league, type }) => {
               <span
                 className="stat adp"
                 style={getTrendColorRank(
-                  Object.keys(adpLm?.[standingsType]).length -
-                    adpLm?.[standingsType]?.[player_id]?.adp,
+                  Object.keys(adpLm?.[adp_key]).length -
+                    adpLm?.[adp_key]?.[player_id]?.adp,
                   league.roster_positions.length * league.rosters.length,
-                  Object.keys(adpLm?.[standingsType]).length
+                  Object.keys(adpLm?.[adp_key]).length
                 )}
               >
-                {(adpLm?.[standingsType]?.[player_id]?.adp &&
-                  getAdpFormatted(adpLm?.[standingsType]?.[player_id]?.adp)) ||
+                {(adpLm?.[adp_key]?.[player_id]?.adp &&
+                  (valueType === "ADP"
+                    ? getAdpFormatted(adpLm?.[adp_key]?.[player_id]?.adp)
+                    : adpLm?.[adp_key]?.[player_id]?.adp?.toFixed(0))) ||
                   "-"}
               </span>
             ),
@@ -274,7 +298,10 @@ const Standings = ({ league, type }) => {
           league={league}
           standingsType={standingsType}
           filter={filter}
-          setFilter={setFilter}
+          valueType={valueType}
+          setValueType={(value) =>
+            dispatch(setStateStandings({ valueType: value }))
+          }
         />
       ) : (
         <TableMain

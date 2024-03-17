@@ -45,6 +45,7 @@ div.nav i.fa-compress,
 div.nav i.fa-expand {
   color: var(--color2);
   font-size: 7rem;
+  padding: 0 2rem;
 }
 
 div.secondary.nav {
@@ -165,12 +166,14 @@ th:hover > span {
 }
 
 td.primary:last-child:hover,
-th:last-child:hover {
+th:last-child:hover,
+th:last-child:hover select {
   direction: rtl;
 }
 
 td.primary:last-child:hover > span,
-th:last-child:hover > span {
+th:last-child:hover > span,
+th:last-child:hover option {
   direction: ltr;
 }
 tbody {

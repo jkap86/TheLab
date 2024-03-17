@@ -15,6 +15,7 @@ const TableMain = ({
   caption,
   searched,
   setSearched,
+  placeholder,
   options1,
   options2,
   partial,
@@ -66,7 +67,7 @@ const TableMain = ({
           <div>{options1?.map((option) => option)}</div>
           <Search
             id={id}
-            placeholder={`${(id && id) || ""}`}
+            placeholder={placeholder}
             list={body
               ?.filter(
                 (b, index) =>

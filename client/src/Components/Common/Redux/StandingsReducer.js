@@ -2,6 +2,7 @@ const initialState = {
   standingsType: "Dynasty",
   column2: "Starters",
   column3: "Total",
+  valueType: "ADP",
 };
 
 const StandingsReducer = (state = initialState, action) => {

@@ -48,6 +48,13 @@ ol {
   list-style: none;
 }
 
+option {
+  background-color: gray;
+  color: black;
+  text-align: center;
+  font-weight: 900;
+}
+
 .left {
   text-align: left;
 }

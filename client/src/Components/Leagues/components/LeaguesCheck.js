@@ -14,8 +14,16 @@ const LeaguesCheck = ({ secondaryTable }) => {
   const dispatch = useDispatch();
   const { allplayers, state } = useSelector((state) => state.common);
   const { leagues, type1, type2, adpLm } = useSelector((state) => state.user);
-  const { column2, column3, column4, column5, itemActive, page, sortBy } =
-    useSelector((state) => state.leagues.LeaguesCheck);
+  const {
+    column2,
+    column3,
+    column4,
+    column5,
+    itemActive,
+    page,
+    sortBy,
+    searched,
+  } = useSelector((state) => state.leagues.LeaguesCheck);
 
   const columnOptions = [
     "Picks Rank",
@@ -141,6 +149,7 @@ const LeaguesCheck = ({ secondaryTable }) => {
   const isLoading = !adpLm;
 
   const body = filterLeagues(leagues, type1, type2)
+    .filter((league) => !searched?.id || searched?.id === league.league_id)
     .map((league) => {
       const standings_detail = league.rosters.map((roster) => {
         const dynasty_picks = getRosterPicksValue(
@@ -305,6 +314,11 @@ const LeaguesCheck = ({ secondaryTable }) => {
       type={"primary"}
       headers={headers}
       body={body}
+      searched={searched}
+      setSearched={(value) =>
+        dispatch(setStateLeaguesCheck({ searched: value }))
+      }
+      placeholder={"Leagues"}
       itemActive={itemActive}
       setItemActive={(value) =>
         dispatch(setStateLeaguesCheck({ itemActive: value }))
