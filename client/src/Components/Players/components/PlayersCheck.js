@@ -25,7 +25,7 @@ const PlayersCheck = ({ secondaryTable }) => {
     searched,
     itemActive,
     filters,
-  } = useSelector((state) => state.players);
+  } = useSelector((state) => state.players.primary);
 
   useFetchPlayerShares();
 
@@ -73,6 +73,7 @@ const PlayersCheck = ({ secondaryTable }) => {
       {
         text: "Player",
         colSpan: 5,
+        className: sortBy.column === 1 ? "sorted" : "",
       },
       {
         text: (
@@ -83,6 +84,7 @@ const PlayersCheck = ({ secondaryTable }) => {
           />
         ),
         colSpan: 2,
+        className: sortBy.column === 2 ? "sorted" : "",
       },
       {
         text: (
@@ -93,6 +95,7 @@ const PlayersCheck = ({ secondaryTable }) => {
           />
         ),
         colSpan: 2,
+        className: sortBy.column === 3 ? "sorted" : "",
       },
       {
         text: (
@@ -103,6 +106,7 @@ const PlayersCheck = ({ secondaryTable }) => {
           />
         ),
         colSpan: 2,
+        className: sortBy.column === 4 ? "sorted" : "",
       },
       {
         text: (
@@ -113,6 +117,7 @@ const PlayersCheck = ({ secondaryTable }) => {
           />
         ),
         colSpan: 2,
+        className: sortBy.column === 5 ? "sorted" : "",
       },
     ],
   ];
@@ -321,7 +326,12 @@ const PlayersCheck = ({ secondaryTable }) => {
             };
           }),
         ],
-        secondary_table: "p",
+        secondary_table: secondaryTable({
+          player_id: player.id,
+          leagues_owned,
+          leagues_taken,
+          leagues_available,
+        }),
       };
     })
     .sort((a, b) => {

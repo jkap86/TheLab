@@ -5,6 +5,11 @@ export const setStatePlayers = (state_obj, tab) => ({
   payload: state_obj,
 });
 
+export const setStateLeaguesOwned = (state_obj, tab) => ({
+  type: `SET_STATE_LEAGUES_OWNED`,
+  payload: state_obj,
+});
+
 export const getPlayerShares = (leagues) => async (dispatch) => {
   const players_dict = {};
 

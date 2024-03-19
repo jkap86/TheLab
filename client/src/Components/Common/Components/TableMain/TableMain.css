@@ -9,6 +9,12 @@ div.secondary.half {
   z-index: 6;
 }
 
+div.tertiary.half {
+  position: sticky;
+  top: 42rem;
+  z-index: 3;
+}
+
 div.nav {
   height: 7rem;
   background-color: var(--color4);
@@ -48,9 +54,29 @@ div.nav i.fa-expand {
   padding: 0 2rem;
 }
 
+div.nav > button {
+  box-shadow: inset 0 0 5rem gray;
+  background-color: transparent;
+  font-size: inherit;
+  font-family: inherit;
+  color: white;
+  border: 0.75rem ridge gray;
+}
+
+div.nav > button.active {
+  box-shadow: inset 0 0 5rem var(--wr);
+  text-shadow: 0 0 0.25rem var(--color2);
+  border-color: var(--color2);
+}
+
 div.secondary.nav {
   top: 14rem;
   z-index: 8;
+}
+
+div.tertiary.nav {
+  top: 35rem;
+  z-index: 5;
 }
 
 table {
@@ -73,6 +99,26 @@ table.primary > thead > tr {
 table.secondary > thead > tr {
   top: 21rem;
   z-index: 7;
+}
+
+table.tertiary > thead > tr {
+  top: 42rem;
+  z-index: 4;
+}
+
+table.primary > tbody > tr > td,
+table.secondary > tbody > tr > td,
+table.tertiary > tbody > tr > td {
+  border: 0.25rem double transparent;
+}
+
+table.half > tbody > tr > td {
+  border: none;
+}
+table.primary > tbody > tr.active_wrapper > td,
+table.secondary > tbody > tr.active_wrapper > td,
+table.tertiary > tbody > tr.active_wrapper > td {
+  border-color: var(--color2);
 }
 
 th {
@@ -204,6 +250,13 @@ table.secondary.half tr.active_wrapper {
   top: 28rem;
   z-index: 6;
 }
+
+table.tertiary.half tr.active_wrapper {
+  position: sticky;
+  top: 49rem;
+  z-index: 3;
+}
+
 tr.active {
   filter: drop-shadow(0 0 1rem silver);
   position: sticky;
@@ -220,7 +273,8 @@ table.secondary tr.active {
 }
 
 tr.active > td.primary,
-tr.active > td.secondary {
+tr.active > td.secondary,
+tr.active > td.tertiary {
   background-image: radial-gradient(var(--color4) -50%, var(--color2) 100%);
 }
 td.primary {

@@ -7,14 +7,14 @@ const initialState = {
   column4: "Rank D",
   column5: "Rank R",
   sortBy: {
-    column: 1,
+    column: 2,
     asc: true,
   },
 };
 
-const LeaguesCheckReducer = (state = initialState, action) => {
+const LeaguesOwnedReducer = (state = initialState, action) => {
   switch (action.type) {
-    case "SET_STATE_LEAGUES_CHECK":
+    case "SET_STATE_LEAGUES_OWNED":
       return {
         ...state,
         ...action.payload,
@@ -24,4 +24,4 @@ const LeaguesCheckReducer = (state = initialState, action) => {
   }
 };
 
-export default LeaguesCheckReducer;
+export default LeaguesOwnedReducer;
