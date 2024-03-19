@@ -1,0 +1,152 @@
+i.fa-ban {
+    color: red;
+    position: absolute;
+    font-size: 7rem;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+img.thumbnail.icon {
+    font-size: 7rem;
+    height: 7rem;
+    width: 7rem;
+}
+
+span.team {
+    display: inline-flex;
+    vertical-align: top;
+    width: fit-content;
+    margin: 0 1rem;
+}
+
+span.team>label {
+    position: relative;
+    width: fit-content;
+
+    width: 7rem;
+    height: 7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+span.team>label>strong.draft-year {
+    font-size: 5rem;
+    position: relative;
+    z-index: 0;
+    color: var(--wr);
+    filter: contrast(2);
+    text-shadow: 0 0 1rem black;
+}
+
+span.team>label>img.icon {
+    width: 7rem;
+    height: 7rem;
+
+}
+
+span.team>label>i.icon {
+    font-size: 7rem;
+    text-shadow: 0 0 1rem black;
+    color: silver;
+    position: absolute;
+    z-index: 0;
+    opacity: .5;
+
+}
+
+span.team>label>select.hidden_behind {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    font-size: 3.5rem;
+    background-color: transparent;
+    border: none;
+    color: transparent;
+    opacity: 0;
+    margin: 0;
+    width: 100%;
+
+
+}
+
+span.team>label>select.hidden_behind>option {
+    font-family: 'Pulang', sans-serif;
+    background-color: #9ca7b4;
+    color: var(--color4);
+    text-align: center;
+    filter: contrast(2);
+}
+
+span.team>label>div.position_square1,
+span.team>label>div.position_square2,
+span.team>label>div.position_square3,
+span.team>label>div.position_square4 {
+    font-size: 2.5rem;
+    display: flex;
+    height: 7rem;
+    width: 7rem;
+    flex-wrap: wrap;
+    border-radius: 1rem;
+    overflow: hidden;
+}
+
+span.team>label>div.position_square1>div {
+    width: 100%;
+}
+
+span.team>label>div.position_square2>div {
+    width: 50%;
+}
+
+span.team>label>div.position_square3>div {
+    width: 33%;
+}
+
+span.team>label>div.position_square4>div {
+    flex-basis: 50%;
+}
+
+span.team>label>div.position_square1>div,
+span.team>label>div.position_square2>div,
+span.team>label>div.position_square3>div,
+span.team>label>div.position_square4>div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: black;
+    text-shadow: 0 0 .5rem white;
+    font-weight: 900;
+    font-size: 3rem;
+}
+
+span.team>label>div.position_square1>div.picks {
+    color: var(--color2);
+    text-shadow: 0 0 .25rem black;
+}
+
+span.team>label div.qb {
+    background-color: var(--qb);
+}
+
+span.team>label div.wr {
+    background-color: var(--wr);
+}
+
+span.team>label div.te {
+    background-color: var(--te);
+
+}
+
+span.team>label div.rb {
+    background-color: var(--rb);
+}
+
+span.team>label div.picks {
+    background-color: midnightblue;
+    color: white;
+    text-shadow: none;
+}

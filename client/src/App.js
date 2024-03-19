@@ -5,6 +5,7 @@ import LoadingIcon from "./Components/Common/Components/LoadingIcon";
 const Homepage = lazy(() => import("./Components/Homepage"));
 const Layout = lazy(() => import("./Components/Common/Components/Layout"));
 const Leagues = lazy(() => import("./Components/Leagues"));
+const Players = lazy(() => import("./Components/Players"));
 
 function App() {
   return (
@@ -20,6 +21,18 @@ function App() {
                   display={
                     <Suspense fallback={<LoadingIcon />}>
                       <Leagues />
+                    </Suspense>
+                  }
+                />
+              }
+            ></Route>
+            <Route
+              path="/players/:username"
+              element={
+                <Layout
+                  display={
+                    <Suspense fallback={<LoadingIcon />}>
+                      <Players />
                     </Suspense>
                   }
                 />

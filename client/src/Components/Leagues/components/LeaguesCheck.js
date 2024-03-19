@@ -9,6 +9,7 @@ import {
   getRosterPicksValue,
 } from "../../Common/Helpers/rosterValues";
 import { getOptimalLineupADP } from "../../Common/Helpers/getOptimalLineupADP";
+import { getSortIcon } from "../../Common/Helpers/getSortIcon";
 
 const LeaguesCheck = ({ secondaryTable }) => {
   const dispatch = useDispatch();
@@ -33,53 +34,30 @@ const LeaguesCheck = ({ secondaryTable }) => {
     "League ID",
   ];
 
-  const displaySort = (colNum) => {
-    return (
-      <div
-        onClick={() =>
-          dispatch(
-            setStateLeaguesCheck({
-              sortBy: {
-                column: colNum,
-                asc: sortBy.column === colNum ? !sortBy.asc : sortBy.asc,
-              },
-            })
-          )
-        }
-        className={sortBy?.column === colNum ? "active" : ""}
-      >
-        {sortBy?.column === colNum ? (
-          sortBy?.asc ? (
-            <i className="fa-solid fa-caret-down"></i>
-          ) : (
-            <i className="fa-solid fa-caret-up"></i>
-          )
-        ) : (
-          ""
-        )}
-      </div>
-    );
-  };
   const headers = [
     [
-      { text: displaySort(1), colSpan: 6, className: "sort" },
       {
-        text: displaySort(2),
+        text: getSortIcon(1, sortBy, dispatch, setStateLeaguesCheck),
+        colSpan: 6,
+        className: "sort",
+      },
+      {
+        text: getSortIcon(2, sortBy, dispatch, setStateLeaguesCheck),
         colSpan: 3,
         className: "sort",
       },
       {
-        text: displaySort(3),
+        text: getSortIcon(3, sortBy, dispatch, setStateLeaguesCheck),
         colSpan: 3,
         className: "sort",
       },
       {
-        text: displaySort(4),
+        text: getSortIcon(4, sortBy, dispatch, setStateLeaguesCheck),
         colSpan: 3,
         className: "sort",
       },
       {
-        text: displaySort(5),
+        text: getSortIcon(5, sortBy, dispatch, setStateLeaguesCheck),
         colSpan: 3,
         className: "sort",
       },
@@ -239,7 +217,7 @@ const LeaguesCheck = ({ secondaryTable }) => {
                 isLoading,
                 standings_detail,
                 true
-              ).text.props.children,
+              ).text,
         search: {
           text: league.name,
           image: {
@@ -259,42 +237,25 @@ const LeaguesCheck = ({ secondaryTable }) => {
             },
             className: sortBy.column === 1 ? "sorted" : "",
           },
-          {
-            ...getColumnValue(
+
+          ...[column2, column3, column4, column5].map((column, index) => {
+            const { text, getTrendColor } = getColumnValue(
               league,
-              column2,
+              column,
               isLoading,
-              standings_detail,
-              sortBy.column === 2
-            ),
-          },
-          {
-            ...getColumnValue(
-              league,
-              column3,
-              isLoading,
-              standings_detail,
-              sortBy.column === 3
-            ),
-          },
-          {
-            ...getColumnValue(
-              league,
-              column4,
-              isLoading,
-              standings_detail,
-              sortBy.column === 4
-            ),
-          },
-          {
-            ...getColumnValue(
-              league,
-              column5,
-              isLoading,
-              standings_detail,
-              sortBy.column === 5
-            ),
-          },
+              standings_detail
+            );
+
+            return {
+              text: (
+                <span className="stat" style={getTrendColor}>
+                  {text}
+                </span>
+              ),
+              colSpan: 3,
+              className: sortBy.column === index + 2 ? "sorted" : "",
+            };
+          }),
         ],
         secondary_table: secondaryTable({
           league: {

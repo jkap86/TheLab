@@ -8,8 +8,11 @@ export const getColumnValue = (
   sorted
 ) => {
   let text;
+  let getTrendColor;
+
   if ((header.includes("Rank") || header.includes("Value")) && isLoadingAdp) {
     text = <i className="fa-solid fa-spinner fa-spin-pulse"></i>;
+    getTrendColor = {};
   } else {
     switch (header) {
       case "Picks Rank":
@@ -19,17 +22,12 @@ export const getColumnValue = (
             .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
           1;
 
-        text = (
-          <span
-            className="stat"
-            style={getTrendColorRank(
-              league.rosters.length - rank_dynasty_picks + 1,
-              1,
-              league.rosters.length
-            )}
-          >
-            {rank_dynasty_picks}
-          </span>
+        text = rank_dynasty_picks;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_dynasty_picks + 1,
+          1,
+          league.rosters.length
         );
         break;
       case "Players Rank D":
@@ -44,21 +42,17 @@ export const getColumnValue = (
             .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
           1;
 
-        text = (
-          <span
-            className="stat"
-            style={getTrendColorRank(
-              league.rosters.length - rank_dynasty_players,
-              1,
-              league.rosters.length,
-              Array.from(Array(league.rosters.length)).keys() ||
-                [].map((key) => key + 1).reduce((acc, cur) => acc + cur, 0) /
-                  league.rosters.length
-            )}
-          >
-            {rank_dynasty_players}
-          </span>
+        text = rank_dynasty_players;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_dynasty_players,
+          1,
+          league.rosters.length,
+          Array.from(Array(league.rosters.length)).keys() ||
+            [].map((key) => key + 1).reduce((acc, cur) => acc + cur, 0) /
+              league.rosters.length
         );
+
         break;
       case "Rank D":
         const rank_dynasty =
@@ -73,18 +67,14 @@ export const getColumnValue = (
             .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
           1;
 
-        text = (
-          <span
-            className="stat"
-            style={getTrendColorRank(
-              league.rosters.length - rank_dynasty,
-              1,
-              league.rosters.length
-            )}
-          >
-            {rank_dynasty}
-          </span>
+        text = rank_dynasty;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_dynasty,
+          1,
+          league.rosters.length
         );
+
         break;
       case "Rank R":
         const rank_redraft =
@@ -98,17 +88,12 @@ export const getColumnValue = (
             .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
           1;
 
-        text = (
-          <span
-            className="stat"
-            style={getTrendColorRank(
-              league.rosters.length - rank_redraft,
-              1,
-              league.rosters.length
-            )}
-          >
-            {rank_redraft}
-          </span>
+        text = rank_redraft;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_redraft,
+          1,
+          league.rosters.length
         );
 
         break;
@@ -118,9 +103,5 @@ export const getColumnValue = (
     }
   }
 
-  return {
-    text: text,
-    colSpan: 3,
-    className: sorted ? "sorted" : "",
-  };
+  return { text, getTrendColor };
 };

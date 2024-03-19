@@ -99,9 +99,15 @@ th.sort > div.active {
 }
 th.sort i.fa-caret-up,
 th.sort i.fa-caret-down {
-  font-size: inherit;
+  font-size: 5rem;
+  color: gray;
+}
+
+th.sort i.fa-caret-up.active,
+th.sort i.fa-caret-down.active {
   color: rgb(0, 255, 255);
 }
+
 th.half {
   height: 3.5rem;
   font-size: 75%;
