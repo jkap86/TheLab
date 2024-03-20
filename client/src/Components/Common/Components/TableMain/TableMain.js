@@ -169,7 +169,7 @@ const TableMain = ({
                 >
                   <td
                     colSpan={item.list?.reduce(
-                      (acc, cur) => acc + (cur.colSpan || 0),
+                      (acc, cur) => acc + (cur?.colSpan || 0),
                       0
                     )}
                   >
@@ -199,7 +199,7 @@ const TableMain = ({
                           }
                         >
                           {item.list
-                            ?.filter((x) => x.text)
+                            ?.filter((x) => x?.text)
                             ?.map((key, index) => (
                               <td
                                 key={index}
@@ -239,7 +239,7 @@ const TableMain = ({
                           >
                             <td
                               colSpan={item.list.reduce(
-                                (acc, cur) => acc + (cur.colSpan || 0),
+                                (acc, cur) => acc + (cur?.colSpan || 0),
                                 0
                               )}
                             >

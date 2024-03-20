@@ -74,3 +74,19 @@ option {
 ::-webkit-scrollbar-thumb {
   background-color: var(--color2);
 }
+
+.rotate {
+  animation: rotate 4s linear infinite;
+}
+
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
+    /* Start with no rotation (0 degrees) */
+  }
+
+  100% {
+    transform: rotate(360deg);
+    /* Rotate the element 360 degrees for a full rotation */
+  }
+}

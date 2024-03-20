@@ -26,5 +26,7 @@ module.exports = (app) => {
 
   router.get("/leaguemate", [], league.leaguemate);
 
+  router.get("/sync", [], league.sync);
+
   app.use("/league", router);
 };

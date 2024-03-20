@@ -97,6 +97,91 @@ export const getColumnValue = (
         );
 
         break;
+      case "LM Picks Rank":
+        const rank_dynasty_picks_lm =
+          standings_detail
+            .sort((a, b) => b.dynasty_picks - a.dynasty_picks)
+            .findIndex((obj) => obj.roster_id === league.lmRoster.roster_id) +
+          1;
+
+        text = rank_dynasty_picks_lm;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_dynasty_picks_lm + 1,
+          1,
+          league.rosters.length
+        );
+        break;
+      case "LM Players Rank D":
+        const rank_dynasty_players_lm =
+          standings_detail
+            .sort(
+              (a, b) =>
+                b.dynasty_starters +
+                b.dynasty_bench -
+                (a.dynasty_starters + a.dynasty_bench)
+            )
+            .findIndex((obj) => obj.roster_id === league.lmRoster.roster_id) +
+          1;
+
+        text = rank_dynasty_players_lm;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_dynasty_players_lm,
+          1,
+          league.rosters.length,
+          Array.from(Array(league.rosters.length)).keys() ||
+            [].map((key) => key + 1).reduce((acc, cur) => acc + cur, 0) /
+              league.rosters.length
+        );
+
+        break;
+      case "LM Rank D":
+        const rank_dynasty_lm =
+          standings_detail
+            .sort(
+              (a, b) =>
+                b.dynasty_starters +
+                b.dynasty_bench +
+                b.dynasty_picks -
+                (a.dynasty_starters + a.dynasty_bench + a.dynasty_picks)
+            )
+            .findIndex((obj) => obj.roster_id === league.lmRoster?.roster_id) +
+          1;
+
+        text = rank_dynasty_lm;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_dynasty_lm,
+          1,
+          league.rosters.length
+        );
+
+        break;
+      case "LM Rank R":
+        const rank_redraft_lm =
+          standings_detail
+            .sort(
+              (a, b) =>
+                b.redraft_starters +
+                b.redraft_bench -
+                (a.redraft_starters + a.redraft_bench)
+            )
+            .findIndex((obj) => obj.roster_id === league.lmRoster.roster_id) +
+          1;
+
+        text = rank_redraft_lm;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_redraft_lm,
+          1,
+          league.rosters.length
+        );
+
+        break;
+      case "League ID":
+        text = league.league_id;
+        break;
       default:
         text = "-";
         break;

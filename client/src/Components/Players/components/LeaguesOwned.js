@@ -10,59 +10,73 @@ import {
   getRosterPicksValue,
 } from "../../Common/Helpers/rosterValues";
 import { getSortIcon } from "../../Common/Helpers/getSortIcon";
+import { useEffect } from "react";
 
-const LeaguesOwned = ({ secondaryTable, leagues_owned }) => {
+const LeaguesOwned = ({
+  secondaryTable,
+  leagues_owned,
+  leagues_taken,
+  leagues_available,
+  columnOptions,
+}) => {
   const dispatch = useDispatch();
   const { allplayers } = useSelector((state) => state.common);
   const { type1, type2, adpLm } = useSelector((state) => state.user);
   const { column2, column3, column4, column5, sortBy, itemActive } =
     useSelector((state) => state.players.owned);
 
-  const columnOptions = [
-    "Picks Rank",
-    "Players Rank D",
-    "Rank D",
-    "Rank R",
-    "League ID",
-  ];
+  useEffect(() => {
+    if (leagues_taken && sortBy.column === 3) {
+      dispatch(
+        setStateLeaguesOwned({
+          sortBy: {
+            ...sortBy,
+            column: 4,
+          },
+        })
+      );
+    }
+  }, [leagues_taken, sortBy, dispatch]);
 
   const headers = [
     [
       {
         text: getSortIcon(1, sortBy, dispatch, setStateLeaguesOwned),
-        colSpan: 6,
+        colSpan: 5,
         className: "sort",
       },
       {
         text: getSortIcon(2, sortBy, dispatch, setStateLeaguesOwned),
-        colSpan: 3,
+        colSpan: leagues_taken ? 4 : 2,
         className: "sort",
       },
-      {
+      !leagues_taken && {
         text: getSortIcon(3, sortBy, dispatch, setStateLeaguesOwned),
-        colSpan: 3,
+        colSpan: 2,
         className: "sort",
       },
       {
         text: getSortIcon(4, sortBy, dispatch, setStateLeaguesOwned),
-        colSpan: 3,
+        colSpan: 2,
         className: "sort",
       },
       {
         text: getSortIcon(5, sortBy, dispatch, setStateLeaguesOwned),
-        colSpan: 3,
+        colSpan: 2,
         className: "sort",
       },
     ],
     [
       {
         text: <span>League</span>,
-        colSpan: 6,
+        colSpan: 5,
         rowSpan: 2,
         className: sortBy.column === 1 ? "sorted" : "",
       },
       {
-        text: (
+        text: leagues_taken ? (
+          <span>Leaguemate</span>
+        ) : (
           <HeaderDropdown
             column_text={column2}
             columnOptions={columnOptions}
@@ -71,10 +85,10 @@ const LeaguesOwned = ({ secondaryTable, leagues_owned }) => {
             }
           />
         ),
-        colSpan: 3,
+        colSpan: leagues_taken ? 4 : 2,
         className: sortBy.column === 2 ? "sorted" : "",
       },
-      {
+      !leagues_taken && {
         text: (
           <HeaderDropdown
             column_text={column3}
@@ -84,7 +98,7 @@ const LeaguesOwned = ({ secondaryTable, leagues_owned }) => {
             }
           />
         ),
-        colSpan: 3,
+        colSpan: leagues_taken ? 0 : 2,
         className: sortBy.column === 3 ? "sorted" : "",
       },
       {
@@ -97,7 +111,7 @@ const LeaguesOwned = ({ secondaryTable, leagues_owned }) => {
             }
           />
         ),
-        colSpan: 3,
+        colSpan: 2,
         className: sortBy.column === 4 ? "sorted" : "",
       },
       {
@@ -110,13 +124,17 @@ const LeaguesOwned = ({ secondaryTable, leagues_owned }) => {
             }
           />
         ),
-        colSpan: 3,
+        colSpan: 2,
         className: sortBy.column === 5 ? "sorted" : "",
       },
     ],
   ];
 
-  const body = filterLeagues(leagues_owned, type1, type2)
+  const body = filterLeagues(
+    leagues_owned || leagues_taken || leagues_available,
+    type1,
+    type2
+  )
     .map((league) => {
       const standings_detail = league.rosters.map((roster) => {
         const dynasty_picks = getRosterPicksValue(
@@ -195,11 +213,16 @@ const LeaguesOwned = ({ secondaryTable, leagues_owned }) => {
         };
       });
 
+      const columns = leagues_taken
+        ? [column4, column5]
+        : [column2, column3, column4, column5];
       return {
         id: league.league_id,
         sortBy:
           sortBy.column === 1
             ? league.index
+            : leagues_taken && sortBy.column === 2
+            ? league.lmRoster.username || "Orphan"
             : getColumnValue(
                 league,
                 [column2, column3, column4, column5][sortBy.column - 2],
@@ -218,7 +241,7 @@ const LeaguesOwned = ({ secondaryTable, leagues_owned }) => {
         list: [
           {
             text: league.name,
-            colSpan: 6,
+            colSpan: 5,
             image: {
               src: league.avatar,
               alt: league.name,
@@ -226,8 +249,18 @@ const LeaguesOwned = ({ secondaryTable, leagues_owned }) => {
             },
             className: sortBy.column === 1 ? "sorted" : "",
           },
+          leagues_taken && {
+            text: league.lmRoster.username || <em>Orphan</em>,
+            colSpan: 4,
+            image: {
+              src: league.lmRoster.avatar,
+              alt: "lm avatar",
+              type: "user",
+            },
+            className: sortBy.column === 2 ? "sorted" : "",
+          },
 
-          ...[column2, column3, column4, column5].map((column, index) => {
+          ...columns.map((column, index) => {
             const { text, getTrendColor } = getColumnValue(
               league,
               column,
@@ -241,8 +274,11 @@ const LeaguesOwned = ({ secondaryTable, leagues_owned }) => {
                   {text}
                 </span>
               ),
-              colSpan: 3,
-              className: sortBy.column === index + 2 ? "sorted" : "",
+              colSpan: 2,
+              className:
+                sortBy.column === index + 2 + (leagues_taken ? 2 : 0)
+                  ? "sorted"
+                  : "",
             };
           }),
         ],

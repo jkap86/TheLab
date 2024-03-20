@@ -15,6 +15,21 @@ const PlayerLeagues = ({
   const dispatch = useDispatch();
   const { tabSecondary } = useSelector((state) => state.players.primary);
 
+  const columnOptionsCommon = [
+    "Picks Rank",
+    "Players Rank D",
+    "Rank D",
+    "Rank R",
+  ];
+
+  const columnOptions = [
+    ...columnOptionsCommon,
+    ...(tabSecondary === "Taken"
+      ? columnOptionsCommon.map((colname) => `LM ${colname}`)
+      : []),
+    "League ID",
+  ];
+
   return (
     <>
       <div className="secondary nav">
@@ -58,10 +73,25 @@ const PlayerLeagues = ({
         )}
       </div>
       <Suspense fallback={<LoadingIcon />}>
-        <LeaguesOwned
-          secondaryTable={secondaryTable}
-          leagues_owned={leagues_owned}
-        />
+        {tabSecondary === "Owned" ? (
+          <LeaguesOwned
+            secondaryTable={secondaryTable}
+            leagues_owned={leagues_owned}
+            columnOptions={columnOptions}
+          />
+        ) : tabSecondary === "Taken" ? (
+          <LeaguesOwned
+            secondaryTable={secondaryTable}
+            leagues_taken={leagues_taken}
+            columnOptions={columnOptions}
+          />
+        ) : (
+          <LeaguesOwned
+            secondaryTable={secondaryTable}
+            leagues_available={leagues_available}
+            columnOptions={columnOptions}
+          />
+        )}
       </Suspense>
     </>
   );

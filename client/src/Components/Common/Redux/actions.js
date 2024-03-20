@@ -154,6 +154,50 @@ export const fetchLeagues = (user_id, season) => {
   };
 };
 
+export const syncLeague = (league_id, user_id) => {
+  return async (dispatch, getState) => {
+    const state = getState();
+
+    const leagues = state.user.leagues;
+
+    dispatch({ type: "SET_STATE_STANDINGS", payload: { syncing: true } });
+
+    try {
+      const league = await axios.get("/league/sync", {
+        params: { league_id, user_id },
+      });
+
+      const league_to_replace_index = leagues.find(
+        (l) => l.league_id === league_id
+      ).index;
+
+      const data = [
+        ...leagues.filter((l) => l.league_id !== league_id),
+        {
+          ...league.data,
+          index: league_to_replace_index,
+        },
+      ];
+      dispatch({
+        type: "FETCH_LEAGUES_SUCCESS",
+        payload: data.sort((a, b) => a.index - b.index),
+      });
+
+      if (!data.find((league) => league.error)) {
+        saveToDB(user_id, "leagues", {
+          timestamp: new Date().getTime() + 60 * 60 * 10000,
+          data: data,
+        });
+      }
+
+      dispatch({ type: "SET_STATE_STANDINGS", payload: { syncing: false } });
+    } catch (err) {
+      console.log({ err });
+      dispatch({ type: "SET_STATE_STANDINGS", payload: { syncing: false } });
+    }
+  };
+};
+
 export const fetchLmPlayerShares = (user_id) => async (dispatch) => {
   dispatch({ type: "SET_STATE_USER", payload: { isLoadingPS: true } });
 

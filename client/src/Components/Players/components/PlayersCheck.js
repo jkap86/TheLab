@@ -141,7 +141,11 @@ const PlayersCheck = ({ secondaryTable }) => {
             allplayers?.[x.id]?.team === filters.team) &&
           (filters.draftClass === "All" ||
             parseInt(filters.draftClass) ===
-              state.league_season - (allplayers[x.id]?.years_exp || 0)))
+              state.league_season - (allplayers[x.id]?.years_exp || 0)) &&
+          (filters.position === allplayers[x.id]?.position ||
+            filters.position
+              .split("/")
+              .includes(allplayers[x.id]?.position?.slice(0, 1))))
     )
     .map((player) => {
       let pick_name;

@@ -4,7 +4,7 @@ const db = require("../models");
 const User = db.users;
 const League = db.leagues;
 const Op = db.Sequelize.Op;
-const { fetchUserLeagues } = require("../api/sleeperApi");
+const { fetchUserLeagues, fetchLeague } = require("../api/sleeperApi");
 const { upsertLeagues, splitLeagues } = require("../helpers/upsertLeagues");
 const { getLeaguemateLeagues } = require("../helpers/leaguemateLeagues");
 const JSONStream = require("JSONStream");
@@ -60,6 +60,26 @@ exports.upsert = async (req, res) => {
     stream.write(data);
   }
   stream.end();
+};
+
+exports.sync = async (req, res) => {
+  const league_to_sync = await fetchLeague(req.query.league_id);
+
+  const synced_league = await upsertLeagues([league_to_sync]);
+
+  const userRoster = synced_league[0].rosters?.find((roster) => {
+    return (
+      (roster.user_id === req.query.user_id ||
+        roster.co_owners?.find((co) => co?.user_id === req.query.user_id)) &&
+      (roster.players?.length > 0 ||
+        synced_league.settings.status === "drafting")
+    );
+  });
+
+  res.send({
+    ...synced_league[0],
+    userRoster,
+  });
 };
 
 exports.leaguemate = async (req, res) => {

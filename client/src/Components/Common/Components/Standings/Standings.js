@@ -5,14 +5,15 @@ import { getAdpFormatted } from "../../Helpers/getAdpFormatted";
 import HeaderDropdown from "../HeaderDropdown";
 import { getTrendColorRank } from "../../Helpers/getTrendColor";
 import { setStateStandings } from "../../Redux/actions";
+import { syncLeague } from "../../Redux/actions";
 const Roster = React.lazy(() => import("../Roster/Roster"));
 const TableMain = React.lazy(() => import("../TableMain"));
 
 const Standings = ({ league, type }) => {
   const dispatch = useDispatch();
   const { allplayers } = useSelector((state) => state.common);
-  const { adpLm } = useSelector((state) => state.user);
-  const { column2, column3, standingsType, valueType } = useSelector(
+  const { adpLm, user_id } = useSelector((state) => state.user);
+  const { column2, column3, standingsType, valueType, syncing } = useSelector(
     (state) => state.standings
   );
   const [itemActive2, setItemActive2] = useState(league?.userRoster?.roster_id);
@@ -250,6 +251,11 @@ const Standings = ({ league, type }) => {
             />
           </div>
         </div>
+        <i
+          className={"fa-solid fa-arrows-rotate" + (syncing ? " rotate" : "")}
+          onClick={() => dispatch(syncLeague(league.league_id, user_id))}
+        ></i>
+
         <div>
           <div>
             <HeaderDropdown

@@ -3,6 +3,7 @@ const initialState = {
   column2: "Starters",
   column3: "Total",
   valueType: "ADP",
+  syncing: false,
 };
 
 const StandingsReducer = (state = initialState, action) => {
