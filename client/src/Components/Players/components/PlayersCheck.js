@@ -38,7 +38,9 @@ const PlayersCheck = ({ secondaryTable }) => {
     "LM W %",
     "ADP SF R",
     "ADP SF D",
+    "ADP SF D-R",
     "Auction Budget% D",
+    "Age",
   ];
 
   const headers = [
@@ -267,7 +269,8 @@ const PlayersCheck = ({ secondaryTable }) => {
         record_lm,
         winpct_lm,
         adpLm,
-        player.id
+        player.id,
+        allplayers
       ).sort;
 
       return {
@@ -316,7 +319,8 @@ const PlayersCheck = ({ secondaryTable }) => {
               record_lm,
               winpct_lm,
               adpLm,
-              player.id
+              player.id,
+              allplayers
             );
 
             return {

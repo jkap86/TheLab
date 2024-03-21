@@ -13,7 +13,7 @@ const Standings = ({ league, type }) => {
   const dispatch = useDispatch();
   const { allplayers } = useSelector((state) => state.common);
   const { adpLm, user_id } = useSelector((state) => state.user);
-  const { column2, column3, standingsType, valueType, syncing } = useSelector(
+  const { column2, column3, column3b, syncing } = useSelector(
     (state) => state.standings
   );
   const [itemActive2, setItemActive2] = useState(league?.userRoster?.roster_id);
@@ -22,6 +22,12 @@ const Standings = ({ league, type }) => {
   const [pageAvailable, setPageAvailable] = useState(1);
 
   const active_roster = league.rosters.find((x) => x.roster_id === itemActive2);
+
+  const standingsType = column3b?.endsWith("D") ? "Dynasty" : "Redraft";
+
+  const adp_key = `${standingsType}${
+    column3b.includes("Auction %") ? "_auction" : ""
+  }`;
 
   useEffect(() => {
     if (league.settings.type === 0) {
@@ -51,11 +57,15 @@ const Standings = ({ league, type }) => {
   };
 
   const columnOptions = [
-    "Starters",
-    "Bench",
-    ...(standingsType === "Dynasty" ? ["Players"] : ""),
-    "Total",
-    ...(standingsType === "Dynasty" ? ["Picks"] : ""),
+    "Starters R",
+    "Bench R",
+    "Total R",
+    "Starters D",
+    "Bench D",
+    "Players D",
+    "Picks D",
+    "Total D",
+    ,
   ];
   const standings_headers = [
     [
@@ -73,6 +83,7 @@ const Standings = ({ league, type }) => {
           />
         ),
         colSpan: 3,
+        className: "sorted",
       },
       {
         text: (
@@ -87,15 +98,17 @@ const Standings = ({ league, type }) => {
     ],
   ];
 
-  const adp_key = `${standingsType}${
-    valueType === "Auction %" ? "_auction" : ""
-  }`;
-
   const standings_body = league.rosters.map((roster) => {
-    const key1 = `${standingsType.toLowerCase()}_${column2.toLowerCase()}`;
+    const key1 = `${(column2.endsWith("D")
+      ? "Dynasty"
+      : "Redraft"
+    ).toLowerCase()}_${column2.split(" ")[0].toLowerCase()}`;
     const stat1 = roster?.[key1];
 
-    const key2 = `${standingsType.toLowerCase()}_${column3.toLowerCase()}`;
+    const key2 = `${(column3.endsWith("D")
+      ? "Dynasty"
+      : "Redraft"
+    ).toLowerCase()}_${column3.split(" ")[0].toLowerCase()}`;
     const stat2 = roster?.[key2];
 
     return {
@@ -108,7 +121,7 @@ const Standings = ({ league, type }) => {
           type: "user",
         },
       },
-      sort: stat2,
+      sort: stat1,
       list: [
         {
           text: roster.username || <em>Orphan</em>,
@@ -132,6 +145,7 @@ const Standings = ({ league, type }) => {
             </span>
           ),
           colSpan: 3,
+          className: "sorted",
         },
         {
           text: (
@@ -146,7 +160,6 @@ const Standings = ({ league, type }) => {
             </span>
           ),
           colSpan: 3,
-          className: "sorted",
         },
       ],
     };
@@ -165,11 +178,11 @@ const Standings = ({ league, type }) => {
       {
         text: (
           <HeaderDropdown
-            column_text={valueType}
+            column_text={column3b}
             setState={(value) =>
-              dispatch(setStateStandings({ valueType: value }))
+              dispatch(setStateStandings({ column3b: value }))
             }
-            columnOptions={["ADP", "Auction %"]}
+            columnOptions={["ADP D", "ADP R", "Auction % D", "Auction % R"]}
           />
         ),
         colSpan: 9,
@@ -225,7 +238,7 @@ const Standings = ({ league, type }) => {
                 )}
               >
                 {(adpLm?.[adp_key]?.[player_id]?.adp &&
-                  (valueType === "ADP"
+                  (column3b.includes("ADP")
                     ? getAdpFormatted(adpLm?.[adp_key]?.[player_id]?.adp)
                     : adpLm?.[adp_key]?.[player_id]?.adp?.toFixed(0))) ||
                   "-"}
@@ -242,13 +255,12 @@ const Standings = ({ league, type }) => {
       <div className={type + " nav"}>
         <div>
           <div>
-            <HeaderDropdown
-              column_text={standingsType}
-              columnOptions={["Dynasty", "Redraft"]}
-              setState={(value) =>
-                dispatch(setStateStandings({ standingsType: value }))
-              }
-            />
+            <button
+              className={itemActive2 === "" ? "active click" : "click"}
+              onClick={() => setItemActive2("")}
+            >
+              Available
+            </button>
           </div>
         </div>
         <i
@@ -304,9 +316,9 @@ const Standings = ({ league, type }) => {
           league={league}
           standingsType={standingsType}
           filter={filter}
-          valueType={valueType}
+          valueType={column3b}
           setValueType={(value) =>
-            dispatch(setStateStandings({ valueType: value }))
+            dispatch(setStateStandings({ column3b: value }))
           }
         />
       ) : (

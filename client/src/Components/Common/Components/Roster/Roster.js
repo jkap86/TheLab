@@ -45,7 +45,7 @@ const Roster = ({
         text: (
           <HeaderDropdown
             column_text={valueType}
-            columnOptions={["ADP", "Auction %"]}
+            columnOptions={["ADP D", "Auction % D", "ADP R", "Auction % R"]}
             setState={setValueType}
           />
         ),
@@ -55,7 +55,7 @@ const Roster = ({
   ];
 
   const adp_key = `${standingsType}${
-    valueType === "Auction %" ? "_auction" : ""
+    valueType.includes("Auction") ? "_auction" : ""
   }`;
 
   const getBody = () => {
@@ -123,7 +123,7 @@ const Roster = ({
                 <span
                   className="stat adp"
                   style={
-                    valueType === "ADP"
+                    valueType.includes("ADP")
                       ? getTrendColorRank(
                           roster.starters.length * league.rosters.length -
                             adpLm?.[adp_key]?.[player_id]?.adp,
@@ -140,7 +140,7 @@ const Roster = ({
                   }
                 >
                   {(adpLm?.[adp_key]?.[player_id]?.adp &&
-                    (valueType === "ADP"
+                    (valueType.includes("ADP")
                       ? getAdpFormatted(adpLm?.[adp_key]?.[player_id]?.adp)
                       : adpLm?.[adp_key]?.[player_id]?.adp?.toFixed(0))) ||
                     "-"}
@@ -213,7 +213,7 @@ const Roster = ({
                   <span
                     className="stat adp"
                     style={
-                      valueType === "ADP"
+                      valueType.includes("ADP")
                         ? getTrendColorRank(
                             roster.starters.length * league.rosters.length -
                               value,
@@ -230,7 +230,7 @@ const Roster = ({
                     }
                   >
                     {(value &&
-                      (valueType === "ADP"
+                      (valueType.includes("ADP")
                         ? getAdpFormatted(value)
                         : value?.toFixed(0))) ||
                       "-"}

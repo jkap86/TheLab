@@ -1,5 +1,8 @@
 const initialState = {
   page: 1,
+  page_owned: 1,
+  page_taken: 1,
+  page_available: 1,
   itemActive: "",
   itemActive2: "",
   searched: "",

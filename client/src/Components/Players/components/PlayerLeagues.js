@@ -13,7 +13,9 @@ const PlayerLeagues = ({
   leagues_available,
 }) => {
   const dispatch = useDispatch();
-  const { tabSecondary } = useSelector((state) => state.players.primary);
+  const { tabSecondary, page_owned, page_taken, page_available } = useSelector(
+    (state) => state.players.primary
+  );
 
   const columnOptionsCommon = [
     "Picks Rank",
@@ -78,18 +80,30 @@ const PlayerLeagues = ({
             secondaryTable={secondaryTable}
             leagues_owned={leagues_owned}
             columnOptions={columnOptions}
+            page={page_owned}
+            setPage={(value) =>
+              dispatch(setStatePlayers({ page_owned: value }))
+            }
           />
         ) : tabSecondary === "Taken" ? (
           <LeaguesOwned
             secondaryTable={secondaryTable}
             leagues_taken={leagues_taken}
             columnOptions={columnOptions}
+            page={page_taken}
+            setPage={(value) =>
+              dispatch(setStatePlayers({ page_taken: value }))
+            }
           />
         ) : (
           <LeaguesOwned
             secondaryTable={secondaryTable}
             leagues_available={leagues_available}
             columnOptions={columnOptions}
+            page={page_available}
+            setPage={(value) =>
+              dispatch(setStatePlayers({ page_available: value }))
+            }
           />
         )}
       </Suspense>

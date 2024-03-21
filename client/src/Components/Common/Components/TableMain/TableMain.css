@@ -51,8 +51,9 @@ div.nav > div {
   align-items: center;
   justify-content: space-between;
 }
-div.nav > div > div {
+div.nav div {
   position: relative;
+  height: 100%;
 }
 
 div.nav > div > div:only-child {
@@ -66,16 +67,17 @@ div.nav i.fa-expand {
   padding: 0 2rem;
 }
 
-div.nav > button {
+div.nav button {
   box-shadow: inset 0 0 5rem gray;
   background-color: transparent;
   font-size: inherit;
   font-family: inherit;
   color: white;
   border: 0.75rem ridge gray;
+  height: 100%;
 }
 
-div.nav > button.active {
+div.nav button.active {
   box-shadow: inset 0 0 5rem var(--wr);
   text-shadow: 0 0 0.25rem var(--color2);
   border-color: var(--color2);

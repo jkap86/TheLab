@@ -1,8 +1,7 @@
 const initialState = {
-  standingsType: "Dynasty",
-  column2: "Starters",
-  column3: "Total",
-  valueType: "ADP",
+  column2: "Total D",
+  column3: "Total R",
+  column3b: "ADP D",
   syncing: false,
 };
 

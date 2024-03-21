@@ -18,6 +18,8 @@ const LeaguesOwned = ({
   leagues_taken,
   leagues_available,
   columnOptions,
+  page,
+  setPage,
 }) => {
   const dispatch = useDispatch();
   const { allplayers } = useSelector((state) => state.common);
@@ -304,6 +306,8 @@ const LeaguesOwned = ({
       setItemActive={(value) =>
         dispatch(setStateLeaguesOwned({ itemActive: value }))
       }
+      page={page}
+      setPage={setPage}
     />
   );
 };
