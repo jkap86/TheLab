@@ -295,7 +295,9 @@ export const fetchAdp =
       );
 
       const n_drafts_dynasty = Math.max(
-        ...adp.data.draft_picks.map((x) => parseInt(x.n_drafts))
+        ...adp.data.draft_picks
+          .filter((x) => x.league_type === "D")
+          .map((x) => parseInt(x.n_drafts))
       );
 
       const adp_dynasty = Object.fromEntries(
@@ -308,13 +310,24 @@ export const fetchAdp =
                 (allplayers[x.player_id]?.years_exp === 0 &&
                   parseInt(x.n_drafts) > 5))
           )
-          .map((x) => [
-            x.player_id,
-            {
-              adp: parseFloat(x.adp),
-              n_drafts: parseInt(x.n_drafts),
-            },
-          ])
+          .map((x) => {
+            const recent = adp.data.draft_picks_recent.find(
+              (pr) => pr.league_type === "D" && pr.player_id === x.player_id
+            );
+
+            if (recent) {
+              console.log({ recent });
+            }
+            return [
+              x.player_id,
+              {
+                adp: recent?.adp
+                  ? (parseFloat(recent.adp) + parseFloat(x.adp)) / 2
+                  : parseFloat(x.adp),
+                n_drafts: parseInt(x.n_drafts),
+              },
+            ];
+          })
       );
 
       const adp_all = Object.fromEntries(

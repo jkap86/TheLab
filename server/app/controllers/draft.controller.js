@@ -36,6 +36,32 @@ exports.adp = async (req, res) => {
       group: ["player_id", "draftpick.league_type"],
     });
 
+    let draft_picks_recent = await Draftpick.findAll({
+      attributes: [
+        "player_id",
+        "league_type",
+        [sequelize.fn("AVG", sequelize.col("pick_no")), "adp"],
+        [sequelize.fn("COUNT", sequelize.col("draft.draft_id")), "n_drafts"],
+      ],
+      include: {
+        model: Draft,
+        attributes: [],
+        where: {
+          last_picked: {
+            [Op.gt]: new Date(new Date() - 7 * 24 * 60 * 60 * 1000).getTime(),
+          },
+        },
+        include: {
+          model: League,
+          attributes: [],
+          where: {
+            league_id: req.body.league_ids,
+          },
+        },
+      },
+      group: ["player_id", "draftpick.league_type"],
+    });
+
     if (draft_picks.length < 500) {
       draft_picks = await Draftpick.findAll({
         attributes: [
@@ -57,6 +83,25 @@ exports.adp = async (req, res) => {
         },
         group: ["player_id", "draftpick.league_type"],
       });
+
+      draft_picks_recent = await Draftpick.findAll({
+        attributes: [
+          "player_id",
+          "league_type",
+          [sequelize.fn("AVG", sequelize.col("pick_no")), "adp"],
+          [sequelize.fn("COUNT", sequelize.col("draft.draft_id")), "n_drafts"],
+        ],
+        include: {
+          model: Draft,
+          attributes: [],
+          where: {
+            start_time: {
+              [Op.gt]: new Date(new Date() - 7 * 24 * 60 * 60 * 1000).getTime(),
+            },
+          },
+        },
+        group: ["player_id", "draftpick.league_type"],
+      });
     }
 
     let auction_picks = await Auctionpick.findAll({
@@ -72,6 +117,32 @@ exports.adp = async (req, res) => {
         where: {
           start_time: {
             [Op.gt]: new Date(new Date() - 30 * 24 * 60 * 60 * 1000).getTime(),
+          },
+        },
+        include: {
+          model: League,
+          attributes: [],
+          where: {
+            league_id: req.body.league_ids,
+          },
+        },
+      },
+      group: ["player_id", "auctionpick.league_type"],
+    });
+
+    let auction_picks_recent = await Auctionpick.findAll({
+      attributes: [
+        "player_id",
+        "league_type",
+        [sequelize.fn("AVG", sequelize.col("budget_percent")), "adp"],
+        [sequelize.fn("COUNT", sequelize.col("draft.draft_id")), "n_drafts"],
+      ],
+      include: {
+        model: Draft,
+        attributes: [],
+        where: {
+          start_time: {
+            [Op.gt]: new Date(new Date() - 7 * 24 * 60 * 60 * 1000).getTime(),
           },
         },
         include: {
@@ -106,9 +177,33 @@ exports.adp = async (req, res) => {
         },
         group: ["player_id", "auctionpick.league_type"],
       });
+
+      auction_picks_recent = await Auctionpick.findAll({
+        attributes: [
+          "player_id",
+          "league_type",
+          [sequelize.fn("AVG", sequelize.col("budget_percent")), "adp"],
+          [sequelize.fn("COUNT", sequelize.col("draft.draft_id")), "n_drafts"],
+        ],
+        include: {
+          model: Draft,
+          attributes: [],
+          where: {
+            start_time: {
+              [Op.gt]: new Date(new Date() - 7 * 24 * 60 * 60 * 1000).getTime(),
+            },
+          },
+        },
+        group: ["player_id", "auctionpick.league_type"],
+      });
     }
 
-    res.send({ draft_picks, auction_picks });
+    res.send({
+      draft_picks,
+      draft_picks_recent,
+      auction_picks,
+      auction_picks_recent,
+    });
   } catch (err) {
     console.log(err.message);
   }
