@@ -308,10 +308,11 @@ div.half:last-child td.half {
 }
 
 ol.page_numbers {
-  background-color: var(--color1);
+  background-color: black;
+  box-shadow: inset 0 0 7rem silver;
   display: flex;
   filter: drop-shadow(0 0 0.2rem silver);
-  font-size: 3rem;
+  font-size: 4rem;
   margin: auto;
   max-width: 80%;
   overflow: auto;
@@ -322,14 +323,17 @@ ol.page_numbers {
 ol.page_numbers > li {
   box-sizing: border-box;
   opacity: 0.25;
-  margin: 0 1rem;
+  margin: auto 0;
   padding: 2rem;
+  font-weight: 900;
+  text-shadow: 0 0 0.25rem black;
 }
 
 ol.page_numbers > li.active {
-  border: 0.1rem ridge var(--color2);
+  border: 0.25rem double var(--color2);
   box-sizing: border-box;
   margin: 0 1rem;
   opacity: 1;
-  padding: 2rem;
+  color: white;
+  box-shadow: inset 0 0 4rem var(--color2);
 }
