@@ -1,4 +1,4 @@
-const position_map = {
+export const position_map = {
   QB: ["QB"],
   RB: ["RB", "FB"],
   WR: ["WR"],
@@ -8,7 +8,8 @@ const position_map = {
   WRRB_FLEX: ["RB", "FB", "WR"],
   REC_FLEX: ["WR", "TE"],
 };
-const position_abbrev = {
+
+export const position_abbrev = {
   QB: "QB",
   RB: "RB",
   WR: "WR",

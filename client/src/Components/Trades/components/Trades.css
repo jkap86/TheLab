@@ -1,0 +1,7 @@
+table.trade_summary table.body > tbody > tr > td:last-child:hover {
+  direction: rtl;
+}
+
+table.trades td > span.stat {
+  font-size: 3.5rem;
+}

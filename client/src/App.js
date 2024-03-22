@@ -6,6 +6,7 @@ const Homepage = lazy(() => import("./Components/Homepage"));
 const Layout = lazy(() => import("./Components/Common/Components/Layout"));
 const Leagues = lazy(() => import("./Components/Leagues"));
 const Players = lazy(() => import("./Components/Players"));
+const Trades = lazy(() => import("./Components/Trades"));
 
 function App() {
   return (
@@ -33,6 +34,18 @@ function App() {
                   display={
                     <Suspense fallback={<LoadingIcon />}>
                       <Players />
+                    </Suspense>
+                  }
+                />
+              }
+            ></Route>
+            <Route
+              path="/trades/:username"
+              element={
+                <Layout
+                  display={
+                    <Suspense fallback={<LoadingIcon />}>
+                      <Trades />
                     </Suspense>
                   }
                 />

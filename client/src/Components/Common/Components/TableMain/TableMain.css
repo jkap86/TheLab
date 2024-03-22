@@ -237,6 +237,7 @@ th:last-child:hover select {
   direction: rtl;
 }
 
+td.primary:only-child:hover,
 td.primary:last-child:hover > span,
 th:last-child:hover > span,
 th:last-child:hover option {

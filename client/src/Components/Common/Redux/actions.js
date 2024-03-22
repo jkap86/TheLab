@@ -315,9 +315,6 @@ export const fetchAdp =
               (pr) => pr.league_type === "D" && pr.player_id === x.player_id
             );
 
-            if (recent) {
-              console.log({ recent });
-            }
             return [
               x.player_id,
               {
