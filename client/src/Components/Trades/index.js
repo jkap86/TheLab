@@ -1,4 +1,3 @@
-import TradesNav from "./components/TradesNav";
 import { useSelector } from "react-redux";
 import PcTrades from "./components/PcTrades";
 import LmTrades from "./components/LmTrades";
@@ -13,7 +12,6 @@ const Trades = () => {
 
   return (
     <>
-      <TradesNav />
       <TradesPrimary />
     </>
   );

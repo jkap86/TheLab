@@ -1,22 +1,34 @@
 import TableMain from "../../Common/Components/TableMain";
 import Trade from "./Trade";
 import { position_map } from "../../Common/Helpers/getOptimalLineupADP";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { setStateTradesNav } from "../redux/actions";
 
 const TradesDisplay = ({ secondaryTable, trades }) => {
   const { allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
   const { trades: lmTrades } = useSelector((state) => state.trades.lmtrades);
+  const dispatch = useDispatch();
+  const { tabPrimary } = useSelector((state) => state.trades.nav);
 
   const trades_headers = [
     [
       {
-        text: "Date",
-        colSpan: 3,
-      },
-      {
-        text: "League",
-        colSpan: 7,
+        text: (
+          <select
+            value={tabPrimary}
+            onChange={(e) =>
+              dispatch(setStateTradesNav({ tabPrimary: e.target.value }))
+            }
+            className="active click"
+          >
+            <option>Price Check</option>
+            <option>Leaguemate League Trades</option>
+            <option>Leaguemate Trades</option>
+            <option>Trade Tips</option>
+          </select>
+        ),
+        colSpan: 10,
       },
     ],
   ];

@@ -45,7 +45,7 @@ const Roster = ({
         text: (
           <HeaderDropdown
             column_text={valueType}
-            columnOptions={["ADP D", "Auction % D", "ADP R", "Auction % R"]}
+            columnOptions={["D ADP", "D Auction %", "R ADP", "R Auction %"]}
             setState={setValueType}
           />
         ),

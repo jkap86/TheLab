@@ -1,7 +1,7 @@
 const initialState = {
-  column2: "Total D",
-  column3: "Total R",
-  column3b: "ADP D",
+  column2: "D Total",
+  column3: "R Total",
+  column3b: "D ADP",
   syncing: false,
 };
 

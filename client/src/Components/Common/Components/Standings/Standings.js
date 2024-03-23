@@ -23,7 +23,7 @@ const Standings = ({ league, type }) => {
 
   const active_roster = league.rosters.find((x) => x.roster_id === itemActive2);
 
-  const standingsType = column3b?.endsWith("D") ? "Dynasty" : "Redraft";
+  const standingsType = column3b?.startsWith("D") ? "Dynasty" : "Redraft";
 
   const adp_key = `${standingsType}${
     column3b.includes("Auction %") ? "_auction" : ""
@@ -57,16 +57,16 @@ const Standings = ({ league, type }) => {
   };
 
   const columnOptions = [
-    "Starters R",
-    "Bench R",
-    "Total R",
-    "Starters D",
-    "Bench D",
-    "Players D",
-    "Picks D",
-    "Total D",
-    ,
+    "R Starters",
+    "R Bench",
+    "R Total",
+    "D Starters",
+    "D Bench",
+    "D Players",
+    "D Picks",
+    "D Total",
   ];
+
   const standings_headers = [
     [
       {
@@ -99,16 +99,16 @@ const Standings = ({ league, type }) => {
   ];
 
   const standings_body = league.rosters.map((roster) => {
-    const key1 = `${(column2.endsWith("D")
+    const key1 = `${(column2.startsWith("D")
       ? "Dynasty"
       : "Redraft"
-    ).toLowerCase()}_${column2.split(" ")[0].toLowerCase()}`;
+    ).toLowerCase()}_${column2.split(" ")[1].toLowerCase()}`;
     const stat1 = roster?.[key1];
 
-    const key2 = `${(column3.endsWith("D")
+    const key2 = `${(column3.startsWith("D")
       ? "Dynasty"
       : "Redraft"
-    ).toLowerCase()}_${column3.split(" ")[0].toLowerCase()}`;
+    ).toLowerCase()}_${column3.split(" ")[1].toLowerCase()}`;
     const stat2 = roster?.[key2];
 
     return {

@@ -3,7 +3,10 @@ import { useSelector } from "react-redux";
 import TableMain from "../../Common/Components/TableMain";
 import Avatar from "../../Common/Components/Avatar";
 import { getAdpFormatted } from "../../Common/Helpers/getAdpFormatted";
-import { getTrendColorRank } from "../../Common/Helpers/getTrendColor";
+import {
+  getTrendColorRank,
+  getTrendColorValue,
+} from "../../Common/Helpers/getTrendColor";
 
 const Trade = ({ trade }) => {
   const { state: stateState, allplayers } = useSelector(
@@ -32,6 +35,30 @@ const Trade = ({ trade }) => {
 
   const te_prem = trade["league.scoring_settings"]?.bonus_rec_te || 0;
 
+  const trade_totals = Object.fromEntries(
+    Object.keys(trade.rosters).map((rid) => {
+      const roster = trade.rosters[rid];
+
+      const adds_value = Object.keys(trade.adds || {})
+        .filter((a) => trade.adds[a] === roster?.user_id)
+        .reduce(
+          (acc, cur) =>
+            acc + (adpLm?.[`${league_type}_auction`]?.[cur]?.adp || 0),
+          0
+        );
+
+      const picks_value = trade.draft_picks
+        .filter((p) => p.owner_id === parseInt(rid))
+        .reduce((acc, cur) => {
+          const pick_name = "R" + ((cur.round - 1) * 12 + (cur.order || 7));
+
+          return acc + adpLm?.[`${league_type}_auction`]?.[pick_name]?.adp || 0;
+        }, 0);
+
+      return [rid, adds_value + picks_value];
+    })
+  );
+
   return (
     <TableMain
       type={"trade_summary"}
@@ -58,7 +85,7 @@ const Trade = ({ trade }) => {
                   </div>
                 </div>
               ),
-              colSpan: 3,
+              colSpan: 2,
               className: "small wrap",
             },
             {
@@ -83,7 +110,7 @@ const Trade = ({ trade }) => {
             },
             {
               text: trade["league.name"],
-              colSpan: 8,
+              colSpan: 9,
               image: {
                 src: trade?.["league.avatar"],
                 alt: "league avatar",
@@ -93,7 +120,7 @@ const Trade = ({ trade }) => {
             },
             {
               text: (
-                <>
+                <span>
                   <div>
                     {no_qb.toString()} QB {no_sf.toString()} SF
                   </div>
@@ -104,7 +131,7 @@ const Trade = ({ trade }) => {
                     })}{" "}
                     Prem
                   </div>
-                </>
+                </span>
               ),
               colSpan: 3,
               className: "type",
@@ -114,6 +141,7 @@ const Trade = ({ trade }) => {
         ...Object.keys(trade.rosters).map((rid) => {
           const roster = trade.rosters[rid];
 
+          const trade_total = trade_totals[rid];
           return {
             id: trade.transaction_id,
             list: [
@@ -124,7 +152,7 @@ const Trade = ({ trade }) => {
                   alt: "avatar",
                   type: "user",
                 },
-                colSpan: 5,
+                colSpan: 4,
                 className: "left trade_manager",
               },
               {
@@ -254,10 +282,30 @@ const Trade = ({ trade }) => {
                             </tr>
                           );
                         })}
+                      <tr>
+                        <td colSpan={11}></td>
+                        <td colSpan={8}>
+                          <span
+                            className="trade_total"
+                            style={getTrendColorRank(
+                              trade_total,
+                              Math.min(...Object.values(trade_totals)) / 2,
+                              Object.values(trade_totals).reduce(
+                                (acc, cur) => acc + cur,
+                                0
+                              ) *
+                                0.5 +
+                                Math.min(...Object.values(trade_totals)) / 2
+                            )}
+                          >
+                            {trade_total.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 ),
-                colSpan: 7,
+                colSpan: 8,
                 rowSpan: 2,
                 className: "small",
               },
