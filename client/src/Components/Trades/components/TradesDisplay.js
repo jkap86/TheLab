@@ -3,13 +3,14 @@ import Trade from "./Trade";
 import { position_map } from "../../Common/Helpers/getOptimalLineupADP";
 import { useSelector, useDispatch } from "react-redux";
 import { setStateTradesNav } from "../redux/actions";
+import HeaderDropdown from "../../Common/Components/HeaderDropdown";
 
 const TradesDisplay = ({ secondaryTable, trades }) => {
   const { allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
   const { trades: lmTrades } = useSelector((state) => state.trades.lmtrades);
   const dispatch = useDispatch();
-  const { tabPrimary } = useSelector((state) => state.trades.nav);
+  const { tabPrimary, valueType } = useSelector((state) => state.trades.nav);
 
   const trades_headers = [
     [
@@ -29,6 +30,28 @@ const TradesDisplay = ({ secondaryTable, trades }) => {
           </select>
         ),
         colSpan: 10,
+      },
+    ],
+    [
+      {
+        text: "",
+        colSpan: 4,
+      },
+      {
+        text: (
+          <HeaderDropdown
+            column_text={valueType}
+            columnOptions={["KTC", "ADP", "Auction %"]}
+            setState={(value) =>
+              dispatch(setStateTradesNav({ valueType: value }))
+            }
+          />
+        ),
+        colSpan: 2,
+      },
+      {
+        text: "",
+        colSpan: 4,
       },
     ],
   ];

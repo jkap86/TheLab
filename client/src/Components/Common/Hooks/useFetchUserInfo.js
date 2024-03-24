@@ -8,6 +8,7 @@ import {
   fetchCommon,
   fetchAdp,
   fetchLmLeagueIds,
+  fetchKTC,
 } from "../Redux/actions";
 import { checkIndexedDB, clearIndexedDB } from "../Helpers/indexedDb";
 
@@ -132,6 +133,10 @@ const useFetchUserInfo = () => {
       );
     }
   }, [dispatch, lmLeagueIds, adpLm, user_id, allplayers]);
+
+  useEffect(() => {
+    dispatch(fetchKTC());
+  }, [dispatch]);
 };
 
 export default useFetchUserInfo;

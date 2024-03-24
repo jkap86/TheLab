@@ -1,6 +1,7 @@
 const initialState = {
   tabPrimary: "Leaguemate League Trades",
   tabSecondary: "Rosters",
+  valueType: "KTC SF",
 };
 
 const TradesNavReducer = (state = initialState, action) => {

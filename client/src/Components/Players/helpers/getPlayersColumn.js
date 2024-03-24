@@ -15,7 +15,8 @@ export const getPlayersColumn = (
   winpct_lm,
   adpLm,
   player_id,
-  allplayers
+  allplayers,
+  ktc
 ) => {
   const leagues_count =
     leagues_owned.length + leagues_available.length + leagues_taken.length;
@@ -64,7 +65,10 @@ export const getPlayersColumn = (
 
   let text, trendColor, sort;
 
-  if ((header.includes("ADP") || header.includes("Auction")) && !adpLm) {
+  if (
+    ((header.includes("ADP") || header.includes("Auction")) && !adpLm) ||
+    (header.includes("KTC") && !ktc)
+  ) {
     text = <i className="fa-solid fa-spinner fa-spin-pulse"></i>;
     trendColor = {};
     sort = leagues_owned.length;
@@ -187,6 +191,12 @@ export const getPlayersColumn = (
         text = delta.toFixed(0);
         sort = delta;
         trendColor = getTrendColorRank(delta, -100, 100);
+        break;
+      case "KTC SF":
+        const value = ktc[player_id]?.superflex || 0;
+        text = value;
+        sort = value;
+        trendColor = getTrendColorRank(value, 1, 1000);
         break;
       default:
         text = "-";

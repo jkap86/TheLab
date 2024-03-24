@@ -1,0 +1,3502 @@
+[
+  {
+    "name": "Patrick Mahomes",
+    "link": "/dynasty-rankings/players/patrick-mahomes-272",
+    "position": "QB",
+    "team": "KCC",
+    "value": "9999"
+  },
+  {
+    "name": "Josh Allen",
+    "link": "/dynasty-rankings/players/josh-allen-365",
+    "position": "QB",
+    "team": "BUF",
+    "value": "9999"
+  },
+  {
+    "name": "C.J. Stroud",
+    "link": "/dynasty-rankings/players/cj-stroud-1403",
+    "position": "QB",
+    "team": "HOU",
+    "value": "9907"
+  },
+  {
+    "name": "Justin Jefferson",
+    "link": "/dynasty-rankings/players/justin-jefferson-542",
+    "position": "WR",
+    "team": "MIN",
+    "value": "9589"
+  },
+  {
+    "name": "Lamar Jackson",
+    "link": "/dynasty-rankings/players/lamar-jackson-372",
+    "position": "QB",
+    "team": "BAL",
+    "value": "8637"
+  },
+  {
+    "name": "Ja'Marr Chase",
+    "link": "/dynasty-rankings/players/ja-marr-chase-1004",
+    "position": "WR",
+    "team": "CIN",
+    "value": "8621"
+  },
+  {
+    "name": "CeeDee Lamb",
+    "link": "/dynasty-rankings/players/ceedee-lamb-546",
+    "position": "WR",
+    "team": "DAL",
+    "value": "8615"
+  },
+  {
+    "name": "Jalen Hurts",
+    "link": "/dynasty-rankings/players/jalen-hurts-595",
+    "position": "QB",
+    "team": "PHI",
+    "value": "8380"
+  },
+  {
+    "name": "Joe Burrow",
+    "link": "/dynasty-rankings/players/joe-burrow-601",
+    "position": "QB",
+    "team": "CIN",
+    "value": "8179"
+  },
+  {
+    "name": "Amon-Ra St. Brown",
+    "link": "/dynasty-rankings/players/amon-ra-st-brown-1010",
+    "position": "WR",
+    "team": "DET",
+    "value": "7970"
+  },
+  {
+    "name": "Marvin Harrison Jr.",
+    "link": "/dynasty-rankings/players/marvin-harrison-jr-1585",
+    "position": "WR",
+    "team": "FA",
+    "value": "7615"
+  },
+  {
+    "name": "Bijan Robinson",
+    "link": "/dynasty-rankings/players/bijan-robinson-1414",
+    "position": "RB",
+    "team": "ATL",
+    "value": "7589"
+  },
+  {
+    "name": "Justin Herbert",
+    "link": "/dynasty-rankings/players/justin-herbert-599",
+    "position": "QB",
+    "team": "LAC",
+    "value": "7586"
+  },
+  {
+    "name": "Caleb Williams",
+    "link": "/dynasty-rankings/players/caleb-williams-1550",
+    "position": "QB",
+    "team": "FA",
+    "value": "7513"
+  },
+  {
+    "name": "Anthony Richardson",
+    "link": "/dynasty-rankings/players/anthony-richardson-1405",
+    "position": "QB",
+    "team": "IND",
+    "value": "7459"
+  },
+  {
+    "name": "Breece Hall",
+    "link": "/dynasty-rankings/players/breece-hall-1224",
+    "position": "RB",
+    "team": "NYJ",
+    "value": "7084"
+  },
+  {
+    "name": "Jordan Love",
+    "link": "/dynasty-rankings/players/jordan-love-596",
+    "position": "QB",
+    "team": "GBP",
+    "value": "7053"
+  },
+  {
+    "name": "Puka Nacua",
+    "link": "/dynasty-rankings/players/puka-nacua-1426",
+    "position": "WR",
+    "team": "LAR",
+    "value": "7052"
+  },
+  {
+    "name": "2024 Early 1st",
+    "link": "/dynasty-rankings/players/2024-early-1st-1293",
+    "position": "PI",
+    "team": "",
+    "value": "7049"
+  },
+  {
+    "name": "Jahmyr Gibbs",
+    "link": "/dynasty-rankings/players/jahmyr-gibbs-1415",
+    "position": "RB",
+    "team": "DET",
+    "value": "6985"
+  },
+  {
+    "name": "Garrett Wilson",
+    "link": "/dynasty-rankings/players/garrett-wilson-1270",
+    "position": "WR",
+    "team": "NYJ",
+    "value": "6792"
+  },
+  {
+    "name": "Sam LaPorta",
+    "link": "/dynasty-rankings/players/sam-laporta-1429",
+    "position": "TE",
+    "team": "DET",
+    "value": "6667"
+  },
+  {
+    "name": "Kyler Murray",
+    "link": "/dynasty-rankings/players/kyler-murray-379",
+    "position": "QB",
+    "team": "ARI",
+    "value": "6576"
+  },
+  {
+    "name": "A.J. Brown",
+    "link": "/dynasty-rankings/players/aj-brown-217",
+    "position": "WR",
+    "team": "PHI",
+    "value": "6512"
+  },
+  {
+    "name": "Christian McCaffrey",
+    "link": "/dynasty-rankings/players/christian-mccaffrey-283",
+    "position": "RB",
+    "team": "SFO",
+    "value": "6469"
+  },
+  {
+    "name": "Trevor Lawrence",
+    "link": "/dynasty-rankings/players/trevor-lawrence-1094",
+    "position": "QB",
+    "team": "JAC",
+    "value": "6405"
+  },
+  {
+    "name": "Malik Nabers",
+    "link": "/dynasty-rankings/players/malik-nabers-1586",
+    "position": "WR",
+    "team": "FA",
+    "value": "6058"
+  },
+  {
+    "name": "Drake London",
+    "link": "/dynasty-rankings/players/drake-london-1268",
+    "position": "WR",
+    "team": "ATL",
+    "value": "6055"
+  },
+  {
+    "name": "Chris Olave",
+    "link": "/dynasty-rankings/players/chris-olave-1271",
+    "position": "WR",
+    "team": "NOS",
+    "value": "5980"
+  },
+  {
+    "name": "Jayden Daniels",
+    "link": "/dynasty-rankings/players/jayden-daniels-1552",
+    "position": "QB",
+    "team": "FA",
+    "value": "5861"
+  },
+  {
+    "name": "Tyreek Hill",
+    "link": "/dynasty-rankings/players/tyreek-hill-286",
+    "position": "WR",
+    "team": "MIA",
+    "value": "5749"
+  },
+  {
+    "name": "2025 Early 1st",
+    "link": "/dynasty-rankings/players/2025-early-1st-1361",
+    "position": "PI",
+    "team": "",
+    "value": "5691"
+  },
+  {
+    "name": "Brock Purdy",
+    "link": "/dynasty-rankings/players/brock-purdy-1214",
+    "position": "QB",
+    "team": "SFO",
+    "value": "5675"
+  },
+  {
+    "name": "Jaylen Waddle",
+    "link": "/dynasty-rankings/players/jaylen-waddle-1007",
+    "position": "WR",
+    "team": "MIA",
+    "value": "5649"
+  },
+  {
+    "name": "Brandon Aiyuk",
+    "link": "/dynasty-rankings/players/brandon-aiyuk-538",
+    "position": "WR",
+    "team": "SFO",
+    "value": "5646"
+  },
+  {
+    "name": "Dak Prescott",
+    "link": "/dynasty-rankings/players/dak-prescott-371",
+    "position": "QB",
+    "team": "DAL",
+    "value": "5638"
+  },
+  {
+    "name": "Rome Odunze",
+    "link": "/dynasty-rankings/players/rome-odunze-1587",
+    "position": "WR",
+    "team": "FA",
+    "value": "5585"
+  },
+  {
+    "name": "Michael Pittman",
+    "link": "/dynasty-rankings/players/michael-pittman-536",
+    "position": "WR",
+    "team": "IND",
+    "value": "5577"
+  },
+  {
+    "name": "Drake Maye",
+    "link": "/dynasty-rankings/players/drake-maye-1551",
+    "position": "QB",
+    "team": "FA",
+    "value": "5572"
+  },
+  {
+    "name": "Jonathan Taylor",
+    "link": "/dynasty-rankings/players/jonathan-taylor-634",
+    "position": "RB",
+    "team": "IND",
+    "value": "5570"
+  },
+  {
+    "name": "Tua Tagovailoa",
+    "link": "/dynasty-rankings/players/tua-tagovailoa-600",
+    "position": "QB",
+    "team": "MIA",
+    "value": "5552"
+  },
+  {
+    "name": "2024 Mid 1st",
+    "link": "/dynasty-rankings/players/2024-mid-1st-1294",
+    "position": "PI",
+    "team": "",
+    "value": "5529"
+  },
+  {
+    "name": "Nico Collins",
+    "link": "/dynasty-rankings/players/nico-collins-1040",
+    "position": "WR",
+    "team": "HOU",
+    "value": "5517"
+  },
+  {
+    "name": "DeVonta Smith",
+    "link": "/dynasty-rankings/players/devonta-smith-1005",
+    "position": "WR",
+    "team": "PHI",
+    "value": "5501"
+  },
+  {
+    "name": "D.J. Moore",
+    "link": "/dynasty-rankings/players/dj-moore-304",
+    "position": "WR",
+    "team": "CHI",
+    "value": "5428"
+  },
+  {
+    "name": "De'Von Achane",
+    "link": "/dynasty-rankings/players/de-von-achane-1398",
+    "position": "RB",
+    "team": "MIA",
+    "value": "5390"
+  },
+  {
+    "name": "Kyren Williams",
+    "link": "/dynasty-rankings/players/kyren-williams-1226",
+    "position": "RB",
+    "team": "LAR",
+    "value": "5345"
+  },
+  {
+    "name": "Tank Dell",
+    "link": "/dynasty-rankings/players/tank-dell-1438",
+    "position": "WR",
+    "team": "HOU",
+    "value": "5336"
+  },
+  {
+    "name": "Trey McBride",
+    "link": "/dynasty-rankings/players/trey-mcbride-1253",
+    "position": "TE",
+    "team": "ARI",
+    "value": "5306"
+  },
+  {
+    "name": "Tee Higgins",
+    "link": "/dynasty-rankings/players/tee-higgins-543",
+    "position": "WR",
+    "team": "CIN",
+    "value": "5269"
+  },
+  {
+    "name": "Brock Bowers",
+    "link": "/dynasty-rankings/players/brock-bowers-1612",
+    "position": "TE",
+    "team": "FA",
+    "value": "5254"
+  },
+  {
+    "name": "Rashee Rice",
+    "link": "/dynasty-rankings/players/rashee-rice-1447",
+    "position": "WR",
+    "team": "KCC",
+    "value": "5242"
+  },
+  {
+    "name": "Jordan Addison",
+    "link": "/dynasty-rankings/players/jordan-addison-1420",
+    "position": "WR",
+    "team": "MIN",
+    "value": "5233"
+  },
+  {
+    "name": "Zay Flowers",
+    "link": "/dynasty-rankings/players/zay-flowers-1443",
+    "position": "WR",
+    "team": "BAL",
+    "value": "5225"
+  },
+  {
+    "name": "Kyle Pitts",
+    "link": "/dynasty-rankings/players/kyle-pitts-1051",
+    "position": "TE",
+    "team": "ATL",
+    "value": "5207"
+  },
+  {
+    "name": "Travis Etienne",
+    "link": "/dynasty-rankings/players/travis-etienne-1030",
+    "position": "RB",
+    "team": "JAC",
+    "value": "5199"
+  },
+  {
+    "name": "Saquon Barkley",
+    "link": "/dynasty-rankings/players/saquon-barkley-1",
+    "position": "RB",
+    "team": "PHI",
+    "value": "5189"
+  },
+  {
+    "name": "DK Metcalf",
+    "link": "/dynasty-rankings/players/dk-metcalf-224",
+    "position": "WR",
+    "team": "SEA",
+    "value": "5093"
+  },
+  {
+    "name": "2026 Early 1st",
+    "link": "/dynasty-rankings/players/2026-early-1st-1527",
+    "position": "PI",
+    "team": "",
+    "value": "5083"
+  },
+  {
+    "name": "Jared Goff",
+    "link": "/dynasty-rankings/players/jared-goff-388",
+    "position": "QB",
+    "team": "DET",
+    "value": "4983"
+  },
+  {
+    "name": "T.J. Hockenson",
+    "link": "/dynasty-rankings/players/tj-hockenson-247",
+    "position": "TE",
+    "team": "MIN",
+    "value": "4980"
+  },
+  {
+    "name": "Dalton Kincaid",
+    "link": "/dynasty-rankings/players/dalton-kincaid-1428",
+    "position": "TE",
+    "team": "BUF",
+    "value": "4971"
+  },
+  {
+    "name": "Jaxon Smith-Njigba",
+    "link": "/dynasty-rankings/players/jaxon-smith-njigba-1437",
+    "position": "WR",
+    "team": "SEA",
+    "value": "4969"
+  },
+  {
+    "name": "2025 Mid 1st",
+    "link": "/dynasty-rankings/players/2025-mid-1st-1362",
+    "position": "PI",
+    "team": "",
+    "value": "4934"
+  },
+  {
+    "name": "Kenneth Walker III",
+    "link": "/dynasty-rankings/players/kenneth-walker-iii-1227",
+    "position": "RB",
+    "team": "SEA",
+    "value": "4862"
+  },
+  {
+    "name": "George Pickens",
+    "link": "/dynasty-rankings/players/george-pickens-1279",
+    "position": "WR",
+    "team": "PIT",
+    "value": "4834"
+  },
+  {
+    "name": "Mark Andrews",
+    "link": "/dynasty-rankings/players/mark-andrews-366",
+    "position": "TE",
+    "team": "BAL",
+    "value": "4823"
+  },
+  {
+    "name": "2024 Late 1st",
+    "link": "/dynasty-rankings/players/2024-late-1st-1295",
+    "position": "PI",
+    "team": "",
+    "value": "4689"
+  },
+  {
+    "name": "Josh Jacobs",
+    "link": "/dynasty-rankings/players/josh-jacobs-303",
+    "position": "RB",
+    "team": "GBP",
+    "value": "4565"
+  },
+  {
+    "name": "James Cook",
+    "link": "/dynasty-rankings/players/james-cook-1231",
+    "position": "RB",
+    "team": "BUF",
+    "value": "4554"
+  },
+  {
+    "name": "Deebo Samuel",
+    "link": "/dynasty-rankings/players/deebo-samuel-383",
+    "position": "WR",
+    "team": "SFO",
+    "value": "4438"
+  },
+  {
+    "name": "J.J. McCarthy",
+    "link": "/dynasty-rankings/players/jj-mccarthy-1555",
+    "position": "QB",
+    "team": "FA",
+    "value": "4408"
+  },
+  {
+    "name": "Jayden Reed",
+    "link": "/dynasty-rankings/players/jayden-reed-1419",
+    "position": "WR",
+    "team": "GBP",
+    "value": "4388"
+  },
+  {
+    "name": "Bryce Young",
+    "link": "/dynasty-rankings/players/bryce-young-1456",
+    "position": "QB",
+    "team": "CAR",
+    "value": "4388"
+  },
+  {
+    "name": "Rachaad White",
+    "link": "/dynasty-rankings/players/rachaad-white-1180",
+    "position": "RB",
+    "team": "TBB",
+    "value": "4372"
+  },
+  {
+    "name": "2026 Mid 1st",
+    "link": "/dynasty-rankings/players/2026-mid-1st-1528",
+    "position": "PI",
+    "team": "",
+    "value": "4298"
+  },
+  {
+    "name": "2025 Late 1st",
+    "link": "/dynasty-rankings/players/2025-late-1st-1363",
+    "position": "PI",
+    "team": "",
+    "value": "4292"
+  },
+  {
+    "name": "Kirk Cousins",
+    "link": "/dynasty-rankings/players/kirk-cousins-396",
+    "position": "QB",
+    "team": "ATL",
+    "value": "4261"
+  },
+  {
+    "name": "Isiah Pacheco",
+    "link": "/dynasty-rankings/players/isiah-pacheco-1266",
+    "position": "RB",
+    "team": "KCC",
+    "value": "4255"
+  },
+  {
+    "name": "Baker Mayfield",
+    "link": "/dynasty-rankings/players/baker-mayfield-215",
+    "position": "QB",
+    "team": "TBB",
+    "value": "4153"
+  },
+  {
+    "name": "Brian Thomas Jr.",
+    "link": "/dynasty-rankings/players/brian-thomas-jr-1589",
+    "position": "WR",
+    "team": "FA",
+    "value": "4101"
+  },
+  {
+    "name": "Mike Evans",
+    "link": "/dynasty-rankings/players/mike-evans-275",
+    "position": "WR",
+    "team": "TBB",
+    "value": "4097"
+  },
+  {
+    "name": "Stefon Diggs",
+    "link": "/dynasty-rankings/players/stefon-diggs-262",
+    "position": "WR",
+    "team": "BUF",
+    "value": "4045"
+  },
+  {
+    "name": "Davante Adams",
+    "link": "/dynasty-rankings/players/davante-adams-277",
+    "position": "WR",
+    "team": "LVR",
+    "value": "4038"
+  },
+  {
+    "name": "Will Levis",
+    "link": "/dynasty-rankings/players/will-levis-1402",
+    "position": "QB",
+    "team": "TEN",
+    "value": "3924"
+  },
+  {
+    "name": "Travis Kelce",
+    "link": "/dynasty-rankings/players/travis-kelce-264",
+    "position": "TE",
+    "team": "KCC",
+    "value": "3898"
+  },
+  {
+    "name": "Marquise Brown",
+    "link": "/dynasty-rankings/players/marquise-brown-311",
+    "position": "WR",
+    "team": "KCC",
+    "value": "3872"
+  },
+  {
+    "name": "2026 Late 1st",
+    "link": "/dynasty-rankings/players/2026-late-1st-1529",
+    "position": "PI",
+    "team": "",
+    "value": "3841"
+  },
+  {
+    "name": "D'Andre Swift",
+    "link": "/dynasty-rankings/players/d-andre-swift-639",
+    "position": "RB",
+    "team": "CHI",
+    "value": "3814"
+  },
+  {
+    "name": "2024 Early 2nd",
+    "link": "/dynasty-rankings/players/2024-early-2nd-1296",
+    "position": "PI",
+    "team": "",
+    "value": "3813"
+  },
+  {
+    "name": "Deshaun Watson",
+    "link": "/dynasty-rankings/players/deshaun-watson-261",
+    "position": "QB",
+    "team": "CLE",
+    "value": "3812"
+  },
+  {
+    "name": "Christian Kirk",
+    "link": "/dynasty-rankings/players/christian-kirk-221",
+    "position": "WR",
+    "team": "JAC",
+    "value": "3770"
+  },
+  {
+    "name": "Javonte Williams",
+    "link": "/dynasty-rankings/players/javonte-williams-1033",
+    "position": "RB",
+    "team": "DEN",
+    "value": "3704"
+  },
+  {
+    "name": "Amari Cooper",
+    "link": "/dynasty-rankings/players/amari-cooper-269",
+    "position": "WR",
+    "team": "CLE",
+    "value": "3679"
+  },
+  {
+    "name": "Cooper Kupp",
+    "link": "/dynasty-rankings/players/cooper-kupp-310",
+    "position": "WR",
+    "team": "LAR",
+    "value": "3669"
+  },
+  {
+    "name": "Terry McLaurin",
+    "link": "/dynasty-rankings/players/terry-mclaurin-328",
+    "position": "WR",
+    "team": "WAS",
+    "value": "3644"
+  },
+  {
+    "name": "Diontae Johnson",
+    "link": "/dynasty-rankings/players/diontae-johnson-338",
+    "position": "WR",
+    "team": "CAR",
+    "value": "3634"
+  },
+  {
+    "name": "David Montgomery",
+    "link": "/dynasty-rankings/players/david-montgomery-288",
+    "position": "RB",
+    "team": "DET",
+    "value": "3628"
+  },
+  {
+    "name": "David Njoku",
+    "link": "/dynasty-rankings/players/david-njoku-252",
+    "position": "TE",
+    "team": "CLE",
+    "value": "3627"
+  },
+  {
+    "name": "Derrick Henry",
+    "link": "/dynasty-rankings/players/derrick-henry-296",
+    "position": "RB",
+    "team": "BAL",
+    "value": "3580"
+  },
+  {
+    "name": "George Kittle",
+    "link": "/dynasty-rankings/players/george-kittle-298",
+    "position": "TE",
+    "team": "SFO",
+    "value": "3566"
+  },
+  {
+    "name": "Christian Watson",
+    "link": "/dynasty-rankings/players/christian-watson-1248",
+    "position": "WR",
+    "team": "GBP",
+    "value": "3564"
+  },
+  {
+    "name": "Xavier Worthy",
+    "link": "/dynasty-rankings/players/xavier-worthy-1591",
+    "position": "WR",
+    "team": "FA",
+    "value": "3564"
+  },
+  {
+    "name": "Keenan Allen",
+    "link": "/dynasty-rankings/players/keenan-allen-265",
+    "position": "WR",
+    "team": "CHI",
+    "value": "3551"
+  },
+  {
+    "name": "Adonai Mitchell",
+    "link": "/dynasty-rankings/players/adonai-mitchell-1597",
+    "position": "WR",
+    "team": "FA",
+    "value": "3503"
+  },
+  {
+    "name": "Joe Mixon",
+    "link": "/dynasty-rankings/players/joe-mixon-273",
+    "position": "RB",
+    "team": "HOU",
+    "value": "3502"
+  },
+  {
+    "name": "Tyjae Spears",
+    "link": "/dynasty-rankings/players/tyjae-spears-1417",
+    "position": "RB",
+    "team": "TEN",
+    "value": "3500"
+  },
+  {
+    "name": "Calvin Ridley",
+    "link": "/dynasty-rankings/players/calvin-ridley-293",
+    "position": "WR",
+    "team": "TEN",
+    "value": "3493"
+  },
+  {
+    "name": "Chris Godwin",
+    "link": "/dynasty-rankings/players/chris-godwin-299",
+    "position": "WR",
+    "team": "TBB",
+    "value": "3486"
+  },
+  {
+    "name": "Michael Penix Jr.",
+    "link": "/dynasty-rankings/players/michael-penix-jr-1554",
+    "position": "QB",
+    "team": "FA",
+    "value": "3428"
+  },
+  {
+    "name": "2024 Mid 2nd",
+    "link": "/dynasty-rankings/players/2024-mid-2nd-1297",
+    "position": "PI",
+    "team": "",
+    "value": "3414"
+  },
+  {
+    "name": "Tony Pollard",
+    "link": "/dynasty-rankings/players/tony-pollard-344",
+    "position": "RB",
+    "team": "TEN",
+    "value": "3393"
+  },
+  {
+    "name": "Najee Harris",
+    "link": "/dynasty-rankings/players/najee-harris-1031",
+    "position": "RB",
+    "team": "PIT",
+    "value": "3386"
+  },
+  {
+    "name": "Jameson Williams",
+    "link": "/dynasty-rankings/players/jameson-williams-1273",
+    "position": "WR",
+    "team": "DET",
+    "value": "3382"
+  },
+  {
+    "name": "Josh Downs",
+    "link": "/dynasty-rankings/players/josh-downs-1440",
+    "position": "WR",
+    "team": "IND",
+    "value": "3369"
+  },
+  {
+    "name": "Matthew Stafford",
+    "link": "/dynasty-rankings/players/matthew-stafford-356",
+    "position": "QB",
+    "team": "LAR",
+    "value": "3359"
+  },
+  {
+    "name": "2025 Early 2nd",
+    "link": "/dynasty-rankings/players/2025-early-2nd-1364",
+    "position": "PI",
+    "team": "",
+    "value": "3347"
+  },
+  {
+    "name": "Rhamondre Stevenson",
+    "link": "/dynasty-rankings/players/rhamondre-stevenson-1036",
+    "position": "RB",
+    "team": "NEP",
+    "value": "3323"
+  },
+  {
+    "name": "Brian Robinson",
+    "link": "/dynasty-rankings/players/brian-robinson-1232",
+    "position": "RB",
+    "team": "WAS",
+    "value": "3310"
+  },
+  {
+    "name": "Justin Fields",
+    "link": "/dynasty-rankings/players/justin-fields-1015",
+    "position": "QB",
+    "team": "PIT",
+    "value": "3305"
+  },
+  {
+    "name": "Romeo Doubs",
+    "link": "/dynasty-rankings/players/romeo-doubs-1238",
+    "position": "WR",
+    "team": "GBP",
+    "value": "3304"
+  },
+  {
+    "name": "Jaylen Warren",
+    "link": "/dynasty-rankings/players/jaylen-warren-1201",
+    "position": "RB",
+    "team": "PIT",
+    "value": "3288"
+  },
+  {
+    "name": "Alvin Kamara",
+    "link": "/dynasty-rankings/players/alvin-kamara-282",
+    "position": "RB",
+    "team": "NOS",
+    "value": "3270"
+  },
+  {
+    "name": "Jake Ferguson",
+    "link": "/dynasty-rankings/players/jake-ferguson-1258",
+    "position": "TE",
+    "team": "DAL",
+    "value": "3246"
+  },
+  {
+    "name": "Ladd McConkey",
+    "link": "/dynasty-rankings/players/ladd-mcconkey-1598",
+    "position": "WR",
+    "team": "FA",
+    "value": "3245"
+  },
+  {
+    "name": "Michael Mayer",
+    "link": "/dynasty-rankings/players/michael-mayer-1427",
+    "position": "TE",
+    "team": "LVR",
+    "value": "3242"
+  },
+  {
+    "name": "Zamir White",
+    "link": "/dynasty-rankings/players/zamir-white-1230",
+    "position": "RB",
+    "team": "LVR",
+    "value": "3224"
+  },
+  {
+    "name": "Evan Engram",
+    "link": "/dynasty-rankings/players/evan-engram-229",
+    "position": "TE",
+    "team": "JAC",
+    "value": "3212"
+  },
+  {
+    "name": "Zach Charbonnet",
+    "link": "/dynasty-rankings/players/zach-charbonnet-1384",
+    "position": "RB",
+    "team": "SEA",
+    "value": "3186"
+  },
+  {
+    "name": "Bo Nix",
+    "link": "/dynasty-rankings/players/bo-nix-1553",
+    "position": "QB",
+    "team": "FA",
+    "value": "3179"
+  },
+  {
+    "name": "Cole Kmet",
+    "link": "/dynasty-rankings/players/cole-kmet-569",
+    "position": "TE",
+    "team": "CHI",
+    "value": "3177"
+  },
+  {
+    "name": "Troy Franklin",
+    "link": "/dynasty-rankings/players/troy-franklin-1590",
+    "position": "WR",
+    "team": "FA",
+    "value": "3172"
+  },
+  {
+    "name": "Jerry Jeudy",
+    "link": "/dynasty-rankings/players/jerry-jeudy-545",
+    "position": "WR",
+    "team": "CLE",
+    "value": "3119"
+  },
+  {
+    "name": "Nick Chubb",
+    "link": "/dynasty-rankings/players/nick-chubb-274",
+    "position": "RB",
+    "team": "CLE",
+    "value": "3111"
+  },
+  {
+    "name": "Kendre Miller",
+    "link": "/dynasty-rankings/players/kendre-miller-1386",
+    "position": "RB",
+    "team": "NOS",
+    "value": "3097"
+  },
+  {
+    "name": "Jonathon Brooks",
+    "link": "/dynasty-rankings/players/jonathon-brooks-1568",
+    "position": "RB",
+    "team": "FA",
+    "value": "3086"
+  },
+  {
+    "name": "Blake Corum",
+    "link": "/dynasty-rankings/players/blake-corum-1564",
+    "position": "RB",
+    "team": "FA",
+    "value": "3072"
+  },
+  {
+    "name": "Dalton Schultz",
+    "link": "/dynasty-rankings/players/dalton-schultz-487",
+    "position": "TE",
+    "team": "HOU",
+    "value": "3068"
+  },
+  {
+    "name": "Pat Freiermuth",
+    "link": "/dynasty-rankings/players/pat-freiermuth-1053",
+    "position": "TE",
+    "team": "PIT",
+    "value": "3052"
+  },
+  {
+    "name": "Aaron Jones",
+    "link": "/dynasty-rankings/players/aaron-jones-301",
+    "position": "RB",
+    "team": "MIN",
+    "value": "3045"
+  },
+  {
+    "name": "Jahan Dotson",
+    "link": "/dynasty-rankings/players/jahan-dotson-1272",
+    "position": "WR",
+    "team": "WAS",
+    "value": "3042"
+  },
+  {
+    "name": "2025 Mid 2nd",
+    "link": "/dynasty-rankings/players/2025-mid-2nd-1365",
+    "position": "PI",
+    "team": "",
+    "value": "3034"
+  },
+  {
+    "name": "Luke Musgrave",
+    "link": "/dynasty-rankings/players/luke-musgrave-1430",
+    "position": "TE",
+    "team": "GBP",
+    "value": "3017"
+  },
+  {
+    "name": "2026 Early 2nd",
+    "link": "/dynasty-rankings/players/2026-early-2nd-1530",
+    "position": "PI",
+    "team": "",
+    "value": "3016"
+  },
+  {
+    "name": "2024 Late 2nd",
+    "link": "/dynasty-rankings/players/2024-late-2nd-1298",
+    "position": "PI",
+    "team": "",
+    "value": "3008"
+  },
+  {
+    "name": "Keon Coleman",
+    "link": "/dynasty-rankings/players/keon-coleman-1588",
+    "position": "WR",
+    "team": "FA",
+    "value": "2997"
+  },
+  {
+    "name": "Dallas Goedert",
+    "link": "/dynasty-rankings/players/dallas-goedert-382",
+    "position": "TE",
+    "team": "PHI",
+    "value": "2930"
+  },
+  {
+    "name": "James Conner",
+    "link": "/dynasty-rankings/players/james-conner-268",
+    "position": "RB",
+    "team": "ARI",
+    "value": "2928"
+  },
+  {
+    "name": "Trey Benson",
+    "link": "/dynasty-rankings/players/trey-benson-1565",
+    "position": "RB",
+    "team": "FA",
+    "value": "2908"
+  },
+  {
+    "name": "Courtland Sutton",
+    "link": "/dynasty-rankings/players/courtland-sutton-226",
+    "position": "WR",
+    "team": "DEN",
+    "value": "2907"
+  },
+  {
+    "name": "Zack Moss",
+    "link": "/dynasty-rankings/players/zack-moss-638",
+    "position": "RB",
+    "team": "CIN",
+    "value": "2901"
+  },
+  {
+    "name": "Jakobi Meyers",
+    "link": "/dynasty-rankings/players/jakobi-meyers-13",
+    "position": "WR",
+    "team": "LVR",
+    "value": "2880"
+  },
+  {
+    "name": "2025 Late 2nd",
+    "link": "/dynasty-rankings/players/2025-late-2nd-1366",
+    "position": "PI",
+    "team": "",
+    "value": "2879"
+  },
+  {
+    "name": "Marvin Mims",
+    "link": "/dynasty-rankings/players/marvin-mims-1442",
+    "position": "WR",
+    "team": "DEN",
+    "value": "2879"
+  },
+  {
+    "name": "Isaiah Likely",
+    "link": "/dynasty-rankings/players/isaiah-likely-1257",
+    "position": "TE",
+    "team": "BAL",
+    "value": "2871"
+  },
+  {
+    "name": "Aaron Rodgers",
+    "link": "/dynasty-rankings/players/aaron-rodgers-235",
+    "position": "QB",
+    "team": "NYJ",
+    "value": "2857"
+  },
+  {
+    "name": "Geno Smith",
+    "link": "/dynasty-rankings/players/geno-smith-671",
+    "position": "QB",
+    "team": "SEA",
+    "value": "2851"
+  },
+  {
+    "name": "Dontayvion Wicks",
+    "link": "/dynasty-rankings/players/dontayvion-wicks-1448",
+    "position": "WR",
+    "team": "GBP",
+    "value": "2833"
+  },
+  {
+    "name": "Derek Carr",
+    "link": "/dynasty-rankings/players/derek-carr-85",
+    "position": "QB",
+    "team": "NOS",
+    "value": "2819"
+  },
+  {
+    "name": "Quentin Johnston",
+    "link": "/dynasty-rankings/players/quentin-johnston-1441",
+    "position": "WR",
+    "team": "LAC",
+    "value": "2801"
+  },
+  {
+    "name": "Xavier Legette",
+    "link": "/dynasty-rankings/players/xavier-legette-1610",
+    "position": "WR",
+    "team": "FA",
+    "value": "2794"
+  },
+  {
+    "name": "Daniel Jones",
+    "link": "/dynasty-rankings/players/daniel-jones-87",
+    "position": "QB",
+    "team": "NYG",
+    "value": "2789"
+  },
+  {
+    "name": "Chase Brown",
+    "link": "/dynasty-rankings/players/chase-brown-1396",
+    "position": "RB",
+    "team": "CIN",
+    "value": "2782"
+  },
+  {
+    "name": "2026 Mid 2nd",
+    "link": "/dynasty-rankings/players/2026-mid-2nd-1531",
+    "position": "PI",
+    "team": "",
+    "value": "2775"
+  },
+  {
+    "name": "Gabriel Davis",
+    "link": "/dynasty-rankings/players/gabriel-davis-533",
+    "position": "WR",
+    "team": "JAC",
+    "value": "2762"
+  },
+  {
+    "name": "Russell Wilson",
+    "link": "/dynasty-rankings/players/russell-wilson-257",
+    "position": "QB",
+    "team": "PIT",
+    "value": "2725"
+  },
+  {
+    "name": "Mike Williams",
+    "link": "/dynasty-rankings/players/mike-williams-230",
+    "position": "WR",
+    "team": "NYJ",
+    "value": "2688"
+  },
+  {
+    "name": "Michael Wilson",
+    "link": "/dynasty-rankings/players/michael-wilson-1421",
+    "position": "WR",
+    "team": "ARI",
+    "value": "2651"
+  },
+  {
+    "name": "Devin Singletary",
+    "link": "/dynasty-rankings/players/devin-singletary-238",
+    "position": "RB",
+    "team": "NYG",
+    "value": "2612"
+  },
+  {
+    "name": "Austin Ekeler",
+    "link": "/dynasty-rankings/players/austin-ekeler-385",
+    "position": "RB",
+    "team": "WAS",
+    "value": "2597"
+  },
+  {
+    "name": "DeAndre Hopkins",
+    "link": "/dynasty-rankings/players/deandre-hopkins-280",
+    "position": "WR",
+    "team": "TEN",
+    "value": "2581"
+  },
+  {
+    "name": "Chuba Hubbard",
+    "link": "/dynasty-rankings/players/chuba-hubbard-1014",
+    "position": "RB",
+    "team": "CAR",
+    "value": "2577"
+  },
+  {
+    "name": "Curtis Samuel",
+    "link": "/dynasty-rankings/players/curtis-samuel-244",
+    "position": "WR",
+    "team": "BUF",
+    "value": "2552"
+  },
+  {
+    "name": "Keaton Mitchell",
+    "link": "/dynasty-rankings/players/keaton-mitchell-1393",
+    "position": "RB",
+    "team": "BAL",
+    "value": "2540"
+  },
+  {
+    "name": "Khalil Shakir",
+    "link": "/dynasty-rankings/players/khalil-shakir-1278",
+    "position": "WR",
+    "team": "BUF",
+    "value": "2533"
+  },
+  {
+    "name": "Gardner Minshew",
+    "link": "/dynasty-rankings/players/gardner-minshew-47",
+    "position": "QB",
+    "team": "LVR",
+    "value": "2531"
+  },
+  {
+    "name": "Josh Palmer",
+    "link": "/dynasty-rankings/players/josh-palmer-1065",
+    "position": "WR",
+    "team": "LAC",
+    "value": "2529"
+  },
+  {
+    "name": "Jerome Ford",
+    "link": "/dynasty-rankings/players/jerome-ford-1229",
+    "position": "RB",
+    "team": "CLE",
+    "value": "2517"
+  },
+  {
+    "name": "Demario Douglas",
+    "link": "/dynasty-rankings/players/demario-douglas-1468",
+    "position": "WR",
+    "team": "NEP",
+    "value": "2501"
+  },
+  {
+    "name": "Darnell Mooney",
+    "link": "/dynasty-rankings/players/darnell-mooney-911",
+    "position": "WR",
+    "team": "ATL",
+    "value": "2484"
+  },
+  {
+    "name": "Gus Edwards",
+    "link": "/dynasty-rankings/players/gus-edwards-76",
+    "position": "RB",
+    "team": "LAC",
+    "value": "2435"
+  },
+  {
+    "name": "Rashid Shaheed",
+    "link": "/dynasty-rankings/players/rashid-shaheed-1360",
+    "position": "WR",
+    "team": "NOS",
+    "value": "2434"
+  },
+  {
+    "name": "Raheem Mostert",
+    "link": "/dynasty-rankings/players/raheem-mostert-43",
+    "position": "RB",
+    "team": "MIA",
+    "value": "2429"
+  },
+  {
+    "name": "2024 Early 3rd",
+    "link": "/dynasty-rankings/players/2024-early-3rd-1299",
+    "position": "PI",
+    "team": "",
+    "value": "2420"
+  },
+  {
+    "name": "Sam Howell",
+    "link": "/dynasty-rankings/players/sam-howell-1209",
+    "position": "QB",
+    "team": "SEA",
+    "value": "2414"
+  },
+  {
+    "name": "Roschon Johnson",
+    "link": "/dynasty-rankings/players/roschon-johnson-1390",
+    "position": "RB",
+    "team": "CHI",
+    "value": "2413"
+  },
+  {
+    "name": "Tyler Lockett",
+    "link": "/dynasty-rankings/players/tyler-lockett-285",
+    "position": "WR",
+    "team": "SEA",
+    "value": "2408"
+  },
+  {
+    "name": "2026 Late 2nd",
+    "link": "/dynasty-rankings/players/2026-late-2nd-1532",
+    "position": "PI",
+    "team": "",
+    "value": "2388"
+  },
+  {
+    "name": "Treylon Burks",
+    "link": "/dynasty-rankings/players/treylon-burks-1269",
+    "position": "WR",
+    "team": "TEN",
+    "value": "2385"
+  },
+  {
+    "name": "Sam Darnold",
+    "link": "/dynasty-rankings/players/sam-darnold-331",
+    "position": "QB",
+    "team": "MIN",
+    "value": "2345"
+  },
+  {
+    "name": "Braelon Allen",
+    "link": "/dynasty-rankings/players/braelon-allen-1567",
+    "position": "RB",
+    "team": "FA",
+    "value": "2338"
+  },
+  {
+    "name": "Wan'Dale Robinson",
+    "link": "/dynasty-rankings/players/wan-dale-robinson-1274",
+    "position": "WR",
+    "team": "NYG",
+    "value": "2334"
+  },
+  {
+    "name": "Tyler Allgeier",
+    "link": "/dynasty-rankings/players/tyler-allgeier-1228",
+    "position": "RB",
+    "team": "ATL",
+    "value": "2321"
+  },
+  {
+    "name": "Roman Wilson",
+    "link": "/dynasty-rankings/players/roman-wilson-1600",
+    "position": "WR",
+    "team": "FA",
+    "value": "2319"
+  },
+  {
+    "name": "Cade Otton",
+    "link": "/dynasty-rankings/players/cade-otton-1261",
+    "position": "TE",
+    "team": "TBB",
+    "value": "2306"
+  },
+  {
+    "name": "Rashod Bateman",
+    "link": "/dynasty-rankings/players/rashod-bateman-1070",
+    "position": "WR",
+    "team": "BAL",
+    "value": "2304"
+  },
+  {
+    "name": "Tucker Kraft",
+    "link": "/dynasty-rankings/players/tucker-kraft-1418",
+    "position": "TE",
+    "team": "GBP",
+    "value": "2297"
+  },
+  {
+    "name": "Antonio Gibson",
+    "link": "/dynasty-rankings/players/antonio-gibson-584",
+    "position": "RB",
+    "team": "NEP",
+    "value": "2293"
+  },
+  {
+    "name": "Jalin Hyatt",
+    "link": "/dynasty-rankings/players/jalin-hyatt-1399",
+    "position": "WR",
+    "team": "NYG",
+    "value": "2268"
+  },
+  {
+    "name": "Rondale Moore",
+    "link": "/dynasty-rankings/players/rondale-moore-1006",
+    "position": "WR",
+    "team": "ATL",
+    "value": "2191"
+  },
+  {
+    "name": "2024 Mid 3rd",
+    "link": "/dynasty-rankings/players/2024-mid-3rd-1300",
+    "position": "PI",
+    "team": "",
+    "value": "2191"
+  },
+  {
+    "name": "Jonathan Mingo",
+    "link": "/dynasty-rankings/players/jonathan-mingo-1450",
+    "position": "WR",
+    "team": "CAR",
+    "value": "2165"
+  },
+  {
+    "name": "Ty Chandler",
+    "link": "/dynasty-rankings/players/ty-chandler-1182",
+    "position": "RB",
+    "team": "MIN",
+    "value": "2117"
+  },
+  {
+    "name": "Dameon Pierce",
+    "link": "/dynasty-rankings/players/dameon-pierce-1207",
+    "position": "RB",
+    "team": "HOU",
+    "value": "2112"
+  },
+  {
+    "name": "Trey Palmer",
+    "link": "/dynasty-rankings/players/trey-palmer-1452",
+    "position": "WR",
+    "team": "TBB",
+    "value": "2102"
+  },
+  {
+    "name": "2024 Late 3rd",
+    "link": "/dynasty-rankings/players/2024-late-3rd-1301",
+    "position": "PI",
+    "team": "",
+    "value": "2092"
+  },
+  {
+    "name": "2025 Early 3rd",
+    "link": "/dynasty-rankings/players/2025-early-3rd-1367",
+    "position": "PI",
+    "team": "",
+    "value": "2092"
+  },
+  {
+    "name": "Chigoziem Okonkwo",
+    "link": "/dynasty-rankings/players/chigoziem-okonkwo-1320",
+    "position": "TE",
+    "team": "TEN",
+    "value": "2091"
+  },
+  {
+    "name": "Jaleel McLaughlin",
+    "link": "/dynasty-rankings/players/jaleel-mclaughlin-1486",
+    "position": "RB",
+    "team": "DEN",
+    "value": "2072"
+  },
+  {
+    "name": "J.K. Dobbins",
+    "link": "/dynasty-rankings/players/jk-dobbins-636",
+    "position": "RB",
+    "team": "BAL",
+    "value": "2068"
+  },
+  {
+    "name": "Khalil Herbert",
+    "link": "/dynasty-rankings/players/khalil-herbert-994",
+    "position": "RB",
+    "team": "CHI",
+    "value": "2064"
+  },
+  {
+    "name": "Elijah Moore",
+    "link": "/dynasty-rankings/players/elijah-moore-1012",
+    "position": "WR",
+    "team": "CLE",
+    "value": "2047"
+  },
+  {
+    "name": "Tank Bigsby",
+    "link": "/dynasty-rankings/players/tank-bigsby-1401",
+    "position": "RB",
+    "team": "JAC",
+    "value": "2027"
+  },
+  {
+    "name": "Alec Pierce",
+    "link": "/dynasty-rankings/players/alec-pierce-1285",
+    "position": "WR",
+    "team": "IND",
+    "value": "2004"
+  },
+  {
+    "name": "2025 Mid 3rd",
+    "link": "/dynasty-rankings/players/2025-mid-3rd-1368",
+    "position": "PI",
+    "team": "",
+    "value": "2002"
+  },
+  {
+    "name": "Rico Dowdle",
+    "link": "/dynasty-rankings/players/rico-dowdle-555",
+    "position": "RB",
+    "team": "DAL",
+    "value": "1986"
+  },
+  {
+    "name": "Greg Dulcich",
+    "link": "/dynasty-rankings/players/greg-dulcich-1256",
+    "position": "TE",
+    "team": "DEN",
+    "value": "1984"
+  },
+  {
+    "name": "Aidan O'Connell",
+    "link": "/dynasty-rankings/players/aidan-o-connell-1412",
+    "position": "QB",
+    "team": "LVR",
+    "value": "1955"
+  },
+  {
+    "name": "Ja'Tavion Sanders",
+    "link": "/dynasty-rankings/players/ja-tavion-sanders-1614",
+    "position": "TE",
+    "team": "FA",
+    "value": "1921"
+  },
+  {
+    "name": "Noah Fant",
+    "link": "/dynasty-rankings/players/noah-fant-243",
+    "position": "TE",
+    "team": "SEA",
+    "value": "1915"
+  },
+  {
+    "name": "Brandin Cooks",
+    "link": "/dynasty-rankings/players/brandin-cooks-307",
+    "position": "WR",
+    "team": "DAL",
+    "value": "1885"
+  },
+  {
+    "name": "Tyler Boyd",
+    "link": "/dynasty-rankings/players/tyler-boyd-231",
+    "position": "WR",
+    "team": "CIN",
+    "value": "1884"
+  },
+  {
+    "name": "Spencer Rattler",
+    "link": "/dynasty-rankings/players/spencer-rattler-1557",
+    "position": "QB",
+    "team": "FA",
+    "value": "1844"
+  },
+  {
+    "name": "AJ Dillon",
+    "link": "/dynasty-rankings/players/aj-dillon-631",
+    "position": "RB",
+    "team": "GBP",
+    "value": "1841"
+  },
+  {
+    "name": "Noah Brown",
+    "link": "/dynasty-rankings/players/noah-brown-776",
+    "position": "WR",
+    "team": "HOU",
+    "value": "1822"
+  },
+  {
+    "name": "Bucky Irving",
+    "link": "/dynasty-rankings/players/bucky-irving-1569",
+    "position": "RB",
+    "team": "FA",
+    "value": "1803"
+  },
+  {
+    "name": "Miles Sanders",
+    "link": "/dynasty-rankings/players/miles-sanders-222",
+    "position": "RB",
+    "team": "CAR",
+    "value": "1793"
+  },
+  {
+    "name": "2025 Late 3rd",
+    "link": "/dynasty-rankings/players/2025-late-3rd-1369",
+    "position": "PI",
+    "team": "",
+    "value": "1793"
+  },
+  {
+    "name": "Alexander Mattison",
+    "link": "/dynasty-rankings/players/alexander-mattison-326",
+    "position": "RB",
+    "team": "LVR",
+    "value": "1792"
+  },
+  {
+    "name": "2026 Early 3rd",
+    "link": "/dynasty-rankings/players/2026-early-3rd-1533",
+    "position": "PI",
+    "team": "",
+    "value": "1791"
+  },
+  {
+    "name": "John Metchie",
+    "link": "/dynasty-rankings/players/john-metchie-1276",
+    "position": "WR",
+    "team": "HOU",
+    "value": "1788"
+  },
+  {
+    "name": "A.T. Perry",
+    "link": "/dynasty-rankings/players/at-perry-1449",
+    "position": "WR",
+    "team": "NOS",
+    "value": "1780"
+  },
+  {
+    "name": "Greg Dortch",
+    "link": "/dynasty-rankings/players/greg-dortch-10",
+    "position": "WR",
+    "team": "ARI",
+    "value": "1769"
+  },
+  {
+    "name": "Elijah Mitchell",
+    "link": "/dynasty-rankings/players/elijah-mitchell-1013",
+    "position": "RB",
+    "team": "SFO",
+    "value": "1768"
+  },
+  {
+    "name": "Trey Lance",
+    "link": "/dynasty-rankings/players/trey-lance-1017",
+    "position": "QB",
+    "team": "DAL",
+    "value": "1758"
+  },
+  {
+    "name": "Kendrick Bourne",
+    "link": "/dynasty-rankings/players/kendrick-bourne-153",
+    "position": "WR",
+    "team": "NEP",
+    "value": "1749"
+  },
+  {
+    "name": "Ja'Lynn Polk",
+    "link": "/dynasty-rankings/players/ja-lynn-polk-1602",
+    "position": "WR",
+    "team": "FA",
+    "value": "1735"
+  },
+  {
+    "name": "Tre Tucker",
+    "link": "/dynasty-rankings/players/tre-tucker-1460",
+    "position": "WR",
+    "team": "LVR",
+    "value": "1697"
+  },
+  {
+    "name": "Zay Jones",
+    "link": "/dynasty-rankings/players/zay-jones-327",
+    "position": "WR",
+    "team": "JAC",
+    "value": "1695"
+  },
+  {
+    "name": "K.J. Osborn",
+    "link": "/dynasty-rankings/players/kj-osborn-912",
+    "position": "WR",
+    "team": "NEP",
+    "value": "1695"
+  },
+  {
+    "name": "Jonnu Smith",
+    "link": "/dynasty-rankings/players/jonnu-smith-84",
+    "position": "TE",
+    "team": "MIA",
+    "value": "1689"
+  },
+  {
+    "name": "Luke Schoonmaker",
+    "link": "/dynasty-rankings/players/luke-schoonmaker-1382",
+    "position": "TE",
+    "team": "DAL",
+    "value": "1689"
+  },
+  {
+    "name": "Hunter Henry",
+    "link": "/dynasty-rankings/players/hunter-henry-212",
+    "position": "TE",
+    "team": "NEP",
+    "value": "1685"
+  },
+  {
+    "name": "2026 Mid 3rd",
+    "link": "/dynasty-rankings/players/2026-mid-3rd-1534",
+    "position": "PI",
+    "team": "",
+    "value": "1684"
+  },
+  {
+    "name": "Andrei Iosivas",
+    "link": "/dynasty-rankings/players/andrei-iosivas-1422",
+    "position": "WR",
+    "team": "CIN",
+    "value": "1682"
+  },
+  {
+    "name": "Dawson Knox",
+    "link": "/dynasty-rankings/players/dawson-knox-88",
+    "position": "TE",
+    "team": "BUF",
+    "value": "1659"
+  },
+  {
+    "name": "Tutu Atwell",
+    "link": "/dynasty-rankings/players/tutu-atwell-1078",
+    "position": "WR",
+    "team": "LAR",
+    "value": "1658"
+  },
+  {
+    "name": "Adam Thielen",
+    "link": "/dynasty-rankings/players/adam-thielen-308",
+    "position": "WR",
+    "team": "CAR",
+    "value": "1636"
+  },
+  {
+    "name": "Israel Abanikanda",
+    "link": "/dynasty-rankings/players/israel-abanikanda-1383",
+    "position": "RB",
+    "team": "NYJ",
+    "value": "1631"
+  },
+  {
+    "name": "Parker Washington",
+    "link": "/dynasty-rankings/players/parker-washington-1445",
+    "position": "WR",
+    "team": "JAC",
+    "value": "1621"
+  },
+  {
+    "name": "2024 Early 4th",
+    "link": "/dynasty-rankings/players/2024-early-4th-1302",
+    "position": "PI",
+    "team": "",
+    "value": "1619"
+  },
+  {
+    "name": "Deuce Vaughn",
+    "link": "/dynasty-rankings/players/deuce-vaughn-1391",
+    "position": "RB",
+    "team": "DAL",
+    "value": "1616"
+  },
+  {
+    "name": "Hendon Hooker",
+    "link": "/dynasty-rankings/players/hendon-hooker-1404",
+    "position": "QB",
+    "team": "DET",
+    "value": "1613"
+  },
+  {
+    "name": "Chris Rodriguez",
+    "link": "/dynasty-rankings/players/chris-rodriguez-1389",
+    "position": "RB",
+    "team": "WAS",
+    "value": "1606"
+  },
+  {
+    "name": "Kenny Pickett",
+    "link": "/dynasty-rankings/players/kenny-pickett-1208",
+    "position": "QB",
+    "team": "PHI",
+    "value": "1605"
+  },
+  {
+    "name": "Xavier Hutchinson",
+    "link": "/dynasty-rankings/players/xavier-hutchinson-1454",
+    "position": "WR",
+    "team": "HOU",
+    "value": "1598"
+  },
+  {
+    "name": "Ricky Pearsall",
+    "link": "/dynasty-rankings/players/ricky-pearsall-1593",
+    "position": "WR",
+    "team": "FA",
+    "value": "1596"
+  },
+  {
+    "name": "Malachi Corley",
+    "link": "/dynasty-rankings/players/malachi-corley-1607",
+    "position": "WR",
+    "team": "FA",
+    "value": "1589"
+  },
+  {
+    "name": "2026 Late 3rd",
+    "link": "/dynasty-rankings/players/2026-late-3rd-1535",
+    "position": "PI",
+    "team": "",
+    "value": "1586"
+  },
+  {
+    "name": "Juwan Johnson",
+    "link": "/dynasty-rankings/players/juwan-johnson-575",
+    "position": "TE",
+    "team": "NOS",
+    "value": "1558"
+  },
+  {
+    "name": "Jaylen Wright",
+    "link": "/dynasty-rankings/players/jaylen-wright-1581",
+    "position": "RB",
+    "team": "FA",
+    "value": "1546"
+  },
+  {
+    "name": "Jacoby Brissett",
+    "link": "/dynasty-rankings/players/jacoby-brissett-20",
+    "position": "QB",
+    "team": "NEP",
+    "value": "1545"
+  },
+  {
+    "name": "Kenneth Gainwell",
+    "link": "/dynasty-rankings/players/kenneth-gainwell-1032",
+    "position": "RB",
+    "team": "PHI",
+    "value": "1538"
+  },
+  {
+    "name": "Jauan Jennings",
+    "link": "/dynasty-rankings/players/jauan-jennings-576",
+    "position": "WR",
+    "team": "SFO",
+    "value": "1537"
+  },
+  {
+    "name": "Cedric Tillman",
+    "link": "/dynasty-rankings/players/cedric-tillman-1444",
+    "position": "WR",
+    "team": "CLE",
+    "value": "1531"
+  },
+  {
+    "name": "MarShawn Lloyd",
+    "link": "/dynasty-rankings/players/marshawn-lloyd-1575",
+    "position": "RB",
+    "team": "FA",
+    "value": "1522"
+  },
+  {
+    "name": "Audric Estime",
+    "link": "/dynasty-rankings/players/audric-estime-1566",
+    "position": "RB",
+    "team": "FA",
+    "value": "1517"
+  },
+  {
+    "name": "Brenden Rice",
+    "link": "/dynasty-rankings/players/brenden-rice-1594",
+    "position": "WR",
+    "team": "FA",
+    "value": "1515"
+  },
+  {
+    "name": "Brevin Jordan",
+    "link": "/dynasty-rankings/players/brevin-jordan-1052",
+    "position": "TE",
+    "team": "HOU",
+    "value": "1502"
+  },
+  {
+    "name": "Daniel Bellinger",
+    "link": "/dynasty-rankings/players/daniel-bellinger-1322",
+    "position": "TE",
+    "team": "NYG",
+    "value": "1489"
+  },
+  {
+    "name": "Jake Browning",
+    "link": "/dynasty-rankings/players/jake-browning-459",
+    "position": "QB",
+    "team": "CIN",
+    "value": "1481"
+  },
+  {
+    "name": "2025 Early 4th",
+    "link": "/dynasty-rankings/players/2025-early-4th-1370",
+    "position": "PI",
+    "team": "",
+    "value": "1472"
+  },
+  {
+    "name": "2024 Mid 4th",
+    "link": "/dynasty-rankings/players/2024-mid-4th-1303",
+    "position": "PI",
+    "team": "",
+    "value": "1470"
+  },
+  {
+    "name": "Mike Gesicki",
+    "link": "/dynasty-rankings/players/mike-gesicki-330",
+    "position": "TE",
+    "team": "CIN",
+    "value": "1466"
+  },
+  {
+    "name": "Isaiah Spiller",
+    "link": "/dynasty-rankings/players/isaiah-spiller-1225",
+    "position": "RB",
+    "team": "LAC",
+    "value": "1462"
+  },
+  {
+    "name": "Skyy Moore",
+    "link": "/dynasty-rankings/players/skyy-moore-1283",
+    "position": "WR",
+    "team": "KCC",
+    "value": "1462"
+  },
+  {
+    "name": "Devontez Walker",
+    "link": "/dynasty-rankings/players/devontez-walker-1592",
+    "position": "WR",
+    "team": "FA",
+    "value": "1462"
+  },
+  {
+    "name": "Luke McCaffrey",
+    "link": "/dynasty-rankings/players/luke-mccaffrey-1606",
+    "position": "WR",
+    "team": "FA",
+    "value": "1449"
+  },
+  {
+    "name": "Zach Evans",
+    "link": "/dynasty-rankings/players/zach-evans-1416",
+    "position": "RB",
+    "team": "LAR",
+    "value": "1444"
+  },
+  {
+    "name": "Noah Gray",
+    "link": "/dynasty-rankings/players/noah-gray-1059",
+    "position": "TE",
+    "team": "KCC",
+    "value": "1440"
+  },
+  {
+    "name": "Clyde Edwards-Helaire",
+    "link": "/dynasty-rankings/players/clyde-edwards-helaire-633",
+    "position": "RB",
+    "team": "KCC",
+    "value": "1429"
+  },
+  {
+    "name": "Calvin Austin III",
+    "link": "/dynasty-rankings/players/calvin-austin-iii-1262",
+    "position": "WR",
+    "team": "PIT",
+    "value": "1424"
+  },
+  {
+    "name": "Ezekiel Elliott",
+    "link": "/dynasty-rankings/players/ezekiel-elliott-281",
+    "position": "RB",
+    "team": "NEP",
+    "value": "1420"
+  },
+  {
+    "name": "Jelani Woods",
+    "link": "/dynasty-rankings/players/jelani-woods-1305",
+    "position": "TE",
+    "team": "IND",
+    "value": "1416"
+  },
+  {
+    "name": "Jameis Winston",
+    "link": "/dynasty-rankings/players/jameis-winston-413",
+    "position": "QB",
+    "team": "CLE",
+    "value": "1414"
+  },
+  {
+    "name": "Will Shipley",
+    "link": "/dynasty-rankings/players/will-shipley-1572",
+    "position": "RB",
+    "team": "FA",
+    "value": "1404"
+  },
+  {
+    "name": "Drew Lock",
+    "link": "/dynasty-rankings/players/drew-lock-33",
+    "position": "QB",
+    "team": "NYG",
+    "value": "1400"
+  },
+  {
+    "name": "Bo Melton",
+    "link": "/dynasty-rankings/players/bo-melton-1244",
+    "position": "WR",
+    "team": "GBP",
+    "value": "1393"
+  },
+  {
+    "name": "2024 Late 4th",
+    "link": "/dynasty-rankings/players/2024-late-4th-1304",
+    "position": "PI",
+    "team": "",
+    "value": "1381"
+  },
+  {
+    "name": "Justice Hill",
+    "link": "/dynasty-rankings/players/justice-hill-368",
+    "position": "RB",
+    "team": "BAL",
+    "value": "1371"
+  },
+  {
+    "name": "Evan Hull",
+    "link": "/dynasty-rankings/players/evan-hull-1395",
+    "position": "RB",
+    "team": "IND",
+    "value": "1365"
+  },
+  {
+    "name": "2025 Mid 4th",
+    "link": "/dynasty-rankings/players/2025-mid-4th-1371",
+    "position": "PI",
+    "team": "",
+    "value": "1354"
+  },
+  {
+    "name": "Darren Waller",
+    "link": "/dynasty-rankings/players/darren-waller-349",
+    "position": "TE",
+    "team": "NYG",
+    "value": "1353"
+  },
+  {
+    "name": "Josh Reynolds",
+    "link": "/dynasty-rankings/players/josh-reynolds-61",
+    "position": "WR",
+    "team": "DET",
+    "value": "1340"
+  },
+  {
+    "name": "Michael Carter",
+    "link": "/dynasty-rankings/players/michael-carter-1035",
+    "position": "RB",
+    "team": "ARI",
+    "value": "1332"
+  },
+  {
+    "name": "Jarrett Stidham",
+    "link": "/dynasty-rankings/players/jarrett-stidham-156",
+    "position": "QB",
+    "team": "DEN",
+    "value": "1320"
+  },
+  {
+    "name": "Darius Slayton",
+    "link": "/dynasty-rankings/players/darius-slayton-77",
+    "position": "WR",
+    "team": "NYG",
+    "value": "1319"
+  },
+  {
+    "name": "Darnell Washington",
+    "link": "/dynasty-rankings/players/darnell-washington-1431",
+    "position": "TE",
+    "team": "PIT",
+    "value": "1316"
+  },
+  {
+    "name": "Mac Jones",
+    "link": "/dynasty-rankings/players/mac-jones-1018",
+    "position": "QB",
+    "team": "JAC",
+    "value": "1315"
+  },
+  {
+    "name": "D'Onta Foreman",
+    "link": "/dynasty-rankings/players/d-onta-foreman-358",
+    "position": "RB",
+    "team": "CHI",
+    "value": "1312"
+  },
+  {
+    "name": "Xavier Gipson",
+    "link": "/dynasty-rankings/players/xavier-gipson-1504",
+    "position": "WR",
+    "team": "NYJ",
+    "value": "1291"
+  },
+  {
+    "name": "Tyquan Thornton",
+    "link": "/dynasty-rankings/players/tyquan-thornton-1246",
+    "position": "WR",
+    "team": "NEP",
+    "value": "1277"
+  },
+  {
+    "name": "Donovan Peoples-Jones",
+    "link": "/dynasty-rankings/players/donovan-peoples-jones-579",
+    "position": "WR",
+    "team": "DET",
+    "value": "1271"
+  },
+  {
+    "name": "Gerald Everett",
+    "link": "/dynasty-rankings/players/gerald-everett-55",
+    "position": "TE",
+    "team": "CHI",
+    "value": "1263"
+  },
+  {
+    "name": "Cam Akers",
+    "link": "/dynasty-rankings/players/cam-akers-531",
+    "position": "RB",
+    "team": "MIN",
+    "value": "1259"
+  },
+  {
+    "name": "D.J. Chark",
+    "link": "/dynasty-rankings/players/dj-chark-361",
+    "position": "WR",
+    "team": "CAR",
+    "value": "1258"
+  },
+  {
+    "name": "Desmond Ridder",
+    "link": "/dynasty-rankings/players/desmond-ridder-1213",
+    "position": "QB",
+    "team": "ARI",
+    "value": "1244"
+  },
+  {
+    "name": "Sean Tucker",
+    "link": "/dynasty-rankings/players/sean-tucker-1400",
+    "position": "RB",
+    "team": "TBB",
+    "value": "1235"
+  },
+  {
+    "name": "Taysom Hill",
+    "link": "/dynasty-rankings/players/taysom-hill-150",
+    "position": "QB",
+    "team": "NOS",
+    "value": "1232"
+  },
+  {
+    "name": "2026 Early 4th",
+    "link": "/dynasty-rankings/players/2026-early-4th-1536",
+    "position": "PI",
+    "team": "",
+    "value": "1228"
+  },
+  {
+    "name": "Zach Wilson",
+    "link": "/dynasty-rankings/players/zach-wilson-1016",
+    "position": "QB",
+    "team": "NYJ",
+    "value": "1216"
+  },
+  {
+    "name": "Colby Parkinson",
+    "link": "/dynasty-rankings/players/colby-parkinson-565",
+    "position": "TE",
+    "team": "LAR",
+    "value": "1186"
+  },
+  {
+    "name": "Michael Gallup",
+    "link": "/dynasty-rankings/players/michael-gallup-237",
+    "position": "WR",
+    "team": "FA",
+    "value": "1183"
+  },
+  {
+    "name": "JuJu Smith-Schuster",
+    "link": "/dynasty-rankings/players/juju-smith-schuster-276",
+    "position": "WR",
+    "team": "NEP",
+    "value": "1166"
+  },
+  {
+    "name": "Irv Smith",
+    "link": "/dynasty-rankings/players/irv-smith-399",
+    "position": "TE",
+    "team": "KCC",
+    "value": "1160"
+  },
+  {
+    "name": "DeWayne McBride",
+    "link": "/dynasty-rankings/players/dewayne-mcbride-1394",
+    "position": "RB",
+    "team": "MIN",
+    "value": "1160"
+  },
+  {
+    "name": "Jalen McMillan",
+    "link": "/dynasty-rankings/players/jalen-mcmillan-1599",
+    "position": "WR",
+    "team": "FA",
+    "value": "1146"
+  },
+  {
+    "name": "David Bell",
+    "link": "/dynasty-rankings/players/david-bell-1275",
+    "position": "WR",
+    "team": "CLE",
+    "value": "1139"
+  },
+  {
+    "name": "Eric Gray",
+    "link": "/dynasty-rankings/players/eric-gray-1388",
+    "position": "RB",
+    "team": "NYG",
+    "value": "1138"
+  },
+  {
+    "name": "Tyler Scott",
+    "link": "/dynasty-rankings/players/tyler-scott-1436",
+    "position": "WR",
+    "team": "CHI",
+    "value": "1135"
+  },
+  {
+    "name": "Kareem Hunt",
+    "link": "/dynasty-rankings/players/kareem-hunt-214",
+    "position": "RB",
+    "team": "CLE",
+    "value": "1132"
+  },
+  {
+    "name": "Jalen Tolbert",
+    "link": "/dynasty-rankings/players/jalen-tolbert-1247",
+    "position": "WR",
+    "team": "DAL",
+    "value": "1124"
+  },
+  {
+    "name": "Emari Demercado",
+    "link": "/dynasty-rankings/players/emari-demercado-1481",
+    "position": "RB",
+    "team": "ARI",
+    "value": "1124"
+  },
+  {
+    "name": "Demarcus Robinson",
+    "link": "/dynasty-rankings/players/demarcus-robinson-52",
+    "position": "WR",
+    "team": "LAR",
+    "value": "1118"
+  },
+  {
+    "name": "Chris Evans",
+    "link": "/dynasty-rankings/players/chris-evans-998",
+    "position": "RB",
+    "team": "CIN",
+    "value": "1116"
+  },
+  {
+    "name": "Tyler Higbee",
+    "link": "/dynasty-rankings/players/tyler-higbee-159",
+    "position": "TE",
+    "team": "LAR",
+    "value": "1104"
+  },
+  {
+    "name": "Cole Turner",
+    "link": "/dynasty-rankings/players/cole-turner-1179",
+    "position": "TE",
+    "team": "WAS",
+    "value": "1092"
+  },
+  {
+    "name": "Terrace Marshall",
+    "link": "/dynasty-rankings/players/terrace-marshall-1085",
+    "position": "WR",
+    "team": "CAR",
+    "value": "1084"
+  },
+  {
+    "name": "2026 Mid 4th",
+    "link": "/dynasty-rankings/players/2026-mid-4th-1537",
+    "position": "PI",
+    "team": "",
+    "value": "1084"
+  },
+  {
+    "name": "Joshua Kelley",
+    "link": "/dynasty-rankings/players/joshua-kelley-629",
+    "position": "RB",
+    "team": "LAC",
+    "value": "1076"
+  },
+  {
+    "name": "Isaiah Hodgins",
+    "link": "/dynasty-rankings/players/isaiah-hodgins-561",
+    "position": "WR",
+    "team": "NYG",
+    "value": "1071"
+  },
+  {
+    "name": "2025 Late 4th",
+    "link": "/dynasty-rankings/players/2025-late-4th-1372",
+    "position": "PI",
+    "team": "",
+    "value": "1064"
+  },
+  {
+    "name": "Davis Allen",
+    "link": "/dynasty-rankings/players/davis-allen-1434",
+    "position": "TE",
+    "team": "LAR",
+    "value": "1056"
+  },
+  {
+    "name": "Joshua Dobbs",
+    "link": "/dynasty-rankings/players/joshua-dobbs-821",
+    "position": "QB",
+    "team": "SFO",
+    "value": "1055"
+  },
+  {
+    "name": "Dorian Thompson-Robinson",
+    "link": "/dynasty-rankings/players/dorian-thompson-robinson-1411",
+    "position": "QB",
+    "team": "CLE",
+    "value": "1051"
+  },
+  {
+    "name": "Odell Beckham",
+    "link": "/dynasty-rankings/players/odell-beckham-279",
+    "position": "WR",
+    "team": "FA",
+    "value": "1045"
+  },
+  {
+    "name": "Jordan Mason",
+    "link": "/dynasty-rankings/players/jordan-mason-1330",
+    "position": "RB",
+    "team": "SFO",
+    "value": "1032"
+  },
+  {
+    "name": "Jake Bobo",
+    "link": "/dynasty-rankings/players/jake-bobo-1488",
+    "position": "WR",
+    "team": "SEA",
+    "value": "1021"
+  },
+  {
+    "name": "Mecole Hardman",
+    "link": "/dynasty-rankings/players/mecole-hardman-404",
+    "position": "WR",
+    "team": "KCC",
+    "value": "1017"
+  },
+  {
+    "name": "Charlie Jones",
+    "link": "/dynasty-rankings/players/charlie-jones-1455",
+    "position": "WR",
+    "team": "CIN",
+    "value": "1014"
+  },
+  {
+    "name": "Tyler Huntley",
+    "link": "/dynasty-rankings/players/tyler-huntley-618",
+    "position": "QB",
+    "team": "CLE",
+    "value": "995"
+  },
+  {
+    "name": "Jalen Guyton",
+    "link": "/dynasty-rankings/players/jalen-guyton-467",
+    "position": "WR",
+    "team": "LAC",
+    "value": "993"
+  },
+  {
+    "name": "Jimmy Garoppolo",
+    "link": "/dynasty-rankings/players/jimmy-garoppolo-395",
+    "position": "QB",
+    "team": "LAR",
+    "value": "991"
+  },
+  {
+    "name": "Hunter Renfrow",
+    "link": "/dynasty-rankings/players/hunter-renfrow-100",
+    "position": "WR",
+    "team": "FA",
+    "value": "982"
+  },
+  {
+    "name": "Donald Parham",
+    "link": "/dynasty-rankings/players/donald-parham-882",
+    "position": "TE",
+    "team": "LAC",
+    "value": "980"
+  },
+  {
+    "name": "Tyler Conklin",
+    "link": "/dynasty-rankings/players/tyler-conklin-489",
+    "position": "TE",
+    "team": "NYJ",
+    "value": "978"
+  },
+  {
+    "name": "Joe Flacco",
+    "link": "/dynasty-rankings/players/joe-flacco-722",
+    "position": "QB",
+    "team": "IND",
+    "value": "968"
+  },
+  {
+    "name": "Zach Ertz",
+    "link": "/dynasty-rankings/players/zach-ertz-305",
+    "position": "TE",
+    "team": "WAS",
+    "value": "966"
+  },
+  {
+    "name": "Bailey Zappe",
+    "link": "/dynasty-rankings/players/bailey-zappe-1212",
+    "position": "QB",
+    "team": "NEP",
+    "value": "965"
+  },
+  {
+    "name": "Jamaal Williams",
+    "link": "/dynasty-rankings/players/jamaal-williams-339",
+    "position": "RB",
+    "team": "NOS",
+    "value": "963"
+  },
+  {
+    "name": "Patrick Mahomes",
+    "link": "/dynasty-rankings/players/patrick-mahomes-272",
+    "position": "QB",
+    "team": "KCC",
+    "value": "9999"
+  },
+  {
+    "name": "Josh Allen",
+    "link": "/dynasty-rankings/players/josh-allen-365",
+    "position": "QB",
+    "team": "BUF",
+    "value": "9999"
+  },
+  {
+    "name": "C.J. Stroud",
+    "link": "/dynasty-rankings/players/cj-stroud-1403",
+    "position": "QB",
+    "team": "HOU",
+    "value": "9907"
+  },
+  {
+    "name": "Justin Jefferson",
+    "link": "/dynasty-rankings/players/justin-jefferson-542",
+    "position": "WR",
+    "team": "MIN",
+    "value": "9589"
+  },
+  {
+    "name": "Lamar Jackson",
+    "link": "/dynasty-rankings/players/lamar-jackson-372",
+    "position": "QB",
+    "team": "BAL",
+    "value": "8637"
+  },
+  {
+    "name": "Ja'Marr Chase",
+    "link": "/dynasty-rankings/players/ja-marr-chase-1004",
+    "position": "WR",
+    "team": "CIN",
+    "value": "8621"
+  },
+  {
+    "name": "CeeDee Lamb",
+    "link": "/dynasty-rankings/players/ceedee-lamb-546",
+    "position": "WR",
+    "team": "DAL",
+    "value": "8615"
+  },
+  {
+    "name": "Jalen Hurts",
+    "link": "/dynasty-rankings/players/jalen-hurts-595",
+    "position": "QB",
+    "team": "PHI",
+    "value": "8380"
+  },
+  {
+    "name": "Joe Burrow",
+    "link": "/dynasty-rankings/players/joe-burrow-601",
+    "position": "QB",
+    "team": "CIN",
+    "value": "8179"
+  },
+  {
+    "name": "Amon-Ra St. Brown",
+    "link": "/dynasty-rankings/players/amon-ra-st-brown-1010",
+    "position": "WR",
+    "team": "DET",
+    "value": "7970"
+  },
+  {
+    "name": "Marvin Harrison Jr.",
+    "link": "/dynasty-rankings/players/marvin-harrison-jr-1585",
+    "position": "WR",
+    "team": "FA",
+    "value": "7615"
+  },
+  {
+    "name": "Bijan Robinson",
+    "link": "/dynasty-rankings/players/bijan-robinson-1414",
+    "position": "RB",
+    "team": "ATL",
+    "value": "7589"
+  },
+  {
+    "name": "Justin Herbert",
+    "link": "/dynasty-rankings/players/justin-herbert-599",
+    "position": "QB",
+    "team": "LAC",
+    "value": "7586"
+  },
+  {
+    "name": "Caleb Williams",
+    "link": "/dynasty-rankings/players/caleb-williams-1550",
+    "position": "QB",
+    "team": "FA",
+    "value": "7513"
+  },
+  {
+    "name": "Anthony Richardson",
+    "link": "/dynasty-rankings/players/anthony-richardson-1405",
+    "position": "QB",
+    "team": "IND",
+    "value": "7459"
+  },
+  {
+    "name": "Breece Hall",
+    "link": "/dynasty-rankings/players/breece-hall-1224",
+    "position": "RB",
+    "team": "NYJ",
+    "value": "7084"
+  },
+  {
+    "name": "Jordan Love",
+    "link": "/dynasty-rankings/players/jordan-love-596",
+    "position": "QB",
+    "team": "GBP",
+    "value": "7053"
+  },
+  {
+    "name": "Puka Nacua",
+    "link": "/dynasty-rankings/players/puka-nacua-1426",
+    "position": "WR",
+    "team": "LAR",
+    "value": "7052"
+  },
+  {
+    "name": "2024 Early 1st",
+    "link": "/dynasty-rankings/players/2024-early-1st-1293",
+    "position": "PI",
+    "team": "FA",
+    "value": "7049"
+  },
+  {
+    "name": "Jahmyr Gibbs",
+    "link": "/dynasty-rankings/players/jahmyr-gibbs-1415",
+    "position": "RB",
+    "team": "DET",
+    "value": "6985"
+  },
+  {
+    "name": "Garrett Wilson",
+    "link": "/dynasty-rankings/players/garrett-wilson-1270",
+    "position": "WR",
+    "team": "NYJ",
+    "value": "6792"
+  },
+  {
+    "name": "Sam LaPorta",
+    "link": "/dynasty-rankings/players/sam-laporta-1429",
+    "position": "TE",
+    "team": "DET",
+    "value": "6667"
+  },
+  {
+    "name": "Kyler Murray",
+    "link": "/dynasty-rankings/players/kyler-murray-379",
+    "position": "QB",
+    "team": "ARI",
+    "value": "6576"
+  },
+  {
+    "name": "A.J. Brown",
+    "link": "/dynasty-rankings/players/aj-brown-217",
+    "position": "WR",
+    "team": "PHI",
+    "value": "6512"
+  },
+  {
+    "name": "Christian McCaffrey",
+    "link": "/dynasty-rankings/players/christian-mccaffrey-283",
+    "position": "RB",
+    "team": "SFO",
+    "value": "6469"
+  },
+  {
+    "name": "Trevor Lawrence",
+    "link": "/dynasty-rankings/players/trevor-lawrence-1094",
+    "position": "QB",
+    "team": "JAC",
+    "value": "6405"
+  },
+  {
+    "name": "Malik Nabers",
+    "link": "/dynasty-rankings/players/malik-nabers-1586",
+    "position": "WR",
+    "team": "FA",
+    "value": "6058"
+  },
+  {
+    "name": "Drake London",
+    "link": "/dynasty-rankings/players/drake-london-1268",
+    "position": "WR",
+    "team": "ATL",
+    "value": "6055"
+  },
+  {
+    "name": "Chris Olave",
+    "link": "/dynasty-rankings/players/chris-olave-1271",
+    "position": "WR",
+    "team": "NOS",
+    "value": "5980"
+  },
+  {
+    "name": "Jayden Daniels",
+    "link": "/dynasty-rankings/players/jayden-daniels-1552",
+    "position": "QB",
+    "team": "FA",
+    "value": "5861"
+  },
+  {
+    "name": "Tyreek Hill",
+    "link": "/dynasty-rankings/players/tyreek-hill-286",
+    "position": "WR",
+    "team": "MIA",
+    "value": "5749"
+  },
+  {
+    "name": "2025 Early 1st",
+    "link": "/dynasty-rankings/players/2025-early-1st-1361",
+    "position": "PI",
+    "team": "FA",
+    "value": "5691"
+  },
+  {
+    "name": "Brock Purdy",
+    "link": "/dynasty-rankings/players/brock-purdy-1214",
+    "position": "QB",
+    "team": "SFO",
+    "value": "5675"
+  },
+  {
+    "name": "Jaylen Waddle",
+    "link": "/dynasty-rankings/players/jaylen-waddle-1007",
+    "position": "WR",
+    "team": "MIA",
+    "value": "5649"
+  },
+  {
+    "name": "Brandon Aiyuk",
+    "link": "/dynasty-rankings/players/brandon-aiyuk-538",
+    "position": "WR",
+    "team": "SFO",
+    "value": "5646"
+  },
+  {
+    "name": "Dak Prescott",
+    "link": "/dynasty-rankings/players/dak-prescott-371",
+    "position": "QB",
+    "team": "DAL",
+    "value": "5638"
+  },
+  {
+    "name": "Rome Odunze",
+    "link": "/dynasty-rankings/players/rome-odunze-1587",
+    "position": "WR",
+    "team": "FA",
+    "value": "5585"
+  },
+  {
+    "name": "Michael Pittman",
+    "link": "/dynasty-rankings/players/michael-pittman-536",
+    "position": "WR",
+    "team": "IND",
+    "value": "5577"
+  },
+  {
+    "name": "Drake Maye",
+    "link": "/dynasty-rankings/players/drake-maye-1551",
+    "position": "QB",
+    "team": "FA",
+    "value": "5572"
+  },
+  {
+    "name": "Jonathan Taylor",
+    "link": "/dynasty-rankings/players/jonathan-taylor-634",
+    "position": "RB",
+    "team": "IND",
+    "value": "5570"
+  },
+  {
+    "name": "Tua Tagovailoa",
+    "link": "/dynasty-rankings/players/tua-tagovailoa-600",
+    "position": "QB",
+    "team": "MIA",
+    "value": "5552"
+  },
+  {
+    "name": "2024 Mid 1st",
+    "link": "/dynasty-rankings/players/2024-mid-1st-1294",
+    "position": "PI",
+    "team": "FA",
+    "value": "5529"
+  },
+  {
+    "name": "Nico Collins",
+    "link": "/dynasty-rankings/players/nico-collins-1040",
+    "position": "WR",
+    "team": "HOU",
+    "value": "5517"
+  },
+  {
+    "name": "DeVonta Smith",
+    "link": "/dynasty-rankings/players/devonta-smith-1005",
+    "position": "WR",
+    "team": "PHI",
+    "value": "5501"
+  },
+  {
+    "name": "D.J. Moore",
+    "link": "/dynasty-rankings/players/dj-moore-304",
+    "position": "WR",
+    "team": "CHI",
+    "value": "5428"
+  },
+  {
+    "name": "De'Von Achane",
+    "link": "/dynasty-rankings/players/de-von-achane-1398",
+    "position": "RB",
+    "team": "MIA",
+    "value": "5390"
+  },
+  {
+    "name": "Kyren Williams",
+    "link": "/dynasty-rankings/players/kyren-williams-1226",
+    "position": "RB",
+    "team": "LAR",
+    "value": "5345"
+  },
+  {
+    "name": "Tank Dell",
+    "link": "/dynasty-rankings/players/tank-dell-1438",
+    "position": "WR",
+    "team": "HOU",
+    "value": "5336"
+  },
+  {
+    "name": "Trey McBride",
+    "link": "/dynasty-rankings/players/trey-mcbride-1253",
+    "position": "TE",
+    "team": "ARI",
+    "value": "5306"
+  },
+  {
+    "name": "Tee Higgins",
+    "link": "/dynasty-rankings/players/tee-higgins-543",
+    "position": "WR",
+    "team": "CIN",
+    "value": "5269"
+  },
+  {
+    "name": "Patrick Mahomes",
+    "link": "/dynasty-rankings/players/patrick-mahomes-272",
+    "position": "QB",
+    "team": "KCC",
+    "value": "9999"
+  },
+  {
+    "name": "Josh Allen",
+    "link": "/dynasty-rankings/players/josh-allen-365",
+    "position": "QB",
+    "team": "BUF",
+    "value": "9999"
+  },
+  {
+    "name": "C.J. Stroud",
+    "link": "/dynasty-rankings/players/cj-stroud-1403",
+    "position": "QB",
+    "team": "HOU",
+    "value": "9907"
+  },
+  {
+    "name": "Justin Jefferson",
+    "link": "/dynasty-rankings/players/justin-jefferson-542",
+    "position": "WR",
+    "team": "MIN",
+    "value": "9589"
+  },
+  {
+    "name": "Lamar Jackson",
+    "link": "/dynasty-rankings/players/lamar-jackson-372",
+    "position": "QB",
+    "team": "BAL",
+    "value": "8637"
+  },
+  {
+    "name": "Ja'Marr Chase",
+    "link": "/dynasty-rankings/players/ja-marr-chase-1004",
+    "position": "WR",
+    "team": "CIN",
+    "value": "8621"
+  },
+  {
+    "name": "CeeDee Lamb",
+    "link": "/dynasty-rankings/players/ceedee-lamb-546",
+    "position": "WR",
+    "team": "DAL",
+    "value": "8615"
+  },
+  {
+    "name": "Jalen Hurts",
+    "link": "/dynasty-rankings/players/jalen-hurts-595",
+    "position": "QB",
+    "team": "PHI",
+    "value": "8380"
+  },
+  {
+    "name": "Joe Burrow",
+    "link": "/dynasty-rankings/players/joe-burrow-601",
+    "position": "QB",
+    "team": "CIN",
+    "value": "8179"
+  },
+  {
+    "name": "Amon-Ra St. Brown",
+    "link": "/dynasty-rankings/players/amon-ra-st-brown-1010",
+    "position": "WR",
+    "team": "DET",
+    "value": "7970"
+  },
+  {
+    "name": "Marvin Harrison Jr.",
+    "link": "/dynasty-rankings/players/marvin-harrison-jr-1585",
+    "position": "WR",
+    "team": "FA",
+    "value": "7615"
+  },
+  {
+    "name": "Bijan Robinson",
+    "link": "/dynasty-rankings/players/bijan-robinson-1414",
+    "position": "RB",
+    "team": "ATL",
+    "value": "7589"
+  },
+  {
+    "name": "Justin Herbert",
+    "link": "/dynasty-rankings/players/justin-herbert-599",
+    "position": "QB",
+    "team": "LAC",
+    "value": "7586"
+  },
+  {
+    "name": "Caleb Williams",
+    "link": "/dynasty-rankings/players/caleb-williams-1550",
+    "position": "QB",
+    "team": "FA",
+    "value": "7513"
+  },
+  {
+    "name": "Anthony Richardson",
+    "link": "/dynasty-rankings/players/anthony-richardson-1405",
+    "position": "QB",
+    "team": "IND",
+    "value": "7459"
+  },
+  {
+    "name": "Breece Hall",
+    "link": "/dynasty-rankings/players/breece-hall-1224",
+    "position": "RB",
+    "team": "NYJ",
+    "value": "7084"
+  },
+  {
+    "name": "Jordan Love",
+    "link": "/dynasty-rankings/players/jordan-love-596",
+    "position": "QB",
+    "team": "GBP",
+    "value": "7053"
+  },
+  {
+    "name": "Puka Nacua",
+    "link": "/dynasty-rankings/players/puka-nacua-1426",
+    "position": "WR",
+    "team": "LAR",
+    "value": "7052"
+  },
+  {
+    "name": "2024 Early 1st",
+    "link": "/dynasty-rankings/players/2024-early-1st-1293",
+    "position": "PI",
+    "team": "FA",
+    "value": "7049"
+  },
+  {
+    "name": "Jahmyr Gibbs",
+    "link": "/dynasty-rankings/players/jahmyr-gibbs-1415",
+    "position": "RB",
+    "team": "DET",
+    "value": "6985"
+  },
+  {
+    "name": "Garrett Wilson",
+    "link": "/dynasty-rankings/players/garrett-wilson-1270",
+    "position": "WR",
+    "team": "NYJ",
+    "value": "6792"
+  },
+  {
+    "name": "Sam LaPorta",
+    "link": "/dynasty-rankings/players/sam-laporta-1429",
+    "position": "TE",
+    "team": "DET",
+    "value": "6667"
+  },
+  {
+    "name": "Kyler Murray",
+    "link": "/dynasty-rankings/players/kyler-murray-379",
+    "position": "QB",
+    "team": "ARI",
+    "value": "6576"
+  },
+  {
+    "name": "A.J. Brown",
+    "link": "/dynasty-rankings/players/aj-brown-217",
+    "position": "WR",
+    "team": "PHI",
+    "value": "6512"
+  },
+  {
+    "name": "Christian McCaffrey",
+    "link": "/dynasty-rankings/players/christian-mccaffrey-283",
+    "position": "RB",
+    "team": "SFO",
+    "value": "6469"
+  },
+  {
+    "name": "Trevor Lawrence",
+    "link": "/dynasty-rankings/players/trevor-lawrence-1094",
+    "position": "QB",
+    "team": "JAC",
+    "value": "6405"
+  },
+  {
+    "name": "Malik Nabers",
+    "link": "/dynasty-rankings/players/malik-nabers-1586",
+    "position": "WR",
+    "team": "FA",
+    "value": "6058"
+  },
+  {
+    "name": "Drake London",
+    "link": "/dynasty-rankings/players/drake-london-1268",
+    "position": "WR",
+    "team": "ATL",
+    "value": "6055"
+  },
+  {
+    "name": "Chris Olave",
+    "link": "/dynasty-rankings/players/chris-olave-1271",
+    "position": "WR",
+    "team": "NOS",
+    "value": "5980"
+  },
+  {
+    "name": "Jayden Daniels",
+    "link": "/dynasty-rankings/players/jayden-daniels-1552",
+    "position": "QB",
+    "team": "FA",
+    "value": "5861"
+  },
+  {
+    "name": "Tyreek Hill",
+    "link": "/dynasty-rankings/players/tyreek-hill-286",
+    "position": "WR",
+    "team": "MIA",
+    "value": "5749"
+  },
+  {
+    "name": "2025 Early 1st",
+    "link": "/dynasty-rankings/players/2025-early-1st-1361",
+    "position": "PI",
+    "team": "FA",
+    "value": "5691"
+  },
+  {
+    "name": "Brock Purdy",
+    "link": "/dynasty-rankings/players/brock-purdy-1214",
+    "position": "QB",
+    "team": "SFO",
+    "value": "5675"
+  },
+  {
+    "name": "Jaylen Waddle",
+    "link": "/dynasty-rankings/players/jaylen-waddle-1007",
+    "position": "WR",
+    "team": "MIA",
+    "value": "5649"
+  },
+  {
+    "name": "Brandon Aiyuk",
+    "link": "/dynasty-rankings/players/brandon-aiyuk-538",
+    "position": "WR",
+    "team": "SFO",
+    "value": "5646"
+  },
+  {
+    "name": "Dak Prescott",
+    "link": "/dynasty-rankings/players/dak-prescott-371",
+    "position": "QB",
+    "team": "DAL",
+    "value": "5638"
+  },
+  {
+    "name": "Rome Odunze",
+    "link": "/dynasty-rankings/players/rome-odunze-1587",
+    "position": "WR",
+    "team": "FA",
+    "value": "5585"
+  },
+  {
+    "name": "Michael Pittman",
+    "link": "/dynasty-rankings/players/michael-pittman-536",
+    "position": "WR",
+    "team": "IND",
+    "value": "5577"
+  },
+  {
+    "name": "Drake Maye",
+    "link": "/dynasty-rankings/players/drake-maye-1551",
+    "position": "QB",
+    "team": "FA",
+    "value": "5572"
+  },
+  {
+    "name": "Jonathan Taylor",
+    "link": "/dynasty-rankings/players/jonathan-taylor-634",
+    "position": "RB",
+    "team": "IND",
+    "value": "5570"
+  },
+  {
+    "name": "Tua Tagovailoa",
+    "link": "/dynasty-rankings/players/tua-tagovailoa-600",
+    "position": "QB",
+    "team": "MIA",
+    "value": "5552"
+  },
+  {
+    "name": "2024 Mid 1st",
+    "link": "/dynasty-rankings/players/2024-mid-1st-1294",
+    "position": "PI",
+    "team": "FA",
+    "value": "5529"
+  },
+  {
+    "name": "Nico Collins",
+    "link": "/dynasty-rankings/players/nico-collins-1040",
+    "position": "WR",
+    "team": "HOU",
+    "value": "5517"
+  },
+  {
+    "name": "DeVonta Smith",
+    "link": "/dynasty-rankings/players/devonta-smith-1005",
+    "position": "WR",
+    "team": "PHI",
+    "value": "5501"
+  },
+  {
+    "name": "D.J. Moore",
+    "link": "/dynasty-rankings/players/dj-moore-304",
+    "position": "WR",
+    "team": "CHI",
+    "value": "5428"
+  },
+  {
+    "name": "De'Von Achane",
+    "link": "/dynasty-rankings/players/de-von-achane-1398",
+    "position": "RB",
+    "team": "MIA",
+    "value": "5390"
+  },
+  {
+    "name": "Kyren Williams",
+    "link": "/dynasty-rankings/players/kyren-williams-1226",
+    "position": "RB",
+    "team": "LAR",
+    "value": "5345"
+  },
+  {
+    "name": "Tank Dell",
+    "link": "/dynasty-rankings/players/tank-dell-1438",
+    "position": "WR",
+    "team": "HOU",
+    "value": "5336"
+  },
+  {
+    "name": "Trey McBride",
+    "link": "/dynasty-rankings/players/trey-mcbride-1253",
+    "position": "TE",
+    "team": "ARI",
+    "value": "5306"
+  },
+  {
+    "name": "Tee Higgins",
+    "link": "/dynasty-rankings/players/tee-higgins-543",
+    "position": "WR",
+    "team": "CIN",
+    "value": "5269"
+  },
+  {
+    "name": "Patrick Mahomes",
+    "link": "/dynasty-rankings/players/patrick-mahomes-272",
+    "position": "QB",
+    "team": "KCC",
+    "value": "9999"
+  },
+  {
+    "name": "Josh Allen",
+    "link": "/dynasty-rankings/players/josh-allen-365",
+    "position": "QB",
+    "team": "BUF",
+    "value": "9999"
+  },
+  {
+    "name": "C.J. Stroud",
+    "link": "/dynasty-rankings/players/cj-stroud-1403",
+    "position": "QB",
+    "team": "HOU",
+    "value": "9907"
+  },
+  {
+    "name": "Justin Jefferson",
+    "link": "/dynasty-rankings/players/justin-jefferson-542",
+    "position": "WR",
+    "team": "MIN",
+    "value": "9589"
+  },
+  {
+    "name": "Lamar Jackson",
+    "link": "/dynasty-rankings/players/lamar-jackson-372",
+    "position": "QB",
+    "team": "BAL",
+    "value": "8637"
+  },
+  {
+    "name": "Ja'Marr Chase",
+    "link": "/dynasty-rankings/players/ja-marr-chase-1004",
+    "position": "WR",
+    "team": "CIN",
+    "value": "8621"
+  },
+  {
+    "name": "CeeDee Lamb",
+    "link": "/dynasty-rankings/players/ceedee-lamb-546",
+    "position": "WR",
+    "team": "DAL",
+    "value": "8615"
+  },
+  {
+    "name": "Jalen Hurts",
+    "link": "/dynasty-rankings/players/jalen-hurts-595",
+    "position": "QB",
+    "team": "PHI",
+    "value": "8380"
+  },
+  {
+    "name": "Joe Burrow",
+    "link": "/dynasty-rankings/players/joe-burrow-601",
+    "position": "QB",
+    "team": "CIN",
+    "value": "8179"
+  },
+  {
+    "name": "Amon-Ra St. Brown",
+    "link": "/dynasty-rankings/players/amon-ra-st-brown-1010",
+    "position": "WR",
+    "team": "DET",
+    "value": "7970"
+  },
+  {
+    "name": "Marvin Harrison Jr.",
+    "link": "/dynasty-rankings/players/marvin-harrison-jr-1585",
+    "position": "WR",
+    "team": "FA",
+    "value": "7615"
+  },
+  {
+    "name": "Bijan Robinson",
+    "link": "/dynasty-rankings/players/bijan-robinson-1414",
+    "position": "RB",
+    "team": "ATL",
+    "value": "7589"
+  },
+  {
+    "name": "Justin Herbert",
+    "link": "/dynasty-rankings/players/justin-herbert-599",
+    "position": "QB",
+    "team": "LAC",
+    "value": "7586"
+  },
+  {
+    "name": "Caleb Williams",
+    "link": "/dynasty-rankings/players/caleb-williams-1550",
+    "position": "QB",
+    "team": "FA",
+    "value": "7513"
+  },
+  {
+    "name": "Anthony Richardson",
+    "link": "/dynasty-rankings/players/anthony-richardson-1405",
+    "position": "QB",
+    "team": "IND",
+    "value": "7459"
+  },
+  {
+    "name": "Breece Hall",
+    "link": "/dynasty-rankings/players/breece-hall-1224",
+    "position": "RB",
+    "team": "NYJ",
+    "value": "7084"
+  },
+  {
+    "name": "Jordan Love",
+    "link": "/dynasty-rankings/players/jordan-love-596",
+    "position": "QB",
+    "team": "GBP",
+    "value": "7053"
+  },
+  {
+    "name": "Puka Nacua",
+    "link": "/dynasty-rankings/players/puka-nacua-1426",
+    "position": "WR",
+    "team": "LAR",
+    "value": "7052"
+  },
+  {
+    "name": "2024 Early 1st",
+    "link": "/dynasty-rankings/players/2024-early-1st-1293",
+    "position": "PI",
+    "team": "FA",
+    "value": "7049"
+  },
+  {
+    "name": "Jahmyr Gibbs",
+    "link": "/dynasty-rankings/players/jahmyr-gibbs-1415",
+    "position": "RB",
+    "team": "DET",
+    "value": "6985"
+  },
+  {
+    "name": "Garrett Wilson",
+    "link": "/dynasty-rankings/players/garrett-wilson-1270",
+    "position": "WR",
+    "team": "NYJ",
+    "value": "6792"
+  },
+  {
+    "name": "Sam LaPorta",
+    "link": "/dynasty-rankings/players/sam-laporta-1429",
+    "position": "TE",
+    "team": "DET",
+    "value": "6667"
+  },
+  {
+    "name": "Kyler Murray",
+    "link": "/dynasty-rankings/players/kyler-murray-379",
+    "position": "QB",
+    "team": "ARI",
+    "value": "6576"
+  },
+  {
+    "name": "A.J. Brown",
+    "link": "/dynasty-rankings/players/aj-brown-217",
+    "position": "WR",
+    "team": "PHI",
+    "value": "6512"
+  },
+  {
+    "name": "Christian McCaffrey",
+    "link": "/dynasty-rankings/players/christian-mccaffrey-283",
+    "position": "RB",
+    "team": "SFO",
+    "value": "6469"
+  },
+  {
+    "name": "Trevor Lawrence",
+    "link": "/dynasty-rankings/players/trevor-lawrence-1094",
+    "position": "QB",
+    "team": "JAC",
+    "value": "6405"
+  },
+  {
+    "name": "Malik Nabers",
+    "link": "/dynasty-rankings/players/malik-nabers-1586",
+    "position": "WR",
+    "team": "FA",
+    "value": "6058"
+  },
+  {
+    "name": "Drake London",
+    "link": "/dynasty-rankings/players/drake-london-1268",
+    "position": "WR",
+    "team": "ATL",
+    "value": "6055"
+  },
+  {
+    "name": "Chris Olave",
+    "link": "/dynasty-rankings/players/chris-olave-1271",
+    "position": "WR",
+    "team": "NOS",
+    "value": "5980"
+  },
+  {
+    "name": "Jayden Daniels",
+    "link": "/dynasty-rankings/players/jayden-daniels-1552",
+    "position": "QB",
+    "team": "FA",
+    "value": "5861"
+  },
+  {
+    "name": "Tyreek Hill",
+    "link": "/dynasty-rankings/players/tyreek-hill-286",
+    "position": "WR",
+    "team": "MIA",
+    "value": "5749"
+  },
+  {
+    "name": "2025 Early 1st",
+    "link": "/dynasty-rankings/players/2025-early-1st-1361",
+    "position": "PI",
+    "team": "FA",
+    "value": "5691"
+  },
+  {
+    "name": "Brock Purdy",
+    "link": "/dynasty-rankings/players/brock-purdy-1214",
+    "position": "QB",
+    "team": "SFO",
+    "value": "5675"
+  },
+  {
+    "name": "Jaylen Waddle",
+    "link": "/dynasty-rankings/players/jaylen-waddle-1007",
+    "position": "WR",
+    "team": "MIA",
+    "value": "5649"
+  },
+  {
+    "name": "Brandon Aiyuk",
+    "link": "/dynasty-rankings/players/brandon-aiyuk-538",
+    "position": "WR",
+    "team": "SFO",
+    "value": "5646"
+  },
+  {
+    "name": "Dak Prescott",
+    "link": "/dynasty-rankings/players/dak-prescott-371",
+    "position": "QB",
+    "team": "DAL",
+    "value": "5638"
+  },
+  {
+    "name": "Rome Odunze",
+    "link": "/dynasty-rankings/players/rome-odunze-1587",
+    "position": "WR",
+    "team": "FA",
+    "value": "5585"
+  },
+  {
+    "name": "Michael Pittman",
+    "link": "/dynasty-rankings/players/michael-pittman-536",
+    "position": "WR",
+    "team": "IND",
+    "value": "5577"
+  },
+  {
+    "name": "Drake Maye",
+    "link": "/dynasty-rankings/players/drake-maye-1551",
+    "position": "QB",
+    "team": "FA",
+    "value": "5572"
+  },
+  {
+    "name": "Jonathan Taylor",
+    "link": "/dynasty-rankings/players/jonathan-taylor-634",
+    "position": "RB",
+    "team": "IND",
+    "value": "5570"
+  },
+  {
+    "name": "Tua Tagovailoa",
+    "link": "/dynasty-rankings/players/tua-tagovailoa-600",
+    "position": "QB",
+    "team": "MIA",
+    "value": "5552"
+  },
+  {
+    "name": "2024 Mid 1st",
+    "link": "/dynasty-rankings/players/2024-mid-1st-1294",
+    "position": "PI",
+    "team": "FA",
+    "value": "5529"
+  },
+  {
+    "name": "Nico Collins",
+    "link": "/dynasty-rankings/players/nico-collins-1040",
+    "position": "WR",
+    "team": "HOU",
+    "value": "5517"
+  },
+  {
+    "name": "DeVonta Smith",
+    "link": "/dynasty-rankings/players/devonta-smith-1005",
+    "position": "WR",
+    "team": "PHI",
+    "value": "5501"
+  },
+  {
+    "name": "D.J. Moore",
+    "link": "/dynasty-rankings/players/dj-moore-304",
+    "position": "WR",
+    "team": "CHI",
+    "value": "5428"
+  },
+  {
+    "name": "De'Von Achane",
+    "link": "/dynasty-rankings/players/de-von-achane-1398",
+    "position": "RB",
+    "team": "MIA",
+    "value": "5390"
+  },
+  {
+    "name": "Kyren Williams",
+    "link": "/dynasty-rankings/players/kyren-williams-1226",
+    "position": "RB",
+    "team": "LAR",
+    "value": "5345"
+  },
+  {
+    "name": "Tank Dell",
+    "link": "/dynasty-rankings/players/tank-dell-1438",
+    "position": "WR",
+    "team": "HOU",
+    "value": "5336"
+  },
+  {
+    "name": "Trey McBride",
+    "link": "/dynasty-rankings/players/trey-mcbride-1253",
+    "position": "TE",
+    "team": "ARI",
+    "value": "5306"
+  },
+  {
+    "name": "Tee Higgins",
+    "link": "/dynasty-rankings/players/tee-higgins-543",
+    "position": "WR",
+    "team": "CIN",
+    "value": "5269"
+  }
+]

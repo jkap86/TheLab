@@ -11,7 +11,7 @@ table.trades td > span.stat {
 }
 
 span.trade_total {
-  font-family: var(--font3);
+  font-family: var(--font2);
 
   font-size: 4rem;
   background-color: black;

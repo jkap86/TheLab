@@ -27,5 +27,24 @@ module.exports = (app) => {
     }
   });
 
+  router.get("/ktcvalues", async (req, res) => {
+    const ktc = path.join(__dirname, "../../data/ktcValues.json");
+
+    let data, date;
+    try {
+      data = fs.readFileSync(ktc, "utf8");
+
+      date = Object.keys(JSON.parse(data)).sort(
+        (a, b) => new Date(b) - new Date(a)
+      )[0];
+
+      console.log({ date });
+    } catch (err) {
+      console.log(err.message);
+    }
+
+    res.send(JSON.parse(data)[date]);
+  });
+
   app.use("/common", router);
 };

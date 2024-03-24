@@ -70,6 +70,7 @@ const start = () => {
     // BACKGROUND
 
     require("./app/background/dailyUpdate")(app);
+    require("./app/background/ktcUpdate")(app);
   });
 };
 

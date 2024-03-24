@@ -273,6 +273,16 @@ export const fetchLmLeagueIds = (user_id, type1, type2) => async (dispatch) => {
   }
 };
 
+export const fetchKTC = () => async (dispatch) => {
+  try {
+    const ktc = await axios.get("/common/ktcvalues");
+
+    dispatch({ type: "SET_STATE_COMMON", payload: { ktc: ktc.data } });
+  } catch (err) {
+    console.log(err);
+  }
+};
+
 export const fetchAdp =
   (league_ids, user_id, allplayers) => async (dispatch) => {
     dispatch({ type: "SET_STATE_USER", payload: { isLoadingAdp: true } });

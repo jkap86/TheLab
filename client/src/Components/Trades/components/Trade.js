@@ -9,11 +9,15 @@ import {
 } from "../../Common/Helpers/getTrendColor";
 
 const Trade = ({ trade }) => {
-  const { state: stateState, allplayers } = useSelector(
-    (state) => state.common
-  );
+  const {
+    state: stateState,
+    allplayers,
+    ktc,
+  } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
+  const { valueType } = useSelector((state) => state.trades.nav);
 
+  console.log({ valueType });
   const league_type =
     trade["league.settings"].type === 2
       ? "Dynasty"
@@ -43,7 +47,10 @@ const Trade = ({ trade }) => {
         .filter((a) => trade.adds[a] === roster?.user_id)
         .reduce(
           (acc, cur) =>
-            acc + (adpLm?.[`${league_type}_auction`]?.[cur]?.adp || 0),
+            acc +
+            (valueType === "KTC"
+              ? ktc[cur]?.superflex || 0
+              : adpLm?.[`${league_type}_auction`]?.[cur]?.adp || 0),
           0
         );
 
@@ -59,6 +66,7 @@ const Trade = ({ trade }) => {
     })
   );
 
+  console.log({ trade_totals });
   return (
     <TableMain
       type={"trade_summary"}
@@ -69,7 +77,7 @@ const Trade = ({ trade }) => {
           list: [
             {
               text: (
-                <div className="timestamp">
+                <span className="timestamp">
                   <div>
                     {new Date(
                       parseInt(trade.status_updated)
@@ -83,14 +91,14 @@ const Trade = ({ trade }) => {
                       minute: "2-digit",
                     })}
                   </div>
-                </div>
+                </span>
               ),
               colSpan: 2,
               className: "small wrap",
             },
             {
               text: (
-                <>
+                <span>
                   <div>
                     {trade["league.settings"].type === 2
                       ? "Dynasty"
@@ -103,7 +111,7 @@ const Trade = ({ trade }) => {
                       ? "Bestball"
                       : "Lineup"}
                   </div>
-                </>
+                </span>
               ),
               colSpan: 2,
               className: "type",
@@ -172,7 +180,7 @@ const Trade = ({ trade }) => {
                           return (
                             <tr>
                               <td
-                                colSpan={11}
+                                colSpan={12}
                                 className={`${
                                   trade.tips?.trade_away &&
                                   trade.tips?.trade_away?.find(
@@ -186,22 +194,38 @@ const Trade = ({ trade }) => {
                                   + {allplayers[player_id]?.full_name}
                                 </span>
                               </td>
-                              <td className="value" colSpan={4}>
-                                <span
-                                  className={"stat value"}
-                                  style={getTrendColorRank(200 - adp, 1, 200)}
-                                >
-                                  {getAdpFormatted(adp)}
-                                </span>
-                              </td>
-                              <td colSpan={4}>
-                                <span
-                                  className={"stat value"}
-                                  style={getTrendColorRank(200 - adp, 1, 200)}
-                                >
-                                  {auction_value.toFixed(1)}%
-                                </span>
-                              </td>
+                              {valueType === "ADP" ? (
+                                <td className="value" colSpan={7}>
+                                  <span
+                                    className={"stat value"}
+                                    style={getTrendColorRank(200 - adp, 1, 200)}
+                                  >
+                                    {getAdpFormatted(adp)}
+                                  </span>
+                                </td>
+                              ) : valueType === "Auction %" ? (
+                                <td colSpan={7}>
+                                  <span
+                                    className={"stat value"}
+                                    style={getTrendColorRank(200 - adp, 1, 200)}
+                                  >
+                                    {auction_value.toFixed(1)}%
+                                  </span>
+                                </td>
+                              ) : (
+                                <td className="value" colSpan={7}>
+                                  <span
+                                    className={"stat value"}
+                                    style={getTrendColorRank(
+                                      ktc[player_id]?.superflex,
+                                      1,
+                                      1000
+                                    )}
+                                  >
+                                    {ktc[player_id]?.superflex}
+                                  </span>
+                                </td>
+                              )}
                             </tr>
                           );
                         })}

@@ -11,7 +11,7 @@ import FilterIcons from "../../Common/Components/FilterIcons";
 
 const PlayersCheck = ({ secondaryTable }) => {
   const dispatch = useDispatch();
-  const { allplayers, state } = useSelector((state) => state.common);
+  const { allplayers, state, ktc } = useSelector((state) => state.common);
   const { userPlayerShares, type1, type2, adpLm } = useSelector(
     (state) => state.user
   );
@@ -41,6 +41,7 @@ const PlayersCheck = ({ secondaryTable }) => {
     "ADP SF D-R",
     "Auction Budget% D",
     "Age",
+    "KTC SF",
   ];
 
   const headers = [
@@ -270,7 +271,8 @@ const PlayersCheck = ({ secondaryTable }) => {
         winpct_lm,
         adpLm,
         player.id,
-        allplayers
+        allplayers,
+        ktc
       ).sort;
 
       return {
@@ -320,7 +322,8 @@ const PlayersCheck = ({ secondaryTable }) => {
               winpct_lm,
               adpLm,
               player.id,
-              allplayers
+              allplayers,
+              ktc
             );
 
             return {

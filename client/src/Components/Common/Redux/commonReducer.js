@@ -3,7 +3,7 @@ const initialState = {
   allplayers: false,
   schedule: false,
   projections: false,
-  values: false,
+  ktc: false,
   adpAll: false,
   siteLinkIndex: 0,
 };
