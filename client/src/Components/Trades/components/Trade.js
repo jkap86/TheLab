@@ -89,12 +89,20 @@ const TradeInfo = ({
           .filter((p) => p.owner_id === parseInt(rid))
           .sort((a, b) => a.season - b.season || a.round - b.round)
           .map((pick) => {
-            const pick_name = "R" + ((pick.round - 1) * 12 + (pick.order || 7));
+            const pick_ovr = (pick.round - 1) * 12 + (pick.order || 7);
+            const pick_name = "R" + pick_ovr;
 
             const adp = adpLm?.[league_type]?.[pick_name]?.adp || 999;
 
             const auction_value =
               adpLm?.[`${league_type}_auction`]?.[pick_name]?.adp || 0;
+
+            const rookie_player_ids = Object.keys(ktc)
+              .filter((player_id) => allplayers[player_id]?.years_exp === 0)
+              .sort((a, b) => ktc[b].superflex - ktc[a].superflex);
+
+            const pick_value =
+              ktc[rookie_player_ids?.[pick_ovr - 1]]?.superflex || 0;
 
             return (
               <tr>
@@ -128,14 +136,40 @@ const TradeInfo = ({
                     }`}</span>
                   }
                 </td>
-                <td className="value" colSpan={7}>
-                  <span
-                    className={"stat value"}
-                    style={getTrendColorRank(200 - adp, 1, 200)}
-                  >
-                    {getAdpFormatted(adp)}
-                  </span>
-                </td>
+                {valueType === "ADP" ? (
+                  <td className="value" colSpan={7}>
+                    <span
+                      className={"stat value"}
+                      style={getTrendColorRank(200 - adp, 1, 200)}
+                    >
+                      {getAdpFormatted(adp)}
+                    </span>
+                  </td>
+                ) : valueType === "Auction %" ? (
+                  <td className="value" colSpan={7}>
+                    <span
+                      className={"stat value"}
+                      style={getTrendColorValue(
+                        auction_value,
+                        Object.keys(adpLm?.[`${league_type}_auction`]).map(
+                          (player_id) =>
+                            adpLm?.[`${league_type}_auction`][player_id].adp
+                        )
+                      )}
+                    >
+                      {auction_value.toFixed(1)}%
+                    </span>
+                  </td>
+                ) : (
+                  <td className="value" colSpan={7}>
+                    <span
+                      className={"stat value"}
+                      style={getTrendColorRank(200 - adp, 1, 200)}
+                    >
+                      {pick_value}
+                    </span>
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -346,12 +380,13 @@ const Trade = ({ trade }) => {
             },
             {
               text: trade["league.name"],
-              colSpan: 9,
+              colSpan: 8,
               image: {
                 src: trade?.["league.avatar"],
                 alt: "league avatar",
                 type: "league",
               },
+              className: "trade_league",
             },
             {
               text: (
@@ -368,7 +403,7 @@ const Trade = ({ trade }) => {
                   </div>
                 </span>
               ),
-              colSpan: 3,
+              colSpan: 4,
               className: "type",
             },
           ],
@@ -382,7 +417,14 @@ const Trade = ({ trade }) => {
             id: trade.transaction_id,
             list: [
               {
-                text: roster?.username || "Orphan",
+                text: (
+                  <>
+                    {roster?.username || "Orphan"}
+                    <span className="trade_total">
+                      {trade_total.toFixed(0)}
+                    </span>{" "}
+                  </>
+                ),
                 image: {
                   src: roster?.avatar,
                   alt: "avatar",

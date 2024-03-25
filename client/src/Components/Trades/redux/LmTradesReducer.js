@@ -19,6 +19,7 @@ const LmTradesReducer = (state = initialState, action) => {
       console.log("TRADES REDUCER");
 
       return {
+        ...state,
         count: action.payload.count,
         trades: [
           ...(state.trades || []),

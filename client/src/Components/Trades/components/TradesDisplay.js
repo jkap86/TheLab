@@ -2,13 +2,13 @@ import TableMain from "../../Common/Components/TableMain";
 import Trade from "./Trade";
 import { position_map } from "../../Common/Helpers/getOptimalLineupADP";
 import { useSelector, useDispatch } from "react-redux";
-import { setStateTradesNav } from "../redux/actions";
+import { setStateTradesNav, setStateLmTrades } from "../redux/actions";
 import HeaderDropdown from "../../Common/Components/HeaderDropdown";
 
 const TradesDisplay = ({ secondaryTable, trades }) => {
   const { allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
-  const { trades: lmTrades } = useSelector((state) => state.trades.lmtrades);
+  const { page } = useSelector((state) => state.trades.lmtrades);
   const dispatch = useDispatch();
   const { tabPrimary, valueType } = useSelector((state) => state.trades.nav);
 
@@ -16,18 +16,18 @@ const TradesDisplay = ({ secondaryTable, trades }) => {
     [
       {
         text: (
-          <select
-            value={tabPrimary}
-            onChange={(e) =>
-              dispatch(setStateTradesNav({ tabPrimary: e.target.value }))
+          <HeaderDropdown
+            column_text={tabPrimary}
+            columnOptions={[
+              "Price Check",
+              "Leaguemate League Trades",
+              "Leaguemate Trades",
+              "Trade Tips",
+            ]}
+            setState={(value) =>
+              dispatch(setStateTradesNav({ tabPrimary: value }))
             }
-            className="active click"
-          >
-            <option>Price Check</option>
-            <option>Leaguemate League Trades</option>
-            <option>Leaguemate Trades</option>
-            <option>Trade Tips</option>
-          </select>
+          />
         ),
         colSpan: 10,
       },
@@ -55,8 +55,6 @@ const TradesDisplay = ({ secondaryTable, trades }) => {
       },
     ],
   ];
-
-  console.log({ trades });
 
   const trades_body = (trades || [])
     ?.sort((a, b) => parseInt(b.status_updated) - parseInt(a.status_updated))
@@ -122,6 +120,8 @@ const TradesDisplay = ({ secondaryTable, trades }) => {
       type={"primary trades"}
       headers={trades_headers}
       body={trades_body}
+      page={page}
+      setPage={(value) => dispatch(setStateLmTrades({ page: value }))}
     />
   );
 };
