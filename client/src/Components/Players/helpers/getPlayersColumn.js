@@ -196,7 +196,10 @@ export const getPlayersColumn = (
         const value = ktc[player_id]?.superflex || 0;
         text = value;
         sort = value;
-        trendColor = getTrendColorRank(value, 1, 1000);
+        trendColor = getTrendColorValue(
+          value,
+          Object.keys(ktc).map((player_id) => ktc[player_id].superflex)
+        );
         break;
       default:
         text = "-";

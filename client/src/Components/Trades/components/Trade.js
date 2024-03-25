@@ -8,6 +8,236 @@ import {
   getTrendColorValue,
 } from "../../Common/Helpers/getTrendColor";
 
+const TradeInfo = ({
+  trade,
+  roster,
+  league_type,
+  rid,
+  trade_totals,
+  trade_total,
+}) => {
+  const {
+    state: stateState,
+    allplayers,
+    ktc,
+  } = useSelector((state) => state.common);
+  const { adpLm } = useSelector((state) => state.user);
+  const { valueType } = useSelector((state) => state.trades.nav);
+
+  return (
+    <table className="trade_info">
+      <tbody>
+        {Object.keys(trade.adds || {})
+          .filter((a) => trade.adds[a] === roster?.user_id)
+          .map((player_id) => {
+            const adp = adpLm?.[league_type]?.[player_id]?.adp || 999;
+
+            const auction_value =
+              adpLm?.[`${league_type}_auction`]?.[player_id]?.adp || 0;
+
+            return (
+              <tr>
+                <td
+                  colSpan={12}
+                  className={`${
+                    trade.tips?.trade_away &&
+                    trade.tips?.trade_away?.find(
+                      (p) => p.player_id === player_id
+                    )
+                      ? "redb left"
+                      : "left"
+                  }`}
+                >
+                  <span>+ {allplayers[player_id]?.full_name}</span>
+                </td>
+                {valueType === "ADP" ? (
+                  <td className="value" colSpan={7}>
+                    <span
+                      className={"stat value"}
+                      style={getTrendColorRank(200 - adp, 1, 200)}
+                    >
+                      {getAdpFormatted(adp)}
+                    </span>
+                  </td>
+                ) : valueType === "Auction %" ? (
+                  <td colSpan={7}>
+                    <span
+                      className={"stat value"}
+                      style={getTrendColorRank(200 - adp, 1, 200)}
+                    >
+                      {auction_value.toFixed(1)}%
+                    </span>
+                  </td>
+                ) : (
+                  <td className="value" colSpan={7}>
+                    <span
+                      className={"stat value"}
+                      style={getTrendColorRank(
+                        ktc[player_id]?.superflex,
+                        1,
+                        1000
+                      )}
+                    >
+                      {ktc[player_id]?.superflex}
+                    </span>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        {trade.draft_picks
+          .filter((p) => p.owner_id === parseInt(rid))
+          .sort((a, b) => a.season - b.season || a.round - b.round)
+          .map((pick) => {
+            const pick_name = "R" + ((pick.round - 1) * 12 + (pick.order || 7));
+
+            const adp = adpLm?.[league_type]?.[pick_name]?.adp || 999;
+
+            const auction_value =
+              adpLm?.[`${league_type}_auction`]?.[pick_name]?.adp || 0;
+
+            return (
+              <tr>
+                <td
+                  colSpan={12}
+                  className={`${
+                    trade.tips?.trade_away &&
+                    trade.tips?.trade_away?.find((p) =>
+                      pick.season === stateState.league_season && pick.order
+                        ? p.player_id ===
+                          `${pick.season} ${
+                            pick.round
+                          }.${pick.order?.toLocaleString("en-US", {
+                            minimumIntegerDigits: 2,
+                          })}`
+                        : `${pick.season} Round ${pick.round}`
+                    )
+                      ? "redb left"
+                      : "left"
+                  }`}
+                >
+                  {
+                    <span>{`+ ${pick.season} ${
+                      pick.season === stateState.league_season ? "" : "Round "
+                    }${pick.round}${
+                      pick.order && pick.season === stateState.league_season
+                        ? `.${pick.order.toLocaleString("en-US", {
+                            minimumIntegerDigits: 2,
+                          })}`
+                        : ` (${pick.original_user?.username || "Orphan"})`
+                    }`}</span>
+                  }
+                </td>
+                <td className="value" colSpan={7}>
+                  <span
+                    className={"stat value"}
+                    style={getTrendColorRank(200 - adp, 1, 200)}
+                  >
+                    {getAdpFormatted(adp)}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        {/*        <tr>
+          <td colSpan={11}></td>
+          <td colSpan={8}>
+            <span
+              className="trade_total"
+              style={getTrendColorRank(
+                trade_total,
+                Math.min(...Object.values(trade_totals)) / 2,
+                Object.values(trade_totals).reduce((acc, cur) => acc + cur, 0) *
+                  0.5 +
+                  Math.min(...Object.values(trade_totals)) / 2
+              )}
+            >
+              {trade_total.toFixed(1)}%
+            </span>
+          </td>
+              </tr>*/}
+      </tbody>
+    </table>
+  );
+};
+
+const TradeInfo2 = ({ trade, roster, rid }) => {
+  const { state: stateState, allplayers } = useSelector(
+    (state) => state.common
+  );
+
+  return (
+    <table className="trade_info">
+      <tbody>
+        {Object.keys(trade.drops || {})
+          .filter((d) => trade.drops[d] === roster?.user_id)
+          .map((player_id) => (
+            <tr>
+              <td
+                className={
+                  "left end" +
+                  `${
+                    trade.tips?.acquire &&
+                    trade.tips?.acquire?.find((p) => p.player_id === player_id)
+                      ? " greenb"
+                      : ""
+                  }`
+                }
+                colSpan={4}
+              >
+                <span className="end">
+                  {`- ${allplayers[player_id]?.full_name}`.toString()}
+                </span>
+              </td>
+            </tr>
+          ))}
+        {trade.draft_picks
+          .filter((p) => p.previous_owner_id === parseInt(rid))
+          .sort((a, b) => a.season - b.season || a.round - b.round)
+          .map((pick) => (
+            <tr>
+              <td
+                colSpan={4}
+                className={
+                  "left end " +
+                  `${
+                    trade.tips?.acquire &&
+                    trade.tips?.acquire?.find((p) =>
+                      pick.season === stateState.league_season && pick.order
+                        ? p.player_id ===
+                          `${pick.season} ${
+                            pick.round
+                          }.${pick.order?.toLocaleString("en-US", {
+                            minimumIntegerDigits: 2,
+                          })}`
+                        : `${pick.season} Round ${pick.round}`
+                    )
+                      ? "greenb"
+                      : ""
+                  }`
+                }
+              >
+                <span className="end">
+                  {`- ${pick.season} ${
+                    pick.order && pick.season === stateState.league_season
+                      ? ""
+                      : "Round"
+                  } ${pick.round}${
+                    pick.order && pick.season === stateState.league_season
+                      ? `.${pick.order.toLocaleString("en-US", {
+                          minimumIntegerDigits: 2,
+                        })}`
+                      : ` (${pick.original_user?.username || "Orphan"})`
+                  }`.toString()}
+                </span>
+              </td>
+            </tr>
+          ))}
+      </tbody>
+    </table>
+  );
+};
+
 const Trade = ({ trade }) => {
   const {
     state: stateState,
@@ -17,7 +247,6 @@ const Trade = ({ trade }) => {
   const { adpLm } = useSelector((state) => state.user);
   const { valueType } = useSelector((state) => state.trades.nav);
 
-  console.log({ valueType });
   const league_type =
     trade["league.settings"].type === 2
       ? "Dynasty"
@@ -66,7 +295,6 @@ const Trade = ({ trade }) => {
     })
   );
 
-  console.log({ trade_totals });
   return (
     <TableMain
       type={"trade_summary"}
@@ -124,7 +352,6 @@ const Trade = ({ trade }) => {
                 alt: "league avatar",
                 type: "league",
               },
-              className: "left",
             },
             {
               text: (
@@ -150,6 +377,7 @@ const Trade = ({ trade }) => {
           const roster = trade.rosters[rid];
 
           const trade_total = trade_totals[rid];
+
           return {
             id: trade.transaction_id,
             list: [
@@ -165,257 +393,21 @@ const Trade = ({ trade }) => {
               },
               {
                 text: (
-                  <table className="trade_info">
-                    <tbody>
-                      {Object.keys(trade.adds || {})
-                        .filter((a) => trade.adds[a] === roster?.user_id)
-                        .map((player_id) => {
-                          const adp =
-                            adpLm?.[league_type]?.[player_id]?.adp || 999;
-
-                          const auction_value =
-                            adpLm?.[`${league_type}_auction`]?.[player_id]
-                              ?.adp || 0;
-
-                          return (
-                            <tr>
-                              <td
-                                colSpan={12}
-                                className={`${
-                                  trade.tips?.trade_away &&
-                                  trade.tips?.trade_away?.find(
-                                    (p) => p.player_id === player_id
-                                  )
-                                    ? "redb left"
-                                    : "left"
-                                }`}
-                              >
-                                <span>
-                                  + {allplayers[player_id]?.full_name}
-                                </span>
-                              </td>
-                              {valueType === "ADP" ? (
-                                <td className="value" colSpan={7}>
-                                  <span
-                                    className={"stat value"}
-                                    style={getTrendColorRank(200 - adp, 1, 200)}
-                                  >
-                                    {getAdpFormatted(adp)}
-                                  </span>
-                                </td>
-                              ) : valueType === "Auction %" ? (
-                                <td colSpan={7}>
-                                  <span
-                                    className={"stat value"}
-                                    style={getTrendColorRank(200 - adp, 1, 200)}
-                                  >
-                                    {auction_value.toFixed(1)}%
-                                  </span>
-                                </td>
-                              ) : (
-                                <td className="value" colSpan={7}>
-                                  <span
-                                    className={"stat value"}
-                                    style={getTrendColorRank(
-                                      ktc[player_id]?.superflex,
-                                      1,
-                                      1000
-                                    )}
-                                  >
-                                    {ktc[player_id]?.superflex}
-                                  </span>
-                                </td>
-                              )}
-                            </tr>
-                          );
-                        })}
-                      {trade.draft_picks
-                        .filter((p) => p.owner_id === parseInt(rid))
-                        .sort(
-                          (a, b) => a.season - b.season || a.round - b.round
-                        )
-                        .map((pick) => {
-                          const pick_name =
-                            "R" + ((pick.round - 1) * 12 + (pick.order || 7));
-
-                          const adp =
-                            adpLm?.[league_type]?.[pick_name]?.adp || 999;
-
-                          const auction_value =
-                            adpLm?.[`${league_type}_auction`]?.[pick_name]
-                              ?.adp || 0;
-
-                          return (
-                            <tr>
-                              <td
-                                colSpan={11}
-                                className={`${
-                                  trade.tips?.trade_away &&
-                                  trade.tips?.trade_away?.find((p) =>
-                                    pick.season === stateState.league_season &&
-                                    pick.order
-                                      ? p.player_id ===
-                                        `${pick.season} ${
-                                          pick.round
-                                        }.${pick.order?.toLocaleString(
-                                          "en-US",
-                                          {
-                                            minimumIntegerDigits: 2,
-                                          }
-                                        )}`
-                                      : `${pick.season} Round ${pick.round}`
-                                  )
-                                    ? "redb left"
-                                    : "left"
-                                }`}
-                              >
-                                {
-                                  <span>{`+ ${pick.season} ${
-                                    pick.season === stateState.league_season
-                                      ? ""
-                                      : "Round "
-                                  }${pick.round}${
-                                    pick.order &&
-                                    pick.season === stateState.league_season
-                                      ? `.${pick.order.toLocaleString("en-US", {
-                                          minimumIntegerDigits: 2,
-                                        })}`
-                                      : ` (${
-                                          pick.original_user?.username ||
-                                          "Orphan"
-                                        })`
-                                  }`}</span>
-                                }
-                              </td>
-                              <td className="value" colSpan={4}>
-                                <span
-                                  className={"stat value"}
-                                  style={getTrendColorRank(200 - adp, 1, 200)}
-                                >
-                                  {getAdpFormatted(adp)}
-                                </span>
-                              </td>
-                              <td colSpan={4} className="relative">
-                                <span
-                                  className={"stat value"}
-                                  style={getTrendColorRank(200 - adp, 1, 200)}
-                                >
-                                  {auction_value?.toFixed(1)}%
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      <tr>
-                        <td colSpan={11}></td>
-                        <td colSpan={8}>
-                          <span
-                            className="trade_total"
-                            style={getTrendColorRank(
-                              trade_total,
-                              Math.min(...Object.values(trade_totals)) / 2,
-                              Object.values(trade_totals).reduce(
-                                (acc, cur) => acc + cur,
-                                0
-                              ) *
-                                0.5 +
-                                Math.min(...Object.values(trade_totals)) / 2
-                            )}
-                          >
-                            {trade_total.toFixed(1)}%
-                          </span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <TradeInfo
+                    trade={trade}
+                    roster={roster}
+                    league_type={league_type}
+                    rid={rid}
+                    trade_totals={trade_totals}
+                    trade_total={trade_total}
+                  />
                 ),
                 colSpan: 8,
                 rowSpan: 2,
                 className: "small",
               },
               {
-                text: (
-                  <table className="trade_info">
-                    <tbody>
-                      {Object.keys(trade.drops || {})
-                        .filter((d) => trade.drops[d] === roster?.user_id)
-                        .map((player_id) => (
-                          <tr>
-                            <td
-                              className={
-                                "left end" +
-                                `${
-                                  trade.tips?.acquire &&
-                                  trade.tips?.acquire?.find(
-                                    (p) => p.player_id === player_id
-                                  )
-                                    ? " greenb"
-                                    : ""
-                                }`
-                              }
-                              colSpan={4}
-                            >
-                              <span className="end">
-                                {`- ${allplayers[player_id]?.full_name}`.toString()}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      {trade.draft_picks
-                        .filter((p) => p.previous_owner_id === parseInt(rid))
-                        .sort(
-                          (a, b) => a.season - b.season || a.round - b.round
-                        )
-                        .map((pick) => (
-                          <tr>
-                            <td
-                              colSpan={4}
-                              className={
-                                "left end " +
-                                `${
-                                  trade.tips?.acquire &&
-                                  trade.tips?.acquire?.find((p) =>
-                                    pick.season === stateState.league_season &&
-                                    pick.order
-                                      ? p.player_id ===
-                                        `${pick.season} ${
-                                          pick.round
-                                        }.${pick.order?.toLocaleString(
-                                          "en-US",
-                                          {
-                                            minimumIntegerDigits: 2,
-                                          }
-                                        )}`
-                                      : `${pick.season} Round ${pick.round}`
-                                  )
-                                    ? "greenb"
-                                    : ""
-                                }`
-                              }
-                            >
-                              <span className="end">
-                                {`- ${pick.season} ${
-                                  pick.order &&
-                                  pick.season === stateState.league_season
-                                    ? ""
-                                    : "Round"
-                                } ${pick.round}${
-                                  pick.order &&
-                                  pick.season === stateState.league_season
-                                    ? `.${pick.order.toLocaleString("en-US", {
-                                        minimumIntegerDigits: 2,
-                                      })}`
-                                    : ` (${
-                                        pick.original_user?.username || "Orphan"
-                                      })`
-                                }`.toString()}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                ),
+                text: <TradeInfo2 trade={trade} roster={roster} rid={rid} />,
                 colSpan: 4,
                 rowSpan: 2,
                 className: "small",
