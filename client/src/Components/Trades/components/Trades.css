@@ -13,21 +13,25 @@ table.primary.trades td {
   position: static;
 }
 
-table.body.active > tbody,
-table.body.active table.trade_summary > tbody > tr:first-child > td {
+table.primary.trades table.body.active > tbody {
   position: sticky;
   top: 7rem;
   z-index: 9;
 }
 
-table.primary.trades table.body.active tr.active2 > td {
-  box-shadow: none;
+table.primary.trades table.secondary.half > thead {
+  position: sticky;
+  top: 21rem;
+  z-index: 8;
 }
-
-table.body.active tr.active2 {
+table.primary.trades table.secondary.half > tbody > tr {
   position: sticky;
   top: 14rem;
-  z-index: 8;
+  z-index: 7;
+}
+
+table.primary.trades table.body.active tr.active2 > td {
+  box-shadow: none;
 }
 
 table.trade_summary td {
