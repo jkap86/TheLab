@@ -273,11 +273,7 @@ const TradeInfo2 = ({ trade, roster, rid }) => {
 };
 
 const Trade = ({ trade }) => {
-  const {
-    state: stateState,
-    allplayers,
-    ktc,
-  } = useSelector((state) => state.common);
+  const { allplayers, ktc } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
   const { valueType } = useSelector((state) => state.trades.nav);
 
@@ -320,146 +316,170 @@ const Trade = ({ trade }) => {
       const picks_value = trade.draft_picks
         .filter((p) => p.owner_id === parseInt(rid))
         .reduce((acc, cur) => {
-          const pick_name = "R" + ((cur.round - 1) * 12 + (cur.order || 7));
+          const pick_ovr = (cur.round - 1) * 12 + (cur.order || 7);
 
-          return acc + adpLm?.[`${league_type}_auction`]?.[pick_name]?.adp || 0;
+          let pick_value;
+
+          if (valueType === "KTC") {
+            const rookie_player_ids = Object.keys(ktc)
+              .filter((player_id) => allplayers[player_id]?.years_exp === 0)
+              .sort((a, b) => ktc[b].superflex - ktc[a].superflex);
+
+            pick_value = ktc[rookie_player_ids?.[pick_ovr - 1]]?.superflex || 0;
+          } else {
+            const pick_name = "R" + pick_ovr;
+
+            pick_value =
+              adpLm?.[`${league_type}_auction`]?.[pick_name]?.adp || 0;
+          }
+          return acc + pick_value;
         }, 0);
 
       return [rid, adds_value + picks_value];
     })
   );
 
-  return (
-    <TableMain
-      type={"trade_summary"}
-      headers={[]}
-      body={[
-        {
-          id: "title",
-          list: [
-            {
-              text: (
-                <span className="timestamp">
-                  <div>
-                    {new Date(
-                      parseInt(trade.status_updated)
-                    ).toLocaleDateString("en-US")}
-                  </div>
-                  <div>
-                    {new Date(
-                      parseInt(trade.status_updated)
-                    ).toLocaleTimeString("en-US", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </span>
-              ),
-              colSpan: 3,
-              className: "small wrap",
-            },
-            {
-              text: (
-                <span>
-                  <div>
-                    {trade["league.settings"].type === 2
-                      ? "Dynasty"
-                      : trade["league.settings"].type === 1
-                      ? "Keeper"
-                      : "Redraft"}
-                  </div>
-                  <div>
-                    {trade["league.settings"].best_ball === 1
-                      ? "Bestball"
-                      : "Lineup"}
-                  </div>
-                </span>
-              ),
-              colSpan: 3,
-              className: "type",
-            },
-            {
-              text: trade["league.name"],
-              colSpan: 8,
-              image: {
-                src: trade?.["league.avatar"],
-                alt: "league avatar",
-                type: "league",
-              },
-              className: "trade_league",
-            },
-            {
-              text: (
-                <span>
-                  <div>
-                    {no_qb.toString()} QB {no_sf.toString()} SF
-                  </div>
-                  <div>
-                    {no_te.toString()} TE{" "}
-                    {te_prem.toLocaleString("en-US", {
-                      maximumFractionDigits: 2,
-                    })}{" "}
-                    Prem
-                  </div>
-                </span>
-              ),
-              colSpan: 4,
-              className: "type",
-            },
-          ],
-        },
-        ...Object.keys(trade.rosters).map((rid) => {
-          const roster = trade.rosters[rid];
-
-          const trade_total = trade_totals[rid];
-
-          return {
-            id: trade.transaction_id,
-            list: [
-              {
-                text: (
-                  <>
-                    {roster?.username || "Orphan"}
-                    <span className="trade_total">
-                      {trade_total.toFixed(0)}
-                    </span>{" "}
-                  </>
-                ),
-                image: {
-                  src: roster?.avatar,
-                  alt: "avatar",
-                  type: "user",
-                },
-                colSpan: 5,
-                className: "left trade_manager",
-              },
-              {
-                text: (
-                  <TradeInfo
-                    trade={trade}
-                    roster={roster}
-                    league_type={league_type}
-                    rid={rid}
-                    trade_totals={trade_totals}
-                    trade_total={trade_total}
-                  />
-                ),
-                colSpan: 8,
-                rowSpan: 2,
-                className: "small",
-              },
-              {
-                text: <TradeInfo2 trade={trade} roster={roster} rid={rid} />,
-                colSpan: 5,
-                rowSpan: 2,
-                className: "small",
-              },
-            ],
-          };
-        }),
-      ]}
-    />
+  const trade_total_value = Object.values(trade_totals).reduce(
+    (acc, cur) => acc + cur,
+    0
   );
+
+  const body = [
+    {
+      id: "title",
+      list: [
+        {
+          text: (
+            <span className="timestamp">
+              <div>
+                {new Date(parseInt(trade.status_updated)).toLocaleDateString(
+                  "en-US"
+                )}
+              </div>
+              <div>
+                {new Date(parseInt(trade.status_updated)).toLocaleTimeString(
+                  "en-US",
+                  {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }
+                )}
+              </div>
+            </span>
+          ),
+          colSpan: 3,
+          className: "small wrap",
+        },
+        {
+          text: (
+            <span>
+              <div>
+                {trade["league.settings"].type === 2
+                  ? "Dynasty"
+                  : trade["league.settings"].type === 1
+                  ? "Keeper"
+                  : "Redraft"}
+              </div>
+              <div>
+                {trade["league.settings"].best_ball === 1
+                  ? "Bestball"
+                  : "Lineup"}
+              </div>
+            </span>
+          ),
+          colSpan: 3,
+          className: "type",
+        },
+        {
+          text: trade["league.name"],
+          colSpan: 8,
+          image: {
+            src: trade?.["league.avatar"],
+            alt: "league avatar",
+            type: "league",
+          },
+          className: "trade_league",
+        },
+        {
+          text: (
+            <span>
+              <div>
+                {no_qb.toString()} QB {no_sf.toString()} SF
+              </div>
+              <div>
+                {no_te.toString()} TE{" "}
+                {te_prem.toLocaleString("en-US", {
+                  maximumFractionDigits: 2,
+                })}{" "}
+                Prem
+              </div>
+            </span>
+          ),
+          colSpan: 4,
+          className: "type",
+        },
+      ],
+    },
+    ...Object.keys(trade.rosters).map((rid, index) => {
+      const roster = trade.rosters[rid];
+
+      const trade_total = trade_totals[rid];
+
+      return {
+        id: trade.transaction_id,
+        list: [
+          {
+            text: (
+              <>
+                {roster?.username || "Orphan"}
+                <span
+                  className="trade_total"
+                  style={getTrendColorRank(
+                    trade_total,
+                    trade_total_value * 0.25,
+                    trade_total_value * 0.75
+                  )}
+                >
+                  {valueType === "KTC"
+                    ? trade_total.toLocaleString("en-US")
+                    : trade_total.toFixed(1) + "%"}
+                </span>
+              </>
+            ),
+            image: {
+              src: roster?.avatar,
+              alt: "avatar",
+              type: "user",
+            },
+            colSpan: 5,
+            className: "left trade_manager",
+          },
+          {
+            text: (
+              <TradeInfo
+                trade={trade}
+                roster={roster}
+                league_type={league_type}
+                rid={rid}
+                trade_totals={trade_totals}
+                trade_total={trade_total}
+              />
+            ),
+            colSpan: 8,
+            rowSpan: 2,
+            className: "small",
+          },
+          {
+            text: <TradeInfo2 trade={trade} roster={roster} rid={rid} />,
+            colSpan: 5,
+            rowSpan: 2,
+            className: "small",
+          },
+        ],
+      };
+    }),
+  ];
+  return <TableMain type={"trade_summary"} headers={[]} body={body} />;
 };
 
 export default Trade;

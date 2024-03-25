@@ -8,10 +8,11 @@ import HeaderDropdown from "../../Common/Components/HeaderDropdown";
 const TradesDisplay = ({ secondaryTable, trades }) => {
   const { allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
-  const { page } = useSelector((state) => state.trades.lmtrades);
+  const { page, itemActive } = useSelector((state) => state.trades.lmtrades);
   const dispatch = useDispatch();
   const { tabPrimary, valueType } = useSelector((state) => state.trades.nav);
 
+  console.log({ itemActive });
   const trades_headers = [
     [
       {
@@ -111,18 +112,24 @@ const TradesDisplay = ({ secondaryTable, trades }) => {
             colSpan: 10,
           },
         ],
-        secondary_table: "", //secondaryTable({ rosters, league, trade }),
+        secondary_table: secondaryTable({ trade }),
       };
     });
 
   return (
-    <TableMain
-      type={"primary trades"}
-      headers={trades_headers}
-      body={trades_body}
-      page={page}
-      setPage={(value) => dispatch(setStateLmTrades({ page: value }))}
-    />
+    <>
+      <TableMain
+        type={"primary trades"}
+        headers={trades_headers}
+        body={trades_body}
+        page={page}
+        setPage={(value) => dispatch(setStateLmTrades({ page: value }))}
+        itemActive={itemActive}
+        setItemActive={(value) =>
+          dispatch(setStateLmTrades({ itemActive: value }))
+        }
+      />
+    </>
   );
 };
 export default TradesDisplay;

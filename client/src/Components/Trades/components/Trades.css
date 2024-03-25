@@ -1,3 +1,44 @@
+table.primary.trades tr.active {
+  filter: unset;
+}
+
+table.trade_summary {
+  border: 0.5rem ridge gray;
+}
+
+table.primary.trades table,
+table.primary.trades thead,
+table.primary.trades tr.active,
+table.primary.trades td {
+  position: static;
+}
+
+table.body.active > tbody,
+table.body.active table.trade_summary > tbody > tr:first-child > td {
+  position: sticky;
+  top: 7rem;
+  z-index: 9;
+}
+
+table.primary.trades table.body.active tr.active2 > td {
+  box-shadow: none;
+}
+
+table.body.active tr.active2 {
+  position: sticky;
+  top: 14rem;
+  z-index: 8;
+}
+
+table.trade_summary td {
+  background-image: radial-gradient(var(--wr) -300%, var(--color4) 100%);
+}
+
+tr.active_wrapper table.trade_summary td,
+tr.active_wrapper span.trade_total {
+  background-image: radial-gradient(var(--color4) -50%, var(--color2) 100%);
+}
+
 table.trade_info > tbody > tr > td:last-child:hover {
   direction: rtl;
 }

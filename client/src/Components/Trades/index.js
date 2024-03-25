@@ -2,17 +2,22 @@ import { useSelector } from "react-redux";
 import PcTrades from "./components/PcTrades";
 import LmTrades from "./components/LmTrades";
 import "./components/Trades.css";
+import TradeDetail from "./components/TradeDetail";
 
 const Trades = () => {
   const { tabPrimary } = useSelector((state) => state.trades.nav);
 
-  const TradesPrimary = () => {
-    return tabPrimary === "Price Check" ? <PcTrades /> : <LmTrades />;
+  const TradesPrimary = ({ secondaryTable }) => {
+    return tabPrimary === "Price Check" ? (
+      <PcTrades secondaryTable={secondaryTable} />
+    ) : (
+      <LmTrades secondaryTable={secondaryTable} />
+    );
   };
 
   return (
     <>
-      <TradesPrimary />
+      <TradesPrimary secondaryTable={(props) => <TradeDetail {...props} />} />
     </>
   );
 };

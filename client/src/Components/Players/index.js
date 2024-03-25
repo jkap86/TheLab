@@ -3,6 +3,7 @@ import PlayersCheck from "./components/PlayersCheck";
 import LoadingIcon from "../Common/Components/LoadingIcon";
 const PlayerLeagues = React.lazy(() => import("./components/PlayerLeagues"));
 const Standings = React.lazy(() => import("../Common/Components/Standings"));
+
 const Players = () => {
   return (
     <PlayersCheck

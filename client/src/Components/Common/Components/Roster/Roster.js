@@ -55,17 +55,17 @@ const Roster = ({
   ];
 
   const adp_key = `${standingsType}${
-    valueType.includes("Auction") ? "_auction" : ""
+    valueType?.includes("Auction") ? "_auction" : ""
   }`;
 
   const getBody = () => {
     return [
       ...[
-        ...((filter === "All" && roster.starters) || []),
-        ...((filter !== "Picks" && roster.players) || [])
+        ...((filter === "All" && roster?.starters) || []),
+        ...((filter !== "Picks" && roster?.players) || [])
           .filter(
             (player_id) =>
-              (filter === "All" && !roster.starters.includes(player_id)) ||
+              (filter === "All" && !roster.starters?.includes(player_id)) ||
               allplayers[player_id]?.position === filter
           )
           .sort((a, b) => {
@@ -123,12 +123,12 @@ const Roster = ({
                 <span
                   className="stat adp"
                   style={
-                    valueType.includes("ADP")
+                    valueType?.includes("ADP")
                       ? getTrendColorRank(
-                          roster.starters.length * league.rosters.length -
+                          roster.starters?.length * league.rosters?.length -
                             adpLm?.[adp_key]?.[player_id]?.adp,
                           1,
-                          roster.starters.length * league.rosters.length
+                          roster.starters?.length * league.rosters?.length
                         )
                       : getTrendColorValue(
                           adpLm?.[adp_key]?.[player_id]?.adp,
@@ -151,7 +151,7 @@ const Roster = ({
           ],
         };
       }),
-      ...(["All", "Picks"].includes(filter) ? roster.draft_picks : [])
+      ...(["All", "Picks"].includes(filter) ? roster?.draft_picks || [] : [])
         ?.sort(
           (a, b) =>
             a.season - b.season || a.round - b.round || a.order - b.order
@@ -215,10 +215,10 @@ const Roster = ({
                     style={
                       valueType.includes("ADP")
                         ? getTrendColorRank(
-                            roster.starters.length * league.rosters.length -
+                            roster.starters?.length * league.rosters.length -
                               value,
                             1,
-                            roster.starters.length * league.rosters.length
+                            roster.starters?.length * league.rosters.length
                           )
                         : getTrendColorValue(
                             value,
