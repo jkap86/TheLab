@@ -38,7 +38,7 @@ const TradeInfo = ({
             return (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={5}
                   className={`${
                     trade.tips?.trade_away &&
                     trade.tips?.trade_away?.find(
@@ -51,7 +51,7 @@ const TradeInfo = ({
                   <span>+ {allplayers[player_id]?.full_name}</span>
                 </td>
                 {valueType === "ADP" ? (
-                  <td className="value" colSpan={7}>
+                  <td className="value" colSpan={3}>
                     <span
                       className={"stat value"}
                       style={getTrendColorRank(200 - adp, 1, 200)}
@@ -60,7 +60,7 @@ const TradeInfo = ({
                     </span>
                   </td>
                 ) : valueType === "Auction %" ? (
-                  <td colSpan={7}>
+                  <td colSpan={3}>
                     <span
                       className={"stat value"}
                       style={getTrendColorRank(200 - adp, 1, 200)}
@@ -69,7 +69,7 @@ const TradeInfo = ({
                     </span>
                   </td>
                 ) : (
-                  <td className="value" colSpan={7}>
+                  <td className="value" colSpan={3}>
                     <span
                       className={"stat value"}
                       style={getTrendColorRank(
@@ -107,7 +107,7 @@ const TradeInfo = ({
             return (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={5}
                   className={`${
                     trade.tips?.trade_away &&
                     trade.tips?.trade_away?.find((p) =>
@@ -137,7 +137,7 @@ const TradeInfo = ({
                   }
                 </td>
                 {valueType === "ADP" ? (
-                  <td className="value" colSpan={7}>
+                  <td className="value" colSpan={3}>
                     <span
                       className={"stat value"}
                       style={getTrendColorRank(200 - adp, 1, 200)}
@@ -146,7 +146,7 @@ const TradeInfo = ({
                     </span>
                   </td>
                 ) : valueType === "Auction %" ? (
-                  <td className="value" colSpan={7}>
+                  <td className="value" colSpan={3}>
                     <span
                       className={"stat value"}
                       style={getTrendColorValue(
@@ -161,7 +161,7 @@ const TradeInfo = ({
                     </span>
                   </td>
                 ) : (
-                  <td className="value" colSpan={7}>
+                  <td className="value" colSpan={3}>
                     <span
                       className={"stat value"}
                       style={getTrendColorRank(200 - adp, 1, 200)}
@@ -355,7 +355,7 @@ const Trade = ({ trade }) => {
                   </div>
                 </span>
               ),
-              colSpan: 2,
+              colSpan: 3,
               className: "small wrap",
             },
             {
@@ -375,7 +375,7 @@ const Trade = ({ trade }) => {
                   </div>
                 </span>
               ),
-              colSpan: 2,
+              colSpan: 3,
               className: "type",
             },
             {
@@ -430,7 +430,7 @@ const Trade = ({ trade }) => {
                   alt: "avatar",
                   type: "user",
                 },
-                colSpan: 4,
+                colSpan: 5,
                 className: "left trade_manager",
               },
               {
@@ -450,7 +450,7 @@ const Trade = ({ trade }) => {
               },
               {
                 text: <TradeInfo2 trade={trade} roster={roster} rid={rid} />,
-                colSpan: 4,
+                colSpan: 5,
                 rowSpan: 2,
                 className: "small",
               },
