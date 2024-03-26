@@ -1,6 +1,7 @@
 import { setStateTradesNav } from "../redux/actions";
 import { useSelector, useDispatch } from "react-redux";
 import RostersComp from "./RostersComp";
+import TradeTips from "./TradeTips";
 
 const TradeDetail = ({ trade }) => {
   const dispatch = useDispatch();
@@ -24,7 +25,11 @@ const TradeDetail = ({ trade }) => {
           Rosters
         </button>
       </div>
-      {tabSecondary === "Rosters" ? <RostersComp trade={trade} /> : null}
+      {tabSecondary === "Rosters" ? (
+        <RostersComp trade={trade} />
+      ) : (
+        <TradeTips trade={trade} />
+      )}
     </>
   );
 };

@@ -29,18 +29,24 @@ table.primary.trades table.body.active > tbody {
   z-index: 9;
 }
 
+table.primary.trades table.secondary.trade_tips > thead,
 table.primary.trades table.secondary.half > thead {
   position: sticky;
   top: 21rem;
   z-index: 8;
 }
+
+table.primary.trades div.secondary.trade_tips,
+table.primary.trades table.secondary.trade_tips > tbody > tr,
 table.primary.trades table.secondary.half > tbody > tr {
   position: sticky;
   top: 14rem;
   z-index: 7;
-  background-color: var(--color1);
 }
 
+table.primary.trades table.secondary.half > tbody > tr {
+  background-color: var(--color1);
+}
 table.primary.trades table.body.active tr.active2 > td {
   box-shadow: none;
 }
@@ -97,4 +103,11 @@ table.trade_summary span.timestamp {
   flex-direction: column;
   justify-content: space-evenly;
   height: 100%;
+}
+
+td.trade_tips:last-of-type:hover {
+  direction: rtl;
+}
+td.trade_tips:last-of-type:hover > span {
+  direction: ltr;
 }

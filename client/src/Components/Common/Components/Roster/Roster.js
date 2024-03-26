@@ -27,6 +27,10 @@ const Roster = ({
     Object.keys(position_map).includes(p)
   );
 
+  const roster_players = roster.players.filter(
+    (player_id) => allplayers[player_id]
+  );
+
   const headers = [
     [
       {
@@ -58,7 +62,7 @@ const Roster = ({
     return [
       ...[
         ...((filter === "All" && roster?.starters) || []),
-        ...((filter !== "Picks" && roster?.players) || [])
+        ...((filter !== "Picks" && roster_players) || [])
           .filter(
             (player_id) =>
               (filter === "All" && !roster.starters?.includes(player_id)) ||
