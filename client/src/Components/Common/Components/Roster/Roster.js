@@ -27,9 +27,8 @@ const Roster = ({
     Object.keys(position_map).includes(p)
   );
 
-  const roster_players = roster.players.filter(
-    (player_id) => allplayers[player_id]
-  );
+  const roster_players =
+    roster.players?.filter((player_id) => allplayers[player_id]) || [];
 
   const headers = [
     [
