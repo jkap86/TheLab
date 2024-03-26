@@ -151,7 +151,9 @@ const TradeInfo = ({
                       className={"stat value"}
                       style={getTrendColorValue(
                         auction_value,
-                        Object.keys(adpLm?.[`${league_type}_auction`]).map(
+                        Object.keys(
+                          adpLm?.[`${league_type}_auction`] || {}
+                        ).map(
                           (player_id) =>
                             adpLm?.[`${league_type}_auction`][player_id].adp
                         )

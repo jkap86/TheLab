@@ -13,7 +13,11 @@ table.primary.trades td {
   position: static;
 }
 
-table.primary.trades table.trade_summary > tbody > tr:first-child {
+table.primary.trades
+  table.body.active
+  table.trade_summary
+  > tbody
+  > tr:first-child {
   position: sticky;
   top: 7rem;
   z-index: 9;

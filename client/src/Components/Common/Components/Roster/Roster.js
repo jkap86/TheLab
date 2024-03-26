@@ -6,6 +6,10 @@ import {
   getTrendColorValue,
 } from "../../Helpers/getTrendColor";
 import HeaderDropdown from "../HeaderDropdown";
+import {
+  position_abbrev,
+  position_map,
+} from "../../Helpers/getOptimalLineupADP";
 
 const Roster = ({
   roster,
@@ -19,17 +23,9 @@ const Roster = ({
   const { state, allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
 
-  const position_abbrev = {
-    QB: "QB",
-    RB: "RB",
-    WR: "WR",
-    TE: "TE",
-    SUPER_FLEX: "SF",
-    FLEX: "WRT",
-    WRRB_FLEX: "W R",
-    WRRB_WRT: "W R",
-    REC_FLEX: "W T",
-  };
+  const roster_positions = league.roster_positions.filter((p) =>
+    Object.keys(position_map).includes(p)
+  );
 
   const headers = [
     [
@@ -101,10 +97,9 @@ const Roster = ({
             {
               text:
                 filter === "All"
-                  ? (league.roster_positions &&
-                      position_abbrev[league.roster_positions[index]]) ||
-                    (league.roster_positions &&
-                      league.roster_positions[index]) ||
+                  ? (roster_positions &&
+                      position_abbrev[roster_positions[index]]) ||
+                    (roster_positions && roster_positions[index]) ||
                     "BN"
                   : allplayers[player_id]?.position,
               colSpan: 4,
@@ -125,10 +120,10 @@ const Roster = ({
                   style={
                     valueType?.includes("ADP")
                       ? getTrendColorRank(
-                          roster.starters?.length * league.rosters?.length -
+                          roster.starters?.length * league.settings?.num_teams -
                             adpLm?.[adp_key]?.[player_id]?.adp,
                           1,
-                          roster.starters?.length * league.rosters?.length
+                          roster.starters?.length * league.settings?.num_teams
                         )
                       : getTrendColorValue(
                           adpLm?.[adp_key]?.[player_id]?.adp,
@@ -215,10 +210,11 @@ const Roster = ({
                     style={
                       valueType.includes("ADP")
                         ? getTrendColorRank(
-                            roster.starters?.length * league.rosters.length -
+                            roster.starters?.length *
+                              league.settings.num_teams -
                               value,
                             1,
-                            roster.starters?.length * league.rosters.length
+                            roster.starters?.length * league.settings.num_teams
                           )
                         : getTrendColorValue(
                             value,

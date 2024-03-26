@@ -21,6 +21,8 @@ const RostersComp = ({ trade }) => {
   const { allplayers, state } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
 
+  const standingsType = valueType.startsWith("D") ? "Dynasty" : "Redraft";
+
   const rosters_array = Object.keys(trade.rosters).map((player_id) => {
     return {
       ...trade.rosters[player_id],
@@ -176,10 +178,15 @@ const RostersComp = ({ trade }) => {
           name: trade["league.name"],
           roster_positions: trade["league.roster_positions"],
           settings: trade["league.settings"],
-          rosters: trade.rosters,
+          rosters: Object.keys(trade.rosters).map((rid) => {
+            return {
+              ...trade.rosters[rid],
+              roster_id: rid,
+            };
+          }),
         }}
-        filter={"All"}
-        standingsType={"Dynasty"}
+        filter={filter1}
+        standingsType={standingsType}
         valueType={valueType}
         setValueType={setValueType}
       />
@@ -204,8 +211,8 @@ const RostersComp = ({ trade }) => {
             };
           }),
         }}
-        filter={"All"}
-        standingsType={"Dynasty"}
+        filter={filter2}
+        standingsType={standingsType}
         valueType={valueType}
         setValueType={setValueType}
       />
