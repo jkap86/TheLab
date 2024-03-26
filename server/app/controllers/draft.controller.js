@@ -171,7 +171,7 @@ exports.adp = async (req, res) => {
         attributes: [],
         where: {
           start_time: {
-            [Op.gt]: new Date(new Date() - 30 * 24 * 60 * 60 * 1000).getTime(),
+            [Op.gt]: new Date(new Date() - 15 * 24 * 60 * 60 * 1000).getTime(),
           },
         },
       },
@@ -190,7 +190,7 @@ exports.adp = async (req, res) => {
         attributes: [],
         where: {
           start_time: {
-            [Op.gt]: new Date(new Date() - 7 * 24 * 60 * 60 * 1000).getTime(),
+            [Op.gt]: new Date(new Date() - 5 * 24 * 60 * 60 * 1000).getTime(),
           },
         },
       },

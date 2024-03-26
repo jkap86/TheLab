@@ -295,13 +295,21 @@ export const fetchAdp =
       const adp_redraft = Object.fromEntries(
         adp.data.draft_picks
           .filter((x) => x.league_type === "R")
-          .map((x) => [
-            x.player_id,
-            {
-              adp: parseFloat(x.adp),
-              n_drafts: parseInt(x.n_drafts),
-            },
-          ])
+          .map((x) => {
+            const recent = adp.data.draft_picks_recent.find(
+              (pr) => pr.league_type === "R" && pr.player_id === x.player_id
+            );
+
+            return [
+              x.player_id,
+              {
+                adp: recent?.adp
+                  ? (parseFloat(recent.adp) + parseFloat(x.adp)) / 2
+                  : parseFloat(x.adp),
+                n_drafts: parseInt(x.n_drafts),
+              },
+            ];
+          })
       );
 
       const n_drafts_dynasty = Math.max(
@@ -374,13 +382,21 @@ export const fetchAdp =
       const adp_redraft_auction = Object.fromEntries(
         adp.data.auction_picks
           .filter((x) => x.league_type === "R")
-          .map((x) => [
-            x.player_id,
-            {
-              adp: parseFloat(x.adp),
-              n_drafts: parseInt(x.n_drafts),
-            },
-          ])
+          .map((x) => {
+            const recent = adp.data.auction_picks_recent.find(
+              (pr) => pr.league_type === "R" && pr.player_id === x.player_id
+            );
+
+            return [
+              x.player_id,
+              {
+                adp: recent?.adp
+                  ? (parseFloat(recent.adp) + parseFloat(x.adp)) / 2
+                  : parseFloat(x.adp),
+                n_drafts: parseInt(x.n_drafts),
+              },
+            ];
+          })
       );
 
       const n_drafts_dynasty_auction = Math.max(
@@ -395,13 +411,21 @@ export const fetchAdp =
               n_drafts_dynasty_auction &&
               parseInt(x.n_drafts) > n_drafts_dynasty_auction / 5
           )
-          .map((x) => [
-            x.player_id,
-            {
-              adp: parseFloat(x.adp),
-              n_drafts: parseInt(x.n_drafts),
-            },
-          ])
+          .map((x) => {
+            const recent = adp.data.auction_picks_recent.find(
+              (pr) => pr.league_type === "D" && pr.player_id === x.player_id
+            );
+
+            return [
+              x.player_id,
+              {
+                adp: recent?.adp
+                  ? (parseFloat(recent.adp) + parseFloat(x.adp)) / 2
+                  : parseFloat(x.adp),
+                n_drafts: parseInt(x.n_drafts),
+              },
+            ];
+          })
       );
 
       const adp_object = {

@@ -34,6 +34,7 @@ table.primary.trades table.secondary.half > tbody > tr {
   position: sticky;
   top: 14rem;
   z-index: 7;
+  background-color: var(--color1);
 }
 
 table.primary.trades table.body.active tr.active2 > td {
