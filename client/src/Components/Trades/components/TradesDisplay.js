@@ -5,7 +5,14 @@ import { useSelector, useDispatch } from "react-redux";
 import { setStateTradesNav, setStateLmTrades } from "../redux/actions";
 import HeaderDropdown from "../../Common/Components/HeaderDropdown";
 
-const TradesDisplay = ({ secondaryTable, trades }) => {
+const TradesDisplay = ({
+  secondaryTable,
+  trades,
+  count,
+  loadMore,
+  isLoading,
+  searchBar,
+}) => {
   const { allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
   const { page, itemActive } = useSelector((state) => state.trades.lmtrades);
@@ -118,6 +125,7 @@ const TradesDisplay = ({ secondaryTable, trades }) => {
 
   return (
     <>
+      {searchBar}
       <TableMain
         type={"primary trades"}
         headers={trades_headers}
@@ -128,6 +136,9 @@ const TradesDisplay = ({ secondaryTable, trades }) => {
         setItemActive={(value) =>
           dispatch(setStateLmTrades({ itemActive: value }))
         }
+        partial={trades?.length < count ? true : false}
+        loadMore={loadMore}
+        isLoading={isLoading}
       />
     </>
   );
