@@ -85,3 +85,42 @@ export const fetchFilteredLmTrades =
       dispatch({ type: "FETCH_TRADES_FAILURE", payload: error.message });
     }
   };
+
+export const fetchPriceCheckTrades =
+  (pricecheck_player, pricecheck_player2, offset, limit) =>
+  async (dispatch, getState) => {
+    dispatch({ type: "FETCH_TRADES_START" });
+
+    const state = getState();
+
+    const { user, common } = state;
+
+    try {
+      const player_trades = await axios.get("/trade/pricecheck", {
+        params: {
+          player: pricecheck_player,
+          player2: pricecheck_player2,
+          offset: offset,
+          limit: limit,
+        },
+      });
+
+      const trades_tips = getTradeTips(
+        player_trades.data.rows,
+        user.leagues,
+        common.state.league_season
+      );
+
+      dispatch({
+        type: "FETCH_PCTRADES_SUCCESS",
+        payload: {
+          pricecheck_player: pricecheck_player,
+          pricecheck_player2: pricecheck_player2,
+          trades: trades_tips,
+          count: player_trades.data.count,
+        },
+      });
+    } catch (error) {
+      dispatch({ type: "FETCH_TRADES_FAILURE", payload: error.message });
+    }
+  };

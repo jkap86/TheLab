@@ -14,8 +14,9 @@ const PcTradesReducer = (state = initialState, action) => {
     case "FETCH_PCTRADES_START":
       return { ...state, isLoading: true, error: null };
     case "FETCH_PCTRADES_SUCCESS":
+      console.log({ type: "FETCH_PCTRADES_SUCCESS" });
       existing_trades =
-        state.pricecheckTrades.searches.find(
+        state.searches.find(
           (s) =>
             s.pricecheck_player === action.payload.pricecheck_player &&
             s.pricecheck_player2 === action.payload.pricecheck_player2
@@ -33,25 +34,21 @@ const PcTradesReducer = (state = initialState, action) => {
         pricecheck_player2: action.payload.pricecheck_player2,
         count: action.payload.count,
         trades: [...existing_trades, ...new_trades],
-        hash: action.payload.hash,
       };
 
       return {
         ...state,
         isLoading: false,
-        pricecheckTrades: {
-          ...state.pricecheckTrades,
-          searches: [
-            ...state.pricecheckTrades.searches.filter(
-              (s) =>
-                !(
-                  s.pricecheck_player === action.payload.pricecheck_player &&
-                  s.pricecheck_player2 === action.payload.pricecheck_player2
-                )
-            ),
-            updated_search,
-          ],
-        },
+        searches: [
+          ...state.searches.filter(
+            (s) =>
+              !(
+                s.pricecheck_player === action.payload.pricecheck_player &&
+                s.pricecheck_player2 === action.payload.pricecheck_player2
+              )
+          ),
+          updated_search,
+        ],
       };
     case "FETCH_PCTRADES_FAILURE":
       return { ...state, isLoading: false, error: action.payload };

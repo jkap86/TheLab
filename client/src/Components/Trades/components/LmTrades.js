@@ -17,6 +17,8 @@ const LmTrades = ({ secondaryTable, players_list, managers_list }) => {
     searched_player,
     searched_manager,
     searches,
+    page,
+    itemActive,
   } = useSelector((state) => state.trades.lmtrades);
 
   useFetchLmTrades();
@@ -41,13 +43,21 @@ const LmTrades = ({ secondaryTable, players_list, managers_list }) => {
     }
   };
 
-  const lmTrades =
-    searched_player.id || searched_manager.id
-      ? searches.find(
-          (s) =>
-            s.player === searched_player.id && s.manager === searched_manager.id
-        )?.trades
-      : trades;
+  let lmTrades, tradeCount;
+
+  if (searched_player.id || searched_manager.id) {
+    const search = searches.find(
+      (s) =>
+        s.player === searched_player.id && s.manager === searched_manager.id
+    );
+    lmTrades = search?.trades;
+
+    tradeCount = search?.count;
+  } else {
+    lmTrades = trades;
+
+    tradeCount = count;
+  }
 
   const searchBar = (
     <div className="trade_search_wrapper">
@@ -75,11 +85,13 @@ const LmTrades = ({ secondaryTable, players_list, managers_list }) => {
   return (
     <TradesDisplay
       trades={lmTrades}
-      count={count}
+      count={tradeCount}
       secondaryTable={secondaryTable}
       loadMore={loadMore}
       isLoading={isLoading}
       searchBar={searchBar}
+      page={page}
+      itemActive={itemActive}
     />
   );
 };

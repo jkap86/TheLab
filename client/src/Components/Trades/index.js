@@ -22,7 +22,7 @@ const Trades = () => {
 
   const TradesPrimary = ({ secondaryTable }) => {
     return tabPrimary === "Price Check" ? (
-      <PcTrades secondaryTable={secondaryTable} />
+      <PcTrades secondaryTable={secondaryTable} players_list={players_list} />
     ) : (
       <LmTrades
         secondaryTable={secondaryTable}

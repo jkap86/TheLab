@@ -82,8 +82,8 @@ exports.leaguemate = async (req, res) => {
 exports.pricecheck = async (req, res) => {
   let filters = [];
 
-  if (req.body.player.includes(".")) {
-    const pick_split = req.body.player.split(" ");
+  if (req.query.player.includes(".")) {
+    const pick_split = req.query.player.split(" ");
     const season = pick_split[0];
     const round = parseInt(pick_split[1]?.split(".")[0]);
     const order = parseInt(pick_split[1]?.split(".")[1]);
@@ -96,14 +96,14 @@ exports.pricecheck = async (req, res) => {
   } else {
     filters.push({
       price_check: {
-        [Op.contains]: [req.body.player],
+        [Op.contains]: [req.query.player],
       },
     });
   }
 
-  if (req.body.player2) {
-    if (req.body.player2.includes(".")) {
-      const pick_split = req.body.player2.split(" ");
+  if (req.query.player2) {
+    if (req.query.player2.includes(".")) {
+      const pick_split = req.query.player2.split(" ");
       const season = pick_split[0];
       const round = parseInt(pick_split[1]?.split(".")[0]);
       const order = parseInt(pick_split[1]?.split(".")[1]);
@@ -116,7 +116,7 @@ exports.pricecheck = async (req, res) => {
     } else {
       filters.push({
         players: {
-          [Op.contains]: [req.body.player2],
+          [Op.contains]: [req.query.player2],
         },
       });
     }
@@ -128,8 +128,8 @@ exports.pricecheck = async (req, res) => {
   try {
     pcTrades = await Trade.findAndCountAll({
       order: [["status_updated", "DESC"]],
-      offset: req.body.offset,
-      limit: req.body.limit,
+      offset: req.query.offset,
+      limit: req.query.limit,
       where: {
         [Op.and]: filters,
       },

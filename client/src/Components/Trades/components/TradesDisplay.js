@@ -4,18 +4,20 @@ import { position_map } from "../../Common/Helpers/getOptimalLineupADP";
 import { useSelector, useDispatch } from "react-redux";
 import { setStateTradesNav, setStateLmTrades } from "../redux/actions";
 import HeaderDropdown from "../../Common/Components/HeaderDropdown";
+import LoadingIcon from "../../Common/Components/LoadingIcon";
 
 const TradesDisplay = ({
   secondaryTable,
   trades,
   count,
+  page,
+  itemActive,
   loadMore,
   isLoading,
   searchBar,
 }) => {
   const { allplayers } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
-  const { page, itemActive } = useSelector((state) => state.trades.lmtrades);
   const dispatch = useDispatch();
   const { tabPrimary, valueType } = useSelector((state) => state.trades.nav);
 
@@ -122,8 +124,11 @@ const TradesDisplay = ({
       };
     });
 
-  return (
+  return isLoading ? (
+    <LoadingIcon />
+  ) : (
     <>
+      <h3>{count?.toLocaleString("en-US")} Trades</h3>
       {searchBar}
       <TableMain
         type={"primary trades"}
