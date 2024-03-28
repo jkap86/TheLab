@@ -19,7 +19,6 @@ const TradesDisplay = ({
   const dispatch = useDispatch();
   const { tabPrimary, valueType } = useSelector((state) => state.trades.nav);
 
-  console.log({ itemActive });
   const trades_headers = [
     [
       {

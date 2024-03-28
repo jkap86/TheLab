@@ -33,7 +33,7 @@ const LmTradesReducer = (state = initialState, action) => {
       };
     case "FETCH_FILTERED_LMTRADES_SUCCESS":
       existing_trades =
-        state.lmTrades.searches.find(
+        state.searches.find(
           (s) =>
             s.player === action.payload.player &&
             s.manager === action.payload.manager
@@ -53,22 +53,22 @@ const LmTradesReducer = (state = initialState, action) => {
         trades: [...existing_trades, ...new_trades],
       };
 
+      console.log({ updated_search });
+
       return {
         ...state,
         isLoading: false,
-        lmTrades: {
-          ...state.lmTrades,
-          searches: [
-            ...state.lmTrades.searches.filter(
-              (s) =>
-                !(
-                  s.player === action.payload.player &&
-                  s.manager === action.payload.manager
-                )
-            ),
-            updated_search,
-          ],
-        },
+
+        searches: [
+          ...state.searches.filter(
+            (s) =>
+              !(
+                s.player === action.payload.player &&
+                s.manager === action.payload.manager
+              )
+          ),
+          updated_search,
+        ],
       };
     case "FETCH_LMTRADES_FAILURE":
       return { ...state, isLoading: false, error: action.payload };

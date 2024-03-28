@@ -70,6 +70,8 @@ export const fetchFilteredLmTrades =
 
       const trades_tips = getTradeTips(trades.data.rows, leagues, season);
 
+      console.log({ trades_tips });
+
       dispatch({
         type: "FETCH_FILTERED_LMTRADES_SUCCESS",
         payload: {

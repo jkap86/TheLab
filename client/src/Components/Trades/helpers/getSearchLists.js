@@ -67,3 +67,25 @@ export const getPlayersList = (leagues, allplayers, picks_list) => {
     []
   );
 };
+
+export const getManagersList = (leagues) => {
+  const managers = {};
+
+  (leagues || []).forEach((league) => {
+    league.rosters.forEach((roster) => {
+      if (parseInt(roster.user_id) > 0) {
+        managers[roster.user_id] = {
+          id: roster.user_id,
+          text: roster.username,
+          image: {
+            src: roster.avatar,
+            alt: "user avatar",
+            type: "user",
+          },
+        };
+      }
+    });
+  });
+
+  return Object.values(managers);
+};

@@ -3,7 +3,11 @@ import PcTrades from "./components/PcTrades";
 import LmTrades from "./components/LmTrades";
 import "./components/Trades.css";
 import TradeDetail from "./components/TradeDetail";
-import { getPlayersList, getPicksList } from "./helpers/getSearchLists";
+import {
+  getPlayersList,
+  getPicksList,
+  getManagersList,
+} from "./helpers/getSearchLists";
 
 const Trades = () => {
   const { state, allplayers } = useSelector((state) => state.common);
@@ -14,6 +18,8 @@ const Trades = () => {
 
   const players_list = getPlayersList(leagues, allplayers, picks_list);
 
+  const managers_list = getManagersList(leagues);
+
   const TradesPrimary = ({ secondaryTable }) => {
     return tabPrimary === "Price Check" ? (
       <PcTrades secondaryTable={secondaryTable} />
@@ -21,7 +27,7 @@ const Trades = () => {
       <LmTrades
         secondaryTable={secondaryTable}
         players_list={players_list}
-        managers_list={[]}
+        managers_list={managers_list}
       />
     );
   };
