@@ -71,24 +71,26 @@ const Heading = ({ homepage }) => {
 
   return (
     <>
-      <div className="sh_nav">
-        {nav_items.map((nav_item) => {
-          return (
-            <a
-              key={nav_item.text}
-              rel="noreferrer"
-              href={nav_item.link}
-              target={
-                !nav_item.link.includes("southharmonff.com")
-                  ? "_blank"
-                  : "_self"
-              }
-            >
-              {nav_item.text}
-            </a>
-          );
-        })}
-      </div>
+      {window.location.href.includes("southharmon") && (
+        <div className="sh_nav">
+          {nav_items.map((nav_item) => {
+            return (
+              <a
+                key={nav_item.text}
+                rel="noreferrer"
+                href={nav_item.link}
+                target={
+                  !nav_item.link.includes("southharmonff.com")
+                    ? "_blank"
+                    : "_self"
+                }
+              >
+                {nav_item.text}
+              </a>
+            );
+          })}
+        </div>
+      )}
       {!homepage ? (
         <>
           <Link to="/" className="home">
