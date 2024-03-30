@@ -6,7 +6,7 @@ const { fetchKtcHistory } = require("../api/ktcValues");
 const { chromium } = require("playwright");
 const cheerio = require("cheerio");
 const allplayers = require("../../data/allplayers.json");
-const ktc_players = require("../../data/ktc_3_24_24.json");
+const ktc_players = require("../../data/ktc_sleeper_ids.json");
 const ktc_sleeper_id_map = require("../../data/ktc_sleeper_id_map.json");
 
 const updateKtcValues = async () => {
@@ -179,3 +179,72 @@ const matchKtcWithSleeper = (ktc_players) => {
 };
 
 //matchKtcWithSleeper(ktc_players);
+
+const scrapePlayerKtcHistory = async (player_link) => {
+  const browser = await chromium.launch();
+
+  const page = await browser.newPage();
+
+  await page.goto(`https://keeptradecut.com/` + player_link, {
+    waitUntil: "domcontentloaded",
+  });
+
+  await page.click(
+    "div.pd-block.pd-value-graph div.block-top div.block-controls div.block-config div#all-time"
+  );
+  const html = await page.content();
+
+  const $ = cheerio.load(html);
+
+  const graph = $("div.pd-value-graph");
+  const dates = graph.find("g.hoverGroup");
+
+  const player_values = [];
+
+  dates.each((index, element) => {
+    const date_element = $(element);
+
+    const date = date_element.find("text.hoverDate").text();
+
+    const value = date_element.find("text.hoverVal").text();
+
+    player_values.push({
+      date,
+      value,
+    });
+  });
+
+  await browser.close();
+
+  return player_values;
+};
+
+const scrapeAllKtcPLayersHistories = async () => {
+  const ktc_history_object = {};
+
+  for await (const player of ktc_players.matched) {
+    console.log("Fetching history for " + player.name);
+
+    ktc_history_object[player.player_id] = [];
+
+    const player_history = await scrapePlayerKtcHistory(player.link);
+
+    console.log(player_history.length + " Dates...");
+
+    player_history.forEach((player_date) => {
+      const utcDate = new Date(player_date.date).toISOString().split("T")[0];
+
+      ktc_history_object[player.player_id].push({
+        date: utcDate,
+        value: player_date.value,
+      });
+    });
+  }
+
+  fs.writeFileSync(
+    "./data/ktcValuesAll.json",
+    JSON.stringify(ktc_history_object)
+  );
+};
+
+//  scrapeAllKtcPLayersHistories();
