@@ -12,9 +12,9 @@ const initialState = {
     draftClass: "All",
   },
   column2: "Owned",
-  column3: "Owned %",
+  column3: "KTC SF",
   column4: "ADP SF D",
-  column5: "KTC SF",
+  column5: "Age",
   sortBy: {
     column: 2,
     asc: false,

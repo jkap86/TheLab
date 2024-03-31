@@ -15,7 +15,7 @@ export const getColumnOptionsLeagues = (lm = false) => {
     return [
       ...columnOptionsLeagues,
       ...columnOptionsLeagues
-        .filter((colname) => ["Rank"].includes(colname))
+        .filter((colname) => colname.includes("Rank"))
         .map((colname) => `LM ${colname}`),
     ];
   } else {

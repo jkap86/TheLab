@@ -2,7 +2,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { setStatePlayers } from "../redux/actions";
 import React, { Suspense } from "react";
 import LoadingIcon from "../../Common/Components/LoadingIcon";
-
+import { getColumnOptionsLeagues } from "../../Leagues/helpers/columnOptionsLeagues";
 const LeaguesOwned = React.lazy(() => import("./LeaguesOwned"));
 
 const PlayerLeagues = ({
@@ -24,13 +24,9 @@ const PlayerLeagues = ({
     "Rank R",
   ];
 
-  const columnOptions = [
-    ...columnOptionsCommon,
-    ...(tabSecondary === "Taken"
-      ? columnOptionsCommon.map((colname) => `LM ${colname}`)
-      : []),
-    "League ID",
-  ];
+  const columnOptions = getColumnOptionsLeagues(
+    tabSecondary === "Taken" ? true : false
+  );
 
   return (
     <>

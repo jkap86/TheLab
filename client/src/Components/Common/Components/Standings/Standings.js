@@ -6,6 +6,8 @@ import HeaderDropdown from "../HeaderDropdown";
 import { getTrendColorRank } from "../../Helpers/getTrendColor";
 import { setStateStandings } from "../../Redux/actions";
 import { syncLeague } from "../../Redux/actions";
+import { getSortIcon } from "../../Helpers/getSortIcon";
+import { columnOptionsStandings } from "./columnOptionsStandings";
 const Roster = React.lazy(() => import("../Roster/Roster"));
 const TableMain = React.lazy(() => import("../TableMain"));
 
@@ -13,7 +15,7 @@ const Standings = ({ league, type }) => {
   const dispatch = useDispatch();
   const { allplayers } = useSelector((state) => state.common);
   const { adpLm, user_id } = useSelector((state) => state.user);
-  const { column2, column3, column3b, syncing } = useSelector(
+  const { column2, column3, column3b, sortBy, syncing } = useSelector(
     (state) => state.standings
   );
   const [itemActive2, setItemActive2] = useState(league?.userRoster?.roster_id);
@@ -56,18 +58,26 @@ const Standings = ({ league, type }) => {
     dispatch(setStateStandings({ [`column${colIndex}`]: value }));
   };
 
-  const columnOptions = [
-    "R Starters",
-    "R Bench",
-    "R Total",
-    "D Starters",
-    "D Bench",
-    "D Players",
-    "D Picks",
-    "D Total",
-  ];
+  const columnOptions = columnOptionsStandings;
 
   const standings_headers = [
+    [
+      {
+        text: "",
+        colSpan: 5,
+        className: "sort",
+      },
+      {
+        text: getSortIcon(2, sortBy, dispatch, setStateStandings),
+        colSpan: 3,
+        className: "sort",
+      },
+      {
+        text: getSortIcon(3, sortBy, dispatch, setStateStandings),
+        colSpan: 3,
+        className: "sort",
+      },
+    ],
     [
       {
         text: "Manager",
@@ -98,72 +108,76 @@ const Standings = ({ league, type }) => {
     ],
   ];
 
-  const standings_body = league.rosters.map((roster) => {
-    const key1 = `${(column2.startsWith("D")
-      ? "Dynasty"
-      : "Redraft"
-    ).toLowerCase()}_${column2.split(" ")[1].toLowerCase()}`;
-    const stat1 = roster?.[key1];
+  const standings_body = league.rosters
+    .map((roster) => {
+      const key1 = `${(column2.startsWith("D")
+        ? "Dynasty"
+        : "Redraft"
+      ).toLowerCase()}_${column2.split(" ")[1].toLowerCase()}`;
+      const stat1 = roster?.[key1];
 
-    const key2 = `${(column3.startsWith("D")
-      ? "Dynasty"
-      : "Redraft"
-    ).toLowerCase()}_${column3.split(" ")[1].toLowerCase()}`;
-    const stat2 = roster?.[key2];
+      const key2 = `${(column3.startsWith("D")
+        ? "Dynasty"
+        : "Redraft"
+      ).toLowerCase()}_${column3.split(" ")[1].toLowerCase()}`;
+      const stat2 = roster?.[key2];
 
-    return {
-      id: roster.roster_id,
-      search: {
-        text: roster.username,
-        image: {
-          src: roster.avatar,
-          alt: "user avatar",
-          type: "user",
-        },
-      },
-      sort: stat1,
-      list: [
-        {
-          text: roster.username || <em>Orphan</em>,
+      return {
+        id: roster.roster_id,
+        search: {
+          text: roster.username,
           image: {
             src: roster.avatar,
             alt: "user avatar",
             type: "user",
           },
-          colSpan: 5,
         },
-        {
-          text: (
-            <span
-              className="stat"
-              style={getTrendColorValue(
-                stat1,
-                league.rosters.map((r) => r?.[key1])
-              )}
-            >
-              {stat1?.toFixed(0)}
-            </span>
-          ),
-          colSpan: 3,
-          className: "sorted",
-        },
-        {
-          text: (
-            <span
-              className="stat"
-              style={getTrendColorValue(
-                stat2,
-                league.rosters.map((r) => r?.[key2])
-              )}
-            >
-              {stat2?.toFixed(0)}
-            </span>
-          ),
-          colSpan: 3,
-        },
-      ],
-    };
-  });
+        sortBy: sortBy.column === 2 ? stat1 : stat2,
+        list: [
+          {
+            text: roster.username || <em>Orphan</em>,
+            image: {
+              src: roster.avatar,
+              alt: "user avatar",
+              type: "user",
+            },
+            colSpan: 5,
+          },
+          {
+            text: (
+              <span
+                className="stat"
+                style={getTrendColorValue(
+                  stat1,
+                  league.rosters.map((r) => r?.[key1])
+                )}
+              >
+                {stat1?.toFixed(0)}
+              </span>
+            ),
+            colSpan: 3,
+            className: "sorted",
+          },
+          {
+            text: (
+              <span
+                className="stat"
+                style={getTrendColorValue(
+                  stat2,
+                  league.rosters.map((r) => r?.[key2])
+                )}
+              >
+                {stat2?.toFixed(0)}
+              </span>
+            ),
+            colSpan: 3,
+          },
+        ],
+      };
+    })
+    .sort((a, b) =>
+      sortBy.asc ? (a.sortBy > b.sortBy ? 1 : -1) : a.sortBy < b.sortBy ? 1 : -1
+    );
 
   const available_headers = [
     [

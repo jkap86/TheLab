@@ -3,9 +3,9 @@ const initialState = {
   itemActive: "",
   searched: "",
   column2: "Rank D",
-  column3: "Rank R",
-  column4: "Players Rank D",
-  column5: "Picks Rank",
+  column3: "Rank D Starters",
+  column4: "Rank R",
+  column5: "Rank R Starters",
   sortBy: {
     column: 2,
     asc: true,
