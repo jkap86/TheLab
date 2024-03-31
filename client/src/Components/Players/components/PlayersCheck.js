@@ -260,20 +260,23 @@ const PlayersCheck = ({ secondaryTable }) => {
             ).toFixed(4)
           : "-";
 
-      const sort = getPlayersColumn(
-        [column2, column3, column4, column5][sortBy.column - 2],
-        leagues_owned,
-        leagues_taken,
-        leagues_available,
-        record,
-        winpct,
-        record_lm,
-        winpct_lm,
-        adpLm,
-        player.id,
-        allplayers,
-        ktc
-      ).sort;
+      const sort =
+        sortBy.column === 1
+          ? allplayers[player.id]?.full_name
+          : getPlayersColumn(
+              [column2, column3, column4, column5][sortBy.column - 2],
+              leagues_owned,
+              leagues_taken,
+              leagues_available,
+              record,
+              winpct,
+              record_lm,
+              winpct_lm,
+              adpLm,
+              player.id,
+              allplayers,
+              ktc
+            ).sort;
 
       return {
         id: player.id,
@@ -309,6 +312,7 @@ const PlayersCheck = ({ secondaryTable }) => {
               type: "player",
             },
             colSpan: 5,
+            className: sortBy.column === 1 ? "sorted" : "",
           },
           ...[column2, column3, column4, column5].map((column, index) => {
             const { text, trendColor } = getPlayersColumn(

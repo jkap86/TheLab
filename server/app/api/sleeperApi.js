@@ -72,9 +72,8 @@ const fetchLeagueTradedPicks = async (league_id) => {
   return traded_picks.data;
 };
 
-const fetchStats = async (season, week) => {
-  const season_type = "post";
-  const positions = ["QB", "RB", "WR", "TE"];
+const fetchStats = async (season, week, positions) => {
+  const season_type = "regular";
 
   const stats = [];
 
