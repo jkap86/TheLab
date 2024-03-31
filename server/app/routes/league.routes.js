@@ -28,5 +28,7 @@ module.exports = (app) => {
 
   router.get("/sync", [], league.sync);
 
+  router.get("/draft", [], league.picktracker);
+
   app.use("/league", router);
 };

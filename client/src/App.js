@@ -8,6 +8,7 @@ const Leagues = lazy(() => import("./Components/Leagues"));
 const Players = lazy(() => import("./Components/Players"));
 const Leaguemates = lazy(() => import("./Components/Leaguemates"));
 const Trades = lazy(() => import("./Components/Trades"));
+const PickTracker = lazy(() => import("./Components/Picktracker"));
 
 function App() {
   return (
@@ -64,6 +65,14 @@ function App() {
                 />
               }
             ></Route>
+            <Route
+              path="/picktracker/:league_id"
+              element={
+                <Suspense fallback={<LoadingIcon />}>
+                  <PickTracker />
+                </Suspense>
+              }
+            />
           </Routes>
         </Suspense>
       </BrowserRouter>

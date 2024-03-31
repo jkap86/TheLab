@@ -35,9 +35,24 @@ body {
   box-sizing: border-box;
 }
 
+h1 {
+  font-size: 4rem;
+  margin: 1rem auto;
+  font-family: var(--font2);
+  letter-spacing: 0.5rem;
+  color: var(--te);
+}
+
 a {
   text-decoration: none;
   color: inherit;
+}
+
+a.home {
+  font-size: 3rem;
+  display: block;
+  width: fit-content;
+  padding: 2rem;
 }
 
 p {
