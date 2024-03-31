@@ -15,7 +15,7 @@ export const getColumnValue = (
     getTrendColor = {};
   } else {
     switch (header) {
-      case "Picks Rank":
+      case "Rank D Picks":
         const rank_dynasty_picks =
           standings_detail
             .sort((a, b) => b.dynasty_picks - a.dynasty_picks)
@@ -30,7 +30,7 @@ export const getColumnValue = (
           league.rosters.length
         );
         break;
-      case "Players Rank D":
+      case "Rank D Players":
         const rank_dynasty_players =
           standings_detail
             .sort(
@@ -47,10 +47,39 @@ export const getColumnValue = (
         getTrendColor = getTrendColorRank(
           league.rosters.length - rank_dynasty_players,
           1,
-          league.rosters.length,
-          Array.from(Array(league.rosters.length)).keys() ||
-            [].map((key) => key + 1).reduce((acc, cur) => acc + cur, 0) /
-              league.rosters.length
+          league.rosters.length
+        );
+
+        break;
+      case "Rank D Starters":
+        const rank_dynasty_starters =
+          standings_detail
+            .sort((a, b) => b.dynasty_starters - a.dynasty_starters)
+            .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
+          1;
+
+        text = rank_dynasty_starters;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_dynasty_starters,
+          1,
+          league.rosters.length
+        );
+
+        break;
+      case "Rank R Starters":
+        const rank_redraft_starters =
+          standings_detail
+            .sort((a, b) => b.redraft_starters - a.redraft_starters)
+            .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
+          1;
+
+        text = rank_redraft_starters;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_redraft_starters,
+          1,
+          league.rosters.length
         );
 
         break;

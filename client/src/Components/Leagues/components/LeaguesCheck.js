@@ -10,6 +10,7 @@ import {
 } from "../../Common/Helpers/rosterValues";
 import { getOptimalLineupADP } from "../../Common/Helpers/getOptimalLineupADP";
 import { getSortIcon } from "../../Common/Helpers/getSortIcon";
+import { getColumnOptionsLeagues } from "../helpers/columnOptionsLeagues";
 
 const LeaguesCheck = ({ secondaryTable }) => {
   const dispatch = useDispatch();
@@ -26,13 +27,7 @@ const LeaguesCheck = ({ secondaryTable }) => {
     searched,
   } = useSelector((state) => state.leagues.LeaguesCheck);
 
-  const columnOptions = [
-    "Picks Rank",
-    "Players Rank D",
-    "Rank D",
-    "Rank R",
-    "League ID",
-  ];
+  const columnOptions = getColumnOptionsLeagues();
 
   const headers = [
     [
