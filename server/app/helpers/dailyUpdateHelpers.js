@@ -3,6 +3,8 @@
 const { parentPort } = require("worker_threads");
 const { fetchState, fetchAllPlayers } = require("../api/sleeperApi");
 const fs = require("fs");
+const db = require("../models");
+const User = db.users;
 
 const getState = async () => {
   const state = await fetchState();
@@ -65,9 +67,25 @@ const getAllPlayers = async () => {
 
   fs.writeFileSync("./data/allplayers.json", JSON.stringify(sleeper_players));
 };
+const getRecentUsers = async () => {
+  const recent = await User.findAndCountAll({
+    order: [["updatedAt", "DESC"]],
+    attributes: ["username", "updatedAt"],
+    where: {
+      type: "S",
+    },
+    raw: true,
+  });
+
+  console.log({ user_count: recent.count });
+
+  fs.writeFileSync("./data/recent_users.json", JSON.stringify(recent));
+};
 
 const getMain = async () => {
   await getState();
+
+  await getRecentUsers();
 
   if (process.env.NODE_ENV === "production") {
     await getAllPlayers();

@@ -5,6 +5,7 @@ const initialState = {
   projections: false,
   ktc: false,
   adpAll: false,
+  recent_users: false,
   siteLinkIndex: 0,
 };
 

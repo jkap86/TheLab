@@ -3,12 +3,13 @@ import { useEffect } from "react";
 import thelablogo from "../../../Images/thelab.png";
 import { useDispatch, useSelector } from "react-redux";
 import { setStateHome } from "../redux/actions";
-import { resetState } from "../../Common/Redux/actions";
+import { fetchCommon, resetState } from "../../Common/Redux/actions";
 import Heading from "../../Common/Components/Heading";
 import "./Homepage.css";
 
 const Homepage = () => {
   const dispatch = useDispatch();
+  const { recent_users } = useSelector((state) => state.common);
   const { username_searched, leagueId, tab } = useSelector(
     (state) => state.homepage
   );
@@ -16,6 +17,7 @@ const Homepage = () => {
   // Effect hook to reset state on component mount
   useEffect(() => {
     dispatch(resetState());
+    dispatch(fetchCommon("recent_users"));
   }, [dispatch]);
 
   return (
@@ -75,7 +77,14 @@ const Homepage = () => {
                 onChange={(e) =>
                   dispatch(setStateHome({ username_searched: e.target.value }))
                 }
+                list="users"
               />
+
+              <datalist id="users">
+                {(recent_users || []).map((username) => {
+                  return <option key={username} value={username}></option>;
+                })}
+              </datalist>
             </div>
 
             {/* Submit link to navigate to page */}

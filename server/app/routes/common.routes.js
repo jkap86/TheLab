@@ -46,5 +46,17 @@ module.exports = (app) => {
     res.send(JSON.parse(data)[date]);
   });
 
+  router.get("/recent_users", (req, res) => {
+    const filepath = path.join(__dirname, "../../data/recent_users.json");
+
+    const recent_users = fs.readFileSync(filepath, "utf-8");
+
+    const data = JSON.parse(recent_users)
+      .rows.slice(0, 100)
+      .map((user) => user.username);
+
+    res.send([data]);
+  });
+
   app.use("/common", router);
 };
