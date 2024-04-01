@@ -16,8 +16,6 @@ const TradesNav = () => {
       >
         <option>Price Check</option>
         <option>Leaguemate League Trades</option>
-        <option>Leaguemate Trades</option>
-        <option>Trade Tips</option>
       </select>
     </h2>
   );
