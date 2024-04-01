@@ -19,7 +19,7 @@ export const setStatePcTrades = (state_obj, tab) => ({
 export const fetchLmTrades =
   (user_id, leagues, offset, limit, season, league_ids, more = false) =>
   async (dispatch) => {
-    dispatch({ type: "FETCH_TRADES_START" });
+    dispatch({ type: "FETCH_LMTRADES_START" });
 
     try {
       const trades = await axios.post("/trade/leaguemate", {

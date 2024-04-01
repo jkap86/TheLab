@@ -30,6 +30,7 @@ const LmTradesReducer = (state = initialState, action) => {
               )
           ),
         ],
+        isLoading: false,
       };
     case "FETCH_FILTERED_LMTRADES_SUCCESS":
       existing_trades =
