@@ -11,6 +11,8 @@ import {
 } from "../../Common/Helpers/rosterValues";
 import { getOptimalLineupADP } from "../../Common/Helpers/getOptimalLineupADP";
 import { getLeaguematesColumns } from "../helpers/getLeaguematesColumns";
+import { getColumnOptionsLeagues } from "../../Leagues/helpers/columnOptionsLeagues";
+import { getColumnValue } from "../../Leagues/helpers/getColumns";
 
 const LeaguemateLeagues = ({ leaguemate }) => {
   const dispatch = useDispatch();
@@ -19,13 +21,7 @@ const LeaguemateLeagues = ({ leaguemate }) => {
   const { page, itemActive, column2, column3, column4, column5, sortBy } =
     useSelector((state) => state.leaguemates.leaguemate_leagues);
 
-  const columnOptions = [
-    "Picks Rank",
-    "Players Rank D",
-    "Rank D",
-    "Rank R",
-    "League ID",
-  ];
+  const columnOptions = getColumnOptionsLeagues(true);
 
   const leaguemateLeagues_headers = [
     [
@@ -213,7 +209,7 @@ const LeaguemateLeagues = ({ leaguemate }) => {
           },
         },
         ...[column2, column3, column4, column5].map((column, index) => {
-          const { text, getTrendColor } = getLeaguematesColumns(
+          const { text, getTrendColor } = getColumnValue(
             lm_league,
             column,
             !adpLm,

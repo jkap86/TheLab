@@ -13,8 +13,16 @@ const LeaguematesPrimary = ({ secondaryTable }) => {
   const { username, type1, type2, leaguemates } = useSelector(
     (state) => state.user
   );
-  const { column3, column4, column5, column6, sortBy, searched, itemActive } =
-    useSelector((state) => state.leaguemates.primary);
+  const {
+    column3,
+    column4,
+    column5,
+    column6,
+    sortBy,
+    searched,
+    itemActive,
+    page,
+  } = useSelector((state) => state.leaguemates.primary);
 
   useFetchLeaguemates();
 
@@ -219,16 +227,12 @@ const LeaguematesPrimary = ({ secondaryTable }) => {
       setItemActive={(item) =>
         dispatch(setStateLeaguemates({ itemActive: item }))
       }
-      /*
       page={page}
       setPage={(page) => dispatch(setStateLeaguemates({ page: page }))}
-     
-      search={true}
       searched={searched}
       setSearched={(searched) =>
         dispatch(setStateLeaguemates({ searched: searched }))
       }
-      */
     />
   );
 };

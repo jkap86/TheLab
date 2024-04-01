@@ -151,8 +151,9 @@ export const getTradeTips = (trades, leagues, season) => {
                     (pickUser) =>
                       parseInt(pick.season) === pickUser.season &&
                       pick.round === pickUser.round &&
-                      (pick.order === pickUser.order ||
-                        parseInt(pick.season) > parseInt(season))
+                      parseInt(pick.order) &&
+                      parseInt(pickUser.order) &&
+                      pick.order === pickUser.order
                   )
               ) &&
               league.userRoster.user_id !== lm_user_id &&

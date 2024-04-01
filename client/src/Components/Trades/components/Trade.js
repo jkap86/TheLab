@@ -238,15 +238,14 @@ const TradeInfo2 = ({ trade, roster, rid }) => {
                   "left end " +
                   `${
                     trade.tips?.acquire &&
-                    trade.tips?.acquire?.find((p) =>
-                      pick.season === stateState.league_season && pick.order
-                        ? p.player_id ===
-                          `${pick.season} ${
-                            pick.round
-                          }.${pick.order?.toLocaleString("en-US", {
-                            minimumIntegerDigits: 2,
-                          })}`
-                        : `${pick.season} Round ${pick.round}`
+                    trade.tips?.acquire?.find(
+                      (p) =>
+                        p.player_id ===
+                        `${pick.season} ${
+                          pick.round
+                        }.${pick.order?.toLocaleString("en-US", {
+                          minimumIntegerDigits: 2,
+                        })}`
                     )
                       ? "greenb"
                       : ""

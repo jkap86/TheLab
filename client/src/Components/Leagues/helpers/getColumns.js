@@ -4,8 +4,7 @@ export const getColumnValue = (
   league,
   header,
   isLoadingAdp,
-  standings_detail,
-  sorted
+  standings_detail
 ) => {
   let text;
   let getTrendColor;
@@ -105,6 +104,28 @@ export const getColumnValue = (
         );
 
         break;
+      case "Lm Rank D":
+        const lm_rank_dynasty =
+          standings_detail
+            .sort(
+              (a, b) =>
+                b.dynasty_starters +
+                b.dynasty_bench +
+                b.dynasty_picks -
+                (a.dynasty_starters + a.dynasty_bench + a.dynasty_picks)
+            )
+            .findIndex((obj) => obj.roster_id === league.lmRoster.roster_id) +
+          1;
+
+        text = lm_rank_dynasty;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - lm_rank_dynasty,
+          1,
+          league.rosters.length
+        );
+
+        break;
       case "Rank R":
         const rank_redraft =
           standings_detail
@@ -121,6 +142,27 @@ export const getColumnValue = (
 
         getTrendColor = getTrendColorRank(
           league.rosters.length - rank_redraft,
+          1,
+          league.rosters.length
+        );
+
+        break;
+      case "Lm Rank R":
+        const lm_rank_redraft =
+          standings_detail
+            .sort(
+              (a, b) =>
+                b.redraft_starters +
+                b.redraft_bench -
+                (a.redraft_starters + a.redraft_bench)
+            )
+            .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
+          1;
+
+        text = lm_rank_redraft;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - lm_rank_redraft,
           1,
           league.rosters.length
         );
