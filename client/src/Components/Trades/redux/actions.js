@@ -56,7 +56,7 @@ export const fetchFilteredLmTrades =
     league_ids
   ) =>
   async (dispatch) => {
-    dispatch({ type: "FETCH_TRADES_START" });
+    dispatch({ type: "FETCH_LMTRADES_START" });
 
     try {
       const trades = await axios.post("/trade/leaguemate", {
@@ -82,14 +82,14 @@ export const fetchFilteredLmTrades =
         },
       });
     } catch (error) {
-      dispatch({ type: "FETCH_TRADES_FAILURE", payload: error.message });
+      dispatch({ type: "FETCH_LMTRADES_FAILURE", payload: error.message });
     }
   };
 
 export const fetchPriceCheckTrades =
   (pricecheck_player, pricecheck_player2, offset, limit) =>
   async (dispatch, getState) => {
-    dispatch({ type: "FETCH_TRADES_START" });
+    dispatch({ type: "FETCH_PCTRADES_START" });
 
     const state = getState();
 
@@ -121,6 +121,6 @@ export const fetchPriceCheckTrades =
         },
       });
     } catch (error) {
-      dispatch({ type: "FETCH_TRADES_FAILURE", payload: error.message });
+      dispatch({ type: "FETCH_PCTRADES_FAILURE", payload: error.message });
     }
   };
