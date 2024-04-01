@@ -364,7 +364,7 @@ const PlayersCheck = ({ secondaryTable }) => {
           state.league_season - (allplayers[player.id]?.years_exp || 0)
       )
     )
-  );
+  ).sort((a, b) => b - a);
 
   return (
     <TableMain
