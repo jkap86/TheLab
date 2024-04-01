@@ -156,7 +156,7 @@ const Standings = ({ league, type }) => {
               </span>
             ),
             colSpan: 3,
-            className: "sorted",
+            className: sortBy.column === 2 ? "sorted" : "",
           },
           {
             text: (
@@ -171,6 +171,7 @@ const Standings = ({ league, type }) => {
               </span>
             ),
             colSpan: 3,
+            className: sortBy.column === 3 ? "sorted" : "",
           },
         ],
       };

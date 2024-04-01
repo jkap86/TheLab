@@ -156,7 +156,7 @@ export const getColumnValue = (
                 b.redraft_bench -
                 (a.redraft_starters + a.redraft_bench)
             )
-            .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
+            .findIndex((obj) => obj.roster_id === league.lmRoster.roster_id) +
           1;
 
         text = lm_rank_redraft;

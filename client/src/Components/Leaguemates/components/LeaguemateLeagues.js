@@ -113,131 +113,137 @@ const LeaguemateLeagues = ({ leaguemate }) => {
     ],
   ];
 
-  const leaguemateLeagues_body = filterLeagues(
-    leaguemate.leagues,
-    type1,
-    type2
-  ).map((lm_league) => {
-    const standings_detail = lm_league.rosters.map((roster) => {
-      const dynasty_picks = getRosterPicksValue(
-        roster.draft_picks,
-        "Dynasty",
-        adpLm,
-        lm_league.season
-      );
+  const leaguemateLeagues_body = filterLeagues(leaguemate.leagues, type1, type2)
+    .map((lm_league) => {
+      const standings_detail = lm_league.rosters.map((roster) => {
+        const dynasty_picks = getRosterPicksValue(
+          roster.draft_picks,
+          "Dynasty",
+          adpLm,
+          lm_league.season
+        );
 
-      const dynasty_optimal = getOptimalLineupADP({
-        roster,
-        roster_positions: lm_league.roster_positions,
-        adpLm,
-        allplayers,
-        type: "Dynasty",
+        const dynasty_optimal = getOptimalLineupADP({
+          roster,
+          roster_positions: lm_league.roster_positions,
+          adpLm,
+          allplayers,
+          type: "Dynasty",
+        });
+
+        const optimal_dynasty_player_ids = dynasty_optimal.map(
+          (slot) => slot.player_id
+        );
+
+        const dynasty_starters = getPlayersValue(
+          optimal_dynasty_player_ids,
+          "Dynasty",
+          adpLm
+        );
+
+        const dynasty_bench = getPlayersValue(
+          roster.players?.filter(
+            (player_id) => !optimal_dynasty_player_ids.includes(player_id)
+          ),
+          "Dynasty",
+          adpLm
+        );
+
+        const redraft_optimal = getOptimalLineupADP({
+          roster,
+          roster_positions: lm_league.roster_positions,
+          adpLm,
+          allplayers,
+          type: "Redraft",
+        });
+
+        const optimal_redraft_player_ids = redraft_optimal.map(
+          (slot) => slot.player_id
+        );
+
+        const redraft_starters = getPlayersValue(
+          optimal_redraft_player_ids,
+          "Redraft",
+          adpLm
+        );
+
+        const redraft_bench = getPlayersValue(
+          roster.players?.filter(
+            (player_id) => !optimal_redraft_player_ids.includes(player_id)
+          ),
+          "Redraft",
+          adpLm
+        );
+
+        return {
+          ...roster,
+          dynasty_picks,
+          dynasty_starters,
+          dynasty_bench,
+          dynasty_players: dynasty_starters + dynasty_bench,
+          dynasty_total: dynasty_starters + dynasty_bench + dynasty_picks,
+          redraft_starters,
+          redraft_bench,
+          redraft_total: redraft_starters + redraft_bench,
+          dynasty_optimal,
+          redraft_optimal,
+          starters_optimal_dynasty: optimal_dynasty_player_ids,
+          starters_optimal_redraft: optimal_redraft_player_ids,
+        };
       });
-
-      const optimal_dynasty_player_ids = dynasty_optimal.map(
-        (slot) => slot.player_id
-      );
-
-      const dynasty_starters = getPlayersValue(
-        optimal_dynasty_player_ids,
-        "Dynasty",
-        adpLm
-      );
-
-      const dynasty_bench = getPlayersValue(
-        roster.players?.filter(
-          (player_id) => !optimal_dynasty_player_ids.includes(player_id)
-        ),
-        "Dynasty",
-        adpLm
-      );
-
-      const redraft_optimal = getOptimalLineupADP({
-        roster,
-        roster_positions: lm_league.roster_positions,
-        adpLm,
-        allplayers,
-        type: "Redraft",
-      });
-
-      const optimal_redraft_player_ids = redraft_optimal.map(
-        (slot) => slot.player_id
-      );
-
-      const redraft_starters = getPlayersValue(
-        optimal_redraft_player_ids,
-        "Redraft",
-        adpLm
-      );
-
-      const redraft_bench = getPlayersValue(
-        roster.players?.filter(
-          (player_id) => !optimal_redraft_player_ids.includes(player_id)
-        ),
-        "Redraft",
-        adpLm
-      );
 
       return {
-        ...roster,
-        dynasty_picks,
-        dynasty_starters,
-        dynasty_bench,
-        dynasty_players: dynasty_starters + dynasty_bench,
-        dynasty_total: dynasty_starters + dynasty_bench + dynasty_picks,
-        redraft_starters,
-        redraft_bench,
-        redraft_total: redraft_starters + redraft_bench,
-        dynasty_optimal,
-        redraft_optimal,
-        starters_optimal_dynasty: optimal_dynasty_player_ids,
-        starters_optimal_redraft: optimal_redraft_player_ids,
-      };
-    });
-
-    return {
-      id: lm_league.league_id,
-      list: [
-        {
-          text: lm_league.name,
-          colSpan: 2,
-          className: "left",
-          image: {
-            src: lm_league.avatar,
-            alt: "avatar",
-            type: "league",
+        id: lm_league.league_id,
+        sortBy: getColumnValue(
+          lm_league,
+          [column2, column3, column4, column5][sortBy.column - 2],
+          !adpLm,
+          standings_detail
+        ).text,
+        list: [
+          {
+            text: lm_league.name,
+            colSpan: 2,
+            className: "left",
+            image: {
+              src: lm_league.avatar,
+              alt: "avatar",
+              type: "league",
+            },
           },
-        },
-        ...[column2, column3, column4, column5].map((column, index) => {
-          const { text, getTrendColor } = getColumnValue(
-            lm_league,
-            column,
-            !adpLm,
-            standings_detail
-          );
+          ...[column2, column3, column4, column5].map((column, index) => {
+            const { text, getTrendColor } = getColumnValue(
+              lm_league,
+              column,
+              !adpLm,
+              standings_detail
+            );
 
-          return {
-            text: (
-              <span className="stat" style={getTrendColor}>
-                {text}
-              </span>
-            ),
-            colSpan: 1,
-            className: sortBy.column === index + 2 ? "sorted" : "",
-          };
-        }),
-      ],
-      secondary_table: (
-        <Standings
-          league={{
-            ...lm_league,
-            rosters: standings_detail,
-          }}
-          type={"tertiary"}
-        />
-      ),
-    };
-  });
+            return {
+              text: (
+                <span className="stat" style={getTrendColor}>
+                  {text}
+                </span>
+              ),
+              colSpan: 1,
+              className: sortBy.column === index + 2 ? "sorted" : "",
+            };
+          }),
+        ],
+        secondary_table: (
+          <Standings
+            league={{
+              ...lm_league,
+              rosters: standings_detail,
+            }}
+            type={"tertiary"}
+          />
+        ),
+      };
+    })
+    .sort((a, b) =>
+      sortBy.asc ? (a.sortBy > b.sortBy ? 1 : -1) : a.sortBy < b.sortBy ? 1 : -1
+    );
 
   return (
     <TableMain
