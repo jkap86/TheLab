@@ -8,14 +8,7 @@ import {
   getTrendColorValue,
 } from "../../Common/Helpers/getTrendColor";
 
-const TradeInfo = ({
-  trade,
-  roster,
-  league_type,
-  rid,
-  trade_totals,
-  trade_total,
-}) => {
+const TradeInfo = ({ trade, roster, league_type, rid }) => {
   const {
     state: stateState,
     allplayers,
@@ -89,7 +82,10 @@ const TradeInfo = ({
           .filter((p) => p.owner_id === parseInt(rid))
           .sort((a, b) => a.season - b.season || a.round - b.round)
           .map((pick) => {
-            const pick_ovr = (pick.round - 1) * 12 + (pick.order || 7);
+            const pick_ovr =
+              (pick.round - 1) * 12 +
+              ((pick.season === stateState.season && pick.order) ||
+                6 + (parseInt(pick.season) - parseInt(stateState.season)) * 3);
             const pick_name = "R" + pick_ovr;
 
             const adp = adpLm?.[league_type]?.[pick_name]?.adp || 999;
@@ -274,7 +270,11 @@ const TradeInfo2 = ({ trade, roster, rid }) => {
 };
 
 const Trade = ({ trade }) => {
-  const { allplayers, ktc } = useSelector((state) => state.common);
+  const {
+    allplayers,
+    ktc,
+    state: stateState,
+  } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
   const { valueType } = useSelector((state) => state.trades.nav);
 
@@ -317,7 +317,10 @@ const Trade = ({ trade }) => {
       const picks_value = trade.draft_picks
         .filter((p) => p.owner_id === parseInt(rid))
         .reduce((acc, cur) => {
-          const pick_ovr = (cur.round - 1) * 12 + (cur.order || 7);
+          const pick_ovr =
+            (cur.round - 1) * 12 +
+            ((cur.season === stateState.season && cur.order) ||
+              6 + (parseInt(cur.season) - parseInt(stateState.season)) * 3);
 
           let pick_value;
 
