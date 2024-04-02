@@ -1,4 +1,3 @@
-import TableMain from "../../Common/Components/TableMain";
 import HeaderDropdown from "../../Common/Components/HeaderDropdown";
 import { useSelector, useDispatch } from "react-redux";
 import { setStateLeaguesOwned } from "../redux/actions";
@@ -10,7 +9,9 @@ import {
   getRosterPicksValue,
 } from "../../Common/Helpers/rosterValues";
 import { getSortIcon } from "../../Common/Helpers/getSortIcon";
-import { useEffect } from "react";
+import React, { lazy, useEffect } from "react";
+import LoadingIcon from "../../Common/Components/LoadingIcon";
+const TableMain = lazy(() => import("../../Common/Components/TableMain"));
 
 const LeaguesOwned = ({
   secondaryTable,
@@ -298,17 +299,19 @@ const LeaguesOwned = ({
     );
 
   return (
-    <TableMain
-      type={"secondary"}
-      headers={headers}
-      body={body}
-      itemActive={itemActive}
-      setItemActive={(value) =>
-        dispatch(setStateLeaguesOwned({ itemActive: value }))
-      }
-      page={page}
-      setPage={setPage}
-    />
+    <React.Suspense fallback={<LoadingIcon />}>
+      <TableMain
+        type={"secondary"}
+        headers={headers}
+        body={body}
+        itemActive={itemActive}
+        setItemActive={(value) =>
+          dispatch(setStateLeaguesOwned({ itemActive: value }))
+        }
+        page={page}
+        setPage={setPage}
+      />
+    </React.Suspense>
   );
 };
 

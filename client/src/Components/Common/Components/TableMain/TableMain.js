@@ -1,6 +1,6 @@
 import "./TableMain.css";
 import Avatar from "../Avatar";
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import Search from "../Search";
 
 const TableMain = ({
@@ -299,4 +299,4 @@ const TableMain = ({
   );
 };
 
-export default TableMain;
+export default React.memo(TableMain);

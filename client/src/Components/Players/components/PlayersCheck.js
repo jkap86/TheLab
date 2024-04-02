@@ -1,5 +1,5 @@
+import React, { Suspense, lazy } from "react";
 import HeaderDropdown from "../../Common/Components/HeaderDropdown";
-import TableMain from "../../Common/Components/TableMain";
 import useFetchPlayerShares from "../hooks/useFetchPlayerShares";
 import headshot from "../../../Images/headshot.png";
 import { useSelector, useDispatch } from "react-redux";
@@ -8,6 +8,7 @@ import { getSortIcon } from "../../Common/Helpers/getSortIcon";
 import { filterLeagues } from "../../Common/Helpers/filterLeagues";
 import { getPlayersColumn } from "../helpers/getPlayersColumn";
 import FilterIcons from "../../Common/Components/FilterIcons";
+const TableMain = lazy(() => import("../../Common/Components/TableMain"));
 
 const PlayersCheck = ({ secondaryTable }) => {
   const dispatch = useDispatch();

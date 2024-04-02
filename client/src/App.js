@@ -32,13 +32,15 @@ function App() {
             <Route
               path="/players/:username"
               element={
-                <Layout
-                  display={
-                    <Suspense fallback={<LoadingIcon />}>
-                      <Players />
-                    </Suspense>
-                  }
-                />
+                <Suspense fallback={<LoadingIcon />}>
+                  <Layout
+                    display={
+                      <Suspense fallback={<LoadingIcon />}>
+                        <Players />
+                      </Suspense>
+                    }
+                  />
+                </Suspense>
               }
             ></Route>
             <Route
