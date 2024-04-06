@@ -11,10 +11,11 @@ import {
 import { getOptimalLineupADP } from "../../Common/Helpers/getOptimalLineupADP";
 import { getSortIcon } from "../../Common/Helpers/getSortIcon";
 import { getColumnOptionsLeagues } from "../helpers/columnOptionsLeagues";
+import { getLeagueRankings } from "../helpers/getLeagueRankings";
 
 const LeaguesCheck = ({ secondaryTable }) => {
   const dispatch = useDispatch();
-  const { allplayers, state } = useSelector((state) => state.common);
+  const { allplayers, ktc, state } = useSelector((state) => state.common);
   const { leagues, type1, type2, adpLm } = useSelector((state) => state.user);
   const {
     column2,
@@ -124,83 +125,13 @@ const LeaguesCheck = ({ secondaryTable }) => {
   const body = filterLeagues(leagues, type1, type2)
     .filter((league) => !searched?.id || searched?.id === league.league_id)
     .map((league) => {
-      const standings_detail = league.rosters.map((roster) => {
-        const dynasty_picks = getRosterPicksValue(
-          roster.draft_picks,
-          "Dynasty",
-          adpLm,
-          league.season
-        );
-
-        const dynasty_optimal = getOptimalLineupADP({
-          roster,
-          roster_positions: league.roster_positions,
-          adpLm,
-          allplayers,
-          type: "Dynasty",
-        });
-
-        const optimal_dynasty_player_ids = dynasty_optimal.map(
-          (slot) => slot.player_id
-        );
-
-        const dynasty_starters = getPlayersValue(
-          optimal_dynasty_player_ids,
-          "Dynasty",
-          adpLm
-        );
-
-        const dynasty_bench = getPlayersValue(
-          roster.players?.filter(
-            (player_id) => !optimal_dynasty_player_ids.includes(player_id)
-          ),
-          "Dynasty",
-          adpLm
-        );
-
-        const redraft_optimal = getOptimalLineupADP({
-          roster,
-          roster_positions: league.roster_positions,
-          adpLm,
-          allplayers,
-          type: "Redraft",
-        });
-
-        const optimal_redraft_player_ids = redraft_optimal.map(
-          (slot) => slot.player_id
-        );
-
-        const redraft_starters = getPlayersValue(
-          optimal_redraft_player_ids,
-          "Redraft",
-          adpLm
-        );
-
-        const redraft_bench = getPlayersValue(
-          roster.players?.filter(
-            (player_id) => !optimal_redraft_player_ids.includes(player_id)
-          ),
-          "Redraft",
-          adpLm
-        );
-
-        return {
-          ...roster,
-          dynasty_picks,
-          dynasty_starters,
-          dynasty_bench,
-          dynasty_players: dynasty_starters + dynasty_bench,
-          dynasty_total: dynasty_starters + dynasty_bench + dynasty_picks,
-          redraft_starters,
-          redraft_bench,
-          redraft_total: redraft_starters + redraft_bench,
-          dynasty_optimal,
-          redraft_optimal,
-          starters_optimal_dynasty: optimal_dynasty_player_ids,
-          starters_optimal_redraft: optimal_redraft_player_ids,
-        };
+      const standings_detail = getLeagueRankings({
+        league,
+        adpLm,
+        allplayers,
+        ktc,
+        state,
       });
-
       return {
         id: league.league_id,
         sortBy:

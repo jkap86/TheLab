@@ -1,8 +1,8 @@
-export const getRosterPicksValue = (draft_picks, type, adp, league_season) => {
+export const getRosterPicksValue = (draft_picks, adp, league_season) => {
   const picks_value = (draft_picks || []).reduce(
     (acc, cur) =>
       acc +
-      (adp?.[`${type}_auction`]?.[
+      (adp?.[`Dynasty_auction`]?.[
         "R" +
           +(
             (cur.round - 1) * 12 +

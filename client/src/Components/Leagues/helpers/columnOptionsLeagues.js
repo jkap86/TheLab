@@ -8,6 +8,10 @@ export const getColumnOptionsLeagues = (lm = false) => {
     "Rank R",
     "Rank R Starters",
     "Rank R Bench",
+    "Rank D KTC",
+    "Rank D Starters KTC",
+    "Rank D Bench KTC",
+    "Rank D Picks KTC",
     "League ID",
   ];
 

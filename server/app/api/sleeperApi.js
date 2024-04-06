@@ -88,6 +88,22 @@ const fetchStats = async (season, week, positions) => {
   return stats.flat();
 };
 
+const fetchStatsSeason = async (season, positions) => {
+  const season_type = "regular";
+
+  const stats = [];
+
+  for (const position of positions) {
+    const stats_position = await axiosInstance.get(
+      `https://api.sleeper.com/stats/nfl/${season}/?season_type=${season_type}&position[]=${position}&order_by=ppr`
+    );
+
+    stats.push(stats_position.data);
+  }
+
+  return stats.flat();
+};
+
 const fetchProjections = async (season, week) => {
   const season_type = "post";
   const positions = ["QB", "RB", "WR", "TE"];
@@ -132,6 +148,7 @@ module.exports = {
   fetchLeagueDrafts,
   fetchLeagueTradedPicks,
   fetchStats,
+  fetchStatsSeason,
   fetchProjections,
   fetchLeagueTransactions,
   fetchDraftPicks,

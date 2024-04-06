@@ -8,6 +8,7 @@ import { getSortIcon } from "../../Common/Helpers/getSortIcon";
 import { filterLeagues } from "../../Common/Helpers/filterLeagues";
 import { getPlayersColumn } from "../helpers/getPlayersColumn";
 import FilterIcons from "../../Common/Components/FilterIcons";
+import LoadingIcon from "../../Common/Components/LoadingIcon";
 const TableMain = lazy(() => import("../../Common/Components/TableMain"));
 
 const PlayersCheck = ({ secondaryTable }) => {
@@ -136,10 +137,7 @@ const PlayersCheck = ({ secondaryTable }) => {
             filters.draftClass === x.id.split("_")[0]) &&
           ["All", "Picks"].includes(filters.position)) ||
         (allplayers?.[x.id] &&
-          x.leagues_owned.length +
-            x.leagues_taken.length +
-            x.leagues_available.length >
-            0 &&
+          x.leagues_owned.length + x.leagues_taken.length > 0 &&
           (!searched?.id || searched?.id === x.id) &&
           (filters.team === "All" ||
             allplayers?.[x.id]?.team === filters.team) &&
@@ -368,50 +366,54 @@ const PlayersCheck = ({ secondaryTable }) => {
   ).sort((a, b) => b - a);
 
   return (
-    <TableMain
-      type={"primary"}
-      headers={headers}
-      body={body}
-      page={page}
-      setPage={(value) => dispatch(setStatePlayers({ page: value }))}
-      searched={searched}
-      setSearched={(value) => dispatch(setStatePlayers({ searched: value }))}
-      itemActive={itemActive}
-      setItemActive={(value) =>
-        dispatch(setStatePlayers({ itemActive: value }))
-      }
-      options1={[
-        <FilterIcons
-          type={"team"}
-          filterTeam={filters.team}
-          setFilterTeam={(value) =>
-            dispatch(setStatePlayers({ filters: { ...filters, team: value } }))
-          }
-        />,
-      ]}
-      options2={[
-        <FilterIcons
-          type={"position"}
-          filterPosition={filters.position}
-          setFilterPosition={(value) =>
-            dispatch(
-              setStatePlayers({ filters: { ...filters, position: value } })
-            )
-          }
-          picks={true}
-        />,
-        <FilterIcons
-          type={"draft"}
-          filterDraftClass={filters.draftClass}
-          setFilterDraftClass={(value) =>
-            dispatch(
-              setStatePlayers({ filters: { ...filters, draftClass: value } })
-            )
-          }
-          draftClassYears={draftClassYears}
-        />,
-      ]}
-    />
+    <Suspense fallback={<LoadingIcon />}>
+      <TableMain
+        type={"primary"}
+        headers={headers}
+        body={body}
+        page={page}
+        setPage={(value) => dispatch(setStatePlayers({ page: value }))}
+        searched={searched}
+        setSearched={(value) => dispatch(setStatePlayers({ searched: value }))}
+        itemActive={itemActive}
+        setItemActive={(value) =>
+          dispatch(setStatePlayers({ itemActive: value }))
+        }
+        options1={[
+          <FilterIcons
+            type={"team"}
+            filterTeam={filters.team}
+            setFilterTeam={(value) =>
+              dispatch(
+                setStatePlayers({ filters: { ...filters, team: value } })
+              )
+            }
+          />,
+        ]}
+        options2={[
+          <FilterIcons
+            type={"position"}
+            filterPosition={filters.position}
+            setFilterPosition={(value) =>
+              dispatch(
+                setStatePlayers({ filters: { ...filters, position: value } })
+              )
+            }
+            picks={true}
+          />,
+          <FilterIcons
+            type={"draft"}
+            filterDraftClass={filters.draftClass}
+            setFilterDraftClass={(value) =>
+              dispatch(
+                setStatePlayers({ filters: { ...filters, draftClass: value } })
+              )
+            }
+            draftClassYears={draftClassYears}
+          />,
+        ]}
+      />
+    </Suspense>
   );
 };
 

@@ -8,7 +8,7 @@ const cheerio = require("cheerio");
 const allplayers = require("../../data/allplayers.json");
 const ktc_players = require("../../data/ktc_sleeper_ids.json");
 const ktc_sleeper_id_map = require("../../data/ktc_sleeper_id_map.json");
-const { fetchStats } = require("../api/sleeperApi");
+const { fetchStats, fetchStatsSeason } = require("../api/sleeperApi");
 
 const updateKtcValues = async () => {
   const ktc_json = fs.readFileSync("./data/ktcValues.json", "utf-8");
@@ -276,27 +276,19 @@ const getPlayersStats = async (start_season, end_season, positions) => {
   const players_stats = [];
 
   await Promise.all(
-    Array.from(Array(end_season - start_season).keys())
+    Array.from(Array(end_season - start_season + 1).keys())
       .map((key) => key + start_season)
       .map(async (season) => {
-        const weeks_in_season = season < 2021 ? 17 : 18;
+        const season_stats = await fetchStatsSeason(season, positions);
 
-        await Promise.all(
-          Array.from(Array(weeks_in_season).keys())
-            .map((key) => key + 1)
-            .map(async (week) => {
-              const week_stats = await fetchStats(season, week, positions);
-
-              players_stats.push(week_stats);
-            })
-        );
+        players_stats.push(season_stats);
       })
   );
 
   fs.writeFileSync(
-    `./data/wr_stats_${start_season}_${end_season}.json`,
+    `./data/stats_${start_season}_${end_season}.json`,
     JSON.stringify(players_stats.flat())
   );
 };
 
-//  getPlayersStats(2020, 2023, ["WR"]);
+//getPlayersStats(2023, 2023, ["QB", "RB", "WR", "TE"]);
