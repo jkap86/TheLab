@@ -20,13 +20,15 @@ function App() {
             <Route
               path="/leagues/:username"
               element={
-                <Layout
-                  display={
-                    <Suspense fallback={<LoadingIcon />}>
-                      <Leagues />
-                    </Suspense>
-                  }
-                />
+                <Suspense fallback={<LoadingIcon />}>
+                  <Layout
+                    display={
+                      <Suspense fallback={<LoadingIcon />}>
+                        <Leagues />
+                      </Suspense>
+                    }
+                  />
+                </Suspense>
               }
             ></Route>
             <Route
@@ -46,13 +48,15 @@ function App() {
             <Route
               path="/leaguemates/:username"
               element={
-                <Layout
-                  display={
-                    <Suspense fallback={<LoadingIcon />}>
-                      <Leaguemates />
-                    </Suspense>
-                  }
-                />
+                <Suspense fallback={<LoadingIcon />}>
+                  <Layout
+                    display={
+                      <Suspense fallback={<LoadingIcon />}>
+                        <Leaguemates />
+                      </Suspense>
+                    }
+                  />
+                </Suspense>
               }
             />
             <Route
