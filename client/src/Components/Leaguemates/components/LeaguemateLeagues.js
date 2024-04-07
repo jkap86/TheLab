@@ -17,7 +17,7 @@ import { getLeagueRankings } from "../../Leagues/helpers/getLeagueRankings";
 
 const LeaguemateLeagues = ({ leaguemate }) => {
   const dispatch = useDispatch();
-  const { allplayers } = useSelector((state) => state.common);
+  const { allplayers, ktc, state } = useSelector((state) => state.common);
   const { username, type1, type2, adpLm } = useSelector((state) => state.user);
   const { page, itemActive, column2, column3, column4, column5, sortBy } =
     useSelector((state) => state.leaguemates.leaguemate_leagues);
@@ -120,6 +120,8 @@ const LeaguemateLeagues = ({ leaguemate }) => {
         league: lm_league,
         adpLm,
         allplayers,
+        ktc,
+        state,
       });
 
       return {

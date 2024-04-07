@@ -24,7 +24,7 @@ const LeaguesOwned = ({
   setPage,
 }) => {
   const dispatch = useDispatch();
-  const { allplayers } = useSelector((state) => state.common);
+  const { allplayers, state, ktc } = useSelector((state) => state.common);
   const { type1, type2, adpLm } = useSelector((state) => state.user);
   const { column2, column3, column4, column5, sortBy, itemActive } =
     useSelector((state) => state.players.owned);
@@ -140,7 +140,13 @@ const LeaguesOwned = ({
     type2
   )
     .map((league) => {
-      const standings_detail = getLeagueRankings({ league, adpLm, allplayers });
+      const standings_detail = getLeagueRankings({
+        league,
+        adpLm,
+        allplayers,
+        ktc,
+        state,
+      });
 
       const columns = leagues_taken
         ? [column4, column5]
