@@ -64,7 +64,6 @@ exports.adp = async (req, res) => {
     });
     */
 
-    //if (draft_picks.length < 500) {
     let draft_picks = await Draftpick.findAll({
       attributes: [
         "player_id",
@@ -95,14 +94,22 @@ exports.adp = async (req, res) => {
         model: Draft,
         attributes: [],
         where: {
-          start_time: {
-            [Op.gt]: new Date(new Date() - 5 * 24 * 60 * 60 * 1000).getTime(),
-          },
+          [Op.and]: [
+            {
+              last_picked: {
+                [Op.gt]: new Date(
+                  new Date() - 5 * 24 * 60 * 60 * 1000
+                ).getTime(),
+              },
+            },
+            {
+              status: "complete",
+            },
+          ],
         },
       },
       group: ["player_id", "draftpick.league_type"],
     });
-    // }
 
     /*
     let auction_picks = await Auctionpick.findAll({
@@ -158,7 +165,6 @@ exports.adp = async (req, res) => {
     });
 */
 
-    //if (auction_picks.length < 500) {
     let auction_picks = await Auctionpick.findAll({
       attributes: [
         "player_id",
@@ -187,16 +193,15 @@ exports.adp = async (req, res) => {
       ],
       include: {
         model: Draft,
-        attributes: [],
+        attributes: ["draft_id", "settings"],
         where: {
           start_time: {
             [Op.gt]: new Date(new Date() - 5 * 24 * 60 * 60 * 1000).getTime(),
           },
         },
       },
-      group: ["player_id", "auctionpick.league_type"],
+      group: ["player_id", "auctionpick.league_type", "draft.draft_id"],
     });
-    //}
 
     res.send({
       draft_picks,

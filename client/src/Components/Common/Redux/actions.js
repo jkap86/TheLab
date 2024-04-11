@@ -292,20 +292,37 @@ export const fetchAdp =
         league_ids: league_ids,
       });
 
+      const n_drafts_redraft = Math.max(
+        ...adp.data.draft_picks
+          .filter((x) => x.league_type === "R")
+          .map((x) => parseInt(x.n_drafts))
+      );
+
+      const n_drafts_redraft_recent = Math.max(
+        ...adp.data.draft_picks_recent
+          .filter((x) => x.league_type === "R")
+          .map((x) => parseInt(x.n_drafts))
+      );
+
       const adp_redraft = Object.fromEntries(
         adp.data.draft_picks
           .filter((x) => x.league_type === "R")
           .map((x) => {
+            const adp =
+              (parseInt(x.n_drafts) * parseFloat(x.adp)) / n_drafts_redraft;
+
             const recent = adp.data.draft_picks_recent.find(
               (pr) => pr.league_type === "R" && pr.player_id === x.player_id
             );
 
+            const adp_recent =
+              (parseInt(recent?.n_drafts) * parseFloat(recent?.adp)) /
+              n_drafts_redraft_recent;
+
             return [
               x.player_id,
               {
-                adp: recent?.adp
-                  ? (parseFloat(recent.adp) + parseFloat(x.adp)) / 2
-                  : parseFloat(x.adp),
+                adp: recent?.adp ? (adp_recent + adp) / 2 : adp,
                 n_drafts: parseInt(x.n_drafts),
               },
             ];
@@ -318,81 +335,69 @@ export const fetchAdp =
           .map((x) => parseInt(x.n_drafts))
       );
 
+      const n_drafts_dynasty_recent = Math.max(
+        ...adp.data.draft_picks_recent
+          .filter((x) => x.league_type === "D")
+          .map((x) => parseInt(x.n_drafts))
+      );
+
       const adp_dynasty = Object.fromEntries(
         adp.data.draft_picks
-          .filter(
-            (x) =>
-              x.league_type === "D" &&
-              n_drafts_dynasty &&
-              (parseInt(x.n_drafts) > n_drafts_dynasty / 10 ||
-                (allplayers[x.player_id]?.years_exp === 0 &&
-                  parseInt(x.n_drafts) > 5))
-          )
+          .filter((x) => x.league_type === "D")
           .map((x) => {
+            const adp =
+              (parseInt(x.n_drafts) * parseFloat(x.adp)) / n_drafts_dynasty;
+
             const recent = adp.data.draft_picks_recent.find(
               (pr) => pr.league_type === "D" && pr.player_id === x.player_id
             );
 
+            const adp_recent =
+              (parseInt(recent?.n_drafts) * parseFloat(recent?.adp)) /
+              n_drafts_dynasty_recent;
+
             return [
               x.player_id,
               {
-                adp: recent?.adp
-                  ? (parseFloat(recent.adp) + parseFloat(x.adp)) / 2
-                  : parseFloat(x.adp),
+                adp: recent?.adp ? (adp_recent + adp) / 2 : adp,
                 n_drafts: parseInt(x.n_drafts),
               },
             ];
           })
       );
 
-      const adp_all = Object.fromEntries(
-        Array.from(
-          new Set([...Object.keys(adp_redraft), ...Object.keys(adp_dynasty)])
-        ).map((player_id) => {
-          const redraft = adp_redraft[player_id];
+      const n_drafts_redraft_auction = Math.max(
+        ...adp.data.auction_picks
+          .filter((x) => x.league_type === "R")
+          .map((x) => parseInt(x.n_drafts))
+      );
 
-          const dynasty = adp_dynasty[player_id];
-
-          const total_drafts =
-            (redraft?.n_drafts || 0) + (dynasty?.n_drafts || 0);
-
-          let redraft_adj;
-          let dynasty_adj;
-
-          if (total_drafts > 0) {
-            redraft_adj =
-              redraft && (redraft.adp * (redraft.n_drafts || 0)) / total_drafts;
-
-            dynasty_adj =
-              dynasty && (dynasty.adp * (dynasty.n_drafts || 0)) / total_drafts;
-          }
-
-          return [
-            player_id,
-            {
-              adp:
-                ((redraft_adj || 0) + (dynasty_adj || 0)) /
-                [redraft_adj, dynasty_adj].filter((x) => x).length,
-              n_drafts: total_drafts,
-            },
-          ];
-        })
+      const n_drafts_redraft_auction_recent = Math.max(
+        ...adp.data.auction_picks_recent
+          .filter((x) => x.league_type === "R")
+          .map((x) => parseInt(x.n_drafts))
       );
 
       const adp_redraft_auction = Object.fromEntries(
         adp.data.auction_picks
           .filter((x) => x.league_type === "R")
           .map((x) => {
+            const adp =
+              (parseInt(x.n_drafts) * parseFloat(x.adp)) /
+              n_drafts_redraft_auction;
+
             const recent = adp.data.auction_picks_recent.find(
               (pr) => pr.league_type === "R" && pr.player_id === x.player_id
             );
 
+            const adp_recent =
+              parseInt(recent?.n_drafts) +
+              parseFloat(recent?.adp) / n_drafts_redraft_auction_recent;
+
             return [
               x.player_id,
               {
-                adp: recent?.adp
-                  ? (parseFloat(recent.adp) + parseFloat(x.adp)) / 2
-                  : parseFloat(x.adp),
+                adp: recent?.adp ? (adp_recent + adp) / 2 : adp,
                 n_drafts: parseInt(x.n_drafts),
               },
             ];
@@ -400,7 +405,15 @@ export const fetchAdp =
       );
 
       const n_drafts_dynasty_auction = Math.max(
-        ...adp.data.auction_picks.map((x) => parseInt(x.n_drafts))
+        ...adp.data.auction_picks
+          .filter((x) => x.league_type === "D")
+          .map((x) => parseInt(x.n_drafts))
+      );
+
+      const n_drafts_dynasty_auction_recent = Math.max(
+        ...adp.data.auction_picks_recent
+          .filter((x) => x.league_type === "D")
+          .map((x) => parseInt(x.n_drafts))
       );
 
       const adp_dynasty_auction = Object.fromEntries(
@@ -412,16 +425,22 @@ export const fetchAdp =
               parseInt(x.n_drafts) > n_drafts_dynasty_auction / 5
           )
           .map((x) => {
+            const adp =
+              (parseInt(x.n_drafts) * parseFloat(x.adp)) /
+              n_drafts_dynasty_auction;
+
             const recent = adp.data.auction_picks_recent.find(
               (pr) => pr.league_type === "D" && pr.player_id === x.player_id
             );
 
+            const adp_recent =
+              (parseInt(recent?.n_drafts) * parseFloat(recent?.adp)) /
+              n_drafts_dynasty_auction_recent;
+
             return [
               x.player_id,
               {
-                adp: recent?.adp
-                  ? (parseFloat(recent.adp) + parseFloat(x.adp)) / 2
-                  : parseFloat(x.adp),
+                adp: recent?.adp ? (adp_recent + adp) / 2 : adp,
                 n_drafts: parseInt(x.n_drafts),
               },
             ];
@@ -431,7 +450,6 @@ export const fetchAdp =
       const adp_object = {
         Redraft: adp_redraft,
         Dynasty: adp_dynasty,
-        All: adp_all,
         Redraft_auction: adp_redraft_auction,
         Dynasty_auction: adp_dynasty_auction,
       };
