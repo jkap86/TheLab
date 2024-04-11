@@ -72,7 +72,7 @@ const getRecentUsers = async () => {
     order: [["updatedAt", "DESC"]],
     attributes: ["username", "updatedAt"],
     where: {
-      type: "S",
+      type: "RS",
     },
     raw: true,
   });

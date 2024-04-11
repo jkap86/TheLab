@@ -168,19 +168,6 @@ const Roster = ({
                     )))
             ]?.adp;
 
-          const auction_value =
-            adpLm["Dynasty_auction"]?.[
-              "R" +
-                ((pick.round - 1) * 12 +
-                  (parseInt(
-                    pick.season === parseInt(league.season) && pick.order
-                  ) ||
-                    Math.min(
-                      6 + (parseInt(pick.season) - parseInt(league.season)) * 3,
-                      12
-                    )))
-            ]?.adp;
-
           return {
             id: `${pick.season}_${pick.round}_${pick.original_user.user_id}`,
             list: [

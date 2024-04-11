@@ -21,7 +21,7 @@ exports.upsert = async (req, res) => {
       user_id: user.user_id,
       username: user.display_name,
       avatar: user.avatar,
-      type: "S", // S = 'Searched'
+      type: "RS", // RS = 'Recently Searched'
       updatedAt: new Date(),
     });
 

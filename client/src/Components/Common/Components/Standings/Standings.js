@@ -246,10 +246,10 @@ const Standings = ({ league, type }) => {
               <span
                 className="stat adp"
                 style={getTrendColorRank(
-                  Object.keys(adpLm?.[adp_key]).length -
+                  Object.keys(adpLm?.[adp_key] || {}).length -
                     adpLm?.[adp_key]?.[player_id]?.adp,
                   league.roster_positions.length * league.rosters.length,
-                  Object.keys(adpLm?.[adp_key]).length
+                  Object.keys(adpLm?.[adp_key] || {}).length
                 )}
               >
                 {(adpLm?.[adp_key]?.[player_id]?.adp &&
