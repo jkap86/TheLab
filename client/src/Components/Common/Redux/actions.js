@@ -306,18 +306,22 @@ export const fetchAdp =
 
       const adp_redraft = Object.fromEntries(
         adp.data.draft_picks
-          .filter((x) => x.league_type === "R")
+          .filter(
+            (x) =>
+              x.league_type === "R" &&
+              n_drafts_redraft &&
+              (parseInt(x.n_drafts) > n_drafts_redraft / 10 ||
+                (allplayers[x.player_id]?.years_exp === 0 &&
+                  parseInt(x.n_drafts) > 5))
+          )
           .map((x) => {
-            const adp_ovr =
-              (parseInt(x.n_drafts) * parseFloat(x.adp)) / n_drafts_redraft;
+            const adp_ovr = parseFloat(x.adp);
 
             const recent = adp.data?.draft_picks_recent.find(
               (pr) => pr.league_type === "R" && pr.player_id === x.player_id
             );
 
-            const adp_recent =
-              (parseInt(recent?.n_drafts) * parseFloat(recent?.adp)) /
-              n_drafts_redraft_recent;
+            const adp_recent = parseFloat(recent?.adp);
 
             return [
               x.player_id,
@@ -343,18 +347,22 @@ export const fetchAdp =
 
       const adp_dynasty = Object.fromEntries(
         adp.data.draft_picks
-          .filter((x) => x.league_type === "D")
+          .filter(
+            (x) =>
+              x.league_type === "D" &&
+              n_drafts_dynasty &&
+              (parseInt(x.n_drafts) > n_drafts_dynasty / 10 ||
+                (allplayers[x.player_id]?.years_exp === 0 &&
+                  parseInt(x.n_drafts) > 5))
+          )
           .map((x) => {
-            const adp_ovr =
-              (parseInt(x.n_drafts) * parseFloat(x.adp)) / n_drafts_dynasty;
+            const adp_ovr = parseFloat(x.adp);
 
             const recent = adp.data.draft_picks_recent.find(
               (pr) => pr.league_type === "D" && pr.player_id === x.player_id
             );
 
-            const adp_recent =
-              (parseInt(recent?.n_drafts) * parseFloat(recent?.adp)) /
-              n_drafts_dynasty_recent;
+            const adp_recent = parseFloat(recent?.adp);
 
             return [
               x.player_id,
@@ -418,12 +426,7 @@ export const fetchAdp =
 
       const adp_dynasty_auction = Object.fromEntries(
         adp.data.auction_picks
-          .filter(
-            (x) =>
-              x.league_type === "D" &&
-              n_drafts_dynasty_auction &&
-              parseInt(x.n_drafts) > n_drafts_dynasty_auction / 5
-          )
+          .filter((x) => x.league_type === "D")
           .map((x) => {
             const adp_ovr =
               (parseInt(x.n_drafts) * parseFloat(x.adp)) /
