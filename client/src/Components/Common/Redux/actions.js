@@ -308,10 +308,10 @@ export const fetchAdp =
         adp.data.draft_picks
           .filter((x) => x.league_type === "R")
           .map((x) => {
-            const adp =
+            const adp_ovr =
               (parseInt(x.n_drafts) * parseFloat(x.adp)) / n_drafts_redraft;
 
-            const recent = adp.data.draft_picks_recent.find(
+            const recent = adp.data?.draft_picks_recent.find(
               (pr) => pr.league_type === "R" && pr.player_id === x.player_id
             );
 
@@ -322,7 +322,7 @@ export const fetchAdp =
             return [
               x.player_id,
               {
-                adp: recent?.adp ? (adp_recent + adp) / 2 : adp,
+                adp: recent?.adp ? (adp_recent + adp_ovr) / 2 : adp_ovr,
                 n_drafts: parseInt(x.n_drafts),
               },
             ];
@@ -345,7 +345,7 @@ export const fetchAdp =
         adp.data.draft_picks
           .filter((x) => x.league_type === "D")
           .map((x) => {
-            const adp =
+            const adp_ovr =
               (parseInt(x.n_drafts) * parseFloat(x.adp)) / n_drafts_dynasty;
 
             const recent = adp.data.draft_picks_recent.find(
@@ -359,7 +359,7 @@ export const fetchAdp =
             return [
               x.player_id,
               {
-                adp: recent?.adp ? (adp_recent + adp) / 2 : adp,
+                adp: recent?.adp ? (adp_recent + adp_ovr) / 2 : adp_ovr,
                 n_drafts: parseInt(x.n_drafts),
               },
             ];
@@ -382,7 +382,7 @@ export const fetchAdp =
         adp.data.auction_picks
           .filter((x) => x.league_type === "R")
           .map((x) => {
-            const adp =
+            const adp_ovr =
               (parseInt(x.n_drafts) * parseFloat(x.adp)) /
               n_drafts_redraft_auction;
 
@@ -397,7 +397,7 @@ export const fetchAdp =
             return [
               x.player_id,
               {
-                adp: recent?.adp ? (adp_recent + adp) / 2 : adp,
+                adp: recent?.adp ? (adp_recent + adp_ovr) / 2 : adp_ovr,
                 n_drafts: parseInt(x.n_drafts),
               },
             ];
@@ -425,7 +425,7 @@ export const fetchAdp =
               parseInt(x.n_drafts) > n_drafts_dynasty_auction / 5
           )
           .map((x) => {
-            const adp =
+            const adp_ovr =
               (parseInt(x.n_drafts) * parseFloat(x.adp)) /
               n_drafts_dynasty_auction;
 
@@ -440,7 +440,7 @@ export const fetchAdp =
             return [
               x.player_id,
               {
-                adp: recent?.adp ? (adp_recent + adp) / 2 : adp,
+                adp: recent?.adp ? (adp_recent + adp_ovr) / 2 : adp_ovr,
                 n_drafts: parseInt(x.n_drafts),
               },
             ];
@@ -453,6 +453,7 @@ export const fetchAdp =
         Redraft_auction: adp_redraft_auction,
         Dynasty_auction: adp_dynasty_auction,
       };
+
       dispatch({
         type: "SET_STATE_USER",
         payload: { adpLm: adp_object, isLoadingAdp: false },
@@ -463,6 +464,7 @@ export const fetchAdp =
         data: adp_object,
       });
     } catch (err) {
+      console.log(err);
       dispatch({
         type: "SET_STATE_USER",
         payload: { errorAdp: err.message },
