@@ -7,6 +7,7 @@ import {
   getTrendColorRank,
   getTrendColorValue,
 } from "../../Common/Helpers/getTrendColor";
+import { getPickOvr } from "../../Common/Helpers/rosterValues";
 
 const TradeInfo = ({ trade, roster, league_type, rid }) => {
   const {
@@ -82,10 +83,8 @@ const TradeInfo = ({ trade, roster, league_type, rid }) => {
           .filter((p) => p.owner_id === parseInt(rid))
           .sort((a, b) => a.season - b.season || a.round - b.round)
           .map((pick) => {
-            const pick_ovr =
-              (pick.round - 1) * 12 +
-              ((pick.season === stateState.season && pick.order) ||
-                6 + (parseInt(pick.season) - parseInt(stateState.season)) * 3);
+            const pick_ovr = getPickOvr({ pick, season: stateState.season });
+
             const pick_name = "R" + pick_ovr;
 
             const adp = adpLm?.[league_type]?.[pick_name]?.adp || 999;

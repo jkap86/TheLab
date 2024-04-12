@@ -1,13 +1,18 @@
+export const getPickOvr = ({ pick, season }) => {
+  const pick_ovr =
+    (pick.round - 1) * 12 +
+    ((pick.season === season && pick.order) ||
+      6 + (parseInt(pick.season) - parseInt(season)) * 3);
+
+  return pick_ovr;
+};
+
 export const getRosterPicksValue = (draft_picks, adp, league_season) => {
   const picks_value = (draft_picks || []).reduce(
     (acc, cur) =>
       acc +
       (adp?.[`Dynasty_auction`]?.[
-        "R" +
-          +(
-            (cur.round - 1) * 12 +
-            (parseInt(cur.season === parseInt(league_season) && cur.order) || 7)
-          )
+        "R" + getPickOvr({ pick: cur, season: league_season })
       ]?.adp || 0),
     0
   );
