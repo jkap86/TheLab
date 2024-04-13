@@ -4,11 +4,6 @@ import HeaderDropdown from "../../Common/Components/HeaderDropdown";
 import { setStateLeaguesCheck } from "../redux/actions";
 import { filterLeagues } from "../../Common/Helpers/filterLeagues";
 import { getColumnValue } from "../helpers/getColumns";
-import {
-  getPlayersValue,
-  getRosterPicksValue,
-} from "../../Common/Helpers/rosterValues";
-import { getOptimalLineupADP } from "../../Common/Helpers/getOptimalLineupADP";
 import { getSortIcon } from "../../Common/Helpers/getSortIcon";
 import { getColumnOptionsLeagues } from "../helpers/columnOptionsLeagues";
 import { getLeagueRankings } from "../helpers/getLeagueRankings";

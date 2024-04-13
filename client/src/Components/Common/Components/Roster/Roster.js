@@ -20,7 +20,7 @@ const Roster = ({
   valueType,
   setValueType,
 }) => {
-  const { state, allplayers } = useSelector((state) => state.common);
+  const { state, allplayers, ktc } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
 
   const roster_positions = league.roster_positions.filter((p) =>
@@ -44,7 +44,14 @@ const Roster = ({
         text: (
           <HeaderDropdown
             column_text={valueType}
-            columnOptions={["D ADP", "D Auction %", "R ADP", "R Auction %"]}
+            columnOptions={[
+              "D ADP",
+              "D Auction %",
+              "R ADP",
+              "R Auction %",
+              "Age",
+              "D KTC SF",
+            ]}
             setState={setValueType}
           />
         ),
@@ -94,6 +101,11 @@ const Roster = ({
             );
           }),
       ].map((player_id, index) => {
+        const min_age = 20;
+        const max_age = allplayers?.[player_id]?.position === "QB" ? 35 : 30;
+
+        const ktc_value_d_sf = ktc[player_id]?.superflex || 0;
+
         return {
           id: player_id,
           list: [
@@ -121,7 +133,20 @@ const Roster = ({
                 <span
                   className="stat adp"
                   style={
-                    valueType?.includes("ADP")
+                    valueType === "Age"
+                      ? getTrendColorRank(
+                          max_age - allplayers?.[player_id]?.age + min_age,
+                          min_age,
+                          max_age
+                        )
+                      : valueType === "D KTC SF"
+                      ? getTrendColorValue(
+                          ktc_value_d_sf,
+                          Object.keys(ktc).map(
+                            (player_id) => ktc[player_id].superflex
+                          )
+                        )
+                      : valueType?.includes("ADP")
                       ? getTrendColorRank(
                           roster.starters?.length * league.settings?.num_teams -
                             adpLm?.[adp_key]?.[player_id]?.adp,
@@ -137,11 +162,15 @@ const Roster = ({
                         )
                   }
                 >
-                  {(adpLm?.[adp_key]?.[player_id]?.adp &&
-                    (valueType.includes("ADP")
-                      ? getAdpFormatted(adpLm?.[adp_key]?.[player_id]?.adp)
-                      : adpLm?.[adp_key]?.[player_id]?.adp?.toFixed(0))) ||
-                    "-"}
+                  {valueType === "Age"
+                    ? allplayers?.[player_id]?.age || 0
+                    : valueType === "D KTC SF"
+                    ? ktc_value_d_sf
+                    : (adpLm?.[adp_key]?.[player_id]?.adp &&
+                        (valueType.includes("ADP")
+                          ? getAdpFormatted(adpLm?.[adp_key]?.[player_id]?.adp)
+                          : adpLm?.[adp_key]?.[player_id]?.adp?.toFixed(0))) ||
+                      "-"}
                 </span>
               ),
               colSpan: 9,
