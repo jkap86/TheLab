@@ -11,22 +11,18 @@ import { getOptimalLineupADP } from "../../Common/Helpers/getOptimalLineupADP";
 const RostersComp = ({ trade }) => {
   const [filter1, setFilter1] = useState("All");
   const [filter2, setFilter2] = useState("All");
-  const [roster1, setRoster1] = useState(
-    Object.values(trade.rosters)[0].username
-  );
-  const [roster2, setRoster2] = useState(
-    Object.values(trade.rosters)[1].username
-  );
+  const [roster1, setRoster1] = useState(Object.values(trade.rosters)[0]);
+  const [roster2, setRoster2] = useState(Object.values(trade.rosters)[1]);
   const [valueType, setValueType] = useState("D ADP");
   const { allplayers, state } = useSelector((state) => state.common);
   const { adpLm } = useSelector((state) => state.user);
 
   const standingsType = valueType.startsWith("D") ? "Dynasty" : "Redraft";
 
-  const rosters_array = Object.keys(trade.rosters).map((player_id) => {
+  const rosters_array = Object.keys(trade.rosters).map((roster_id) => {
     return {
-      ...trade.rosters[player_id],
-      player_id: player_id,
+      ...trade.rosters[roster_id],
+      roster_id: roster_id,
     };
   });
 
@@ -128,13 +124,13 @@ const RostersComp = ({ trade }) => {
               column_text={roster1.username}
               columnOptions={Object.values(trade.rosters)
                 .filter(
-                  (player_id) => trade.rosters[player_id].username !== roster2
+                  (trade_roster) => trade_roster.roster_id !== roster2.roster_id
                 )
-                .map((player_id) => trade.rosters[player_id].username)}
+                .map((trade_roster) => trade_roster.username)}
               setState={setRoster1}
             />
           ) : (
-            <span className="username">{roster1.username}</span>
+            <span className="username">{roster1.username || "Orphan"}</span>
           )}
           <div></div>
           <div></div>
@@ -152,13 +148,13 @@ const RostersComp = ({ trade }) => {
               column_text={roster2.username}
               columnOptions={Object.values(trade.rosters)
                 .filter(
-                  (player_id) => trade.rosters[player_id].username !== roster1
+                  (trade_roster) => trade_roster.roster_id !== roster1.roster_id
                 )
-                .map((player_id) => trade.rosters[player_id].username)}
+                .map((trade_roster) => trade_roster.username)}
               setState={setRoster2}
             />
           ) : (
-            <span className="username">{roster2.username}</span>
+            <span className="username">{roster2.username || "Orphan"}</span>
           )}
           <div></div>
           <div></div>
