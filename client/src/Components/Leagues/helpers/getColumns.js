@@ -158,14 +158,52 @@ export const getColumnValue = (
         );
 
         break;
-      case "Rank R":
-        const rank_redraft =
+      case "Rank R Players":
+        const rank_redraft_players =
           standings_detail
             .sort(
               (a, b) =>
                 b.redraft_starters +
                 b.redraft_bench -
                 (a.redraft_starters + a.redraft_bench)
+            )
+            .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
+          1;
+
+        text = rank_redraft_players;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_redraft_players,
+          1,
+          league.rosters.length
+        );
+
+        break;
+      case "Rank R Picks":
+        const rank_redraft_picks =
+          standings_detail
+            .sort((a, b) => b.redraft_picks - a.redraft_picks)
+            .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
+          1;
+
+        text = rank_redraft_picks;
+
+        getTrendColor = getTrendColorRank(
+          league.rosters.length - rank_redraft_picks,
+          1,
+          league.rosters.length
+        );
+
+        break;
+      case "Rank R":
+        const rank_redraft =
+          standings_detail
+            .sort(
+              (a, b) =>
+                b.redraft_starters +
+                b.redraft_bench +
+                b.redraft_picks -
+                (a.redraft_starters + a.redraft_bench + a.redraft_picks)
             )
             .findIndex((obj) => obj.roster_id === league.userRoster.roster_id) +
           1;

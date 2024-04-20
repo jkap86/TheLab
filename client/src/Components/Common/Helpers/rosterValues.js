@@ -7,11 +7,11 @@ export const getPickOvr = ({ pick, season }) => {
   return pick_ovr;
 };
 
-export const getRosterPicksValue = (draft_picks, adp, league_season) => {
+export const getRosterPicksValue = (draft_picks, adp, league_season, type) => {
   const picks_value = (draft_picks || []).reduce(
     (acc, cur) =>
       acc +
-      (adp?.[`Dynasty_auction`]?.[
+      (adp?.[`${type}_auction`]?.[
         "R" + getPickOvr({ pick: cur, season: league_season })
       ]?.adp || 0),
     0

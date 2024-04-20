@@ -30,7 +30,8 @@ export const getLeagueRankings = ({
     const dynasty_picks = getRosterPicksValue(
       roster.draft_picks,
       adpLm,
-      league.season
+      league.season,
+      "Dynasty"
     );
 
     const dynasty_optimal = getOptimalLineupADP({
@@ -85,6 +86,15 @@ export const getLeagueRankings = ({
       adpLm
     );
 
+    const redraft_picks = getRosterPicksValue(
+      roster.draft_picks.filter(
+        (pick) => pick.season === parseInt(league.season)
+      ),
+      adpLm,
+      league.season,
+      "Redraft"
+    );
+
     const dynasty_starters_ktc = optimal_dynasty_player_ids.reduce(
       (acc, cur) => acc + (ktc[cur]?.superflex || 0),
       0
@@ -109,7 +119,9 @@ export const getLeagueRankings = ({
       dynasty_total: dynasty_starters + dynasty_bench + dynasty_picks,
       redraft_starters,
       redraft_bench,
-      redraft_total: redraft_starters + redraft_bench,
+      redraft_picks,
+      redraft_players: redraft_starters + redraft_bench,
+      redraft_total: redraft_starters + redraft_bench + redraft_picks,
       dynasty_optimal,
       redraft_optimal,
       starters_optimal_dynasty: optimal_dynasty_player_ids,
