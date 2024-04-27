@@ -140,7 +140,7 @@ const Search = ({
                     handleMouseEnter(`${option.text}_${index}`)
                   }
                   onMouseLeave={() => setReverse(false)}
-                  onMouseDown={() => setSearched(option)}
+                  onMouseDown={() => handleSearch(option.text)}
                 >
                   {option.image ? (
                     <p>
