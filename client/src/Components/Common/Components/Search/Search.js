@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import Avatar from "../Avatar";
 import "./Search.css";
 
@@ -13,6 +13,7 @@ const Search = ({
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [dropdownOptions, setDropdownOptions] = useState([]);
   const [reverse, setReverse] = useState(false);
+  const [searchedLocal, setSearchedLocal] = useState("");
 
   const getOptions = useCallback(
     (s) => {
@@ -43,7 +44,8 @@ const Search = ({
             )
             ? 1
             : -1
-        );
+        )
+        .slice(0, 15);
 
       return options;
     },
@@ -59,6 +61,7 @@ const Search = ({
       options = [];
       visible = false;
       setSearched(s);
+      setSearchedLocal(s);
     } else if (
       list
         .map((x) => x.text?.trim().toLowerCase())
@@ -70,10 +73,11 @@ const Search = ({
       options = [];
       visible = false;
       setSearched(option);
+      setSearchedLocal(option);
     } else {
       options = getOptions(s);
       visible = true;
-      setSearched(s);
+      setSearchedLocal(s);
     }
     setDropdownVisible(visible);
     setDropdownOptions(options);
@@ -91,11 +95,11 @@ const Search = ({
         onBlur={() => setDropdownVisible(false)}
         className={"search_wrapper"}
       >
-        {searched?.image ? (
+        {searchedLocal?.image ? (
           <Avatar
-            avatar_id={searched.image.src}
-            alt={searched.image.alt}
-            type={searched.image.type}
+            avatar_id={searchedLocal.image.src}
+            alt={searchedLocal.image.alt}
+            type={searchedLocal.image.type}
           />
         ) : null}
         <input
@@ -105,12 +109,12 @@ const Search = ({
           id={id === undefined ? null : id}
           placeholder={`Search ${(placeholder && placeholder) || ""}...`}
           type="text"
-          value={searched?.text || searched}
+          value={searchedLocal?.text || searchedLocal}
           autoComplete={"off"}
           disabled={isLoading}
         />
-        {searched === "" ||
-        (!dropdownVisible && searched !== "" && dropdownVisible) ? (
+        {searchedLocal === "" ||
+        (!dropdownVisible && searchedLocal !== "" && dropdownVisible) ? (
           <button onClick={() => handleSearch(" ")} className={"input click"}>
             &#9660;
           </button>
@@ -162,4 +166,4 @@ const Search = ({
   );
 };
 
-export default Search;
+export default React.memo(Search);
