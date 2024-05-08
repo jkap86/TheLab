@@ -7,6 +7,10 @@ h1 {
   margin-top: 0;
 }
 
+div.heading_wrapper {
+  position: relative;
+}
+
 div.heading h1 {
   color: var(--color2);
   filter: brightness(1.5);

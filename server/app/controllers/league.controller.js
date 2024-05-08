@@ -125,7 +125,7 @@ exports.picktracker = async (req, res) => {
     const users = await axios.get(
       `https://api.sleeper.app/v1/league/${req.query.league_id}/users`
     );
-    const teams = Object.keys(active_draft.draft_order).length;
+    const teams = Object.keys(active_draft.draft_order || {}).length;
 
     const picktracker = draft_picks.data
       .filter((pick) => pick.metadata.position === "K")

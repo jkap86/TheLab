@@ -71,7 +71,7 @@ const Heading = ({ homepage }) => {
 
   return (
     <>
-      {window.location.href.includes("southharmon") && (
+      {!window.location.href.includes("southharmon") && (
         <div className="sh_nav">
           {nav_items.map((nav_item) => {
             return (
@@ -92,10 +92,11 @@ const Heading = ({ homepage }) => {
         </div>
       )}
       {!homepage ? (
-        <>
+        <div className="heading_wrapper">
           <Link to="/" className="home">
             The Lab Home
           </Link>
+          {/*<i className="fa-regular fa-circle-question"></i>*/}
           <div className="heading">
             <h1>{state?.league_season}</h1>
             <h1>
@@ -185,7 +186,7 @@ const Heading = ({ homepage }) => {
               </>
             )}
           </div>
-        </>
+        </div>
       ) : (
         ""
       )}

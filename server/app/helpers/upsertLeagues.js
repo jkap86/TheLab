@@ -239,6 +239,8 @@ const upsertLeagues = async (leagues) => {
   const user_league_data = [];
   const draft_data = [];
 
+  const drafts_delete = [];
+
   leagues_to_add.forEach((league) => {
     league.rosters
       ?.filter((roster) => roster.players?.length > 0)
@@ -303,7 +305,10 @@ const upsertLeagues = async (leagues) => {
             ? "R"
             : false;
 
-        if (league_type) {
+        if (
+          league_type //&&
+          //draft.settings.rounds > league.settings.draft_rounds
+        ) {
           draft_data.push({
             draft_id,
             type,
@@ -315,6 +320,8 @@ const upsertLeagues = async (leagues) => {
             draft_order,
             leagueLeagueId: league.league_id,
           });
+        } else {
+          drafts_delete.push({ draft_id });
         }
       });
   });
@@ -353,6 +360,24 @@ const upsertLeagues = async (leagues) => {
       "draft_order",
     ],
   });
+
+  for await (const draft_delete of drafts_delete) {
+    const numDraftsDeleted = await Draft.destroy({
+      where: {
+        draft_id: draft_delete.draft_id,
+      },
+    });
+
+    console.log(`${numDraftsDeleted} Drafts Deleted...`);
+
+    const numDraftPicksDeleted = await DraftPick.destroy({
+      where: {
+        draftDraftId: draft_delete.draft_id,
+      },
+    });
+
+    console.log(`${numDraftPicksDeleted} Draft Picks Deleted...`);
+  }
 
   return leagues_to_add;
 };
