@@ -1,5 +1,4 @@
 import { useDispatch, useSelector } from "react-redux";
-import { useState } from "react";
 import TableMain from "../../Common/Components/TableMain";
 import HeaderDropdown from "../../Common/Components/HeaderDropdown";
 import { setStateLeaguesCheck } from "../redux/actions";
@@ -23,7 +22,6 @@ const LeaguesCheck = ({ secondaryTable }) => {
     sortBy,
     searched,
   } = useSelector((state) => state.leagues.LeaguesCheck);
-  const [isLegendVisible, setIsLegendVisible] = useState(false);
 
   const columnOptions = getColumnOptionsLeagues();
 
@@ -195,55 +193,6 @@ const LeaguesCheck = ({ secondaryTable }) => {
 
   return (
     <>
-      <div className="relative">
-        <i
-          className="fa-regular fa-circle-question"
-          onClick={() => setIsLegendVisible((prevState) => !prevState)}
-        ></i>
-        {isLegendVisible && (
-          <div className="legend">
-            <table className="legend">
-              <tbody>
-                {[
-                  {
-                    label: "Rank",
-                    desc: "League rank based on sleeper average auction draft budget percentages",
-                  },
-                  {
-                    label: "D",
-                    desc: "Dynasty",
-                  },
-                  {
-                    label: "R",
-                    desc: "Redraft (includes current year picks)",
-                  },
-                  {
-                    label: "KTC",
-                    desc: "KeepTradeCut.com Dynasty Superflex values",
-                  },
-                  {
-                    label: "Starters",
-                    desc: "Players in starting lineup when optimal lineup is set",
-                  },
-                  {
-                    label: "Bench",
-                    desc: "Players NOT in starting lineup when optimal lineup is set (includes Taxi and IR)",
-                  },
-                ].map((col) => {
-                  return (
-                    <tr key={col.label}>
-                      <td>
-                        <strong>{col.label}</strong>
-                      </td>
-                      <td>{col.desc}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
       <TableMain
         type={"primary"}
         headers={headers}

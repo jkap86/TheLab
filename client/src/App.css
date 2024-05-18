@@ -113,7 +113,6 @@ h3 {
 }
 
 div.legend {
-  font-size: 2rem;
   width: 50%;
   margin: auto;
 }
@@ -131,7 +130,7 @@ table.legend {
   box-shadow: 0 0 1rem white;
 }
 table.legend td {
-  font-size: 2rem;
+  font-size: 2.5rem;
   height: auto;
   text-align: left;
   white-space: wrap;
