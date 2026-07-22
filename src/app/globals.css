@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+/* Register the cyan accent as a Tailwind color so `text-active`, `bg-active`,
+   `border-active` (with opacity modifiers) are available. Additive only. */
+@theme {
+  --color-active: #00ffe5;
+}
+
+:root {
+  --background: rgb(0, 0, 25);
+  --active: #00ffe5;
+
+  font-size: 8px;
+}
+
+body {
+  background: var(--background);
+  color: white;
+  font-family: Arial, Helvetica, sans-serif;
+  width: CLAMP(100dvmin, 100vw, 1000px);
+}
