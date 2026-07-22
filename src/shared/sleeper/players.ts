@@ -1,6 +1,4 @@
-import http from "@thelab/http";
-
-import { SLEEPER_API_BASE } from "./client";
+import { sleeperGet, sleeperUrl } from "./client";
 import type { SleeperPlayerMap } from "./types";
 
 /**
@@ -8,9 +6,6 @@ import type { SleeperPlayerMap } from "./types";
  * callers to hit this at most once per day, so it must be cached — see
  * `@/shared/players`.
  */
-export async function getAllPlayers(): Promise<SleeperPlayerMap> {
-  const { data } = await http.get<SleeperPlayerMap | null>(
-    `${SLEEPER_API_BASE}/players/nfl`,
-  );
-  return data ?? {};
+export function getAllPlayers(): Promise<SleeperPlayerMap> {
+  return sleeperGet(sleeperUrl("players", "nfl"), {});
 }

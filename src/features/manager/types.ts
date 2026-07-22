@@ -1,20 +1,10 @@
-/** A manager's league with summary counts, as rendered on the leagues page. */
-export type ManagerLeague = {
-  league_id: string;
-  name: string;
-  season: string;
-  status: string;
-  total_rosters: number;
-  team_name: string | null;
-  record: { wins: number; losses: number; ties: number } | null;
-  counts: {
-    rosters: number;
-    tradedPicks: number;
-    drafts: number;
-    draftPicks: number;
-    transactions: number;
-  };
-};
+import type {
+  ManagerLeague,
+  SyncProgress as SyncProgressCounts,
+} from "@/shared/manager";
+
+// Re-exported so feature components import league shapes from one place.
+export type { ManagerLeague };
 
 /** A `result` message from the leagues stream (see the leagues route handler). */
 export type LeaguesResult = {
@@ -26,10 +16,10 @@ export type LeaguesResult = {
   summary?: { total: number; leagues: number; failed: number };
 };
 
-/** A `progress` message from the leagues stream. */
-export type SyncProgress = {
+/**
+ * A `progress` message from the leagues stream: the server's sync counts plus the
+ * `phase` the route tags each message with.
+ */
+export type SyncProgress = SyncProgressCounts & {
   phase: "initial" | "refresh";
-  loaded: number;
-  total: number;
-  failed: number;
 };

@@ -7,7 +7,7 @@ import {
   SYNC_TTL_MS,
 } from "@/shared/manager";
 import { ensurePlayersFresh } from "@/shared/players";
-import { DEFAULT_SEASON, getSleeperUser, sleeperAvatarUrl } from "@/shared/sleeper";
+import { DEFAULT_SEASON, resolveManagerUser, toUserInfo } from "@/shared/sleeper";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,41 +35,25 @@ export async function GET(
 ) {
   const { username } = await params;
 
-  if (!username?.trim()) {
-    return NextResponse.json({ error: "Username is required" }, { status: 400 });
+  const resolved = await resolveManagerUser(username);
+  if (!resolved.ok) {
+    return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
+  const user = resolved.user;
 
   const searchParams = new URL(request.url).searchParams;
   const season = searchParams.get("season")?.trim() || DEFAULT_SEASON;
   const force = searchParams.get("refresh") === "1";
-
-  let user;
-  try {
-    user = await getSleeperUser(username);
-  } catch {
-    return NextResponse.json({ error: "Failed to reach Sleeper" }, { status: 502 });
-  }
-
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
-  const resolvedUser = user;
 
   // Warm the players cache in the background (no-op when fresh).
   void ensurePlayersFresh().catch((error) => {
     console.error("[players] warm-up failed:", error);
   });
 
-  const userInfo = {
-    user_id: resolvedUser.user_id,
-    username: resolvedUser.username,
-    display_name: resolvedUser.display_name,
-    avatar: resolvedUser.avatar,
-    avatar_url: sleeperAvatarUrl(resolvedUser.avatar),
-  };
-  const refreshKey = `${resolvedUser.user_id}:${season}`;
+  const userInfo = toUserInfo(user);
+  const refreshKey = `${user.user_id}:${season}`;
 
-  const syncedAt = await getManagerSyncedAt(resolvedUser.user_id, season);
+  const syncedAt = await getManagerSyncedAt(user.user_id, season);
   const hasCache = syncedAt !== null;
   const isStale = !syncedAt || Date.now() - syncedAt.getTime() >= SYNC_TTL_MS;
   const wantRefresh = force || isStale;
@@ -92,7 +76,7 @@ export async function GET(
       try {
         // 1. Serve cached leagues immediately when we have them.
         if (hasCache) {
-          const leagues = await getManagerLeagues(resolvedUser.user_id, season);
+          const leagues = await getManagerLeagues(user.user_id, season);
           send({
             type: "result",
             user: userInfo,
@@ -107,7 +91,7 @@ export async function GET(
         if (willRefresh) {
           refreshInFlight.add(refreshKey);
           try {
-            const summary = await syncManagerLeagues(resolvedUser.user_id, season, {
+            const summary = await syncManagerLeagues(user.user_id, season, {
               force: true,
               onProgress: (progress) =>
                 send({
@@ -116,7 +100,7 @@ export async function GET(
                   ...progress,
                 }),
             });
-            const leagues = await getManagerLeagues(resolvedUser.user_id, season);
+            const leagues = await getManagerLeagues(user.user_id, season);
             send({
               type: "result",
               user: userInfo,

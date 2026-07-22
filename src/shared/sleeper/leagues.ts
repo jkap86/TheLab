@@ -1,6 +1,4 @@
-import http from "@thelab/http";
-
-import { SLEEPER_API_BASE } from "./client";
+import { sleeperGet, sleeperUrl } from "./client";
 import type {
   SleeperDraft,
   SleeperDraftPick,
@@ -15,64 +13,38 @@ import type {
 export const DEFAULT_SEASON = "2026";
 
 /** Leagues a user belongs to in a given season. */
-export async function getUserLeagues(
+export function getUserLeagues(
   userId: string,
   season: string = DEFAULT_SEASON,
 ): Promise<SleeperLeague[]> {
-  const { data } = await http.get<SleeperLeague[] | null>(
-    `${SLEEPER_API_BASE}/user/${encodeURIComponent(userId)}/leagues/nfl/${season}`,
-  );
-  return data ?? [];
+  return sleeperGet(sleeperUrl("user", userId, "leagues", "nfl", season), []);
 }
 
 /** All rosters (teams) in a league. */
-export async function getLeagueRosters(
-  leagueId: string,
-): Promise<SleeperRoster[]> {
-  const { data } = await http.get<SleeperRoster[] | null>(
-    `${SLEEPER_API_BASE}/league/${leagueId}/rosters`,
-  );
-  return data ?? [];
+export function getLeagueRosters(leagueId: string): Promise<SleeperRoster[]> {
+  return sleeperGet(sleeperUrl("league", leagueId, "rosters"), []);
 }
 
 /** All members of a league. */
-export async function getLeagueUsers(
-  leagueId: string,
-): Promise<SleeperLeagueUser[]> {
-  const { data } = await http.get<SleeperLeagueUser[] | null>(
-    `${SLEEPER_API_BASE}/league/${leagueId}/users`,
-  );
-  return data ?? [];
+export function getLeagueUsers(leagueId: string): Promise<SleeperLeagueUser[]> {
+  return sleeperGet(sleeperUrl("league", leagueId, "users"), []);
 }
 
 /** Traded future draft-pick assets in a league. */
-export async function getLeagueTradedPicks(
+export function getLeagueTradedPicks(
   leagueId: string,
 ): Promise<SleeperTradedPick[]> {
-  const { data } = await http.get<SleeperTradedPick[] | null>(
-    `${SLEEPER_API_BASE}/league/${leagueId}/traded_picks`,
-  );
-  return data ?? [];
+  return sleeperGet(sleeperUrl("league", leagueId, "traded_picks"), []);
 }
 
 /** Drafts belonging to a league (usually one). */
-export async function getLeagueDrafts(
-  leagueId: string,
-): Promise<SleeperDraft[]> {
-  const { data } = await http.get<SleeperDraft[] | null>(
-    `${SLEEPER_API_BASE}/league/${leagueId}/drafts`,
-  );
-  return data ?? [];
+export function getLeagueDrafts(leagueId: string): Promise<SleeperDraft[]> {
+  return sleeperGet(sleeperUrl("league", leagueId, "drafts"), []);
 }
 
 /** Every pick made in a draft. */
-export async function getDraftPicks(
-  draftId: string,
-): Promise<SleeperDraftPick[]> {
-  const { data } = await http.get<SleeperDraftPick[] | null>(
-    `${SLEEPER_API_BASE}/draft/${draftId}/picks`,
-  );
-  return data ?? [];
+export function getDraftPicks(draftId: string): Promise<SleeperDraftPick[]> {
+  return sleeperGet(sleeperUrl("draft", draftId, "picks"), []);
 }
 
 /**
@@ -80,12 +52,9 @@ export async function getDraftPicks(
  * Sleeper has no "all transactions" endpoint — they are keyed by week, so a full
  * league history is the union of each week. Offseason activity lives at week 1.
  */
-export async function getLeagueTransactions(
+export function getLeagueTransactions(
   leagueId: string,
   week: number,
 ): Promise<SleeperTransaction[]> {
-  const { data } = await http.get<SleeperTransaction[] | null>(
-    `${SLEEPER_API_BASE}/league/${leagueId}/transactions/${week}`,
-  );
-  return data ?? [];
+  return sleeperGet(sleeperUrl("league", leagueId, "transactions", week), []);
 }
