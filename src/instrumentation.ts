@@ -7,7 +7,8 @@
  *
  * Migrations use `pg`/`node-pg-migrate`, which are Node.js-only, so the import
  * is guarded to the Node.js runtime and loaded dynamically — this keeps the DB
- * code out of the Edge bundle entirely.
+ * code out of the Edge bundle entirely. The same guard fronts the in-process
+ * KeepTradeCut refresh loop, which is started once migrations have applied.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -22,4 +23,10 @@ export async function register(): Promise<void> {
     console.error("[db] Failed to apply migrations on boot:", error);
     throw error;
   }
+
+  // Schema is up to date; start the background loop that scrapes KeepTradeCut
+  // dynasty values every 15 minutes. Dynamically imported (Node-only deps) and
+  // started without awaiting so the first scrape doesn't block serving.
+  const { startKtcScheduler } = await import("@/shared/ktc");
+  startKtcScheduler();
 }
