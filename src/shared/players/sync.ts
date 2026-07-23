@@ -1,13 +1,8 @@
-import { pool } from "@/shared/db";
+import { bulkInsert, jsonb as j, pool } from "@/shared/db";
 import { getAllPlayers } from "@/shared/sleeper";
 
 /** How long the cached players map stays fresh (Sleeper: refresh once/day). */
 export const PLAYERS_TTL_MS = 24 * 60 * 60 * 1000;
-
-/** Rows per INSERT statement (10 params each; well under Postgres' limit). */
-const CHUNK = 500;
-
-const j = (v: unknown): string | null => (v == null ? null : JSON.stringify(v));
 
 export type PlayersSyncSummary = { skipped: boolean; count: number };
 
@@ -40,42 +35,26 @@ export async function syncPlayers(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    for (let i = 0; i < entries.length; i += CHUNK) {
-      const chunk = entries.slice(i, i + CHUNK);
-      const valuesSql = chunk
-        .map((_, r) => {
-          const b = r * 10;
-          return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10}, now())`;
-        })
-        .join(",");
-      const params: unknown[] = [];
-      for (const [id, p] of chunk) {
-        params.push(
-          id,
-          p.first_name ?? null,
-          p.last_name ?? null,
-          p.full_name ?? null,
-          p.position ?? null,
-          p.team ?? null,
-          j(p.fantasy_positions),
-          p.status ?? null,
-          p.sport ?? null,
-          j(p),
-        );
-      }
-      await client.query(
-        `INSERT INTO players (player_id, first_name, last_name, full_name,
-            position, team, fantasy_positions, status, sport, data, updated_at)
-         VALUES ${valuesSql}
-         ON CONFLICT (player_id) DO UPDATE SET
-            first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name,
-            full_name = EXCLUDED.full_name, position = EXCLUDED.position,
-            team = EXCLUDED.team, fantasy_positions = EXCLUDED.fantasy_positions,
-            status = EXCLUDED.status, sport = EXCLUDED.sport,
-            data = EXCLUDED.data, updated_at = now()`,
-        params,
-      );
-    }
+    await bulkInsert(client, {
+      table: "players",
+      columns: [
+        "player_id", "first_name", "last_name", "full_name", "position", "team",
+        "fantasy_positions", "status", "sport", "data",
+      ],
+      rows: entries,
+      values: ([id, p]) => [
+        id, p.first_name ?? null, p.last_name ?? null, p.full_name ?? null,
+        p.position ?? null, p.team ?? null, j(p.fantasy_positions),
+        p.status ?? null, p.sport ?? null, j(p),
+      ],
+      trailing: { column: "updated_at", sql: "now()" },
+      onConflict: `(player_id) DO UPDATE SET
+          first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name,
+          full_name = EXCLUDED.full_name, position = EXCLUDED.position,
+          team = EXCLUDED.team, fantasy_positions = EXCLUDED.fantasy_positions,
+          status = EXCLUDED.status, sport = EXCLUDED.sport,
+          data = EXCLUDED.data, updated_at = now()`,
+    });
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

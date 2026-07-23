@@ -1,23 +1,8 @@
 import { pool } from "@/shared/db";
 
-/** A manager's league with summary counts, read from Postgres. */
-export type ManagerLeague = {
-  league_id: string;
-  name: string;
-  season: string;
-  status: string;
-  total_rosters: number;
-  avatar: string | null;
-  team_name: string | null;
-  record: { wins: number; losses: number; ties: number } | null;
-  counts: {
-    rosters: number;
-    tradedPicks: number;
-    drafts: number;
-    draftPicks: number;
-    transactions: number;
-  };
-};
+import type { ManagerLeague } from "./types";
+
+export type { ManagerLeague };
 
 type Row = {
   league_id: string;
