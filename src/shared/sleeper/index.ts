@@ -10,6 +10,7 @@ export type { UserInfo, ResolvedManager } from "./client";
 export {
   DEFAULT_SEASON,
   getUserLeagues,
+  getLeague,
   getLeagueRosters,
   getLeagueUsers,
   getLeagueTradedPicks,

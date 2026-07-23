@@ -1,11 +1,22 @@
 import { pool } from "@/shared/db";
 import { getNflState, getUserLeagues } from "@/shared/sleeper";
+import type { SleeperLeague } from "@/shared/sleeper";
 import { mapWithConcurrency } from "@/shared/util";
 
 import { fetchLeagueGraph, type WeekRange } from "./graph";
 import { getStoredMaxWeekByLeague, persistLeagueGraph } from "./persist";
 
-export type SyncSummary = {
+/** Child rows persisted across a set of league graphs. */
+export type LeagueCounts = {
+  rosters: number;
+  leagueUsers: number;
+  tradedPicks: number;
+  drafts: number;
+  draftPicks: number;
+  transactions: number;
+};
+
+export type SyncSummary = LeagueCounts & {
   season: string;
   /** true when the sync was skipped because existing data was still fresh. */
   skipped: boolean;
@@ -15,12 +26,6 @@ export type SyncSummary = {
   leagues: number;
   /** leagues that failed to sync (e.g. Sleeper timeout) and were skipped. */
   failed: number;
-  rosters: number;
-  leagueUsers: number;
-  tradedPicks: number;
-  drafts: number;
-  draftPicks: number;
-  transactions: number;
 };
 
 /** Incremental sync progress, reported after each league finishes. */
@@ -30,6 +35,13 @@ export type SyncOptions = {
   force?: boolean;
   concurrency?: number;
   onProgress?: (progress: SyncProgress) => void;
+};
+
+/** Outcome of persisting a batch of league graphs. */
+export type LeagueSyncResult = {
+  loaded: number;
+  failed: number;
+  counts: LeagueCounts;
 };
 
 /** How long a manager's league sync stays fresh before we re-fetch Sleeper. */
@@ -42,52 +54,48 @@ export const SYNC_TTL_MS = 10 * 60 * 1000;
  */
 export const LEAGUE_FETCH_CONCURRENCY = 6;
 
+const emptyCounts = (): LeagueCounts => ({
+  rosters: 0,
+  leagueUsers: 0,
+  tradedPicks: 0,
+  drafts: 0,
+  draftPicks: 0,
+  transactions: 0,
+});
+
 /**
- * Fetch a manager's leagues (and rosters, members, traded picks, drafts, and
- * draft picks) from Sleeper for a season and persist them to Postgres.
- *
- * Leagues are fetched+persisted with bounded concurrency and each league is its
- * own transaction, so one slow/failed league neither stalls the others nor
- * rolls back the whole sync. `onProgress` fires after each league completes.
+ * The current NFL week, floored to 1: offseason moves are logged at week 1 while
+ * Sleeper's state reports week 0. Nothing exists past it, so it bounds every
+ * transaction fetch.
  */
-export async function syncManagerLeagues(
-  userId: string,
-  season: string,
-  options: SyncOptions = {},
-): Promise<SyncSummary> {
-  const {
-    force = false,
-    concurrency = LEAGUE_FETCH_CONCURRENCY,
-    onProgress,
-  } = options;
-
-  if (!force) {
-    const { rows } = await pool.query<{ synced_at: Date }>(
-      `SELECT synced_at FROM manager_syncs WHERE user_id = $1 AND season = $2`,
-      [userId, season],
-    );
-    const syncedAt = rows[0]?.synced_at;
-    if (syncedAt && Date.now() - syncedAt.getTime() < SYNC_TTL_MS) {
-      return {
-        season, skipped: true, total: 0, leagues: 0, failed: 0,
-        rosters: 0, leagueUsers: 0, tradedPicks: 0, drafts: 0, draftPicks: 0,
-        transactions: 0,
-      };
-    }
-  }
-
-  // One state call gives the current NFL week (floored to 1: offseason moves are
-  // logged at week 1 while state reports week 0). Nothing exists past it.
+export async function getCurrentWeek(): Promise<number> {
   const nflState = await getNflState();
-  const currentWeek = Math.max(nflState?.week ?? 1, 1);
+  return Math.max(nflState?.week ?? 1, 1);
+}
 
-  const leagues = await getUserLeagues(userId, season);
+/**
+ * Fetch each league's full graph from Sleeper and persist it.
+ *
+ * Leagues are processed with bounded concurrency and each one is its own
+ * transaction, so a slow or failed league neither stalls the others nor rolls
+ * back the batch. `onProgress` fires after each league completes.
+ *
+ * A league's transaction weeks are frozen once past, so only the tail is
+ * re-fetched: from its last stored week minus one (to catch late-settling
+ * waivers/trades in the just-closed week) up to `currentWeek`. A league with no
+ * stored transactions is backfilled from week 1.
+ */
+export async function syncLeagueGraphs(
+  leagues: SleeperLeague[],
+  currentWeek: number,
+  options: {
+    concurrency?: number;
+    onProgress?: (progress: SyncProgress) => void;
+  } = {},
+): Promise<LeagueSyncResult> {
+  const { concurrency = LEAGUE_FETCH_CONCURRENCY, onProgress } = options;
   const total = leagues.length;
 
-  // How far each league has already been synced. A league's transaction weeks
-  // are frozen once past, so on a refresh we only re-fetch from its last stored
-  // week minus one (to catch late-settling waivers/trades in the just-closed
-  // week) up to the current week — a first sync (no rows) backfills from week 1.
   const storedMaxWeek = await getStoredMaxWeekByLeague(
     leagues.map((l) => l.league_id),
   );
@@ -101,10 +109,7 @@ export async function syncManagerLeagues(
 
   let loaded = 0;
   let failed = 0;
-  const counts = {
-    rosters: 0, leagueUsers: 0, tradedPicks: 0, drafts: 0, draftPicks: 0,
-    transactions: 0,
-  };
+  const counts = emptyCounts();
 
   onProgress?.({ loaded, total, failed });
 
@@ -130,14 +135,55 @@ export async function syncManagerLeagues(
     }
   });
 
+  return { loaded, failed, counts };
+}
+
+/**
+ * Fetch a manager's leagues (and rosters, members, traded picks, drafts, and
+ * draft picks) from Sleeper for a season and persist them to Postgres.
+ */
+export async function syncManagerLeagues(
+  userId: string,
+  season: string,
+  options: SyncOptions = {},
+): Promise<SyncSummary> {
+  const { force = false, concurrency, onProgress } = options;
+
+  if (!force) {
+    const { rows } = await pool.query<{ synced_at: Date | null }>(
+      `SELECT synced_at FROM manager_syncs WHERE user_id = $1 AND season = $2`,
+      [userId, season],
+    );
+    const syncedAt = rows[0]?.synced_at;
+    if (syncedAt && Date.now() - syncedAt.getTime() < SYNC_TTL_MS) {
+      return {
+        season, skipped: true, total: 0, leagues: 0, failed: 0, ...emptyCounts(),
+      };
+    }
+  }
+
+  const currentWeek = await getCurrentWeek();
+  const leagues = await getUserLeagues(userId, season);
+  const { loaded, failed, counts } = await syncLeagueGraphs(
+    leagues,
+    currentWeek,
+    { concurrency, onProgress },
+  );
+
   // Stamp the sync so subsequent loads inside the TTL skip the re-fetch. Written
   // even on partial failure to avoid hammering Sleeper; the TTL retries later.
+  // `attempt_at` moves too: this did everything the crawl's discovery pass would
+  // have, so it should rotate to the back of that queue as well.
   await pool.query(
-    `INSERT INTO manager_syncs (user_id, season, synced_at)
-     VALUES ($1, $2, now())
-     ON CONFLICT (user_id, season) DO UPDATE SET synced_at = now()`,
+    `INSERT INTO manager_syncs (user_id, season, synced_at, attempt_at)
+     VALUES ($1, $2, now(), now())
+     ON CONFLICT (user_id, season)
+     DO UPDATE SET synced_at = now(), attempt_at = now()`,
     [userId, season],
   );
 
-  return { season, skipped: false, total, leagues: loaded, failed, ...counts };
+  return {
+    season, skipped: false, total: leagues.length, leagues: loaded, failed,
+    ...counts,
+  };
 }

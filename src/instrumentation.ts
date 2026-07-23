@@ -8,7 +8,8 @@
  * Migrations use `pg`/`node-pg-migrate`, which are Node.js-only, so the import
  * is guarded to the Node.js runtime and loaded dynamically — this keeps the DB
  * code out of the Edge bundle entirely. The same guard fronts the in-process
- * KeepTradeCut refresh loop, which is started once migrations have applied.
+ * background loops (KeepTradeCut values, league crawl), which are started once
+ * migrations have applied.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -29,4 +30,10 @@ export async function register(): Promise<void> {
   // started without awaiting so the first scrape doesn't block serving.
   const { startKtcScheduler } = await import("@/shared/ktc");
   startKtcScheduler();
+
+  // Keep every stored league fresh and keep finding new ones by walking league
+  // members — the same sync the leagues route runs on a username search, on a
+  // one-minute loop. Also Node-only and started without awaiting.
+  const { startLeagueCrawler } = await import("@/shared/manager");
+  startLeagueCrawler();
 }

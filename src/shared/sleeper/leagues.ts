@@ -20,6 +20,14 @@ export function getUserLeagues(
   return sleeperGet(sleeperUrl("user", userId, "leagues", "nfl", season), []);
 }
 
+/**
+ * A single league by id, or null when Sleeper has no such league (deleted, or
+ * never existed) — it answers 200 with a null body rather than 404.
+ */
+export function getLeague(leagueId: string): Promise<SleeperLeague | null> {
+  return sleeperGet<SleeperLeague | null>(sleeperUrl("league", leagueId), null);
+}
+
 /** All rosters (teams) in a league. */
 export function getLeagueRosters(leagueId: string): Promise<SleeperRoster[]> {
   return sleeperGet(sleeperUrl("league", leagueId, "rosters"), []);
