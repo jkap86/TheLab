@@ -3,6 +3,7 @@ import type { LeaguesResult, SyncProgress } from "../types";
 export function LeaguesHeader({
   user,
   leagueCount,
+  totalCount,
   season,
   refreshing,
   progress,
@@ -10,11 +11,13 @@ export function LeaguesHeader({
 }: {
   user: LeaguesResult["user"];
   leagueCount: number;
+  totalCount: number;
   season: string;
   refreshing: boolean;
   progress: SyncProgress | null;
   summary: LeaguesResult["summary"];
 }) {
+  const filtered = leagueCount !== totalCount;
   return (
     <header className="mb-8 border-b border-white/10 pb-6">
       <div className="flex items-center gap-4">
@@ -40,7 +43,15 @@ export function LeaguesHeader({
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <span className="text-lg font-medium">
-          {leagueCount} league{leagueCount === 1 ? "" : "s"}
+          {filtered ? (
+            <>
+              {leagueCount} of {totalCount} league{totalCount === 1 ? "" : "s"}
+            </>
+          ) : (
+            <>
+              {totalCount} league{totalCount === 1 ? "" : "s"}
+            </>
+          )}
         </span>
         <span className="rounded-md bg-white/5 px-2 py-0.5 text-sm text-white/55">
           {season}
