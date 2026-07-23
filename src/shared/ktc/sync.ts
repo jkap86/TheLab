@@ -1,4 +1,4 @@
-import { pool } from "@/shared/db";
+import { bulkInsert, jsonb as j, pool } from "@/shared/db";
 import { ensurePlayersFresh } from "@/shared/players";
 
 import { fetchKtcDynastyRankings } from "./client";
@@ -7,10 +7,6 @@ import { resolveSleeperIds } from "./match";
 /** How long scraped KTC values stay fresh; matches the 15-min refresh cadence. */
 export const KTC_TTL_MS = 15 * 60 * 1000;
 
-/** Rows per INSERT statement (15 params each; far under Postgres' 65535 limit). */
-const CHUNK = 250;
-
-const j = (v: unknown): string | null => (v == null ? null : JSON.stringify(v));
 const int = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? Math.trunc(v) : null;
 
@@ -54,53 +50,35 @@ export async function syncKtcValues(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    for (let i = 0; i < players.length; i += CHUNK) {
-      const chunk = players.slice(i, i + CHUNK);
-      const valuesSql = chunk
-        .map((_, r) => {
-          const b = r * 15;
-          return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15}, now())`;
-        })
-        .join(",");
-      const params: unknown[] = [];
-      for (const p of chunk) {
-        const sf = p.superflexValues;
-        const one = p.oneQBValues;
-        params.push(
-          int(p.playerID),
-          sleeperIds.get(p.playerID) ?? null,
-          p.playerName ?? null,
-          p.slug ?? null,
-          p.position ?? null,
-          p.team || null,
-          Boolean(p.rookie),
-          typeof p.age === "number" ? p.age : null,
-          int(sf?.value),
-          int(sf?.rank),
-          int(sf?.positionalRank),
-          int(one?.value),
-          int(one?.rank),
-          int(one?.positionalRank),
-          j(p),
-        );
-      }
-      await client.query(
-        `INSERT INTO ktc_values (ktc_id, sleeper_id, player_name, slug, position,
-            team, rookie, age, sf_value, sf_rank, sf_position_rank,
-            oneqb_value, oneqb_rank, oneqb_position_rank, data, updated_at)
-         VALUES ${valuesSql}
-         ON CONFLICT (ktc_id) DO UPDATE SET
-            sleeper_id = EXCLUDED.sleeper_id, player_name = EXCLUDED.player_name,
-            slug = EXCLUDED.slug, position = EXCLUDED.position,
-            team = EXCLUDED.team, rookie = EXCLUDED.rookie, age = EXCLUDED.age,
-            sf_value = EXCLUDED.sf_value, sf_rank = EXCLUDED.sf_rank,
-            sf_position_rank = EXCLUDED.sf_position_rank,
-            oneqb_value = EXCLUDED.oneqb_value, oneqb_rank = EXCLUDED.oneqb_rank,
-            oneqb_position_rank = EXCLUDED.oneqb_position_rank,
-            data = EXCLUDED.data, updated_at = now()`,
-        params,
-      );
-    }
+    await bulkInsert(client, {
+      table: "ktc_values",
+      columns: [
+        "ktc_id", "sleeper_id", "player_name", "slug", "position", "team",
+        "rookie", "age", "sf_value", "sf_rank", "sf_position_rank",
+        "oneqb_value", "oneqb_rank", "oneqb_position_rank", "data",
+      ],
+      rows: players,
+      values: (p) => [
+        int(p.playerID), sleeperIds.get(p.playerID) ?? null,
+        p.playerName ?? null, p.slug ?? null, p.position ?? null,
+        p.team || null, Boolean(p.rookie),
+        typeof p.age === "number" ? p.age : null,
+        int(p.superflexValues?.value), int(p.superflexValues?.rank),
+        int(p.superflexValues?.positionalRank),
+        int(p.oneQBValues?.value), int(p.oneQBValues?.rank),
+        int(p.oneQBValues?.positionalRank), j(p),
+      ],
+      trailing: { column: "updated_at", sql: "now()" },
+      onConflict: `(ktc_id) DO UPDATE SET
+          sleeper_id = EXCLUDED.sleeper_id, player_name = EXCLUDED.player_name,
+          slug = EXCLUDED.slug, position = EXCLUDED.position,
+          team = EXCLUDED.team, rookie = EXCLUDED.rookie, age = EXCLUDED.age,
+          sf_value = EXCLUDED.sf_value, sf_rank = EXCLUDED.sf_rank,
+          sf_position_rank = EXCLUDED.sf_position_rank,
+          oneqb_value = EXCLUDED.oneqb_value, oneqb_rank = EXCLUDED.oneqb_rank,
+          oneqb_position_rank = EXCLUDED.oneqb_position_rank,
+          data = EXCLUDED.data, updated_at = now()`,
+    });
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
