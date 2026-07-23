@@ -2,6 +2,7 @@ import { bulkInsert, jsonb as j, pool } from "@/shared/db";
 import { ensurePlayersFresh } from "@/shared/players";
 
 import { fetchKtcDynastyRankings } from "./client";
+import { recordDailySnapshot } from "./history";
 import { resolveSleeperIds } from "./match";
 
 /** How long scraped KTC values stay fresh; matches the 15-min refresh cadence. */
@@ -21,9 +22,10 @@ async function ktcIsFresh(): Promise<boolean> {
 }
 
 /**
- * Scrape KeepTradeCut dynasty values and upsert them into `ktc_values`. Skips
- * the scrape when the cache is still fresh unless `force` is set. Upserts in
- * chunks inside one transaction so readers never observe a partial set.
+ * Scrape KeepTradeCut dynasty values and upsert them into `ktc_values`, plus
+ * today's row per player into `ktc_value_history`. Skips the scrape when the
+ * cache is still fresh unless `force` is set. Upserts in chunks inside one
+ * transaction so readers never observe a partial set.
  */
 export async function syncKtcValues(
   options: { force?: boolean } = {},
@@ -79,6 +81,9 @@ export async function syncKtcValues(
           oneqb_position_rank = EXCLUDED.oneqb_position_rank,
           data = EXCLUDED.data, updated_at = now()`,
     });
+    // Same transaction, and after the upsert above so every ktc_id the snapshot
+    // references already exists (ktc_value_history has an FK to ktc_values).
+    await recordDailySnapshot(client, players);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

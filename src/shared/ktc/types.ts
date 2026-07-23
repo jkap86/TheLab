@@ -28,3 +28,21 @@ export type KtcPlayer = {
   superflexValues?: KtcValueBlock;
   [key: string]: unknown;
 };
+
+/**
+ * One point of a KTC history series, as embedded on a player page: `d` is a
+ * `YYMMDD` date string, `v` the value or rank on that day.
+ */
+export type KtcSeriesPoint = { d: string; v: number };
+
+/** One player's superflex and 1QB numbers for a single day, merged by date. */
+export type KtcHistoryPoint = {
+  /** ISO `YYYY-MM-DD`. */
+  date: string;
+  sfValue: number | null;
+  sfRank: number | null;
+  sfPositionRank: number | null;
+  oneqbValue: number | null;
+  oneqbRank: number | null;
+  oneqbPositionRank: number | null;
+};

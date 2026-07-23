@@ -1,3 +1,4 @@
+import { syncKtcHistory } from "./history";
 import { KTC_TTL_MS, syncKtcValues } from "./sync";
 
 /** Refresh cadence for KTC values (kept equal to the freshness TTL). */
@@ -19,6 +20,21 @@ async function runOnce(force: boolean): Promise<void> {
     // Never let a scrape/DB failure kill the interval — log and retry next tick.
     console.error("[ktc] Refresh failed:", error);
   }
+
+  // Then chip away at the history backfill. Runs after the values sync (which
+  // creates the `ktc_values` rows this walks) and is separately guarded so a
+  // failure here can't take the values refresh down with it.
+  try {
+    const { scraped, failed, rows, remaining } = await syncKtcHistory();
+    if (scraped || failed) {
+      console.log(
+        `[ktc] History: scraped ${scraped} player(s), ${rows} day rows` +
+          `${failed ? `, ${failed} failed` : ""}; ${remaining} still due.`,
+      );
+    }
+  } catch (error) {
+    console.error("[ktc] History backfill failed:", error);
+  }
 }
 
 /**
@@ -27,8 +43,9 @@ async function runOnce(force: boolean): Promise<void> {
  *
  * Runs an initial (non-forced) refresh shortly after boot to populate an empty
  * or stale cache without blocking server startup, then forces a refresh every
- * 15 minutes. The timer is `unref`'d so it never keeps the process alive on its
- * own.
+ * 15 minutes. Each tick also scrapes a few players' full value history (see
+ * `syncKtcHistory`). The timer is `unref`'d so it never keeps the process alive
+ * on its own.
  *
  * Runs per server instance. If you scale horizontally the 15-min freshness gate
  * makes extra instances mostly no-op, but a single leader (or a Postgres
