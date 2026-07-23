@@ -6,9 +6,6 @@ export function LeagueCard({ league }: { league: ManagerLeague }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-lg font-semibold">{league.name}</h3>
-          {league.team_name && (
-            <p className="truncate text-sm text-white/50">{league.team_name}</p>
-          )}
         </div>
         <StatusBadge status={league.status} />
       </div>
@@ -20,9 +17,6 @@ export function LeagueCard({ league }: { league: ManagerLeague }) {
           </span>
         )}
         <Stat value={league.total_rosters} label="teams" />
-        <Stat value={league.counts.transactions} label="moves" />
-        <Stat value={league.counts.tradedPicks} label="traded picks" />
-        <Stat value={league.counts.draftPicks} label="drafted" />
       </div>
     </li>
   );

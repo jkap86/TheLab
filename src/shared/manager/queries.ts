@@ -11,15 +11,11 @@ type Row = {
   status: string;
   total_rosters: number;
   avatar: string | null;
-  team_name: string | null;
   wins: string | null;
   losses: string | null;
   ties: string | null;
-  roster_count: string;
-  traded_pick_count: string;
-  draft_count: string;
-  draft_pick_count: string;
-  transaction_count: string;
+  settings: Record<string, unknown> | null;
+  scoring_settings: Record<string, number> | null;
 };
 
 /**
@@ -39,8 +35,9 @@ export async function getManagerSyncedAt(
 }
 
 /**
- * Read a manager's leagues for a season from the DB, with per-league counts and
- * the manager's own team record. Assumes {@link syncManagerLeagues} has run.
+ * Read a manager's leagues for a season from the DB, with the manager's own team
+ * record and each league's settings/scoring. Assumes {@link syncManagerLeagues}
+ * has run. The `league_users` join also scopes results to the manager's leagues.
  */
 export async function getManagerLeagues(
   userId: string,
@@ -49,17 +46,10 @@ export async function getManagerLeagues(
   const { rows } = await pool.query<Row>(
     `SELECT
         l.league_id, l.name, l.season, l.status, l.total_rosters, l.avatar,
-        lu.team_name,
+        l.settings, l.scoring_settings,
         mr.settings->>'wins'   AS wins,
         mr.settings->>'losses' AS losses,
-        mr.settings->>'ties'   AS ties,
-        (SELECT count(*) FROM rosters r WHERE r.league_id = l.league_id) AS roster_count,
-        (SELECT count(*) FROM traded_picks tp WHERE tp.league_id = l.league_id) AS traded_pick_count,
-        (SELECT count(*) FROM drafts d WHERE d.league_id = l.league_id) AS draft_count,
-        (SELECT count(*) FROM draft_picks dp
-           JOIN drafts d ON d.draft_id = dp.draft_id
-          WHERE d.league_id = l.league_id) AS draft_pick_count,
-        (SELECT count(*) FROM transactions tx WHERE tx.league_id = l.league_id) AS transaction_count
+        mr.settings->>'ties'   AS ties
      FROM leagues l
      JOIN league_users lu
        ON lu.league_id = l.league_id AND lu.user_id = $1
@@ -77,7 +67,6 @@ export async function getManagerLeagues(
     status: r.status,
     total_rosters: r.total_rosters,
     avatar: r.avatar,
-    team_name: r.team_name,
     record:
       r.wins == null && r.losses == null && r.ties == null
         ? null
@@ -86,12 +75,7 @@ export async function getManagerLeagues(
             losses: Number(r.losses ?? 0),
             ties: Number(r.ties ?? 0),
           },
-    counts: {
-      rosters: Number(r.roster_count),
-      tradedPicks: Number(r.traded_pick_count),
-      drafts: Number(r.draft_count),
-      draftPicks: Number(r.draft_pick_count),
-      transactions: Number(r.transaction_count),
-    },
+    settings: r.settings,
+    scoring_settings: r.scoring_settings,
   }));
 }
