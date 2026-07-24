@@ -1,8 +1,8 @@
 import { pool } from "@/shared/db";
 
-import type { ManagerLeague } from "./types";
+import type { LeagueDetail, LeagueTeam, ManagerLeague } from "./types";
 
-export type { ManagerLeague };
+export type { LeagueDetail, LeagueTeam, ManagerLeague };
 
 type Row = {
   league_id: string;
@@ -78,4 +78,99 @@ export async function getManagerLeagues(
     settings: r.settings,
     scoring_settings: r.scoring_settings,
   }));
+}
+
+type TeamRow = {
+  roster_id: number;
+  owner_id: string | null;
+  players: string[] | null;
+  starters: string[] | null;
+  reserve: string[] | null;
+  taxi: string[] | null;
+  settings: Record<string, unknown> | null;
+  display_name: string | null;
+  avatar: string | null;
+  team_name: string | null;
+};
+
+/** Sleeper stores a whole-point count plus a separate hundredths field. */
+function foldPoints(whole: unknown, decimal: unknown): number {
+  return Number(whole ?? 0) + Number(decimal ?? 0) / 100;
+}
+
+/**
+ * A league's rosters, league members, and derived standings for the expanded
+ * league view. Teams are returned in standings order (wins desc, then points
+ * for desc). Returns null when the league isn't cached. Player ids are returned
+ * raw; the API route resolves them to names.
+ */
+export async function getLeagueDetail(
+  leagueId: string,
+): Promise<LeagueDetail | null> {
+  const league = await pool.query<{
+    league_id: string;
+    name: string;
+    season: string;
+    status: string;
+    roster_positions: string[] | null;
+  }>(
+    `SELECT league_id, name, season, status, roster_positions
+       FROM leagues WHERE league_id = $1`,
+    [leagueId],
+  );
+  if (league.rows.length === 0) return null;
+  const l = league.rows[0];
+
+  const { rows } = await pool.query<TeamRow>(
+    `SELECT
+        r.roster_id, r.owner_id, r.players, r.starters, r.reserve, r.taxi,
+        r.settings,
+        lu.display_name, lu.avatar, lu.team_name
+       FROM rosters r
+       LEFT JOIN league_users lu
+         ON lu.league_id = r.league_id AND lu.user_id = r.owner_id
+      WHERE r.league_id = $1`,
+    [leagueId],
+  );
+
+  const teams: LeagueTeam[] = rows.map((r) => {
+    const s = r.settings ?? {};
+    return {
+      roster_id: r.roster_id,
+      owner_id: r.owner_id,
+      manager: r.owner_id
+        ? {
+            user_id: r.owner_id,
+            display_name: r.display_name ?? "",
+            avatar: r.avatar,
+            team_name: r.team_name,
+          }
+        : null,
+      record: {
+        wins: Number(s.wins ?? 0),
+        losses: Number(s.losses ?? 0),
+        ties: Number(s.ties ?? 0),
+      },
+      fpts: foldPoints(s.fpts, s.fpts_decimal),
+      fpts_against: foldPoints(s.fpts_against, s.fpts_against_decimal),
+      players: r.players ?? [],
+      starters: r.starters ?? [],
+      reserve: r.reserve ?? [],
+      taxi: r.taxi ?? [],
+    };
+  });
+
+  // Standings order: most wins, then most points for as the tiebreaker.
+  teams.sort(
+    (a, b) => b.record.wins - a.record.wins || b.fpts - a.fpts,
+  );
+
+  return {
+    league_id: l.league_id,
+    name: l.name,
+    season: l.season,
+    status: l.status,
+    roster_positions: l.roster_positions,
+    teams,
+  };
 }

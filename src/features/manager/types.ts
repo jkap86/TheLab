@@ -1,10 +1,33 @@
 import type {
+  LeagueTeam,
   ManagerLeague,
   SyncProgress as SyncProgressCounts,
 } from "@/shared/manager";
+import type { PlayerSummary } from "@/shared/players";
 
 // Re-exported so feature components import league shapes from one place.
-export type { ManagerLeague };
+export type { ManagerLeague, PlayerSummary };
+
+/** A team as sent to the client: manager avatar id is resolved to a URL. */
+export type LeagueTeamView = Omit<LeagueTeam, "manager"> & {
+  manager:
+    | (Omit<NonNullable<LeagueTeam["manager"]>, "avatar"> & {
+        avatar_url: string | null;
+      })
+    | null;
+};
+
+/** The `/api/league/[leagueId]` response consumed by the expanded league view. */
+export type LeagueDetailResult = {
+  league_id: string;
+  name: string;
+  season: string;
+  status: string;
+  roster_positions: string[] | null;
+  teams: LeagueTeamView[];
+  /** Player ids → resolved name/position/team, for rendering rosters. */
+  players: Record<string, PlayerSummary>;
+};
 
 /** A `result` message from the leagues stream (see the leagues route handler). */
 export type LeaguesResult = {
