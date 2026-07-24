@@ -1,4 +1,5 @@
 import { runner } from "node-pg-migrate";
+import { dbSsl } from "./ssl";
 
 /**
  * Apply any pending migrations in `db/migrations`.
@@ -21,7 +22,10 @@ export async function runMigrations(): Promise<void> {
   }
 
   const applied = await runner({
-    databaseUrl,
+    // Pass a ClientConfig (not a bare string) so the on-boot migration connects
+    // with the same TLS settings as the runtime pool — Heroku Postgres and other
+    // managed providers require SSL, which a plain connection string omits.
+    databaseUrl: { connectionString: databaseUrl, ssl: dbSsl(databaseUrl) },
     migrationsTable: "pgmigrations",
     dir: "db/migrations",
     direction: "up",
