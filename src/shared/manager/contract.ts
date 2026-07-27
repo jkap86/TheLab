@@ -1,6 +1,7 @@
 import type { PlayerSummary } from "@/shared/players";
 import type { UserInfo } from "@/shared/sleeper";
 
+import type { AdpFilters } from "./adp-filters";
 import type { SyncProgress, SyncSummary } from "./sync";
 import type { LeagueDetail, LeagueTeam, ManagerLeague } from "./types";
 
@@ -64,6 +65,38 @@ export type LeaguesStreamMessage =
   | LeaguesResultMessage
   | LeaguesProgressMessage
   | LeaguesErrorMessage;
+
+/**
+ * One player's ADP row. Unlike the roster payloads, the player is resolved
+ * inline rather than through a side map — each player appears exactly once here,
+ * so there is nothing to deduplicate. `name` falls back to the player id when
+ * the players cache doesn't know the id.
+ */
+export type AdpPlayerPayload = {
+  /** Position in the full filtered set, 1-based — not within the page. */
+  rank: number;
+  player_id: string;
+  name: string;
+  position: string | null;
+  team: string | null;
+  adp: number;
+  min_pick: number;
+  max_pick: number;
+  stdev: number;
+  /** Drafts that took this player, of `draft_count` matched. */
+  picks: number;
+};
+
+/** `GET /api/adp` — ADP over the crawled drafts matching the query. */
+export type AdpPayload = {
+  /** The filters actually applied, defaults included. */
+  filters: AdpFilters;
+  /** Drafts the filters matched. */
+  draft_count: number;
+  /** Players in the full filtered set; 0 when the requested page is past its end. */
+  player_count: number;
+  players: AdpPlayerPayload[];
+};
 
 /** The error body every league API route returns on a non-2xx. */
 export type ApiErrorPayload = { error: string };

@@ -77,6 +77,33 @@ receives, so the two ends can't drift without a type error.
 | `GET /api/user/[username]/leagues` | A manager's leagues, as a **newline-delimited JSON stream** (`result` / `progress` / `error` messages). Serves cached data immediately and pushes a second `result` when a background refresh finishes. |
 | `GET /api/league/[leagueId]` | One league's standings and rosters, with player ids resolved to names. |
 | `GET\|POST /api/players/sync` | Refresh the cached players map. `?force=1` bypasses the freshness gate. |
+| `GET /api/adp` | Average draft position over the crawled drafts, filtered by draft and league attributes. |
+
+`/api/adp` computes ADP from `draft_picks` — Sleeper has no ADP endpoint, so it
+describes the leagues in *this* database, not the market. The filters exist
+because that population is a mix; narrow it before reading anything into the
+numbers.
+
+| Filter | Values |
+| --- | --- |
+| `season` | 4-digit year, or `all`. Defaults to the current season. |
+| `draft_type` | `snake` \| `linear` \| `auction`. Defaults to snake + linear. |
+| `draft_status` | `complete` \| `drafting` \| `paused` \| `pre_draft`. Defaults to complete. |
+| `rounds_min` / `rounds_max` | Bounds on the draft's round count. |
+| `league_id` | Restrict to specific leagues. |
+| `league_type` | `redraft` \| `keeper` \| `dynasty`. |
+| `scoring` | `std` \| `half_ppr` \| `ppr`, derived from the league's `rec` value. |
+| `best_ball`, `superflex` | Booleans. |
+| `teams_min` / `teams_max` | Bounds on the league's team count. |
+| `min_picks` | Drop players taken in fewer drafts than this. Defaults to 2. |
+| `limit` / `offset` | Paging; `limit` caps at 1000. |
+
+Lists accept repeated params or commas (`?scoring=ppr&scoring=half_ppr` ==
+`?scoring=ppr,half_ppr`). Auction drafts are excluded by default because their
+`pick_no` is nomination order rather than draft position. `rounds_min` matters
+more than it looks — a dynasty league's 4-round rookie draft and its 25-round
+startup are both drafts, and pick 1 of one is nothing like pick 1 of the other.
+The response echoes the filters it applied, so the defaults stay visible.
 
 ## Background work
 
