@@ -42,4 +42,6 @@ export type {
   LeaguesProgressMessage,
   LeaguesResultMessage,
   LeaguesStreamMessage,
+  ProjectionPlayerPayload,
+  ProjectionsPayload,
 } from "./contract";

@@ -1,4 +1,5 @@
 import type { PlayerSummary } from "@/shared/players";
+import type { ProjectionFilters } from "@/shared/projections";
 import type { UserInfo } from "@/shared/sleeper";
 
 import type { AdpFilters } from "./adp-filters";
@@ -96,6 +97,46 @@ export type AdpPayload = {
   /** Players in the full filtered set; 0 when the requested page is past its end. */
   player_count: number;
   players: AdpPlayerPayload[];
+};
+
+/**
+ * One player's projection for a week. The player is resolved inline, as in
+ * `AdpPlayerPayload` — a player appears once per week, so there is nothing a side
+ * map would deduplicate.
+ *
+ * `team` comes from the projection rather than the players cache: they disagree
+ * after a trade, and the one that matters is who the player was projected as
+ * playing for that week.
+ */
+export type ProjectionPlayerPayload = {
+  /** Position in the full filtered set, 1-based — not within the page. */
+  rank: number;
+  player_id: string;
+  name: string;
+  position: string | null;
+  team: string | null;
+  opponent: string | null;
+  /** `YYYY-MM-DD` of the game. */
+  game_date: string | null;
+  /** Projected points in the requested scoring; null when Sleeper published none. */
+  points: number | null;
+  /** The full projected stat line, only when `?stats=1` was asked for. */
+  stats?: Record<string, number>;
+};
+
+/** `GET /api/projections` — a week of stored projections, ranked. */
+export type ProjectionsPayload = {
+  /** The filters actually applied, with `week` resolved if it was left out. */
+  filters: ProjectionFilters;
+  /**
+   * When these rows were last written, ISO 8601 — null when the week has none.
+   * This is a cache of Sleeper's numbers, so a client showing them should say how
+   * old they are.
+   */
+  updated_at: string | null;
+  /** Players in the full filtered set; 0 when the page is past its end. */
+  player_count: number;
+  players: ProjectionPlayerPayload[];
 };
 
 /** The error body every league API route returns on a non-2xx. */

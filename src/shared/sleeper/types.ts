@@ -133,6 +133,42 @@ export type SleeperTransaction = {
 };
 
 /**
+ * One player's projection for one week, from
+ * `GET api.sleeper.com/projections/nfl/<season>/<week>` — undocumented, and on a
+ * different host from the v1 API (see `SLEEPER_DATA_BASE`).
+ *
+ * The response is every player in the league, not every player with a
+ * projection: entries for players with no game that week carry a `null` `date`,
+ * `null` `game_id`, and nothing in `stats` but ADP placeholders. `game_id` is
+ * the usable signal that this is a real projection.
+ *
+ * `stats` is a flat map of ~45 projected stat keys (`pass_yd`, `rec_tgt`,
+ * `fgm_40_49`, `pts_allow`, …) plus Sleeper's own scoring of them as `pts_std`,
+ * `pts_half_ppr` and `pts_ppr`. Keys vary by position and are not promised, so
+ * read from it defensively.
+ */
+export type SleeperProjection = {
+  player_id: string;
+  season: string;
+  week: number;
+  season_type: string;
+  /** "proj" for projections; the same endpoint shape is used for actual stats. */
+  category: string;
+  /** Provider Sleeper is republishing, e.g. "rotowire". */
+  company: string | null;
+  team: string | null;
+  opponent: string | null;
+  game_id: string | null;
+  /** Game date as `YYYY-MM-DD`; null when the player has no game that week. */
+  date: string | null;
+  /** Epoch ms of Sleeper's last revision to this projection. */
+  last_modified: number | null;
+  stats: Record<string, number> | null;
+  /** Player fields inlined by this endpoint (position, injury status, …). */
+  player: Record<string, unknown> | null;
+};
+
+/**
  * Current NFL state, from `GET /v1/state/nfl`. In the offseason `week` is 0 and
  * `season_type` is "off"; during the season `week` tracks the current NFL week.
  */

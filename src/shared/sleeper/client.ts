@@ -6,11 +6,28 @@ import type { SleeperUser } from "./types";
 export const SLEEPER_API_BASE = "https://api.sleeper.app/v1";
 export const SLEEPER_CDN_BASE = "https://sleepercdn.com";
 
+/**
+ * Host serving the undocumented, unversioned endpoints (projections, stats).
+ *
+ * Kept separate from `SLEEPER_API_BASE` because the v1 host answers those paths
+ * too — `api.sleeper.app/v1/projections/nfl/2025/1` returns HTTP 200 with an
+ * object of empty objects, which parses fine and means nothing. Anything reading
+ * projections must build its URL from this base.
+ */
+export const SLEEPER_DATA_BASE = "https://api.sleeper.com";
+
 /** Build a Sleeper API URL, encoding every path segment. */
 export function sleeperUrl(...segments: (string | number)[]): string {
-  const path = segments.map((s) => encodeURIComponent(String(s))).join("/");
-  return `${SLEEPER_API_BASE}/${path}`;
+  return `${SLEEPER_API_BASE}/${joinSegments(segments)}`;
 }
+
+/** Build a URL on the undocumented data host — see {@link SLEEPER_DATA_BASE}. */
+export function sleeperDataUrl(...segments: (string | number)[]): string {
+  return `${SLEEPER_DATA_BASE}/${joinSegments(segments)}`;
+}
+
+const joinSegments = (segments: (string | number)[]): string =>
+  segments.map((s) => encodeURIComponent(String(s))).join("/");
 
 /**
  * GET a Sleeper endpoint, returning `fallback` when Sleeper responds with a null

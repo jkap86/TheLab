@@ -3,8 +3,10 @@ export {
   resolveManagerUser,
   toUserInfo,
   sleeperAvatarUrl,
+  sleeperDataUrl,
   SLEEPER_API_BASE,
   SLEEPER_CDN_BASE,
+  SLEEPER_DATA_BASE,
 } from "./client";
 export type { UserInfo, ResolvedManager } from "./client";
 export {
@@ -20,6 +22,7 @@ export {
 } from "./leagues";
 export { getNflState } from "./state";
 export { getAllPlayers } from "./players";
+export { fetchWeekProjections } from "./projections";
 export type {
   SleeperUser,
   SleeperLeague,
@@ -32,4 +35,5 @@ export type {
   SleeperNflState,
   SleeperPlayer,
   SleeperPlayerMap,
+  SleeperProjection,
 } from "./types";

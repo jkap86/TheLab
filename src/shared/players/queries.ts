@@ -49,6 +49,27 @@ export async function getPlayersByIds(
 }
 
 /**
+ * Ids of every cached player at one of `positions` (Sleeper's spelling — "WR",
+ * "DEF", "OLB").
+ *
+ * Exists so other modules can filter their own tables by position without
+ * querying `players` themselves: `/api/projections` narrows a week this way,
+ * since `projections` stores no position of its own. Returns an empty list for an
+ * unknown position, which callers should read as "nothing matched".
+ */
+export async function getPlayerIdsByPosition(
+  positions: string[],
+): Promise<string[]> {
+  if (positions.length === 0) return [];
+
+  const { rows } = await pool.query<{ player_id: string }>(
+    `SELECT player_id FROM players WHERE position = ANY($1)`,
+    [positions],
+  );
+  return rows.map((r) => r.player_id);
+}
+
+/**
  * A cached player projected down to the fields cross-source name matching needs
  * — see `@/shared/ktc`'s `resolveSleeperIds`. `active` and `birth_year` are
  * lifted out of the raw Sleeper payload so callers never have to know how that

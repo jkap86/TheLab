@@ -121,6 +121,26 @@ It takes the default season as an argument rather than importing
   handful per tick.
 - Transactions are keyed by week with no all-at-once endpoint; a league's full
   history is the union of each week.
+- **Projections live on a different host and aren't documented or versioned.**
+  `api.sleeper.com/projections/nfl/<season>/<week>`, not `api.sleeper.app/v1` —
+  and the v1 host answers that path with 200 and an object of empty objects, so a
+  wrong base looks like working code with no data. Build the URL with
+  `sleeperDataUrl`, not `sleeperUrl`.
+- **A weekly projections response is ~9,400 entries and only ~800 are real.** The
+  rest are placeholders for players with no game that week: `game_id` null and
+  nothing in `stats` but ADP keys. Store them and every one reads as "projected
+  zero" — `projections/parse` is the filter, and it belongs on anything reading
+  this endpoint. Omitting `position[]` returns every position in one request, so
+  a week is one 5.6MB fetch rather than nine.
+- **`state/nfl` reports week 0 all offseason** while projections for week 1 are
+  already published. Gating on `week` alone means syncing nothing until
+  September; `display_week` is the one to follow (see `projections/weeks`).
+- **A projection's `pts_ppr` is not any league's PPR.** It is scored at 0.05 a
+  passing yard, where Sleeper's own league default is 0.04 — worth ~2.3 points a
+  quarterback, before house rules. Only 14 of the 120 leagues stored here land
+  within 0.15 of it. Score the stat line against the league's `scoring_settings`
+  with `projections/score`; the two sides share a key vocabulary, so it is a dot
+  product. Reserve `pts_ppr` for a generic, league-less board.
 - **There is no ADP endpoint** — `/api/adp` averages the `draft_picks` we have
   crawled, so it describes the leagues in this database, not the market. Say so
   wherever the number surfaces, and expose filters that narrow the population:
@@ -128,3 +148,8 @@ It takes the default season as an argument rather than importing
   different games.
 - **A draft's `pick_no` is not always a draft position.** In auction drafts it
   is nomination order, which is why `/api/adp` excludes them by default.
+- **Lineup slots overlap without nesting.** `WRRB_FLEX` takes RB/WR and
+  `REC_FLEX` takes WR/TE, and leagues here use both, so filling slots one at a
+  time — even most-constrained first — picks the wrong lineup. `projections/optimal`
+  goes player-by-player in points order instead, which is optimal because a
+  player's points don't depend on the slot they fill.

@@ -1,0 +1,169 @@
+import { pool } from "@/shared/db";
+
+import type { ProjectionScoring } from "./filters";
+
+/** One player's stored projection for a week. */
+export type PlayerProjection = {
+  player_id: string;
+  season: string;
+  week: number;
+  team: string | null;
+  /** Opponent for that week's game — null once it is no longer scheduled. */
+  opponent: string | null;
+  /** `YYYY-MM-DD` of the game. */
+  game_date: string | null;
+  pts_std: number | null;
+  pts_half_ppr: number | null;
+  pts_ppr: number | null;
+  /**
+   * The full projected stat line. A league with custom scoring has to be scored
+   * from this rather than from the three `pts_*` values.
+   */
+  stats: Record<string, number>;
+};
+
+/**
+ * A week's projections keyed by player_id, optionally narrowed to `playerIds`
+ * (pass a roster to avoid dragging the whole ~800-row week across).
+ *
+ * Players Sleeper has no projection for are simply absent — a missing key means
+ * "not projected" (bye, inactive, off the slate), which is not the same as
+ * projected zero, so callers should keep the distinction.
+ */
+export async function getWeekProjections({
+  season,
+  week,
+  playerIds,
+}: {
+  season: string;
+  week: number;
+  playerIds?: string[];
+}): Promise<Record<string, PlayerProjection>> {
+  if (playerIds && playerIds.length === 0) return {};
+
+  const params: unknown[] = [season, week];
+  const idFilter = playerIds
+    ? ` AND player_id = ANY($${params.push(playerIds)})`
+    : "";
+
+  const { rows } = await pool.query<PlayerProjection>(
+    // NUMERIC arrives as a string over the wire; cast so callers get numbers.
+    `SELECT player_id, season, week, team, opponent,
+            to_char(game_date, 'YYYY-MM-DD') AS game_date,
+            pts_std::float8 AS pts_std,
+            pts_half_ppr::float8 AS pts_half_ppr,
+            pts_ppr::float8 AS pts_ppr,
+            COALESCE(stats, '{}'::jsonb) AS stats
+       FROM projections
+      WHERE season = $1 AND week = $2${idFilter}`,
+    params,
+  );
+
+  return Object.fromEntries(rows.map((row) => [row.player_id, row]));
+}
+
+/**
+ * The newest week with stored projections for a season, or null when none are
+ * stored at all.
+ *
+ * What a read route should default to: the sync keeps the current and next week
+ * fresh, so the newest stored week is the one Sleeper is currently projecting —
+ * and asking the database rather than Sleeper's NFL state keeps the read path off
+ * the network, and honest about what is actually here to read.
+ */
+export async function getLatestStoredWeek(season: string): Promise<number | null> {
+  const { rows } = await pool.query<{ week: number | null }>(
+    `SELECT max(week) AS week FROM projections WHERE season = $1`,
+    [season],
+  );
+  return rows[0]?.week ?? null;
+}
+
+/** One row of a ranked week, scored by the caller's chosen format. */
+export type RankedProjection = {
+  player_id: string;
+  team: string | null;
+  opponent: string | null;
+  game_date: string | null;
+  /** Projected points in the requested scoring; null when Sleeper published none. */
+  points: number | null;
+  stats: Record<string, number>;
+};
+
+/**
+ * Interpolated into `ORDER BY` and the select list, so it must never be built
+ * from caller input — `ProjectionScoring` is a closed enum for this reason.
+ */
+const POINTS_COLUMN: Record<ProjectionScoring, string> = {
+  std: "pts_std",
+  half_ppr: "pts_half_ppr",
+  ppr: "pts_ppr",
+};
+
+/**
+ * One week's projections, ranked by the requested scoring, with the size of the
+ * full matched set and when it was last written.
+ *
+ * `playerIds` narrows the set; an empty array means nothing matched (a position
+ * filter that hit no cached players, say) and short-circuits to no rows, rather
+ * than being read as "no filter".
+ */
+export async function listWeekProjections({
+  season,
+  week,
+  scoring,
+  playerIds,
+  includeStats,
+  limit,
+  offset,
+}: {
+  season: string;
+  week: number;
+  scoring: ProjectionScoring;
+  playerIds?: string[] | null;
+  includeStats?: boolean;
+  limit: number;
+  offset: number;
+}): Promise<{
+  rows: RankedProjection[];
+  player_count: number;
+  updated_at: string | null;
+}> {
+  if (playerIds && playerIds.length === 0) {
+    return { rows: [], player_count: 0, updated_at: null };
+  }
+
+  const points = POINTS_COLUMN[scoring];
+  const params: unknown[] = [season, week];
+  const where =
+    `season = $1 AND week = $2` +
+    (playerIds ? ` AND player_id = ANY($${params.push(playerIds)})` : "");
+
+  const { rows: totals } = await pool.query<{ count: string; updated_at: string | null }>(
+    `SELECT count(*)::text AS count,
+            to_char(max(updated_at), 'YYYY-MM-DD"T"HH24:MI:SSOF') AS updated_at
+       FROM projections
+      WHERE ${where}`,
+    params,
+  );
+
+  const { rows } = await pool.query<RankedProjection>(
+    // `player_id` breaks ties so paging is stable — plenty of players share a
+    // projected total, and without it a row can appear on two pages or neither.
+    `SELECT player_id, team, opponent,
+            to_char(game_date, 'YYYY-MM-DD') AS game_date,
+            ${points}::float8 AS points,
+            ${includeStats ? `COALESCE(stats, '{}'::jsonb)` : `'{}'::jsonb`} AS stats
+       FROM projections
+      WHERE ${where}
+      ORDER BY ${points} DESC NULLS LAST, player_id
+      LIMIT $${params.push(limit)} OFFSET $${params.push(offset)}`,
+    params,
+  );
+
+  return {
+    rows,
+    player_count: Number(totals[0]?.count ?? 0),
+    updated_at: totals[0]?.updated_at ?? null,
+  };
+}

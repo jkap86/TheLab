@@ -8,8 +8,8 @@
  * Migrations use `pg`/`node-pg-migrate`, which are Node.js-only, so the import
  * is guarded to the Node.js runtime and loaded dynamically — this keeps the DB
  * code out of the Edge bundle entirely. The same guard fronts the in-process
- * background loops (KeepTradeCut values, league crawl), which are started once
- * migrations have applied.
+ * background loops (KeepTradeCut values, league crawl, weekly projections),
+ * which are started once migrations have applied.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -36,4 +36,9 @@ export async function register(): Promise<void> {
   // one-minute loop. Also Node-only and started without awaiting.
   const { startLeagueCrawler } = await import("@/shared/manager");
   startLeagueCrawler();
+
+  // Keep the current and next NFL week's player projections stored locally, so
+  // the lineup tools read Postgres instead of a 5.6MB Sleeper response per visit.
+  const { startProjectionsScheduler } = await import("@/shared/projections");
+  startProjectionsScheduler();
 }

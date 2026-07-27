@@ -28,6 +28,7 @@ while you work.
 | `DATABASE_URL` | yes | — | Postgres connection string. Also read by the `migrate:*` scripts. |
 | `DATABASE_SSL` | no | auto | `require` forces TLS on, `disable` forces it off. Auto-detects: off for `localhost`, on (relaxed verification) for remote/managed hosts. |
 | `LEAGUE_CRAWLER` | no | on | Set to `off` to disable the background league crawler. |
+| `PROJECTIONS_SYNC` | no | on | Set to `off` to disable the weekly projections sync. Each week it refreshes is a ~5.6MB download. |
 
 ## Architecture
 
@@ -64,6 +65,12 @@ receives, so the two ends can't drift without a type error.
   by name) are pure and directly tested; `client.ts` does the fetching.
 - **`players/`** — caches Sleeper's ~12k-entry global players map, and owns
   every read of it.
+- **`projections/`** — stores Sleeper's weekly projections and owns every read of
+  them. `parse.ts` (which entries in a response are real projections), `weeks.ts`
+  (which weeks to sync), `filters.ts` (the read route's query string) and
+  `score.ts` (scoring a stat line with a league's own settings) and `optimal.ts`
+  (the best legal lineup from a roster) are pure and directly tested; `sync.ts`
+  fetches and writes, `queries.ts` reads, `scheduler.ts` runs the loop.
 - **`db/`** — connection pool, TLS policy, migration runner, and the
   `bulkInsert` / `withTransaction` / `withAdvisoryLock` / `isFresh` helpers.
 - **`util/`** — `startBackgroundLoop` (the shared scheduler lifecycle),
@@ -77,6 +84,8 @@ receives, so the two ends can't drift without a type error.
 | `GET /api/user/[username]/leagues` | A manager's leagues, as a **newline-delimited JSON stream** (`result` / `progress` / `error` messages). Serves cached data immediately and pushes a second `result` when a background refresh finishes. |
 | `GET /api/league/[leagueId]` | One league's standings and rosters, with player ids resolved to names. |
 | `GET\|POST /api/players/sync` | Refresh the cached players map. `?force=1` bypasses the freshness gate. |
+| `GET /api/projections` | A week of stored projections, ranked by the requested scoring. Reads only — it never calls Sleeper. |
+| `GET\|POST /api/projections/sync` | Refresh stored weekly projections. Defaults to the current and next week if stale; `?force=1` ignores the freshness gate, `?week=1,2` backfills specific weeks, `?season=2025` picks another season. |
 | `GET /api/adp` | Average draft position over the crawled drafts, filtered by draft and league attributes. |
 
 `/api/adp` computes ADP from `draft_picks` — Sleeper has no ADP endpoint, so it
@@ -105,9 +114,28 @@ more than it looks — a dynasty league's 4-round rookie draft and its 25-round
 startup are both drafts, and pick 1 of one is nothing like pick 1 of the other.
 The response echoes the filters it applied, so the defaults stay visible.
 
+`/api/projections` reads the `projections` table the background sync fills, so it
+answers with whatever has been synced — a week nobody has pulled in comes back
+empty rather than fetched on demand.
+
+| Filter | Values |
+| --- | --- |
+| `season` | 4-digit year. Defaults to the current season. |
+| `week` | 1–18. Defaults to the newest week on file, which is one of the two being kept fresh. |
+| `scoring` | `std` \| `half_ppr` \| `ppr`. Picks what players are ranked and scored by; defaults to `ppr`. |
+| `position` | Sleeper positions (`WR`, `TE`, `DEF`, `OLB`), matched against the players cache. |
+| `player_id` | Restrict to specific players — a roster, say. Intersects with `position` when both are given. |
+| `stats` | `1` to include the full projected stat line per player (~27 keys), which is what custom scoring needs. |
+| `limit` / `offset` | Paging; `limit` caps at 1000, defaults to 100. |
+
+Two fields in the response are worth reading before displaying anything:
+`updated_at` says when those rows were last written — they are a cache of someone
+else's numbers, so say how old they are — and `week: null` means the season has
+nothing stored at all, which is not the same as a week that matched no filters.
+
 ## Background work
 
-Both loops start in [`src/instrumentation.ts`](src/instrumentation.ts) once
+All three loops start in [`src/instrumentation.ts`](src/instrumentation.ts) once
 migrations have applied. They are Node-only, `unref`'d so they never hold the
 process open, and guarded by Postgres advisory locks so extra instances sharing
 one database don't duplicate the work.
@@ -120,6 +148,11 @@ one database don't duplicate the work.
 - **KTC scheduler** (every 15 min) — refreshes dynasty values, records a daily
   snapshot per player, and chips away at the per-player history backfill (5
   players per tick; their pages are 3–6MB each).
+- **Projections sync** (checks every 15 min, refreshes hourly) — stores Sleeper's
+  weekly player projections for the current NFL week and the next one. Freshness
+  is judged per week, so a tick that finds both weeks current costs one query;
+  past weeks are never re-fetched, since their numbers stop moving once the games
+  are played. Backfill one by hand with `/api/projections/sync?week=N`.
 
 ### Freshness windows
 
@@ -128,6 +161,7 @@ one database don't duplicate the work.
 | Manager league sync | 10 min |
 | Stored league (crawler refresh) | 15 min |
 | KTC values | 15 min |
+| Weekly projections (per week) | 1 hour |
 | Manager league-list enumeration | 6 hours |
 | Sleeper players map | 24 hours |
 | KTC per-player history | 30 days |
@@ -176,6 +210,20 @@ break silently:
   cases where it must *refuse* to guess (a wrong player id is worse than none).
 - `features/manager/filters` and `format` — the Sleeper `settings` quirks and
   the display formatting.
+- `shared/projections/parse` — the filter separating real projections from the
+  ~8,500 placeholder entries in every weekly response, which is the difference
+  between a usable week and 8,500 rows that read as projected zeroes.
+- `shared/projections/weeks` — which weeks the loop targets (Sleeper reports
+  week 0 in the offseason) and the `?week=` validation.
+- `shared/projections/filters` — the read route's query string, including the
+  `scoring` enum that decides which column its `ORDER BY` interpolates.
+- `shared/projections/score` — scoring a projected stat line with a league's
+  `scoring_settings`. Errors here are silent and small, which is the worst kind
+  for a tool whose job is to tell you to bench someone.
+- `shared/projections/optimal` — the best legal lineup for a set of slots. Every
+  flex case is pinned individually, and the result is cross-checked against an
+  exhaustive search on 400 random rosters, because the algorithm is only optimal
+  by an argument that deserves to be verified rather than believed.
 
 Anything that talks to Postgres or the network is deliberately not covered here;
 those paths are kept thin so the logic worth testing sits outside them.

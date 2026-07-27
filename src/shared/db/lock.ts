@@ -15,6 +15,8 @@ export const LOCK_KEYS = {
   ktcValues: [8675309, 2],
   /** KeepTradeCut per-player history backfill (`shared/ktc/history.ts`). */
   ktcHistory: [8675309, 3],
+  /** Weekly projections sync (`shared/projections/sync.ts`). */
+  projections: [8675309, 4],
 } as const satisfies Record<string, AdvisoryLockKey>;
 
 /**
