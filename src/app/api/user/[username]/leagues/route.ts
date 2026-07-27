@@ -6,6 +6,7 @@ import {
   syncManagerLeagues,
   SYNC_TTL_MS,
 } from "@/shared/manager";
+import type { ApiErrorPayload, LeaguesStreamMessage } from "@/shared/manager";
 import { ensurePlayersFresh } from "@/shared/players";
 import { DEFAULT_SEASON, resolveManagerUser, toUserInfo } from "@/shared/sleeper";
 
@@ -24,10 +25,9 @@ const refreshInFlight = new Set<string>();
  *   - With no cache (first visit) it syncs in the foreground, emitting
  *     `progress` events so the client can show a bar for 100+ league accounts.
  *
- * Messages:
- *   {"type":"result","user":{...},"season":"...","leagues":[...],"stale":bool,"refreshing":bool,"summary"?:{...}}
- *   {"type":"progress","phase":"initial"|"refresh","loaded":N,"total":M,"failed":F}
- *   {"type":"error","error":"..."}
+ * The message shapes are declared in `@/shared/manager`'s
+ * {@link LeaguesStreamMessage}, which the client decodes against — see
+ * `features/manager/hooks/use-manager-leagues`.
  */
 export async function GET(
   request: Request,
@@ -37,7 +37,8 @@ export async function GET(
 
   const resolved = await resolveManagerUser(username);
   if (!resolved.ok) {
-    return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+    const error: ApiErrorPayload = { error: resolved.error };
+    return NextResponse.json(error, { status: resolved.status });
   }
   const user = resolved.user;
 
@@ -64,10 +65,10 @@ export async function GET(
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let closed = false;
-      const send = (obj: unknown) => {
+      const send = (message: LeaguesStreamMessage) => {
         if (closed) return;
         try {
-          controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+          controller.enqueue(encoder.encode(JSON.stringify(message) + "\n"));
         } catch {
           closed = true; // client disconnected
         }

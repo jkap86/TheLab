@@ -47,3 +47,38 @@ export async function getPlayersByIds(
   }
   return out;
 }
+
+/**
+ * A cached player projected down to the fields cross-source name matching needs
+ * — see `@/shared/ktc`'s `resolveSleeperIds`. `active` and `birth_year` are
+ * lifted out of the raw Sleeper payload so callers never have to know how that
+ * blob is shaped.
+ */
+export type MatchablePlayer = {
+  player_id: string;
+  full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  position: string | null;
+  team: string | null;
+  active: boolean | null;
+  /** Year of birth, or null when Sleeper has no birth date on file. */
+  birth_year: number | null;
+};
+
+/**
+ * Every cached player that could be matched by name, i.e. has a position.
+ *
+ * Returns the whole table (~12k rows) because the caller builds lookup indexes
+ * over all of it; there is nothing to filter by up front.
+ */
+export async function getMatchablePlayers(): Promise<MatchablePlayer[]> {
+  const { rows } = await pool.query<MatchablePlayer>(
+    `SELECT player_id, full_name, first_name, last_name, position, team,
+            (data->>'active')::boolean AS active,
+            NULLIF(left(data->>'birth_date', 4), '')::int AS birth_year
+       FROM players
+      WHERE position IS NOT NULL`,
+  );
+  return rows;
+}

@@ -1,9 +1,10 @@
-import { PickTracker } from "@/features/picktracker";
+import { PageShell } from "@/features/shared";
+import { ToolPlaceholder } from "@/features/tools";
 
-export default function PickTrackerPage() {
+export default function Page() {
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-16">
-      <PickTracker />
-    </main>
+    <PageShell>
+      <ToolPlaceholder href="/picktracker" />
+    </PageShell>
   );
 }

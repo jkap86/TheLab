@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getLeagueDetail } from "@/shared/manager";
+import type { ApiErrorPayload, LeagueDetailPayload } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 
@@ -23,24 +24,32 @@ export async function GET(
 
   const detail = await getLeagueDetail(leagueId);
   if (!detail) {
-    return NextResponse.json({ error: "League not found" }, { status: 404 });
+    const error: ApiErrorPayload = { error: "League not found" };
+    return NextResponse.json(error, { status: 404 });
   }
 
   const playerIds = [...new Set(detail.teams.flatMap((t) => t.players))];
   const players = await getPlayersByIds(playerIds);
 
-  return NextResponse.json({
+  const payload: LeagueDetailPayload = {
     league_id: detail.league_id,
     name: detail.name,
     season: detail.season,
     status: detail.status,
     roster_positions: detail.roster_positions,
-    teams: detail.teams.map((t) => ({
-      ...t,
-      manager: t.manager
-        ? { ...t.manager, avatar_url: sleeperAvatarUrl(t.manager.avatar, "thumb") }
+    teams: detail.teams.map(({ manager, ...team }) => ({
+      ...team,
+      manager: manager
+        ? {
+            user_id: manager.user_id,
+            display_name: manager.display_name,
+            team_name: manager.team_name,
+            avatar_url: sleeperAvatarUrl(manager.avatar, "thumb"),
+          }
         : null,
     })),
     players,
-  });
+  };
+
+  return NextResponse.json(payload);
 }

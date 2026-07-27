@@ -1,22 +1,21 @@
 import {
   bulkInsert,
+  countRows,
+  isFresh,
   jsonb as j,
   LOCK_KEYS,
-  pool,
   withAdvisoryLock,
   withTransaction,
 } from "@/shared/db";
-import { ensurePlayersFresh } from "@/shared/players";
+import { ensurePlayersFresh, getMatchablePlayers } from "@/shared/players";
 
 import { fetchKtcDynastyRankings } from "./client";
 import { recordDailySnapshot } from "./history";
 import { resolveSleeperIds } from "./match";
+import { int } from "./parse";
 
 /** How long scraped KTC values stay fresh; matches the 15-min refresh cadence. */
 export const KTC_TTL_MS = 15 * 60 * 1000;
-
-const int = (v: unknown): number | null =>
-  typeof v === "number" && Number.isFinite(v) ? Math.trunc(v) : null;
 
 export type KtcSyncSummary = {
   /** true when another instance held the lock and this run did nothing. */
@@ -25,14 +24,6 @@ export type KtcSyncSummary = {
   skipped: boolean;
   count: number;
 };
-
-async function ktcIsFresh(): Promise<boolean> {
-  const { rows } = await pool.query<{ max: Date | null }>(
-    `SELECT max(updated_at) AS max FROM ktc_values`,
-  );
-  const max = rows[0]?.max;
-  return max != null && Date.now() - max.getTime() < KTC_TTL_MS;
-}
 
 /**
  * Scrape KeepTradeCut dynasty values and upsert them into `ktc_values`, plus
@@ -48,11 +39,8 @@ export async function syncKtcValues(
   options: { force?: boolean } = {},
 ): Promise<KtcSyncSummary> {
   const summary = await withAdvisoryLock(LOCK_KEYS.ktcValues, async () => {
-    if (!options.force && (await ktcIsFresh())) {
-      const { rows } = await pool.query<{ count: string }>(
-        `SELECT count(*)::text AS count FROM ktc_values`,
-      );
-      return { locked: false, skipped: true, count: Number(rows[0].count) };
+    if (!options.force && (await isFresh("ktc_values", KTC_TTL_MS))) {
+      return { locked: false, skipped: true, count: await countRows("ktc_values") };
     }
 
     const players = await fetchKtcDynastyRankings();
@@ -65,7 +53,7 @@ export async function syncKtcValues(
     } catch (error) {
       console.warn("[ktc] Players cache refresh failed; sleeper_id may be null:", error);
     }
-    const sleeperIds = await resolveSleeperIds(players);
+    const sleeperIds = resolveSleeperIds(players, await getMatchablePlayers());
 
     await withTransaction(async (client) => {
       await bulkInsert(client, {

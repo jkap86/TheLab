@@ -16,3 +16,12 @@ export type { CrawlSummary, CrawlOptions } from "./crawl";
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export { getLeagueDetail, getManagerLeagues, getManagerSyncedAt } from "./queries";
 export type { LeagueDetail, LeagueTeam, ManagerLeague } from "./types";
+export type {
+  ApiErrorPayload,
+  LeagueDetailPayload,
+  LeagueTeamPayload,
+  LeaguesErrorMessage,
+  LeaguesProgressMessage,
+  LeaguesResultMessage,
+  LeaguesStreamMessage,
+} from "./contract";

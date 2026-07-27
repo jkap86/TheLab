@@ -1,11 +1,10 @@
 export {
   fetchKtcDynastyRankings,
   fetchKtcPlayerHistory,
-  extractPlayersArray,
-  extractPlayerHistory,
   ktcPlayerUrl,
   KTC_RANKINGS_URL,
 } from "./client";
+export { extractPlayersArray, extractPlayerHistory, int } from "./parse";
 export { syncKtcValues, KTC_TTL_MS } from "./sync";
 export type { KtcSyncSummary } from "./sync";
 export {

@@ -7,8 +7,10 @@ import {
   withAdvisoryLock,
   withTransaction,
 } from "@/shared/db";
+import { errorMessage } from "@/shared/util";
 
 import { fetchKtcPlayerHistory } from "./client";
+import { int } from "./parse";
 import type { KtcHistoryPoint, KtcPlayer } from "./types";
 
 /**
@@ -40,9 +42,6 @@ const HISTORY_ON_CONFLICT = `(ktc_id, date) DO UPDATE SET
     sf_position_rank = EXCLUDED.sf_position_rank,
     oneqb_value = EXCLUDED.oneqb_value, oneqb_rank = EXCLUDED.oneqb_rank,
     oneqb_position_rank = EXCLUDED.oneqb_position_rank`;
-
-const int = (v: unknown): number | null =>
-  typeof v === "number" && Number.isFinite(v) ? Math.trunc(v) : null;
 
 /**
  * Today's date on KTC's clock. Their series roll over on US Eastern days, so
@@ -203,7 +202,7 @@ export async function syncKtcHistory(
           .catch(() => {});
         console.warn(
           `[ktc] History scrape failed for ${player.player_name} (${player.slug}):`,
-          error instanceof Error ? error.message : error,
+          errorMessage(error),
         );
       }
     }

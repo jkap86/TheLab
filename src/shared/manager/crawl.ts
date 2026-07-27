@@ -1,8 +1,15 @@
-import { LOCK_KEYS, pool, withAdvisoryLock } from "@/shared/db";
+import { LOCK_KEYS, withAdvisoryLock } from "@/shared/db";
 import { DEFAULT_SEASON, getLeague, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague } from "@/shared/sleeper";
-import { mapWithConcurrency } from "@/shared/util";
+import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
+import {
+  claimStaleLeagues,
+  countDueLeagues,
+  knownLeagueIds,
+  pendingManagers,
+  stampManagers,
+} from "./crawl-queue";
 import { getCurrentWeek, syncLeagueGraphs } from "./sync";
 
 /** Stored leagues re-synced per tick. */
@@ -38,15 +45,8 @@ export const CRAWL_MANAGER_TTL_MS = 6 * 60 * 60 * 1000;
  */
 export const CRAWL_CONCURRENCY = 4;
 
-const message = (error: unknown) =>
-  error instanceof Error ? error.message : error;
-
-const seconds = (ms: number) => `${Math.round(ms / 1000)} seconds`;
-
-export type CrawlSummary = {
-  season: string;
-  /** true when another tick or instance held the lock and this tick did nothing. */
-  locked: boolean;
+/** What the refresh pass did this tick. */
+export type RefreshResult = {
   /** stored leagues re-synced from Sleeper. */
   refreshed: number;
   /** leagues whose refresh failed; rotated to the back of the queue. */
@@ -55,6 +55,10 @@ export type CrawlSummary = {
   gone: number;
   /** leagues still past the freshness TTL after this tick. */
   due: number;
+};
+
+/** What the discovery pass did this tick. */
+export type DiscoveryResult = {
   /** league members whose league list was enumerated. */
   managersCrawled: number;
   /** previously unseen leagues fetched and stored. */
@@ -65,53 +69,26 @@ export type CrawlSummary = {
   deferred: number;
 };
 
-/** Which of the given league ids we already store. */
-async function knownLeagueIds(leagueIds: string[]): Promise<Set<string>> {
-  if (leagueIds.length === 0) return new Set();
-  const { rows } = await pool.query<{ league_id: string }>(
-    `SELECT league_id FROM leagues WHERE league_id = ANY($1::varchar[])`,
-    [leagueIds],
-  );
-  return new Set(rows.map((r) => r.league_id));
-}
+export type CrawlSummary = RefreshResult &
+  DiscoveryResult & {
+    season: string;
+    /** true when another tick or instance held the lock and this tick did nothing. */
+    locked: boolean;
+  };
 
-/** How many stored leagues are past the freshness TTL. */
-async function countDueLeagues(season: string): Promise<number> {
-  const { rows } = await pool.query<{ count: string }>(
-    `SELECT count(*)::text AS count
-       FROM leagues
-      WHERE season = $1 AND updated_at < now() - $2::interval`,
-    [season, seconds(CRAWL_LEAGUE_TTL_MS)],
-  );
-  return Number(rows[0].count);
-}
+const NO_REFRESH: RefreshResult = {
+  refreshed: 0,
+  refreshFailed: 0,
+  gone: 0,
+  due: 0,
+};
 
-/**
- * Take the next batch of stale leagues, stamping the attempt as we claim them.
- *
- * Claim and stamp are one statement so two ticks (or two instances) can never
- * pick the same leagues, and so a league that fails — or a tick that dies
- * mid-flight — rotates to the back rather than being retried immediately.
- */
-async function claimStaleLeagues(
-  season: string,
-  limit: number,
-): Promise<string[]> {
-  const { rows } = await pool.query<{ league_id: string }>(
-    `UPDATE leagues
-        SET sync_attempt_at = now()
-      WHERE league_id IN (
-              SELECT league_id
-                FROM leagues
-               WHERE season = $1 AND updated_at < now() - $2::interval
-               ORDER BY sync_attempt_at ASC NULLS FIRST
-               LIMIT $3
-            )
-      RETURNING league_id`,
-    [season, seconds(CRAWL_LEAGUE_TTL_MS), limit],
-  );
-  return rows.map((r) => r.league_id);
-}
+const NO_DISCOVERY: DiscoveryResult = {
+  managersCrawled: 0,
+  discovered: 0,
+  discoverFailed: 0,
+  deferred: 0,
+};
 
 /**
  * Re-sync the stalest stored leagues — the same fetch+persist the leagues route
@@ -126,12 +103,10 @@ async function refreshStaleLeagues(
   season: string,
   currentWeek: number,
   limit: number,
-): Promise<Pick<CrawlSummary, "refreshed" | "refreshFailed" | "gone" | "due">> {
-  const due = await countDueLeagues(season);
-  const leagueIds = await claimStaleLeagues(season, limit);
-  if (leagueIds.length === 0) {
-    return { refreshed: 0, refreshFailed: 0, gone: 0, due };
-  }
+): Promise<RefreshResult> {
+  const due = await countDueLeagues(season, CRAWL_LEAGUE_TTL_MS);
+  const leagueIds = await claimStaleLeagues(season, CRAWL_LEAGUE_TTL_MS, limit);
+  if (leagueIds.length === 0) return { ...NO_REFRESH, due };
 
   const leagues: SleeperLeague[] = [];
   let gone = 0;
@@ -144,7 +119,10 @@ async function refreshStaleLeagues(
       else gone += 1;
     } catch (error) {
       failed += 1;
-      console.warn(`[crawl] failed to fetch league ${leagueId}:`, message(error));
+      console.warn(
+        `[crawl] failed to fetch league ${leagueId}:`,
+        errorMessage(error),
+      );
     }
   });
 
@@ -161,44 +139,6 @@ async function refreshStaleLeagues(
   };
 }
 
-/** League members due a league-list enumeration, longest-waiting first. */
-async function pendingManagers(
-  season: string,
-  limit: number,
-): Promise<string[]> {
-  const { rows } = await pool.query<{ user_id: string }>(
-    `SELECT lu.user_id
-       FROM league_users lu
-       JOIN leagues l
-         ON l.league_id = lu.league_id AND l.season = $1
-       LEFT JOIN manager_syncs ms
-         ON ms.user_id = lu.user_id AND ms.season = $1
-      WHERE NOT coalesce(lu.is_bot, false)
-        AND (ms.attempt_at IS NULL OR ms.attempt_at < now() - $2::interval)
-      GROUP BY lu.user_id, ms.attempt_at
-      ORDER BY ms.attempt_at ASC NULLS FIRST
-      LIMIT $3`,
-    [season, seconds(CRAWL_MANAGER_TTL_MS), limit],
-  );
-  return rows.map((r) => r.user_id);
-}
-
-/**
- * Record that we enumerated these managers' leagues. Only `attempt_at` moves —
- * `synced_at` means "full graph sync" and stays owned by syncManagerLeagues, so
- * a discovery pass never makes the leagues route serve half-refreshed data as
- * fresh.
- */
-async function stampManagers(season: string, userIds: string[]): Promise<void> {
-  if (userIds.length === 0) return;
-  await pool.query(
-    `INSERT INTO manager_syncs (user_id, season, attempt_at)
-     SELECT unnest($1::varchar[]), $2::varchar, now()
-     ON CONFLICT (user_id, season) DO UPDATE SET attempt_at = now()`,
-    [userIds, season],
-  );
-}
-
 /**
  * Walk league members and pull in leagues we have never seen.
  *
@@ -211,16 +151,9 @@ async function discoverMemberLeagues(
   currentWeek: number,
   limit: number,
   cap: number,
-): Promise<
-  Pick<
-    CrawlSummary,
-    "managersCrawled" | "discovered" | "discoverFailed" | "deferred"
-  >
-> {
-  const userIds = await pendingManagers(season, limit);
-  if (userIds.length === 0) {
-    return { managersCrawled: 0, discovered: 0, discoverFailed: 0, deferred: 0 };
-  }
+): Promise<DiscoveryResult> {
+  const userIds = await pendingManagers(season, CRAWL_MANAGER_TTL_MS, limit);
+  if (userIds.length === 0) return NO_DISCOVERY;
 
   const byManager = new Map<string, SleeperLeague[]>();
   let failed = 0;
@@ -232,7 +165,7 @@ async function discoverMemberLeagues(
       failed += 1;
       console.warn(
         `[crawl] failed to list leagues for member ${userId}:`,
-        message(error),
+        errorMessage(error),
       );
     }
   });
@@ -311,11 +244,6 @@ export async function runLeagueCrawl(
     discoveryCap = CRAWL_DISCOVERY_CAP,
   } = options;
 
-  const idle: CrawlSummary = {
-    season, locked: false, refreshed: 0, refreshFailed: 0, gone: 0, due: 0,
-    managersCrawled: 0, discovered: 0, discoverFailed: 0, deferred: 0,
-  };
-
   // The lock is held for the whole tick so overlapping ticks — and extra app
   // instances, which share one database — don't crawl the same rows twice.
   const summary = await withAdvisoryLock(LOCK_KEYS.leagueCrawl, async () => {
@@ -327,8 +255,8 @@ export async function runLeagueCrawl(
       managerLimit,
       discoveryCap,
     );
-    return { ...idle, ...refresh, ...discovery };
+    return { season, locked: false, ...refresh, ...discovery };
   });
 
-  return summary ?? { ...idle, locked: true };
+  return summary ?? { season, locked: true, ...NO_REFRESH, ...NO_DISCOVERY };
 }

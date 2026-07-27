@@ -1,5 +1,10 @@
+import { PageShell } from "@/features/shared";
 import { ManagerSearch } from "@/features/manager";
 
 export default function ManagerPage() {
-  return <ManagerSearch title="Manager" />;
+  return (
+    <PageShell>
+      <ManagerSearch title="Manager" />
+    </PageShell>
+  );
 }

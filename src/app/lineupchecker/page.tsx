@@ -1,9 +1,10 @@
-import { LineupChecker } from "@/features/lineupchecker";
+import { PageShell } from "@/features/shared";
+import { ToolPlaceholder } from "@/features/tools";
 
-export default function LineupCheckerPage() {
+export default function Page() {
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-16">
-      <LineupChecker />
-    </main>
+    <PageShell>
+      <ToolPlaceholder href="/lineupchecker" />
+    </PageShell>
   );
 }

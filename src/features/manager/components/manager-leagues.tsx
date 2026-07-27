@@ -2,14 +2,16 @@
 
 import { useMemo, useState } from "react";
 
-import { useManagerLeagues } from "../hooks/use-manager-leagues";
-import { LeagueCard } from "./league-card";
+import { PageShell } from "@/features/shared";
+
 import {
   DEFAULT_LEAGUE_FILTERS,
-  LeaguesFilters,
   matchesFilters,
   type LeagueFilters,
-} from "./manager-leagues-filters";
+} from "../filters";
+import { useManagerLeagues } from "../hooks/use-manager-leagues";
+import { LeagueCard } from "./league-card";
+import { LeaguesFilters } from "./manager-leagues-filters";
 import { LeaguesHeader } from "./manager-leagues-header";
 import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
 
@@ -28,20 +30,20 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   // Cold load: nothing cached yet.
   if (!data) {
     return (
-      <Shell>
+      <PageShell width="wide">
         {error ? (
           <ErrorCard message={error} />
         ) : (
           <LoadingState searched={searched} progress={progress} />
         )}
-      </Shell>
+      </PageShell>
     );
   }
 
   const { user, season, summary } = data;
 
   return (
-    <Shell>
+    <PageShell width="wide">
       <LeaguesHeader
         user={user}
         leagueCount={filtered.length}
@@ -58,7 +60,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
         <>
           <LeaguesFilters filters={filters} onChange={setFilters} />
           {filtered.length === 0 ? (
-            <p className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-8 text-center text-sm text-white/45">
+            <p className="rounded-xl border border-foreground/10 bg-foreground/[0.02] px-4 py-8 text-center text-sm text-foreground/45">
               No leagues match these filters.
             </p>
           ) : (
@@ -70,14 +72,6 @@ export function ManagerLeagues({ searched }: { searched: string }) {
           )}
         </>
       )}
-    </Shell>
-  );
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
-      {children}
-    </main>
+    </PageShell>
   );
 }

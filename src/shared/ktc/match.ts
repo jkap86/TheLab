@@ -1,6 +1,14 @@
-import { pool } from "@/shared/db";
+import type { MatchablePlayer } from "@/shared/players";
 
 import type { KtcPlayer } from "./types";
+
+/**
+ * Cross-source name matching between KeepTradeCut and Sleeper.
+ *
+ * Pure by design — the caller supplies both sides — so the matching rules can
+ * be tested directly. Reading the cached Sleeper players belongs to
+ * `@/shared/players`, which owns that table.
+ */
 
 /**
  * Normalize a player name for cross-source matching: lowercase, strip accents,
@@ -30,19 +38,8 @@ function ktcBirthYear(birthday: unknown): number | null {
   return new Date(n * 1000).getUTCFullYear();
 }
 
-type SleeperRow = {
-  player_id: string;
-  full_name: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  position: string | null;
-  team: string | null;
-  active: boolean | null;
-  birth_year: number | null;
-};
-
 /** Of several same-name candidates, the one clearly current player, else null. */
-function pickActive(cands: SleeperRow[]): SleeperRow | null {
+function pickActive(cands: MatchablePlayer[]): MatchablePlayer | null {
   const active = cands.filter((c) => c.active);
   if (active.length === 1) return active[0];
   const teamed = cands.filter((c) => c.team);
@@ -50,8 +47,37 @@ function pickActive(cands: SleeperRow[]): SleeperRow | null {
   return null;
 }
 
+/** The two lookup indexes the matching tiers below search. */
+function indexPlayers(players: readonly MatchablePlayer[]) {
+  const byNamePos = new Map<string, MatchablePlayer[]>();
+  const byLastPosYear = new Map<string, MatchablePlayer[]>();
+
+  const push = (
+    m: Map<string, MatchablePlayer[]>,
+    k: string,
+    r: MatchablePlayer,
+  ) => {
+    const list = m.get(k);
+    if (list) list.push(r);
+    else m.set(k, [r]);
+  };
+
+  for (const r of players) {
+    const name =
+      r.full_name ?? [r.first_name, r.last_name].filter(Boolean).join(" ");
+    const nn = normalizeName(name);
+    if (!nn || !r.position) continue;
+    push(byNamePos, `${nn}|${r.position}`, r);
+    if (r.birth_year != null) {
+      push(byLastPosYear, `${lastToken(nn)}|${r.position}|${r.birth_year}`, r);
+    }
+  }
+
+  return { byNamePos, byLastPosYear };
+}
+
 /**
- * Resolve KTC entries to Sleeper `player_id`s using the cached `players` table.
+ * Resolve KTC entries to Sleeper `player_id`s.
  *
  * Sleeper's map doesn't carry KTC's only external id (`mflid`), so we match by
  * name in three tiers, most precise first:
@@ -63,43 +89,19 @@ function pickActive(cands: SleeperRow[]): SleeperRow | null {
  * `sleeper_id` is honest ("no confident match"), never a wrong player.
  *
  * Returns a map of KTC `playerID` -> Sleeper `player_id` for resolved entries
- * only. When the `players` cache is empty the map is empty (all null).
+ * only. An empty `sleeperPlayers` yields an empty map (all null).
  */
-export async function resolveSleeperIds(
-  players: KtcPlayer[],
-): Promise<Map<number, string>> {
-  const { rows } = await pool.query<SleeperRow>(
-    `SELECT player_id, full_name, first_name, last_name, position, team,
-            (data->>'active')::boolean AS active,
-            NULLIF(left(data->>'birth_date', 4), '')::int AS birth_year
-       FROM players
-      WHERE position IS NOT NULL`,
-  );
-
-  const byNamePos = new Map<string, SleeperRow[]>();
-  const byLastPosYear = new Map<string, SleeperRow[]>();
-  const push = (m: Map<string, SleeperRow[]>, k: string, r: SleeperRow) => {
-    const list = m.get(k);
-    if (list) list.push(r);
-    else m.set(k, [r]);
-  };
-
-  for (const r of rows) {
-    const name =
-      r.full_name ?? [r.first_name, r.last_name].filter(Boolean).join(" ");
-    const nn = normalizeName(name);
-    if (!nn || !r.position) continue;
-    push(byNamePos, `${nn}|${r.position}`, r);
-    if (r.birth_year != null) {
-      push(byLastPosYear, `${lastToken(nn)}|${r.position}|${r.birth_year}`, r);
-    }
-  }
+export function resolveSleeperIds(
+  ktcPlayers: readonly KtcPlayer[],
+  sleeperPlayers: readonly MatchablePlayer[],
+): Map<number, string> {
+  const { byNamePos, byLastPosYear } = indexPlayers(sleeperPlayers);
 
   const out = new Map<number, string>();
-  for (const p of players) {
+  for (const p of ktcPlayers) {
     if (typeof p.playerID !== "number") continue;
     const nn = normalizeName(p.playerName);
-    let match: SleeperRow | null = null;
+    let match: MatchablePlayer | null = null;
 
     // Tier 1/2: normalized full name + position.
     const cands = byNamePos.get(`${nn}|${p.position}`);

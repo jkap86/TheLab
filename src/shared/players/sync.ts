@@ -1,18 +1,16 @@
-import { bulkInsert, jsonb as j, pool, withTransaction } from "@/shared/db";
+import {
+  bulkInsert,
+  countRows,
+  isFresh,
+  jsonb as j,
+  withTransaction,
+} from "@/shared/db";
 import { getAllPlayers } from "@/shared/sleeper";
 
 /** How long the cached players map stays fresh (Sleeper: refresh once/day). */
 export const PLAYERS_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type PlayersSyncSummary = { skipped: boolean; count: number };
-
-async function playersAreFresh(): Promise<boolean> {
-  const { rows } = await pool.query<{ max: Date | null }>(
-    `SELECT max(updated_at) AS max FROM players`,
-  );
-  const max = rows[0]?.max;
-  return max != null && Date.now() - max.getTime() < PLAYERS_TTL_MS;
-}
 
 /**
  * Refresh the cached Sleeper players map. Skips the (large) download when the
@@ -22,11 +20,8 @@ async function playersAreFresh(): Promise<boolean> {
 export async function syncPlayers(
   options: { force?: boolean } = {},
 ): Promise<PlayersSyncSummary> {
-  if (!options.force && (await playersAreFresh())) {
-    const { rows } = await pool.query<{ count: string }>(
-      `SELECT count(*)::text AS count FROM players`,
-    );
-    return { skipped: true, count: Number(rows[0].count) };
+  if (!options.force && (await isFresh("players", PLAYERS_TTL_MS))) {
+    return { skipped: true, count: await countRows("players") };
   }
 
   const map = await getAllPlayers();

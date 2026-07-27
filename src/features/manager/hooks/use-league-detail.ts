@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+import { errorMessage } from "@/shared/util";
+
+import { apiFetch, isAbortError } from "@/features/shared";
 import type { LeagueDetailResult } from "../types";
 
 export type LeagueDetailState = {
@@ -14,7 +17,7 @@ export type LeagueDetailState = {
  * Fetches a league's standings + rosters from `/api/league/[leagueId]`, lazily:
  * pass `enabled: false` (the collapsed state) to skip the request entirely so a
  * league is only loaded once its card is expanded. The fetch is aborted on
- * unmount or when the league id changes.
+ * unmount and re-issued when the league id changes.
  */
 export function useLeagueDetail(
   leagueId: string,
@@ -25,28 +28,27 @@ export function useLeagueDetail(
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!enabled || data) return;
+    if (!enabled) return;
 
     let active = true;
     const controller = new AbortController();
 
     (async () => {
+      // Clear the previous league up front: a slow fetch must never leave the
+      // last league's rosters on screen underneath the new id.
+      setData(null);
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(
-          `/api/league/${encodeURIComponent(leagueId)}`,
-          { signal: controller.signal },
-        );
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          throw new Error(body?.error ?? "Failed to load league");
-        }
+        const res = await apiFetch(`/api/league/${encodeURIComponent(leagueId)}`, {
+          signal: controller.signal,
+          fallbackError: "Failed to load league",
+        });
         const json = (await res.json()) as LeagueDetailResult;
         if (active) setData(json);
       } catch (err: unknown) {
-        if (active && (err as Error).name !== "AbortError") {
-          setError(err instanceof Error ? err.message : "Something went wrong");
+        if (active && !isAbortError(err)) {
+          setError(errorMessage(err, "Something went wrong"));
         }
       } finally {
         if (active) setLoading(false);
@@ -57,7 +59,7 @@ export function useLeagueDetail(
       active = false;
       controller.abort();
     };
-  }, [leagueId, enabled, data]);
+  }, [leagueId, enabled]);
 
   return { data, loading, error };
 }

@@ -1,8 +1,9 @@
+import { PageShell } from "@/features/shared";
 import { ToolGrid } from "@/features/tools";
 
 export default function ToolsPage() {
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-16">
+    <PageShell>
       <header className="mb-12">
         <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
           The Lab
@@ -13,6 +14,6 @@ export default function ToolsPage() {
       </header>
 
       <ToolGrid />
-    </main>
+    </PageShell>
   );
 }

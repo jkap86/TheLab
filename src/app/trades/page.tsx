@@ -1,9 +1,10 @@
-import { Trades } from "@/features/trades";
+import { PageShell } from "@/features/shared";
+import { ToolPlaceholder } from "@/features/tools";
 
-export default function TradesPage() {
+export default function Page() {
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-16">
-      <Trades />
-    </main>
+    <PageShell>
+      <ToolPlaceholder href="/trades" />
+    </PageShell>
   );
 }

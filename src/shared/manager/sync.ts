@@ -1,7 +1,7 @@
 import { pool } from "@/shared/db";
 import { getNflState, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague } from "@/shared/sleeper";
-import { mapWithConcurrency } from "@/shared/util";
+import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
 import { fetchLeagueGraph, type WeekRange } from "./graph";
 import { getStoredMaxWeekByLeague, persistLeagueGraph } from "./persist";
@@ -128,7 +128,7 @@ export async function syncLeagueGraphs(
       failed += 1;
       console.error(
         `[leagues] failed to sync league ${league.league_id}:`,
-        error instanceof Error ? error.message : error,
+        errorMessage(error),
       );
     } finally {
       onProgress?.({ loaded, total, failed });

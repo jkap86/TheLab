@@ -6,3 +6,4 @@ export { bulkInsert } from "./bulk";
 export { withTransaction } from "./transaction";
 export { withAdvisoryLock, LOCK_KEYS } from "./lock";
 export type { AdvisoryLockKey } from "./lock";
+export { isFresh, countRows } from "./freshness";

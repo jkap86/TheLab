@@ -1,3 +1,5 @@
+import { Avatar } from "@/features/shared";
+
 import type { LeaguesResult, SyncProgress } from "../types";
 
 export function LeaguesHeader({
@@ -19,25 +21,18 @@ export function LeaguesHeader({
 }) {
   const filtered = leagueCount !== totalCount;
   return (
-    <header className="mb-8 border-b border-white/10 pb-6">
+    <header className="mb-8 border-b border-foreground/10 pb-6">
       <div className="flex items-center gap-4">
-        {user.avatar_url ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={user.avatar_url}
-            alt=""
-            className="h-16 w-16 shrink-0 rounded-full border border-white/10 object-cover"
-          />
-        ) : (
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-2xl font-semibold text-white/40">
-            {(user.display_name || user.username).charAt(0).toUpperCase()}
-          </div>
-        )}
+        <Avatar
+          url={user.avatar_url}
+          name={user.display_name || user.username}
+          size="lg"
+        />
         <div className="min-w-0">
           <h1 className="truncate text-4xl font-semibold tracking-tight">
             {user.display_name || user.username}
           </h1>
-          <p className="text-sm text-white/45">@{user.username}</p>
+          <p className="text-sm text-foreground/45">@{user.username}</p>
         </div>
       </div>
 
@@ -53,7 +48,7 @@ export function LeaguesHeader({
             </>
           )}
         </span>
-        <span className="rounded-md bg-white/5 px-2 py-0.5 text-sm text-white/55">
+        <span className="rounded-md bg-foreground/5 px-2 py-0.5 text-sm text-foreground/55">
           {season}
         </span>
         {refreshing && <RefreshingPill progress={progress} />}
