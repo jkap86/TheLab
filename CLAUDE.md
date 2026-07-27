@@ -21,6 +21,19 @@ src/shared/    Domain logic, one folder per concern.
 - A module owns its tables. If you need data from another concern, add a query
   to *that* module and call it — don't write SQL against a table your module
   doesn't own. (`ktc/match` used to query `players` directly; it doesn't now.)
+- **A cache-backed route reads and nothing else.** `/api/projections`,
+  `/api/league/[leagueId]` and `/api/adp` answer from what the background syncs
+  have stored; a slice that hasn't been synced comes back empty rather than
+  fetched on demand. (The `/api/user/[username]` routes are the deliberate
+  exception — resolving a manager and syncing their leagues is what they are
+  *for*, which is why the leagues one streams progress.) Where a read needs to
+  know what week it is, derive it from stored data too: `projections/queries`
+  takes the weeks still ahead from `game_date` rather than `state/nfl`, so it can
+  only ever name weeks that are actually here to read.
+- A route that needs several independent reads should `Promise.all` them, and
+  decide per read whether a failure is fatal. `/api/league/[leagueId]` catches
+  its projections read and sends `outlook: null` — the rosters are the point of
+  that route and the lineups are a bonus on top.
 - Aliases: `@/*` → `src/*`, `@thelab/http` → the configured axios instance.
 
 ## Anything crossing the network
@@ -136,6 +149,17 @@ parameter. `scoring` picks the column `projections/queries` interpolates into
 `ORDER BY`, so it is a closed enum that fails the request on an unknown value —
 never a silent fallback to a default.
 
+A feature that spans several of those pure modules gets one thin file that does
+the I/O and composes them, and no logic of its own: `projections/outlook` reads
+the weeks and the players cache, then hands off to `aggregate` → `score` →
+`optimal`. The composition is what stays untested, and it is small enough that
+that costs nothing.
+
+Test the property the code rests on, not just its outputs. The rest-of-season
+totals are only correct because scoring is linear, so `aggregate.test` asserts
+`score(w1) + score(w2) === score(w1 + w2)` against real stat lines — if that ever
+stops holding, a comment saying it does would not have caught it.
+
 ## Style
 
 - Comments explain **why**, not what. Match the surrounding density — this
@@ -181,6 +205,24 @@ never a silent fallback to a default.
   within 0.15 of it. Score the stat line against the league's `scoring_settings`
   with `projections/score`; the two sides share a key vocabulary, so it is a dot
   product. Reserve `pts_ppr` for a generic, league-less board.
+- **That dot product is linear, so aggregate the stat lines, not the points.**
+  `score(w1) + score(w2)` is exactly `score(w1 + w2)`, and summing first is one
+  dot product per player instead of one per player-week, rounding once instead
+  of once a week (`projections/aggregate`). It is also the only way to tell a bye
+  from a zero: a summed total needs the *count of weeks that contributed*
+  alongside it, or a player Sleeper hasn't projected is indistinguishable from
+  one projected to score nothing. Carry that distinction all the way to the
+  screen — an em dash, not `0.00`.
+- **The projections window is two weeks, not a season.** The sync keeps the
+  current week and the next warm, so anything called "rest of season" is however
+  many weeks happen to be stored. Send the horizon with the number
+  (`outlook.weeks`) and show it wherever the number surfaces, the same way
+  `/api/adp` has to say which drafts it averaged.
+- **`unprojectedScoring` is non-empty for nearly every league**, because they
+  nearly all weight defence and special-teams events Sleeper doesn't project. It
+  only *means* anything where those players start, so gate any warning on the
+  league having a DEF/IDP slot. A caveat that fires on all 120 leagues is noise,
+  and noise is how the one league it matters for gets ignored.
 - **There is no ADP endpoint** — `/api/adp` averages the `draft_picks` we have
   crawled, so it describes the leagues in this database, not the market. Say so
   wherever the number surfaces, and expose filters that narrow the population:
@@ -193,3 +235,16 @@ never a silent fallback to a default.
   time — even most-constrained first — picks the wrong lineup. `projections/optimal`
   goes player-by-player in points order instead, which is optimal because a
   player's points don't depend on the slot they fill.
+- **Eligibility is `fantasy_positions`, not `position`.** A back listed
+  `["RB","WR"]` can fill a `REC_FLEX` his primary position bars him from, and
+  Sleeper's own lineups use it — the IDP leagues here start players at DL whose
+  `position` reads LB. `getFantasyPositions` is the query; a player the cache
+  doesn't know is eligible for nothing, which is better than guessing and
+  recommending a lineup Sleeper would reject. Exclude IR and taxi from the
+  candidates for the same reason.
+- **An optimal lineup that is arbitrary about interchangeable slots reads as a
+  mistake.** The matching is free to seat the worse of two backs at RB1, or a
+  15-point back in FLEX with a 14-point back at RB — same total, but as advice it
+  looks wrong and diffs against a sane current lineup as pointless moves. So the
+  answer is canonicalised: better player to the stricter slot, and among equally
+  strict slots to the earlier one.
