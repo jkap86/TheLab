@@ -30,6 +30,10 @@ annotate what they send with those types; the client aliases them in
 `features/manager/types.ts`. Never redeclare a response shape on the client —
 that drift is invisible to the compiler, which is exactly what this prevents.
 
+That file holds **every** route's payloads, not just the league ones — `/api/adp`
+and `/api/projections` are both there. Adding a second contract file per module
+is the drift this rule exists to stop; import the filter type it needs instead.
+
 ## Database
 
 Use the helpers in `@/shared/db` rather than hand-rolling:
@@ -39,11 +43,26 @@ Use the helpers in `@/shared/db` rather than hand-rolling:
 | A transaction | `withTransaction(client => …)` — never write `BEGIN`/`COMMIT`/`ROLLBACK` yourself |
 | Work that must not run twice | `withAdvisoryLock(LOCK_KEYS.x, …)`, returns `null` if someone else holds it |
 | Multi-row insert/upsert | `bulkInsert` — chunks and parameterises |
-| Cache freshness gate | `isFresh(table, ttlMs)` / `countRows(table)` |
+| Cache freshness gate (whole table) | `isFresh(table, ttlMs)` / `countRows(table)` |
 | JSONB parameter | `jsonb(value)` |
 
 New advisory lock? Add it to the `LOCK_KEYS` table in `shared/db/lock.ts` so
 collisions stay visible.
+
+`isFresh` judges a **whole table** by its newest `updated_at`, so it only fits a
+cache that is replaced all at once (`players`, `ktc_values`). A table holding
+independently-refreshed slices needs its own gate, or writing any slice marks
+every slice fresh — `projections` is per `(season, week)`, so its sync selects
+the stale weeks with a `NOT EXISTS … updated_at > now() - $ttl` query instead.
+
+Refreshing a slice that can shrink means **upsert then delete what's missing, in
+one transaction** — an upsert alone leaves rows that quietly look current
+(`shared/projections/sync`). Guard the delete on a non-empty fetch, so an
+upstream hiccup returning nothing can't empty the slice.
+
+`NUMERIC` columns come back from `pg` as **strings**, not numbers. Cast in the
+query (`pts_ppr::float8`) rather than converting in TypeScript, so a value is a
+number by the time it leaves the query layer.
 
 Schema: nested Sleeper payloads (settings, scoring, metadata, id arrays) stay
 `JSONB`; promote a column only when it gets queried or joined on. Migrations are
@@ -73,7 +92,18 @@ stacks timers otherwise), non-overlapping ticks, `unref`, and never letting a
 throwing tick kill the loop.
 
 Anything that scrapes or syncs should also take an advisory lock, so extra
-instances sharing one database don't multiply load on Sleeper or KTC.
+instances sharing one database don't multiply load on Sleeper or KTC. Take it
+around the freshness check too, not just the fetch — otherwise every instance
+decides for itself that a refresh is due and they queue up to do it in turn.
+
+Two cadences, and the choice matters:
+
+- **Interval equal to the TTL, forcing on scheduled ticks** (`ktc`) — for a
+  single cache refreshed as a whole, where jitter would otherwise skip a cycle.
+- **Interval a fraction of the TTL, never forcing** (`projections`) — where the
+  gate is per-slice and a tick that finds nothing due costs one query. Forcing
+  here would re-download megabytes of unchanged data on every tick, all
+  offseason.
 
 ## Testing
 
@@ -95,6 +125,16 @@ thin I/O wrappers, pure logic underneath.
 string and nothing else, so the SQL beside it only ever sees checked values.
 It takes the default season as an argument rather than importing
 `DEFAULT_SEASON` — that import is exactly what would make it untestable.
+
+`projections/filters` follows it, and duplicates its small `list`/`integer`
+helpers rather than importing them. That is deliberate: importing across modules
+would pull a barrel — and the database code behind it — into a file whose whole
+value is having no runtime imports. Copy the twenty lines.
+
+Validation earns its keep when a value reaches SQL as anything but a bound
+parameter. `scoring` picks the column `projections/queries` interpolates into
+`ORDER BY`, so it is a closed enum that fails the request on an unknown value —
+never a silent fallback to a default.
 
 ## Style
 
