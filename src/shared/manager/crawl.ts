@@ -1,4 +1,4 @@
-import { pool } from "@/shared/db";
+import { LOCK_KEYS, pool, withAdvisoryLock } from "@/shared/db";
 import { DEFAULT_SEASON, getLeague, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague } from "@/shared/sleeper";
 import { mapWithConcurrency } from "@/shared/util";
@@ -37,13 +37,6 @@ export const CRAWL_MANAGER_TTL_MS = 6 * 60 * 60 * 1000;
  * Sleeper's rate budget and the pg pool to real requests.
  */
 export const CRAWL_CONCURRENCY = 4;
-
-/**
- * Advisory lock guarding a crawl tick. Arbitrary constant, held for the duration
- * of a tick so overlapping ticks — and extra app instances, which share one
- * database — don't crawl the same rows twice.
- */
-const CRAWL_LOCK_KEY = [8675309, 1] as const;
 
 const message = (error: unknown) =>
   error instanceof Error ? error.message : error;
@@ -286,27 +279,6 @@ async function discoverMemberLeagues(
   };
 }
 
-/** Run `fn` only if no other tick holds the crawl lock. */
-async function withCrawlLock<T>(fn: () => Promise<T>): Promise<T | null> {
-  const client = await pool.connect();
-  try {
-    const { rows } = await client.query<{ locked: boolean }>(
-      `SELECT pg_try_advisory_lock($1::int, $2::int) AS locked`,
-      [...CRAWL_LOCK_KEY],
-    );
-    if (!rows[0].locked) return null;
-    try {
-      return await fn();
-    } finally {
-      await client.query(`SELECT pg_advisory_unlock($1::int, $2::int)`, [
-        ...CRAWL_LOCK_KEY,
-      ]);
-    }
-  } finally {
-    client.release();
-  }
-}
-
 export type CrawlOptions = {
   season?: string;
   /** Stored leagues to refresh this tick. */
@@ -344,7 +316,9 @@ export async function runLeagueCrawl(
     managersCrawled: 0, discovered: 0, discoverFailed: 0, deferred: 0,
   };
 
-  const summary = await withCrawlLock(async () => {
+  // The lock is held for the whole tick so overlapping ticks — and extra app
+  // instances, which share one database — don't crawl the same rows twice.
+  const summary = await withAdvisoryLock(LOCK_KEYS.leagueCrawl, async () => {
     const currentWeek = await getCurrentWeek();
     const refresh = await refreshStaleLeagues(season, currentWeek, leagueLimit);
     const discovery = await discoverMemberLeagues(

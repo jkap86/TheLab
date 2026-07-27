@@ -1,6 +1,12 @@
 import type { PoolClient } from "pg";
 
-import { bulkInsert, pool } from "@/shared/db";
+import {
+  bulkInsert,
+  LOCK_KEYS,
+  pool,
+  withAdvisoryLock,
+  withTransaction,
+} from "@/shared/db";
 
 import { fetchKtcPlayerHistory } from "./client";
 import type { KtcHistoryPoint, KtcPlayer } from "./types";
@@ -84,13 +90,11 @@ export async function recordDailySnapshot(
 }
 
 /** Upsert one player's full scraped series. */
-async function writePlayerHistory(
+function writePlayerHistory(
   ktcId: number,
   points: readonly KtcHistoryPoint[],
 ): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withTransaction(async (client) => {
     await bulkInsert(client, {
       table: "ktc_value_history",
       columns: HISTORY_COLUMNS,
@@ -107,13 +111,7 @@ async function writePlayerHistory(
         WHERE ktc_id = $1`,
       [ktcId],
     );
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 type PendingRow = { ktc_id: number; slug: string; player_name: string };
@@ -153,6 +151,8 @@ async function pendingPlayers(
 }
 
 export type KtcHistorySummary = {
+  /** true when another instance held the lock and this run did nothing. */
+  locked: boolean;
   /** Players whose page was scraped and stored successfully. */
   scraped: number;
   /** Players whose scrape failed (logged, retried on a later tick). */
@@ -171,36 +171,45 @@ export type KtcHistorySummary = {
  * fills in over a day. One player's failure never aborts the batch — the
  * attempt is stamped so the queue rotates past them, and they come back around
  * on a later tick.
+ *
+ * Held under an advisory lock: unlike the league crawler's queue, this one
+ * selects its batch without atomically claiming it, so two instances running at
+ * once would pick the same players and scrape those multi-megabyte pages twice.
  */
 export async function syncKtcHistory(
   options: { limit?: number; force?: boolean } = {},
 ): Promise<KtcHistorySummary> {
   const { limit = KTC_HISTORY_BATCH, force = false } = options;
-  const { rows: pending, remaining } = await pendingPlayers(limit, force);
 
-  let scraped = 0;
-  let failed = 0;
-  let rows = 0;
+  const summary = await withAdvisoryLock(LOCK_KEYS.ktcHistory, async () => {
+    const { rows: pending, remaining } = await pendingPlayers(limit, force);
 
-  for (const player of pending) {
-    try {
-      const points = await fetchKtcPlayerHistory(player.slug);
-      await writePlayerHistory(player.ktc_id, points);
-      scraped++;
-      rows += points.length;
-    } catch (error) {
-      failed++;
-      await pool
-        .query(`UPDATE ktc_values SET history_attempt_at = now() WHERE ktc_id = $1`, [
-          player.ktc_id,
-        ])
-        .catch(() => {});
-      console.warn(
-        `[ktc] History scrape failed for ${player.player_name} (${player.slug}):`,
-        error instanceof Error ? error.message : error,
-      );
+    let scraped = 0;
+    let failed = 0;
+    let rows = 0;
+
+    for (const player of pending) {
+      try {
+        const points = await fetchKtcPlayerHistory(player.slug);
+        await writePlayerHistory(player.ktc_id, points);
+        scraped++;
+        rows += points.length;
+      } catch (error) {
+        failed++;
+        await pool
+          .query(`UPDATE ktc_values SET history_attempt_at = now() WHERE ktc_id = $1`, [
+            player.ktc_id,
+          ])
+          .catch(() => {});
+        console.warn(
+          `[ktc] History scrape failed for ${player.player_name} (${player.slug}):`,
+          error instanceof Error ? error.message : error,
+        );
+      }
     }
-  }
 
-  return { scraped, failed, rows, remaining: remaining - scraped };
+    return { locked: false, scraped, failed, rows, remaining: remaining - scraped };
+  });
+
+  return summary ?? { locked: true, scraped: 0, failed: 0, rows: 0, remaining: 0 };
 }

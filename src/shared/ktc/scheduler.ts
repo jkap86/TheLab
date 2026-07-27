@@ -11,7 +11,9 @@ const globalForScheduler = globalThis as unknown as {
 async function runOnce(force: boolean): Promise<void> {
   try {
     const summary = await syncKtcValues({ force });
-    if (summary.skipped) {
+    if (summary.locked) {
+      console.log("[ktc] Values refresh already running elsewhere; skipped.");
+    } else if (summary.skipped) {
       console.log(`[ktc] Values still fresh; skipped (${summary.count} rows).`);
     } else {
       console.log(`[ktc] Refreshed ${summary.count} values.`);
@@ -25,8 +27,8 @@ async function runOnce(force: boolean): Promise<void> {
   // creates the `ktc_values` rows this walks) and is separately guarded so a
   // failure here can't take the values refresh down with it.
   try {
-    const { scraped, failed, rows, remaining } = await syncKtcHistory();
-    if (scraped || failed) {
+    const { locked, scraped, failed, rows, remaining } = await syncKtcHistory();
+    if (!locked && (scraped || failed)) {
       console.log(
         `[ktc] History: scraped ${scraped} player(s), ${rows} day rows` +
           `${failed ? `, ${failed} failed` : ""}; ${remaining} still due.`,
@@ -47,9 +49,9 @@ async function runOnce(force: boolean): Promise<void> {
  * `syncKtcHistory`). The timer is `unref`'d so it never keeps the process alive
  * on its own.
  *
- * Runs per server instance. If you scale horizontally the 15-min freshness gate
- * makes extra instances mostly no-op, but a single leader (or a Postgres
- * advisory lock in `syncKtcValues`) would avoid the redundant scrapes entirely.
+ * Runs per server instance, but `syncKtcValues` and `syncKtcHistory` each take a
+ * Postgres advisory lock, so scaling horizontally doesn't multiply the scrapes —
+ * extra instances find the lock held and skip that tick.
  */
 export function startKtcScheduler(): void {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;

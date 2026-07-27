@@ -1,4 +1,4 @@
-import { bulkInsert, jsonb as j, pool } from "@/shared/db";
+import { bulkInsert, jsonb as j, pool, withTransaction } from "@/shared/db";
 import { getAllPlayers } from "@/shared/sleeper";
 
 /** How long the cached players map stays fresh (Sleeper: refresh once/day). */
@@ -32,10 +32,8 @@ export async function syncPlayers(
   const map = await getAllPlayers();
   const entries = Object.entries(map);
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await bulkInsert(client, {
+  await withTransaction((client) =>
+    bulkInsert(client, {
       table: "players",
       columns: [
         "player_id", "first_name", "last_name", "full_name", "position", "team",
@@ -54,14 +52,8 @@ export async function syncPlayers(
           team = EXCLUDED.team, fantasy_positions = EXCLUDED.fantasy_positions,
           status = EXCLUDED.status, sport = EXCLUDED.sport,
           data = EXCLUDED.data, updated_at = now()`,
-    });
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+    }),
+  );
 
   return { skipped: false, count: entries.length };
 }

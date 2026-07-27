@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 
-import { bulkInsert, jsonb as j, pool } from "@/shared/db";
+import { bulkInsert, jsonb as j, pool, withTransaction } from "@/shared/db";
 
 import type { LeagueGraph } from "./graph";
 
@@ -112,18 +112,8 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
 }
 
 /** Persist one league graph in its own transaction (atomic per league). */
-export async function persistLeagueGraph(g: LeagueGraph): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await writeLeagueGraph(client, g);
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+export function persistLeagueGraph(g: LeagueGraph): Promise<void> {
+  return withTransaction((client) => writeLeagueGraph(client, g));
 }
 
 /**
