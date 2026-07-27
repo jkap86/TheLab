@@ -62,7 +62,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
               No leagues match these filters.
             </p>
           ) : (
-            <ul className="flex flex-col gap-4">
+            <ul className="flex flex-col gap-4 w-full">
               {filtered.map((league) => (
                 <LeagueCard key={league.league_id} league={league} />
               ))}
@@ -76,7 +76,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
       {children}
     </main>
   );

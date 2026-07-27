@@ -36,7 +36,7 @@ export function LeagueCard({ league }: { league: ManagerLeague }) {
       </button>
 
       {expanded && (
-        <div className="border-t border-white/10 p-4">
+        <div className="border-t border-white/10 py-4">
           <LeagueDetailPanel leagueId={league.league_id} />
         </div>
       )}

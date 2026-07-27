@@ -46,18 +46,22 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   const selected =
     data.teams.find((t) => t.roster_id === selectedId) ?? data.teams[0];
 
+  // Even 50/50 split at every width; the children use @lg container queries to
+  // shed non-essential columns once each half gets tight.
   return (
-    <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <Standings
-        teams={data.teams}
-        selectedId={selected.roster_id}
-        onSelect={setSelectedId}
-      />
-      <RosterDetail
-        team={selected}
-        players={data.players}
-        rosterPositions={data.roster_positions}
-      />
+    <div className="@container">
+      <div className="grid grid-cols-2 gap-2 @lg:gap-4">
+        <Standings
+          teams={data.teams}
+          selectedId={selected.roster_id}
+          onSelect={setSelectedId}
+        />
+        <RosterDetail
+          team={selected}
+          players={data.players}
+          rosterPositions={data.roster_positions}
+        />
+      </div>
     </div>
   );
 }
@@ -73,46 +77,54 @@ function Standings({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-white/10">
-      <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-xs uppercase tracking-wide text-white/40">
+      <div className="grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 border-b border-white/10 bg-white/[0.03] px-1.5 py-2 text-[0.65rem] uppercase tracking-wide text-white/40 @lg:grid-cols-[2rem_minmax(0,1fr)_auto] @lg:gap-2 @lg:px-3 @lg:text-xs">
         <span className="text-center">#</span>
-        <span>Manager</span>
-        <span className="text-right">Rec</span>
+        <span className="truncate">Manager</span>
+        <span className="hidden text-right @lg:block">Rec</span>
       </div>
       <ul>
         {teams.map((team, i) => {
           const active = team.roster_id === selectedId;
+          const record = `${team.record.wins}-${team.record.losses}${
+            team.record.ties ? `-${team.record.ties}` : ""
+          }`;
+          const fpts = team.fpts.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
           return (
             <li key={team.roster_id}>
               <button
                 type="button"
                 onClick={() => onSelect(team.roster_id)}
-                className={`grid w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 border-l-2 px-3 py-2 text-left transition-colors ${
+                title={teamLabel(team)}
+                className={`grid w-full grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 border-l-2 px-1.5 py-1.5 text-left transition-colors @lg:grid-cols-[2rem_minmax(0,1fr)_auto] @lg:gap-2 @lg:px-3 @lg:py-2 ${
                   active
                     ? "border-active bg-active/10"
                     : "border-transparent hover:bg-white/[0.04]"
                 }`}
               >
-                <span className="text-center text-sm tabular-nums text-white/40">
+                <span className="text-center text-[0.65rem] tabular-nums text-white/40 @lg:text-sm">
                   {i + 1}
                 </span>
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 items-center gap-1 @lg:gap-2">
                   <Avatar team={team} />
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-white/90">
+                    <span className="block truncate text-xs font-medium text-white/90 @lg:text-sm">
                       {teamLabel(team)}
                     </span>
-                    <span className="block truncate text-xs tabular-nums text-white/40">
-                      {team.fpts.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}{" "}
-                      PF
+                    {/* Narrow: record folds onto the second line so it doesn't
+                        need a column of its own. */}
+                    <span className="block truncate text-[0.65rem] tabular-nums text-white/40 @lg:hidden">
+                      {record} · {fpts}
+                    </span>
+                    <span className="hidden truncate text-xs tabular-nums text-white/40 @lg:block">
+                      {fpts} PF
                     </span>
                   </span>
                 </span>
-                <span className="text-right text-sm tabular-nums text-white/70">
-                  {team.record.wins}-{team.record.losses}
-                  {team.record.ties ? `-${team.record.ties}` : ""}
+                <span className="hidden text-right text-sm tabular-nums text-white/70 @lg:block">
+                  {record}
                 </span>
               </button>
             </li>
@@ -143,31 +155,35 @@ function RosterDetail({
   }, [team]);
 
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4">
-      <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-        <Avatar team={team} size="lg" />
-        <div className="min-w-0">
-          <h4 className="truncate text-base font-semibold text-white/90">
-            {teamLabel(team)}
-          </h4>
-          {team.manager?.team_name && team.manager.display_name && (
-            <p className="truncate text-xs text-white/45">
-              {team.manager.display_name}
-            </p>
-          )}
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5 @lg:p-4">
+      {/* Narrow: record drops to its own line under the name instead of
+          competing with it for horizontal space. */}
+      <div className="border-b border-white/10 pb-3 @lg:flex @lg:items-center @lg:gap-3 @lg:pb-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Avatar team={team} size="lg" />
+          <div className="min-w-0">
+            <h4 className="truncate text-sm font-semibold text-white/90 @lg:text-base">
+              {teamLabel(team)}
+            </h4>
+            {team.manager?.team_name && team.manager.display_name && (
+              <p className="truncate text-xs text-white/45">
+                {team.manager.display_name}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="ml-auto text-right text-sm">
-          <div className="tabular-nums font-medium text-white/85">
+        <div className="mt-1.5 flex items-baseline gap-2 text-sm @lg:mt-0 @lg:ml-auto @lg:block @lg:shrink-0 @lg:text-right">
+          <span className="tabular-nums font-medium text-white/85">
             {team.record.wins}-{team.record.losses}
             {team.record.ties ? `-${team.record.ties}` : ""}
-          </div>
-          <div className="tabular-nums text-xs text-white/45">
+          </span>
+          <span className="block tabular-nums text-xs text-white/45">
             {team.fpts.toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}{" "}
             PF
-          </div>
+          </span>
         </div>
       </div>
 
@@ -240,13 +256,18 @@ function PlayerRow({
   const position = player?.position ?? null;
 
   return (
-    <li className="flex items-center gap-2 py-1.5">
+    <li className="flex items-center gap-1 py-1.5 @lg:gap-2">
       {slot ? (
-        <span className="w-9 shrink-0 text-center text-[0.7rem] font-semibold uppercase text-white/35">
+        <span className="w-6 shrink-0 text-center text-[0.65rem] font-semibold uppercase text-white/35 @lg:w-9 @lg:text-[0.7rem]">
           {slot}
         </span>
       ) : null}
-      <PositionBadge position={position} />
+      {/* The badge duplicates the slot label, so at narrow widths it only
+          earns its space on rows that have no slot (bench). */}
+      <PositionBadge
+        position={position}
+        className={slot ? "hidden @lg:inline-flex" : undefined}
+      />
       <span
         className={`min-w-0 flex-1 truncate text-sm ${
           empty ? "text-white/25" : "text-white/85"
@@ -255,7 +276,7 @@ function PlayerRow({
         {name}
       </span>
       {player?.team && (
-        <span className="shrink-0 text-xs tabular-nums text-white/35">
+        <span className="hidden shrink-0 text-xs tabular-nums text-white/35 @sm:inline">
           {player.team}
         </span>
       )}
@@ -263,11 +284,17 @@ function PlayerRow({
   );
 }
 
-function PositionBadge({ position }: { position: string | null }) {
+function PositionBadge({
+  position,
+  className = "inline-flex",
+}: {
+  position: string | null;
+  className?: string;
+}) {
   const tone = (position && POSITION_TONE[position]) || "bg-white/5 text-white/40";
   return (
     <span
-      className={`inline-flex w-8 shrink-0 items-center justify-center rounded px-1 py-0.5 text-[0.65rem] font-bold ${tone}`}
+      className={`w-8 shrink-0 items-center justify-center rounded px-1 py-0.5 text-[0.65rem] font-bold ${tone} ${className}`}
     >
       {position ?? "–"}
     </span>
@@ -281,7 +308,10 @@ function Avatar({
   team: LeagueTeamView;
   size?: "sm" | "lg";
 }) {
-  const dim = size === "lg" ? "h-9 w-9 text-sm" : "h-6 w-6 text-xs";
+  const dim =
+    size === "lg"
+      ? "h-7 w-7 text-xs @lg:h-9 @lg:w-9 @lg:text-sm"
+      : "h-5 w-5 text-[0.6rem] @lg:h-6 @lg:w-6 @lg:text-xs";
   const url = team.manager?.avatar_url;
   if (url) {
     return (
