@@ -49,6 +49,22 @@ Schema: nested Sleeper payloads (settings, scoring, metadata, id arrays) stay
 `JSONB`; promote a column only when it gets queried or joined on. Migrations are
 plain SQL in `db/migrations`, applied automatically on boot.
 
+Filtering *on* those blobs takes two habits:
+
+- **Regex-guard a numeric cast before making it.** Sleeper omits its defaults
+  and doesn't promise types, so a bare `(settings->>'type')::int` fails the
+  whole query on the one league holding a junk value. Write
+  `CASE WHEN settings->>'type' ~ '^[0-9]+$' THEN (settings->>'type')::int ELSE 0
+  END`, and let the fallback match what the client already assumes (a missing
+  `type` is redraft — see `features/manager/filters`).
+- **Parenthesise a SQL fragment you intend to reuse.** Call sites append their
+  own comparison, so a fragment ending in `= 1` makes `${FRAG} = $1` a chained
+  `=`, which Postgres rejects. `shared/manager/adp` builds its `WHERE` this way.
+
+Build a dynamic `WHERE` by pushing onto a params array and binding the index it
+returns (`` `$${params.push(value)}` ``) — the validated enum decides *which*
+fragments exist, and every value still arrives as a bound parameter.
+
 ## Background loops
 
 Use `startBackgroundLoop` from `@/shared/util` — don't hand-roll `setInterval`.
@@ -75,6 +91,11 @@ That is why `ktc/parse` and `ktc/match` are pure and take their inputs as
 arguments. Keep new logic that's worth testing on the same side of that line:
 thin I/O wrappers, pure logic underneath.
 
+`manager/adp-filters` is the same shape for a route: it validates the query
+string and nothing else, so the SQL beside it only ever sees checked values.
+It takes the default season as an argument rather than importing
+`DEFAULT_SEASON` — that import is exactly what would make it untestable.
+
 ## Style
 
 - Comments explain **why**, not what. Match the surrounding density — this
@@ -100,3 +121,10 @@ thin I/O wrappers, pure logic underneath.
   handful per tick.
 - Transactions are keyed by week with no all-at-once endpoint; a league's full
   history is the union of each week.
+- **There is no ADP endpoint** — `/api/adp` averages the `draft_picks` we have
+  crawled, so it describes the leagues in this database, not the market. Say so
+  wherever the number surfaces, and expose filters that narrow the population:
+  pooling a 4-round dynasty rookie draft with a 25-round startup averages two
+  different games.
+- **A draft's `pick_no` is not always a draft position.** In auction drafts it
+  is nomination order, which is why `/api/adp` excludes them by default.
