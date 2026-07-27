@@ -60,6 +60,15 @@ describe("optimalLineup", () => {
     assert.deepEqual(filled(["RB", "FLEX"], roster), ["rb1", "rb2"]);
   });
 
+  test("orders two copies of the same slot best first", () => {
+    // Both orderings are the same lineup for the same points, but a roster that
+    // lists RB2 above RB1 reads as an oversight, and diffs against a sane current
+    // lineup as two moves that change nothing.
+    const roster = [p("rb1", "RB", 15), p("rb2", "RB", 14), p("rb3", "RB", 9)];
+    assert.deepEqual(filled(["RB", "RB"], roster), ["rb1", "rb2"]);
+    assert.deepEqual(filled(["FLEX", "FLEX"], roster), ["rb1", "rb2"]);
+  });
+
   test("SUPER_FLEX starts a second quarterback when he outscores the flex", () => {
     const roster = [p("qb1", "QB", 22), p("qb2", "QB", 19), p("rb1", "RB", 14)];
     assert.deepEqual(filled(["QB", "SUPER_FLEX"], roster), ["qb1", "qb2"]);

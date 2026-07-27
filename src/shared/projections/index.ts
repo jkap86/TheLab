@@ -4,8 +4,19 @@ export {
   getWeekProjections,
   listWeekProjections,
   getLatestStoredWeek,
+  getRemainingWeeks,
+  listPlayerWeekStats,
 } from "./queries";
 export type { PlayerProjection, RankedProjection } from "./queries";
+export { aggregateWeeklyStats, aggregatedStatKeys } from "./aggregate";
+export type { AggregatedProjection, PlayerWeekStats } from "./aggregate";
+export { getLeagueOutlook } from "./outlook";
+export type {
+  LeagueOutlook,
+  OutlookRoster,
+  PlayerOutlook,
+  TeamOutlook,
+} from "./outlook";
 export {
   parseProjectionFilters,
   PROJECTION_FILTER_DEFAULTS,

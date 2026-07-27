@@ -48,8 +48,41 @@ function Panel({ data }: { data: LeagueDetailResult }) {
           team={selected}
           players={data.players}
           rosterPositions={data.roster_positions}
+          outlook={data.outlook}
         />
       </div>
+      <OutlookCaveat data={data} />
     </div>
+  );
+}
+
+/** Slots whose players Sleeper barely projects — see {@link OutlookCaveat}. */
+const DEFENSIVE_SLOTS = new Set(["DEF", "DL", "LB", "DB", "IDP_FLEX"]);
+
+/**
+ * Says so when this league's projections are known to be incomplete.
+ *
+ * `unprojected_scoring` is near enough always non-empty — every league carries
+ * weights for defence and special-teams events Sleeper doesn't project — so it is
+ * only worth a warning where those categories actually score: a league that
+ * starts a DEF or an IDP. There, every one of those players reads low, and the
+ * optimal lineup will bench them for skill players it can see.
+ *
+ * A league-level fact, so it is stated once under the panel rather than on each
+ * team.
+ */
+function OutlookCaveat({ data }: { data: LeagueDetailResult }) {
+  const count = data.outlook?.unprojected_scoring.length ?? 0;
+  const startsDefence = (data.roster_positions ?? []).some((slot) =>
+    DEFENSIVE_SLOTS.has(slot),
+  );
+  if (count === 0 || !startsDefence) return null;
+
+  return (
+    <p className="mt-2 text-[0.7rem] leading-relaxed text-foreground/40">
+      This league starts defensive players and scores {count}{" "}
+      categories Sleeper doesn&apos;t project, so their projected points read low
+      and the optimal lineup will under-start them.
+    </p>
   );
 }

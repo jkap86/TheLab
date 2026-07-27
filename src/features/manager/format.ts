@@ -22,3 +22,31 @@ export function formatPoints(points: number): string {
     maximumFractionDigits: 2,
   });
 }
+
+/**
+ * The week horizon a projection covers, e.g. `"Wk 3–5"`, `"Wk 3"`, `"Wk 3, 5"`.
+ *
+ * Worth the few lines because the horizon is not what a reader assumes: the sync
+ * keeps a short window of weeks warm, so a "rest of season" total is usually two
+ * weeks deep. Every projected number is shown next to this rather than left to
+ * imply a full season.
+ *
+ * Runs of consecutive weeks collapse to a range; gaps (an unsynced week between
+ * two synced ones) stay visible as separate entries, since that is a hole in the
+ * total rather than a shorter horizon.
+ */
+export function formatWeekRange(weeks: readonly number[]): string {
+  if (weeks.length === 0) return "no weeks";
+
+  const sorted = [...weeks].sort((a, b) => a - b);
+  const runs: number[][] = [];
+  for (const week of sorted) {
+    const run = runs.at(-1);
+    if (run && week === run[1] + 1) run[1] = week;
+    else runs.push([week, week]);
+  }
+
+  return `Wk ${runs
+    .map(([from, to]) => (from === to ? `${from}` : `${from}–${to}`))
+    .join(", ")}`;
+}

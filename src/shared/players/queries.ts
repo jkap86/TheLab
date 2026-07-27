@@ -70,6 +70,46 @@ export async function getPlayerIdsByPosition(
 }
 
 /**
+ * Player ids → the positions each is eligible at, Sleeper's `fantasy_positions`.
+ *
+ * Distinct from `position`, and the distinction is the whole reason this exists:
+ * a lineup slot takes anyone eligible, so a back listed `["RB","WR"]` can fill a
+ * `REC_FLEX` that his primary position would bar him from. Falls back to the
+ * single position when Sleeper lists none, and omits an id the cache doesn't know
+ * — a caller filling slots should treat that as "eligible for nothing" rather
+ * than guess.
+ */
+export async function getFantasyPositions(
+  ids: string[],
+): Promise<Record<string, string[]>> {
+  if (ids.length === 0) return {};
+
+  const { rows } = await pool.query<{
+    player_id: string;
+    positions: string[];
+    position: string | null;
+  }>(
+    // Unnested in SQL so the driver hands back a text[]; `fantasy_positions` is
+    // JSONB and Sleeper has been seen to store a non-array there, which
+    // `jsonb_array_elements_text` errors on rather than skips.
+    `SELECT player_id, position,
+            ARRAY(SELECT jsonb_array_elements_text(
+                    CASE WHEN jsonb_typeof(fantasy_positions) = 'array'
+                         THEN fantasy_positions ELSE '[]'::jsonb END)) AS positions
+       FROM players
+      WHERE player_id = ANY($1)`,
+    [ids],
+  );
+
+  const out: Record<string, string[]> = {};
+  for (const r of rows) {
+    out[r.player_id] =
+      r.positions.length > 0 ? r.positions : r.position ? [r.position] : [];
+  }
+  return out;
+}
+
+/**
  * A cached player projected down to the fields cross-source name matching needs
  * — see `@/shared/ktc`'s `resolveSleeperIds`. `active` and `birth_year` are
  * lifted out of the raw Sleeper payload so callers never have to know how that

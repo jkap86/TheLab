@@ -113,8 +113,9 @@ export async function getLeagueDetail(
     season: string;
     status: string;
     roster_positions: string[] | null;
+    scoring_settings: Record<string, number> | null;
   }>(
-    `SELECT league_id, name, season, status, roster_positions
+    `SELECT league_id, name, season, status, roster_positions, scoring_settings
        FROM leagues WHERE league_id = $1`,
     [leagueId],
   );
@@ -171,6 +172,7 @@ export async function getLeagueDetail(
     season: l.season,
     status: l.status,
     roster_positions: l.roster_positions,
+    scoring_settings: l.scoring_settings,
     teams,
   };
 }

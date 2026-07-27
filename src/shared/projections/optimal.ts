@@ -142,20 +142,30 @@ const breadth = (slot: string): number => SLOT_POSITIONS[slot]?.length ?? 0;
 
 /**
  * Settle which of two interchangeable slots each chosen player occupies: the
- * better player goes in the stricter slot.
+ * better player goes in the stricter slot, and among equally strict slots he goes
+ * in the earlier one.
  *
  * The matching above is optimal but arbitrary about this, because augmenting
  * paths displace players sideways — it will happily seat a 15-point back in FLEX
- * and a 14-point back at RB. Same total, but as advice it reads as a mistake, and
- * diffing it against a sane current lineup invents two pointless moves.
+ * and a 14-point back at RB, or the worse of two backs in the first of two RB
+ * slots. Same total either way, but as advice it reads as a mistake, and diffing
+ * it against a sane current lineup invents two pointless moves.
  *
  * Only ever swaps two seated players between their slots, so the set of starters
- * and the total are untouched.
+ * and the total are untouched. It terminates because every swap moves the better
+ * player to the more preferred slot, which strictly decreases a bounded ordering.
  */
 function canonicalise(
   slots: readonly string[],
   filled: (RosterPlayer | null)[],
 ): void {
+  /** Whether slot `i` is the one of the pair that should hold the better player. */
+  const prefers = (i: number, j: number): boolean => {
+    const a = breadth(slots[i]);
+    const b = breadth(slots[j]);
+    return a < b || (a === b && i < j);
+  };
+
   for (let pass = 0; pass < slots.length; pass++) {
     let swapped = false;
 
@@ -163,7 +173,7 @@ function canonicalise(
       for (let j = 0; j < slots.length; j++) {
         const a = filled[i];
         const b = filled[j];
-        if (!a || !b || breadth(slots[i]) >= breadth(slots[j])) continue;
+        if (!a || !b || !prefers(i, j)) continue;
         if (a.points >= b.points) continue;
         if (!eligible(slots[i], b.positions) || !eligible(slots[j], a.positions)) continue;
 

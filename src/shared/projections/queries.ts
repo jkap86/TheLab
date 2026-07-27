@@ -1,5 +1,6 @@
 import { pool } from "@/shared/db";
 
+import type { PlayerWeekStats } from "./aggregate";
 import type { ProjectionScoring } from "./filters";
 
 /** One player's stored projection for a week. */
@@ -77,6 +78,64 @@ export async function getLatestStoredWeek(season: string): Promise<number | null
     [season],
   );
   return rows[0]?.week ?? null;
+}
+
+/**
+ * Stored weeks of a season still to be played, ascending.
+ *
+ * A week counts as remaining until its last game kicks off — that is the point
+ * past which no lineup decision is left to make, and it is the same rollover
+ * Sleeper's `display_week` follows. Deriving it from `game_date` rather than
+ * asking `state/nfl` keeps this read off the network, and keeps it honest: it can
+ * only ever name weeks that are actually here to read.
+ *
+ * Compared against the date in US Eastern, not the server's: a Monday night game
+ * is still ahead of you at 9pm ET, when UTC has already rolled into Tuesday.
+ *
+ * A week whose rows carry no `game_date` at all is left out rather than assumed
+ * future — counting a played week as remaining would silently double a roster's
+ * outlook, which reads as a plausible number rather than as a bug.
+ */
+export async function getRemainingWeeks(season: string): Promise<number[]> {
+  const { rows } = await pool.query<{ week: number }>(
+    `SELECT week
+       FROM projections
+      WHERE season = $1
+      GROUP BY week
+     HAVING max(game_date) >= (now() AT TIME ZONE 'America/New_York')::date
+      ORDER BY week`,
+    [season],
+  );
+  return rows.map((r) => r.week);
+}
+
+/**
+ * Raw stat lines for these players over these weeks — the input to
+ * {@link aggregateWeeklyStats}.
+ *
+ * Only `stats` comes back, because a league scores from the stat line rather than
+ * from Sleeper's `pts_*`. Rows are per player-week and simply absent where there
+ * is no projection (bye, unpublished week), which the aggregate reports as a
+ * missing week rather than a zero.
+ */
+export async function listPlayerWeekStats({
+  season,
+  weeks,
+  playerIds,
+}: {
+  season: string;
+  weeks: number[];
+  playerIds: string[];
+}): Promise<PlayerWeekStats[]> {
+  if (weeks.length === 0 || playerIds.length === 0) return [];
+
+  const { rows } = await pool.query<PlayerWeekStats>(
+    `SELECT player_id, week, COALESCE(stats, '{}'::jsonb) AS stats
+       FROM projections
+      WHERE season = $1 AND week = ANY($2::int[]) AND player_id = ANY($3)`,
+    [season, weeks, playerIds],
+  );
+  return rows;
 }
 
 /** One row of a ranked week, scored by the caller's chosen format. */

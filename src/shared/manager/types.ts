@@ -56,5 +56,10 @@ export type LeagueDetail = {
   status: string;
   /** Ordered starting-slot + bench labels (e.g. ["QB","RB","FLEX","BN"]). */
   roster_positions: string[] | null;
+  /**
+   * Scoring rules keyed by stat, as stored by Sleeper. Needed to project this
+   * league's rosters: its numbers, not Sleeper's default PPR.
+   */
+  scoring_settings: Record<string, number> | null;
   teams: LeagueTeam[];
 };

@@ -1,5 +1,5 @@
 import type { PlayerSummary } from "@/shared/players";
-import type { ProjectionFilters } from "@/shared/projections";
+import type { LeagueOutlook, ProjectionFilters } from "@/shared/projections";
 import type { UserInfo } from "@/shared/sleeper";
 
 import type { AdpFilters } from "./adp-filters";
@@ -33,6 +33,24 @@ export type LeagueDetailPayload = Omit<LeagueDetail, "teams"> & {
   teams: LeagueTeamPayload[];
   /** Player ids → resolved name/position/team, for rendering rosters. */
   players: Record<string, PlayerSummary>;
+  /**
+   * Every roster's best starting lineup for the rest of the season, ranked on
+   * each player's projected points aggregated over `outlook.weeks` and scored
+   * with *this* league's `scoring_settings` — so the same player is worth
+   * different totals in two leagues, which is the point.
+   *
+   * One lineup per team rather than one per week: `optimal` answers "who belongs
+   * in your starting slots from here", and `current`/`points_left`/`start`/`sit`
+   * diff that against what the roster is starting today.
+   *
+   * The horizon is the weeks actually stored, which the sync keeps a short window
+   * of — read `outlook.weeks` rather than assuming it runs to week 18, and say
+   * how far ahead the numbers reach wherever they surface.
+   *
+   * null when the league can't be projected: no slots or scoring settings on
+   * file, or no weeks left on the schedule.
+   */
+  outlook: LeagueOutlook | null;
 };
 
 /** A manager's leagues, sent once from cache and again after a refresh. */

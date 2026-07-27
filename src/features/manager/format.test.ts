@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { formatPoints, formatRecord } from "./format.ts";
+import { formatPoints, formatRecord, formatWeekRange } from "./format.ts";
 
 describe("formatRecord", () => {
   test("omits ties when there are none", () => {
@@ -25,5 +25,29 @@ describe("formatPoints", () => {
 
   test("rounds to two decimals", () => {
     assert.equal(formatPoints(99.999), "100.00");
+  });
+});
+
+describe("formatWeekRange", () => {
+  test("collapses consecutive weeks into a range", () => {
+    assert.equal(formatWeekRange([3, 4, 5]), "Wk 3–5");
+  });
+
+  test("names a single week without a range", () => {
+    assert.equal(formatWeekRange([3]), "Wk 3");
+  });
+
+  test("keeps a gap visible rather than spanning it", () => {
+    // A missing week in the middle is a hole in the total, not a shorter horizon.
+    assert.equal(formatWeekRange([1, 3]), "Wk 1, 3");
+    assert.equal(formatWeekRange([1, 2, 5, 6]), "Wk 1–2, 5–6");
+  });
+
+  test("sorts before ranging", () => {
+    assert.equal(formatWeekRange([5, 3, 4]), "Wk 3–5");
+  });
+
+  test("says so when there are no weeks at all", () => {
+    assert.equal(formatWeekRange([]), "no weeks");
   });
 });
