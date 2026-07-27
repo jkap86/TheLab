@@ -1,9 +1,16 @@
 @import "tailwindcss";
 
-/* Register the cyan accent as a Tailwind color so `text-active`, `bg-active`,
-   `border-active` (with opacity modifiers) are available. Additive only. */
+/* Register app colors as Tailwind colors so `text-active`, `bg-foreground`,
+   `border-foreground` (with opacity modifiers) are available. Additive only.
+
+   `foreground` is the body text color. Tailwind v4 has no built-in colour by
+   that name — it resolves `text-foreground` from `--color-foreground` here — so
+   without this registration every `*-foreground/*` utility silently emits
+   nothing. It is plain white, so `foreground/60` and `white/60` are equivalent;
+   prefer `foreground` in new code, since restyling then stays in this file. */
 @theme {
   --color-active: #00ffe5;
+  --color-foreground: #ffffff;
 }
 
 :root {
@@ -15,7 +22,7 @@
 
 body {
   background: var(--background);
-  color: white;
+  color: var(--color-foreground);
   font-family: Arial, Helvetica, sans-serif;
   width: CLAMP(100dvmin, 100vw, 1000px);
 }
