@@ -34,8 +34,9 @@ while you work.
 ```
 src/
   app/         Routes — pages and API route handlers only; no business logic
-  features/    Client UI, one folder per tool (components, hooks, view types)
-  shared/      Server-side domain logic, one folder per concern
+  features/    Client UI, one folder per tool; `shared/` holds cross-feature
+               pieces (PageShell, Avatar, apiFetch)
+  shared/      Domain logic, one folder per concern
 ```
 
 `shared/` never imports from `features/`. Each folder exposes a barrel
@@ -44,6 +45,11 @@ src/
 Path aliases: `@/*` → `src/*`, and `@thelab/http` → `src/shared/http` (a
 preconfigured axios instance: 30s timeout, 3 retries with backoff).
 
+The shapes crossing the network are declared once in
+[`shared/manager/contract.ts`](src/shared/manager/contract.ts). Route handlers
+annotate what they send with those types and the client annotates what it
+receives, so the two ends can't drift without a type error.
+
 ### `shared/` modules
 
 - **`sleeper/`** — typed client for the Sleeper API (users, leagues, rosters,
@@ -51,12 +57,17 @@ preconfigured axios instance: 30s timeout, 3 retries with backoff).
 - **`manager/`** — the core. Fetches a manager's full league graph
   (`graph.ts`), writes it transactionally (`persist.ts`), orchestrates syncs
   (`sync.ts`), reads it back for the UI (`queries.ts`), and runs the background
-  crawler (`crawl.ts`, `scheduler.ts`).
+  crawler (`crawl.ts` for the orchestration, `crawl-queue.ts` for the queue
+  SQL, `scheduler.ts` for the loop).
 - **`ktc/`** — scrapes KeepTradeCut dynasty rankings and per-player value
-  history, and matches KTC entries to Sleeper player ids by name (`match.ts`).
-- **`players/`** — caches Sleeper's ~12k-entry global players map.
+  history. `parse.ts` (page parsing) and `match.ts` (KTC → Sleeper id matching
+  by name) are pure and directly tested; `client.ts` does the fetching.
+- **`players/`** — caches Sleeper's ~12k-entry global players map, and owns
+  every read of it.
 - **`db/`** — connection pool, TLS policy, migration runner, and the
-  `bulkInsert` / `withTransaction` / `withAdvisoryLock` helpers.
+  `bulkInsert` / `withTransaction` / `withAdvisoryLock` / `isFresh` helpers.
+- **`util/`** — `startBackgroundLoop` (the shared scheduler lifecycle),
+  `mapWithConcurrency`, `errorMessage`.
 
 ### API routes
 
@@ -118,8 +129,29 @@ Sleeper's nested payloads (settings, scoring, metadata, id arrays) are stored as
 | --- | --- |
 | `npm run dev` | Dev server. |
 | `npm run build` / `npm start` | Production build and serve. |
+| `npm test` | Unit tests. |
 | `npm run lint` | ESLint. |
 | `npm run migrate:up` / `:down` / `:redo` / `:create` | Migration CLI. |
+
+## Tests
+
+`npm test` runs Node's built-in test runner over `src/**/*.test.ts` — no test
+framework dependency, and no build step, since Node 22 strips the TypeScript
+itself. Test files import with an explicit `.ts` extension so Node can resolve
+them directly.
+
+Coverage is aimed at the logic that is pure, load-bearing, and most likely to
+break silently:
+
+- `shared/ktc/parse` — the scrapers for KTC's embedded JSON. KTC can change its
+  markup at any time, so these run against page-shaped fixtures.
+- `shared/ktc/match` — name matching between KTC and Sleeper, including the
+  cases where it must *refuse* to guess (a wrong player id is worse than none).
+- `features/manager/filters` and `format` — the Sleeper `settings` quirks and
+  the display formatting.
+
+Anything that talks to Postgres or the network is deliberately not covered here;
+those paths are kept thin so the logic worth testing sits outside them.
 
 ## Deployment
 
@@ -135,5 +167,10 @@ resolve.
 
 **Manager** is the implemented tool: search a Sleeper username to browse that
 manager's leagues, filter by type and format, and expand any league for
-standings and full rosters. **Pick Tracker**, **Trades**, and **Lineup Checker**
-are scaffolded placeholders.
+standings and full rosters.
+
+**Pick Tracker**, **Trades**, and **Lineup Checker** are listed on the tools
+grid but not built. Their pages render a shared `ToolPlaceholder` that reads the
+title and blurb from [`tools.data.ts`](src/features/tools/tools.data.ts), so
+there is one description per tool. To build one, add a
+`src/features/<tool>/` folder and point its page at that instead.

@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --test \"src/**/*.test.ts\"",
     "migrate:up": "node-pg-migrate up -m db/migrations",
     "migrate:down": "node-pg-migrate down -m db/migrations",
     "migrate:redo": "node-pg-migrate redo -m db/migrations",
