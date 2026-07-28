@@ -81,16 +81,24 @@ export async function getLatestStoredWeek(season: string): Promise<number | null
 }
 
 /**
- * Stored weeks of a season still to be played, ascending.
+ * Today in US Eastern, which is the clock a football week runs on: a Monday night
+ * game is still ahead of you at 9pm ET, when UTC has already rolled into Tuesday.
  *
- * A week counts as remaining until its last game kicks off — that is the point
- * past which no lineup decision is left to make, and it is the same rollover
- * Sleeper's `display_week` follows. Deriving it from `game_date` rather than
+ * A constant rather than a parameter so the week list and the stat lines behind it
+ * can't disagree about what "still to come" means — one interpolated expression,
+ * used by both queries below.
+ */
+const TODAY_ET = `(now() AT TIME ZONE 'America/New_York')::date`;
+
+/**
+ * Stored weeks of a season with a game still to be played, ascending — the
+ * horizon a rest-of-season number covers.
+ *
+ * A week stays on the list until its *last* game, so it is the right label for the
+ * horizon mid-week; {@link listPlayerWeekStats} then drops the individual games
+ * inside it that are already over. Deriving both from `game_date` rather than
  * asking `state/nfl` keeps this read off the network, and keeps it honest: it can
  * only ever name weeks that are actually here to read.
- *
- * Compared against the date in US Eastern, not the server's: a Monday night game
- * is still ahead of you at 9pm ET, when UTC has already rolled into Tuesday.
  *
  * A week whose rows carry no `game_date` at all is left out rather than assumed
  * future — counting a played week as remaining would silently double a roster's
@@ -102,7 +110,7 @@ export async function getRemainingWeeks(season: string): Promise<number[]> {
        FROM projections
       WHERE season = $1
       GROUP BY week
-     HAVING max(game_date) >= (now() AT TIME ZONE 'America/New_York')::date
+     HAVING max(game_date) >= ${TODAY_ET}
       ORDER BY week`,
     [season],
   );
@@ -117,6 +125,14 @@ export async function getRemainingWeeks(season: string): Promise<number[]> {
  * from Sleeper's `pts_*`. Rows are per player-week and simply absent where there
  * is no projection (bye, unpublished week), which the aggregate reports as a
  * missing week rather than a zero.
+ *
+ * Filtered by game rather than by week, which is the whole reason this doesn't
+ * just take the weeks and trust them. An NFL week is spread over five days, so
+ * from Friday to Monday `getRemainingWeeks` is still — correctly — naming the
+ * current week, while a chunk of it has already been played: on the Sunday of 2025
+ * week 1 that was 105 of 835 rows. Counting those adds points nobody can still
+ * score, and has the lineup advising a swap for a player whose game is over. A row
+ * with no `game_date` is dropped for the same reason the week list drops one.
  */
 export async function listPlayerWeekStats({
   season,
@@ -132,10 +148,40 @@ export async function listPlayerWeekStats({
   const { rows } = await pool.query<PlayerWeekStats>(
     `SELECT player_id, week, COALESCE(stats, '{}'::jsonb) AS stats
        FROM projections
-      WHERE season = $1 AND week = ANY($2::int[]) AND player_id = ANY($3)`,
+      WHERE season = $1 AND week = ANY($2::int[]) AND player_id = ANY($3)
+        AND game_date >= ${TODAY_ET}`,
     [season, weeks, playerIds],
   );
   return rows;
+}
+
+/**
+ * Every stat key the feed publishes for these weeks — the vocabulary
+ * `score.unprojectedScoring` measures a league's scoring settings against.
+ *
+ * Read across the whole week rather than one league's rosters on purpose: the
+ * answer is a property of what Sleeper projects, not of who happens to be
+ * rostered. Narrowing it to a roster makes a league with no kicker or defence slot
+ * report `xpm`, `sack` and `int` as unsupplied — categories the feed publishes for
+ * every kicker and defence — and the noise hides the gaps that are real.
+ */
+export async function getProjectedStatKeys({
+  season,
+  weeks,
+}: {
+  season: string;
+  weeks: number[];
+}): Promise<string[]> {
+  if (weeks.length === 0) return [];
+
+  const { rows } = await pool.query<{ key: string }>(
+    `SELECT DISTINCT k AS key
+       FROM projections,
+            LATERAL jsonb_object_keys(COALESCE(stats, '{}'::jsonb)) k
+      WHERE season = $1 AND week = ANY($2::int[])`,
+    [season, weeks],
+  );
+  return rows.map((r) => r.key);
 }
 
 /** One row of a ranked week, scored by the caller's chosen format. */

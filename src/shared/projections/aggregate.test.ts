@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { aggregatedStatKeys, aggregateWeeklyStats } from "./aggregate.ts";
+import { aggregateWeeklyStats } from "./aggregate.ts";
 import { scoreProjection } from "./score.ts";
 
 /**
@@ -98,25 +98,5 @@ describe("scoring the aggregate", () => {
       Math.abs(perWeek - aggregate) <= 0.01,
       `per-week ${perWeek} vs aggregate ${aggregate}`,
     );
-  });
-});
-
-describe("aggregatedStatKeys", () => {
-  test("unions the keys every player contributed", () => {
-    const out = aggregateWeeklyStats([
-      { player_id: "1", week: 5, stats: { rec: 5, rec_yd: 60 } },
-      { player_id: "2", week: 5, stats: { pass_yd: 250, pass_td: 1.7 } },
-    ]);
-
-    assert.deepEqual(aggregatedStatKeys(out).sort(), [
-      "pass_td",
-      "pass_yd",
-      "rec",
-      "rec_yd",
-    ]);
-  });
-
-  test("is empty for an empty aggregate", () => {
-    assert.deepEqual(aggregatedStatKeys({}), []);
   });
 });

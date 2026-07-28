@@ -6,9 +6,10 @@ export {
   getLatestStoredWeek,
   getRemainingWeeks,
   listPlayerWeekStats,
+  getProjectedStatKeys,
 } from "./queries";
 export type { PlayerProjection, RankedProjection } from "./queries";
-export { aggregateWeeklyStats, aggregatedStatKeys } from "./aggregate";
+export { aggregateWeeklyStats } from "./aggregate";
 export type { AggregatedProjection, PlayerWeekStats } from "./aggregate";
 export { getLeagueOutlook } from "./outlook";
 export type {
@@ -27,7 +28,7 @@ export type {
   ParsedProjectionFilters,
   ProjectionScoring,
 } from "./filters";
-export { scoreProjection, unprojectedScoring } from "./score";
+export { scoreProjection, unprojectedScoring, derivedScoring } from "./score";
 export { optimalLineup, compareLineup, startingSlots } from "./optimal";
 export type { RosterPlayer, LineupSlot, LineupComparison } from "./optimal";
 export { hasProjection, toProjectionRows } from "./parse";

@@ -62,27 +62,41 @@ const DEFENSIVE_SLOTS = new Set(["DEF", "DL", "LB", "DB", "IDP_FLEX"]);
 /**
  * Says so when this league's projections are known to be incomplete.
  *
- * `unprojected_scoring` is near enough always non-empty — every league carries
- * weights for defence and special-teams events Sleeper doesn't project — so it is
- * only worth a warning where those categories actually score: a league that
- * starts a DEF or an IDP. There, every one of those players reads low, and the
- * optimal lineup will bench them for skill players it can see.
+ * Two caveats, gated differently, which is why they aren't one line. Missing
+ * categories are near enough always non-empty — every league carries weights for
+ * defence and special-teams events Sleeper doesn't project — so they are only
+ * worth a warning where those categories actually score: a league that starts a
+ * DEF or an IDP. Derived categories are the opposite: first downs and reception
+ * splits are scored on skill players, so they apply to every team in a league
+ * that pays for them, and there is nothing to gate on.
  *
- * A league-level fact, so it is stated once under the panel rather than on each
+ * League-level facts, so they are stated once under the panel rather than on each
  * team.
  */
 function OutlookCaveat({ data }: { data: LeagueDetailResult }) {
-  const count = data.outlook?.unprojected_scoring.length ?? 0;
+  const missing = data.outlook?.unprojected_scoring.length ?? 0;
+  const derived = data.outlook?.derived_scoring ?? [];
   const startsDefence = (data.roster_positions ?? []).some((slot) =>
     DEFENSIVE_SLOTS.has(slot),
   );
-  if (count === 0 || !startsDefence) return null;
+  if (derived.length === 0 && (missing === 0 || !startsDefence)) return null;
 
   return (
-    <p className="mt-2 text-[0.7rem] leading-relaxed text-foreground/40">
-      This league starts defensive players and scores {count}{" "}
-      categories Sleeper doesn&apos;t project, so their projected points read low
-      and the optimal lineup will under-start them.
-    </p>
+    <div className="mt-2 space-y-1 text-[0.7rem] leading-relaxed text-foreground/40">
+      {derived.length > 0 && (
+        <p>
+          This league scores {derived.join(", ")}, which Sleeper publishes as a
+          formula rather than a projection — a &ldquo;first down&rdquo; is just
+          the yardage over ten. Those categories are left out of the totals here.
+        </p>
+      )}
+      {missing > 0 && startsDefence && (
+        <p>
+          This league starts defensive players and scores {missing} categories
+          Sleeper doesn&apos;t project, so their projected points read low and the
+          optimal lineup will under-start them.
+        </p>
+      )}
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { scoreProjection, unprojectedScoring } from "./score.ts";
+import { derivedScoring, scoreProjection, unprojectedScoring } from "./score.ts";
 
 /**
  * The whole point of scoring a projection ourselves is that Sleeper's `pts_ppr`
@@ -121,6 +121,26 @@ describe("scoreProjection", () => {
     );
   });
 
+  test("never scores a category Sleeper derives instead of projecting", () => {
+    // The reason this rule exists, in one line: the receiver's `rec_fd` is 9.94
+    // on 6.36 catches, because it is `rec_yd / 10` and not a first-down count. A
+    // league paying a point each would hand him 9.94 points nobody can score.
+    assert.equal(receiver.rec_fd, Math.round(receiver.rec_yd * 10) / 100);
+    assert.equal(scoreProjection(receiver, { ...ppr, rec_fd: 1 }), 20.39);
+
+    // Same for the reception splits, a fixed 20/20/30/20/10/10 carve-up of `rec`
+    // that puts a tenth of every catch in the 40-plus bucket.
+    assert.equal(receiver.rec_40p, Math.round(receiver.rec * 10) / 100);
+    assert.equal(scoreProjection(receiver, { ...ppr, rec_40p: 1.5 }), 20.39);
+  });
+
+  test("still scores the bonuses Sleeper really does project", () => {
+    // `rush_40p` and `pass_cmp_40p` look like the derived keys and aren't —
+    // neither holds to a formula across the stored seasons, so they count.
+    assert.equal(scoreProjection({ rush_40p: 0.19 }, { rush_40p: 2 }), 0.38);
+    assert.equal(scoreProjection({ pass_cmp_40p: 0.4 }, { pass_cmp_40p: 1 }), 0.4);
+  });
+
   test("rounds to two decimals rather than leaking float noise", () => {
     // 0.1 * 3 is 0.30000000000000004 in binary floating point.
     assert.equal(scoreProjection({ rush_yd: 3 }, { rush_yd: 0.1 }), 0.3);
@@ -166,7 +186,33 @@ describe("unprojectedScoring", () => {
     assert.deepEqual(unprojectedScoring({ pts_ppr: 1, adp_dd_ppr: 1 }, []), []);
   });
 
+  test("leaves the derived keys to derivedScoring", () => {
+    // They are present in the stat line, so they are not missing — they are the
+    // other kind of gap, and the two get different warnings.
+    assert.deepEqual(unprojectedScoring({ rec_fd: 1, tkl_solo: 1 }, available), [
+      "tkl_solo",
+    ]);
+  });
+
   test("handles missing settings", () => {
     assert.deepEqual(unprojectedScoring(null, available), []);
+  });
+});
+
+describe("derivedScoring", () => {
+  test("names the categories Sleeper computes rather than projects", () => {
+    assert.deepEqual(
+      derivedScoring({ rec: 1, rec_fd: 0.5, pass_fd: 0.5, rec_40p: 1.5 }),
+      ["pass_fd", "rec_40p", "rec_fd"],
+    );
+  });
+
+  test("ignores disabled ones, like the rest of a league's template", () => {
+    assert.deepEqual(derivedScoring({ rec_fd: 0, rush_fd: 0 }), []);
+  });
+
+  test("says nothing for a league that doesn't score them", () => {
+    assert.deepEqual(derivedScoring(ppr), []);
+    assert.deepEqual(derivedScoring(null), []);
   });
 });

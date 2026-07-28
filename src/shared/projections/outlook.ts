@@ -1,10 +1,14 @@
 import { getFantasyPositions } from "@/shared/players";
 
-import { aggregatedStatKeys, aggregateWeeklyStats } from "./aggregate";
+import { aggregateWeeklyStats } from "./aggregate";
 import { compareLineup } from "./optimal";
 import type { LineupComparison, RosterPlayer } from "./optimal";
-import { getRemainingWeeks, listPlayerWeekStats } from "./queries";
-import { scoreProjection, unprojectedScoring } from "./score";
+import {
+  getProjectedStatKeys,
+  getRemainingWeeks,
+  listPlayerWeekStats,
+} from "./queries";
+import { derivedScoring, scoreProjection, unprojectedScoring } from "./score";
 
 /**
  * Rest-of-season optimal lineups for every roster in one league.
@@ -52,7 +56,7 @@ export type LeagueOutlook = {
   players: Record<string, PlayerOutlook>;
   teams: TeamOutlook[];
   /**
-   * Categories the league scores that projections don't supply.
+   * Categories the league scores that projections don't supply at all.
    *
    * Rarely empty, and mostly harmless: nearly every league carries weights for
    * defence and special-teams events Sleeper doesn't project, which cost nothing
@@ -61,6 +65,17 @@ export type LeagueOutlook = {
    * slot and a long list here shouldn't be presented as authoritative.
    */
   unprojected_scoring: string[];
+  /**
+   * Categories the league scores that Sleeper publishes as a formula rather than
+   * a projection, and which are therefore left out of every total here.
+   *
+   * Separate from `unprojected_scoring` because it can't be gated on the league
+   * starting a defence: first-down and reception-split scoring applies to every
+   * skill player, so a non-empty list here means every number on the page is
+   * lower than the league's own settings would suggest — and, before this was
+   * excluded, was higher than anything that could actually be scored.
+   */
+  derived_scoring: string[];
 };
 
 /**
@@ -99,15 +114,19 @@ export async function getLeagueOutlook({
   if (weeks.length === 0) return null;
 
   const playerIds = [...new Set(teams.flatMap((t) => t.players))].filter(Boolean);
-  const aggregated = aggregateWeeklyStats(
-    await listPlayerWeekStats({ season, weeks, playerIds }),
-  );
 
-  // Positions come from the players cache rather than the projection, which
-  // stores none. A player the cache doesn't know is eligible for no slot and so
-  // never starts — better than guessing a position and recommending a lineup
-  // Sleeper would reject.
-  const positions = await getFantasyPositions(playerIds);
+  const [stats, statKeys, positions] = await Promise.all([
+    listPlayerWeekStats({ season, weeks, playerIds }),
+    // The whole week's vocabulary, not this league's rosters' — see the query.
+    getProjectedStatKeys({ season, weeks }),
+    // Positions come from the players cache rather than the projection, which
+    // stores none. A player the cache doesn't know is eligible for no slot and so
+    // never starts — better than guessing a position and recommending a lineup
+    // Sleeper would reject.
+    getFantasyPositions(playerIds),
+  ]);
+
+  const aggregated = aggregateWeeklyStats(stats);
 
   const players: Record<string, PlayerOutlook> = {};
   for (const [playerId, entry] of Object.entries(aggregated)) {
@@ -139,9 +158,7 @@ export async function getLeagueOutlook({
         }),
       };
     }),
-    unprojected_scoring: unprojectedScoring(
-      scoringSettings,
-      aggregatedStatKeys(aggregated),
-    ),
+    unprojected_scoring: unprojectedScoring(scoringSettings, statKeys),
+    derived_scoring: derivedScoring(scoringSettings),
   };
 }

@@ -72,18 +72,3 @@ export function aggregateWeeklyStats(
     ]),
   );
 }
-
-/**
- * Every stat key the aggregate covers, for {@link unprojectedScoring} in
- * `./score` — which asks what a league scores that projections can't supply, and
- * needs the vocabulary actually present rather than the one Sleeper documents.
- */
-export function aggregatedStatKeys(
-  aggregated: Record<string, AggregatedProjection>,
-): string[] {
-  const keys = new Set<string>();
-  for (const entry of Object.values(aggregated)) {
-    for (const key of Object.keys(entry.stats)) keys.add(key);
-  }
-  return [...keys];
-}
