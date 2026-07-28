@@ -118,6 +118,14 @@ Two cadences, and the choice matters:
   here would re-download megabytes of unchanged data on every tick, all
   offseason.
 
+A slice's TTL should match how fast *that slice* moves, not the table's. The same
+projections sync runs two: this week and next are gated at an hour because an
+injury designation changes them, and the rest of the season at a day because it
+doesn't. One gate for both would have to choose between a stale lineup and 90MB an
+hour. Where the slow tier is also large, cap how many slices a tick will fetch
+(`HORIZON_WEEKS_PER_TICK`) and report what the cap deferred — a skipped slice that
+reads as "fresh" is how a backfill silently stops advancing.
+
 ## Testing
 
 `npm test` runs Node's built-in runner over `src/**/*.test.ts`. No framework, no
@@ -236,11 +244,18 @@ stops holding, a comment saying it does would not have caught it.
   alongside it, or a player Sleeper hasn't projected is indistinguishable from
   one projected to score nothing. Carry that distinction all the way to the
   screen — an em dash, not `0.00`.
-- **The projections window is two weeks, not a season.** The sync keeps the
-  current week and the next warm, so anything called "rest of season" is however
-  many weeks happen to be stored. Send the horizon with the number
-  (`outlook.weeks`) and show it wherever the number surfaces, the same way
-  `/api/adp` has to say which drafts it averaged.
+- **The horizon is whatever is stored, so send it with the number.** Sleeper
+  publishes all 18 weeks months ahead and the sync now keeps them, but
+  `getRemainingWeeks` still reports the weeks actually on disk rather than
+  assuming a full season — a failed backfill shortens the answer without
+  invalidating it. Send the horizon with the total (`outlook.weeks`) and show it
+  wherever the number surfaces, the same way `/api/adp` has to say which drafts it
+  averaged.
+- **Over a season horizon, one missing week is a bye — it is not a caveat.**
+  Every team has exactly one, so a marker on any shortfall fires on 974 of 981
+  players and says nothing; the threshold is two (`roster-detail`). The same trap
+  as `unprojectedScoring` below: a warning that fires on everything hides the one
+  case that mattered.
 - **`unprojectedScoring` is non-empty for nearly every league**, because they
   nearly all weight defence and special-teams events Sleeper doesn't project. It
   only *means* anything where those players start, so gate any warning on the
