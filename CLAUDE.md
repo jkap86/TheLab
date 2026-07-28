@@ -205,6 +205,29 @@ stops holding, a comment saying it does would not have caught it.
   within 0.15 of it. Score the stat line against the league's `scoring_settings`
   with `projections/score`; the two sides share a key vocabulary, so it is a dot
   product. Reserve `pts_ppr` for a generic, league-less board.
+- **Some of what's in `stats` isn't a projection at all.** `pass_fd`, `rush_fd`
+  and `rec_fd` are exactly the yardage over ten — Burrow projects 25.83
+  completions and 29.39 passing "first downs" — and the reception splits
+  (`rec_0_4` … `rec_40p`) are a fixed 20/20/30/20/10/10 carve-up of `rec`. Both
+  hold on every row of both stored seasons. Scoring them is not a small error: 39
+  leagues here pay for `rush_fd`, so a league at 0.5 a first down is silently
+  adding 0.05 a passing yard on top of its own rate, up to 35% of a starter's
+  total. `score`'s `DERIVED` set is the exclusion list, and `derivedScoring`
+  reports them so the league is told rather than quietly given a smaller number.
+  Check a new bonus key against both seasons before trusting it — `rush_40p` and
+  `pass_cmp_40p` look like the same trick and hold to no formula.
+- **A week is five days long, so filter the horizon by game, not by week.**
+  `getRemainingWeeks` keeps a week until its *last* game, which is right for
+  labelling the horizon and wrong for summing it: on the Sunday of 2025 week 1
+  that's 105 of 835 rows whose game is already over. `listPlayerWeekStats` filters
+  on the row's own `game_date` against the same `TODAY_ET` expression, so the two
+  can't drift.
+- **Ask what Sleeper projects, not what this roster happens to have.**
+  `unprojectedScoring` measures a league's scoring against the week's whole
+  vocabulary (`getProjectedStatKeys`). Fed the roster subset instead, a league
+  with no kicker or defence slot reports `xpm`, `sack` and `int` as unsupplied and
+  the real gaps — `fgm_50p` is never projected and 89 of the 120 leagues score it
+  — are lost in 28 lines of noise.
 - **That dot product is linear, so aggregate the stat lines, not the points.**
   `score(w1) + score(w2)` is exactly `score(w1 + w2)`, and summing first is one
   dot product per player instead of one per player-week, rounding once instead
