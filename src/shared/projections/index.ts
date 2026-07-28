@@ -38,9 +38,15 @@ export {
   optimalLineup,
   compareLineup,
   startingSlots,
-  weeklyOptimalPoints,
+  weeklyLineupSplit,
 } from "./optimal";
-export type { RosterPlayer, LineupSlot, LineupComparison } from "./optimal";
+export type {
+  RosterPlayer,
+  LineupSlot,
+  LineupComparison,
+  PlayerSplit,
+  WeeklyLineupSplit,
+} from "./optimal";
 export { hasProjection, toProjectionRows } from "./parse";
 export type { ProjectionRow } from "./parse";
 export {

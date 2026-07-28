@@ -180,6 +180,27 @@ stops holding, a comment saying it does would not have caught it.
   classes.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
+- **A list of managers is labelled by username, a team by team name.** `ui.tsx`
+  has both — `managerLabel` (display_name → team_name → roster number) and
+  `teamLabel` (the reverse) — and the column heading says which one it is.
+  `standings` is a Manager column, so it uses the username: a team name is a
+  nickname someone picked for one league and changes at will, so labelling by it
+  makes the same opponent read as a different person in every league they're in.
+  The team name isn't dropped, it's demoted — it stays on the row's hover and the
+  roster panel beside it still leads with it. Pass the same string to
+  `TeamAvatar`'s `label` so its fallback initial matches the name shown next to it.
+- **Rows in that panel give the name its own line.** Both lists inside it —
+  `standings` and `roster-detail` — put the team or player name alone on the first
+  line and everything else (record, points for, position, NFL team, both totals)
+  on a second line under it. The name is the field a reader scans for and it lost
+  every fight for horizontal space in a panel rendering at half a card's width;
+  "Christian McCaffrey" between a slot label, a badge, a team and two numbers
+  truncates to nothing. The numbers keep their own grid columns on that second
+  line rather than being folded into a sentence, because they are what's worth
+  comparing down the list. Row and heading share **one** grid template
+  (`SectionLayout` in `roster-detail`, the `columns` string in `standings`) — a
+  header laid out separately drifts the moment a width changes. Every template is
+  written out as a whole class string so Tailwind can see it.
 - **`roster-detail` shows the optimal lineup only** — there is no current/optimal
   toggle. The current lineup is a click away in Sleeper; what this tool adds is
   the best lineup available, so the starters list *is* that lineup and the bench
@@ -188,6 +209,16 @@ stops holding, a comment saying it does would not have caught it.
   sit …` — rather than made something to find by toggling. `optimal.ts` still
   computes `current` / `current_points`: `points_left`, `start` and `sit` are
   differences against them, so they are load-bearing, not dead.
+- **Every roster row carries two numbers, not one: `start` and `bench`.** A
+  season total answers the wrong question on both sides of the roster. A backup
+  quarterback projected 361 points behind two better starters is worth *nothing* —
+  none of it reaches a lineup — while one projected 398 is worth only the 46 he
+  scores in the two weeks he is the better start, and a single total calls those
+  the same. The columns are labelled once per section (`RosterSection` takes
+  `columns`, sized to match the cells so the headings stay over them) rather than
+  on every row. IR and taxi get the one `proj` column instead: a player Sleeper
+  won't let start has no starting half, so a split there would be two ways of
+  writing zero.
 
 ## External API gotchas
 
@@ -264,6 +295,31 @@ stops holding, a comment saying it does would not have caught it.
   players and says nothing; the threshold is two (`roster-detail`). The same trap
   as `unprojectedScoring` below: a warning that fires on everything hides the one
   case that mattered.
+- **Keep the weekly lineups, don't just sum them.** `weeklyLineupSplit` solves each
+  remaining week and returns both the total *and* who filled the slots, because the
+  attribution is the only thing that separates a bench player who is occasionally
+  the better start from one who is never startable — and the solve had it in hand
+  before it threw it away. Two consequences worth knowing:
+  - The halves belong to `weekly_optimal_points`, not to `optimal_points`. Summing
+    every player's `starting_points` reproduces the former exactly (checked against
+    a real 32-team league); it will never reproduce the aggregate lineup's total,
+    and the two are deliberately different numbers.
+  - A week a player has no projection for is left out of that week's candidates
+    rather than passed as a zero. The lineup is unchanged — a zero can only fill a
+    slot nobody else wanted — but it keeps the bye out of his benched-weeks count,
+    which otherwise makes all 981 players read as part-time starters. Same trap as
+    the bullet above: `starting_weeks + bench_weeks` is the player's *projected*
+    weeks, not the horizon.
+  - It hangs off `TeamOutlook`, not the league-wide `players` map, because being
+    stuck behind someone is a fact about a roster: the same projection makes one
+    team's lineup and not another's.
+  - The team-level total, `weekly_bench_points`, is summed from the raw weeks
+    alongside the per-player halves rather than by adding those halves up — one
+    rounding off the source instead of a cent of drift per player. `standings`
+    shows it next to `Proj`, dimmer, because it is context for that number and not
+    a rival to it: two teams projecting 3.5k are not the same team when one carries
+    883 behind its starters and the other 2,119. It is not a number to minimise —
+    a bye has to be covered by somebody, so a zero bench means no depth at all.
 - **`unprojectedScoring` is non-empty for nearly every league**, because they
   nearly all weight defence and special-teams events Sleeper doesn't project. It
   only *means* anything where those players start, so gate any warning on the

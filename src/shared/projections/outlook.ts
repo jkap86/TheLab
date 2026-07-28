@@ -1,8 +1,8 @@
 import { getFantasyPositions } from "@/shared/players";
 
 import { aggregateWeeklyStats } from "./aggregate";
-import { compareLineup, weeklyOptimalPoints } from "./optimal";
-import type { LineupComparison, RosterPlayer } from "./optimal";
+import { compareLineup, weeklyLineupSplit } from "./optimal";
+import type { LineupComparison, PlayerSplit, RosterPlayer } from "./optimal";
 import {
   getProjectedStatKeys,
   getRemainingWeeks,
@@ -67,6 +67,30 @@ export type TeamOutlook = LineupComparison & {
    * whose game is over frees his slot for whoever hasn't played yet.
    */
   weekly_optimal_points: number;
+  /**
+   * The other side of `weekly_optimal_points`: what every candidate who didn't
+   * start is projected for, over the same horizon.
+   *
+   * How much production this roster is carrying without playing — depth on a good
+   * team, a logjam on a badly balanced one. Worth showing beside the projected
+   * total rather than derived from it, since the two together say something
+   * neither says alone: two teams projecting the same points are not the same team
+   * if one of them has twice as much sitting behind its starters.
+   */
+  weekly_bench_points: number;
+  /**
+   * `weekly_optimal_points` broken out per player: what each one is projected for
+   * in the weeks he makes that week's lineup, and in the weeks he doesn't.
+   *
+   * Keyed by player id, and only the players who were candidates for this team's
+   * lineup — IR and taxi are excluded here for the same reason they are excluded
+   * from the lineup itself, so a row for one of them has no split to show.
+   *
+   * A team-level answer rather than a league-level one, which is why it sits here
+   * and not in `players`: the same projection makes the lineup on one roster and
+   * doesn't on another, so who a player is stuck behind is a fact about his team.
+   */
+  weekly_split: Record<string, PlayerSplit>;
 };
 
 export type LeagueOutlook = {
@@ -110,7 +134,10 @@ export type LeagueOutlook = {
  * The sum of the weekly optimals is the answer to the *other* question — what the
  * roster will score between now and the end — so each team also carries it as
  * `weekly_optimal_points`. It costs one lineup solve per team per week, which is
- * cheap next to the query that fed it.
+ * cheap next to the query that fed it, and those solves also say *which* players
+ * filled the slots — kept as `weekly_split` rather than thrown away, since it is
+ * the only thing that separates a bench player who is occasionally the better
+ * start from one who is never startable at all.
  *
  * Returns null when the league can't be projected at all: no slots on file, no
  * scoring settings to score with, or nothing left on the schedule. Scoring a
@@ -192,24 +219,30 @@ export async function getLeagueOutlook({
         players: candidates,
       });
 
+      const weekly = weeklyLineupSplit(
+        // The slots the comparison itself used, so a league with a slot this
+        // code doesn't recognise leaves it out of both numbers rather than one.
+        comparison.optimal.map((slot) => slot.slot),
+        weeks.map((week) => {
+          const scored = weeklyPoints.get(week);
+          // A candidate Sleeper hasn't projected for this week is left out of it
+          // rather than passed as a zero. The lineup is the same either way — a
+          // zero can only ever fill a slot nobody else wanted — but it keeps the
+          // bye out of his benched-weeks count, which would otherwise make every
+          // player on the roster look like a part-time starter.
+          return candidates.flatMap((player) => {
+            const points = scored?.get(player.player_id);
+            return points === undefined ? [] : [{ ...player, points }];
+          });
+        }),
+      );
+
       return {
         roster_id: team.roster_id,
         ...comparison,
-        weekly_optimal_points: weeklyOptimalPoints(
-          // The slots the comparison itself used, so a league with a slot this
-          // code doesn't recognise leaves it out of both numbers rather than one.
-          comparison.optimal.map((slot) => slot.slot),
-          weeks.map((week) => {
-            const scored = weeklyPoints.get(week);
-            // A candidate Sleeper hasn't projected for this week scores zero in it
-            // and keeps his roster spot — the bye case, where the slot goes to
-            // whoever is playing rather than being lost.
-            return candidates.map((player) => ({
-              ...player,
-              points: scored?.get(player.player_id) ?? 0,
-            }));
-          }),
-        ),
+        weekly_optimal_points: weekly.points,
+        weekly_bench_points: weekly.bench_points,
+        weekly_split: weekly.players,
       };
     }),
     unprojected_scoring: unprojectedScoring(scoringSettings, statKeys),

@@ -7,6 +7,7 @@ import type {
   LeagueOutlook,
   LeagueTeamView,
   PlayerOutlook,
+  PlayerSplit,
   PlayerSummary,
   TeamOutlook,
 } from "../types";
@@ -31,6 +32,48 @@ const SLOT_LABEL: Record<string, string> = {
 
 /** A row of the starters list: a slot and who is in it. */
 type SlotRow = { slot: string; player_id: string };
+
+/**
+ * The grid a section's rows and its column headings share.
+ *
+ * One template for both, so the headings stay over their numbers — a header laid
+ * out separately drifts the moment a width changes.
+ *
+ * Two lines per row rather than one, because a name is the thing you actually read
+ * and it was losing to everything else on the row: squeezed between a slot label,
+ * a position badge, a team and two totals, "Christian McCaffrey" truncated inside a
+ * panel that renders at half the width of a card. So the name takes the whole first
+ * line and the rest — position, team, points — sits under it. The numbers keep
+ * their own columns on that second line, which is what still makes them comparable
+ * down the list.
+ */
+type SectionLayout = {
+  /** Column template: slot gutter, name/meta, then one column per number. */
+  grid: string;
+  /** How far the name reaches on its own line — the meta column plus the numbers. */
+  nameSpan: string;
+  /** Headings for the number columns, left to right. */
+  columns: string[];
+};
+
+// Written out rather than assembled, so Tailwind sees every class string whole.
+const NO_NUMBERS: SectionLayout = {
+  grid: "grid-cols-[1.75rem_minmax(0,1fr)] @lg:grid-cols-[2.5rem_minmax(0,1fr)]",
+  nameSpan: "col-span-1",
+  columns: [],
+};
+
+const SPLIT_LAYOUT: SectionLayout = {
+  grid: "grid-cols-[1.75rem_minmax(0,1fr)_3rem_3rem] @lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem_3.25rem]",
+  nameSpan: "col-span-3",
+  columns: ["start", "bench"],
+};
+
+const TOTAL_LAYOUT: SectionLayout = {
+  grid: "grid-cols-[1.75rem_minmax(0,1fr)_3rem] @lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem]",
+  nameSpan: "col-span-2",
+  columns: ["proj"],
+};
 
 /**
  * One team's full roster, grouped into starters, bench, IR and taxi, with each
@@ -91,6 +134,12 @@ export function RosterDetail({
 
   const horizon = outlook?.weeks.length ?? 0;
 
+  // No projections means no number columns at all, so the headings go too — a
+  // "start / bench" label over a column of em dashes promises a breakdown that
+  // isn't there.
+  const lineupLayout = horizon > 0 ? SPLIT_LAYOUT : NO_NUMBERS;
+  const stashLayout = horizon > 0 ? TOTAL_LAYOUT : NO_NUMBERS;
+
   return (
     <div className="rounded-lg border border-foreground/10 bg-foreground/[0.02] p-2.5 @lg:p-4">
       <div className="border-b border-foreground/10 pb-3 @lg:flex @lg:items-center @lg:gap-3 @lg:pb-4">
@@ -125,7 +174,7 @@ export function RosterDetail({
         />
       )}
 
-      <RosterSection title="Starters">
+      <RosterSection title="Starters" layout={lineupLayout}>
         {starters.map((row, i) => (
           <PlayerRow
             key={`s-${i}`}
@@ -133,6 +182,8 @@ export function RosterDetail({
             playerId={row.player_id}
             slot={row.slot}
             outlook={outlook?.players[row.player_id]}
+            split={teamOutlook?.weekly_split[row.player_id]}
+            layout={lineupLayout}
             horizon={horizon}
             promoted={teamOutlook?.start.includes(row.player_id)}
           />
@@ -140,13 +191,15 @@ export function RosterDetail({
       </RosterSection>
 
       {bench.length > 0 && (
-        <RosterSection title="Bench">
+        <RosterSection title="Bench" layout={lineupLayout}>
           {bench.map((id) => (
             <PlayerRow
               key={id}
               player={players[id]}
               playerId={id}
               outlook={outlook?.players[id]}
+              split={teamOutlook?.weekly_split[id]}
+              layout={lineupLayout}
               horizon={horizon}
               benched={teamOutlook?.sit.includes(id)}
             />
@@ -156,9 +209,10 @@ export function RosterDetail({
 
       {/* IR and taxi still show a projection — it is what a stash decision turns
           on — but they are never candidates for the lineup above, since Sleeper
-          won't let them start. */}
+          won't let them start. That is also why they get the season total rather
+          than the split: a player who cannot start has no starting half. */}
       {team.reserve.length > 0 && (
-        <RosterSection title="IR">
+        <RosterSection title="IR" layout={stashLayout}>
           {team.reserve.map((id) => (
             <PlayerRow
               key={id}
@@ -166,6 +220,7 @@ export function RosterDetail({
               playerId={id}
               slot="IR"
               outlook={outlook?.players[id]}
+              layout={stashLayout}
               horizon={horizon}
             />
           ))}
@@ -173,7 +228,7 @@ export function RosterDetail({
       )}
 
       {team.taxi.length > 0 && (
-        <RosterSection title="Taxi">
+        <RosterSection title="Taxi" layout={stashLayout}>
           {team.taxi.map((id) => (
             <PlayerRow
               key={id}
@@ -181,6 +236,7 @@ export function RosterDetail({
               playerId={id}
               slot="TX"
               outlook={outlook?.players[id]}
+              layout={stashLayout}
               horizon={horizon}
             />
           ))}
@@ -247,18 +303,41 @@ function LineupSummary({
   );
 }
 
+/**
+ * A titled group of rows, with the numeric columns labelled once at the top
+ * rather than on every row.
+ *
+ * Laid out on the same grid as its rows, so the headings sit over the numbers they
+ * name. The first cell is the empty slot gutter — the headings start where the
+ * names do.
+ */
 function RosterSection({
   title,
+  layout,
   children,
 }: {
   title: string;
+  layout: SectionLayout;
   children: React.ReactNode;
 }) {
   return (
     <div className="mt-3">
-      <h5 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground/35">
-        {title}
-      </h5>
+      <div
+        className={`mb-1.5 grid ${layout.grid} items-baseline gap-x-1 @lg:gap-x-2`}
+      >
+        <span />
+        <h5 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-foreground/35">
+          {title}
+        </h5>
+        {layout.columns.map((label) => (
+          <span
+            key={label}
+            className="text-right text-[0.6rem] uppercase tracking-wide text-foreground/30"
+          >
+            {label}
+          </span>
+        ))}
+      </div>
       <ul className="flex flex-col divide-y divide-foreground/5">{children}</ul>
     </div>
   );
@@ -269,6 +348,8 @@ function PlayerRow({
   playerId,
   slot,
   outlook,
+  split,
+  layout,
   horizon = 0,
   promoted,
   benched,
@@ -277,6 +358,19 @@ function PlayerRow({
   playerId: string;
   slot?: string;
   outlook?: PlayerOutlook;
+  /**
+   * How the projection divides between weeks in and out of the lineup. Undefined
+   * for a player with no projection at all, which is a different thing from the
+   * IR and taxi rows that ask for no split in the first place — hence `variant`
+   * rather than reading this prop's absence as "show one number".
+   */
+  split?: PlayerSplit;
+  /**
+   * The section's grid. Its `columns` also decide how many numbers this row
+   * carries — two for a lineup candidate, one for a player who can't start, none
+   * for a league with no projections at all.
+   */
+  layout: SectionLayout;
   /** Weeks the projection covers, so a partial one can be marked as such. */
   horizon?: number;
   /** Starting here only in the optimal lineup. */
@@ -290,51 +384,113 @@ function PlayerRow({
 
   return (
     <li
-      className={`flex items-center gap-1 py-1.5 @lg:gap-2 ${
+      className={`grid ${layout.grid} items-center gap-x-1 gap-y-0.5 py-1.5 @lg:gap-x-2 ${
         promoted ? "bg-active/[0.07]" : benched ? "opacity-50" : ""
       }`}
     >
-      {slot ? (
-        <span className="w-7 shrink-0 truncate text-center text-[0.65rem] font-semibold uppercase text-foreground/35 @lg:w-10 @lg:text-[0.7rem]">
-          {SLOT_LABEL[slot] ?? slot}
-        </span>
-      ) : null}
-      {/* The badge duplicates the slot label, so at narrow widths it only
-          earns its space on rows that have no slot (bench). */}
-      <PositionBadge
-        position={player?.position ?? null}
-        className={slot ? "hidden @lg:inline-flex" : undefined}
-      />
+      {/* Spans both lines so the slot reads as labelling the whole row, and holds
+          the gutter open on bench rows that have no slot to show. */}
+      <span className="row-span-2 self-center truncate text-center text-[0.65rem] font-semibold uppercase text-foreground/35 @lg:text-[0.7rem]">
+        {slot ? (SLOT_LABEL[slot] ?? slot) : ""}
+      </span>
+
       <span
-        className={`min-w-0 flex-1 truncate text-sm ${
+        className={`${layout.nameSpan} min-w-0 truncate text-sm ${
           empty ? "text-foreground/25" : "text-foreground/85"
         }`}
       >
         {name}
       </span>
-      {player?.team && (
-        <span className="hidden shrink-0 text-xs tabular-nums text-foreground/35 @sm:inline">
-          {player.team}
-        </span>
+
+      {/* Second line: what the name used to be competing with. The badge no longer
+          needs hiding at narrow widths — it isn't taking room from anything now. */}
+      <span className="col-start-2 flex min-w-0 items-center gap-1.5">
+        {!empty && <PositionBadge position={player?.position ?? null} />}
+        {player?.team && (
+          <span className="truncate text-[0.65rem] tabular-nums text-foreground/35">
+            {player.team}
+          </span>
+        )}
+      </span>
+
+      {empty ? (
+        // Keep the number columns occupied so an unfilled slot doesn't pull the
+        // next row's cells up into its line.
+        layout.columns.map((label) => <span key={label} />)
+      ) : layout.columns.length > 1 ? (
+        <SplitPoints outlook={outlook} split={split} horizon={horizon} />
+      ) : (
+        <ProjectedPoints outlook={outlook} horizon={horizon} />
       )}
-      {!empty && <ProjectedPoints outlook={outlook} horizon={horizon} />}
     </li>
   );
 }
 
 /**
- * A player's projected points over the horizon.
+ * One number cell. Its width comes from the section's grid column rather than the
+ * cell, so a heading and the numbers under it can't disagree about it.
+ */
+function PointsCell({
+  title,
+  muted,
+  children,
+}: {
+  title: string;
+  muted?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      title={title}
+      className={`text-right text-xs tabular-nums ${
+        muted ? "text-foreground/25" : "text-foreground/70"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** `3 weeks`, or `1 week` — used in tooltips, where the count is spelled out. */
+const weekCount = (n: number): string => `${n} week${n === 1 ? "" : "s"}`;
+
+/**
+ * The marker on a total covering fewer weeks than the horizon, so one that looks
+ * low can be read as short rather than bad — but only past a week's shortfall.
+ *
+ * Every team has exactly one bye, so over a rest-of-season horizon a single
+ * missing week is what *everyone* looks like, and an asterisk on every row says
+ * nothing. Two or more is a hole: a week Sleeper hasn't published, or a player who
+ * has fallen off the slate.
+ */
+function ShortHorizon({
+  outlook,
+  horizon,
+}: {
+  outlook: PlayerOutlook;
+  horizon: number;
+}) {
+  if (horizon - outlook.weeks <= 1) return null;
+
+  return (
+    <span
+      title={`Projected in only ${outlook.weeks} of ${weekCount(horizon)}`}
+      className="text-foreground/30"
+    >
+      *
+    </span>
+  );
+}
+
+/**
+ * A player's projected points over the horizon, as one number.
+ *
+ * For the rows that can't start — IR and taxi — where the season total is the
+ * whole answer, since none of it is going into a lineup either way.
  *
  * An em dash rather than 0.00 when there is no projection at all: a player
  * Sleeper hasn't projected and a player projected to score nothing are different
  * claims, and the roster shouldn't make the stronger one.
- *
- * A total covering fewer weeks than the horizon is marked, so one that looks low
- * can be read as short rather than bad — but only past a week's shortfall. Every
- * team has exactly one bye, so over a rest-of-season horizon a single missing week
- * is what *everyone* looks like, and an asterisk on every row says nothing. Two or
- * more is a hole: a week Sleeper hasn't published, or a player who has fallen off
- * the slate. The tooltip carries the exact count either way.
  */
 function ProjectedPoints({
   outlook,
@@ -345,25 +501,88 @@ function ProjectedPoints({
 }) {
   if (horizon === 0) return null;
 
+  if (!outlook) return <PointsCell title="No projection" muted>—</PointsCell>;
+
+  return (
+    <PointsCell
+      title={`${formatPoints(outlook.points)} projected over ${outlook.weeks} of ${weekCount(horizon)}`}
+    >
+      {formatPoints(outlook.points)}
+      <ShortHorizon outlook={outlook} horizon={horizon} />
+    </PointsCell>
+  );
+}
+
+/**
+ * A lineup candidate's projection, split into the weeks he is in that week's best
+ * lineup and the weeks he isn't.
+ *
+ * Two numbers because the single total answers the wrong question on both sides of
+ * the roster. A bench player's total says nothing about whether any of it is
+ * reachable — 60 points behind an every-week starter is worth zero, and 60 points
+ * that arrive on the three weeks the starter is on bye is worth all 60. A starter's
+ * bench half is the mirror of that: it is what his slot is worth to someone else
+ * while he is out.
+ *
+ * Both halves come from the weekly lineups rather than the season aggregate, so
+ * they add up to `weekly_optimal_points` and not to the total in the summary above
+ * — those are deliberately different numbers (see `TeamOutlook`), which is why the
+ * tooltips name what each half covers instead of implying a single total.
+ *
+ * The em dash convention is the one used everywhere else: no projection at all is
+ * a dash in both columns, while a real 0.00 — a player the lineup never starts —
+ * is a claim worth making.
+ */
+function SplitPoints({
+  outlook,
+  split,
+  horizon,
+}: {
+  outlook?: PlayerOutlook;
+  split?: PlayerSplit;
+  horizon: number;
+}) {
+  if (horizon === 0) return null;
+
   if (!outlook) {
     return (
-      <span
-        title="No projection"
-        className="w-12 shrink-0 text-right text-xs tabular-nums text-foreground/25"
-      >
-        —
-      </span>
+      <>
+        <PointsCell title="No projection" muted>—</PointsCell>
+        <PointsCell title="No projection" muted>—</PointsCell>
+      </>
     );
   }
 
-  const partial = horizon - outlook.weeks > 1;
+  // A projected player with no split was never a candidate for a lineup solve,
+  // which today means the horizon holds no week he is projected for. Zero is the
+  // honest reading: none of his projection reaches a starting slot.
+  const starting = split?.starting_points ?? 0;
+  const bench = split?.bench_points ?? 0;
+  const startingWeeks = split?.starting_weeks ?? 0;
+  const benchWeeks = split?.bench_weeks ?? 0;
+
   return (
-    <span
-      title={`${formatPoints(outlook.points)} projected over ${outlook.weeks} of ${horizon} week${horizon === 1 ? "" : "s"}`}
-      className="w-12 shrink-0 text-right text-xs tabular-nums text-foreground/70"
-    >
-      {formatPoints(outlook.points)}
-      {partial && <span className="text-foreground/30">*</span>}
-    </span>
+    <>
+      <PointsCell
+        title={
+          startingWeeks === 0
+            ? "Never in a week's best lineup"
+            : `${formatPoints(starting)} over ${weekCount(startingWeeks)} in the best lineup`
+        }
+      >
+        {formatPoints(starting)}
+        <ShortHorizon outlook={outlook} horizon={horizon} />
+      </PointsCell>
+      <PointsCell
+        muted={bench === 0}
+        title={
+          benchWeeks === 0
+            ? "In the best lineup every week he is projected for"
+            : `${formatPoints(bench)} over ${weekCount(benchWeeks)} out of the lineup`
+        }
+      >
+        {formatPoints(bench)}
+      </PointsCell>
+    </>
   );
 }

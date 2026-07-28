@@ -46,7 +46,13 @@ export type LeagueDetailPayload = Omit<LeagueDetail, "teams"> & {
    * `weekly_optimal_points` is the team total for the same horizon and is a
    * different number: it re-sets the lineup every week, so it covers byes and
    * alternating starts, and is the one to show as "what this team projects to
-   * score" rather than either lineup's total.
+   * score" rather than either lineup's total. `weekly_split` is that same total
+   * attributed player by player — how much of each one's projection lands in a
+   * starting slot and how much of it never leaves the bench — so it is keyed by
+   * player id but scoped to a team, since being stuck behind someone is.
+   * `weekly_bench_points` is the team-level sum of those bench halves: the depth a
+   * roster is carrying without playing, which is why it sits beside the projected
+   * total in the standings rather than being folded into it.
    *
    * The horizon is the weeks actually stored, which the sync keeps a short window
    * of — read `outlook.weeks` rather than assuming it runs to week 18, and say

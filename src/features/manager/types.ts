@@ -6,7 +6,12 @@ import type {
   ManagerLeague,
 } from "@/shared/manager";
 import type { PlayerSummary } from "@/shared/players";
-import type { LeagueOutlook, PlayerOutlook, TeamOutlook } from "@/shared/projections";
+import type {
+  LeagueOutlook,
+  PlayerOutlook,
+  PlayerSplit,
+  TeamOutlook,
+} from "@/shared/projections";
 
 /**
  * The shapes this feature renders.
@@ -16,7 +21,14 @@ import type { LeagueOutlook, PlayerOutlook, TeamOutlook } from "@/shared/project
  * drift from what the routes actually send. Re-exported here so components have
  * one import site.
  */
-export type { LeagueOutlook, ManagerLeague, PlayerOutlook, PlayerSummary, TeamOutlook };
+export type {
+  LeagueOutlook,
+  ManagerLeague,
+  PlayerOutlook,
+  PlayerSplit,
+  PlayerSummary,
+  TeamOutlook,
+};
 
 /** A team as sent to the client (manager avatar id resolved to a URL). */
 export type LeagueTeamView = LeagueTeamPayload;
