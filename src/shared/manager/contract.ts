@@ -43,6 +43,11 @@ export type LeagueDetailPayload = Omit<LeagueDetail, "teams"> & {
    * in your starting slots from here", and `current`/`points_left`/`start`/`sit`
    * diff that against what the roster is starting today.
    *
+   * `weekly_optimal_points` is the team total for the same horizon and is a
+   * different number: it re-sets the lineup every week, so it covers byes and
+   * alternating starts, and is the one to show as "what this team projects to
+   * score" rather than either lineup's total.
+   *
    * The horizon is the weeks actually stored, which the sync keeps a short window
    * of — read `outlook.weeks` rather than assuming it runs to week 18, and say
    * how far ahead the numbers reach wherever they surface.

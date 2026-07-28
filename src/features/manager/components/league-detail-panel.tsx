@@ -41,6 +41,7 @@ function Panel({ data }: { data: LeagueDetailResult }) {
       <div className="grid grid-cols-2 gap-2 @lg:gap-4">
         <Standings
           teams={data.teams}
+          outlook={data.outlook}
           selectedId={selected.roster_id}
           onSelect={setSelectedId}
         />

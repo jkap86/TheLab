@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { compareLineup, optimalLineup, startingSlots } from "./optimal.ts";
+import {
+  compareLineup,
+  optimalLineup,
+  startingSlots,
+  weeklyOptimalPoints,
+} from "./optimal.ts";
 import type { RosterPlayer } from "./optimal.ts";
 
 /**
@@ -119,6 +124,58 @@ describe("optimalLineup", () => {
   test("handles an empty roster and an empty lineup", () => {
     assert.deepEqual(optimalLineup([], [p("wr", "WR", 12)]), []);
     assert.deepEqual(filled(["QB"], []), [null]);
+  });
+});
+
+describe("weeklyOptimalPoints", () => {
+  test("sums each week's own best lineup", () => {
+    const total = weeklyOptimalPoints(
+      ["QB", "RB"],
+      [
+        [p("qb1", "QB", 20), p("rb1", "RB", 15)],
+        [p("qb1", "QB", 18), p("rb1", "RB", 12)],
+      ],
+    );
+    assert.equal(total, 65);
+  });
+
+  test("beats one lineup ranked on the aggregate when the best start alternates", () => {
+    // Both backs total 25 over the two weeks, so a season-long lineup with one RB
+    // slot starts either of them for 25. Setting the lineup week by week starts
+    // whichever is up that week, for 40 — the gap is the whole point of this
+    // number sitting beside the aggregate one.
+    const weeks = [
+      [p("rb1", "RB", 20), p("rb2", "RB", 5)],
+      [p("rb1", "RB", 5), p("rb2", "RB", 20)],
+    ];
+    assert.equal(weeklyOptimalPoints(["RB"], weeks), 40);
+    assert.equal(
+      points(["RB"], [p("rb1", "RB", 25), p("rb2", "RB", 25)]),
+      25,
+    );
+  });
+
+  test("covers a bye with the bench rather than losing the slot", () => {
+    // rb1 is the better start in week 1 and unprojected in week 2, where his slot
+    // goes to rb2 — 30, not the 20 a fixed lineup would score.
+    const total = weeklyOptimalPoints(
+      ["RB"],
+      [
+        [p("rb1", "RB", 20), p("rb2", "RB", 10)],
+        [p("rb1", "RB", 0), p("rb2", "RB", 10)],
+      ],
+    );
+    assert.equal(total, 30);
+  });
+
+  test("rounds once over the whole horizon, not once a week", () => {
+    // Three weeks at 0.005 are 0.02 together and 0.03 rounded a week at a time.
+    const weeks = [0, 1, 2].map(() => [p("qb1", "QB", 0.005)]);
+    assert.equal(weeklyOptimalPoints(["QB"], weeks), 0.02);
+  });
+
+  test("is zero over no weeks", () => {
+    assert.equal(weeklyOptimalPoints(["QB"], []), 0);
   });
 });
 

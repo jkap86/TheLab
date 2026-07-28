@@ -34,7 +34,12 @@ export type {
   ProjectionScoring,
 } from "./filters";
 export { scoreProjection, unprojectedScoring, derivedScoring } from "./score";
-export { optimalLineup, compareLineup, startingSlots } from "./optimal";
+export {
+  optimalLineup,
+  compareLineup,
+  startingSlots,
+  weeklyOptimalPoints,
+} from "./optimal";
 export type { RosterPlayer, LineupSlot, LineupComparison } from "./optimal";
 export { hasProjection, toProjectionRows } from "./parse";
 export type { ProjectionRow } from "./parse";

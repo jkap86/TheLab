@@ -193,6 +193,36 @@ function total(lineup: readonly LineupSlot[]): number {
 }
 
 /**
+ * What each week's best lineup scores, summed over the weeks given — a roster's
+ * projected points for the rest of the season.
+ *
+ * A different question from {@link optimalLineup} run once on season-long totals,
+ * and always at least as large. One lineup ranked on aggregate points answers
+ * "who belongs in my starting slots from here"; this answers "what is this roster
+ * going to score", where the manager is free to re-set the lineup every week — so
+ * a bye costs one week rather than a slot, and two backs who take turns being the
+ * better start both count.
+ *
+ * `weeks` holds one entry per remaining week: the same candidates, scored against
+ * *that* week's projection. A player with no projection for a week is a zero in it
+ * rather than absent, which is what makes the bye case work — he keeps his roster
+ * spot and simply loses the slot to whoever is playing.
+ *
+ * Rounded once at the end, for the reason `./aggregate` sums stat lines rather
+ * than points: eighteen weekly roundings are eighteen chances to drift.
+ */
+export function weeklyOptimalPoints(
+  slots: readonly string[],
+  weeks: readonly (readonly RosterPlayer[])[],
+): number {
+  let sum = 0;
+  for (const players of weeks) {
+    for (const slot of optimalLineup(slots, players)) sum += slot.points;
+  }
+  return round(sum);
+}
+
+/**
  * What this roster is starting versus what it should be.
  *
  * `starters` is Sleeper's array, which lines up with the starting slots of
