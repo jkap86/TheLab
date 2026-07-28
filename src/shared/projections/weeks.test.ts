@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { LAST_REGULAR_WEEK, parseWeeks, targetWeeks } from "./weeks.ts";
+import {
+  horizonWeeks,
+  LAST_REGULAR_WEEK,
+  parseWeeks,
+  targetWeeks,
+} from "./weeks.ts";
 
 describe("targetWeeks", () => {
   test("follows display_week during the season, plus the next", () => {
@@ -32,6 +37,39 @@ describe("targetWeeks", () => {
     assert.deepEqual(targetWeeks({ week: 3, display_week: 3 }, 0), [3]);
     assert.deepEqual(targetWeeks({ week: 3, display_week: 3 }, 3), [3, 4, 5, 6]);
     assert.deepEqual(targetWeeks({ week: 3, display_week: 3 }, -1), [3]);
+  });
+});
+
+describe("horizonWeeks", () => {
+  test("picks up where targetWeeks leaves off, through week 18", () => {
+    const state = { week: 6, display_week: 7 };
+    assert.deepEqual(targetWeeks(state), [7, 8]);
+    assert.deepEqual(horizonWeeks(state), [9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+  });
+
+  test("covers the whole season from the offseason", () => {
+    // The case that matters: in July every week past the first two is horizon,
+    // and Sleeper has already published all of them.
+    assert.equal(horizonWeeks({ week: 0, display_week: 1 }).length, 16);
+    assert.deepEqual(horizonWeeks({ week: 0, display_week: 1 })[0], 3);
+  });
+
+  test("never overlaps the near window", () => {
+    for (const week of [1, 5, 12, 17, 18]) {
+      const state = { week, display_week: week };
+      const near = new Set(targetWeeks(state));
+      assert.ok(
+        horizonWeeks(state).every((w) => !near.has(w)),
+        `week ${week} overlaps`,
+      );
+    }
+  });
+
+  test("is empty once the near window reaches the end of the season", () => {
+    assert.deepEqual(horizonWeeks({ week: 18, display_week: 18 }), []);
+    assert.deepEqual(horizonWeeks({ week: 21, display_week: 21 }), []);
+    // A lookahead wide enough to swallow the season leaves nothing behind it.
+    assert.deepEqual(horizonWeeks({ week: 1, display_week: 1 }, LAST_REGULAR_WEEK), []);
   });
 });
 

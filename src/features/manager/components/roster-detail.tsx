@@ -376,9 +376,14 @@ function PlayerRow({
  *
  * An em dash rather than 0.00 when there is no projection at all: a player
  * Sleeper hasn't projected and a player projected to score nothing are different
- * claims, and the roster shouldn't make the stronger one. A player projected for
- * fewer weeks than the horizon — a bye, or a week not yet published — is marked
- * so a total that looks low can be read as short rather than bad.
+ * claims, and the roster shouldn't make the stronger one.
+ *
+ * A total covering fewer weeks than the horizon is marked, so one that looks low
+ * can be read as short rather than bad — but only past a week's shortfall. Every
+ * team has exactly one bye, so over a rest-of-season horizon a single missing week
+ * is what *everyone* looks like, and an asterisk on every row says nothing. Two or
+ * more is a hole: a week Sleeper hasn't published, or a player who has fallen off
+ * the slate. The tooltip carries the exact count either way.
  */
 function ProjectedPoints({
   outlook,
@@ -400,7 +405,7 @@ function ProjectedPoints({
     );
   }
 
-  const partial = outlook.weeks < horizon;
+  const partial = horizon - outlook.weeks > 1;
   return (
     <span
       title={`${formatPoints(outlook.points)} projected over ${outlook.weeks} of ${horizon} week${horizon === 1 ? "" : "s"}`}

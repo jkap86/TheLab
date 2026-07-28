@@ -15,7 +15,7 @@ import { errorMessage } from "@/shared/util";
 
 import { toProjectionRows } from "./parse";
 import type { ProjectionRow } from "./parse";
-import { targetWeeks } from "./weeks";
+import { horizonWeeks, targetWeeks } from "./weeks";
 
 /**
  * How long a week's stored projections stay fresh.
@@ -26,6 +26,28 @@ import { targetWeeks } from "./weeks";
  * which would call every week fresh the moment any week was written).
  */
 export const PROJECTIONS_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * How long a rest-of-season week stays fresh.
+ *
+ * The same data on a different clock. Week 12's projection in July is a
+ * strength-of-schedule estimate, not a lineup input: it moves when a depth chart
+ * does, over weeks, so refreshing it hourly would spend 90MB a day rewriting
+ * identical rows. It reaches the hourly gate on its own, by becoming the current
+ * week (see `weeks.targetWeeks`).
+ */
+export const PROJECTIONS_HORIZON_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Horizon weeks fetched per run, so the backfill trickles instead of arriving as
+ * one 90MB tick.
+ *
+ * The same shape as the KTC history backfill and for the same reason: a tick that
+ * pulls the whole rest of the season at once is a burst on Sleeper and a long
+ * stretch of held advisory lock. At the 15-minute loop interval two a tick walks
+ * all sixteen inside two hours, well within their day-long TTL.
+ */
+export const HORIZON_WEEKS_PER_TICK = 2;
 
 const COLUMNS = [
   "season", "week", "player_id", "company", "team", "opponent", "game_id",
@@ -58,6 +80,13 @@ export type ProjectionsSyncSummary = {
   synced: WeekSyncResult[];
   /** Weeks skipped because the stored rows were still inside the TTL. */
   fresh: number[];
+  /**
+   * Horizon weeks that were due but past {@link HORIZON_WEEKS_PER_TICK}, left for
+   * the next run. Reported rather than folded into `fresh`, because a capped week
+   * is stale and a fresh one isn't — and a cap that reads as "nothing to do" is
+   * how a backfill silently stops making progress.
+   */
+  deferred: number[];
   /** Weeks Sleeper had no real projections for; nothing was written. */
   empty: number[];
   /** Weeks whose fetch or write failed. Logged, retried on a later tick. */
@@ -128,10 +157,19 @@ function writeWeek(
 /**
  * Fetch and store weekly projections.
  *
- * With no options it syncs the current week and the next (see `targetWeeks`),
- * skipping any that were written inside `PROJECTIONS_TTL_MS`. Pass `weeks` to
- * backfill specific ones — a past week is never picked up on its own, since its
- * numbers stop changing once its games are played.
+ * With no options it covers the whole rest of the season, on two clocks: the
+ * current week and the next are refreshed hourly because they move on news, and
+ * the weeks behind them are refreshed daily, a couple per run (see
+ * `PROJECTIONS_HORIZON_TTL_MS` and `HORIZON_WEEKS_PER_TICK`). One gate would have
+ * to pick between re-downloading 90MB an hour and letting this week go stale.
+ *
+ * Pass `weeks` to backfill specific ones — that skips the tiering entirely and
+ * fetches exactly what was asked for, which is the only way a past week is ever
+ * picked up: its numbers stop changing once its games are played.
+ *
+ * `force` applies to the near window only. Forcing is for "this week's numbers
+ * look wrong", and a flag that quietly turned into a full-season re-download
+ * would be a footgun; use explicit `weeks` for that.
  *
  * Weeks are fetched one at a time on purpose: each response is ~5.6MB, so
  * parallelising a handful of weeks would mean tens of megabytes in flight and in
@@ -147,9 +185,16 @@ export async function syncProjections(
     weeks?: number[];
     force?: boolean;
     ttlMs?: number;
+    horizonTtlMs?: number;
+    horizonPerRun?: number;
   } = {},
 ): Promise<ProjectionsSyncSummary> {
-  const { force = false, ttlMs = PROJECTIONS_TTL_MS } = options;
+  const {
+    force = false,
+    ttlMs = PROJECTIONS_TTL_MS,
+    horizonTtlMs = PROJECTIONS_HORIZON_TTL_MS,
+    horizonPerRun = HORIZON_WEEKS_PER_TICK,
+  } = options;
 
   const summary = await withAdvisoryLock(LOCK_KEYS.projections, async () => {
     const explicitWeeks = options.weeks?.length ? options.weeks : null;
@@ -169,10 +214,21 @@ export async function syncProjections(
     }
 
     const season = options.season ?? state?.season ?? DEFAULT_SEASON;
-    const weeks = explicitWeeks ?? targetWeeks(state);
 
-    const due = force ? weeks : await staleWeeks(season, weeks, ttlMs);
-    const fresh = weeks.filter((w) => !due.includes(w));
+    const near = explicitWeeks ?? targetWeeks(state);
+    const far = explicitWeeks ? [] : horizonWeeks(state);
+
+    // Two freshness gates, one per clock. The horizon's is capped, so what it
+    // leaves behind is stale-but-waiting rather than fresh.
+    const nearDue = force ? near : await staleWeeks(season, near, ttlMs);
+    const farStale = far.length ? await staleWeeks(season, far, horizonTtlMs) : [];
+    const farDue = farStale.slice(0, Math.max(0, horizonPerRun));
+    const deferred = farStale.slice(farDue.length);
+
+    const due = [...nearDue, ...farDue];
+    const fresh = [...near, ...far].filter(
+      (w) => !due.includes(w) && !deferred.includes(w),
+    );
 
     const synced: WeekSyncResult[] = [];
     const empty: number[] = [];
@@ -201,7 +257,7 @@ export async function syncProjections(
       }
     }
 
-    return { locked: false, season, synced, fresh, empty, failed };
+    return { locked: false, season, synced, fresh, deferred, empty, failed };
   });
 
   return (
@@ -210,6 +266,7 @@ export async function syncProjections(
       season: options.season ?? DEFAULT_SEASON,
       synced: [],
       fresh: [],
+      deferred: [],
       empty: [],
       failed: [],
     }

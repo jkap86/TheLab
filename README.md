@@ -148,11 +148,14 @@ one database don't duplicate the work.
 - **KTC scheduler** (every 15 min) — refreshes dynasty values, records a daily
   snapshot per player, and chips away at the per-player history backfill (5
   players per tick; their pages are 3–6MB each).
-- **Projections sync** (checks every 15 min, refreshes hourly) — stores Sleeper's
-  weekly player projections for the current NFL week and the next one. Freshness
-  is judged per week, so a tick that finds both weeks current costs one query;
-  past weeks are never re-fetched, since their numbers stop moving once the games
-  are played. Backfill one by hand with `/api/projections/sync?week=N`.
+- **Projections sync** (checks every 15 min) — stores Sleeper's weekly player
+  projections for the whole rest of the season, on two clocks. The current NFL
+  week and the next refresh hourly, because they move on injury news; the weeks
+  behind them refresh daily, two per tick, because a week-12 projection in July
+  changes over weeks rather than hours. Freshness is judged per week, so a tick
+  that finds everything current costs two queries; past weeks are never
+  re-fetched, since their numbers stop moving once the games are played. Fill the
+  horizon in one go, or pull a past week, with `/api/projections/sync?week=N`.
 
 ### Freshness windows
 
@@ -161,8 +164,9 @@ one database don't duplicate the work.
 | Manager league sync | 10 min |
 | Stored league (crawler refresh) | 15 min |
 | KTC values | 15 min |
-| Weekly projections (per week) | 1 hour |
+| Weekly projections — current + next week | 1 hour |
 | Manager league-list enumeration | 6 hours |
+| Weekly projections — rest of season | 24 hours |
 | Sleeper players map | 24 hours |
 | KTC per-player history | 30 days |
 

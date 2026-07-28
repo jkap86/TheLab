@@ -7,7 +7,8 @@ export const LAST_REGULAR_WEEK = 18;
 export const PROJECTION_LOOKAHEAD = 1;
 
 /**
- * Weeks the background sync should keep fresh, given the current NFL state.
+ * Weeks the background sync keeps fresh at the news-cycle TTL: the one being
+ * played and the one being set.
  *
  * `display_week` is preferred over `week` because it is the week Sleeper's own UI
  * is pointed at — it rolls over once a week's games are done, which is exactly
@@ -16,9 +17,12 @@ export const PROJECTION_LOOKAHEAD = 1;
  * exist months ahead of kickoff, so there is no reason to sit idle until
  * September.
  *
- * Only ever a small window: past weeks never change once their games are played,
- * so re-fetching them would be 5.6MB spent to rewrite identical rows. Backfilling
- * one is a deliberate act — pass explicit weeks to `syncProjections`.
+ * Deliberately narrow, because these are the weeks that move on news — a Friday
+ * injury designation changes Sunday's numbers. The rest of the season is
+ * {@link horizonWeeks}, refreshed far more slowly. Past weeks are in neither: they
+ * never change once their games are played, so re-fetching one would be 5.6MB
+ * spent to rewrite identical rows. Backfilling one is a deliberate act — pass
+ * explicit weeks to `syncProjections`.
  */
 export function targetWeeks(
   state: Pick<SleeperNflState, "week" | "display_week"> | null,
@@ -29,6 +33,33 @@ export function targetWeeks(
   const last = Math.min(first + Math.max(Math.trunc(lookahead), 0), LAST_REGULAR_WEEK);
 
   return Array.from({ length: last - first + 1 }, (_, i) => first + i);
+}
+
+/**
+ * The rest of the regular season past {@link targetWeeks} — everything from the
+ * end of that window to week 18.
+ *
+ * Sleeper publishes all 18 weeks months ahead of kickoff and they are real, not
+ * padding: a back's rushing line moves week to week with the opponent, and a bye
+ * shows up as the player being absent from that week entirely. Storing them is
+ * what lets "rest of season" mean it rather than "the next fortnight".
+ *
+ * Separate from the near window because they age differently, not because they
+ * matter less. A week-12 projection in July doesn't move hour to hour, so syncing
+ * it on the same one-hour gate would re-download 90MB a day to rewrite the same
+ * rows — see the two TTLs in `./sync`.
+ */
+export function horizonWeeks(
+  state: Pick<SleeperNflState, "week" | "display_week"> | null,
+  lookahead: number = PROJECTION_LOOKAHEAD,
+): number[] {
+  const near = targetWeeks(state, lookahead);
+  const first = (near.at(-1) ?? 0) + 1;
+
+  return Array.from(
+    { length: Math.max(0, LAST_REGULAR_WEEK - first + 1) },
+    (_, i) => first + i,
+  );
 }
 
 /** A parsed `?week=` list, or the reason it was rejected. */

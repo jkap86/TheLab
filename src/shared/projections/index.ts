@@ -1,4 +1,9 @@
-export { syncProjections, PROJECTIONS_TTL_MS } from "./sync";
+export {
+  syncProjections,
+  PROJECTIONS_TTL_MS,
+  PROJECTIONS_HORIZON_TTL_MS,
+  HORIZON_WEEKS_PER_TICK,
+} from "./sync";
 export type { ProjectionsSyncSummary, WeekSyncResult } from "./sync";
 export {
   getWeekProjections,
@@ -35,6 +40,7 @@ export { hasProjection, toProjectionRows } from "./parse";
 export type { ProjectionRow } from "./parse";
 export {
   targetWeeks,
+  horizonWeeks,
   parseWeeks,
   LAST_REGULAR_WEEK,
   PROJECTION_LOOKAHEAD,

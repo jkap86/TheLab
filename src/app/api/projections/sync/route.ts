@@ -8,14 +8,17 @@ export const dynamic = "force-dynamic";
 /**
  * Refresh stored weekly projections.
  *
- *   POST /api/projections/sync                 current + next week, if stale
- *   POST /api/projections/sync?force=1         same weeks, ignoring freshness
+ *   POST /api/projections/sync                 whatever is stale, on both clocks
+ *   POST /api/projections/sync?force=1         current + next week regardless
  *   POST /api/projections/sync?week=1,2,3      backfill specific weeks
  *   POST /api/projections/sync?season=2025&week=17
  *
- * A manual counterpart to the background loop, which only ever keeps the current
- * window fresh — past weeks are frozen once their games are played, so pulling one
- * in is a deliberate act. `week` accepts repeated params or commas, as elsewhere.
+ * A manual counterpart to the background loop. With no week it does exactly what a
+ * tick does: this week and next if they're past the hourly gate, plus a couple of
+ * rest-of-season weeks if they're past the daily one. Naming weeks skips both
+ * gates and both caps, which is the only way to pull a past season or to fill the
+ * horizon in one go rather than over the next two hours. `week` accepts repeated
+ * params or commas, as elsewhere.
  *
  * Each week is a ~5.6MB download; a request that syncs several is slow by nature.
  */
