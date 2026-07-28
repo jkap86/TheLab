@@ -180,6 +180,14 @@ stops holding, a comment saying it does would not have caught it.
   classes.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
+- **`roster-detail` shows the optimal lineup only** — there is no current/optimal
+  toggle. The current lineup is a click away in Sleeper; what this tool adds is
+  the best lineup available, so the starters list *is* that lineup and the bench
+  follows it (promoted rows highlighted, sat rows dimmed). The gap against what
+  the team is actually starting is stated in words — `+X on the bench · start … ·
+  sit …` — rather than made something to find by toggling. `optimal.ts` still
+  computes `current` / `current_points`: `points_left`, `start` and `sit` are
+  differences against them, so they are load-bearing, not dead.
 
 ## External API gotchas
 

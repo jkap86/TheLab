@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { formatPoints, formatRecord, formatWeekRange } from "../format";
 import type {
@@ -29,9 +29,6 @@ const SLOT_LABEL: Record<string, string> = {
   IDP_FLEX: "IDP",
 };
 
-/** Which lineup the starters section is showing. */
-type View = "current" | "optimal";
-
 /** A row of the starters list: a slot and who is in it. */
 type SlotRow = { slot: string; player_id: string };
 
@@ -39,10 +36,10 @@ type SlotRow = { slot: string; player_id: string };
  * One team's full roster, grouped into starters, bench, IR and taxi, with each
  * player's projected points for the rest of the season.
  *
- * The starters section switches between what the team is starting and the best
- * lineup available to it (see `outlook`), and the bench follows: a player the
- * optimal lineup starts moves up out of the bench when that view is on, so the
- * two lists always read as one lineup.
+ * The starters section shows the *best* lineup available to the team, not what
+ * it is currently starting (see `outlook`), and the bench follows: a player the
+ * optimal lineup starts is listed as a starter and highlighted, one it sits is
+ * dimmed on the bench, so the two lists always read as one lineup.
  *
  * Below the `@lg` container width the record drops onto its own line under the
  * team name instead of competing with it for horizontal space.
@@ -58,8 +55,6 @@ export function RosterDetail({
   rosterPositions: string[] | null;
   outlook: LeagueOutlook | null;
 }) {
-  const [view, setView] = useState<View>("current");
-
   const teamOutlook = useMemo(
     () => outlook?.teams.find((t) => t.roster_id === team.roster_id) ?? null,
     [outlook, team.roster_id],
@@ -69,14 +64,14 @@ export function RosterDetail({
   // outlook has already done that pairing (and dropped any slot it doesn't
   // recognise), so it is only redone here for a league with no projections.
   const starters: SlotRow[] = useMemo(() => {
-    const lineup = teamOutlook?.[view];
+    const lineup = teamOutlook?.optimal;
     if (lineup) {
       return lineup.map((s) => ({ slot: s.slot, player_id: s.player_id ?? "" }));
     }
 
     const slots = (rosterPositions ?? []).filter((p) => !BENCH_SLOTS.has(p));
     return team.starters.map((id, i) => ({ slot: slots[i] ?? "FLEX", player_id: id }));
-  }, [teamOutlook, view, rosterPositions, team.starters]);
+  }, [teamOutlook, rosterPositions, team.starters]);
 
   const bench = useMemo(() => {
     const onField = new Set([
@@ -123,11 +118,9 @@ export function RosterDetail({
       </div>
 
       {teamOutlook && outlook && (
-        <LineupSwitch
+        <LineupSummary
           teamOutlook={teamOutlook}
           weeks={outlook.weeks}
-          view={view}
-          onChange={setView}
           players={players}
         />
       )}
@@ -141,7 +134,7 @@ export function RosterDetail({
             slot={row.slot}
             outlook={outlook?.players[row.player_id]}
             horizon={horizon}
-            promoted={view === "optimal" && teamOutlook?.start.includes(row.player_id)}
+            promoted={teamOutlook?.start.includes(row.player_id)}
           />
         ))}
       </RosterSection>
@@ -155,7 +148,7 @@ export function RosterDetail({
               playerId={id}
               outlook={outlook?.players[id]}
               horizon={horizon}
-              benched={view === "optimal" && teamOutlook?.sit.includes(id)}
+              benched={teamOutlook?.sit.includes(id)}
             />
           ))}
         </RosterSection>
@@ -198,25 +191,19 @@ export function RosterDetail({
 }
 
 /**
- * The current/optimal switch, with each lineup's projected total on its own
- * button — the gap between the two numbers is the whole point, so it is shown
- * rather than made something to work out by toggling.
+ * The optimal lineup's projected total, and what it would take to get there.
  *
- * The week range sits beside it because the horizon is not what a reader would
- * assume: the projections sync keeps a short window warm, so "rest of season" is
- * usually a couple of weeks deep.
+ * The week range sits beside it because the horizon is whatever has been synced,
+ * not a fixed span — a short backfill shortens the number without invalidating
+ * it, so it is stated rather than left to be assumed.
  */
-function LineupSwitch({
+function LineupSummary({
   teamOutlook,
   weeks,
-  view,
-  onChange,
   players,
 }: {
   teamOutlook: TeamOutlook;
   weeks: number[];
-  view: View;
-  onChange: (view: View) => void;
   players: Record<string, PlayerSummary>;
 }) {
   const name = (id: string) => players[id]?.name ?? id;
@@ -224,20 +211,12 @@ function LineupSwitch({
   return (
     <div className="mt-3">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <div className="flex rounded-md border border-foreground/10 p-0.5">
-          <SwitchButton
-            active={view === "current"}
-            onClick={() => onChange("current")}
-            label="Current"
-            points={teamOutlook.current_points}
-          />
-          <SwitchButton
-            active={view === "optimal"}
-            onClick={() => onChange("optimal")}
-            label="Optimal"
-            points={teamOutlook.optimal_points}
-          />
-        </div>
+        <span className="flex items-baseline gap-1.5 rounded-md bg-active/10 px-2 py-1 text-[0.7rem] text-active">
+          <span className="font-medium">Optimal</span>
+          <span className="tabular-nums">
+            {formatPoints(teamOutlook.optimal_points)}
+          </span>
+        </span>
         <span className="text-[0.65rem] uppercase tracking-wide text-foreground/35">
           proj · {formatWeekRange(weeks)}
         </span>
@@ -265,34 +244,6 @@ function LineupSwitch({
         </p>
       )}
     </div>
-  );
-}
-
-function SwitchButton({
-  active,
-  onClick,
-  label,
-  points,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  points: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`flex items-baseline gap-1.5 rounded px-2 py-1 text-[0.7rem] transition-colors ${
-        active
-          ? "bg-active/10 text-active"
-          : "text-foreground/45 hover:bg-foreground/[0.04]"
-      }`}
-    >
-      <span className="font-medium">{label}</span>
-      <span className="tabular-nums">{formatPoints(points)}</span>
-    </button>
   );
 }
 
