@@ -14,7 +14,12 @@ export type {
 export { runLeagueCrawl } from "./crawl";
 export type { CrawlSummary, CrawlOptions } from "./crawl";
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
-export { getLeagueDetail, getManagerLeagues, getManagerSyncedAt } from "./queries";
+export {
+  getLeagueDetail,
+  getManagerLeagues,
+  getManagerRosters,
+  getManagerSyncedAt,
+} from "./queries";
 export type { LeagueDetail, LeagueTeam, ManagerLeague } from "./types";
 export { resolveManagerUser, toUserInfo } from "./resolve";
 export type { ResolvedManager } from "./resolve";

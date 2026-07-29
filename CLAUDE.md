@@ -40,10 +40,13 @@ src/shared/    Domain logic, one folder per concern.
 - **A cache-backed route reads and nothing else.** `/api/projections`,
   `/api/league/[leagueId]` and `/api/adp` answer from what the background syncs
   have stored; a slice that hasn't been synced comes back empty rather than
-  fetched on demand. (The `/api/user/[username]` routes are the deliberate
+  fetched on demand. (`/api/user/[username]` and `…/leagues` are the deliberate
   exception — resolving a manager and syncing their leagues is what they are
-  *for*, which is why the leagues one streams progress.) Where a read needs to
-  know what week it is, derive it from stored data too: `projections/queries`
+  *for*, which is why the leagues one streams progress. `…/players` shares that
+  prefix and is *not* an exception: it reads the rosters that stream writes, so a
+  manager it has never run for gets an empty answer rather than a second sync of
+  their own.) Where a read needs to know what week it is, derive it from
+  stored data too: `projections/queries`
   takes the weeks still ahead from `game_date` rather than `state/nfl`, so it can
   only ever name weeks that are actually here to read.
 - A route that needs several independent reads should `Promise.all` them, and
@@ -187,6 +190,12 @@ named functions — absence means "off" for a flag like `?stats=1` and "don't
 filter" for a population filter like `?best_ball=`, and one function silently
 serving both meanings is the bug the split names.)
 
+`manager/shares` is that shape on the client: `playerShares` takes the leagues,
+the rosters and the players cache as arguments and counts, so the rules that
+decide what a share is out of can be read and tested without a fetch behind them.
+It sits beside `filters` because the two compose — the caller filters the league
+list, then counts over what's left.
+
 Validation earns its keep when a value reaches SQL as anything but a bound
 parameter. `scoring` picks the column `projections/queries` interpolates into
 `ORDER BY`, so it is a closed enum that fails the request on an unknown value —
@@ -222,6 +231,26 @@ stops holding, a comment saying it does would not have caught it.
   classes.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
+- **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
+  being looked at, the season and the sync state are the same facts on all of
+  them; only the count line under them differs, which is what `children` is. The
+  tabs live there because that is the only thing making a second view reachable —
+  there is no global nav — and they link with the URL's own spelling of the
+  manager rather than the resolved username, since Sleeper resolves a user id as
+  readily as a name.
+- **A player share is out of the leagues that hold a roster of yours, not the
+  leagues listed.** They are different numbers — 121 leagues, 113 rosters for the
+  account this was built against — because Sleeper keeps you in `league_users`
+  after you stop holding a team (a guillotine league you were knocked out of, one
+  you left). Counting membership would quietly deflate every share on the page,
+  so `playerShares` counts only leagues that contributed a roster, and an empty
+  roster (pre-draft) still counts: holding nobody is a real answer.
+- **The shares list is one line a row, unlike the roster panel's two.** That rule
+  is about a panel rendering at half a card's width; this page has the full shell,
+  so the name is in no danger and splitting it would only add height to a list
+  several hundred rows long. Both numbers are kept — the count is what's actually
+  held and compares between players, the share is what it means for a portfolio
+  and moves when the filters do.
 - **A list of managers is labelled by username, a team by team name.** `ui.tsx`
   has both — `managerLabel` (display_name → team_name → roster number) and
   `teamLabel` (the reverse) — and the column heading says which one it is.
