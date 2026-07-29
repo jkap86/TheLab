@@ -9,6 +9,7 @@ import {
   matchesFilters,
   type LeagueFilters,
 } from "../filters";
+import { useManagerKtc } from "../hooks/use-manager-ktc";
 import { useManagerLeagues } from "../hooks/use-manager-leagues";
 import { useManagerRanks } from "../hooks/use-manager-ranks";
 import { LeagueCard } from "./league-card";
@@ -23,9 +24,12 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   );
 
   const leagues = data?.leagues;
-  // The card chips are a bonus on top of the list, so a ranks fetch that fails
-  // costs the chips and nothing else — the error is deliberately unused.
+  // The card chips are a bonus on top of the list, so a fetch that fails costs
+  // the chips and nothing else — both errors are deliberately unused. Two reads
+  // rather than one because they answer different questions off different
+  // caches: a KTC scrape that is behind shouldn't cost the projected ranks.
   const { data: ranks } = useManagerRanks(searched, leagues ?? null);
+  const { data: ktc } = useManagerKtc(searched, leagues ?? null);
   const filtered = useMemo(
     () => (leagues ?? []).filter((league) => matchesFilters(league, filters)),
     [leagues, filters],
@@ -77,6 +81,8 @@ export function ManagerLeagues({ searched }: { searched: string }) {
                   league={league}
                   rank={ranks?.ranks[league.league_id] ?? null}
                   weeks={ranks?.weeks ?? []}
+                  value={ktc?.leagues[league.league_id] ?? null}
+                  valuedAt={ktc?.updated_at ?? null}
                 />
               ))}
             </ul>

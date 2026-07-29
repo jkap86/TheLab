@@ -232,6 +232,18 @@ stops holding, a comment saying it does would not have caught it.
   use `white` — it was the old convention and has been fully migrated.
 - Wrap page content in `<PageShell>` rather than repeating the container
   classes.
+- **The tools page's account section resolves in place; the other two searches
+  navigate.** `ManagerSearch` and `PicktrackerSearch` hand what you typed to a
+  route and let the destination resolve it, so a typo is only discovered as a
+  failed page. `UserLookup` *is* the destination: it asks `/api/user/[username]`
+  who that is and shows the avatar and canonical `@username` back, because
+  Sleeper resolves a user id as readily as a name — what you typed is not proof
+  of who you meant, which is what makes the extra request worth making before a
+  tool is picked. A resubmit aborts the lookup still in flight, or the slower
+  response wins whichever was asked for last. The resolved user lives in
+  component state and nothing else reads it yet: a reload clears it, and handing
+  that identity to the tools below is the next step, not something the section
+  already does.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
@@ -292,6 +304,35 @@ stops holding, a comment saying it does would not have caught it.
   Ties share the better rank (two at 250.0 are both #1), and a league where
   every total is zero gets *no* rank — pre-draft, "1st of 12" would dress an
   empty league up as a lead (`projectedRank`, tested).
+- **The card's KTC chip is three numbers, and the bench one is a subtraction.**
+  A total says nothing about shape: two rosters worth 40k are not the same roster
+  when one can start 30k of it and the other is depth behind a thin lineup. So
+  `/api/user/[username]/ktc` sends `total`, `starters` and `bench`, with `bench`
+  computed as `total − starters` so the three always reconcile — everything not
+  in the lineup lands there, IR and taxi included, which is the honest reading of
+  "value this roster holds and cannot play" even though the roster panel lists
+  those under headings of their own. The starting half is summed by walking the
+  *roster* and asking whether each player starts, never by walking the lineup, so
+  a lineup naming someone the roster doesn't hold can't hand back a negative
+  bench (`rosterKtcValue`, tested). The chip disappears when nothing is priced,
+  on the same terms as the rank chip beside it: a pre-draft roster is empty and
+  KTC's board is skill players only, so "0 ktc" would dress both up as a claim
+  about the team.
+- **That chip is batched like the rank chip, and for the same reason.** A
+  collapsed card costs no request, so a hundred of them each fetching a value
+  would undo that. The route reads `getManagerLeagueRosters` and drops every team
+  but the manager's own *before* the projections read — a hundred leagues of
+  twelve rosters is twelve times the lineup solving for eleven answers nobody
+  asked for. `getOptimalLineups` is the third entry point in `projections/outlook`
+  beside `getLeagueOutlook` and `getWeeklyTeamPoints`, and it is the cheapest of
+  the three per team: the aggregate lineup is ranked on a season total, so the
+  stat lines are summed once for the whole account (scoring is linear, so a
+  player's aggregate is league-independent) and each league scores that sum once
+  per player, where the weekly totals need a solve per team per week. It returns
+  the same lineup the expanded panel lists as Starters, so a chip and the card it
+  opens can't disagree about who starts. Its failure costs the split and not the
+  value — pricing a roster needs no projection, so the totals still answer, which
+  is why `split` is nullable rather than the whole league being dropped.
 - **A list of managers is labelled by username, a team by team name.** `ui.tsx`
   has both — `managerLabel` (display_name → team_name → roster number) and
   `teamLabel` (the reverse) — and the column heading says which one it is.
@@ -345,6 +386,27 @@ stops holding, a comment saying it does would not have caught it.
 - **KTC serves bot clients a page with no data**, so requests need browser
   headers. Player pages are 3–6MB, which is why the history backfill does a
   handful per tick.
+- **KTC publishes two boards and they move in opposite directions.** Superflex
+  and 1QB pricing are not one scale factor apart: over the players stored here a
+  quarterback averages 3,219 superflex against 2,554 1QB, while a receiver
+  averages 2,569 against 3,027. A roster read off the wrong board is therefore
+  wrong at *every* position, not just at quarterback. Which board a league reads
+  is simply whether it starts more than one QB — derived from `SLOT_POSITIONS`
+  rather than testing for `SUPER_FLEX` by name, the way `DEFENSIVE_SLOTS` is
+  derived, so a new QB-eligible flex counts the moment the solver learns it
+  (`ktc/roster.ts`). It travels with the number in the payload instead of being
+  assumed by whoever renders it. It matters for few leagues and matters a lot to
+  them: 118 of the 122 stored here are superflex, so the four that aren't are
+  exactly the ones a default would silently misprice.
+- **KTC prices ~500 dynasty skill players, so a roster total is never the whole
+  roster.** 93.7% of the players on rosters here carry a price; the shortfall is
+  IDP (LB, DB, DL, DE) plus the deep end of every skill position, and kickers and
+  defences are off the board entirely. A total therefore ships with the count
+  behind it — `priced` of `rostered` — rather than passing as complete, the same
+  habit as sending `outlook.weeks` alongside a projection. It is also a *dynasty*
+  board and the only one this app scrapes, which is the wrong lens on the redraft
+  leagues sitting in the same list, so anything showing the number says
+  "dynasty" rather than leaving it to be inferred.
 - Transactions are keyed by week with no all-at-once endpoint; a league's full
   history is the union of each week.
 - **Projections live on a different host and aren't documented or versioned.**

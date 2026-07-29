@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-import { formatPoints, formatRecord, formatWeekRange } from "../format";
-import type { ManagerLeague, ProjectedRank } from "../types";
+import { formatPoints, formatRecord, formatValue, formatWeekRange } from "../format";
+import type { LeagueKtcValue, ManagerLeague, ProjectedRank } from "../types";
 import { LeagueDetailPanel } from "./league-detail-panel";
 import { Chevron } from "./ui";
 
@@ -11,6 +11,8 @@ export function LeagueCard({
   league,
   rank,
   weeks,
+  value,
+  valuedAt,
 }: {
   league: ManagerLeague;
   /**
@@ -22,6 +24,14 @@ export function LeagueCard({
   rank: ProjectedRank | null;
   /** The horizon behind `rank`, so the chip can say what its number covers. */
   weeks: number[];
+  /**
+   * What this manager's roster here is worth on KeepTradeCut — null while the
+   * values are loading, and for a league they hold no roster in. Absent rather
+   * than zeroed, on the same terms as `rank`.
+   */
+  value: LeagueKtcValue | null;
+  /** When those values were scraped, so the chip can say how old they are. */
+  valuedAt: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -56,6 +66,7 @@ export function LeagueCard({
                 of {rank.of} · proj
               </span>
             )}
+            {value && <ValueChip value={value} valuedAt={valuedAt} />}
             <Stat value={league.total_rosters} label="teams" />
           </div>
         </div>
@@ -68,6 +79,74 @@ export function LeagueCard({
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * What this manager's roster in the league is worth on KeepTradeCut, and how
+ * much of that value is in the best lineup rather than sat behind it.
+ *
+ * Three numbers rather than one because a total says nothing about shape: two
+ * rosters worth 40k are not the same roster when one can start 30k of it and the
+ * other is a deep bench propping up a thin lineup. The split is drawn from the
+ * same lineup the expanded panel lists as Starters, so a chip and the card it
+ * opens can't disagree about who starts, and IR and taxi land in the bench half
+ * — value held that cannot be played is exactly what that half means.
+ *
+ * Nothing at all when the roster prices at nothing, on the same terms as the
+ * rank chip beside it: KTC's board is skill players only and a pre-draft roster
+ * is empty, so "0 ktc" would dress both up as a claim about the team.
+ *
+ * The label says *dynasty* because that is the only board this app scrapes —
+ * these are keeper-asset prices, which is the wrong lens on the redraft leagues
+ * in the same list, and worth naming rather than leaving to be inferred.
+ */
+function ValueChip({
+  value,
+  valuedAt,
+}: {
+  value: LeagueKtcValue;
+  valuedAt: string | null;
+}) {
+  if (value.priced === 0) return null;
+
+  const board = value.superflex ? "superflex" : "1QB";
+  const title = [
+    `${formatValue(value.total)} KeepTradeCut dynasty ${board} value`,
+    value.split
+      ? `${formatValue(value.split.starters)} in the best lineup, ${formatValue(
+          value.split.bench,
+        )} behind it`
+      : "no projections yet, so nothing to split it across a lineup",
+    `${value.priced} of ${value.rostered} rostered players priced`,
+    valuedAt && `scraped ${new Date(valuedAt).toLocaleString()}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <span
+      title={title}
+      className="rounded-md bg-foreground/5 px-2 py-0.5 text-sm text-foreground/55"
+    >
+      <span className="font-semibold tabular-nums text-foreground/85">
+        {formatValue(value.total)}
+      </span>{" "}
+      ktc
+      {value.split && (
+        <>
+          {" · "}
+          <span className="tabular-nums text-foreground/75">
+            {formatValue(value.split.starters)}
+          </span>{" "}
+          start ·{" "}
+          <span className="tabular-nums text-foreground/75">
+            {formatValue(value.split.bench)}
+          </span>{" "}
+          bench
+        </>
+      )}
+    </span>
   );
 }
 

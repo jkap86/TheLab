@@ -8,6 +8,7 @@ import type {
   SyncProgress,
   SyncSummary,
 } from "@/shared/manager";
+import type { KtcRosterValue } from "@/shared/ktc";
 import type { PlaceholderPick } from "@/shared/picktracker";
 import type { PlayerSummary } from "@/shared/players";
 import type { LeagueOutlook, ProjectionFilters } from "@/shared/projections";
@@ -179,6 +180,56 @@ export type ManagerRanksPayload = {
    * aren't cached, or nothing in it is projected yet (pre-draft).
    */
   ranks: Record<string, ProjectedRank>;
+};
+
+/** One league's roster priced on KeepTradeCut, and how that value is split. */
+export type LeagueKtcValue = KtcRosterValue & {
+  /**
+   * Which of KTC's two boards priced it: superflex where the league starts more
+   * than one quarterback, 1QB otherwise. The same roster is worth materially
+   * different totals on the two, so the board travels with the number instead of
+   * being assumed by whoever reads it.
+   */
+  superflex: boolean;
+};
+
+/**
+ * `GET /api/user/[username]/ktc` — what the manager's own roster in each of
+ * their leagues is worth on KeepTradeCut, and how much of that value is in a
+ * starting lineup rather than behind one.
+ *
+ * Read-only like its `players` and `ranks` siblings under this prefix: it prices
+ * the rosters the leagues stream has already written using the values the KTC
+ * scrape has already stored, so a manager nobody has looked up comes back empty
+ * rather than triggering a sync of their own.
+ *
+ * KTC publishes *dynasty* values and this app scrapes only that board, so the
+ * numbers describe a keeper asset rather than a season's usefulness — they are
+ * the wrong lens on a redraft league, and anything showing them should say
+ * "dynasty" rather than leave it to be inferred.
+ */
+export type ManagerKtcPayload = {
+  season: string;
+  /**
+   * When the KTC rows behind every number here were scraped, ISO 8601 — null
+   * when nothing on these rosters is priced. A fifteen-minute cache of someone
+   * else's numbers, so a client showing them should be able to say how old they
+   * are, as `/api/projections` does.
+   */
+  updated_at: string | null;
+  /**
+   * Weeks the lineup behind every `split` was ranked over, ascending. Empty when
+   * nothing remains to project, in which case every `split` is null and only the
+   * totals are answerable.
+   */
+  weeks: number[];
+  /**
+   * League id → that roster's value. A league is absent when the manager holds
+   * no roster in it; a league whose roster KTC prices nothing is present with a
+   * zero total and `priced: 0`, which is a real answer rather than a gap — a
+   * pre-draft roster is empty and a roster of kickers is off the board.
+   */
+  leagues: Record<string, LeagueKtcValue>;
 };
 
 /**
