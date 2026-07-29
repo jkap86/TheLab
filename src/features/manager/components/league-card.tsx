@@ -5,6 +5,7 @@ import { useState } from "react";
 import { formatPoints, formatRecord, formatWeekRange } from "../format";
 import type { ManagerLeague, ProjectedRank } from "../types";
 import { LeagueDetailPanel } from "./league-detail-panel";
+import { Chevron } from "./ui";
 
 export function LeagueCard({
   league,
@@ -34,7 +35,7 @@ export function LeagueCard({
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <Chevron open={expanded} />
+            <Chevron open={expanded} size="md" />
             <h3 className="truncate text-lg font-semibold">{league.name}</h3>
           </div>
 
@@ -67,27 +68,6 @@ export function LeagueCard({
         </div>
       )}
     </li>
-  );
-}
-
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="none"
-      aria-hidden="true"
-      className={`h-4 w-4 shrink-0 text-foreground/40 transition-transform ${
-        open ? "rotate-90" : ""
-      }`}
-    >
-      <path
-        d="M7 5l6 5-6 5"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 

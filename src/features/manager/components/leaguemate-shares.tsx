@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 
-import type { PlayerShare } from "../shares";
-import { Chevron, PositionBadge, SharedLeagueRow } from "./ui";
+import { Avatar } from "@/features/shared";
+
+import type { LeaguemateShare } from "../leaguemates";
+import { Chevron, SharedLeagueRow } from "./ui";
 
 /**
- * The grid a share row and the heading above it share — one template for both,
- * so the headings stay over their numbers.
+ * The grid a leaguemate row and the heading above it share — one template for
+ * both, so the headings stay over their numbers.
  *
  * Written out whole so Tailwind sees the class string.
  */
@@ -15,23 +17,20 @@ const COLUMNS =
   "grid-cols-[1rem_minmax(0,1fr)_3.5rem_3.5rem] sm:grid-cols-[1rem_minmax(0,1fr)_4.5rem_4rem]";
 
 /**
- * Every player the manager rosters, most-owned first, each expanding to the
- * leagues that hold him.
+ * Everyone the manager shares a league with, most-shared first, each expanding
+ * to the leagues they share.
  *
- * One line per row rather than the two the league panel uses: this list has a
- * full page to work with, so the name is in no danger of losing its space.
- *
- * Both numbers are shown because neither is the whole answer. The count is what
- * the manager actually holds and is comparable between players; the share is
- * what it means for a portfolio, and it moves when the filters do — eight
- * leagues is heavy exposure across ten and barely a position across a hundred.
+ * The player-shares list with a person where the player goes: same one-line
+ * rows, same count-and-share columns, same expansion. Labelled by username, per
+ * the standings rule — a team name is a nickname someone picked for one league,
+ * and this list exists to recognise the same person *across* leagues.
  */
-export function PlayerShares({
-  shares,
+export function LeaguemateShares({
+  mates,
   leagueCount,
 }: {
-  shares: PlayerShare[];
-  /** Leagues the shares are out of — see `PlayerShares.league_count`. */
+  mates: LeaguemateShare[];
+  /** Leagues the shares are out of — see `LeaguemateShares.league_count`. */
   leagueCount: number;
 }) {
   return (
@@ -40,33 +39,29 @@ export function PlayerShares({
         className={`grid ${COLUMNS} items-center gap-x-2 border-b border-foreground/10 bg-foreground/[0.03] px-3 py-2 text-[0.65rem] uppercase tracking-wide text-foreground/40 sm:text-xs`}
       >
         <span />
-        <span className="truncate">Player</span>
+        <span className="truncate">Manager</span>
         <span className="text-right">Leagues</span>
         <span className="text-right">Share</span>
       </div>
       <ul className="divide-y divide-foreground/5">
-        {shares.map((share) => (
-          <ShareRow
-            key={share.player_id}
-            share={share}
-            leagueCount={leagueCount}
-          />
+        {mates.map((mate) => (
+          <MateRow key={mate.user_id} mate={mate} leagueCount={leagueCount} />
         ))}
       </ul>
     </div>
   );
 }
 
-function ShareRow({
-  share,
+function MateRow({
+  mate,
   leagueCount,
 }: {
-  share: PlayerShare;
+  mate: LeaguemateShare;
   leagueCount: number;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const held = share.leagues.length;
-  const pct = leagueCount > 0 ? Math.round((held / leagueCount) * 100) : 0;
+  const shared = mate.leagues.length;
+  const pct = leagueCount > 0 ? Math.round((shared / leagueCount) * 100) : 0;
 
   return (
     <li className={expanded ? "bg-foreground/[0.02]" : undefined}>
@@ -79,19 +74,14 @@ function ShareRow({
         <Chevron open={expanded} />
 
         <span className="flex min-w-0 items-center gap-2">
-          <PositionBadge position={share.position} />
+          <Avatar url={mate.avatar_url} name={mate.name} size="sm" />
           <span className="min-w-0 truncate text-sm text-foreground/90">
-            {share.name}
+            {mate.name}
           </span>
-          {share.team && (
-            <span className="shrink-0 text-[0.65rem] tabular-nums text-foreground/35">
-              {share.team}
-            </span>
-          )}
         </span>
 
         <span className="text-right text-sm tabular-nums text-foreground/80">
-          {held}
+          {shared}
           <span className="text-foreground/30"> / {leagueCount}</span>
         </span>
         {/* Dimmer than the count: it is that number restated against the
@@ -103,7 +93,7 @@ function ShareRow({
 
       {expanded && (
         <ul className="border-t border-foreground/5 px-3 pb-2 pt-1">
-          {share.leagues.map((league) => (
+          {mate.leagues.map((league) => (
             <SharedLeagueRow key={league.league_id} league={league} />
           ))}
         </ul>

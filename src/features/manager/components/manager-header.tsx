@@ -8,6 +8,7 @@ import type { LeaguesResult, SyncProgress } from "../types";
 const TABS = [
   { key: "leagues", label: "Leagues" },
   { key: "players", label: "Players" },
+  { key: "leaguemates", label: "Leaguemates" },
 ] as const;
 
 export type ManagerTab = (typeof TABS)[number]["key"];

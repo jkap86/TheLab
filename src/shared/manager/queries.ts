@@ -2,12 +2,21 @@ import { pool } from "@/shared/db";
 
 import type {
   LeagueDetail,
+  Leaguemate,
   LeagueRosterSet,
   LeagueTeam,
   ManagerLeague,
+  ManagerLeaguemates,
 } from "./types";
 
-export type { LeagueDetail, LeagueRosterSet, LeagueTeam, ManagerLeague };
+export type {
+  LeagueDetail,
+  Leaguemate,
+  LeagueRosterSet,
+  LeagueTeam,
+  ManagerLeague,
+  ManagerLeaguemates,
+};
 
 type Row = {
   league_id: string;
@@ -122,6 +131,53 @@ export async function getManagerRosters(
     out[r.league_id] = [...(out[r.league_id] ?? []), ...(r.players ?? [])];
   }
   return out;
+}
+
+/**
+ * Every member of each of the manager's leagues for a season, keyed by league —
+ * what a count of leaguemates is built from.
+ *
+ * The manager's own row is kept in `members` rather than filtered here: every
+ * synced league has at least that row, so its presence is what separates "shared
+ * with nobody" from "not cached", and the caller knows its own id. Membership,
+ * not roster-holding, on purpose — Sleeper keeps a knocked-out or departed
+ * manager in `league_users`, and someone you were in a guillotine league with is
+ * still someone you know.
+ *
+ * `users` resolves each id once; where the same user was synced under different
+ * names across leagues, the newest row wins.
+ */
+export async function getManagerLeaguemates(
+  userId: string,
+  season: string,
+): Promise<ManagerLeaguemates> {
+  const { rows } = await pool.query<{
+    league_id: string;
+    user_id: string;
+    display_name: string | null;
+    avatar: string | null;
+  }>(
+    `SELECT lu.league_id, lu.user_id, lu.display_name, lu.avatar
+       FROM league_users lu
+       JOIN league_users me
+         ON me.league_id = lu.league_id AND me.user_id = $1
+       JOIN leagues l ON l.league_id = lu.league_id
+      WHERE l.season = $2
+      ORDER BY lu.updated_at`,
+    [userId, season],
+  );
+
+  const members: Record<string, string[]> = {};
+  const users: Record<string, Leaguemate> = {};
+  for (const r of rows) {
+    (members[r.league_id] ??= []).push(r.user_id);
+    users[r.user_id] = {
+      user_id: r.user_id,
+      display_name: r.display_name,
+      avatar: r.avatar,
+    };
+  }
+  return { members, users };
 }
 
 /**

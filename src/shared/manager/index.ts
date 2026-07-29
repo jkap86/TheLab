@@ -17,15 +17,18 @@ export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
   getLeagueDetail,
   getManagerLeagueRosters,
+  getManagerLeaguemates,
   getManagerLeagues,
   getManagerRosters,
   getManagerSyncedAt,
 } from "./queries";
 export type {
   LeagueDetail,
+  Leaguemate,
   LeagueRosterSet,
   LeagueTeam,
   ManagerLeague,
+  ManagerLeaguemates,
 } from "./types";
 export { orderByProjectedPoints, projectedRank } from "./rank";
 export type { ProjectedRank } from "./rank";

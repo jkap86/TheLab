@@ -1,8 +1,10 @@
 import type {
   LeagueDetailPayload,
+  LeaguematePayload,
   LeaguesProgressMessage,
   LeaguesResultMessage,
   LeagueTeamPayload,
+  ManagerLeaguematesPayload,
   ManagerPlayersPayload,
   ManagerRanksPayload,
 } from "@/shared/contract";
@@ -47,6 +49,12 @@ export type SyncProgress = LeaguesProgressMessage;
 
 /** The `/api/user/[username]/players` response the shares view counts over. */
 export type ManagerPlayersResult = ManagerPlayersPayload;
+
+/** A league member as sent to the client (avatar resolved to a URL). */
+export type LeaguemateView = LeaguematePayload;
+
+/** The `/api/user/[username]/leaguemates` response that view counts over. */
+export type ManagerLeaguematesResult = ManagerLeaguematesPayload;
 
 /** The `/api/user/[username]/ranks` response the league cards annotate from. */
 export type ManagerRanksResult = ManagerRanksPayload;

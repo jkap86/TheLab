@@ -18,6 +18,31 @@ export type ManagerLeague = {
 };
 
 /**
+ * A league member as read from `league_users` — identity only, no roster.
+ * Read by {@link getManagerLeaguemates}.
+ */
+export type Leaguemate = {
+  user_id: string;
+  display_name: string | null;
+  /** Avatar id (not a URL); null when the user has no avatar. */
+  avatar: string | null;
+};
+
+/**
+ * Every member of each of a manager's leagues for a season — what counting
+ * leaguemates is built from. `members` keeps the manager's own id so a league
+ * they share with nobody still reads as cached rather than missing; `users`
+ * resolves each id once, however many leagues share it. Read by
+ * {@link getManagerLeaguemates}.
+ */
+export type ManagerLeaguemates = {
+  /** League id → the user ids in that league's cached member list. */
+  members: Record<string, string[]>;
+  /** User ids → identity, one entry per user. */
+  users: Record<string, Leaguemate>;
+};
+
+/**
  * One team within a league: its roster (player ids) plus the standings figures
  * derived from the Sleeper roster settings. `manager` is null for orphan teams
  * (no owner assigned). Read by {@link getLeagueDetail}.

@@ -45,10 +45,10 @@ src/shared/    Domain logic, one folder per concern.
   manager and syncing their leagues is what the user routes are *for*, which is
   why the leagues one streams progress, and the pick tracker follows a draft
   *while it happens*, for any league id whether a sync has seen it or not; a
-  cached copy would be behind the room. `…/players` and `…/ranks` share the
-  user prefix and are *not* exceptions: they read the rosters that stream
-  writes, so a manager it has never run for gets an empty answer rather than a
-  second sync of their own.) Where a read needs to know what week it is, derive it from
+  cached copy would be behind the room. `…/players`, `…/leaguemates` and
+  `…/ranks` share the user prefix and are *not* exceptions: they read the
+  rosters and membership that stream writes, so a manager it has never run for
+  gets an empty answer rather than a second sync of their own.) Where a read needs to know what week it is, derive it from
   stored data too: `projections/queries`
   takes the weeks still ahead from `game_date` rather than `state/nfl`, so it can
   only ever name weeks that are actually here to read.
@@ -254,6 +254,21 @@ stops holding, a comment saying it does would not have caught it.
   several hundred rows long. Both numbers are kept — the count is what's actually
   held and compares between players, the share is what it means for a portfolio
   and moves when the filters do.
+- **A leaguemate is shared by membership, though a player share is counted by
+  roster — the opposite choices on purpose.** The ghost `league_users` rows that
+  would deflate a player share are exactly who this page is for: someone
+  knocked out of your guillotine league is still someone you know, and dropping
+  them because they no longer hold a team answers a different question. So
+  `leaguemateShares` (pure, beside `shares`) counts co-membership over the
+  filtered leagues, and its denominator is leagues that contributed a member
+  list. The manager's own row is *kept* in `members` — every synced league has
+  it, so its presence is what separates "shared with nobody" from "not cached" —
+  and dropped by the counting, which takes the self id as an argument for it.
+  Rows are labelled by `display_name` per the standings rule (recognising the
+  same person across leagues is the page), and the list itself is the player
+  shares list with a person in the player column: same grid, same two numbers,
+  same expansion — the expanded league row and the chevron live once in `ui.tsx`
+  because a third copy is where the drift would have started.
 - **The expanded standings are ordered by projected points, not by record.**
   What the panel adds over Sleeper is the projection, so the Proj column is the
   one the rows are ranked on — the numbers descend down the page, and the `#`

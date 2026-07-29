@@ -1,6 +1,7 @@
 import type {
   AdpFilters,
   LeagueDetail,
+  Leaguemate,
   LeagueTeam,
   ManagerLeague,
   ProjectedRank,
@@ -126,6 +127,33 @@ export type ManagerPlayersPayload = {
   rosters: Record<string, string[]>;
   /** Player ids → name/position/team, for every id above the cache knows. */
   players: Record<string, PlayerSummary>;
+};
+
+/** A league member as sent to the client (avatar id resolved to a URL). */
+export type LeaguematePayload = Omit<Leaguemate, "avatar"> & {
+  avatar_url: string | null;
+};
+
+/**
+ * `GET /api/user/[username]/leaguemates` — every member of every league the
+ * manager is in, which is what a count of shared leagues is built from.
+ *
+ * The same shape as {@link ManagerPlayersPayload} with user ids where it has
+ * player ids, for the same reasons: the client joins `members` against the
+ * league list it already holds, and `users` resolves each id once however many
+ * leagues share it. `members` keeps the manager's own id — its presence is what
+ * marks a league as cached even when they share it with nobody — and the client
+ * drops it from the counts, since it knows whose page it is on.
+ *
+ * Read-only like the sibling `players` route: it reads the membership the
+ * leagues stream stored, so a manager it has never run for gets `{}` back.
+ */
+export type ManagerLeaguematesPayload = {
+  season: string;
+  /** League id → the user ids in that league's cached member list. */
+  members: Record<string, string[]>;
+  /** User ids → display name and avatar, for every id above. */
+  users: Record<string, LeaguematePayload>;
 };
 
 /**
