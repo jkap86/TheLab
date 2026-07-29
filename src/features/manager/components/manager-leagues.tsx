@@ -46,12 +46,14 @@ export function ManagerLeagues({ searched }: { searched: string }) {
     <PageShell width="wide">
       <LeaguesHeader
         user={user}
+        searched={searched}
         leagueCount={filtered.length}
         totalCount={data.leagues.length}
         season={season}
         refreshing={refreshing}
         progress={progress}
         summary={summary}
+        refreshError={error}
       />
 
       {data.leagues.length === 0 ? (

@@ -1,4 +1,4 @@
-import type { ApiErrorPayload } from "@/shared/manager";
+import type { ApiErrorPayload } from "@/shared/contract";
 
 /**
  * `fetch` for this app's own API routes.

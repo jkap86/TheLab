@@ -1,21 +1,38 @@
+import type {
+  AdpFilters,
+  LeagueDetail,
+  LeagueTeam,
+  ManagerLeague,
+  SyncProgress,
+  SyncSummary,
+} from "@/shared/manager";
 import type { PlaceholderPick } from "@/shared/picktracker";
 import type { PlayerSummary } from "@/shared/players";
 import type { LeagueOutlook, ProjectionFilters } from "@/shared/projections";
-import type { UserInfo } from "@/shared/sleeper";
-
-import type { AdpFilters } from "./adp-filters";
-import type { SyncProgress, SyncSummary } from "./sync";
-import type { LeagueDetail, LeagueTeam, ManagerLeague } from "./types";
 
 /**
- * The wire contract between the league API routes and the client that reads
- * them.
+ * The wire contract between this app's API routes and the client that reads
+ * them — every route's payloads and stream messages, in one module.
  *
  * Declared once, here, and imported by both sides: the route handlers annotate
  * what they send with these types and the `manager` feature annotates what it
  * receives, so a change to one end that the other doesn't follow is a type
  * error rather than a runtime surprise.
+ *
+ * Types only, and everything it pulls from the domain modules comes in with
+ * `import type` — those imports are erased at compile time, which is what lets
+ * client code import this module without dragging `pg` into the bundle, and
+ * what keeps the manager-module references here from being a runtime cycle.
  */
+
+/** The public user shape returned by the app's user/leagues APIs. */
+export type UserInfo = {
+  user_id: string;
+  username: string;
+  display_name: string;
+  avatar: string | null;
+  avatar_url: string | null;
+};
 
 /**
  * A team as sent to the client. The database stores an avatar *id*; the client
@@ -87,6 +104,28 @@ export type LeaguesProgressMessage = SyncProgress & {
 };
 
 export type LeaguesErrorMessage = { type: "error"; error: string };
+
+/**
+ * `GET /api/user/[username]/players` — the manager's own roster in every league
+ * they're in, which is what a count of player shares is built from.
+ *
+ * Rosters carry ids and nothing else: the client already has the league list off
+ * the leagues stream and joins on `league_id`, so a league's name, record and
+ * settings aren't repeated once per rostered player. `players` resolves the
+ * union of those ids once for the same reason — a player on twenty rosters is
+ * one entry here, where a per-roster payload would carry him twenty times.
+ *
+ * Read-only, and deliberately: the leagues stream is what syncs these rosters,
+ * so a manager who has never been looked up comes back with an empty `rosters`
+ * rather than triggering a second sync of their own.
+ */
+export type ManagerPlayersPayload = {
+  season: string;
+  /** League id → the player ids on the manager's roster there. */
+  rosters: Record<string, string[]>;
+  /** Player ids → name/position/team, for every id above the cache knows. */
+  players: Record<string, PlayerSummary>;
+};
 
 /**
  * One newline-delimited JSON message on the

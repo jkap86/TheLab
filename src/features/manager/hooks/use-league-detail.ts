@@ -14,22 +14,17 @@ export type LeagueDetailState = {
 };
 
 /**
- * Fetches a league's standings + rosters from `/api/league/[leagueId]`, lazily:
- * pass `enabled: false` (the collapsed state) to skip the request entirely so a
- * league is only loaded once its card is expanded. The fetch is aborted on
+ * Fetches a league's standings + rosters from `/api/league/[leagueId]`. Loading
+ * is lazy because the panel that calls this only mounts when its card is
+ * expanded — a collapsed league costs no request. The fetch is aborted on
  * unmount and re-issued when the league id changes.
  */
-export function useLeagueDetail(
-  leagueId: string,
-  enabled: boolean,
-): LeagueDetailState {
+export function useLeagueDetail(leagueId: string): LeagueDetailState {
   const [data, setData] = useState<LeagueDetailResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!enabled) return;
-
     let active = true;
     const controller = new AbortController();
 
@@ -59,7 +54,7 @@ export function useLeagueDetail(
       active = false;
       controller.abort();
     };
-  }, [leagueId, enabled]);
+  }, [leagueId]);
 
   return { data, loading, error };
 }

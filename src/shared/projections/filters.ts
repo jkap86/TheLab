@@ -1,16 +1,14 @@
 /**
  * Query-string parsing for `GET /api/projections`.
  *
- * Pure and free of runtime imports so it can be unit-tested, and so the SQL
- * beside it only ever sees checked values — `scoring` in particular decides which
- * column is interpolated into `ORDER BY`, which is only safe because it is
- * constrained to this enum here.
- *
- * The small `list`/`integer`/`enumList` helpers are deliberately duplicated from
- * `manager/adp-filters` rather than shared: importing that module at runtime would
- * couple the two concerns and, through its barrel, drag database code into a file
- * whose whole point is having no runtime dependencies.
+ * Pure so it can be unit-tested, and so the SQL beside it only ever sees
+ * checked values — `scoring` in particular decides which column is interpolated
+ * into `ORDER BY`, which is only safe because it is constrained to this enum
+ * here. The parsing primitives come from `shared/query`, imported relatively
+ * with a `.ts` extension so Node's test runner can resolve the chain.
  */
+
+import { booleanFlag, integer, isSeason, list } from "../query/parse.ts";
 
 const SCORINGS = ["std", "half_ppr", "ppr"] as const;
 
@@ -53,54 +51,21 @@ export type ParsedProjectionFilters =
   | { ok: true; filters: ProjectionFilters }
   | { ok: false; error: string };
 
-/** Values for one key, accepting repeated params and comma lists alike. */
-function list(params: URLSearchParams, key: string): string[] {
-  const values = params
-    .getAll(key)
-    .flatMap((value) => value.split(","))
-    .map((value) => value.trim())
-    .filter(Boolean);
-  return [...new Set(values)];
-}
-
-function integer(
-  params: URLSearchParams,
-  key: string,
-  { min, max, fallback }: { min: number; max?: number; fallback: number | null },
-): { ok: true; value: number | null } | { ok: false; error: string } {
-  const raw = params.get(key)?.trim();
-  if (!raw) return { ok: true, value: fallback };
-
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < min || (max !== undefined && value > max)) {
-    const bound = max === undefined ? `>= ${min}` : `${min}-${max}`;
-    return { ok: false, error: `Invalid ${key}: ${raw}. Expected an integer ${bound}.` };
-  }
-  return { ok: true, value };
-}
-
-function boolean(
-  params: URLSearchParams,
-  key: string,
-): { ok: true; value: boolean } | { ok: false; error: string } {
-  const raw = params.get(key)?.trim().toLowerCase();
-  if (!raw) return { ok: true, value: false };
-  if (["1", "true", "yes"].includes(raw)) return { ok: true, value: true };
-  if (["0", "false", "no"].includes(raw)) return { ok: true, value: false };
-  return { ok: false, error: `Invalid ${key}: ${raw}. Expected true or false.` };
-}
-
 /**
  * Validate a projections query string. `defaultSeason` is passed in rather than
  * imported so this module stays dependency-free; the route supplies
  * `DEFAULT_SEASON`.
+ *
+ * `stats` is an on/off flag (`booleanFlag`, absent → false): it switches a
+ * feature on, unlike the ADP filters' tri-state booleans that narrow a
+ * population.
  */
 export function parseProjectionFilters(
   params: URLSearchParams,
   defaultSeason: string,
 ): ParsedProjectionFilters {
   const season = params.get("season")?.trim();
-  if (season && !/^\d{4}$/.test(season)) {
+  if (season && !isSeason(season)) {
     return { ok: false, error: `Invalid season: ${season}. Expected a 4-digit year.` };
   }
 
@@ -115,7 +80,7 @@ export function parseProjectionFilters(
     };
   }
 
-  const includeStats = boolean(params, "stats");
+  const includeStats = booleanFlag(params, "stats");
   if (!includeStats.ok) return includeStats;
 
   const limit = integer(params, "limit", {

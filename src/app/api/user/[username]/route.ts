@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { resolveManagerUser, toUserInfo } from "@/shared/sleeper";
+import type { ApiErrorPayload } from "@/shared/contract";
+import { resolveManagerUser, toUserInfo } from "@/shared/manager";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * Resolve a Sleeper username (or user id) to the app's user shape, avatar URL
+ * included. 400 for a blank name, 404 for one Sleeper doesn't know, 502 when
+ * Sleeper is unreachable.
+ */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ username: string }> },
@@ -10,7 +19,8 @@ export async function GET(
 
   const resolved = await resolveManagerUser(username);
   if (!resolved.ok) {
-    return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+    const error: ApiErrorPayload = { error: resolved.error };
+    return NextResponse.json(error, { status: resolved.status });
   }
 
   return NextResponse.json(toUserInfo(resolved.user));

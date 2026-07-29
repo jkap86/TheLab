@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import type { ApiErrorPayload, PicktrackerPayload } from "@/shared/manager";
+import type { ApiErrorPayload, PicktrackerPayload } from "@/shared/contract";
 import { trackPlaceholderDraft } from "@/shared/picktracker";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 

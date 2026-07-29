@@ -18,19 +18,38 @@ src/shared/    Domain logic, one folder per concern.
 - **`shared/` must never import from `features/`.** The reverse is fine.
 - Import from a module's barrel (`@/shared/manager`), not its internals
   (`@/shared/manager/queries`). Add new exports to the barrel.
+- **One exception: client code may deep-import a designated pure module.**
+  A `"use client"` file can't *value*-import a barrel that re-exports
+  `pg`-backed code — the bundler would drag the database into the browser — so
+  runtime values shared with the client live in modules with zero runtime
+  imports, imported directly (`@/shared/projections/slots`). Type-only imports
+  are erased and don't need this. The same constraint appears between pure
+  modules: a tested module importing another by alias breaks Node's test
+  runner, so pure→pure value imports are relative with an explicit `.ts`
+  extension (`optimal.ts` → `./slots.ts`), the mechanism the tests already use.
+- **The lineup-slot vocabulary lives in `projections/slots.ts`, once.** The
+  solver and the client components both read it — which slots exist, which
+  start nobody, which are defensive. `DEFENSIVE_SLOTS` is derived from
+  `SLOT_POSITIONS` rather than listed, so a new IDP slot gates the
+  "projections read low" caveat the moment the solver learns it; before this,
+  the set was retyped in two components and a new slot would have silently
+  missed the warning.
 - A module owns its tables. If you need data from another concern, add a query
   to *that* module and call it — don't write SQL against a table your module
   doesn't own. (`ktc/match` used to query `players` directly; it doesn't now.)
 - **A cache-backed route reads and nothing else.** `/api/projections`,
   `/api/league/[leagueId]` and `/api/adp` answer from what the background syncs
   have stored; a slice that hasn't been synced comes back empty rather than
-  fetched on demand. (Two deliberate exceptions: the `/api/user/[username]`
-  routes — resolving a manager and syncing their leagues is what they are *for*,
-  which is why the leagues one streams progress — and
-  `/api/picktracker/[leagueId]`, which follows a draft *while it happens*, for
-  any league id whether a sync has seen it or not; any cached copy would be
-  behind the room.) Where a read needs to
-  know what week it is, derive it from stored data too: `projections/queries`
+  fetched on demand. (`/api/user/[username]`, `…/leagues` and
+  `/api/picktracker/[leagueId]` are the deliberate exceptions — resolving a
+  manager and syncing their leagues is what the user routes are *for*, which is
+  why the leagues one streams progress, and the pick tracker follows a draft
+  *while it happens*, for any league id whether a sync has seen it or not; a
+  cached copy would be behind the room. `…/players` shares the user prefix and
+  is *not* an exception: it reads the rosters that stream writes, so a
+  manager it has never run for gets an empty answer rather than a second sync of
+  their own.) Where a read needs to know what week it is, derive it from
+  stored data too: `projections/queries`
   takes the weeks still ahead from `game_date` rather than `state/nfl`, so it can
   only ever name weeks that are actually here to read.
 - A route that needs several independent reads should `Promise.all` them, and
@@ -41,14 +60,27 @@ src/shared/    Domain logic, one folder per concern.
 
 ## Anything crossing the network
 
-Response and message shapes go in `shared/manager/contract.ts`, once. Routes
-annotate what they send with those types; the client aliases them in
+Response and message shapes go in `shared/contract`, once. Routes annotate what
+they send with those types; the client aliases them in
 `features/manager/types.ts`. Never redeclare a response shape on the client —
 that drift is invisible to the compiler, which is exactly what this prevents.
 
-That file holds **every** route's payloads, not just the league ones — `/api/adp`
-and `/api/projections` are both there. Adding a second contract file per module
-is the drift this rule exists to stop; import the filter type it needs instead.
+That module holds **every** route's payloads, not just the league ones —
+`/api/adp` and `/api/projections` are both there, and so is `UserInfo` (it used
+to live in `shared/sleeper`, which left one payload defined outside the
+contract). Adding a second contract file per module is the drift this rule
+exists to stop; import the filter type it needs instead. It is its own concern
+rather than a file inside `manager` (where it started) because it describes
+routes spanning several modules, and a contributor looking for
+`ProjectionsPayload` should not need to know the league tool came first. Types
+only: everything it pulls from the domain modules comes in with `import type`,
+which is what lets client code import it without dragging `pg` into the bundle.
+
+Route *policy* stays out of the upstream clients. `resolveManagerUser` maps a
+searched username to the HTTP status the routes answer with (blank → 400,
+unknown → 404, unreachable → 502); that is a fact about this app's API, so it
+lives in `shared/manager/resolve.ts` — the Sleeper client only knows that
+Sleeper answers 200-with-null for an unknown user.
 
 ## Database
 
@@ -61,6 +93,7 @@ Use the helpers in `@/shared/db` rather than hand-rolling:
 | Multi-row insert/upsert | `bulkInsert` — chunks and parameterises |
 | Cache freshness gate (whole table) | `isFresh(table, ttlMs)` / `countRows(table)` |
 | JSONB parameter | `jsonb(value)` |
+| A TTL bound against `now() - $n::interval` | `msInterval(ttlMs)` |
 
 New advisory lock? Add it to the `LOCK_KEYS` table in `shared/db/lock.ts` so
 collisions stay visible.
@@ -150,10 +183,21 @@ string and nothing else, so the SQL beside it only ever sees checked values.
 It takes the default season as an argument rather than importing
 `DEFAULT_SEASON` — that import is exactly what would make it untestable.
 
-`projections/filters` follows it, and duplicates its small `list`/`integer`
-helpers rather than importing them. That is deliberate: importing across modules
-would pull a barrel — and the database code behind it — into a file whose whole
-value is having no runtime imports. Copy the twenty lines.
+`projections/filters` follows it. The `list`/`integer`/`enumList` primitives
+both filter modules use live once, in `shared/query` — a pure module they import
+relatively with a `.ts` extension, the same mechanism the tests use, so sharing
+costs no runtime dependency. (They used to be copied into each filter module to
+avoid pulling a barrel's database code into a tested file; the copies had
+already drifted, which is how `booleanFlag` and `booleanFilter` came to be two
+named functions — absence means "off" for a flag like `?stats=1` and "don't
+filter" for a population filter like `?best_ball=`, and one function silently
+serving both meanings is the bug the split names.)
+
+`manager/shares` is that shape on the client: `playerShares` takes the leagues,
+the rosters and the players cache as arguments and counts, so the rules that
+decide what a share is out of can be read and tested without a fetch behind them.
+It sits beside `filters` because the two compose — the caller filters the league
+list, then counts over what's left.
 
 Validation earns its keep when a value reaches SQL as anything but a bound
 parameter. `scoring` picks the column `projections/queries` interpolates into
@@ -163,8 +207,15 @@ never a silent fallback to a default.
 A feature that spans several of those pure modules gets one thin file that does
 the I/O and composes them, and no logic of its own: `projections/outlook` reads
 the weeks and the players cache, then hands off to `aggregate` → `score` →
-`optimal`. The composition is what stays untested, and it is small enough that
-that costs nothing.
+`weekly` → `optimal`. The composition is what stays untested, and it is small
+enough that that costs nothing.
+
+That bar is worth policing, because logic drifts into the composition file a
+line at a time. The rule that a player unprojected for a week is *omitted* from
+that week's candidates — not passed as a zero — once lived inline in `outlook`,
+where nothing tested it; it is the rule the benched-weeks counts rest on, so it
+was moved to `projections/weekly` and pinned with a test. If a loop in the
+composition file starts making a decision, that decision wants a pure module.
 
 Test the property the code rests on, not just its outputs. The rest-of-season
 totals are only correct because scoring is linear, so `aggregate.test` asserts
@@ -183,6 +234,26 @@ stops holding, a comment saying it does would not have caught it.
   classes.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
+- **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
+  being looked at, the season and the sync state are the same facts on all of
+  them; only the count line under them differs, which is what `children` is. The
+  tabs live there because that is the only thing making a second view reachable —
+  there is no global nav — and they link with the URL's own spelling of the
+  manager rather than the resolved username, since Sleeper resolves a user id as
+  readily as a name.
+- **A player share is out of the leagues that hold a roster of yours, not the
+  leagues listed.** They are different numbers — 121 leagues, 113 rosters for the
+  account this was built against — because Sleeper keeps you in `league_users`
+  after you stop holding a team (a guillotine league you were knocked out of, one
+  you left). Counting membership would quietly deflate every share on the page,
+  so `playerShares` counts only leagues that contributed a roster, and an empty
+  roster (pre-draft) still counts: holding nobody is a real answer.
+- **The shares list is one line a row, unlike the roster panel's two.** That rule
+  is about a panel rendering at half a card's width; this page has the full shell,
+  so the name is in no danger and splitting it would only add height to a list
+  several hundred rows long. Both numbers are kept — the count is what's actually
+  held and compares between players, the share is what it means for a portfolio
+  and moves when the filters do.
 - **A list of managers is labelled by username, a team by team name.** `ui.tsx`
   has both — `managerLabel` (display_name → team_name → roster number) and
   `teamLabel` (the reverse) — and the column heading says which one it is.
@@ -201,9 +272,12 @@ stops holding, a comment saying it does would not have caught it.
   truncates to nothing. The numbers keep their own grid columns on that second
   line rather than being folded into a sentence, because they are what's worth
   comparing down the list. Row and heading share **one** grid template
-  (`SectionLayout` in `roster-detail`, the `columns` string in `standings`) — a
-  header laid out separately drifts the moment a width changes. Every template is
-  written out as a whole class string so Tailwind can see it.
+  (`SectionLayout` in `roster-layout`, the `columns` string in `standings`) — a
+  header laid out separately drifts the moment a width changes, which is why the
+  layout lives in its own file: `roster-detail` renders the headings and
+  `player-row` lays the cells, and the template they share is the contract
+  between them. Every template is written out as a whole class string so
+  Tailwind can see it.
 - **`roster-detail` shows the optimal lineup only** — there is no current/optimal
   toggle. The current lineup is a click away in Sleeper; what this tool adds is
   the best lineup available, so the starters list *is* that lineup and the bench

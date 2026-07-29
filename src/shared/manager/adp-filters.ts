@@ -1,11 +1,14 @@
 /**
  * Query-string parsing for `GET /api/adp`.
  *
- * Pure and free of runtime imports so it can be unit-tested, and so `adp.ts`
- * only ever builds SQL from values that have already been validated: the enums
- * decide which fragments exist at all, and everything else is bound as a
- * parameter.
+ * Pure so it can be unit-tested, and so `adp.ts` only ever builds SQL from
+ * values that have already been validated: the enums decide which fragments
+ * exist at all, and everything else is bound as a parameter. The parsing
+ * primitives come from `shared/query`, imported relatively with a `.ts`
+ * extension so Node's test runner can resolve the chain.
  */
+
+import { booleanFilter, enumList, integer, isSeason, list } from "../query/parse.ts";
 
 const DRAFT_TYPES = ["snake", "linear", "auction"] as const;
 const DRAFT_STATUSES = ["complete", "drafting", "paused", "pre_draft"] as const;
@@ -85,70 +88,12 @@ export type ParsedAdpFilters =
   | { ok: false; error: string };
 
 /**
- * Values for one key: repeated params and comma-separated lists are both
- * accepted (`?scoring=ppr&scoring=half_ppr` == `?scoring=ppr,half_ppr`), so
- * callers can use whichever their HTTP client makes easy.
- */
-function list(params: URLSearchParams, key: string): string[] {
-  const values = params
-    .getAll(key)
-    .flatMap((value) => value.split(","))
-    .map((value) => value.trim())
-    .filter(Boolean);
-  return [...new Set(values)];
-}
-
-/** A list filter constrained to a fixed vocabulary. Absent → `fallback`. */
-function enumList<T extends string>(
-  params: URLSearchParams,
-  key: string,
-  allowed: readonly T[],
-  fallback: T[] | null,
-): { ok: true; value: T[] | null } | { ok: false; error: string } {
-  const values = list(params, key);
-  if (values.length === 0) return { ok: true, value: fallback };
-
-  const invalid = values.filter((v) => !(allowed as readonly string[]).includes(v));
-  if (invalid.length > 0) {
-    return {
-      ok: false,
-      error: `Invalid ${key}: ${invalid.join(", ")}. Expected one of ${allowed.join(", ")}.`,
-    };
-  }
-  return { ok: true, value: values as T[] };
-}
-
-function boolean(
-  params: URLSearchParams,
-  key: string,
-): { ok: true; value: boolean | null } | { ok: false; error: string } {
-  const raw = params.get(key)?.trim().toLowerCase();
-  if (!raw) return { ok: true, value: null };
-  if (["1", "true", "yes"].includes(raw)) return { ok: true, value: true };
-  if (["0", "false", "no"].includes(raw)) return { ok: true, value: false };
-  return { ok: false, error: `Invalid ${key}: ${raw}. Expected true or false.` };
-}
-
-function integer(
-  params: URLSearchParams,
-  key: string,
-  { min, max, fallback }: { min: number; max?: number; fallback: number | null },
-): { ok: true; value: number | null } | { ok: false; error: string } {
-  const raw = params.get(key)?.trim();
-  if (!raw) return { ok: true, value: fallback };
-
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < min || (max !== undefined && value > max)) {
-    const bound = max === undefined ? `>= ${min}` : `${min}-${max}`;
-    return { ok: false, error: `Invalid ${key}: ${raw}. Expected an integer ${bound}.` };
-  }
-  return { ok: true, value };
-}
-
-/**
  * Validate an ADP query string. `defaultSeason` is passed in rather than
  * imported so this module stays dependency-free; the route supplies
  * `DEFAULT_SEASON`. Pass `season=all` to span every season on file.
+ *
+ * The boolean filters are tri-state (`booleanFilter`): leaving `best_ball` off
+ * must narrow nothing, which is different from `best_ball=false`.
  */
 export function parseAdpFilters(
   params: URLSearchParams,
@@ -156,7 +101,7 @@ export function parseAdpFilters(
 ): ParsedAdpFilters {
   const seasonValues = list(params, "season");
   const allSeasons = seasonValues.some((s) => s.toLowerCase() === "all");
-  const badSeason = seasonValues.find((s) => s.toLowerCase() !== "all" && !/^\d{4}$/.test(s));
+  const badSeason = seasonValues.find((s) => s.toLowerCase() !== "all" && !isSeason(s));
   if (badSeason) {
     return { ok: false, error: `Invalid season: ${badSeason}. Expected a 4-digit year or "all".` };
   }
@@ -177,10 +122,10 @@ export function parseAdpFilters(
   const scoring = enumList(params, "scoring", SCORING_FORMATS, null);
   if (!scoring.ok) return scoring;
 
-  const bestBall = boolean(params, "best_ball");
+  const bestBall = booleanFilter(params, "best_ball");
   if (!bestBall.ok) return bestBall;
 
-  const superflex = boolean(params, "superflex");
+  const superflex = booleanFilter(params, "superflex");
   if (!superflex.ok) return superflex;
 
   const roundsMin = integer(params, "rounds_min", { min: 1, fallback: null });

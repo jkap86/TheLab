@@ -3,12 +3,14 @@ import { NextResponse } from "next/server";
 import {
   getManagerLeagues,
   getManagerSyncedAt,
+  resolveManagerUser,
   syncManagerLeagues,
+  toUserInfo,
   SYNC_TTL_MS,
 } from "@/shared/manager";
-import type { ApiErrorPayload, LeaguesStreamMessage } from "@/shared/manager";
+import type { ApiErrorPayload, LeaguesStreamMessage } from "@/shared/contract";
 import { ensurePlayersFresh } from "@/shared/players";
-import { DEFAULT_SEASON, resolveManagerUser, toUserInfo } from "@/shared/sleeper";
+import { DEFAULT_SEASON } from "@/shared/sleeper";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +27,7 @@ const refreshInFlight = new Set<string>();
  *   - With no cache (first visit) it syncs in the foreground, emitting
  *     `progress` events so the client can show a bar for 100+ league accounts.
  *
- * The message shapes are declared in `@/shared/manager`'s
+ * The message shapes are declared in `@/shared/contract`'s
  * {@link LeaguesStreamMessage}, which the client decodes against — see
  * `features/manager/hooks/use-manager-leagues`.
  */

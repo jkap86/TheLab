@@ -3,8 +3,9 @@ import type {
   LeaguesProgressMessage,
   LeaguesResultMessage,
   LeagueTeamPayload,
-  ManagerLeague,
-} from "@/shared/manager";
+  ManagerPlayersPayload,
+} from "@/shared/contract";
+import type { ManagerLeague } from "@/shared/manager";
 import type { PlayerSummary } from "@/shared/players";
 import type {
   LeagueOutlook,
@@ -17,7 +18,7 @@ import type {
  * The shapes this feature renders.
  *
  * Everything that crosses the network is an alias of the wire contract in
- * `@/shared/manager` rather than a parallel declaration, so the client can't
+ * `@/shared/contract` rather than a parallel declaration, so the client can't
  * drift from what the routes actually send. Re-exported here so components have
  * one import site.
  */
@@ -41,3 +42,6 @@ export type LeaguesResult = LeaguesResultMessage;
 
 /** A `progress` message from the leagues stream. */
 export type SyncProgress = LeaguesProgressMessage;
+
+/** The `/api/user/[username]/players` response the shares view counts over. */
+export type ManagerPlayersResult = ManagerPlayersPayload;

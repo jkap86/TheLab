@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 
+// Imported directly rather than through the projections barrel, which would
+// pull `pg`-backed code into the client bundle — see `slots.ts`.
+import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
+
 import { useLeagueDetail } from "../hooks/use-league-detail";
 import type { LeagueDetailResult } from "../types";
 import { RosterDetail } from "./roster-detail";
@@ -14,7 +18,7 @@ import { PanelMessage } from "./ui";
  * which is when its card is expanded.
  */
 export function LeagueDetailPanel({ leagueId }: { leagueId: string }) {
-  const { data, loading, error } = useLeagueDetail(leagueId, true);
+  const { data, loading, error } = useLeagueDetail(leagueId);
 
   if (loading && !data) {
     return <PanelMessage>Loading rosters…</PanelMessage>;
@@ -56,9 +60,6 @@ function Panel({ data }: { data: LeagueDetailResult }) {
     </div>
   );
 }
-
-/** Slots whose players Sleeper barely projects — see {@link OutlookCaveat}. */
-const DEFENSIVE_SLOTS = new Set(["DEF", "DL", "LB", "DB", "IDP_FLEX"]);
 
 /**
  * Says so when this league's projections are known to be incomplete.

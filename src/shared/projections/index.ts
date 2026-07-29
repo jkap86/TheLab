@@ -6,14 +6,13 @@ export {
 } from "./sync";
 export type { ProjectionsSyncSummary, WeekSyncResult } from "./sync";
 export {
-  getWeekProjections,
   listWeekProjections,
   getLatestStoredWeek,
   getRemainingWeeks,
   listPlayerWeekStats,
   getProjectedStatKeys,
 } from "./queries";
-export type { PlayerProjection, RankedProjection } from "./queries";
+export type { RankedProjection } from "./queries";
 export { aggregateWeeklyStats } from "./aggregate";
 export type { AggregatedProjection, PlayerWeekStats } from "./aggregate";
 export { getLeagueOutlook } from "./outlook";
@@ -34,19 +33,19 @@ export type {
   ProjectionScoring,
 } from "./filters";
 export { scoreProjection, unprojectedScoring, derivedScoring } from "./score";
+export { optimalLineup, compareLineup, startingSlots } from "./optimal";
+export type { RosterPlayer, LineupSlot, LineupComparison } from "./optimal";
 export {
-  optimalLineup,
-  compareLineup,
-  startingSlots,
+  SLOT_POSITIONS,
+  NON_STARTING_SLOTS,
+  DEFENSIVE_SLOTS,
+} from "./slots";
+export {
+  groupWeeklyPoints,
+  weeklyRosters,
   weeklyLineupSplit,
-} from "./optimal";
-export type {
-  RosterPlayer,
-  LineupSlot,
-  LineupComparison,
-  PlayerSplit,
-  WeeklyLineupSplit,
-} from "./optimal";
+} from "./weekly";
+export type { PlayerSplit, WeeklyLineupSplit } from "./weekly";
 export { hasProjection, toProjectionRows } from "./parse";
 export type { ProjectionRow } from "./parse";
 export {

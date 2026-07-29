@@ -5,6 +5,7 @@ import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
 import { fetchLeagueGraph, type WeekRange } from "./graph";
 import { getStoredMaxWeekByLeague, persistLeagueGraph } from "./persist";
+import { getManagerSyncedAt } from "./queries";
 
 /** Child rows persisted across a set of league graphs. */
 export type LeagueCounts = {
@@ -150,11 +151,7 @@ export async function syncManagerLeagues(
   const { force = false, concurrency, onProgress } = options;
 
   if (!force) {
-    const { rows } = await pool.query<{ synced_at: Date | null }>(
-      `SELECT synced_at FROM manager_syncs WHERE user_id = $1 AND season = $2`,
-      [userId, season],
-    );
-    const syncedAt = rows[0]?.synced_at;
+    const syncedAt = await getManagerSyncedAt(userId, season);
     if (syncedAt && Date.now() - syncedAt.getTime() < SYNC_TTL_MS) {
       return {
         season, skipped: true, total: 0, leagues: 0, failed: 0, ...emptyCounts(),

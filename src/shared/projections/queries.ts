@@ -3,66 +3,6 @@ import { pool } from "@/shared/db";
 import type { PlayerWeekStats } from "./aggregate";
 import type { ProjectionScoring } from "./filters";
 
-/** One player's stored projection for a week. */
-export type PlayerProjection = {
-  player_id: string;
-  season: string;
-  week: number;
-  team: string | null;
-  /** Opponent for that week's game — null once it is no longer scheduled. */
-  opponent: string | null;
-  /** `YYYY-MM-DD` of the game. */
-  game_date: string | null;
-  pts_std: number | null;
-  pts_half_ppr: number | null;
-  pts_ppr: number | null;
-  /**
-   * The full projected stat line. A league with custom scoring has to be scored
-   * from this rather than from the three `pts_*` values.
-   */
-  stats: Record<string, number>;
-};
-
-/**
- * A week's projections keyed by player_id, optionally narrowed to `playerIds`
- * (pass a roster to avoid dragging the whole ~800-row week across).
- *
- * Players Sleeper has no projection for are simply absent — a missing key means
- * "not projected" (bye, inactive, off the slate), which is not the same as
- * projected zero, so callers should keep the distinction.
- */
-export async function getWeekProjections({
-  season,
-  week,
-  playerIds,
-}: {
-  season: string;
-  week: number;
-  playerIds?: string[];
-}): Promise<Record<string, PlayerProjection>> {
-  if (playerIds && playerIds.length === 0) return {};
-
-  const params: unknown[] = [season, week];
-  const idFilter = playerIds
-    ? ` AND player_id = ANY($${params.push(playerIds)})`
-    : "";
-
-  const { rows } = await pool.query<PlayerProjection>(
-    // NUMERIC arrives as a string over the wire; cast so callers get numbers.
-    `SELECT player_id, season, week, team, opponent,
-            to_char(game_date, 'YYYY-MM-DD') AS game_date,
-            pts_std::float8 AS pts_std,
-            pts_half_ppr::float8 AS pts_half_ppr,
-            pts_ppr::float8 AS pts_ppr,
-            COALESCE(stats, '{}'::jsonb) AS stats
-       FROM projections
-      WHERE season = $1 AND week = $2${idFilter}`,
-    params,
-  );
-
-  return Object.fromEntries(rows.map((row) => [row.player_id, row]));
-}
-
 /**
  * The newest week with stored projections for a season, or null when none are
  * stored at all.
@@ -148,7 +88,7 @@ export async function listPlayerWeekStats({
   const { rows } = await pool.query<PlayerWeekStats>(
     `SELECT player_id, week, COALESCE(stats, '{}'::jsonb) AS stats
        FROM projections
-      WHERE season = $1 AND week = ANY($2::int[]) AND player_id = ANY($3)
+      WHERE season = $1 AND week = ANY($2::int[]) AND player_id = ANY($3::varchar[])
         AND game_date >= ${TODAY_ET}`,
     [season, weeks, playerIds],
   );

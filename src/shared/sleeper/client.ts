@@ -48,26 +48,6 @@ export function sleeperAvatarUrl(
   return `${SLEEPER_CDN_BASE}/${path}/${avatar}`;
 }
 
-/** The public user shape returned by the app's user/leagues APIs. */
-export type UserInfo = {
-  user_id: string;
-  username: string;
-  display_name: string;
-  avatar: string | null;
-  avatar_url: string | null;
-};
-
-/** Project a Sleeper user into the app's API user shape (adds `avatar_url`). */
-export function toUserInfo(user: SleeperUser): UserInfo {
-  return {
-    user_id: user.user_id,
-    username: user.username,
-    display_name: user.display_name,
-    avatar: user.avatar,
-    avatar_url: sleeperAvatarUrl(user.avatar),
-  };
-}
-
 /**
  * Fetch a Sleeper user by username (or user_id).
  *
@@ -86,33 +66,4 @@ export async function getSleeperUser(
     if ((error as AxiosError).response?.status === 404) return null;
     throw error;
   }
-}
-
-/** A resolved manager, or a normalized failure with the HTTP status to return. */
-export type ResolvedManager =
-  | { ok: true; user: SleeperUser }
-  | { ok: false; status: 400 | 404 | 502; error: string };
-
-/**
- * Resolve a manager by username with the failure handling shared by the user and
- * leagues API routes: blank → 400, Sleeper unreachable → 502, unknown user → 404.
- */
-export async function resolveManagerUser(
-  username: string,
-): Promise<ResolvedManager> {
-  if (!username?.trim()) {
-    return { ok: false, status: 400, error: "Username is required" };
-  }
-
-  let user: SleeperUser | null;
-  try {
-    user = await getSleeperUser(username);
-  } catch {
-    return { ok: false, status: 502, error: "Failed to reach Sleeper" };
-  }
-
-  if (!user) {
-    return { ok: false, status: 404, error: "User not found" };
-  }
-  return { ok: true, user };
 }

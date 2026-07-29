@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import type { ApiErrorPayload, ProjectionPlayerPayload, ProjectionsPayload } from "@/shared/manager";
+import type { ApiErrorPayload, ProjectionPlayerPayload, ProjectionsPayload } from "@/shared/contract";
 import { getPlayerIdsByPosition, getPlayersByIds } from "@/shared/players";
 import {
   getLatestStoredWeek,

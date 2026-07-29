@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
+import type { ApiErrorPayload, LeagueDetailPayload } from "@/shared/contract";
 import { getLeagueDetail } from "@/shared/manager";
-import type { ApiErrorPayload, LeagueDetailPayload } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 import { getLeagueOutlook } from "@/shared/projections";
 import { sleeperAvatarUrl } from "@/shared/sleeper";

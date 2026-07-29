@@ -1,14 +1,16 @@
 import { getFantasyPositions } from "@/shared/players";
 
 import { aggregateWeeklyStats } from "./aggregate";
-import { compareLineup, weeklyLineupSplit } from "./optimal";
-import type { LineupComparison, PlayerSplit, RosterPlayer } from "./optimal";
+import { compareLineup } from "./optimal";
+import type { LineupComparison, RosterPlayer } from "./optimal";
 import {
   getProjectedStatKeys,
   getRemainingWeeks,
   listPlayerWeekStats,
 } from "./queries";
 import { derivedScoring, scoreProjection, unprojectedScoring } from "./score";
+import { groupWeeklyPoints, weeklyLineupSplit, weeklyRosters } from "./weekly";
+import type { PlayerSplit } from "./weekly";
 
 /**
  * Rest-of-season optimal lineups for every roster in one league.
@@ -193,12 +195,9 @@ export async function getLeagueOutlook({
   // total is one dot product over his summed stat line — but which players *start*
   // changes week to week, so that sum has to be broken back out per week to know
   // what a lineup is worth in it.
-  const weeklyPoints = new Map<number, Map<string, number>>();
-  for (const row of stats) {
-    let week = weeklyPoints.get(row.week);
-    if (!week) weeklyPoints.set(row.week, (week = new Map()));
-    week.set(row.player_id, scoreProjection(row.stats, scoringSettings));
-  }
+  const weeklyPoints = groupWeeklyPoints(stats, (s) =>
+    scoreProjection(s, scoringSettings),
+  );
 
   return {
     weeks,
@@ -222,19 +221,10 @@ export async function getLeagueOutlook({
       const weekly = weeklyLineupSplit(
         // The slots the comparison itself used, so a league with a slot this
         // code doesn't recognise leaves it out of both numbers rather than one.
+        // A candidate unprojected for a week is omitted from it rather than
+        // passed as a zero — the rule lives (and is tested) in `./weekly`.
         comparison.optimal.map((slot) => slot.slot),
-        weeks.map((week) => {
-          const scored = weeklyPoints.get(week);
-          // A candidate Sleeper hasn't projected for this week is left out of it
-          // rather than passed as a zero. The lineup is the same either way — a
-          // zero can only ever fill a slot nobody else wanted — but it keeps the
-          // bye out of his benched-weeks count, which would otherwise make every
-          // player on the roster look like a part-time starter.
-          return candidates.flatMap((player) => {
-            const points = scored?.get(player.player_id);
-            return points === undefined ? [] : [{ ...player, points }];
-          });
-        }),
+        weeklyRosters(candidates, weeks, weeklyPoints),
       );
 
       return {
