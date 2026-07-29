@@ -46,6 +46,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
     <PageShell width="wide">
       <LeaguesHeader
         user={user}
+        searched={searched}
         leagueCount={filtered.length}
         totalCount={data.leagues.length}
         season={season}

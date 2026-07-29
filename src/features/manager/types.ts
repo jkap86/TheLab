@@ -4,6 +4,7 @@ import type {
   LeaguesResultMessage,
   LeagueTeamPayload,
   ManagerLeague,
+  ManagerPlayersPayload,
 } from "@/shared/manager";
 import type { PlayerSummary } from "@/shared/players";
 import type {
@@ -41,3 +42,6 @@ export type LeaguesResult = LeaguesResultMessage;
 
 /** A `progress` message from the leagues stream. */
 export type SyncProgress = LeaguesProgressMessage;
+
+/** The `/api/user/[username]/players` response the shares view counts over. */
+export type ManagerPlayersResult = ManagerPlayersPayload;

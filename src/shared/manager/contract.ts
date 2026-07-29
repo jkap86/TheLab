@@ -88,6 +88,28 @@ export type LeaguesProgressMessage = SyncProgress & {
 export type LeaguesErrorMessage = { type: "error"; error: string };
 
 /**
+ * `GET /api/user/[username]/players` — the manager's own roster in every league
+ * they're in, which is what a count of player shares is built from.
+ *
+ * Rosters carry ids and nothing else: the client already has the league list off
+ * the leagues stream and joins on `league_id`, so a league's name, record and
+ * settings aren't repeated once per rostered player. `players` resolves the
+ * union of those ids once for the same reason — a player on twenty rosters is
+ * one entry here, where a per-roster payload would carry him twenty times.
+ *
+ * Read-only, and deliberately: the leagues stream is what syncs these rosters,
+ * so a manager who has never been looked up comes back with an empty `rosters`
+ * rather than triggering a second sync of their own.
+ */
+export type ManagerPlayersPayload = {
+  season: string;
+  /** League id → the player ids on the manager's roster there. */
+  rosters: Record<string, string[]>;
+  /** Player ids → name/position/team, for every id above the cache knows. */
+  players: Record<string, PlayerSummary>;
+};
+
+/**
  * One newline-delimited JSON message on the
  * `GET /api/user/[username]/leagues` stream. Discriminated by `type`.
  */

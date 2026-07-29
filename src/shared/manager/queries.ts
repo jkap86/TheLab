@@ -80,6 +80,45 @@ export async function getManagerLeagues(
   }));
 }
 
+/**
+ * The manager's own roster in each of their leagues for a season, keyed by
+ * league id — every player they hold there, IR and taxi included.
+ *
+ * Keyed by league rather than returned as rows because the caller is counting a
+ * player across leagues and already holds the league list from
+ * {@link getManagerLeagues}: everything else about a league would be repeated
+ * once per rostered player.
+ *
+ * A league with no entry is one whose rosters aren't cached, or where the
+ * manager holds none; an entry with an empty array is a league they hold a
+ * roster in and nobody on it yet (pre-draft). The two are different and the
+ * distinction survives into the share denominator.
+ */
+export async function getManagerRosters(
+  userId: string,
+  season: string,
+): Promise<Record<string, string[]>> {
+  const { rows } = await pool.query<{
+    league_id: string;
+    players: string[] | null;
+  }>(
+    `SELECT r.league_id, r.players
+       FROM rosters r
+       JOIN leagues l ON l.league_id = r.league_id
+      WHERE r.owner_id = $1 AND l.season = $2`,
+    [userId, season],
+  );
+
+  const out: Record<string, string[]> = {};
+  for (const r of rows) {
+    // Concatenated rather than assigned: a manager should hold one roster per
+    // league, and if Sleeper ever hands back two, silently dropping one would
+    // lose players from the count rather than fail visibly.
+    out[r.league_id] = [...(out[r.league_id] ?? []), ...(r.players ?? [])];
+  }
+  return out;
+}
+
 type TeamRow = {
   roster_id: number;
   owner_id: string | null;
