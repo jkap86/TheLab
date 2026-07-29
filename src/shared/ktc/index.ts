@@ -15,6 +15,10 @@ export {
 } from "./history";
 export type { KtcHistorySummary } from "./history";
 export { resolveSleeperIds, normalizeName } from "./match";
+export { getKtcValuesBySleeperId } from "./queries";
+export type { KtcValue, KtcValueSet } from "./queries";
+export { isSuperflexLineup, rosterKtcValue } from "./roster";
+export type { KtcRosterValue } from "./roster";
 export { startKtcScheduler } from "./scheduler";
 export type {
   KtcPlayer,

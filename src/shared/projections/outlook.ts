@@ -2,7 +2,7 @@ import { getFantasyPositions } from "@/shared/players";
 
 import { aggregateWeeklyStats } from "./aggregate";
 import type { PlayerWeekStats } from "./aggregate";
-import { compareLineup, startingSlots } from "./optimal";
+import { compareLineup, optimalLineup, startingSlots } from "./optimal";
 import type { LineupComparison, RosterPlayer } from "./optimal";
 import {
   getProjectedStatKeys,
@@ -347,4 +347,100 @@ export async function getWeeklyTeamPoints({
   }
 
   return { weeks, points };
+}
+
+export type OptimalLineups = {
+  /** Weeks the lineups were ranked over, ascending — empty when none remain. */
+  weeks: number[];
+  /**
+   * League id → roster id → the player ids that lineup starts, in slot order
+   * with unfilled slots dropped. A league that can't be projected is absent.
+   */
+  lineups: Map<string, Map<number, string[]>>;
+};
+
+/**
+ * The rest-of-season optimal lineup for every team across many leagues in one
+ * pass — the same lineup {@link getLeagueOutlook} puts in a panel's Starters
+ * list, for callers that need it across a whole account rather than one league.
+ *
+ * The third entry point beside that one and {@link getWeeklyTeamPoints}, and it
+ * exists for the reason the second does: the reads it shares — the remaining
+ * weeks, the stat lines, the positions — cost the same whether one league asks
+ * or a hundred do, so a per-league loop would repeat them a hundred times. What
+ * genuinely differs per league is the scoring and the solve.
+ *
+ * Cheaper per team than `getWeeklyTeamPoints`, because this lineup is ranked on
+ * a season total: the stat lines are summed once for everyone (scoring is
+ * linear, so a player's aggregate is league-independent — see `./aggregate`) and
+ * each league scores that sum once per player, where the weekly totals need one
+ * solve per team per week.
+ *
+ * Every team passed in is solved, so a caller wanting one roster per league
+ * should pass one roster per league.
+ */
+export async function getOptimalLineups({
+  season,
+  leagues,
+}: {
+  season: string;
+  leagues: readonly LeagueTeamsInput[];
+}): Promise<OptimalLineups> {
+  const projectable = leagues.filter(
+    (l) => l.rosterPositions?.length && l.scoringSettings && l.teams.length > 0,
+  );
+  if (projectable.length === 0) return { weeks: [], lineups: new Map() };
+
+  const weeks = await getRemainingWeeks(season);
+  if (weeks.length === 0) return { weeks: [], lineups: new Map() };
+
+  const playerIds = [
+    ...new Set(projectable.flatMap((l) => l.teams.flatMap((t) => t.players))),
+  ].filter(Boolean);
+
+  const [stats, positions] = await Promise.all([
+    listPlayerWeekStats({ season, weeks, playerIds }),
+    getFantasyPositions(playerIds),
+  ]);
+
+  // Summed once for the whole account: a stat line doesn't depend on whose
+  // league it is read in, and only the scoring below does.
+  const aggregated = aggregateWeeklyStats(stats);
+
+  const lineups = new Map<string, Map<number, string[]>>();
+  for (const league of projectable) {
+    const scoring = league.scoringSettings!;
+
+    // The recognised starting slots, as compareLineup derives them — an unknown
+    // slot takes nobody here the same way it takes nobody there.
+    const slots = startingSlots(league.rosterPositions!).filter(
+      (slot) => slot in SLOT_POSITIONS,
+    );
+
+    const byTeam = new Map<number, string[]>();
+    for (const team of league.teams) {
+      // IR and taxi are candidates for nobody's lineup, as in getLeagueOutlook.
+      const unavailable = new Set([...team.reserve, ...team.taxi]);
+      const candidates: RosterPlayer[] = team.players
+        .filter((id) => id && !unavailable.has(id))
+        .map((id) => {
+          const entry = aggregated[id];
+          return {
+            player_id: id,
+            positions: positions[id] ?? [],
+            points: entry ? scoreProjection(entry.stats, scoring) : 0,
+          };
+        });
+
+      byTeam.set(
+        team.roster_id,
+        optimalLineup(slots, candidates)
+          .map((slot) => slot.player_id)
+          .filter((id): id is string => id !== null),
+      );
+    }
+    lineups.set(league.league_id, byTeam);
+  }
+
+  return { weeks, lineups };
 }

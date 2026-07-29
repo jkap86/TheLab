@@ -15,10 +15,15 @@ export {
 export type { RankedProjection } from "./queries";
 export { aggregateWeeklyStats } from "./aggregate";
 export type { AggregatedProjection, PlayerWeekStats } from "./aggregate";
-export { getLeagueOutlook, getWeeklyTeamPoints } from "./outlook";
+export {
+  getLeagueOutlook,
+  getOptimalLineups,
+  getWeeklyTeamPoints,
+} from "./outlook";
 export type {
   LeagueOutlook,
   LeagueTeamsInput,
+  OptimalLineups,
   OutlookRoster,
   PlayerOutlook,
   TeamOutlook,

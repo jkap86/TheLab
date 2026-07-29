@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { formatPoints, formatRecord, formatWeekRange } from "./format.ts";
+import {
+  formatPoints,
+  formatRecord,
+  formatValue,
+  formatWeekRange,
+} from "./format.ts";
 
 describe("formatRecord", () => {
   test("omits ties when there are none", () => {
@@ -25,6 +30,13 @@ describe("formatPoints", () => {
 
   test("rounds to two decimals", () => {
     assert.equal(formatPoints(99.999), "100.00");
+  });
+});
+
+describe("formatValue", () => {
+  test("groups thousands and drops the decimals points keep", () => {
+    assert.equal(formatValue(41320), "41,320");
+    assert.equal(formatValue(0), "0");
   });
 });
 

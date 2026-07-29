@@ -1,8 +1,10 @@
 import type {
   LeagueDetailPayload,
+  LeagueKtcValue,
   LeaguesProgressMessage,
   LeaguesResultMessage,
   LeagueTeamPayload,
+  ManagerKtcPayload,
   ManagerPlayersPayload,
   ManagerRanksPayload,
 } from "@/shared/contract";
@@ -24,6 +26,7 @@ import type {
  * one import site.
  */
 export type {
+  LeagueKtcValue,
   LeagueOutlook,
   ManagerLeague,
   PlayerOutlook,
@@ -50,3 +53,6 @@ export type ManagerPlayersResult = ManagerPlayersPayload;
 
 /** The `/api/user/[username]/ranks` response the league cards annotate from. */
 export type ManagerRanksResult = ManagerRanksPayload;
+
+/** The `/api/user/[username]/ktc` response the league cards price from. */
+export type ManagerKtcResult = ManagerKtcPayload;

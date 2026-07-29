@@ -24,6 +24,17 @@ export function formatPoints(points: number): string {
 }
 
 /**
+ * A KeepTradeCut value with locale grouping and no decimals, e.g. `"41,320"`.
+ *
+ * The opposite convention to {@link formatPoints}, and deliberately: KTC's
+ * numbers are whole and four digits wide, so a decimal place would be two
+ * characters of noise on a chip already carrying three totals.
+ */
+export function formatValue(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+/**
  * The week horizon a projection covers, e.g. `"Wk 3–5"`, `"Wk 3"`, `"Wk 3, 5"`.
  *
  * Worth the few lines because the horizon is not what a reader assumes: the sync
