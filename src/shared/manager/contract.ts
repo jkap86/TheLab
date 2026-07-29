@@ -1,3 +1,4 @@
+import type { PlaceholderPick } from "@/shared/picktracker";
 import type { PlayerSummary } from "@/shared/players";
 import type { LeagueOutlook, ProjectionFilters } from "@/shared/projections";
 import type { UserInfo } from "@/shared/sleeper";
@@ -166,6 +167,34 @@ export type ProjectionsPayload = {
   /** Players in the full filtered set; 0 when the page is past its end. */
   player_count: number;
   players: ProjectionPlayerPayload[];
+};
+
+/**
+ * One placeholder pick as sent to the client: the pick tracker's kicker pick,
+ * with the picking manager's avatar *id* resolved to a URL (as in
+ * `LeagueTeamPayload`) and the raw id dropped.
+ */
+export type PicktrackerPickPayload = Omit<PlaceholderPick, "picked_by"> & {
+  picked_by:
+    | (Omit<NonNullable<PlaceholderPick["picked_by"]>, "avatar"> & {
+        avatar_url: string | null;
+      })
+    | null;
+};
+
+/** `GET /api/picktracker/[leagueId]` — a league's placeholder draft, live. */
+export type PicktrackerPayload = {
+  league: {
+    league_id: string;
+    name: string;
+    avatar_url: string | null;
+  };
+  draft_status: string;
+  /** Teams per round — what the round.slot labels are numbered against. */
+  teams: number;
+  picks: PicktrackerPickPayload[];
+  /** The placeholder now on the clock; null once the draft is complete. */
+  next_pick: string | null;
 };
 
 /** The error body every league API route returns on a non-2xx. */

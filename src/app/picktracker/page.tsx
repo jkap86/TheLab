@@ -1,10 +1,10 @@
 import { PageShell } from "@/features/shared";
-import { ToolPlaceholder } from "@/features/tools";
+import { PicktrackerSearch } from "@/features/picktracker";
 
-export default function Page() {
+export default function PicktrackerPage() {
   return (
     <PageShell>
-      <ToolPlaceholder href="/picktracker" />
+      <PicktrackerSearch />
     </PageShell>
   );
 }

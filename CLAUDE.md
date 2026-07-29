@@ -24,9 +24,12 @@ src/shared/    Domain logic, one folder per concern.
 - **A cache-backed route reads and nothing else.** `/api/projections`,
   `/api/league/[leagueId]` and `/api/adp` answer from what the background syncs
   have stored; a slice that hasn't been synced comes back empty rather than
-  fetched on demand. (The `/api/user/[username]` routes are the deliberate
-  exception — resolving a manager and syncing their leagues is what they are
-  *for*, which is why the leagues one streams progress.) Where a read needs to
+  fetched on demand. (Two deliberate exceptions: the `/api/user/[username]`
+  routes — resolving a manager and syncing their leagues is what they are *for*,
+  which is why the leagues one streams progress — and
+  `/api/picktracker/[leagueId]`, which follows a draft *while it happens*, for
+  any league id whether a sync has seen it or not; any cached copy would be
+  behind the room.) Where a read needs to
   know what week it is, derive it from stored data too: `projections/queries`
   takes the weeks still ahead from `game_date` rather than `state/nfl`, so it can
   only ever name weeks that are actually here to read.
@@ -332,6 +335,17 @@ stops holding, a comment saying it does would not have caught it.
   different games.
 - **A draft's `pick_no` is not always a draft position.** In auction drafts it
   is nomination order, which is why `/api/adp` excludes them by default.
+- **A placeholder pick's number is its place in the kicker sequence, not its
+  draft slot.** Leagues trading next year's rookie picks during a startup draft
+  can't draft players who aren't in Sleeper's pool yet, so they draft kickers as
+  stand-ins: the Nth kicker off the board is rookie pick N. A kicker taken at
+  startup slot 7.11 can be rookie pick 1.03, which is why `shared/picktracker`
+  sorts by `pick_no`, filters to `metadata.position === "K"` and numbers from
+  the *filtered* index — the pick's own `round`/`pick_no` are the wrong numbers
+  on purpose. Two adjacent traps: slots-per-round is `settings.teams`, because
+  `draft_order` only maps users who claimed a slot and is null before an order
+  is set; and "next pick" must gate on the draft's `status`, because after the
+  last pick the arithmetic still names a plausible slot that will never exist.
 - **Lineup slots overlap without nesting.** `WRRB_FLEX` takes RB/WR and
   `REC_FLEX` takes WR/TE, and leagues here use both, so filling slots one at a
   time — even most-constrained first — picks the wrong lineup. `projections/optimal`
