@@ -2,15 +2,15 @@ import { getFantasyPositions } from "@/shared/players";
 
 import { aggregateWeeklyStats } from "./aggregate";
 import type { PlayerWeekStats } from "./aggregate";
-import { compareLineup, optimalLineup, startingSlots } from "./optimal";
-import type { LineupComparison, RosterPlayer } from "./optimal";
+import { isProjectable, lineupCandidates, rosterPlayerIds } from "./candidates";
+import { compareLineup, optimalLineup, recognisedSlots } from "./optimal";
+import type { LineupComparison } from "./optimal";
 import {
   getProjectedStatKeys,
   getRemainingWeeks,
   listPlayerWeekStats,
 } from "./queries";
 import { derivedScoring, scoreProjection, unprojectedScoring } from "./score";
-import { SLOT_POSITIONS } from "./slots";
 import { groupWeeklyPoints, weeklyLineupSplit, weeklyRosters } from "./weekly";
 import type { PlayerSplit } from "./weekly";
 
@@ -162,14 +162,17 @@ export async function getLeagueOutlook({
   scoringSettings: Record<string, number> | null;
   teams: readonly OutlookRoster[];
 }): Promise<LeagueOutlook | null> {
-  if (!rosterPositions?.length || !scoringSettings || teams.length === 0) {
-    return null;
-  }
+  // Gathered into a league so the guard can narrow it: `isProjectable` is the
+  // same rule the batch entry points below filter on, so all three refuse a
+  // league on one definition rather than three spellings of it.
+  const league = { rosterPositions, scoringSettings, teams };
+  if (!isProjectable(league)) return null;
+  const scoring = league.scoringSettings;
 
   const weeks = await getRemainingWeeks(season);
   if (weeks.length === 0) return null;
 
-  const playerIds = [...new Set(teams.flatMap((t) => t.players))].filter(Boolean);
+  const playerIds = rosterPlayerIds(teams);
 
   const [stats, statKeys, positions] = await Promise.all([
     listPlayerWeekStats({ season, weeks, playerIds }),
@@ -187,7 +190,7 @@ export async function getLeagueOutlook({
   const players: Record<string, PlayerOutlook> = {};
   for (const [playerId, entry] of Object.entries(aggregated)) {
     players[playerId] = {
-      points: scoreProjection(entry.stats, scoringSettings),
+      points: scoreProjection(entry.stats, scoring),
       weeks: entry.weeks.length,
     };
   }
@@ -198,24 +201,21 @@ export async function getLeagueOutlook({
   // changes week to week, so that sum has to be broken back out per week to know
   // what a lineup is worth in it.
   const weeklyPoints = groupWeeklyPoints(stats, (s) =>
-    scoreProjection(s, scoringSettings),
+    scoreProjection(s, scoring),
   );
 
   return {
     weeks,
     players,
     teams: teams.map((team) => {
-      const unavailable = new Set([...team.reserve, ...team.taxi]);
-      const candidates: RosterPlayer[] = team.players
-        .filter((id) => id && !unavailable.has(id))
-        .map((id) => ({
-          player_id: id,
-          positions: positions[id] ?? [],
-          points: players[id]?.points ?? 0,
-        }));
+      const candidates = lineupCandidates(
+        team,
+        positions,
+        (id) => players[id]?.points ?? 0,
+      );
 
       const comparison = compareLineup({
-        rosterPositions,
+        rosterPositions: league.rosterPositions,
         starters: team.starters,
         players: candidates,
       });
@@ -237,8 +237,8 @@ export async function getLeagueOutlook({
         weekly_split: weekly.players,
       };
     }),
-    unprojected_scoring: unprojectedScoring(scoringSettings, statKeys),
-    derived_scoring: derivedScoring(scoringSettings),
+    unprojected_scoring: unprojectedScoring(scoring, statKeys),
+    derived_scoring: derivedScoring(scoring),
   };
 }
 
@@ -249,6 +249,41 @@ export type LeagueTeamsInput = {
   scoringSettings: Record<string, number> | null;
   teams: readonly OutlookRoster[];
 };
+
+/**
+ * The reads {@link getWeeklyTeamPoints} and {@link getOptimalLineups} share:
+ * which leagues can be projected at all, the horizon, and — for the union of
+ * every roster across them — the stat lines and the positions.
+ *
+ * One pass for the whole account, which is the reason those two exist rather
+ * than a loop over {@link getLeagueOutlook}: these reads cost the same whether
+ * one league asks or a hundred do, so a per-league loop would repeat them a
+ * hundred times. What genuinely differs per league is the scoring and the solve,
+ * and that stays with each caller.
+ *
+ * Null when there is nothing to project — no projectable league, or nothing left
+ * on the schedule — so neither caller has to spell out the two ways that happens
+ * before returning its own empty shape.
+ */
+async function readBatchInputs(
+  season: string,
+  leagues: readonly LeagueTeamsInput[],
+) {
+  const projectable = leagues.filter(isProjectable);
+  if (projectable.length === 0) return null;
+
+  const weeks = await getRemainingWeeks(season);
+  if (weeks.length === 0) return null;
+
+  const playerIds = rosterPlayerIds(projectable.flatMap((l) => l.teams));
+
+  const [stats, positions] = await Promise.all([
+    listPlayerWeekStats({ season, weeks, playerIds }),
+    getFantasyPositions(playerIds),
+  ]);
+
+  return { projectable, weeks, stats, positions };
+}
 
 export type WeeklyTeamPoints = {
   /** Weeks the totals cover, ascending — empty when nothing remains to play. */
@@ -266,12 +301,11 @@ export type WeeklyTeamPoints = {
  * account at once, because ranking a roster means projecting everyone else's.
  *
  * A separate entry point rather than `getLeagueOutlook` in a loop because the
- * loop would repeat the reads a hundred-plus times per request: the remaining
- * weeks, the stat lines and the positions are fetched once for the union of
- * every league's rosters, and only the scoring and the lineup solves — the
- * parts that genuinely differ per league — run per league. Everything skipped
- * here (aggregates, splits, current-lineup diffs, scoring caveats) is a
- * per-panel answer the league detail route already serves.
+ * loop would repeat the reads a hundred-plus times per request — they are shared
+ * across the account here (see {@link readBatchInputs}), leaving only the
+ * scoring and the lineup solves to run per league. Everything skipped here
+ * (aggregates, splits, current-lineup diffs, scoring caveats) is a per-panel
+ * answer the league detail route already serves.
  */
 export async function getWeeklyTeamPoints({
   season,
@@ -280,22 +314,9 @@ export async function getWeeklyTeamPoints({
   season: string;
   leagues: readonly LeagueTeamsInput[];
 }): Promise<WeeklyTeamPoints> {
-  const projectable = leagues.filter(
-    (l) => l.rosterPositions?.length && l.scoringSettings && l.teams.length > 0,
-  );
-  if (projectable.length === 0) return { weeks: [], points: new Map() };
-
-  const weeks = await getRemainingWeeks(season);
-  if (weeks.length === 0) return { weeks: [], points: new Map() };
-
-  const playerIds = [
-    ...new Set(projectable.flatMap((l) => l.teams.flatMap((t) => t.players))),
-  ].filter(Boolean);
-
-  const [stats, positions] = await Promise.all([
-    listPlayerWeekStats({ season, weeks, playerIds }),
-    getFantasyPositions(playerIds),
-  ]);
+  const input = await readBatchInputs(season, leagues);
+  if (!input) return { weeks: [], points: new Map() };
+  const { projectable, weeks, stats, positions } = input;
 
   // Bucketed by player once, so each league scores its own rosters' rows rather
   // than re-scanning the whole account's union per league.
@@ -308,34 +329,23 @@ export async function getWeeklyTeamPoints({
 
   const points = new Map<string, Map<number, number>>();
   for (const league of projectable) {
-    const scoring = league.scoringSettings!;
-    const leaguePlayers = [
-      ...new Set(league.teams.flatMap((t) => t.players)),
-    ].filter(Boolean);
+    const scoring = league.scoringSettings;
     const weeklyPoints = groupWeeklyPoints(
-      leaguePlayers.flatMap((id) => rowsByPlayer.get(id) ?? []),
+      rosterPlayerIds(league.teams).flatMap((id) => rowsByPlayer.get(id) ?? []),
       (s) => scoreProjection(s, scoring),
     );
 
-    // The recognised starting slots, as compareLineup derives them — an unknown
-    // slot is left out of the total here the same way it is left out there.
-    const slots = startingSlots(league.rosterPositions!).filter(
-      (slot) => slot in SLOT_POSITIONS,
-    );
+    const slots = recognisedSlots(league.rosterPositions);
 
     const byTeam = new Map<number, number>();
     for (const team of league.teams) {
-      // IR and taxi are candidates for nobody's lineup, as in getLeagueOutlook.
-      const unavailable = new Set([...team.reserve, ...team.taxi]);
-      const candidates: RosterPlayer[] = team.players
-        .filter((id) => id && !unavailable.has(id))
-        .map((id) => ({
-          player_id: id,
-          positions: positions[id] ?? [],
-          // Never read: weeklyRosters re-scores every candidate against each
-          // week's own projection, and the aggregate total isn't needed here.
-          points: 0,
-        }));
+      const candidates = lineupCandidates(
+        team,
+        positions,
+        // Never read: weeklyRosters re-scores every candidate against each
+        // week's own projection, and the aggregate total isn't needed here.
+        () => 0,
+      );
 
       byTeam.set(
         team.roster_id,
@@ -365,10 +375,9 @@ export type OptimalLineups = {
  * list, for callers that need it across a whole account rather than one league.
  *
  * The third entry point beside that one and {@link getWeeklyTeamPoints}, and it
- * exists for the reason the second does: the reads it shares — the remaining
- * weeks, the stat lines, the positions — cost the same whether one league asks
- * or a hundred do, so a per-league loop would repeat them a hundred times. What
- * genuinely differs per league is the scoring and the solve.
+ * exists for the reason the second does: the reads it shares cost the same
+ * whether one league asks or a hundred do (see {@link readBatchInputs}), so only
+ * the scoring and the solve run per league.
  *
  * Cheaper per team than `getWeeklyTeamPoints`, because this lineup is ranked on
  * a season total: the stat lines are summed once for everyone (scoring is
@@ -386,22 +395,9 @@ export async function getOptimalLineups({
   season: string;
   leagues: readonly LeagueTeamsInput[];
 }): Promise<OptimalLineups> {
-  const projectable = leagues.filter(
-    (l) => l.rosterPositions?.length && l.scoringSettings && l.teams.length > 0,
-  );
-  if (projectable.length === 0) return { weeks: [], lineups: new Map() };
-
-  const weeks = await getRemainingWeeks(season);
-  if (weeks.length === 0) return { weeks: [], lineups: new Map() };
-
-  const playerIds = [
-    ...new Set(projectable.flatMap((l) => l.teams.flatMap((t) => t.players))),
-  ].filter(Boolean);
-
-  const [stats, positions] = await Promise.all([
-    listPlayerWeekStats({ season, weeks, playerIds }),
-    getFantasyPositions(playerIds),
-  ]);
+  const input = await readBatchInputs(season, leagues);
+  if (!input) return { weeks: [], lineups: new Map() };
+  const { projectable, weeks, stats, positions } = input;
 
   // Summed once for the whole account: a stat line doesn't depend on whose
   // league it is read in, and only the scoring below does.
@@ -409,28 +405,15 @@ export async function getOptimalLineups({
 
   const lineups = new Map<string, Map<number, string[]>>();
   for (const league of projectable) {
-    const scoring = league.scoringSettings!;
-
-    // The recognised starting slots, as compareLineup derives them — an unknown
-    // slot takes nobody here the same way it takes nobody there.
-    const slots = startingSlots(league.rosterPositions!).filter(
-      (slot) => slot in SLOT_POSITIONS,
-    );
+    const scoring = league.scoringSettings;
+    const slots = recognisedSlots(league.rosterPositions);
 
     const byTeam = new Map<number, string[]>();
     for (const team of league.teams) {
-      // IR and taxi are candidates for nobody's lineup, as in getLeagueOutlook.
-      const unavailable = new Set([...team.reserve, ...team.taxi]);
-      const candidates: RosterPlayer[] = team.players
-        .filter((id) => id && !unavailable.has(id))
-        .map((id) => {
-          const entry = aggregated[id];
-          return {
-            player_id: id,
-            positions: positions[id] ?? [],
-            points: entry ? scoreProjection(entry.stats, scoring) : 0,
-          };
-        });
+      const candidates = lineupCandidates(team, positions, (id) => {
+        const entry = aggregated[id];
+        return entry ? scoreProjection(entry.stats, scoring) : 0;
+      });
 
       byTeam.set(
         team.roster_id,

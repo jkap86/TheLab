@@ -40,7 +40,12 @@ export type {
   ProjectionScoring,
 } from "./filters";
 export { scoreProjection, unprojectedScoring, derivedScoring } from "./score";
-export { optimalLineup, compareLineup, startingSlots } from "./optimal";
+export {
+  optimalLineup,
+  compareLineup,
+  startingSlots,
+  recognisedSlots,
+} from "./optimal";
 export type { RosterPlayer, LineupSlot, LineupComparison } from "./optimal";
 export {
   SLOT_POSITIONS,

@@ -1,16 +1,14 @@
-import { NextResponse } from "next/server";
-
 import {
   getManagerLeagues,
   getManagerSyncedAt,
-  resolveManagerUser,
   syncManagerLeagues,
   toUserInfo,
   SYNC_TTL_MS,
 } from "@/shared/manager";
-import type { ApiErrorPayload, LeaguesStreamMessage } from "@/shared/contract";
+import type { LeaguesStreamMessage } from "@/shared/contract";
 import { ensurePlayersFresh } from "@/shared/players";
-import { DEFAULT_SEASON } from "@/shared/sleeper";
+
+import { resolveManagerRequest } from "../manager-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,17 +33,10 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {
-  const { username } = await params;
+  const resolved = await resolveManagerRequest(request, params);
+  if (!resolved.ok) return resolved.response;
+  const { user, season, searchParams } = resolved;
 
-  const resolved = await resolveManagerUser(username);
-  if (!resolved.ok) {
-    const error: ApiErrorPayload = { error: resolved.error };
-    return NextResponse.json(error, { status: resolved.status });
-  }
-  const user = resolved.user;
-
-  const searchParams = new URL(request.url).searchParams;
-  const season = searchParams.get("season")?.trim() || DEFAULT_SEASON;
   const force = searchParams.get("refresh") === "1";
 
   // Warm the players cache in the background (no-op when fresh).

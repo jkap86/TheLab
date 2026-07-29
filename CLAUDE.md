@@ -82,6 +82,32 @@ unknown → 404, unreachable → 502); that is a fact about this app's API, so i
 lives in `shared/manager/resolve.ts` — the Sleeper client only knows that
 Sleeper answers 200-with-null for an unknown user.
 
+**The HTTP half of that lives one layer out, in
+`app/api/user/[username]/manager-request.ts`.** All six routes under that prefix
+opened with the same ten lines — await the params, resolve the username, turn a
+failure into `NextResponse.json(ApiErrorPayload)`, read `?season` — so
+`resolveManagerRequest` is those ten lines, and a route is now three:
+
+```ts
+const resolved = await resolveManagerRequest(request, params);
+if (!resolved.ok) return resolved.response;
+const { userId, season } = resolved;
+```
+
+It sits in `src/app` rather than beside `resolveManagerUser` because the only
+thing it adds is the `NextResponse`, and domain code has no business
+constructing responses. That is also why it doesn't breach "routes only, no
+business logic": every decision it makes already belongs to a module it calls,
+and what is left is the HTTP adaptation. A non-route file in the app directory is
+fine — only `route.ts`/`page.tsx` are special, and the build confirms it.
+
+Two details it carries so callers don't have to. It returns `username` **as
+spelled in the URL**, because Sleeper resolves a user id as readily as a name and
+that is the string worth putting in a log line (the `ktc` route does). And it
+parses `season` for all six including the base route that ignores it — one string
+read is cheaper than a second entry point, and the routes that want more of the
+query string get `searchParams` itself (`leagues` reads `?refresh=1` off it).
+
 ## Database
 
 Use the helpers in `@/shared/db` rather than hand-rolling:
@@ -217,6 +243,34 @@ where nothing tested it; it is the rule the benched-weeks counts rest on, so it
 was moved to `projections/weekly` and pinned with a test. If a loop in the
 composition file starts making a decision, that decision wants a pure module.
 
+**A second and third entry point is how that drift arrives at scale.** Once
+`outlook` grew `getWeeklyTeamPoints` and `getOptimalLineups` beside
+`getLeagueOutlook`, four rules were retyped once per entry point — the IR/taxi
+exclusion, the projectable-league guard, the player-id union, and which slots the
+solver recognises — and none of the three copies was tested, because the
+composition file deliberately has no test. They live once now:
+`projections/candidates` owns `lineupCandidates`, `isProjectable` and
+`rosterPlayerIds`, and `optimal` owns `recognisedSlots` (which `compareLineup`
+had also spelled out inline, and which can't live in `candidates` without a
+cycle). What that buys is not lines — the extraction is roughly line-neutral —
+but that `getWeeklyTeamPoints` can no longer disagree with `getLeagueOutlook`
+about who is allowed to start, and that a new Sleeper reserve category is one
+edit with a test over it rather than three edits and a hope.
+
+Two details worth keeping. `lineupCandidates` takes the scorer as a callback,
+because the three callers want different numbers off the same roster — a season
+aggregate, a per-league score of it, or nothing at all where the weekly solve
+re-scores every candidate itself — and that difference is the only thing that
+varied between the copies. And `isProjectable` is a **type predicate**, so
+`leagues.filter(isProjectable)` narrows: the three `scoringSettings!` /
+`rosterPositions!` assertions that used to re-assert what the filter had just
+checked are gone, which is the compiler agreeing that the guard and the use are
+now the same fact.
+
+The shared *reads* behind those two batch entry points sit in `readBatchInputs`,
+still inside the composition file and private to it. That is the right side of
+the line: it is I/O and nothing else, so there is nothing in it to test.
+
 Test the property the code rests on, not just its outputs. The rest-of-season
 totals are only correct because scoring is linear, so `aggregate.test` asserts
 `score(w1) + score(w2) === score(w1 + w2)` against real stat lines — if that ever
@@ -253,6 +307,23 @@ stops holding, a comment saying it does would not have caught it.
   there is no global nav — and they link with the URL's own spelling of the
   manager rather than the resolved username, since Sleeper resolves a user id as
   readily as a name.
+- **The four manager sub-resource hooks are one hook, bound four ways.**
+  `useManagerPlayers`, `useManagerLeaguemates`, `useManagerRanks` and
+  `useManagerKtc` read `/api/user/[username]/{players,leaguemates,ranks,ktc}`,
+  and they were four line-for-line copies differing only in the path and the
+  error string. They delegate to `useManagerResource` now, with each file keeping
+  its name, its result type and a note on what its route is for. The shared body
+  is not boilerplate — it carries two rules worth having in one place: every one
+  of these resources reads what the *leagues stream* wrote, so the hook takes the
+  leagues array and its identity is what re-runs the fetch (a ready flag couldn't
+  re-trigger on the second `result` a background refresh sends); and `data` is
+  never reset to null on refetch, because blanking several hundred rows to redraw
+  them nearly unchanged is worse than a moment of staleness. `useLeagueDetail`
+  looks like a fifth copy and is not one: it *does* clear on change, since a new
+  league id means the rows on screen belong to a different league, and it tracks
+  `loading` because its panel mounts on expand. `useManagerLeagues` is not one
+  either — it decodes an NDJSON stream. Two hooks that differ in what they
+  guarantee are two hooks.
 - **A player share is out of the leagues that hold a roster of yours, not the
   leagues listed.** They are different numbers — 121 leagues, 113 rosters for the
   account this was built against — because Sleeper keeps you in `league_users`
@@ -279,8 +350,20 @@ stops holding, a comment saying it does would not have caught it.
   Rows are labelled by `display_name` per the standings rule (recognising the
   same person across leagues is the page), and the list itself is the player
   shares list with a person in the player column: same grid, same two numbers,
-  same expansion — the expanded league row and the chevron live once in `ui.tsx`
-  because a third copy is where the drift would have started.
+  same expansion.
+- **Both share views *are* `ShareList`.** The grid template, the heading row, the
+  count-and-percent cells and the expansion were copied between
+  `player-shares` and `leaguemate-shares` — only the heading word and the first
+  column's contents ever differed — so they live once in `share-list.tsx` and each
+  view is now ~30 lines naming its own column. Two copies of a grid template is
+  one width change away from the headings sitting over the wrong numbers in
+  whichever file didn't get edited, and that would look like a data bug rather
+  than a CSS one. What a caller supplies is `icon` (a position pill, an avatar)
+  and an optional `note` — the dim trailing detail, which is the NFL team on a
+  player row and nothing on a person. The name span and its truncation stay in
+  `ShareList`, since losing the name is the failure both lists are laid out to
+  avoid. `Chevron` and `SharedLeagueRow` remain in `ui.tsx`: the standings and the
+  roster panel use them too, so they are atoms rather than part of this table.
 - **The expanded standings are ordered by projected points, not by record.**
   What the panel adds over Sleeper is the projection, so the Proj column is the
   one the rows are ranked on — the numbers descend down the page, and the `#`

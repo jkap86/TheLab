@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-import type { ApiErrorPayload, ManagerRanksPayload } from "@/shared/contract";
-import { getManagerLeagueRosters, projectedRank, resolveManagerUser } from "@/shared/manager";
+import type { ManagerRanksPayload } from "@/shared/contract";
+import { getManagerLeagueRosters, projectedRank } from "@/shared/manager";
 import { getWeeklyTeamPoints } from "@/shared/projections";
-import { DEFAULT_SEASON } from "@/shared/sleeper";
+
+import { resolveManagerRequest } from "../manager-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,17 +22,9 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {
-  const { username } = await params;
-
-  const resolved = await resolveManagerUser(username);
-  if (!resolved.ok) {
-    const error: ApiErrorPayload = { error: resolved.error };
-    return NextResponse.json(error, { status: resolved.status });
-  }
-
-  const searchParams = new URL(request.url).searchParams;
-  const season = searchParams.get("season")?.trim() || DEFAULT_SEASON;
-  const userId = resolved.user.user_id;
+  const resolved = await resolveManagerRequest(request, params);
+  if (!resolved.ok) return resolved.response;
+  const { userId, season } = resolved;
 
   // Sequential rather than parallel: which rosters to project is the answer to
   // the first read.

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-import type { ApiErrorPayload, ManagerPlayersPayload } from "@/shared/contract";
-import { getManagerRosters, resolveManagerUser } from "@/shared/manager";
+import type { ManagerPlayersPayload } from "@/shared/contract";
+import { getManagerRosters } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
-import { DEFAULT_SEASON } from "@/shared/sleeper";
+
+import { resolveManagerRequest } from "../manager-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,20 +23,13 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {
-  const { username } = await params;
-
-  const resolved = await resolveManagerUser(username);
-  if (!resolved.ok) {
-    const error: ApiErrorPayload = { error: resolved.error };
-    return NextResponse.json(error, { status: resolved.status });
-  }
-
-  const searchParams = new URL(request.url).searchParams;
-  const season = searchParams.get("season")?.trim() || DEFAULT_SEASON;
+  const resolved = await resolveManagerRequest(request, params);
+  if (!resolved.ok) return resolved.response;
+  const { userId, season } = resolved;
 
   // Sequential rather than parallel: which players to resolve is the answer to
   // the first read.
-  const rosters = await getManagerRosters(resolved.user.user_id, season);
+  const rosters = await getManagerRosters(userId, season);
   const players = await getPlayersByIds([
     ...new Set(Object.values(rosters).flat()),
   ]);
