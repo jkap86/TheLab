@@ -1,14 +1,11 @@
 export {
   getSleeperUser,
-  resolveManagerUser,
-  toUserInfo,
   sleeperAvatarUrl,
   sleeperDataUrl,
   SLEEPER_API_BASE,
   SLEEPER_CDN_BASE,
   SLEEPER_DATA_BASE,
 } from "./client";
-export type { UserInfo, ResolvedManager } from "./client";
 export {
   DEFAULT_SEASON,
   getUserLeagues,

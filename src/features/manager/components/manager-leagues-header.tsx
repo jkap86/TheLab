@@ -10,6 +10,7 @@ export function LeaguesHeader({
   refreshing,
   progress,
   summary,
+  refreshError,
 }: {
   user: LeaguesResult["user"];
   leagueCount: number;
@@ -18,6 +19,11 @@ export function LeaguesHeader({
   refreshing: boolean;
   progress: SyncProgress | null;
   summary: LeaguesResult["summary"];
+  /**
+   * A refresh that failed after cached leagues were already served. Shown as a
+   * pill rather than replacing the page: the list below is stale, not wrong.
+   */
+  refreshError: string | null;
 }) {
   const filtered = leagueCount !== totalCount;
   return (
@@ -55,6 +61,11 @@ export function LeaguesHeader({
         {summary && summary.failed > 0 && (
           <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-sm text-amber-300">
             {summary.failed} failed to sync
+          </span>
+        )}
+        {refreshError && (
+          <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-sm text-amber-300">
+            Refresh failed — showing cached leagues
           </span>
         )}
       </div>

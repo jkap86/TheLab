@@ -1,20 +1,37 @@
+import type {
+  AdpFilters,
+  LeagueDetail,
+  LeagueTeam,
+  ManagerLeague,
+  SyncProgress,
+  SyncSummary,
+} from "@/shared/manager";
 import type { PlayerSummary } from "@/shared/players";
 import type { LeagueOutlook, ProjectionFilters } from "@/shared/projections";
-import type { UserInfo } from "@/shared/sleeper";
-
-import type { AdpFilters } from "./adp-filters";
-import type { SyncProgress, SyncSummary } from "./sync";
-import type { LeagueDetail, LeagueTeam, ManagerLeague } from "./types";
 
 /**
- * The wire contract between the league API routes and the client that reads
- * them.
+ * The wire contract between this app's API routes and the client that reads
+ * them — every route's payloads and stream messages, in one module.
  *
  * Declared once, here, and imported by both sides: the route handlers annotate
  * what they send with these types and the `manager` feature annotates what it
  * receives, so a change to one end that the other doesn't follow is a type
  * error rather than a runtime surprise.
+ *
+ * Types only, and everything it pulls from the domain modules comes in with
+ * `import type` — those imports are erased at compile time, which is what lets
+ * client code import this module without dragging `pg` into the bundle, and
+ * what keeps the manager-module references here from being a runtime cycle.
  */
+
+/** The public user shape returned by the app's user/leagues APIs. */
+export type UserInfo = {
+  user_id: string;
+  username: string;
+  display_name: string;
+  avatar: string | null;
+  avatar_url: string | null;
+};
 
 /**
  * A team as sent to the client. The database stores an avatar *id*; the client

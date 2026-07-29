@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import type { LeaguesStreamMessage } from "@/shared/manager";
+import type { LeaguesStreamMessage } from "@/shared/contract";
 import { errorMessage } from "@/shared/util";
 
 import { apiFetch, isAbortError } from "@/features/shared";
@@ -26,7 +26,7 @@ function takeLines(buffer: string): { lines: string[]; rest: string } {
 /**
  * Streams a manager's leagues from `/api/user/[username]/leagues`, decoding the
  * newline-delimited JSON protocol into React state. Message shapes come from
- * `@/shared/manager`'s {@link LeaguesStreamMessage}, the same contract the route
+ * `@/shared/contract`'s {@link LeaguesStreamMessage}, the same contract the route
  * sends against.
  *
  * Aborts the in-flight request on unmount. Callers should key the owning

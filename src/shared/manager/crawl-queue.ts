@@ -1,13 +1,10 @@
-import { pool } from "@/shared/db";
+import { msInterval, pool } from "@/shared/db";
 
 /**
  * The crawler's queue: every database read and write that decides *what* to
  * crawl next. Deliberately free of policy — batch sizes and freshness windows
  * are passed in by `crawl.ts`, which owns them — so these stay plain queries.
  */
-
-/** A millisecond duration as a Postgres interval literal. */
-const seconds = (ms: number) => `${Math.round(ms / 1000)} seconds`;
 
 /** Which of the given league ids we already store. */
 export async function knownLeagueIds(
@@ -30,7 +27,7 @@ export async function countDueLeagues(
     `SELECT count(*)::text AS count
        FROM leagues
       WHERE season = $1 AND updated_at < now() - $2::interval`,
-    [season, seconds(ttlMs)],
+    [season, msInterval(ttlMs)],
   );
   return Number(rows[0].count);
 }
@@ -58,7 +55,7 @@ export async function claimStaleLeagues(
                LIMIT $3
             )
       RETURNING league_id`,
-    [season, seconds(ttlMs), limit],
+    [season, msInterval(ttlMs), limit],
   );
   return rows.map((r) => r.league_id);
 }
@@ -81,7 +78,7 @@ export async function pendingManagers(
       GROUP BY lu.user_id, ms.attempt_at
       ORDER BY ms.attempt_at ASC NULLS FIRST
       LIMIT $3`,
-    [season, seconds(ttlMs), limit],
+    [season, msInterval(ttlMs), limit],
   );
   return rows.map((r) => r.user_id);
 }

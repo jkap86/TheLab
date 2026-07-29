@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { parseWeeks, syncProjections } from "@/shared/projections";
+import { isSeason } from "@/shared/query";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ async function handler(request: Request) {
   }
 
   const season = params.get("season");
-  if (season !== null && !/^\d{4}$/.test(season)) {
+  if (season !== null && !isSeason(season)) {
     return NextResponse.json(
       { error: "season must be a 4-digit year" },
       { status: 400 },

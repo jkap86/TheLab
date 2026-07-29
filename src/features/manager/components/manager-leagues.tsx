@@ -52,6 +52,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
         refreshing={refreshing}
         progress={progress}
         summary={summary}
+        refreshError={error}
       />
 
       {data.leagues.length === 0 ? (

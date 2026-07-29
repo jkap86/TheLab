@@ -2,6 +2,7 @@ import {
   bulkInsert,
   jsonb as j,
   LOCK_KEYS,
+  msInterval,
   pool,
   withAdvisoryLock,
   withTransaction,
@@ -112,7 +113,7 @@ async function staleWeeks(
                AND p.week = w.week
                AND p.updated_at > now() - $3::interval)
       ORDER BY w.week`,
-    [weeks, season, `${Math.round(ttlMs / 1000)} seconds`],
+    [weeks, season, msInterval(ttlMs)],
   );
   return rows.map((r) => r.week);
 }

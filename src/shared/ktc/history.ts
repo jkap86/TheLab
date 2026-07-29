@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import {
   bulkInsert,
   LOCK_KEYS,
+  msInterval,
   pool,
   withAdvisoryLock,
   withTransaction,
@@ -124,7 +125,7 @@ async function pendingPlayers(
     ? "TRUE"
     : `(history_synced_at IS NULL
          OR history_synced_at < now() - $1::interval)`;
-  const params = force ? [] : [`${Math.round(KTC_HISTORY_TTL_MS / 1000)} seconds`];
+  const gateParams = force ? [] : [msInterval(KTC_HISTORY_TTL_MS)];
 
   // `history_attempt_at` orders the queue (not `history_synced_at`) so a player
   // whose page keeps failing rotates to the back instead of being retried every
@@ -135,15 +136,15 @@ async function pendingPlayers(
       WHERE slug IS NOT NULL AND ${staleGate}
       ORDER BY history_attempt_at ASC NULLS FIRST,
                sf_value DESC NULLS LAST
-      LIMIT ${Math.max(0, Math.trunc(limit))}`,
-    params,
+      LIMIT $${gateParams.length + 1}`,
+    [...gateParams, Math.max(0, Math.trunc(limit))],
   );
 
   const { rows: countRows } = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count
        FROM ktc_values
       WHERE slug IS NOT NULL AND ${staleGate}`,
-    params,
+    gateParams,
   );
 
   return { rows, remaining: Number(countRows[0].count) };

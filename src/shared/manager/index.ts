@@ -16,6 +16,8 @@ export type { CrawlSummary, CrawlOptions } from "./crawl";
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export { getLeagueDetail, getManagerLeagues, getManagerSyncedAt } from "./queries";
 export type { LeagueDetail, LeagueTeam, ManagerLeague } from "./types";
+export { resolveManagerUser, toUserInfo } from "./resolve";
+export type { ResolvedManager } from "./resolve";
 export { getDraftAdp } from "./adp";
 export type { AdpResult, AdpRow } from "./adp";
 export {
@@ -32,16 +34,3 @@ export type {
   ParsedAdpFilters,
   ScoringFormat,
 } from "./adp-filters";
-export type {
-  AdpPayload,
-  AdpPlayerPayload,
-  ApiErrorPayload,
-  LeagueDetailPayload,
-  LeagueTeamPayload,
-  LeaguesErrorMessage,
-  LeaguesProgressMessage,
-  LeaguesResultMessage,
-  LeaguesStreamMessage,
-  ProjectionPlayerPayload,
-  ProjectionsPayload,
-} from "./contract";
