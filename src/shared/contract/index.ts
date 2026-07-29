@@ -3,6 +3,7 @@ import type {
   LeagueDetail,
   LeagueTeam,
   ManagerLeague,
+  ProjectedRank,
   SyncProgress,
   SyncSummary,
 } from "@/shared/manager";
@@ -125,6 +126,31 @@ export type ManagerPlayersPayload = {
   rosters: Record<string, string[]>;
   /** Player ids → name/position/team, for every id above the cache knows. */
   players: Record<string, PlayerSummary>;
+};
+
+/**
+ * `GET /api/user/[username]/ranks` — where the manager's roster sits in each of
+ * their leagues when its teams are ordered by projected points
+ * (`weekly_optimal_points`, under each league's own scoring).
+ *
+ * Read-only like the sibling `players` route: it ranks over the rosters and
+ * projections the background work has stored, so a manager the leagues stream
+ * has never run for gets `{}` rather than a sync of their own.
+ */
+export type ManagerRanksPayload = {
+  season: string;
+  /**
+   * Weeks the totals behind every rank cover, ascending — the horizon travels
+   * with the number here as it does everywhere else. Empty when nothing remains
+   * to project, in which case `ranks` is empty too.
+   */
+  weeks: number[];
+  /**
+   * League id → the manager's projected rank there. A league is absent when it
+   * can't be ranked: the manager holds no roster in it, its rosters or settings
+   * aren't cached, or nothing in it is projected yet (pre-draft).
+   */
+  ranks: Record<string, ProjectedRank>;
 };
 
 /**

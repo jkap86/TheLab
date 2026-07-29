@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-// Imported directly rather than through the projections barrel, which would
-// pull `pg`-backed code into the client bundle — see `slots.ts`.
+// Both imported directly rather than through their barrels, which would pull
+// `pg`-backed code into the client bundle — see `slots.ts` and `rank.ts`.
+import { orderByProjectedPoints } from "@/shared/manager/rank";
 import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 
 import { useLeagueDetail } from "../hooks/use-league-detail";
@@ -34,9 +35,26 @@ export function LeagueDetailPanel({ leagueId }: { leagueId: string }) {
 }
 
 function Panel({ data }: { data: LeagueDetailResult }) {
-  const [selectedId, setSelectedId] = useState<number>(data.teams[0].roster_id);
-  const selected =
-    data.teams.find((t) => t.roster_id === selectedId) ?? data.teams[0];
+  // Projected-points order, not standings order — the table's own Proj column
+  // is what the rows are ranked on, so the numbers descend down the page and
+  // the row's position agrees with the rank chip on the collapsed card. Ties
+  // and teams with no projection (or a league with none at all) fall back to
+  // the standings order the server sent.
+  const teams = useMemo(
+    () =>
+      orderByProjectedPoints(
+        data.teams,
+        data.outlook
+          ? new Map(
+              data.outlook.teams.map((t) => [t.roster_id, t.weekly_optimal_points]),
+            )
+          : null,
+      ),
+    [data],
+  );
+
+  const [selectedId, setSelectedId] = useState<number>(teams[0].roster_id);
+  const selected = teams.find((t) => t.roster_id === selectedId) ?? teams[0];
 
   // Even 50/50 split at every width; the children use @lg container queries to
   // shed non-essential columns once each half gets tight.
@@ -44,7 +62,7 @@ function Panel({ data }: { data: LeagueDetailResult }) {
     <div className="@container">
       <div className="grid grid-cols-2 gap-2 @lg:gap-4">
         <Standings
-          teams={data.teams}
+          teams={teams}
           outlook={data.outlook}
           selectedId={selected.roster_id}
           onSelect={setSelectedId}

@@ -45,10 +45,10 @@ src/shared/    Domain logic, one folder per concern.
   manager and syncing their leagues is what the user routes are *for*, which is
   why the leagues one streams progress, and the pick tracker follows a draft
   *while it happens*, for any league id whether a sync has seen it or not; a
-  cached copy would be behind the room. `…/players` shares the user prefix and
-  is *not* an exception: it reads the rosters that stream writes, so a
-  manager it has never run for gets an empty answer rather than a second sync of
-  their own.) Where a read needs to know what week it is, derive it from
+  cached copy would be behind the room. `…/players` and `…/ranks` share the
+  user prefix and are *not* exceptions: they read the rosters that stream
+  writes, so a manager it has never run for gets an empty answer rather than a
+  second sync of their own.) Where a read needs to know what week it is, derive it from
   stored data too: `projections/queries`
   takes the weeks still ahead from `game_date` rather than `state/nfl`, so it can
   only ever name weeks that are actually here to read.
@@ -254,6 +254,29 @@ stops holding, a comment saying it does would not have caught it.
   several hundred rows long. Both numbers are kept — the count is what's actually
   held and compares between players, the share is what it means for a portfolio
   and moves when the filters do.
+- **The expanded standings are ordered by projected points, not by record.**
+  What the panel adds over Sleeper is the projection, so the Proj column is the
+  one the rows are ranked on — the numbers descend down the page, and the `#`
+  column numbers the same ranking the collapsed card's chip quotes. The record
+  isn't lost, it keeps its grid column on every row's second line. The sort
+  (`orderByProjectedPoints` in `shared/manager/rank.ts`, pure and tested) is
+  stable over the standings order the server sends, so ties, unprojected teams
+  and a league with no outlook at all degrade to the standings rather than to a
+  shuffle.
+- **The collapsed card's rank chip comes from one batch route,
+  `/api/user/[username]/ranks`.** A collapsed league costs no request — the
+  panel loads on expand — and a hundred cards each fetching a league detail to
+  learn one number would undo that; ranking also needs every *other* team's
+  total, which is why the client can't derive it from anything it already has.
+  The batch (`getManagerLeagueRosters` → `getWeeklyTeamPoints`) reads the
+  remaining weeks, stat lines and positions once for the union of every roster
+  and runs only what genuinely differs per league — scoring and lineup solves —
+  so it isn't `getLeagueOutlook` in a loop. The number ranked is
+  `weekly_optimal_points` under each league's own scoring, through the same
+  pure modules as the panel's Proj column, so chip and table can't disagree.
+  Ties share the better rank (two at 250.0 are both #1), and a league where
+  every total is zero gets *no* rank — pre-draft, "1st of 12" would dress an
+  empty league up as a lead (`projectedRank`, tested).
 - **A list of managers is labelled by username, a team by team name.** `ui.tsx`
   has both — `managerLabel` (display_name → team_name → roster number) and
   `teamLabel` (the reverse) — and the column heading says which one it is.

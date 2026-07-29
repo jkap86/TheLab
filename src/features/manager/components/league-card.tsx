@@ -2,11 +2,26 @@
 
 import { useState } from "react";
 
-import { formatRecord } from "../format";
-import type { ManagerLeague } from "../types";
+import { formatPoints, formatRecord, formatWeekRange } from "../format";
+import type { ManagerLeague, ProjectedRank } from "../types";
 import { LeagueDetailPanel } from "./league-detail-panel";
 
-export function LeagueCard({ league }: { league: ManagerLeague }) {
+export function LeagueCard({
+  league,
+  rank,
+  weeks,
+}: {
+  league: ManagerLeague;
+  /**
+   * Where this manager sits when the league's teams are ordered by projected
+   * points — null while the ranks are loading, and for a league that can't be
+   * ranked (nothing projected yet, or no roster held there). The chip simply
+   * isn't shown then: an absent bonus, not an error.
+   */
+  rank: ProjectedRank | null;
+  /** The horizon behind `rank`, so the chip can say what its number covers. */
+  weeks: number[];
+}) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -27,6 +42,17 @@ export function LeagueCard({ league }: { league: ManagerLeague }) {
             {league.record && (
               <span className="rounded-md bg-foreground/5 px-2 py-0.5 text-sm font-medium tabular-nums text-foreground/80">
                 {formatRecord(league.record)}
+              </span>
+            )}
+            {rank && (
+              <span
+                title={`${formatPoints(rank.points)} projected · best lineup each week · ${formatWeekRange(weeks)}`}
+                className="rounded-md bg-foreground/5 px-2 py-0.5 text-sm text-foreground/55"
+              >
+                <span className="font-semibold tabular-nums text-foreground/85">
+                  #{rank.rank}
+                </span>{" "}
+                of {rank.of} · proj
               </span>
             )}
             <Stat value={league.total_rosters} label="teams" />

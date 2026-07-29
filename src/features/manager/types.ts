@@ -4,8 +4,9 @@ import type {
   LeaguesResultMessage,
   LeagueTeamPayload,
   ManagerPlayersPayload,
+  ManagerRanksPayload,
 } from "@/shared/contract";
-import type { ManagerLeague } from "@/shared/manager";
+import type { ManagerLeague, ProjectedRank } from "@/shared/manager";
 import type { PlayerSummary } from "@/shared/players";
 import type {
   LeagueOutlook,
@@ -28,6 +29,7 @@ export type {
   PlayerOutlook,
   PlayerSplit,
   PlayerSummary,
+  ProjectedRank,
   TeamOutlook,
 };
 
@@ -45,3 +47,6 @@ export type SyncProgress = LeaguesProgressMessage;
 
 /** The `/api/user/[username]/players` response the shares view counts over. */
 export type ManagerPlayersResult = ManagerPlayersPayload;
+
+/** The `/api/user/[username]/ranks` response the league cards annotate from. */
+export type ManagerRanksResult = ManagerRanksPayload;

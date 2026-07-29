@@ -1,7 +1,8 @@
 import { getFantasyPositions } from "@/shared/players";
 
 import { aggregateWeeklyStats } from "./aggregate";
-import { compareLineup } from "./optimal";
+import type { PlayerWeekStats } from "./aggregate";
+import { compareLineup, startingSlots } from "./optimal";
 import type { LineupComparison, RosterPlayer } from "./optimal";
 import {
   getProjectedStatKeys,
@@ -9,6 +10,7 @@ import {
   listPlayerWeekStats,
 } from "./queries";
 import { derivedScoring, scoreProjection, unprojectedScoring } from "./score";
+import { SLOT_POSITIONS } from "./slots";
 import { groupWeeklyPoints, weeklyLineupSplit, weeklyRosters } from "./weekly";
 import type { PlayerSplit } from "./weekly";
 
@@ -238,4 +240,111 @@ export async function getLeagueOutlook({
     unprojected_scoring: unprojectedScoring(scoringSettings, statKeys),
     derived_scoring: derivedScoring(scoringSettings),
   };
+}
+
+/** What {@link getWeeklyTeamPoints} needs from one league. */
+export type LeagueTeamsInput = {
+  league_id: string;
+  rosterPositions: readonly string[] | null;
+  scoringSettings: Record<string, number> | null;
+  teams: readonly OutlookRoster[];
+};
+
+export type WeeklyTeamPoints = {
+  /** Weeks the totals cover, ascending — empty when nothing remains to play. */
+  weeks: number[];
+  /**
+   * League id → roster id → that team's `weekly_optimal_points`. A league that
+   * can't be projected (no slots or scoring on file, no rosters) is absent.
+   */
+  points: Map<string, Map<number, number>>;
+};
+
+/**
+ * `weekly_optimal_points` for every team across many leagues in one pass — the
+ * one number {@link getLeagueOutlook} computes that is worth having for a whole
+ * account at once, because ranking a roster means projecting everyone else's.
+ *
+ * A separate entry point rather than `getLeagueOutlook` in a loop because the
+ * loop would repeat the reads a hundred-plus times per request: the remaining
+ * weeks, the stat lines and the positions are fetched once for the union of
+ * every league's rosters, and only the scoring and the lineup solves — the
+ * parts that genuinely differ per league — run per league. Everything skipped
+ * here (aggregates, splits, current-lineup diffs, scoring caveats) is a
+ * per-panel answer the league detail route already serves.
+ */
+export async function getWeeklyTeamPoints({
+  season,
+  leagues,
+}: {
+  season: string;
+  leagues: readonly LeagueTeamsInput[];
+}): Promise<WeeklyTeamPoints> {
+  const projectable = leagues.filter(
+    (l) => l.rosterPositions?.length && l.scoringSettings && l.teams.length > 0,
+  );
+  if (projectable.length === 0) return { weeks: [], points: new Map() };
+
+  const weeks = await getRemainingWeeks(season);
+  if (weeks.length === 0) return { weeks: [], points: new Map() };
+
+  const playerIds = [
+    ...new Set(projectable.flatMap((l) => l.teams.flatMap((t) => t.players))),
+  ].filter(Boolean);
+
+  const [stats, positions] = await Promise.all([
+    listPlayerWeekStats({ season, weeks, playerIds }),
+    getFantasyPositions(playerIds),
+  ]);
+
+  // Bucketed by player once, so each league scores its own rosters' rows rather
+  // than re-scanning the whole account's union per league.
+  const rowsByPlayer = new Map<string, PlayerWeekStats[]>();
+  for (const row of stats) {
+    let rows = rowsByPlayer.get(row.player_id);
+    if (!rows) rowsByPlayer.set(row.player_id, (rows = []));
+    rows.push(row);
+  }
+
+  const points = new Map<string, Map<number, number>>();
+  for (const league of projectable) {
+    const scoring = league.scoringSettings!;
+    const leaguePlayers = [
+      ...new Set(league.teams.flatMap((t) => t.players)),
+    ].filter(Boolean);
+    const weeklyPoints = groupWeeklyPoints(
+      leaguePlayers.flatMap((id) => rowsByPlayer.get(id) ?? []),
+      (s) => scoreProjection(s, scoring),
+    );
+
+    // The recognised starting slots, as compareLineup derives them — an unknown
+    // slot is left out of the total here the same way it is left out there.
+    const slots = startingSlots(league.rosterPositions!).filter(
+      (slot) => slot in SLOT_POSITIONS,
+    );
+
+    const byTeam = new Map<number, number>();
+    for (const team of league.teams) {
+      // IR and taxi are candidates for nobody's lineup, as in getLeagueOutlook.
+      const unavailable = new Set([...team.reserve, ...team.taxi]);
+      const candidates: RosterPlayer[] = team.players
+        .filter((id) => id && !unavailable.has(id))
+        .map((id) => ({
+          player_id: id,
+          positions: positions[id] ?? [],
+          // Never read: weeklyRosters re-scores every candidate against each
+          // week's own projection, and the aggregate total isn't needed here.
+          points: 0,
+        }));
+
+      byTeam.set(
+        team.roster_id,
+        weeklyLineupSplit(slots, weeklyRosters(candidates, weeks, weeklyPoints))
+          .points,
+      );
+    }
+    points.set(league.league_id, byTeam);
+  }
+
+  return { weeks, points };
 }

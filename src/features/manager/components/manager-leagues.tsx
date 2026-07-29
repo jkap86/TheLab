@@ -10,6 +10,7 @@ import {
   type LeagueFilters,
 } from "../filters";
 import { useManagerLeagues } from "../hooks/use-manager-leagues";
+import { useManagerRanks } from "../hooks/use-manager-ranks";
 import { LeagueCard } from "./league-card";
 import { LeaguesFilters } from "./manager-leagues-filters";
 import { LeaguesHeader } from "./manager-leagues-header";
@@ -22,6 +23,9 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   );
 
   const leagues = data?.leagues;
+  // The card chips are a bonus on top of the list, so a ranks fetch that fails
+  // costs the chips and nothing else — the error is deliberately unused.
+  const { data: ranks } = useManagerRanks(searched, leagues ?? null);
   const filtered = useMemo(
     () => (leagues ?? []).filter((league) => matchesFilters(league, filters)),
     [leagues, filters],
@@ -68,7 +72,12 @@ export function ManagerLeagues({ searched }: { searched: string }) {
           ) : (
             <ul className="flex flex-col gap-4 w-full">
               {filtered.map((league) => (
-                <LeagueCard key={league.league_id} league={league} />
+                <LeagueCard
+                  key={league.league_id}
+                  league={league}
+                  rank={ranks?.ranks[league.league_id] ?? null}
+                  weeks={ranks?.weeks ?? []}
+                />
               ))}
             </ul>
           )}

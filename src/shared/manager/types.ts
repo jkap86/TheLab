@@ -45,6 +45,28 @@ export type LeagueTeam = {
 };
 
 /**
+ * One league's slots, scoring and every team's roster — what projecting all of
+ * a manager's leagues in one pass needs, and nothing more: no standings, no
+ * member names, none of what {@link getLeagueDetail} resolves for a single
+ * league's panel. Read by {@link getManagerLeagueRosters}.
+ */
+export type LeagueRosterSet = {
+  league_id: string;
+  /** Ordered starting-slot + bench labels (e.g. ["QB","RB","FLEX","BN"]). */
+  roster_positions: string[] | null;
+  /** Scoring rules keyed by stat, as stored by Sleeper. */
+  scoring_settings: Record<string, number> | null;
+  teams: {
+    roster_id: number;
+    owner_id: string | null;
+    players: string[];
+    starters: string[];
+    reserve: string[];
+    taxi: string[];
+  }[];
+};
+
+/**
  * A league's rosters + standings for the expanded league view. `teams` is
  * pre-sorted into standings order (wins, then points for). Read by
  * {@link getLeagueDetail}.

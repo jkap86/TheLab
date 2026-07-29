@@ -16,11 +16,19 @@ export type { CrawlSummary, CrawlOptions } from "./crawl";
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
   getLeagueDetail,
+  getManagerLeagueRosters,
   getManagerLeagues,
   getManagerRosters,
   getManagerSyncedAt,
 } from "./queries";
-export type { LeagueDetail, LeagueTeam, ManagerLeague } from "./types";
+export type {
+  LeagueDetail,
+  LeagueRosterSet,
+  LeagueTeam,
+  ManagerLeague,
+} from "./types";
+export { orderByProjectedPoints, projectedRank } from "./rank";
+export type { ProjectedRank } from "./rank";
 export { resolveManagerUser, toUserInfo } from "./resolve";
 export type { ResolvedManager } from "./resolve";
 export { getDraftAdp } from "./adp";

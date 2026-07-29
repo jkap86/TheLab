@@ -1,8 +1,13 @@
 import { pool } from "@/shared/db";
 
-import type { LeagueDetail, LeagueTeam, ManagerLeague } from "./types";
+import type {
+  LeagueDetail,
+  LeagueRosterSet,
+  LeagueTeam,
+  ManagerLeague,
+} from "./types";
 
-export type { LeagueDetail, LeagueTeam, ManagerLeague };
+export type { LeagueDetail, LeagueRosterSet, LeagueTeam, ManagerLeague };
 
 type Row = {
   league_id: string;
@@ -117,6 +122,75 @@ export async function getManagerRosters(
     out[r.league_id] = [...(out[r.league_id] ?? []), ...(r.players ?? [])];
   }
   return out;
+}
+
+/**
+ * Every team's roster in each of the manager's leagues for a season, with the
+ * league's slots and scoring — the batch input for projecting them all at once.
+ *
+ * Two queries for the whole account rather than two per league, because the
+ * caller is ranking the manager across a hundred-plus leagues in one request.
+ * A league whose rosters aren't cached yet comes back with no teams, which
+ * downstream reads as "nothing to rank" rather than an error — the leagues
+ * stream is what fills rosters in, same as {@link getManagerRosters}.
+ */
+export async function getManagerLeagueRosters(
+  userId: string,
+  season: string,
+): Promise<LeagueRosterSet[]> {
+  const { rows: leagues } = await pool.query<{
+    league_id: string;
+    roster_positions: string[] | null;
+    scoring_settings: Record<string, number> | null;
+  }>(
+    `SELECT l.league_id, l.roster_positions, l.scoring_settings
+       FROM leagues l
+       JOIN league_users lu
+         ON lu.league_id = l.league_id AND lu.user_id = $1
+      WHERE l.season = $2`,
+    [userId, season],
+  );
+  if (leagues.length === 0) return [];
+
+  const byLeague = new Map<string, LeagueRosterSet>(
+    leagues.map((l) => [
+      l.league_id,
+      {
+        league_id: l.league_id,
+        roster_positions: l.roster_positions,
+        scoring_settings: l.scoring_settings,
+        teams: [],
+      },
+    ]),
+  );
+
+  const { rows: rosters } = await pool.query<{
+    league_id: string;
+    roster_id: number;
+    owner_id: string | null;
+    players: string[] | null;
+    starters: string[] | null;
+    reserve: string[] | null;
+    taxi: string[] | null;
+  }>(
+    `SELECT league_id, roster_id, owner_id, players, starters, reserve, taxi
+       FROM rosters
+      WHERE league_id = ANY($1::varchar[])`,
+    [[...byLeague.keys()]],
+  );
+
+  for (const r of rosters) {
+    byLeague.get(r.league_id)?.teams.push({
+      roster_id: r.roster_id,
+      owner_id: r.owner_id,
+      players: r.players ?? [],
+      starters: r.starters ?? [],
+      reserve: r.reserve ?? [],
+      taxi: r.taxi ?? [],
+    });
+  }
+
+  return [...byLeague.values()];
 }
 
 type TeamRow = {

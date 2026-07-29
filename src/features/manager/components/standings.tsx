@@ -6,8 +6,10 @@ import { managerLabel, TeamAvatar } from "./ui";
 type TeamProjection = { points: number; bench: number };
 
 /**
- * The league table, in standings order. Selecting a row drives the roster panel
- * beside it.
+ * The league table, rendered in the order given — the panel passes teams in
+ * projected-points order, falling back to standings order where projections
+ * run out, so the `#` column numbers the projected ranking the collapsed
+ * card's chip quotes. Selecting a row drives the roster panel beside it.
  *
  * Two lines per row. The team name gets the first one to itself, because at a
  * 50/50 split it was the thing losing every fight for horizontal space — a name
