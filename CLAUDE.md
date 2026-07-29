@@ -232,6 +232,18 @@ stops holding, a comment saying it does would not have caught it.
   use `white` — it was the old convention and has been fully migrated.
 - Wrap page content in `<PageShell>` rather than repeating the container
   classes.
+- **The tools page's account section resolves in place; the other two searches
+  navigate.** `ManagerSearch` and `PicktrackerSearch` hand what you typed to a
+  route and let the destination resolve it, so a typo is only discovered as a
+  failed page. `UserLookup` *is* the destination: it asks `/api/user/[username]`
+  who that is and shows the avatar and canonical `@username` back, because
+  Sleeper resolves a user id as readily as a name — what you typed is not proof
+  of who you meant, which is what makes the extra request worth making before a
+  tool is picked. A resubmit aborts the lookup still in flight, or the slower
+  response wins whichever was asked for last. The resolved user lives in
+  component state and nothing else reads it yet: a reload clears it, and handing
+  that identity to the tools below is the next step, not something the section
+  already does.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
