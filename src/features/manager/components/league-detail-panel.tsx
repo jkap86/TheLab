@@ -69,6 +69,7 @@ function Panel({ data }: { data: LeagueDetailResult }) {
         />
         <RosterDetail
           team={selected}
+          teams={teams}
           players={data.players}
           rosterPositions={data.roster_positions}
           outlook={data.outlook}

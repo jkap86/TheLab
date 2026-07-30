@@ -13,11 +13,9 @@
 
 import type { RosterPlayer } from "./optimal.ts";
 
-/** What deciding a team's candidates needs of it: the roster and its stashes. */
+/** What deciding a team's candidates needs of it: the roster. */
 export type CandidateRoster = {
   players: readonly string[];
-  reserve: readonly string[];
-  taxi: readonly string[];
 };
 
 /** What deciding whether a league can be projected needs of it. */
@@ -71,11 +69,15 @@ export function rosterPlayerIds(
 /**
  * The players eligible for this team's lineup, scored by `points`.
  *
- * IR and taxi are candidates for nobody — Sleeper won't let them start, so
- * offering them would be offering an illegal lineup. That exclusion is the whole
- * reason this is a function rather than a `map`: it is the difference between a
- * roster and a set of lineup candidates, and every entry point in `./outlook`
- * depends on it holding.
+ * Every rostered player is a candidate, IR and taxi included: this tool treats a
+ * stashed player as bench depth that could be started rather than as unavailable,
+ * so a strong player parked on IR or the taxi squad is ranked against the rest of
+ * the bench like any other. (Sleeper itself won't seat one without a roster move
+ * first, so the lineup this produces is "best available once you activate who you
+ * need", not always one you can set in a single click.) `positions` is what makes
+ * this a function rather than a `map` — it turns a roster into scored,
+ * slot-eligible candidates — and every entry point in `./outlook` shares it so
+ * they can't disagree about who is startable.
  *
  * `points` is supplied per caller because the three want different numbers off
  * the same roster — a season aggregate, a per-league score of that aggregate, or
@@ -91,9 +93,8 @@ export function lineupCandidates(
   positions: Record<string, string[]>,
   points: (playerId: string) => number,
 ): RosterPlayer[] {
-  const unavailable = new Set([...team.reserve, ...team.taxi]);
   return team.players
-    .filter((id) => id && !unavailable.has(id))
+    .filter((id) => id)
     .map((id) => ({
       player_id: id,
       positions: positions[id] ?? [],

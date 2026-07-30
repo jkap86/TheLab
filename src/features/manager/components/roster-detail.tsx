@@ -13,8 +13,9 @@ import type {
   PlayerSummary,
   TeamOutlook,
 } from "../types";
+import { DraftPicks } from "./draft-picks";
 import { PlayerRow } from "./player-row";
-import { NO_NUMBERS, SPLIT_LAYOUT, TOTAL_LAYOUT } from "./roster-layout";
+import { NO_NUMBERS, SPLIT_LAYOUT } from "./roster-layout";
 import type { SectionLayout } from "./roster-layout";
 import { teamLabel, TeamAvatar } from "./ui";
 
@@ -22,24 +23,29 @@ import { teamLabel, TeamAvatar } from "./ui";
 type SlotRow = { slot: string; player_id: string };
 
 /**
- * One team's full roster, grouped into starters, bench, IR and taxi, with each
- * player's projected points for the rest of the season.
+ * One team's full roster — starters and bench — plus its future draft picks, with
+ * each player's projected points for the rest of the season.
  *
  * The starters section shows the *best* lineup available to the team, not what
  * it is currently starting (see `outlook`), and the bench follows: a player the
  * optimal lineup starts is listed as a starter and highlighted, one it sits is
- * dimmed on the bench, so the two lists always read as one lineup.
+ * dimmed on the bench, so the two lists always read as one lineup. IR and taxi
+ * players aren't broken out — they're treated as bench depth (candidates for the
+ * lineup like anyone on the bench), so they simply sit in the bench list.
  *
  * Below the `@lg` container width the record drops onto its own line under the
  * team name instead of competing with it for horizontal space.
  */
 export function RosterDetail({
   team,
+  teams,
   players,
   rosterPositions,
   outlook,
 }: {
   team: LeagueTeamView;
+  /** Every team in the league, for naming the roster an acquired pick came from. */
+  teams: LeagueTeamView[];
   players: Record<string, PlayerSummary>;
   rosterPositions: string[] | null;
   outlook: LeagueOutlook | null;
@@ -47,6 +53,11 @@ export function RosterDetail({
   const teamOutlook = useMemo(
     () => outlook?.teams.find((t) => t.roster_id === team.roster_id) ?? null,
     [outlook, team.roster_id],
+  );
+
+  const teamsById = useMemo(
+    () => new Map(teams.map((t) => [t.roster_id, t])),
+    [teams],
   );
 
   // Starters are positionally aligned with the league's non-bench slots. The
@@ -63,12 +74,11 @@ export function RosterDetail({
   }, [teamOutlook, rosterPositions, team.starters]);
 
   const bench = useMemo(() => {
-    const onField = new Set([
-      ...starters.map((s) => s.player_id),
-      ...team.reserve,
-      ...team.taxi,
-    ]);
-    const rest = team.players.filter((id) => id && !onField.has(id));
+    // Everyone not in the optimal starting lineup, IR and taxi included: those
+    // stashes are candidates for the lineup too now, so the ones that don't make
+    // it belong here rather than in sections of their own.
+    const starting = new Set(starters.map((s) => s.player_id));
+    const rest = team.players.filter((id) => id && !starting.has(id));
 
     // Best available first once there are projections to sort on: the point of
     // the bench in a lineup tool is who you might promote off it.
@@ -84,7 +94,6 @@ export function RosterDetail({
   // "start / bench" label over a column of em dashes promises a breakdown that
   // isn't there.
   const lineupLayout = horizon > 0 ? SPLIT_LAYOUT : NO_NUMBERS;
-  const stashLayout = horizon > 0 ? TOTAL_LAYOUT : NO_NUMBERS;
 
   return (
     <div className="rounded-lg border border-foreground/10 bg-foreground/[0.02] p-2.5 @lg:p-4">
@@ -153,41 +162,11 @@ export function RosterDetail({
         </RosterSection>
       )}
 
-      {/* IR and taxi still show a projection — it is what a stash decision turns
-          on — but they are never candidates for the lineup above, since Sleeper
-          won't let them start. That is also why they get the season total rather
-          than the split: a player who cannot start has no starting half. */}
-      {team.reserve.length > 0 && (
-        <RosterSection title="IR" layout={stashLayout}>
-          {team.reserve.map((id) => (
-            <PlayerRow
-              key={id}
-              player={players[id]}
-              playerId={id}
-              slot="IR"
-              outlook={outlook?.players[id]}
-              layout={stashLayout}
-              horizon={horizon}
-            />
-          ))}
-        </RosterSection>
-      )}
-
-      {team.taxi.length > 0 && (
-        <RosterSection title="Taxi" layout={stashLayout}>
-          {team.taxi.map((id) => (
-            <PlayerRow
-              key={id}
-              player={players[id]}
-              playerId={id}
-              slot="TX"
-              outlook={outlook?.players[id]}
-              layout={stashLayout}
-              horizon={horizon}
-            />
-          ))}
-        </RosterSection>
-      )}
+      <DraftPicks
+        picks={team.picks}
+        rosterId={team.roster_id}
+        teamsById={teamsById}
+      />
     </div>
   );
 }

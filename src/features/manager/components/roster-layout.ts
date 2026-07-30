@@ -36,9 +36,3 @@ export const SPLIT_LAYOUT: SectionLayout = {
   nameSpan: "col-span-3",
   columns: ["start", "bench"],
 };
-
-export const TOTAL_LAYOUT: SectionLayout = {
-  grid: "grid-cols-[1.75rem_minmax(0,1fr)_3rem] @lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem]",
-  nameSpan: "col-span-2",
-  columns: ["proj"],
-};

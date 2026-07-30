@@ -14,7 +14,12 @@ import type {
   ManagerPlayersPayload,
   ManagerRanksPayload,
 } from "@/shared/contract";
-import type { LeagueRank, ManagerLeague, ProjectedRank } from "@/shared/manager";
+import type {
+  DraftPickAsset,
+  LeagueRank,
+  ManagerLeague,
+  ProjectedRank,
+} from "@/shared/manager";
 import type { PlayerSummary } from "@/shared/players";
 import type {
   LeagueOutlook,
@@ -34,6 +39,7 @@ import type {
 export type {
   AdpPayload,
   AdpPlayerPayload,
+  DraftPickAsset,
   LeagueKtcEntry,
   LeagueKtcValue,
   LeagueOutlook,
