@@ -417,14 +417,22 @@ stops holding, a comment saying it does would not have caught it.
   `useLeagueFilters` throws outside that provider rather than falling back to the
   defaults, since a silent fallback is a filter bar that renders fine and quietly
   moves nothing.
-- **The Players tab has a second, separate set of filters, and sharing state
-  between the two would be a bug.** The header's `LeagueFilters` narrow *which of
-  this manager's leagues* a share is counted over; the ADP bar's `AdpControls`
-  narrow *which drafts in the database* the average is taken from. One is about
-  the manager, the other about the market, and they are only adjacent on screen —
-  a dynasty filter on the header means "count my dynasty leagues", the same word
-  on the ADP bar means "average dynasty drafts, including strangers'". They stay
-  independent for that reason. "Match a league" is the one bridge, and it is
+- **The manager tabs carry two independent filter sets, and sharing state between
+  them would be a bug.** The header's `LeagueFilters` narrow *which of this
+  manager's leagues* a share is counted over; the ADP bar's `AdpControls` narrow
+  *which drafts in the database* the average is taken from. One is about the
+  manager, the other about the market, and they are only adjacent on screen — a
+  dynasty filter on the header means "count my dynasty leagues", the same word on
+  the ADP bar means "average dynasty drafts, including strangers'". They stay
+  independent for that reason. Both are now provided from the same place —
+  `AdpControlsProvider` sits beside `LeagueFiltersProvider` in the manager layout,
+  reset per manager by the same subtree key — because the ADP bar stopped being a
+  Players-tab control: its board filters drive that tab's per-player ADP *and* its
+  steepness drives the Leagues tab's team value, so a curve chosen on one tab has
+  to survive the trip to the other. Note the asymmetry with the league filters:
+  `AdpControls` starts as **null**, because its default depends on the viewed
+  season and the layout doesn't know it — each tab seeds it through
+  `useAdpControlsFor`. Shared *provider*, still two separate selections. "Match a league" is the one bridge, and it is
   deliberately partial: it seeds the four *league settings* from one of the
   manager's leagues, while season and draft type stay manual (they aren't league
   settings at all) and so does superflex — that lives in `roster_positions`, which
@@ -546,6 +554,28 @@ stops holding, a comment saying it does would not have caught it.
   the module keeps the pure-and-tested bar its neighbours `shares` and `filters`
   hold: everything from `./types` arrives as an erased `import type`, so the
   accessors test without a fetch (`league-metrics.test.ts`).
+- **There are three metric catalogues, one per grain, and that is the axis they
+  divide on — not the screen they appear on.** `ColumnPicker` is the shared
+  control; what differs is what a row *is*:
+
+  | Module | Grain | Where |
+  | --- | --- | --- |
+  | `league-metrics` | one league | collapsed card |
+  | `standings-metrics` | one team | expanded panel's standings |
+  | `roster-metrics` | one player | expanded panel's roster list |
+
+  Put a metric where its subject lives, not where you happen to want to see it.
+  KTC and ADP appear in all three and mean something different each time — a
+  whole roster summed in `standings-metrics`, a single player's price in
+  `roster-metrics` — which is why the same lens is not one shared metric. The
+  other split worth keeping: only `league-metrics` holds `rank` cells, because
+  only the collapsed card places a league against its peers; the standings and
+  roster panels are already ranked lists, so their columns are plain values and a
+  rank in them would be a second ordering competing with the rows. All three hold
+  the same pure-and-tested bar, and all three are *client* modules under
+  `features/` — they format for display, so they belong beside the components,
+  and their `./format.ts` import is relative with an explicit extension for the
+  usual test-runner reason.
 - **The rank metrics come from one batch route,
   `/api/user/[username]/ranks`.** A collapsed league costs no request — the
   panel loads on expand — and a hundred cards each fetching a league detail to
