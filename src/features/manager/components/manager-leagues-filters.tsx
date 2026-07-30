@@ -24,7 +24,9 @@ export function LeaguesFilters({
   onChange: (filters: LeagueFilters) => void;
 }) {
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3">
+    // The second zone of the manager header card: a hairline below the identity
+    // row, aligned to its left padding so the labels sit under the avatar.
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 border-t border-foreground/10 py-3 pl-6 pr-5">
       <FilterGroup label="Type">
         {TYPE_OPTIONS.map((opt) => (
           <SegmentButton

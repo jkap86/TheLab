@@ -37,16 +37,12 @@ export function ManagerLeagues({ searched }: { searched: string }) {
       view={view}
       active="leagues"
       count={
-        <span className="text-lg font-medium">
-          {showing === total ? (
-            <>
-              {total} league{total === 1 ? "" : "s"}
-            </>
-          ) : (
-            <>
-              {showing} of {total} league{total === 1 ? "" : "s"}
-            </>
-          )}
+        <span className="text-sm text-foreground/60">
+          <b className="text-base font-bold text-foreground">
+            {showing === total ? total : showing}
+          </b>{" "}
+          {showing === total ? "" : `of ${total} `}league
+          {total === 1 ? "" : "s"}
         </span>
       }
     >

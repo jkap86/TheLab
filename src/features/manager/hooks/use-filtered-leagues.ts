@@ -1,12 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import {
-  DEFAULT_LEAGUE_FILTERS,
-  matchesFilters,
-  type LeagueFilters,
-} from "../filters";
+import { matchesFilters } from "../filters";
+import { useLeagueFilters } from "../filters-context";
 import { useManagerLeagues } from "./use-manager-leagues";
 
 /**
@@ -22,10 +19,14 @@ import { useManagerLeagues } from "./use-manager-leagues";
  * it has to be a value the page can read, not one buried in the chrome. The
  * chrome that renders around it lives once in {@link LeaguesViewLayout}; this is
  * the state behind that chrome.
+ *
+ * The filter state itself lives one level up, in the manager layout's
+ * {@link LeagueFiltersProvider}, so the selection is shared across the three tabs
+ * rather than reset on each navigation between them.
  */
 export function useFilteredLeagues(searched: string) {
   const stream = useManagerLeagues(searched);
-  const [filters, setFilters] = useState<LeagueFilters>(DEFAULT_LEAGUE_FILTERS);
+  const { filters, setFilters } = useLeagueFilters();
 
   const leagues = stream.data?.leagues;
   const filtered = useMemo(

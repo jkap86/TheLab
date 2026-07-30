@@ -12,8 +12,8 @@ import { PanelMessage } from "./ui";
 
 /**
  * The chrome every `/manager/[searched]/…` tab shares: the wide shell, the
- * cold-load state, the header with its count line, the filter bar, and the note
- * that stands in when the filters match nothing.
+ * cold-load state, the header — its count line and the filter bar folded into it
+ * — and the note that stands in when the filters match nothing.
  *
  * The three tabs were three line-for-line copies of this scaffold — one edit away
  * from disagreeing on how a cold load, a failed refresh or an empty account
@@ -57,6 +57,7 @@ export function LeaguesViewLayout({
   }
 
   const { user, season, summary } = data;
+  const hasLeagues = data.leagues.length > 0;
 
   return (
     <PageShell width="wide">
@@ -69,21 +70,21 @@ export function LeaguesViewLayout({
         progress={progress}
         summary={summary}
         refreshError={error}
+        filters={
+          hasLeagues ? (
+            <LeaguesFilters filters={filters} onChange={setFilters} />
+          ) : undefined
+        }
       >
         {count}
       </ManagerHeader>
 
-      {data.leagues.length === 0 ? (
+      {!hasLeagues ? (
         <EmptyState season={season} />
+      ) : filtered.length === 0 ? (
+        <PanelMessage>No leagues match these filters.</PanelMessage>
       ) : (
-        <>
-          <LeaguesFilters filters={filters} onChange={setFilters} />
-          {filtered.length === 0 ? (
-            <PanelMessage>No leagues match these filters.</PanelMessage>
-          ) : (
-            children
-          )}
-        </>
+        children
       )}
     </PageShell>
   );
