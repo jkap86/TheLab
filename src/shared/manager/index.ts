@@ -33,6 +33,8 @@ export type {
 } from "./types";
 export { orderByProjectedPoints, projectedRank, rankOf, standingScore } from "./rank";
 export type { LeagueRank, ProjectedRank } from "./rank";
+export { ownedDraftPicks } from "./draft-picks";
+export type { DraftPickAsset, TradedPick } from "./draft-picks";
 export { resolveManagerUser, toUserInfo } from "./resolve";
 export type { ResolvedManager } from "./resolve";
 export { getDraftAdp, getDraftAdpForPlayers } from "./adp";

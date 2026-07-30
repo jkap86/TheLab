@@ -35,6 +35,27 @@ export function formatValue(value: number): string {
 }
 
 /**
+ * A number as an ordinal, e.g. `1` → `"1st"`, `2` → `"2nd"`, `13` → `"13th"`.
+ *
+ * How draft picks are spoken about — "a 2026 1st", "their 3rd" — so it labels a
+ * pick's round that way rather than as a bare number.
+ */
+export function ordinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
+/**
  * The week horizon a projection covers, e.g. `"Wk 3–5"`, `"Wk 3"`, `"Wk 3, 5"`.
  *
  * Worth the few lines because the horizon is not what a reader assumes: the sync

@@ -10,8 +10,6 @@ import type { CandidateRoster } from "./candidates.ts";
 
 const roster = (team: Partial<CandidateRoster>): CandidateRoster => ({
   players: [],
-  reserve: [],
-  taxi: [],
   ...team,
 });
 
@@ -30,27 +28,21 @@ describe("lineupCandidates", () => {
   });
 
   /**
-   * The rule the lineup's legality rests on. Sleeper won't let a stashed player
-   * start, so one reaching the solver is a lineup the site would reject — and
-   * the solver has no idea it happened, since a candidate is just points and
-   * positions by the time it gets there.
+   * IR and taxi players sit in `players` alongside the active roster, and they
+   * are candidates like anyone else: this tool ranks a stashed player as bench
+   * depth that could be started rather than dropping it as unavailable (a
+   * deliberate choice — Sleeper needs a roster move to seat one).
    */
-  it("never offers a stashed player as a candidate", () => {
+  it("offers stashed players as candidates like any other", () => {
     const candidates = lineupCandidates(
-      // Sleeper keeps IR and taxi players in `players` as well as in their own
-      // arrays, which is what makes the exclusion necessary rather than implied.
-      roster({
-        players: ["starter", "hurt", "rookie"],
-        reserve: ["hurt"],
-        taxi: ["rookie"],
-      }),
+      roster({ players: ["starter", "hurt", "rookie"] }),
       { starter: ["QB"], hurt: ["RB"], rookie: ["WR"] },
       () => 10,
     );
 
     assert.deepEqual(
       candidates.map((c) => c.player_id),
-      ["starter"],
+      ["starter", "hurt", "rookie"],
     );
   });
 

@@ -34,12 +34,13 @@ import type { PlayerSplit } from "./weekly";
 /** What this needs from a team to project it. */
 export type OutlookRoster = {
   roster_id: number;
-  /** Every rostered player id. */
+  /**
+   * Every rostered player id — IR and taxi included, since they are candidates
+   * for the lineup like any bench player now, so the solver wants the whole list.
+   */
   players: readonly string[];
   /** Starting lineup, positionally aligned with the league's starting slots. */
   starters: readonly string[];
-  reserve: readonly string[];
-  taxi: readonly string[];
 };
 
 /** One player's aggregate outlook under this league's scoring. */
@@ -86,9 +87,9 @@ export type TeamOutlook = LineupComparison & {
    * `weekly_optimal_points` broken out per player: what each one is projected for
    * in the weeks he makes that week's lineup, and in the weeks he doesn't.
    *
-   * Keyed by player id, and only the players who were candidates for this team's
-   * lineup — IR and taxi are excluded here for the same reason they are excluded
-   * from the lineup itself, so a row for one of them has no split to show.
+   * Keyed by player id, over every player who was a candidate for this team's
+   * lineup — which is the whole roster, IR and taxi included, since a stashed
+   * player is treated as startable bench depth rather than as unavailable.
    *
    * A team-level answer rather than a league-level one, which is why it sits here
    * and not in `players`: the same projection makes the lineup on one roster and
@@ -148,8 +149,9 @@ export type LeagueOutlook = {
  * league with no `scoring_settings` would come back all zeroes and look like a
  * roster of worthless players, so it is refused rather than guessed at.
  *
- * IR and taxi players are candidates for nobody's lineup — Sleeper won't let them
- * start, so offering them as advice would be offering an illegal lineup.
+ * IR and taxi players are candidates like any bench player — a stashed player is
+ * treated as depth that could be started, not as unavailable (Sleeper needs a
+ * roster move to seat one, so the lineup is "best available once activated").
  */
 export async function getLeagueOutlook({
   season,

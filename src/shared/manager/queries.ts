@@ -2,6 +2,8 @@ import { pool } from "@/shared/db";
 
 import { LEAGUE_TYPE_CODES } from "./adp-filters";
 import type { LeagueType } from "./adp-filters";
+import { ownedDraftPicks } from "./draft-picks";
+import type { TradedPick } from "./draft-picks";
 import type {
   LeagueDetail,
   Leaguemate,
@@ -340,16 +342,31 @@ export async function getLeagueDetail(
   if (league.rows.length === 0) return null;
   const l = league.rows[0];
 
-  const { rows } = await pool.query<TeamRow>(
-    `SELECT
-        r.roster_id, r.owner_id, r.players, r.starters, r.reserve, r.taxi,
-        r.settings,
-        lu.display_name, lu.avatar, lu.team_name
-       FROM rosters r
-       LEFT JOIN league_users lu
-         ON lu.league_id = r.league_id AND lu.user_id = r.owner_id
-      WHERE r.league_id = $1`,
-    [leagueId],
+  // The rosters and the traded picks are independent reads over the same league,
+  // so they go together; the picks are resolved into per-roster portfolios below.
+  const [{ rows }, { rows: tradedRows }] = await Promise.all([
+    pool.query<TeamRow>(
+      `SELECT
+          r.roster_id, r.owner_id, r.players, r.starters, r.reserve, r.taxi,
+          r.settings,
+          lu.display_name, lu.avatar, lu.team_name
+         FROM rosters r
+         LEFT JOIN league_users lu
+           ON lu.league_id = r.league_id AND lu.user_id = r.owner_id
+        WHERE r.league_id = $1`,
+      [leagueId],
+    ),
+    pool.query<TradedPick>(
+      `SELECT season, round, roster_id, owner_id
+         FROM traded_picks WHERE league_id = $1`,
+      [leagueId],
+    ),
+  ]);
+
+  const picksByRoster = ownedDraftPicks(
+    tradedRows,
+    rows.map((r) => r.roster_id),
+    l.season,
   );
 
   const teams: LeagueTeam[] = rows.map((r) => {
@@ -376,6 +393,7 @@ export async function getLeagueDetail(
       starters: r.starters ?? [],
       reserve: r.reserve ?? [],
       taxi: r.taxi ?? [],
+      picks: picksByRoster.get(r.roster_id) ?? [],
     };
   });
 
