@@ -327,18 +327,27 @@ stops holding, a comment saying it does would not have caught it.
   the section is *for*: `ToolsHome` holds it and hands it down, so the extra
   request buys the grid below something and not just a confirmation. A reload
   still clears it — it lives in component state and nowhere else.
-- **One tool card reads that account; the rest stay links, and that asymmetry is
-  the point.** `ToolGrid` renders `ToolLinkCard` for every tool except the pick
-  tracker, which gets `PicktrackerCard`: a league *id* is the only thing the
-  tracker needs and a resolved account already knows every one of them, so the
-  card lists them inline and jumps straight there rather than sending you to a
-  search for something you'd have to go read off Sleeper. With no account
-  resolved it falls back to the plain link card, whose destination is manual
-  league-id entry — which is also how the tracker gets opened from a league chat
-  mid-draft, where there is no Sleeper account in hand. Don't "finish the job" by
-  giving the other cards pickers: a tool keyed by manager is already served by
-  the username, and only this one is keyed by something the account has to be
-  expanded to learn.
+- **The account is the key to the whole grid: every card is inert until one
+  resolves.** Each tool reads that account, so `ToolGrid` passes `disabled={!user}`
+  and `ToolLinkCard` renders an `aria-disabled`, dimmed `div` instead of a
+  `Link` — there is nothing useful behind any of these cards without knowing
+  whose leagues to read. What resolving unlocks differs by tool, which is where
+  the two overrides come in: the manager card takes an `href` override straight
+  to `/manager/<username>/leagues`, skipping the username search it would
+  otherwise land you on (you just typed that name — asking twice is the drift
+  `UserLookup` exists to prevent), and the pick tracker gets `PicktrackerCard`
+  instead, listing the account's leagues inline because a league *id* is the one
+  thing a username does **not** give you and the account already knows every one.
+  Its picker is its own gate — there is no way to the tracker without choosing a
+  league — so it needs no `disabled` state of its own once an account is in hand.
+- **The tools grid no longer links to manual league-id entry, but the page is
+  still there.** `/picktracker` (the `page.tsx`, distinct from
+  `/picktracker/[leagueId]`) takes a raw id and still answers; gating the grid
+  only took away the *link* to it. That path is worth remembering before treating
+  the route as dead code: it is how the tracker opens from a league chat
+  mid-draft, where there is a league id in the URL bar and no Sleeper account in
+  hand. If the no-account state should reach it again, that is a deliberate
+  exception to the gate above and not a bug in it.
 - **`useUserLeagues` is not `useManagerLeagues`, for the reason the four manager
   sub-resource hooks *are* one hook.** Both decode the same NDJSON stream off
   `/api/user/[username]/leagues`, but the picker wants the list and none of the
@@ -360,6 +369,18 @@ stops holding, a comment saying it does would not have caught it.
   hook is the state behind it, and `filtered` stays a value the page can read
   because the players and leaguemates shares memoise on it — buried in the chrome
   it would be out of reach.
+- **The filter selection outlives the tab you chose it on, because the three tabs
+  are three routes.** Held in each view, a filter snapped back to the default the
+  moment you moved between Leagues, Players and Leaguemates — the same league set
+  narrowed three ways, re-narrowed by hand each time. So `LeagueFiltersProvider`
+  is mounted once in `app/manager/[searched]/layout.tsx` and `useFilteredLeagues`
+  reads it through `useLeagueFilters` instead of holding `useState` of its own.
+  What makes the shared state safe is where it is mounted: the layout is keyed by
+  the searched manager, so the selection follows you across tabs but still starts
+  fresh when you look at someone *else* — a per-manager reset, not a global one.
+  `useLeagueFilters` throws outside that provider rather than falling back to the
+  defaults, since a silent fallback is a filter bar that renders fine and quietly
+  moves nothing.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
