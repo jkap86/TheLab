@@ -6,6 +6,7 @@ import type { UserInfo } from "@/shared/contract";
 
 import { useUserLeagues } from "../hooks/use-user-leagues";
 import type { Tool } from "../tools.data";
+import { LeaguePicker } from "./league-picker";
 import { ToolLinkCard } from "./tool-link-card";
 
 /**
@@ -30,12 +31,9 @@ export function PicktrackerCard({
 
   if (!user) return <ToolLinkCard tool={tool} />;
 
-  const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const leagueId = event.target.value;
-    if (leagueId) router.push(`/picktracker/${encodeURIComponent(leagueId)}`);
+  const handleSelect = (leagueId: string) => {
+    router.push(`/picktracker/${encodeURIComponent(leagueId)}`);
   };
-
-  const hasLeagues = !!leagues?.length;
 
   return (
     <div className="flex h-full flex-col rounded-xl border border-foreground/10 bg-foreground/[0.02] p-6">
@@ -48,31 +46,11 @@ export function PicktrackerCard({
             {error}
           </p>
         ) : (
-          <>
-            <label htmlFor="picktracker-league" className="sr-only">
-              Pick a league to track
-            </label>
-            <select
-              id="picktracker-league"
-              defaultValue=""
-              disabled={loading || !hasLeagues}
-              onChange={handleSelect}
-              className="w-full rounded-lg border border-foreground/15 bg-foreground/[0.03] px-4 py-2.5 text-base text-foreground focus:border-active/50 focus:outline-none focus:ring-1 focus:ring-active/40 disabled:cursor-not-allowed disabled:text-foreground/35"
-            >
-              <option value="" disabled>
-                {loading
-                  ? "Loading your leagues…"
-                  : hasLeagues
-                    ? "Select a league…"
-                    : "No leagues found"}
-              </option>
-              {leagues?.map((league) => (
-                <option key={league.league_id} value={league.league_id}>
-                  {league.name}
-                </option>
-              ))}
-            </select>
-          </>
+          <LeaguePicker
+            leagues={leagues ?? []}
+            loading={loading}
+            onSelect={handleSelect}
+          />
         )}
       </div>
     </div>
