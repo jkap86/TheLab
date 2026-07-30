@@ -1,4 +1,6 @@
 import type {
+  AdpPayload,
+  AdpPlayerPayload,
   LeagueDetailPayload,
   LeagueKtcEntry,
   LeagueKtcValue,
@@ -30,6 +32,8 @@ import type {
  * one import site.
  */
 export type {
+  AdpPayload,
+  AdpPlayerPayload,
   LeagueKtcEntry,
   LeagueKtcValue,
   LeagueOutlook,
