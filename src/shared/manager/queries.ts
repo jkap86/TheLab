@@ -228,14 +228,17 @@ export async function getManagerLeagueRosters(
     starters: string[] | null;
     reserve: string[] | null;
     taxi: string[] | null;
+    settings: Record<string, unknown> | null;
   }>(
-    `SELECT league_id, roster_id, owner_id, players, starters, reserve, taxi
+    `SELECT league_id, roster_id, owner_id, players, starters, reserve, taxi,
+            settings
        FROM rosters
       WHERE league_id = ANY($1::varchar[])`,
     [[...byLeague.keys()]],
   );
 
   for (const r of rosters) {
+    const s = r.settings ?? {};
     byLeague.get(r.league_id)?.teams.push({
       roster_id: r.roster_id,
       owner_id: r.owner_id,
@@ -243,6 +246,12 @@ export async function getManagerLeagueRosters(
       starters: r.starters ?? [],
       reserve: r.reserve ?? [],
       taxi: r.taxi ?? [],
+      record: {
+        wins: Number(s.wins ?? 0),
+        losses: Number(s.losses ?? 0),
+        ties: Number(s.ties ?? 0),
+      },
+      fpts: foldPoints(s.fpts, s.fpts_decimal),
     });
   }
 

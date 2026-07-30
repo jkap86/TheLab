@@ -79,9 +79,9 @@ export function ManagerLeagues({ searched }: { searched: string }) {
                 <LeagueCard
                   key={league.league_id}
                   league={league}
-                  rank={ranks?.ranks[league.league_id] ?? null}
+                  ranks={ranks?.ranks[league.league_id] ?? null}
                   weeks={ranks?.weeks ?? []}
-                  value={ktc?.leagues[league.league_id] ?? null}
+                  ktc={ktc?.leagues[league.league_id] ?? null}
                   valuedAt={ktc?.updated_at ?? null}
                 />
               ))}

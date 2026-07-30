@@ -2,6 +2,7 @@ import type {
   AdpFilters,
   LeagueDetail,
   Leaguemate,
+  LeagueRank,
   LeagueTeam,
   ManagerLeague,
   ProjectedRank,
@@ -158,9 +159,29 @@ export type ManagerLeaguematesPayload = {
 };
 
 /**
+ * The manager's place in one league across the metrics a league card ranks it
+ * on. Each is independently nullable, because they don't all answer at the same
+ * time: a league that has been drafted but not played has a projected rank and
+ * no standings, and one nothing is projected in has the reverse.
+ */
+export type LeagueRankSet = {
+  /** By record — wins, then points for as Sleeper breaks its own ties. */
+  standing: LeagueRank | null;
+  /** By points for. Carries the total, for saying what the rank is of. */
+  points: (LeagueRank & { pointsFor: number }) | null;
+  /** By projected points (`weekly_optimal_points`, this league's scoring). */
+  proj: ProjectedRank | null;
+};
+
+/**
  * `GET /api/user/[username]/ranks` — where the manager's roster sits in each of
- * their leagues when its teams are ordered by projected points
- * (`weekly_optimal_points`, under each league's own scoring).
+ * their leagues, by record, by points for, and by projected points.
+ *
+ * Three rankings rather than one because a card shows all three side by side and
+ * two of them (record, points for) cost nothing the rosters read wasn't already
+ * fetching; only the projected rank needs the projections behind it. The KTC
+ * starter-value rank travels with the sibling `ktc` route instead, since it is
+ * the one that already has the prices.
  *
  * Read-only like the sibling `players` route: it ranks over the rosters and
  * projections the background work has stored, so a manager the leagues stream
@@ -169,17 +190,19 @@ export type ManagerLeaguematesPayload = {
 export type ManagerRanksPayload = {
   season: string;
   /**
-   * Weeks the totals behind every rank cover, ascending — the horizon travels
-   * with the number here as it does everywhere else. Empty when nothing remains
-   * to project, in which case `ranks` is empty too.
+   * Weeks the projected totals cover, ascending — the horizon travels with the
+   * number here as it does everywhere else. Empty when nothing remains to
+   * project, in which case every `proj` is null (the record and points ranks
+   * don't depend on it).
    */
   weeks: number[];
   /**
-   * League id → the manager's projected rank there. A league is absent when it
-   * can't be ranked: the manager holds no roster in it, its rosters or settings
-   * aren't cached, or nothing in it is projected yet (pre-draft).
+   * League id → the manager's ranks there. A league is absent when none of the
+   * three can be formed: the manager holds no roster in it, or its rosters
+   * aren't cached; a league present with, say, a `standing` but a null `proj` is
+   * one that's been played but has nothing left to project.
    */
-  ranks: Record<string, ProjectedRank>;
+  ranks: Record<string, LeagueRankSet>;
 };
 
 /** One league's roster priced on KeepTradeCut, and how that value is split. */
@@ -191,6 +214,20 @@ export type LeagueKtcValue = KtcRosterValue & {
    * being assumed by whoever reads it.
    */
   superflex: boolean;
+};
+
+/** A league's KTC value plus where its starter value ranks league-wide. */
+export type LeagueKtcEntry = LeagueKtcValue & {
+  /**
+   * The manager's place among their leaguemates by starter KTC value — the
+   * `split.starters` half, ranked across every team in the league.
+   *
+   * Null when the ranking can't be formed: the league can't be projected (so no
+   * lineup to draw starters from), or every roster's starters price at zero
+   * (an undrafted board). The card shows the rank where it exists and nothing
+   * where it doesn't, the same way the projected rank does.
+   */
+  starters_rank: LeagueRank | null;
 };
 
 /**
@@ -224,12 +261,13 @@ export type ManagerKtcPayload = {
    */
   weeks: number[];
   /**
-   * League id → that roster's value. A league is absent when the manager holds
-   * no roster in it; a league whose roster KTC prices nothing is present with a
-   * zero total and `priced: 0`, which is a real answer rather than a gap — a
-   * pre-draft roster is empty and a roster of kickers is off the board.
+   * League id → that roster's value and its starter-value rank. A league is
+   * absent when the manager holds no roster in it; a league whose roster KTC
+   * prices nothing is present with a zero total and `priced: 0`, which is a real
+   * answer rather than a gap — a pre-draft roster is empty and a roster of
+   * kickers is off the board.
    */
-  leagues: Record<string, LeagueKtcValue>;
+  leagues: Record<string, LeagueKtcEntry>;
 };
 
 /**

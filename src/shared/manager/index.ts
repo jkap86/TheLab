@@ -30,8 +30,8 @@ export type {
   ManagerLeague,
   ManagerLeaguemates,
 } from "./types";
-export { orderByProjectedPoints, projectedRank } from "./rank";
-export type { ProjectedRank } from "./rank";
+export { orderByProjectedPoints, projectedRank, rankOf, standingScore } from "./rank";
+export type { LeagueRank, ProjectedRank } from "./rank";
 export { resolveManagerUser, toUserInfo } from "./resolve";
 export type { ResolvedManager } from "./resolve";
 export { getDraftAdp } from "./adp";

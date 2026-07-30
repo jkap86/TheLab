@@ -2,75 +2,126 @@
 
 import { useState } from "react";
 
-import { formatPoints, formatRecord, formatValue, formatWeekRange } from "../format";
-import type { LeagueKtcValue, ManagerLeague, ProjectedRank } from "../types";
+import {
+  formatPoints,
+  formatRecord,
+  formatValue,
+  formatWeekRange,
+} from "../format";
+import type { LeagueKtcEntry, LeagueRankSet, ManagerLeague } from "../types";
 import { LeagueDetailPanel } from "./league-detail-panel";
 import { Chevron } from "./ui";
 
+/**
+ * One league in the leagues list: a dense, glassy row that reads at a glance and
+ * opens the full standings-and-rosters panel on click.
+ *
+ * What the collapsed row is *for* is the four rankings across it — where this
+ * manager stands by record, by points scored, by KTC starter value and by
+ * projected points. Each is the same shape (`#N of M`) so they line up column to
+ * column down the whole list, and each is tinted and metered by where in its
+ * league it falls: near the top reads in the accent, near the bottom in rose,
+ * the middle left in plain ink. The number is always the real read; the colour
+ * is a second, faster one.
+ *
+ * The raw KTC total that used to sit on the row moves onto the KTC column's
+ * hover, where the value, the board and the priced count still answer — the row
+ * itself is kept to name, record and the four ranks.
+ */
 export function LeagueCard({
   league,
-  rank,
+  ranks,
   weeks,
-  value,
+  ktc,
   valuedAt,
 }: {
   league: ManagerLeague;
   /**
-   * Where this manager sits when the league's teams are ordered by projected
-   * points — null while the ranks are loading, and for a league that can't be
-   * ranked (nothing projected yet, or no roster held there). The chip simply
-   * isn't shown then: an absent bonus, not an error.
+   * Where this manager sits by record, points for and projected points — null
+   * while the ranks are loading, and each field independently null for a ranking
+   * this league can't form yet (nothing projected, or nothing played). A missing
+   * rank shows as a dim placeholder rather than a gap, so the columns stay put.
    */
-  rank: ProjectedRank | null;
-  /** The horizon behind `rank`, so the chip can say what its number covers. */
+  ranks: LeagueRankSet | null;
+  /** The horizon behind the projected rank, so its hover can say what it covers. */
   weeks: number[];
   /**
-   * What this manager's roster here is worth on KeepTradeCut — null while the
-   * values are loading, and for a league they hold no roster in. Absent rather
-   * than zeroed, on the same terms as `rank`.
+   * This manager's KTC value here and its starter-value rank — null while
+   * loading, and for a league they hold no roster in. Absent rather than zeroed,
+   * on the same terms as `ranks`.
    */
-  value: LeagueKtcValue | null;
-  /** When those values were scraped, so the chip can say how old they are. */
+  ktc: LeagueKtcEntry | null;
+  /** When those KTC values were scraped, for the KTC column's hover. */
   valuedAt: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
 
+  const record = league.record;
+  const pointsRank = ranks?.points ?? null;
+  const proj = ranks?.proj ?? null;
+  const board = ktc?.superflex ? "superflex" : "1QB";
+
   return (
-    <li className="rounded-xl border border-foreground/10 bg-foreground/[0.02] transition-colors hover:border-foreground/20">
+    <li className="group rounded-xl border border-foreground/10 bg-gradient-to-b from-foreground/[0.06] to-foreground/[0.015] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_28px_-16px_rgba(0,0,0,0.7)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_20px_44px_-18px_rgba(0,0,0,0.85)] motion-reduce:transition-none motion-reduce:hover:translate-y-0">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full items-start justify-between gap-3 rounded-xl p-4 text-left hover:bg-foreground/[0.02]"
+        className="flex w-full flex-col items-stretch gap-3 rounded-xl px-4 py-3 text-left sm:flex-row sm:items-center sm:gap-4"
       >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <Chevron open={expanded} size="md" />
-            <h3 className="truncate text-lg font-semibold">{league.name}</h3>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-6">
-            {league.record && (
-              <span className="rounded-md bg-foreground/5 px-2 py-0.5 text-sm font-medium tabular-nums text-foreground/80">
-                {formatRecord(league.record)}
-              </span>
-            )}
-            {rank && (
-              <span
-                title={`${formatPoints(rank.points)} projected · best lineup each week · ${formatWeekRange(weeks)}`}
-                className="rounded-md bg-foreground/5 px-2 py-0.5 text-sm text-foreground/55"
-              >
-                <span className="font-semibold tabular-nums text-foreground/85">
-                  #{rank.rank}
-                </span>{" "}
-                of {rank.of} · proj
-              </span>
-            )}
-            {value && <ValueChip value={value} valuedAt={valuedAt} />}
-            <Stat value={league.total_rosters} label="teams" />
-          </div>
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <Chevron open={expanded} size="md" />
+          <StatusDot status={league.status} />
+          <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold">
+            {league.name}
+          </h3>
+          {record && (
+            <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground/70">
+              {formatRecord(record)}
+            </span>
+          )}
         </div>
-        <StatusBadge status={league.status} />
+
+        <div className="flex shrink-0 items-stretch divide-x divide-foreground/10">
+          <RankStat
+            label="Standing"
+            rank={ranks?.standing ?? null}
+            title={
+              ranks?.standing
+                ? `#${ranks.standing.rank} of ${ranks.standing.of} by record${
+                    record ? ` · ${formatRecord(record)}` : ""
+                  }`
+                : "no standing yet"
+            }
+          />
+          <RankStat
+            label="Points"
+            rank={pointsRank}
+            title={
+              pointsRank
+                ? `#${pointsRank.rank} of ${pointsRank.of} by points for · ${formatPoints(
+                    pointsRank.pointsFor,
+                  )} pts`
+                : "no points scored yet"
+            }
+          />
+          <RankStat
+            label="KTC start"
+            rank={ktc?.starters_rank ?? null}
+            title={ktcTitle(ktc, board, valuedAt)}
+          />
+          <RankStat
+            label="Proj start"
+            rank={proj}
+            title={
+              proj
+                ? `#${proj.rank} of ${proj.of} by projected starters · ${formatPoints(
+                    proj.points,
+                  )} · best lineup each week · ${formatWeekRange(weeks)}`
+                : "nothing left to project"
+            }
+          />
+        </div>
       </button>
 
       {expanded && (
@@ -82,97 +133,113 @@ export function LeagueCard({
   );
 }
 
-/**
- * What this manager's roster in the league is worth on KeepTradeCut, and how
- * much of that value is in the best lineup rather than sat behind it.
- *
- * Three numbers rather than one because a total says nothing about shape: two
- * rosters worth 40k are not the same roster when one can start 30k of it and the
- * other is a deep bench propping up a thin lineup. The split is drawn from the
- * same lineup the expanded panel lists as Starters, so a chip and the card it
- * opens can't disagree about who starts, and IR and taxi land in the bench half
- * — value held that cannot be played is exactly what that half means.
- *
- * Nothing at all when the roster prices at nothing, on the same terms as the
- * rank chip beside it: KTC's board is skill players only and a pre-draft roster
- * is empty, so "0 ktc" would dress both up as a claim about the team.
- *
- * The label says *dynasty* because that is the only board this app scrapes —
- * these are keeper-asset prices, which is the wrong lens on the redraft leagues
- * in the same list, and worth naming rather than leaving to be inferred.
- */
-function ValueChip({
-  value,
-  valuedAt,
-}: {
-  value: LeagueKtcValue;
-  valuedAt: string | null;
-}) {
-  if (value.priced === 0) return null;
-
-  const board = value.superflex ? "superflex" : "1QB";
-  const title = [
-    `${formatValue(value.total)} KeepTradeCut dynasty ${board} value`,
-    value.split
-      ? `${formatValue(value.split.starters)} in the best lineup, ${formatValue(
-          value.split.bench,
-        )} behind it`
-      : "no projections yet, so nothing to split it across a lineup",
-    `${value.priced} of ${value.rostered} rostered players priced`,
+/** The hover text for the KTC column, where the raw value now lives. */
+function ktcTitle(
+  ktc: LeagueKtcEntry | null,
+  board: string,
+  valuedAt: string | null,
+): string {
+  if (!ktc || ktc.priced === 0) return "nothing priced on KeepTradeCut";
+  return [
+    ktc.starters_rank &&
+      `#${ktc.starters_rank.rank} of ${ktc.starters_rank.of} by starter value`,
+    ktc.split && `${formatValue(ktc.split.starters)} starting`,
+    `${formatValue(ktc.total)} KeepTradeCut dynasty ${board} value`,
+    `${ktc.priced} of ${ktc.rostered} rostered players priced`,
     valuedAt && `scraped ${new Date(valuedAt).toLocaleString()}`,
   ]
     .filter(Boolean)
     .join(" · ");
+}
 
+const TIER_TEXT: Record<Tier, string> = {
+  hi: "text-active",
+  mid: "text-foreground/85",
+  lo: "text-rose-300",
+};
+const TIER_FILL: Record<Tier, string> = {
+  hi: "bg-active",
+  mid: "bg-foreground/40",
+  lo: "bg-rose-400/80",
+};
+
+type Tier = "hi" | "mid" | "lo";
+
+/**
+ * Where a rank falls in its league as a fraction (1 for first, 0 for last), and
+ * the tier that fraction lands in. The tiers are wide bands, not thirds, so the
+ * accent is reserved for genuinely near the top and rose for genuinely near the
+ * bottom — most rows read as the neutral middle, which is what keeps a card of
+ * four colours from looking like an alarm.
+ */
+function rankTier(rank: { rank: number; of: number }): { p: number; tier: Tier } {
+  const p = rank.of <= 1 ? 1 : (rank.of - rank.rank) / (rank.of - 1);
+  const tier: Tier = p >= 0.62 ? "hi" : p <= 0.3 ? "lo" : "mid";
+  return { p, tier };
+}
+
+/**
+ * One ranked column: a label, `#N of M`, and a meter of where in the league that
+ * sits. A null rank keeps the column — an em dash and an empty track — so a
+ * loading or unrankable metric doesn't shift the ones beside it.
+ */
+function RankStat({
+  label,
+  rank,
+  title,
+}: {
+  label: string;
+  rank: { rank: number; of: number } | null;
+  title: string;
+}) {
+  const t = rank ? rankTier(rank) : null;
   return (
-    <span
-      title={title}
-      className="rounded-md bg-foreground/5 px-2 py-0.5 text-sm text-foreground/55"
-    >
-      <span className="font-semibold tabular-nums text-foreground/85">
-        {formatValue(value.total)}
-      </span>{" "}
-      ktc
-      {value.split && (
-        <>
-          {" · "}
-          <span className="tabular-nums text-foreground/75">
-            {formatValue(value.split.starters)}
-          </span>{" "}
-          start ·{" "}
-          <span className="tabular-nums text-foreground/75">
-            {formatValue(value.split.bench)}
-          </span>{" "}
-          bench
-        </>
+    <div title={title} className="flex w-20 shrink-0 flex-col gap-1 px-2.5">
+      <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-foreground/40">
+        {label}
+      </span>
+      {rank && t ? (
+        <span className="flex items-baseline gap-0.5 leading-none">
+          <span className={`text-base font-bold tabular-nums ${TIER_TEXT[t.tier]}`}>
+            #{rank.rank}
+          </span>
+          <span className="text-[11px] tabular-nums text-foreground/40">
+            /{rank.of}
+          </span>
+        </span>
+      ) : (
+        <span className="text-base font-bold leading-none text-foreground/25">
+          —
+        </span>
       )}
-    </span>
+      <span className="h-1 w-full overflow-hidden rounded-full bg-foreground/10">
+        {rank && t && (
+          <span
+            className={`block h-full rounded-full ${TIER_FILL[t.tier]}`}
+            style={{ width: `${Math.max(6, t.p * 100)}%` }}
+          />
+        )}
+      </span>
+    </div>
   );
 }
 
-function Stat({ value, label }: { value: number; label: string }) {
-  return (
-    <span className="rounded-md bg-foreground/5 px-2 py-0.5 text-sm text-foreground/55">
-      <span className="font-semibold tabular-nums text-foreground/85">
-        {value.toLocaleString()}
-      </span>{" "}
-      {label}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
+/**
+ * A small state dot standing in for the old text badge: the accent for a league
+ * in season, amber for one still drafting, dim for anything done. The status
+ * word rides on hover and for screen readers.
+ */
+function StatusDot({ status }: { status: string }) {
   const tone =
     status === "in_season"
-      ? "border-active/40 text-active"
+      ? "bg-active shadow-[0_0_8px_rgba(0,255,229,0.7)]"
       : status === "drafting" || status === "pre_draft"
-        ? "border-amber-400/40 text-amber-300"
-        : "border-foreground/15 text-foreground/45";
+        ? "bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.6)]"
+        : "bg-foreground/30";
   return (
-    <span
-      className={`mt-0.5 shrink-0 rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide ${tone}`}
-    >
-      {status.replace(/_/g, " ")}
+    <span title={status.replace(/_/g, " ")} className="flex shrink-0 items-center">
+      <span className={`h-2 w-2 rounded-full ${tone}`} aria-hidden="true" />
+      <span className="sr-only">{status.replace(/_/g, " ")}</span>
     </span>
   );
 }

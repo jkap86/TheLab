@@ -1,7 +1,9 @@
 import type {
   LeagueDetailPayload,
+  LeagueKtcEntry,
   LeagueKtcValue,
   LeaguematePayload,
+  LeagueRankSet,
   LeaguesProgressMessage,
   LeaguesResultMessage,
   LeagueTeamPayload,
@@ -10,7 +12,7 @@ import type {
   ManagerPlayersPayload,
   ManagerRanksPayload,
 } from "@/shared/contract";
-import type { ManagerLeague, ProjectedRank } from "@/shared/manager";
+import type { LeagueRank, ManagerLeague, ProjectedRank } from "@/shared/manager";
 import type { PlayerSummary } from "@/shared/players";
 import type {
   LeagueOutlook,
@@ -28,8 +30,11 @@ import type {
  * one import site.
  */
 export type {
+  LeagueKtcEntry,
   LeagueKtcValue,
   LeagueOutlook,
+  LeagueRank,
+  LeagueRankSet,
   ManagerLeague,
   PlayerOutlook,
   PlayerSplit,

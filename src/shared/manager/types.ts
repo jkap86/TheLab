@@ -88,6 +88,15 @@ export type LeagueRosterSet = {
     starters: string[];
     reserve: string[];
     taxi: string[];
+    /**
+     * Standings figures from the Sleeper roster settings — every team's, not
+     * just the manager's, because ranking the manager by record or points for
+     * needs the whole league's. Carried here rather than in a second query since
+     * the rosters read is already fetching these rows.
+     */
+    record: { wins: number; losses: number; ties: number };
+    /** Points for, decimals folded in (e.g. 1234.56). */
+    fpts: number;
   }[];
 };
 
