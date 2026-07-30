@@ -1,25 +1,41 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
+import {
+  type AdpControls,
+  adpQueryString,
+  defaultAdpControls,
+  seasonOptions,
+} from "../adp-controls";
+import { useAdp } from "../hooks/use-adp";
 import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
 import { useManagerPlayers } from "../hooks/use-manager-players";
 import { playerShares } from "../shares";
+import type { AdpPlayerPayload } from "../types";
+import { AdpFilters } from "./adp-filters";
 import { LeaguesViewLayout } from "./leagues-view-layout";
 import { ErrorCard } from "./manager-leagues-status";
 import { PlayerShares } from "./player-shares";
 import { PanelMessage } from "./ui";
 
 /**
- * Player shares: who this manager owns, and in how many of their leagues.
+ * Player shares: who this manager owns, in how many of their leagues, and each
+ * player's ADP.
  *
  * The same page as the leagues and leaguemates views — leagues stream, filters,
  * and the shared chrome of {@link LeaguesViewLayout} — reading its own resource
  * off the same stream. The rosters the leagues stream syncs are what a share is
  * counted over, so asking for them here means the page is never looking at a
- * manager the sync hasn't run for. The filters narrow the population a share is
- * measured against rather than the players: dynasty-only and redraft-only
- * exposure are different portfolios.
+ * manager the sync hasn't run for. The header filters narrow the population a
+ * share is measured against rather than the players: dynasty-only and
+ * redraft-only exposure are different portfolios.
+ *
+ * The ADP column is a second, independent axis: its own controls (below the
+ * header, in {@link AdpFilters}) pick which crawled drafts the average is taken
+ * over, and `useAdp` fetches that board off the global `/api/adp`. Its state is
+ * held here rather than in the section below so it survives a background refresh
+ * and the odd moment the filtered list empties out.
  */
 export function ManagerPlayers({ searched }: { searched: string }) {
   const view = useFilteredLeagues(searched);
@@ -32,6 +48,23 @@ export function ManagerPlayers({ searched }: { searched: string }) {
         : null,
     [view.filtered, rosters.data],
   );
+
+  // The ADP board defaults to the season on screen; null until the stream names
+  // it, which is the same beat the whole view is waiting on.
+  const season = view.data?.season ?? null;
+  const [controls, setControls] = useState<AdpControls | null>(null);
+  const activeControls = controls ?? (season ? defaultAdpControls(season) : null);
+  const adpQuery = activeControls ? adpQueryString(activeControls) : null;
+  const adp = useAdp(adpQuery);
+
+  const adpByPlayer = useMemo(() => {
+    const map = new Map<string, AdpPlayerPayload>();
+    for (const player of adp.data?.players ?? []) map.set(player.player_id, player);
+    return map;
+  }, [adp.data]);
+
+  const seasons = useMemo(() => (season ? seasonOptions(season) : []), [season]);
+  const data = view.data;
 
   return (
     <LeaguesViewLayout
@@ -63,10 +96,24 @@ export function ManagerPlayers({ searched }: { searched: string }) {
         // hasn't drafted — a real answer, and not the same as an error.
         <PanelMessage>No players rostered in these leagues yet.</PanelMessage>
       ) : (
-        <PlayerShares
-          shares={shares.players}
-          leagueCount={shares.league_count}
-        />
+        data && (
+          <div className="flex flex-col gap-4">
+            <AdpFilters
+              controls={activeControls ?? defaultAdpControls(data.season)}
+              onChange={setControls}
+              leagues={data.leagues}
+              seasons={seasons}
+              draftCount={adp.data?.draft_count ?? null}
+              loading={adp.loading}
+              error={adp.error}
+            />
+            <PlayerShares
+              shares={shares.players}
+              leagueCount={shares.league_count}
+              adp={adpByPlayer}
+            />
+          </div>
+        )
       )}
     </LeaguesViewLayout>
   );
