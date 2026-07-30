@@ -45,10 +45,13 @@ src/shared/    Domain logic, one folder per concern.
   manager and syncing their leagues is what the user routes are *for*, which is
   why the leagues one streams progress, and the pick tracker follows a draft
   *while it happens*, for any league id whether a sync has seen it or not; a
-  cached copy would be behind the room. `…/players`, `…/leaguemates` and
-  `…/ranks` share the user prefix and are *not* exceptions: they read the
-  rosters and membership that stream writes, so a manager it has never run for
-  gets an empty answer rather than a second sync of their own.) Where a read needs to know what week it is, derive it from
+  cached copy would be behind the room. **Every other route under that prefix is
+  *not* an exception** — `…/players`, `…/leaguemates`, `…/ranks`, `…/ktc` and
+  `…/adp-value` today: they read the rosters and membership that stream writes,
+  so a manager it has never run for gets an empty answer rather than a second
+  sync of their own. That is the rule for a new sibling too, so this list has
+  gone stale twice; the prefix is not what makes a route an exception, being
+  *the thing that resolves or follows* is.) Where a read needs to know what week it is, derive it from
   stored data too: `projections/queries`
   takes the weeks still ahead from `game_date` rather than `state/nfl`, so it can
   only ever name weeks that are actually here to read.
@@ -599,6 +602,28 @@ stops holding, a comment saying it does would not have caught it.
   opens can't disagree about who starts. Its failure costs the split and not the
   value — pricing a roster needs no projection, so the totals still answer, which
   is why `split` is nullable rather than the whole league being dropped.
+- **ADP is ordinal, so it cannot be summed — `adp-value` makes it cardinal
+  first.** A draft position is a rank where lower is better, so adding raw ADPs
+  gives a deep roster a bigger (worse) number and lets a stud *lower* the total.
+  `adpValue` inverts it onto a scale, and the shape of that inversion is the
+  point: value decays exponentially with a 24-pick half-life, because the gap
+  between picks 1 and 2 is worth vastly more than the gap between 100 and 101,
+  and a plain `maxPick − adp` would overvalue bench depth and undervalue the
+  players a season is won with. Both constants (`ADP_PEAK`, `ADP_HALF_LIFE`) are
+  **modeling choices, not facts** — the half-life is two rounds of a twelve-team
+  league, chosen because it prices an early first at roughly twice a late second,
+  and it is meant to be tuned against real boards. Treat a change to it as a
+  change to every number on the card, not a constant tweak.
+- **This is the third team-value lens, and the three answer different
+  questions.** `ktc` prices a *dynasty* asset, `ranks` models a *season*, and
+  `adp-value` reads the *market consensus* of the drafts this app crawled — which
+  is why a roster can rank differently under each and none of them is the wrong
+  answer. It is batched like the other two for the same reason (a collapsed card
+  costs no request). The trap it adds is that **ADP pooled across different games
+  is meaningless**: a superflex dynasty board and a 1QB redraft board are not one
+  population, the same lesson as KTC's two boards. So each league is priced
+  against the board most like it and leagues sharing a `boardSignature` share one
+  query — grouped and fetched once per board, never once per league.
 - **A list of managers is labelled by username, a team by team name.** `ui.tsx`
   has both — `managerLabel` (display_name → team_name → roster number) and
   `teamLabel` (the reverse) — and the column heading says which one it is.
