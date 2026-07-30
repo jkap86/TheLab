@@ -55,6 +55,11 @@ export function ordinal(n: number): string {
   }
 }
 
+/** `3 weeks`, or `1 week` — for tooltips, where the count is spelled out. */
+export function weekCount(n: number): string {
+  return `${n} week${n === 1 ? "" : "s"}`;
+}
+
 /**
  * The week horizon a projection covers, e.g. `"Wk 3–5"`, `"Wk 3"`, `"Wk 3, 5"`.
  *

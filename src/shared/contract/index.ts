@@ -52,11 +52,48 @@ export type LeagueTeamPayload = Omit<LeagueTeam, "manager"> & {
     | null;
 };
 
+/**
+ * Per-player KeepTradeCut and ADP values on the board this league reads, for the
+ * roster panel's selectable value columns.
+ *
+ * Both are keyed by player id with unpriced ids *absent* rather than zeroed — an
+ * em dash on the roster, not a value of zero, the same reading the collapsed
+ * card's KTC total takes. The board a value was read on travels with it
+ * (`superflex`, `adp_league_type`), since the same player is worth materially
+ * different totals across boards and reading a roster off the wrong one is wrong
+ * at every position.
+ */
+export type LeagueRosterValues = {
+  /**
+   * Which board priced these: superflex where the league starts more than one
+   * quarterback, 1QB otherwise. Shared by both lenses' hovers.
+   */
+  superflex: boolean;
+  /** When the KTC rows were scraped, ISO 8601; null when nothing here is priced. */
+  ktc_updated_at: string | null;
+  /** The league type whose crawled drafts the ADP board averaged. */
+  adp_league_type: LeagueType;
+  /** How many crawled drafts stood behind the ADP board — a thin board is noisy. */
+  adp_draft_count: number;
+  /** Player id → KTC dynasty value on this league's board; unpriced ids absent. */
+  ktc: Record<string, number>;
+  /** Player id → ADP-derived draft-capital value on this league's board; unpriced absent. */
+  adp: Record<string, number>;
+  /** Player id → the raw average draft position behind that ADP value, for the hover. */
+  adp_position: Record<string, number>;
+};
+
 /** `GET /api/league/[leagueId]` — standings and rosters for one league. */
 export type LeagueDetailPayload = Omit<LeagueDetail, "teams"> & {
   teams: LeagueTeamPayload[];
   /** Player ids → resolved name/position/team, for rendering rosters. */
   players: Record<string, PlayerSummary>;
+  /**
+   * Per-player KTC and ADP values on this league's board, for the roster panel's
+   * selectable value columns. Always present — an empty set of maps where nothing
+   * on these rosters is priced — so the client needn't guard its shape.
+   */
+  values: LeagueRosterValues;
   /**
    * Every roster's best starting lineup for the rest of the season, ranked on
    * each player's projected points aggregated over `outlook.weeks` and scored
