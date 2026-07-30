@@ -502,12 +502,24 @@ stops holding, a comment saying it does would not have caught it.
   The batch (`getManagerLeagueRosters` → `getWeeklyTeamPoints`) reads the
   remaining weeks, stat lines and positions once for the union of every roster
   and runs only what genuinely differs per league — scoring and lineup solves —
-  so it isn't `getLeagueOutlook` in a loop. The number ranked is
-  `weekly_optimal_points` under each league's own scoring, through the same
-  pure modules as the panel's Proj column, so chip and table can't disagree.
-  Ties share the better rank (two at 250.0 are both #1), and a league where
-  every total is zero gets *no* rank — pre-draft, "1st of 12" would dress an
-  empty league up as a lead (`projectedRank`, tested).
+  so it isn't `getLeagueOutlook` in a loop. The numbers ranked are
+  `weekly_optimal_points` and `weekly_bench_points` under each league's own
+  scoring, through the same pure modules as the panel's Proj column, so card and
+  table can't disagree. Ties share the better rank (two at 250.0 are both #1),
+  and a league where every total is zero gets *no* rank — pre-draft, "1st of 12"
+  would dress an empty league up as a lead (`projectedRank`, tested).
+- **The bench half rides along because the solve already had it.**
+  `getWeeklyTeamPoints` returns `bench` beside `points` from one weekly solve, so
+  ranking a roster by depth costs nothing beyond carrying the map — it was being
+  discarded in the batch path. It is worth ranking for the reason the KTC chip
+  splits into three: two teams level on projected starters are not the same team
+  when one carries twice the production it isn't playing. `proj_bench` is null on
+  exactly the terms `proj` is, which includes the case that matters — a shallow or
+  undrafted league where every bench prices at zero gets no rank rather than an
+  arbitrary #1. Note the two views read it differently on purpose: `standings`
+  still shows bench as dimmer *context* beside `Proj`, while a card column ranks
+  it outright. A number can be context in a table that is already ranked on
+  something else, and the answer in its own column.
 - **The card's KTC chip is three numbers, and the bench one is a subtraction.**
   A total says nothing about shape: two rosters worth 40k are not the same roster
   when one can start 30k of it and the other is depth behind a thin lineup. So
