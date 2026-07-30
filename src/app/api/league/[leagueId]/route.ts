@@ -8,11 +8,14 @@ import type {
 import { getKtcValuesBySleeperId, isSuperflexLineup } from "@/shared/ktc";
 import type { KtcValueSet } from "@/shared/ktc";
 import {
+  DEFAULT_STEEPNESS,
+  STEEPNESS_HALVINGS,
   adpBoardFor,
   adpValue,
   getDraftAdpForPlayers,
   getLeagueDetail,
   getLeagueTypes,
+  startingSlotCount,
 } from "@/shared/manager";
 import type { LeagueType, PlayerAdp } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
@@ -38,11 +41,13 @@ export const dynamic = "force-dynamic";
 async function priceRosters(args: {
   leagueId: string;
   season: string;
+  teams: number;
   playerIds: string[];
   rosterPositions: string[] | null;
   scoringSettings: Record<string, number> | null;
 }): Promise<LeagueRosterValues> {
-  const { leagueId, season, playerIds, rosterPositions, scoringSettings } = args;
+  const { leagueId, season, teams, playerIds, rosterPositions, scoringSettings } =
+    args;
   const superflex = isSuperflexLineup(rosterPositions);
 
   const [ktcSet, leagueTypes] = await Promise.all([
@@ -76,10 +81,18 @@ async function priceRosters(args: {
     },
   );
 
+  // The startable pool the value curve is anchored to: teams × starting slots,
+  // computed exactly as the adp-value route does, falling back to a typical
+  // lineup depth so a league with no slots on file can't collapse the curve.
+  // This panel offers no steepness control, so it reads the default the collapsed
+  // card's ADP metric also starts from.
+  const pool = teams * (startingSlotCount(rosterPositions) || 9);
+  const halvings = STEEPNESS_HALVINGS[DEFAULT_STEEPNESS];
+
   const adp: Record<string, number> = {};
   const adp_position: Record<string, number> = {};
   for (const [id, { adp: position }] of adpResult.values) {
-    adp[id] = adpValue(position);
+    adp[id] = adpValue(position, pool, halvings);
     adp_position[id] = position;
   }
 
@@ -133,6 +146,7 @@ export async function GET(
     priceRosters({
       leagueId,
       season: detail.season,
+      teams: detail.teams.length,
       playerIds,
       rosterPositions: detail.roster_positions,
       scoringSettings: detail.scoring_settings,
