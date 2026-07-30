@@ -204,10 +204,28 @@ That is why `ktc/parse` and `ktc/match` are pure and take their inputs as
 arguments. Keep new logic that's worth testing on the same side of that line:
 thin I/O wrappers, pure logic underneath.
 
-`manager/adp-filters` is the same shape for a route: it validates the query
-string and nothing else, so the SQL beside it only ever sees checked values.
-It takes the default season as an argument rather than importing
+`shared/manager/adp-filters` is the same shape for a route: it validates the
+query string and nothing else, so the SQL beside it only ever sees checked
+values. It takes the default season as an argument rather than importing
 `DEFAULT_SEASON` — that import is exactly what would make it untestable.
+
+**Three files now carry an ADP name, and two of them are called `adp-filters`.**
+Check which side of the wire you are on before editing one:
+
+| File | Side | Job |
+| --- | --- | --- |
+| `shared/manager/adp-filters.ts` | server | validates `/api/adp`'s query string |
+| `features/manager/adp-controls.ts` | client, pure | *builds* that query string, seeds it from a league |
+| `features/manager/components/adp-filters.tsx` | client, UI | the bar that drives the controls |
+
+The two ends are a matched pair with no compiler link between them — the client
+writes the vocabulary the server parses (the scoring buckets, the league-type
+codes, the auction exclusion), so a value added on one side and not the other
+fails as an ignored parameter rather than a type error. `adp-controls` derives
+its scoring bucket to mirror the endpoint's own `SCORING_SQL` for that reason:
+seeding a filter from a league has to land on the bucket that league would
+actually be counted in, or "match a league" quietly returns a board the league
+isn't in.
 
 `projections/filters` follows it. The `list`/`integer`/`enumList` primitives
 both filter modules use live once, in `shared/query` — a pure module they import
@@ -395,6 +413,27 @@ stops holding, a comment saying it does would not have caught it.
   `useLeagueFilters` throws outside that provider rather than falling back to the
   defaults, since a silent fallback is a filter bar that renders fine and quietly
   moves nothing.
+- **The Players tab has a second, separate set of filters, and sharing state
+  between the two would be a bug.** The header's `LeagueFilters` narrow *which of
+  this manager's leagues* a share is counted over; the ADP bar's `AdpControls`
+  narrow *which drafts in the database* the average is taken from. One is about
+  the manager, the other about the market, and they are only adjacent on screen —
+  a dynasty filter on the header means "count my dynasty leagues", the same word
+  on the ADP bar means "average dynasty drafts, including strangers'". They stay
+  independent for that reason. "Match a league" is the one bridge, and it is
+  deliberately partial: it seeds the four *league settings* from one of the
+  manager's leagues, while season and draft type stay manual (they aren't league
+  settings at all) and so does superflex — that lives in `roster_positions`, which
+  the client's league object doesn't carry. Seeding it from nothing would mean
+  guessing, and a wrong guess here reads off the wrong KTC-style board.
+- **`useAdp` is not keyed to the manager, unlike every other hook on these
+  pages.** The four sub-resource hooks re-fetch on the leagues array because they
+  read what that stream wrote; ADP describes the whole crawled database narrowed
+  by settings, so it calls `/api/adp` directly and re-fetches on the *query
+  string*. It keeps the one habit they share — loaded data is never blanked on
+  refetch — because a filter tweak that flashes every ADP cell to an em dash and
+  back is worse than a moment of staleness. A `null` query means the season isn't
+  known yet, which is the one case where there is genuinely nothing to ask for.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
@@ -457,6 +496,15 @@ stops holding, a comment saying it does would not have caught it.
   same person across leagues is the page), and the list itself is the player
   shares list with a person in the player column: same grid, same two numbers,
   same expansion.
+- **`ShareList`'s optional `value` column is two whole grid templates, not one
+  interpolated.** The players view puts ADP between the name and the counts; the
+  leaguemates view has nothing to put there. So `COLUMNS` and
+  `COLUMNS_WITH_VALUE` are both written out in full — Tailwind only sees class
+  strings it can read literally, and a template assembled from fragments compiles
+  to no grid at all. The cell is gated on the column existing rather than on
+  having a number, so a row with no ADP still fills its track and the columns
+  below it stay aligned; a caller omitting `value` gets the four-column grid
+  byte-for-byte as it was, which is what keeps the leaguemates list unchanged.
 - **Both share views *are* `ShareList`.** The grid template, the heading row, the
   count-and-percent cells and the expansion were copied between
   `player-shares` and `leaguemate-shares` — only the heading word and the first
