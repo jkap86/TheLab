@@ -325,8 +325,22 @@ stops holding, a comment saying it does would not have caught it.
   tool is picked. A resubmit aborts the lookup still in flight, or the slower
   response wins whichever was asked for last. That resolved identity is now what
   the section is *for*: `ToolsHome` holds it and hands it down, so the extra
-  request buys the grid below something and not just a confirmation. A reload
-  still clears it — it lives in component state and nowhere else.
+  request buys the grid below something and not just a confirmation.
+- **That account is the app's only client-side persistence, and it is a
+  `useSyncExternalStore` over one `localStorage` key.** A reload, or a trip out
+  to a tool and back, used to drop you at an empty search box — with the grid
+  gated on the account, that made the gate feel like a wall. Three details are
+  load-bearing and easy to undo by "simplifying" the store away. The server has
+  no storage, so `getServerSnapshot` returns null and the account appears only
+  after hydration — reading `localStorage` during render is the hydration
+  mismatch this shape exists to avoid. The snapshot is the **raw string**, parsed
+  in a `useMemo` keyed on it, because `useSyncExternalStore` compares snapshots
+  by identity and a fresh `JSON.parse` per read looks like a change every render
+  and loops. And `storeUser` notifies its own listeners by hand, since the
+  `storage` event fires in *other* tabs but never the one that wrote. Only the
+  resolved `UserInfo` is kept; leagues re-derive from `user_id`. Writes are
+  wrapped in `try`/`catch` because storage can be blocked — persistence here is a
+  convenience, never correctness.
 - **The account is the key to the whole grid: every card is inert until one
   resolves.** Each tool reads that account, so `ToolGrid` passes `disabled={!user}`
   and `ToolLinkCard` renders an `aria-disabled`, dimmed `div` instead of a
@@ -386,10 +400,19 @@ stops holding, a comment saying it does would not have caught it.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
   being looked at, the season and the sync state are the same facts on all of
   them; only the count line under them differs, which is what `children` is. The
-  tabs live there because that is the only thing making a second view reachable —
-  there is no global nav — and they link with the URL's own spelling of the
-  manager rather than the resolved username, since Sleeper resolves a user id as
-  readily as a name.
+  tabs live there because they are what makes a second view reachable, and they
+  link with the URL's own spelling of the manager rather than the resolved
+  username, since Sleeper resolves a user id as readily as a name.
+- **`SiteHeader` is the only global chrome, and it is one link.** Every tool is
+  reached by navigating away from `/tools`, which used to leave the back button
+  as the only way home; the slim bar in `app/layout.tsx` closes that loop. It
+  hides itself on `/tools` — a link to the page you are on is noise, and that
+  page leads with its own header — which is the whole reason it reads
+  `usePathname` and therefore the whole reason it is a client component. Its
+  container matches `PageShell`'s so the wordmark lines up with the content under
+  it. This does **not** make it a nav: the manager tabs still carry movement
+  between manager views, and adding routes here would put two navigation systems
+  on the same page.
 - **The four manager sub-resource hooks are one hook, bound four ways.**
   `useManagerPlayers`, `useManagerLeaguemates`, `useManagerRanks` and
   `useManagerKtc` read `/api/user/[username]/{players,leaguemates,ranks,ktc}`,
@@ -456,7 +479,22 @@ stops holding, a comment saying it does would not have caught it.
   stable over the standings order the server sends, so ties, unprojected teams
   and a league with no outlook at all degrade to the standings rather than to a
   shuffle.
-- **The collapsed card's rank chip comes from one batch route,
+- **The collapsed card's stat columns are four slots the reader aims, not four
+  fixed rankings.** `league-metrics.ts` is the catalogue of what a slot can hold
+  and how to read it off the cached ranks and KTC value — the card hard-coded
+  record, points, KTC starters and projected points, which answers where a roster
+  places on four axes and nothing about the shape behind them. Three things to
+  keep. The list holds **two shapes on purpose**: a `rank` metric is `#N of M`,
+  tinted and metered against its league, while a `value` metric is a bare number
+  with no field to place it in (bench value, the raw points behind a rank) — same
+  menu, different cells, because "3rd of 12" and "41,200" are not comparable
+  claims. The selection lives in `ManagerLeagues`, not per card, so the columns
+  line up down the list and one picker moves them all — per-card columns would
+  make the list unreadable vertically, which is the axis it is scanned on. And
+  the module keeps the pure-and-tested bar its neighbours `shares` and `filters`
+  hold: everything from `./types` arrives as an erased `import type`, so the
+  accessors test without a fetch (`league-metrics.test.ts`).
+- **The rank metrics come from one batch route,
   `/api/user/[username]/ranks`.** A collapsed league costs no request — the
   panel loads on expand — and a hundred cards each fetching a league detail to
   learn one number would undo that; ranking also needs every *other* team's
@@ -480,11 +518,11 @@ stops holding, a comment saying it does would not have caught it.
   those under headings of their own. The starting half is summed by walking the
   *roster* and asking whether each player starts, never by walking the lineup, so
   a lineup naming someone the roster doesn't hold can't hand back a negative
-  bench (`rosterKtcValue`, tested). The chip disappears when nothing is priced,
-  on the same terms as the rank chip beside it: a pre-draft roster is empty and
-  KTC's board is skill players only, so "0 ktc" would dress both up as a claim
-  about the team.
-- **That chip is batched like the rank chip, and for the same reason.** A
+  bench (`rosterKtcValue`, tested). Its cell goes blank when nothing is priced,
+  on the same terms as a rank metric: a pre-draft roster is empty and KTC's board
+  is skill players only, so "0 ktc" would dress both up as a claim about the
+  team.
+- **The KTC metrics are batched like the rank ones, and for the same reason.** A
   collapsed card costs no request, so a hundred of them each fetching a value
   would undo that. The route reads `getManagerLeagueRosters` and drops every team
   but the manager's own *before* the projections read — a hundred leagues of
