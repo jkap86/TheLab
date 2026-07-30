@@ -1,8 +1,11 @@
 "use client";
 
+import { useCallback, useState } from "react";
+
 import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
 import { useManagerKtc } from "../hooks/use-manager-ktc";
 import { useManagerRanks } from "../hooks/use-manager-ranks";
+import { DEFAULT_COLUMNS } from "../league-metrics";
 import { LeagueCard } from "./league-card";
 import { LeaguesViewLayout } from "./leagues-view-layout";
 
@@ -28,6 +31,15 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   const leagues = view.data?.leagues ?? null;
   const ranks = useManagerRanks(searched, leagues);
   const ktc = useManagerKtc(searched, leagues);
+
+  // Which metric each of the four stat columns shows, shared by every card so the
+  // columns line up down the list — a change on any card's picker moves them all.
+  const [columns, setColumns] = useState<string[]>(DEFAULT_COLUMNS);
+  const setColumn = useCallback((slot: number, key: string) => {
+    setColumns((current) =>
+      current.map((existing, i) => (i === slot ? key : existing)),
+    );
+  }, []);
 
   const total = view.data?.leagues.length ?? 0;
   const showing = view.filtered.length;
@@ -55,6 +67,8 @@ export function ManagerLeagues({ searched }: { searched: string }) {
             weeks={ranks.data?.weeks ?? []}
             ktc={ktc.data?.leagues[league.league_id] ?? null}
             valuedAt={ktc.data?.updated_at ?? null}
+            columns={columns}
+            onColumnChange={setColumn}
           />
         ))}
       </ul>
