@@ -1,4 +1,3 @@
-export { ToolGrid } from "./components/tool-grid";
+export { ToolsHome } from "./components/tools-home";
 export { ToolPlaceholder } from "./components/tool-placeholder";
-export { UserLookup } from "./components/user-lookup";
 export { tools, type Tool } from "./tools.data";

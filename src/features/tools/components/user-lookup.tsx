@@ -17,12 +17,22 @@ import { Avatar, apiFetch, isAbortError } from "@/features/shared";
  * That is also why the lookup is worth a request at all: Sleeper accepts a user
  * id as readily as a name, so what you typed is not proof of who you meant.
  *
+ * The resolved user is lifted to `ToolsHome` rather than held here, because the
+ * tools below now read it — the pick tracker card lists this account's leagues.
+ * Only the resolved identity is controlled; the search box text and the
+ * in-flight/error state stay local, since nothing else needs them.
+ *
  * A real `<form>` for the same reason as the other two: Enter submits, and the
  * browser treats input and button as one control.
  */
-export function UserLookup() {
+export function UserLookup({
+  user,
+  onUserChange,
+}: {
+  user: UserInfo | null;
+  onUserChange: (user: UserInfo | null) => void;
+}) {
   const [username, setUsername] = useState("");
-  const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
@@ -50,7 +60,7 @@ export function UserLookup() {
         fallbackError: "Failed to look that username up",
       });
       const json = (await res.json()) as UserInfo;
-      setUser(json);
+      onUserChange(json);
       setLoading(false);
     } catch (err: unknown) {
       // An abort means a newer lookup (or unmount) has taken over the state,
@@ -63,7 +73,7 @@ export function UserLookup() {
 
   const handleChange = () => {
     inFlight.current?.abort();
-    setUser(null);
+    onUserChange(null);
     setError(null);
   };
 

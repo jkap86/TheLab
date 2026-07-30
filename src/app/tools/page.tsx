@@ -1,5 +1,5 @@
 import { PageShell } from "@/features/shared";
-import { ToolGrid, UserLookup } from "@/features/tools";
+import { ToolsHome } from "@/features/tools";
 
 export default function ToolsPage() {
   return (
@@ -13,9 +13,7 @@ export default function ToolsPage() {
         </p>
       </header>
 
-      <UserLookup />
-
-      <ToolGrid />
+      <ToolsHome />
     </PageShell>
   );
 }
