@@ -45,9 +45,11 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
       active="leaguemates"
       count={
         <>
-          <span className="text-lg font-medium">
-            {shares ? shares.mates.length : "—"} leaguemate
-            {shares?.mates.length === 1 ? "" : "s"}
+          <span className="text-sm text-foreground/60">
+            <b className="text-base font-bold text-foreground">
+              {shares ? shares.mates.length : "—"}
+            </b>{" "}
+            leaguemate{shares?.mates.length === 1 ? "" : "s"}
           </span>
           {shares && (
             <span className="text-sm text-foreground/45">

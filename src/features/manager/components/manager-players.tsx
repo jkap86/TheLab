@@ -39,9 +39,11 @@ export function ManagerPlayers({ searched }: { searched: string }) {
       active="players"
       count={
         <>
-          <span className="text-lg font-medium">
-            {shares ? shares.players.length : "—"} player
-            {shares?.players.length === 1 ? "" : "s"}
+          <span className="text-sm text-foreground/60">
+            <b className="text-base font-bold text-foreground">
+              {shares ? shares.players.length : "—"}
+            </b>{" "}
+            player{shares?.players.length === 1 ? "" : "s"}
           </span>
           {shares && (
             <span className="text-sm text-foreground/45">
