@@ -1,94 +1,67 @@
 "use client";
 
-import { useMemo, useState } from "react";
-
-import { PageShell } from "@/features/shared";
-
-import {
-  DEFAULT_LEAGUE_FILTERS,
-  matchesFilters,
-  type LeagueFilters,
-} from "../filters";
+import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
 import { useManagerKtc } from "../hooks/use-manager-ktc";
-import { useManagerLeagues } from "../hooks/use-manager-leagues";
 import { useManagerRanks } from "../hooks/use-manager-ranks";
 import { LeagueCard } from "./league-card";
-import { LeaguesFilters } from "./manager-leagues-filters";
-import { LeaguesHeader } from "./manager-leagues-header";
-import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
+import { LeaguesViewLayout } from "./leagues-view-layout";
 
+/**
+ * The leagues view: this manager's leagues as a filterable list of cards, each
+ * opening the full standings-and-rosters panel.
+ *
+ * It, players and leaguemates are the same page — leagues stream, filters, and
+ * the header/empty/no-match chrome — so all three sit on {@link useFilteredLeagues}
+ * and {@link LeaguesViewLayout} and vary only in the resource they read, the count
+ * line, and the body. Here the body is the card list; the resource is the rank
+ * and KTC chips those cards wear.
+ */
 export function ManagerLeagues({ searched }: { searched: string }) {
-  const { data, progress, refreshing, error } = useManagerLeagues(searched);
-  const [filters, setFilters] = useState<LeagueFilters>(
-    DEFAULT_LEAGUE_FILTERS,
-  );
+  const view = useFilteredLeagues(searched);
 
-  const leagues = data?.leagues;
   // The card chips are a bonus on top of the list, so a fetch that fails costs
-  // the chips and nothing else — both errors are deliberately unused. Two reads
-  // rather than one because they answer different questions off different
-  // caches: a KTC scrape that is behind shouldn't cost the projected ranks.
-  const { data: ranks } = useManagerRanks(searched, leagues ?? null);
-  const { data: ktc } = useManagerKtc(searched, leagues ?? null);
-  const filtered = useMemo(
-    () => (leagues ?? []).filter((league) => matchesFilters(league, filters)),
-    [leagues, filters],
-  );
+  // the chips and nothing else — both errors go deliberately unread. Two reads
+  // rather than one because they answer different questions off different caches:
+  // a KTC scrape that is behind shouldn't cost the projected ranks. Both fetch
+  // over the unfiltered leagues, since the chips belong to every card the filters
+  // might later show.
+  const leagues = view.data?.leagues ?? null;
+  const ranks = useManagerRanks(searched, leagues);
+  const ktc = useManagerKtc(searched, leagues);
 
-  // Cold load: nothing cached yet.
-  if (!data) {
-    return (
-      <PageShell width="wide">
-        {error ? (
-          <ErrorCard message={error} />
-        ) : (
-          <LoadingState searched={searched} progress={progress} />
-        )}
-      </PageShell>
-    );
-  }
-
-  const { user, season, summary } = data;
+  const total = view.data?.leagues.length ?? 0;
+  const showing = view.filtered.length;
 
   return (
-    <PageShell width="wide">
-      <LeaguesHeader
-        user={user}
-        searched={searched}
-        leagueCount={filtered.length}
-        totalCount={data.leagues.length}
-        season={season}
-        refreshing={refreshing}
-        progress={progress}
-        summary={summary}
-        refreshError={error}
-      />
-
-      {data.leagues.length === 0 ? (
-        <EmptyState season={season} />
-      ) : (
-        <>
-          <LeaguesFilters filters={filters} onChange={setFilters} />
-          {filtered.length === 0 ? (
-            <p className="rounded-xl border border-foreground/10 bg-foreground/[0.02] px-4 py-8 text-center text-sm text-foreground/45">
-              No leagues match these filters.
-            </p>
+    <LeaguesViewLayout
+      view={view}
+      active="leagues"
+      count={
+        <span className="text-lg font-medium">
+          {showing === total ? (
+            <>
+              {total} league{total === 1 ? "" : "s"}
+            </>
           ) : (
-            <ul className="flex flex-col gap-4 w-full">
-              {filtered.map((league) => (
-                <LeagueCard
-                  key={league.league_id}
-                  league={league}
-                  ranks={ranks?.ranks[league.league_id] ?? null}
-                  weeks={ranks?.weeks ?? []}
-                  ktc={ktc?.leagues[league.league_id] ?? null}
-                  valuedAt={ktc?.updated_at ?? null}
-                />
-              ))}
-            </ul>
+            <>
+              {showing} of {total} league{total === 1 ? "" : "s"}
+            </>
           )}
-        </>
-      )}
-    </PageShell>
+        </span>
+      }
+    >
+      <ul className="flex flex-col gap-4 w-full">
+        {view.filtered.map((league) => (
+          <LeagueCard
+            key={league.league_id}
+            league={league}
+            ranks={ranks.data?.ranks[league.league_id] ?? null}
+            weeks={ranks.data?.weeks ?? []}
+            ktc={ktc.data?.leagues[league.league_id] ?? null}
+            valuedAt={ktc.data?.updated_at ?? null}
+          />
+        ))}
+      </ul>
+    </LeaguesViewLayout>
   );
 }
