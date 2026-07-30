@@ -111,6 +111,7 @@ function Panel({ data }: { data: LeagueDetailResult }) {
         <Standings
           teams={teams}
           outlook={data.outlook}
+          values={data.values}
           selectedId={selected.roster_id}
           onSelect={setSelectedId}
           columns={teamColumns}

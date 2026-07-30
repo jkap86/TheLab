@@ -1,10 +1,16 @@
 import { formatPoints, formatRecord, formatWeekRange } from "../format";
 import {
+  rosterValueTotal,
   TEAM_METRICS,
   TEAM_METRICS_BY_KEY,
   type TeamMetric,
 } from "../standings-metrics";
-import type { LeagueOutlook, LeagueTeamView, TeamOutlook } from "../types";
+import type {
+  LeagueOutlook,
+  LeagueRosterValues,
+  LeagueTeamView,
+  TeamOutlook,
+} from "../types";
 import { ColumnPicker, type ColumnOption } from "./column-picker";
 import { managerLabel, TeamAvatar } from "./ui";
 
@@ -32,13 +38,14 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
  *
  * The two value columns are slots the reader points at a team-level metric —
  * projected points and projected bench to start with, swappable to the season
- * optimal or points for from the heading's picker. Which metric each shows is held
- * above this table (in the panel) so both columns line up down the list and one
- * picker moves the whole column.
+ * optimal, points for, or the roster's whole KTC / ADP total from the heading's
+ * picker. Which metric each shows is held above this table (in the panel) so both
+ * columns line up down the list and one picker moves the whole column.
  */
 export function Standings({
   teams,
   outlook,
+  values,
   selectedId,
   onSelect,
   columns,
@@ -49,6 +56,8 @@ export function Standings({
 }: {
   teams: LeagueTeamView[];
   outlook: LeagueOutlook | null;
+  /** Per-player KTC and ADP values on this league's board, summed per team here. */
+  values: LeagueRosterValues;
   selectedId: number;
   onSelect: (rosterId: number) => void;
   /** The metric key each of the two value columns shows. */
@@ -111,6 +120,7 @@ export function Standings({
             nameSpan={nameSpan}
             columns={outlookByRoster ? columns : null}
             teamOutlook={outlookByRoster?.get(team.roster_id)}
+            values={values}
             active={team.roster_id === selectedId}
             onSelect={() => onSelect(team.roster_id)}
           />
@@ -135,6 +145,7 @@ function StandingsRow({
   nameSpan,
   columns,
   teamOutlook,
+  values,
   active,
   onSelect,
 }: {
@@ -150,11 +161,19 @@ function StandingsRow({
   columns: string[] | null;
   /** This team's outlook, or undefined when it has none — the metrics render an em dash. */
   teamOutlook: TeamOutlook | undefined;
+  /** Per-player KTC and ADP values, summed to this roster's totals for those metrics. */
+  values: LeagueRosterValues;
   active: boolean;
   onSelect: () => void;
 }) {
   const record = formatRecord(team.record);
   const points = formatPoints(team.fpts);
+
+  // The KTC and ADP metrics read a whole-roster total; the projection ones ignore
+  // these. Computed once here rather than per cell, and only when there are value
+  // columns to feed.
+  const ktcTotal = columns ? rosterValueTotal(team.players, values.ktc) : null;
+  const adpTotal = columns ? rosterValueTotal(team.players, values.adp) : null;
 
   // The username identifies the person; the team name is a per-league nickname
   // that changes at will. Showing the username means the same opponent reads the
@@ -195,7 +214,14 @@ function StandingsRow({
 
         {columns?.map((key, slot) => {
           const metric: TeamMetric = TEAM_METRICS_BY_KEY[key] ?? TEAM_METRICS[0];
-          const cell = metric.cell({ team, outlook: teamOutlook });
+          const cell = metric.cell({
+            team,
+            outlook: teamOutlook,
+            ktcTotal,
+            adpTotal,
+            superflex: values.superflex,
+            draftCount: values.adp_draft_count,
+          });
           return (
             <span
               key={slot}

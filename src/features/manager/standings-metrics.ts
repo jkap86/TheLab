@@ -1,4 +1,4 @@
-import { formatPoints } from "./format.ts";
+import { formatPoints, formatValue } from "./format.ts";
 import type { LeagueTeamView, TeamOutlook } from "./types";
 
 /**
@@ -12,22 +12,61 @@ import type { LeagueTeamView, TeamOutlook } from "./types";
  * points at a metric of their choosing, and this is the catalogue of what a slot
  * can hold.
  *
- * Team-specific by design: every metric here is one team's aggregate, read off
- * its standings row or its {@link TeamOutlook}. The roster panel beside it has the
- * player-level lens (a player's KTC and ADP value); a manager's column stays about
- * the team, which is the split the two catalogues keep.
+ * Team-specific by design: every metric here is one team's aggregate — read off
+ * its standings row, its {@link TeamOutlook}, or its roster's total on the KTC and
+ * ADP boards. The roster panel beside it carries the *per-player* KTC and ADP
+ * value; here those two lenses are the whole roster summed to one number. Only the
+ * total, never a rank: the standings has no rank cell (unlike the collapsed card),
+ * so a manager's column is always a plain value.
  *
- * Pure and free of runtime imports beyond {@link formatPoints} — everything from
- * {@link ./types} arrives as an erased `import type` — so the accessors read and
- * test without a fetch behind them, the same bar `league-metrics` holds.
+ * Pure and free of runtime imports beyond {@link formatPoints} and {@link
+ * formatValue} — everything from {@link ./types} arrives as an erased `import
+ * type` — so the accessors read and test without a fetch behind them, the same bar
+ * `league-metrics` holds.
  */
 
-/** What a team metric reads from: one team's standings row and its outlook. */
+/** What a team metric reads from: one team's standings row, outlook and board totals. */
 export type TeamMetricContext = {
   team: LeagueTeamView;
   /** This team's rest-of-season outlook, or null/undefined when none was projected. */
   outlook: TeamOutlook | null | undefined;
+  /** This team's KTC total on the league's board, or null when nothing is priced. */
+  ktcTotal: number | null;
+  /** This team's ADP-derived total, or null when nothing is priced. */
+  adpTotal: number | null;
+  /** Whether the league reads the superflex board — for the KTC and ADP hovers. */
+  superflex: boolean;
+  /** How many crawled drafts stood behind the ADP board, for its hover. */
+  draftCount: number;
 };
+
+/**
+ * A team's total on one of the per-player value boards: every rostered player's
+ * board value summed, deduped, unpriced ids skipped.
+ *
+ * Null when nothing on the roster is priced — an em dash rather than a zero, the
+ * reading the collapsed card's KTC total takes. A board value is always positive,
+ * so a zero total only ever means an unpriced roster, which is why the priced
+ * count and not the sum decides the em dash. Mirrors `rosterKtcValue` /
+ * `rosterAdpValue`, which sum the same way server-side.
+ */
+export function rosterValueTotal(
+  playerIds: readonly string[],
+  values: Record<string, number>,
+): number | null {
+  let total = 0;
+  let priced = 0;
+  // Sleeper pads unfilled slots with an empty id or a literal "0"; a deduped
+  // roster keeps the total from double-counting anyone.
+  for (const id of new Set(playerIds)) {
+    if (!id || id === "0") continue;
+    const value = values[id];
+    if (value === undefined) continue;
+    total += value;
+    priced++;
+  }
+  return priced > 0 ? total : null;
+}
 
 /**
  * One column's read: the formatted number to print, or null for an em dash when
@@ -52,9 +91,11 @@ const noProjection: TeamMetricCell = { text: null, title: "No projection" };
 /**
  * Every team metric a standings column can show, in the order the picker lists
  * them: the two projected totals it opened with — each week's best lineup and what
- * those lineups leave on the bench — then the single season-long optimal lineup
- * (a different, always-smaller number, see {@link TeamOutlook}), and the points
- * the team has actually scored so far.
+ * those lineups leave on the bench — the single season-long optimal lineup (a
+ * different, always-smaller number, see {@link TeamOutlook}), the points the team
+ * has actually scored so far, and the whole roster's value on the KTC and ADP
+ * boards. The last two are totals only — no rank, since the standings has no rank
+ * cell to place one in.
  */
 export const TEAM_METRICS: TeamMetric[] = [
   {
@@ -103,6 +144,37 @@ export const TEAM_METRICS: TeamMetric[] = [
       text: formatPoints(team.fpts),
       title: `${formatPoints(team.fpts)} points for`,
     }),
+  },
+  {
+    key: "ktc",
+    label: "KTC",
+    cell: ({ ktcTotal, superflex }) =>
+      ktcTotal === null
+        ? { text: null, title: "nothing on this roster is priced on KeepTradeCut" }
+        : {
+            text: formatValue(ktcTotal),
+            title: `${formatValue(ktcTotal)} KeepTradeCut dynasty ${
+              superflex ? "superflex" : "1QB"
+            } value`,
+          },
+  },
+  {
+    key: "adp",
+    label: "ADP",
+    cell: ({ adpTotal, superflex, draftCount }) =>
+      adpTotal === null
+        ? { text: null, title: "no ADP value on the matching board" }
+        : {
+            text: formatValue(adpTotal),
+            title: [
+              `${formatValue(adpTotal)} draft-capital value`,
+              `${superflex ? "superflex" : "1QB"} board`,
+              draftCount > 0 &&
+                `over ${draftCount} crawled draft${draftCount === 1 ? "" : "s"}`,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          },
   },
 ];
 

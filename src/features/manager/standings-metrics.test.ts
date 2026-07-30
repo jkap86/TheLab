@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import {
   DEFAULT_TEAM_COLUMNS,
+  rosterValueTotal,
   TEAM_METRICS,
   TEAM_METRICS_BY_KEY,
   type TeamMetricContext,
@@ -34,6 +35,10 @@ const outlook = {
 const ctx = (over: Partial<TeamMetricContext> = {}): TeamMetricContext => ({
   team,
   outlook,
+  ktcTotal: 41320,
+  adpTotal: 38400,
+  superflex: true,
+  draftCount: 37,
   ...over,
 });
 
@@ -77,5 +82,29 @@ describe("points-for metric", () => {
   test("reads the team's actual points, with or without an outlook", () => {
     assert.equal(cell("pf").text, "1,234.56");
     assert.equal(cell("pf", { outlook: null }).text, "1,234.56");
+  });
+});
+
+describe("roster value totals", () => {
+  test("sum a roster's board values, deduped, unpriced ids skipped", () => {
+    const values = { a: 100, b: 250, c: 400 };
+    // `d` is unpriced and the duplicate `a` must not be counted twice.
+    assert.equal(rosterValueTotal(["a", "b", "a", "d"], values), 350);
+  });
+
+  test("are null, not zero, when nothing on the roster is priced", () => {
+    assert.equal(rosterValueTotal(["x", "0", ""], { a: 100 }), null);
+  });
+});
+
+describe("value-total metrics", () => {
+  test("KTC and ADP print the roster total, not a rank", () => {
+    assert.equal(cell("ktc").text, "41,320");
+    assert.equal(cell("adp").text, "38,400");
+  });
+
+  test("are an em dash when nothing on the roster is priced", () => {
+    assert.equal(cell("ktc", { ktcTotal: null }).text, null);
+    assert.equal(cell("adp", { adpTotal: null }).text, null);
   });
 });
