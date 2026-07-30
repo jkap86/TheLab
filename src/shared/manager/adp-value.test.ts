@@ -2,21 +2,32 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
-  ADP_HALF_LIFE,
   ADP_PEAK,
+  DEFAULT_STEEPNESS,
   adpBoardFor,
   adpValue,
   boardSignature,
+  parseSteepness,
   rosterAdpValue,
+  startingSlotCount,
 } from "./adp-value.ts";
+
+// A 12-team league starting 9 — 108 startable slots — at the default steepness.
+const POOL = 108;
+const HALVINGS = 4;
 
 describe("adpValue", () => {
   test("the first pick sits at the peak", () => {
-    assert.equal(adpValue(1), ADP_PEAK);
+    assert.equal(adpValue(1, POOL, HALVINGS), ADP_PEAK);
   });
 
-  test("value halves over one half-life of picks", () => {
-    assert.equal(adpValue(1 + ADP_HALF_LIFE), Math.round(ADP_PEAK / 2));
+  test("value halves one full halving-step into the pool", () => {
+    // (adp − 1)/pool = 1/halvings ⇒ one halving. 27/108 = 1/4 = 1/HALVINGS.
+    assert.equal(adpValue(1 + POOL / HALVINGS, POOL, HALVINGS), Math.round(ADP_PEAK / 2));
+  });
+
+  test("a full pool deep, value has halved `halvings` times", () => {
+    assert.equal(adpValue(1 + POOL, POOL, HALVINGS), Math.round(ADP_PEAK / 2 ** HALVINGS));
   });
 
   test("a better (lower) ADP is never worth less", () => {
@@ -25,21 +36,65 @@ describe("adpValue", () => {
     // bench pieces really are worth about the same.
     let previous = Infinity;
     for (let adp = 1; adp <= 300; adp += 3) {
-      const value = adpValue(adp);
+      const value = adpValue(adp, POOL, HALVINGS);
       assert.ok(value <= previous, `adp ${adp} rose above ${previous}`);
       previous = value;
     }
   });
 
-  test("across a real draft gap a better pick is worth strictly more", () => {
-    assert.ok(adpValue(1) > adpValue(13));
-    assert.ok(adpValue(13) > adpValue(50));
-    assert.ok(adpValue(50) > adpValue(120));
+  test("a bigger startable pool holds value further down the board", () => {
+    // The league-size anchor: the same pick is worth more where more players start.
+    assert.ok(adpValue(30, 132, HALVINGS) > adpValue(30, 72, HALVINGS));
+  });
+
+  test("more halvings make the curve steeper", () => {
+    assert.ok(adpValue(30, POOL, 5) < adpValue(30, POOL, 3));
   });
 
   test("a junk ADP can't exceed the peak or return NaN", () => {
-    assert.equal(adpValue(Number.NaN), ADP_PEAK);
-    assert.equal(adpValue(0), ADP_PEAK);
+    assert.equal(adpValue(Number.NaN, POOL, HALVINGS), ADP_PEAK);
+    assert.equal(adpValue(0, POOL, HALVINGS), ADP_PEAK);
+  });
+
+  test("a zero pool is floored rather than dividing by zero", () => {
+    const value = adpValue(30, 0, HALVINGS);
+    assert.ok(Number.isFinite(value) && value >= 0 && value < ADP_PEAK);
+  });
+});
+
+describe("startingSlotCount", () => {
+  test("counts starting slots, dropping bench, IR and taxi", () => {
+    assert.equal(
+      startingSlotCount(["QB", "RB", "RB", "WR", "TE", "FLEX", "BN", "IR", "TAXI"]),
+      6,
+    );
+  });
+
+  test("a superflex slot is a starting slot", () => {
+    assert.equal(startingSlotCount(["QB", "SUPER_FLEX", "BN"]), 2);
+  });
+
+  test("an unrecognised slot starts nobody", () => {
+    assert.equal(startingSlotCount(["QB", "OP", "BN"]), 1);
+  });
+
+  test("no slots on file is zero, not a guess", () => {
+    assert.equal(startingSlotCount(null), 0);
+    assert.equal(startingSlotCount([]), 0);
+  });
+});
+
+describe("parseSteepness", () => {
+  test("passes the three presets through", () => {
+    assert.equal(parseSteepness("flat"), "flat");
+    assert.equal(parseSteepness("balanced"), "balanced");
+    assert.equal(parseSteepness("steep"), "steep");
+  });
+
+  test("anything unknown falls back to the default", () => {
+    assert.equal(parseSteepness(null), DEFAULT_STEEPNESS);
+    assert.equal(parseSteepness(undefined), DEFAULT_STEEPNESS);
+    assert.equal(parseSteepness("garbage"), DEFAULT_STEEPNESS);
   });
 });
 

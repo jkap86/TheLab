@@ -13,13 +13,14 @@
  *
  * Pure and free of runtime imports beyond the slot vocabulary and the ADP
  * filter defaults, so it unit-tests without a fetch — the same bar `rank.ts`,
- * `shares` and `filters` hold. Its one cross-module value import reaches
- * `ktc/roster` relatively with a `.ts` extension, the mechanism that file itself
- * uses to reach `projections/slots`: Node's test runner strips types but doesn't
- * know the `@/*` aliases.
+ * `shares` and `filters` hold. Its cross-module value imports reach `ktc/roster`
+ * and `projections/slots` relatively with a `.ts` extension, the mechanism those
+ * files use between themselves: Node's test runner strips types but doesn't know
+ * the `@/*` aliases.
  */
 
 import { isSuperflexLineup } from "../ktc/roster.ts";
+import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../projections/slots.ts";
 import { ADP_FILTER_DEFAULTS } from "./adp-filters.ts";
 import type { AdpFilters, LeagueType, ScoringFormat } from "./adp-filters.ts";
 
@@ -32,28 +33,69 @@ import type { AdpFilters, LeagueType, ScoringFormat } from "./adp-filters.ts";
 export const ADP_PEAK = 10_000;
 
 /**
- * How many picks of ADP halve a player's value. Twenty-four is two rounds of a
- * twelve-team league: the early-first-rounder is worth roughly twice the
- * late-second, which is about how draft boards actually price that gap. It is a
- * modeling choice, not a fact — tune it once real boards are in view.
+ * The steepness of the value curve, as three presets the reader picks from the
+ * ADP bar — the number of times value halves across a league's whole *startable
+ * pool* (see {@link adpValue}). `balanced` (4) makes a league's last startable
+ * pick worth ~1/16 of the 1.01; `flat` keeps depth worth more, `steep`
+ * concentrates value at the very top. A `Steepness` is the only knob on the
+ * curve, and it is expressed in halvings-per-pool rather than picks so it means
+ * the same thing in a shallow league and a deep one.
+ *
+ * The client writes these same three strings into its own `AdpControls` with no
+ * compiler link — a matched pair, like the ADP board filters — so
+ * {@link parseSteepness} tolerates anything unknown by falling back to the
+ * default rather than trusting the query string.
  */
-export const ADP_HALF_LIFE = 24;
+export const STEEPNESS_HALVINGS = { flat: 3, balanced: 4, steep: 5 } as const;
+export type Steepness = keyof typeof STEEPNESS_HALVINGS;
+export const DEFAULT_STEEPNESS: Steepness = "balanced";
 
-const DECAY = Math.LN2 / ADP_HALF_LIFE;
+/** Read a `steepness` query value, falling back to the default for anything unknown. */
+export function parseSteepness(value: string | null | undefined): Steepness {
+  return value != null && value in STEEPNESS_HALVINGS
+    ? (value as Steepness)
+    : DEFAULT_STEEPNESS;
+}
 
 /**
- * One player's value from their average draft position: exponential decay,
- * anchored so ADP 1 sits at {@link ADP_PEAK} and every {@link ADP_HALF_LIFE}
- * picks halve it. Monotonically decreasing, so a better (lower) ADP is always a
- * higher value. Rounded to a whole number so it reads like the KTC board and so
- * a roster total is a clean sum.
+ * A league's startable pool: how many players get *started* across it — the
+ * count of starting slots per team times the number of teams. Value should be
+ * near zero by the edge of this pool, because everything past it is replacement
+ * level, so it is what the curve is anchored to rather than raw pick count.
+ *
+ * {@link startingSlotCount} reuses the slot vocabulary so a new flex counts the
+ * moment the solver learns it, the way {@link isSuperflexLineup} does.
  */
-export function adpValue(adp: number): number {
+export function startingSlotCount(
+  rosterPositions: readonly string[] | null,
+): number {
+  if (!rosterPositions) return 0;
+  return rosterPositions.filter(
+    (slot) => !NON_STARTING_SLOTS.has(slot) && SLOT_POSITIONS[slot] !== undefined,
+  ).length;
+}
+
+/**
+ * One player's value from their average draft position, anchored to a league's
+ * startable pool rather than to a fixed pick count.
+ *
+ * `pool` is the league-wide count of starting slots (teams × starters per team);
+ * `halvings` is how many times value halves across it (a {@link Steepness}). So
+ * `(adp − 1) / pool` is how deep into the startable pool the pick sits, and the
+ * curve is `PEAK · 2^(−halvings · that)`. Anchoring to the pool is what makes a
+ * late first-rounder worth the same in a 10-team and a 14-team league, and a
+ * deeper-starting league (superflex, extra flex, IDP) extend value further down
+ * the board — because it starts more players. Rounded whole, and monotonically
+ * decreasing in ADP.
+ */
+export function adpValue(adp: number, pool: number, halvings: number): number {
   // ADP is an average of 1-based pick numbers, so it is always ≥ 1 in practice;
   // the guard is only so a junk value can't hand back NaN or something above the
-  // peak.
+  // peak. `pool` is floored at 1 so a league with no slots on file can't divide
+  // by zero — the caller supplies a fallback pool for that case.
   if (!Number.isFinite(adp) || adp <= 1) return ADP_PEAK;
-  return Math.round(ADP_PEAK * Math.exp(-DECAY * (adp - 1)));
+  const p = pool > 0 ? pool : 1;
+  return Math.round(ADP_PEAK * 2 ** ((-halvings * (adp - 1)) / p));
 }
 
 /** One roster's ADP-derived value, whole and split across its lineup. */

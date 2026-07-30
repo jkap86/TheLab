@@ -56,6 +56,7 @@ describe("adpQueryString", () => {
       bestBall: "no",
       teams: "12",
       rounds: "full",
+      steepness: "steep",
     };
     assert.deepEqual(params(adpQueryString(controls)), {
       limit: "1000",
@@ -69,6 +70,14 @@ describe("adpQueryString", () => {
       teams_max: "12",
       rounds_min: "12",
     });
+  });
+
+  test("steepness is a value-curve knob, not a board filter — never sent here", () => {
+    // It drives the Leagues-tab team value, not which drafts /api/adp averages.
+    const flat = adpQueryString({ ...defaultAdpControls("2026"), steepness: "flat" });
+    const steep = adpQueryString({ ...defaultAdpControls("2026"), steepness: "steep" });
+    assert.equal(flat, steep);
+    assert.equal("steepness" in params(flat), false);
   });
 
   test("the rounds buckets bound one side each, all-rounds neither", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 
 import { type AdpControls, seedFromLeague } from "../adp-controls";
 import type { ManagerLeague } from "../types";
@@ -44,35 +44,46 @@ const ROUNDS_OPTS = [
   { value: "full", label: "12+ (startup)" },
 ] as const;
 
+// The value-curve steepness — how top-heavy the ADP → team-value curve is. It
+// drives the Leagues-tab card value, not which drafts the per-player ADP averages.
+const STEEPNESS_OPTS = [
+  { value: "flat", label: "Flat" },
+  { value: "balanced", label: "Balanced" },
+  { value: "steep", label: "Top-heavy" },
+] as const;
+
 /**
- * The Players tab's ADP controls: which crawled drafts the column averages over,
- * plus a caption that says so. The bar is fully controlled — every change is an
- * immutable replace of the whole {@link AdpControls} object — so its state lives
- * up in `ManagerPlayers` and survives a background refresh.
+ * The shared ADP bar, shown on all three manager tabs. Its board controls pick
+ * which crawled drafts the Players-tab per-player ADP averages over; its value
+ * curve sets how top-heavy the Leagues-tab team value is. The bar is fully
+ * controlled — every change is an immutable replace of the whole
+ * {@link AdpControls} object — and its state lives in one per-manager store
+ * (`AdpControlsProvider`) so a choice made on one tab carries to the others.
  *
  * Season and team size are dropdowns because their options depend on the data
  * (the manager's leagues, the seasons on offer); the fixed enums are dropdowns
  * too, to keep one control language across a wide bar. "Match a league" is an
  * action rather than a selection — it seeds the four league settings from a
  * chosen league and snaps back to its placeholder.
+ *
+ * The line under the controls is a `caption` the calling tab supplies, because
+ * what is worth saying there differs: the Players tab reports how many drafts
+ * the board matched ({@link AdpBoardCaption}), the others say what the bar drives
+ * where the board controls don't bite.
  */
 export function AdpFilters({
   controls,
   onChange,
   leagues,
   seasons,
-  draftCount,
-  loading,
-  error,
+  caption,
 }: {
   controls: AdpControls;
   onChange: (controls: AdpControls) => void;
   leagues: ManagerLeague[];
   seasons: string[];
-  /** Drafts the current filters matched; null while the first board loads. */
-  draftCount: number | null;
-  loading: boolean;
-  error: string | null;
+  /** The line under the controls — tab-specific; omitted renders nothing. */
+  caption?: ReactNode;
 }) {
   // Only the sizes this manager actually plays, so seeding from any of their
   // leagues always lands on a listed option.
@@ -83,8 +94,6 @@ export function AdpFilters({
       ),
     [leagues],
   );
-
-  const seasonLabel = controls.season === "all" ? "all seasons" : controls.season;
 
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border border-foreground/10 bg-foreground/[0.02] px-3 py-3">
@@ -180,31 +189,55 @@ export function AdpFilters({
             ))}
           </select>
         </Field>
+
+        <EnumField
+          label="Value"
+          value={controls.steepness}
+          options={STEEPNESS_OPTS}
+          onChange={(steepness) => onChange({ ...controls, steepness })}
+        />
       </div>
 
-      {/* The ADP is averaged over the drafts this app happens to have crawled, so
-          it describes this database, not the market — said here, right above the
-          column, per the same rule that makes a projection ship its horizon. */}
-      <p className="text-xs text-foreground/45">
-        {error ? (
-          <span className="text-amber-300">ADP unavailable — {error}</span>
-        ) : draftCount === null ? (
-          "Loading ADP…"
-        ) : draftCount === 0 ? (
-          "No crawled drafts match these filters."
-        ) : (
-          <>
-            Averaged over{" "}
-            <b className="font-semibold text-foreground/70">
-              {draftCount.toLocaleString()}
-            </b>{" "}
-            crawled {draftCount === 1 ? "draft" : "drafts"} from {seasonLabel} in
-            this app’s data — not market ADP.
-            {loading && <span className="text-foreground/35"> Updating…</span>}
-          </>
-        )}
-      </p>
+      {caption && <p className="text-xs text-foreground/45">{caption}</p>}
     </div>
+  );
+}
+
+/**
+ * The Players tab's caption: how many crawled drafts the current board matched,
+ * and the standing caveat that the number describes this app's database and not
+ * the market. It is the inline content of the bar's caption line, so it renders
+ * as spans the bar wraps in its own `<p>`.
+ */
+export function AdpBoardCaption({
+  draftCount,
+  loading,
+  error,
+  season,
+}: {
+  /** Drafts the current filters matched; null while the first board loads. */
+  draftCount: number | null;
+  loading: boolean;
+  error: string | null;
+  season: string;
+}): ReactNode {
+  const seasonLabel = season === "all" ? "all seasons" : season;
+
+  if (error) {
+    return <span className="text-amber-300">ADP unavailable — {error}</span>;
+  }
+  if (draftCount === null) return "Loading ADP…";
+  if (draftCount === 0) return "No crawled drafts match these filters.";
+  return (
+    <>
+      Averaged over{" "}
+      <b className="font-semibold text-foreground/70">
+        {draftCount.toLocaleString()}
+      </b>{" "}
+      crawled {draftCount === 1 ? "draft" : "drafts"} from {seasonLabel} in this
+      app’s data — not market ADP.
+      {loading && <span className="text-foreground/35"> Updating…</span>}
+    </>
   );
 }
 

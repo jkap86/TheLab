@@ -12,15 +12,20 @@ export type ManagerAdpValueState = ManagerResourceState<ManagerAdpValueResult>;
  * the same reason: a collapsed card costs no request, so a hundred of them each
  * fetching a value would undo that. See {@link useManagerResource} for why it
  * takes the leagues themselves.
+ *
+ * `steepness` rides in the path so a change to the value curve re-fetches the
+ * whole board — it changes every roster's number, not which leagues are read,
+ * and the route re-prices them all with the new curve.
  */
 export function useManagerAdpValue(
   searched: string,
   leagues: ManagerLeague[] | null,
+  steepness: string,
 ): ManagerAdpValueState {
   return useManagerResource<ManagerAdpValueResult>(
     searched,
     leagues,
-    "adp-value",
+    `adp-value?steepness=${encodeURIComponent(steepness)}`,
     "Failed to load draft values",
   );
 }

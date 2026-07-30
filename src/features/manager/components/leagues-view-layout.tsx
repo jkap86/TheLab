@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 
 import { PageShell } from "@/features/shared";
 
+import { defaultAdpControls, seasonOptions } from "../adp-controls";
+import { useAdpControls } from "../filters-context";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
+import { AdpFilters } from "./adp-filters";
 import { ManagerHeader, type ManagerTab } from "./manager-header";
 import { LeaguesFilters } from "./manager-leagues-filters";
 import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
@@ -26,22 +29,31 @@ import { PanelMessage } from "./ui";
  * The body is `children` rather than always rendered so a tab's content only has
  * to reason about a non-empty filtered list: the "no leagues match these filters"
  * case is handled here, above it, the same way for all three.
+ *
+ * The shared ADP bar lives here too, so it shows identically on all three tabs
+ * from the one per-manager store, above the body but below the empty-filter
+ * check — the board is a fact about the market, not about which leagues the
+ * header filters leave. Its caption is the tab's to supply through `adpCaption`.
  */
 export function LeaguesViewLayout({
   view,
   active,
   count,
+  adpCaption,
   children,
 }: {
   view: FilteredLeagues;
   active: ManagerTab;
   /** The tab's own count line, shown beside the season and sync state. */
   count: ReactNode;
+  /** The line under the ADP bar — what it drives on this tab. */
+  adpCaption?: ReactNode;
   /** The tab's content, rendered once at least one league passes the filters. */
   children: ReactNode;
 }) {
   const { data, searched, progress, refreshing, error, filters, setFilters, filtered } =
     view;
+  const { controls, setControls } = useAdpControls();
 
   // Cold load: nothing cached yet.
   if (!data) {
@@ -58,6 +70,7 @@ export function LeaguesViewLayout({
 
   const { user, season, summary } = data;
   const hasLeagues = data.leagues.length > 0;
+  const activeControls = controls ?? defaultAdpControls(season);
 
   return (
     <PageShell width="wide">
@@ -81,10 +94,21 @@ export function LeaguesViewLayout({
 
       {!hasLeagues ? (
         <EmptyState season={season} />
-      ) : filtered.length === 0 ? (
-        <PanelMessage>No leagues match these filters.</PanelMessage>
       ) : (
-        children
+        <div className="flex flex-col gap-4">
+          <AdpFilters
+            controls={activeControls}
+            onChange={setControls}
+            leagues={data.leagues}
+            seasons={seasonOptions(season)}
+            caption={adpCaption}
+          />
+          {filtered.length === 0 ? (
+            <PanelMessage>No leagues match these filters.</PanelMessage>
+          ) : (
+            children
+          )}
+        </div>
       )}
     </PageShell>
   );

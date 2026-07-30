@@ -40,6 +40,16 @@ export type AdpControls = {
    * the short rookie drafts from the full ones rather than average across them.
    */
   rounds: "all" | "rookie" | "full";
+  /**
+   * How top-heavy the ADP → team-value curve is on the Leagues tab. Unlike every
+   * field above it, this doesn't narrow *which drafts* are averaged — it sets how
+   * a player's ADP converts into value once averaged, so it rides on the
+   * per-player board (which is a raw number) doing nothing and drives the
+   * league-card team value instead. A matched string the
+   * `/api/user/[username]/adp-value` route parses — the same no-compiler-link
+   * pair the board vocabulary is — so a value added here must be added there too.
+   */
+  steepness: "flat" | "balanced" | "steep";
 };
 
 /** The `rounds_min`/`rounds_max` bounds each rounds bucket sends. */
@@ -72,6 +82,9 @@ export function defaultAdpControls(season: string): AdpControls {
     bestBall: "all",
     teams: "all",
     rounds: "all",
+    // Matches the route's DEFAULT_STEEPNESS; the two ends carry the vocabulary
+    // separately, so this string is what "balanced" means on the wire.
+    steepness: "balanced",
   };
 }
 

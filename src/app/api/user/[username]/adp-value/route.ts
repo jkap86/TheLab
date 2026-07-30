@@ -3,14 +3,17 @@ import { NextResponse } from "next/server";
 import type { ManagerAdpValuePayload } from "@/shared/contract";
 import { isSuperflexLineup } from "@/shared/ktc";
 import {
+  STEEPNESS_HALVINGS,
   adpBoardFor,
   adpValue,
   boardSignature,
   getDraftAdpForPlayers,
   getLeagueTypes,
   getManagerLeagueRosters,
+  parseSteepness,
   rankOf,
   rosterAdpValue,
+  startingSlotCount,
 } from "@/shared/manager";
 import type { AdpFilters } from "@/shared/manager";
 import { getOptimalLineups } from "@/shared/projections";
@@ -43,7 +46,11 @@ export async function GET(
 ) {
   const resolved = await resolveManagerRequest(request, params);
   if (!resolved.ok) return resolved.response;
-  const { username, userId, season } = resolved;
+  const { username, userId, season, searchParams } = resolved;
+
+  // The steepness of the value curve, chosen in the ADP bar and sent as a query
+  // param; an unknown value falls back to the default rather than being trusted.
+  const halvings = STEEPNESS_HALVINGS[parseSteepness(searchParams.get("steepness"))];
 
   const leagues = await getManagerLeagueRosters(userId, season);
   const withOwn = leagues.filter((league) =>
@@ -104,17 +111,15 @@ export async function GET(
       );
       return null;
     }),
+    // The raw ADP per board — the curve is applied per league below, since it
+    // depends on each league's startable pool, not on the board alone.
     Promise.all(
       [...boards].map(async ([signature, board]) => {
-        const { draft_count, values } = await getDraftAdpForPlayers(
+        const result = await getDraftAdpForPlayers(
           board.filters,
           [...board.playerIds],
         );
-        // Curve each average draft position to a value once per board, so pricing
-        // a roster is a plain lookup and sum.
-        const curved = new Map<string, number>();
-        for (const [id, { adp }] of values) curved.set(id, adpValue(adp));
-        return [signature, { draft_count, values: curved }] as const;
+        return [signature, result] as const;
       }),
     ),
   ]);
@@ -126,6 +131,19 @@ export async function GET(
     const own = league.teams.find((t) => t.owner_id === userId)!;
     const board = boardValues.get(leagueBoard.get(league.league_id)!)!;
 
+    // The startable pool the curve is anchored to: teams × starting slots. A
+    // league with no slots on file falls back to a typical lineup depth, since a
+    // pool of zero would collapse the whole curve.
+    const pool =
+      league.teams.length * (startingSlotCount(league.roster_positions) || 9);
+
+    // Curve this board's ADP into values for this league's pool. The pool is per
+    // league, so two leagues sharing a board are still priced on their own size.
+    const values = new Map<string, number>();
+    for (const [id, { adp }] of board.values) {
+      values.set(id, adpValue(adp, pool, halvings));
+    }
+
     // Every team's starter value, so the manager's can be ranked against them;
     // the manager's own full value is kept aside for the payload.
     const starterValue = new Map<number, number>();
@@ -135,7 +153,7 @@ export async function GET(
         players: team.players,
         starters:
           lineups?.lineups.get(league.league_id)?.get(team.roster_id) ?? null,
-        values: board.values,
+        values,
       });
       if (value.split) starterValue.set(team.roster_id, value.split.starters);
       if (team.roster_id === own.roster_id) ownValue = value;

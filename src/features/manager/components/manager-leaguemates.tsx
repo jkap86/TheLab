@@ -59,6 +59,7 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
           )}
         </>
       }
+      adpCaption="ADP board and value settings apply on the Players and Leagues tabs."
     >
       {membership.error ? (
         <ErrorCard message={membership.error} />

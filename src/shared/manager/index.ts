@@ -40,14 +40,17 @@ export type { ResolvedManager } from "./resolve";
 export { getDraftAdp, getDraftAdpForPlayers } from "./adp";
 export type { AdpResult, AdpRow, PlayerAdp } from "./adp";
 export {
-  ADP_HALF_LIFE,
   ADP_PEAK,
+  DEFAULT_STEEPNESS,
+  STEEPNESS_HALVINGS,
   adpBoardFor,
   adpValue,
   boardSignature,
+  parseSteepness,
   rosterAdpValue,
+  startingSlotCount,
 } from "./adp-value";
-export type { AdpRosterValue } from "./adp-value";
+export type { AdpRosterValue, Steepness } from "./adp-value";
 export {
   parseAdpFilters,
   ADP_FILTER_DEFAULTS,
