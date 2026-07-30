@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { formatRecord } from "../format";
 import type { MetricContext } from "../league-metrics";
-import type { LeagueKtcEntry, LeagueRankSet, ManagerLeague } from "../types";
+import type {
+  LeagueAdpEntry,
+  LeagueKtcEntry,
+  LeagueRankSet,
+  ManagerLeague,
+} from "../types";
 import { LeagueDetailPanel } from "./league-detail-panel";
 import { MetricColumn } from "./metric-column";
 import { Chevron } from "./ui";
@@ -30,6 +35,7 @@ export function LeagueCard({
   weeks,
   ktc,
   valuedAt,
+  adp,
   columns,
   onColumnChange,
 }: {
@@ -51,6 +57,12 @@ export function LeagueCard({
   ktc: LeagueKtcEntry | null;
   /** When those KTC values were scraped, for the KTC metrics' hover. */
   valuedAt: string | null;
+  /**
+   * This manager's ADP-derived value here and its starter-value rank — null while
+   * loading and for a league they hold no roster in, absent rather than zeroed on
+   * the same terms as `ktc`.
+   */
+  adp: LeagueAdpEntry | null;
   /** The metric key each of the four stat columns shows, shared by every card. */
   columns: string[];
   /** Point a column at another metric (applies to every card at once). */
@@ -83,7 +95,7 @@ export function LeagueCard({
   }, [openSlot]);
 
   const record = league.record;
-  const ctx: MetricContext = { league, ranks, ktc, weeks, valuedAt };
+  const ctx: MetricContext = { league, ranks, ktc, adp, weeks, valuedAt };
 
   return (
     <li

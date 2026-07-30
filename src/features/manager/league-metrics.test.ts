@@ -9,6 +9,7 @@ import {
   type MetricContext,
 } from "./league-metrics.ts";
 import type {
+  LeagueAdpEntry,
   LeagueKtcEntry,
   LeagueRankSet,
   ManagerLeague,
@@ -42,10 +43,22 @@ const ktc: LeagueKtcEntry = {
   starters_rank: { rank: 4, of: 12 },
 };
 
+const adp: LeagueAdpEntry = {
+  total: 38400,
+  priced: 14,
+  rostered: 16,
+  split: { starters: 26100, bench: 12300 },
+  superflex: true,
+  league_type: "dynasty",
+  draft_count: 37,
+  starters_rank: { rank: 5, of: 12 },
+};
+
 const ctx = (over: Partial<MetricContext> = {}): MetricContext => ({
   league,
   ranks,
   ktc,
+  adp,
   weeks: [3, 4, 5],
   valuedAt: null,
   ...over,
@@ -141,5 +154,32 @@ describe("value metrics", () => {
       ktc: { ...ktc, total: 0, priced: 0, split: null },
     });
     assert.equal(total.kind === "value" && total.text, null);
+  });
+
+  test("ADP value prints the whole priced total", () => {
+    const total = cell("adp_total");
+    assert.equal(total.kind === "value" && total.text, "38,400");
+  });
+
+  test("ADP value is an em dash when nothing on the roster is priced", () => {
+    const total = cell("adp_total", {
+      adp: { ...adp, total: 0, priced: 0, split: null },
+    });
+    assert.equal(total.kind === "value" && total.text, null);
+    assert.equal(metricPreview(total), "—");
+  });
+});
+
+describe("ADP rank metric", () => {
+  test("places the roster by its starter value", () => {
+    const rank = cell("adp_rank");
+    assert.equal(rank.kind, "rank");
+    assert.equal(rank.kind === "rank" && rank.rank?.rank, 5);
+    assert.equal(metricPreview(rank), "#5");
+  });
+
+  test("is null before the ADP values land", () => {
+    const rank = cell("adp_rank", { adp: null });
+    assert.equal(rank.kind === "rank" && rank.rank, null);
   });
 });

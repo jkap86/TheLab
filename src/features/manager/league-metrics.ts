@@ -5,6 +5,7 @@ import {
   formatWeekRange,
 } from "./format.ts";
 import type {
+  LeagueAdpEntry,
   LeagueKtcEntry,
   LeagueRank,
   LeagueRankSet,
@@ -40,6 +41,8 @@ export type MetricContext = {
   league: ManagerLeague;
   ranks: LeagueRankSet | null;
   ktc: LeagueKtcEntry | null;
+  /** This roster's ADP-derived value here, or null while loading / with no roster. */
+  adp: LeagueAdpEntry | null;
   /** The weeks behind the projected numbers, for a hover that says what it covers. */
   weeks: number[];
   /** When the KTC values were scraped, for the KTC metrics' hover. */
@@ -115,6 +118,30 @@ function projTitle(
         proj.points,
       )} · ${horizon}`
     : `${formatPoints(proj.points)} projected · ${horizon}`;
+}
+
+/**
+ * The ADP-value column's hover, shared by both ADP metrics. Names the value, the
+ * split, the board it was priced on and how many crawled drafts stood behind it —
+ * the same "say what the number rests on" habit the KTC and projection hovers
+ * keep, and the reminder that this is a consensus board, not fantasy points.
+ */
+function adpTitle(adp: LeagueAdpEntry | null): string {
+  if (!adp || adp.priced === 0) return "no players priced from ADP";
+  const board = `${adp.superflex ? "superflex" : "1QB"} ${adp.league_type}`;
+  return [
+    adp.starters_rank &&
+      `#${adp.starters_rank.rank} of ${adp.starters_rank.of} by starter value`,
+    adp.split && `${formatValue(adp.split.starters)} starting`,
+    adp.split && `${formatValue(adp.split.bench)} on the bench`,
+    `${formatValue(adp.total)} ADP draft-capital value`,
+    `${adp.priced} of ${adp.rostered} rostered players priced`,
+    `averaged over ${adp.draft_count} crawled ${board} draft${
+      adp.draft_count === 1 ? "" : "s"
+    }`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /**
@@ -246,6 +273,26 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
       // with nothing left to project — so bench has no answer, not a zero.
       text: ktc?.split ? formatValue(ktc.split.bench) : null,
       title: ktcTitle(ktc, valuedAt),
+    }),
+  },
+  {
+    key: "adp_total",
+    label: "ADP value",
+    cell: ({ adp }) => ({
+      kind: "value",
+      // Nothing priced is a real, empty roster rather than a value of zero — an
+      // em dash, the same reading the KTC total takes.
+      text: adp && adp.priced > 0 ? formatValue(adp.total) : null,
+      title: adpTitle(adp),
+    }),
+  },
+  {
+    key: "adp_rank",
+    label: "ADP rank",
+    cell: ({ adp }) => ({
+      kind: "rank",
+      rank: adp?.starters_rank ?? null,
+      title: adpTitle(adp),
     }),
   },
 ];

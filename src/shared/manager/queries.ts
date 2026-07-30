@@ -1,5 +1,7 @@
 import { pool } from "@/shared/db";
 
+import { LEAGUE_TYPE_CODES } from "./adp-filters";
+import type { LeagueType } from "./adp-filters";
 import type {
   LeagueDetail,
   Leaguemate,
@@ -256,6 +258,44 @@ export async function getManagerLeagueRosters(
   }
 
   return [...byLeague.values()];
+}
+
+const LEAGUE_TYPE_BY_CODE = new Map<number, LeagueType>(
+  (Object.entries(LEAGUE_TYPE_CODES) as [LeagueType, number][]).map(
+    ([type, code]) => [code, type],
+  ),
+);
+
+/**
+ * Each league's type — redraft, keeper or dynasty — from Sleeper's numeric
+ * `settings.type`, keyed by league id. Regex-guarded before the cast because the
+ * settings blob is loosely typed and omits its default, so an absent or junk
+ * value reads redraft, matching the `/api/adp` `LEAGUE_TYPE_SQL` and the client
+ * filters.
+ *
+ * Kept out of {@link LeagueRosterSet} because only the ADP-value board needs it:
+ * everything else projects a league without caring how it keeps players between
+ * seasons.
+ */
+export async function getLeagueTypes(
+  leagueIds: readonly string[],
+): Promise<Map<string, LeagueType>> {
+  if (leagueIds.length === 0) return new Map();
+
+  const { rows } = await pool.query<{ league_id: string; type_code: number }>(
+    `SELECT league_id,
+            CASE WHEN settings->>'type' ~ '^[0-9]+$'
+                 THEN (settings->>'type')::int ELSE 0 END AS type_code
+       FROM leagues
+      WHERE league_id = ANY($1::varchar[])`,
+    [[...leagueIds]],
+  );
+
+  const byLeague = new Map<string, LeagueType>();
+  for (const r of rows) {
+    byLeague.set(r.league_id, LEAGUE_TYPE_BY_CODE.get(r.type_code) ?? "redraft");
+  }
+  return byLeague;
 }
 
 type TeamRow = {

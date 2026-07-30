@@ -16,6 +16,7 @@ export type { CrawlSummary, CrawlOptions } from "./crawl";
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
   getLeagueDetail,
+  getLeagueTypes,
   getManagerLeagueRosters,
   getManagerLeaguemates,
   getManagerLeagues,
@@ -34,8 +35,17 @@ export { orderByProjectedPoints, projectedRank, rankOf, standingScore } from "./
 export type { LeagueRank, ProjectedRank } from "./rank";
 export { resolveManagerUser, toUserInfo } from "./resolve";
 export type { ResolvedManager } from "./resolve";
-export { getDraftAdp } from "./adp";
-export type { AdpResult, AdpRow } from "./adp";
+export { getDraftAdp, getDraftAdpForPlayers } from "./adp";
+export type { AdpResult, AdpRow, PlayerAdp } from "./adp";
+export {
+  ADP_HALF_LIFE,
+  ADP_PEAK,
+  adpBoardFor,
+  adpValue,
+  boardSignature,
+  rosterAdpValue,
+} from "./adp-value";
+export type { AdpRosterValue } from "./adp-value";
 export {
   parseAdpFilters,
   ADP_FILTER_DEFAULTS,

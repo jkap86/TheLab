@@ -1,6 +1,7 @@
 import type {
   AdpPayload,
   AdpPlayerPayload,
+  LeagueAdpEntry,
   LeagueDetailPayload,
   LeagueKtcEntry,
   LeagueKtcValue,
@@ -9,6 +10,7 @@ import type {
   LeaguesProgressMessage,
   LeaguesResultMessage,
   LeagueTeamPayload,
+  ManagerAdpValuePayload,
   ManagerKtcPayload,
   ManagerLeaguematesPayload,
   ManagerPlayersPayload,
@@ -34,6 +36,7 @@ import type {
 export type {
   AdpPayload,
   AdpPlayerPayload,
+  LeagueAdpEntry,
   LeagueKtcEntry,
   LeagueKtcValue,
   LeagueOutlook,
@@ -73,3 +76,6 @@ export type ManagerRanksResult = ManagerRanksPayload;
 
 /** The `/api/user/[username]/ktc` response the league cards price from. */
 export type ManagerKtcResult = ManagerKtcPayload;
+
+/** The `/api/user/[username]/adp-value` response the league cards value from. */
+export type ManagerAdpValueResult = ManagerAdpValuePayload;

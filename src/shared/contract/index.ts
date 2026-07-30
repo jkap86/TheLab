@@ -1,9 +1,11 @@
 import type {
   AdpFilters,
+  AdpRosterValue,
   LeagueDetail,
   Leaguemate,
   LeagueRank,
   LeagueTeam,
+  LeagueType,
   ManagerLeague,
   ProjectedRank,
   SyncProgress,
@@ -278,6 +280,66 @@ export type ManagerKtcPayload = {
    * kickers is off the board.
    */
   leagues: Record<string, LeagueKtcEntry>;
+};
+
+/** One league's roster priced on ADP-derived draft value, and how it splits. */
+export type LeagueAdpValue = AdpRosterValue & {
+  /**
+   * Which ADP board priced it: superflex where the league starts more than one
+   * quarterback, 1QB otherwise. A quarterback goes far earlier in superflex
+   * drafts, so the same roster is worth a different total on the two — the board
+   * travels with the number rather than being assumed by whoever reads it, the
+   * same rule the KTC value follows.
+   */
+  superflex: boolean;
+  /**
+   * The league type whose crawled drafts the board averaged — a dynasty startup
+   * drafts rookies a redraft never sees, so pooling them would misprice both.
+   */
+  league_type: LeagueType;
+  /**
+   * How many crawled drafts stood behind this board. Shipped with the number the
+   * way `/api/adp` reports what it averaged: a thin board is a noisy one, and a
+   * board of zero is why a roster can come back unpriced.
+   */
+  draft_count: number;
+};
+
+/** A league's ADP value plus where its starter value ranks league-wide. */
+export type LeagueAdpEntry = LeagueAdpValue & {
+  /**
+   * The manager's place among their leaguemates by starter ADP value — the
+   * `split.starters` half, ranked across every team. Null on the same terms as
+   * the KTC rank: no lineup to draw starters from, or every roster prices at zero
+   * (a board with no matching drafts, or a pre-draft league).
+   */
+  starters_rank: LeagueRank | null;
+};
+
+/**
+ * `GET /api/user/[username]/adp-value` — what the manager's roster in each league
+ * is worth valued off crawled ADP, and where its starter value ranks.
+ *
+ * A third team-value lens beside `ktc` and the projected `ranks`: KTC is a
+ * *dynasty* board and projections are a points model, where this reads the
+ * *market consensus* of the drafts this app has actually crawled, priced against
+ * the boards most like each league. Read-only over synced rosters and crawled
+ * draft picks, like its siblings under this prefix.
+ */
+export type ManagerAdpValuePayload = {
+  season: string;
+  /**
+   * Weeks the lineup behind every `split` was ranked over, ascending. Empty when
+   * nothing remains to project, in which case every `split` is null and only the
+   * totals answer.
+   */
+  weeks: number[];
+  /**
+   * League id → that roster's ADP value and its starter-value rank. Absent for a
+   * league the manager holds no roster in; present with a zero total and
+   * `priced: 0` where no rostered player is on the matching board.
+   */
+  leagues: Record<string, LeagueAdpEntry>;
 };
 
 /**

@@ -167,3 +167,63 @@ export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
     })),
   };
 }
+
+/** One player's average draft position on a board, with the sample behind it. */
+export type PlayerAdp = { adp: number; picks: number };
+
+/**
+ * ADP for a specific set of players over the drafts matching `filters`, keyed by
+ * id — what pricing a roster needs, where {@link getDraftAdp} answers a paged
+ * board.
+ *
+ * Restricting the aggregation to the rostered ids is what keeps this cheap enough
+ * to run once per league card's worth of rosters: it shares `getDraftAdp`'s
+ * `matched_drafts` and its `min_picks` gate (a player taken in a single draft has
+ * no average worth trusting), but never resolves names or pages, because the
+ * caller already holds both. `draft_count` rides along so the number can say how
+ * many crawled drafts stand behind it.
+ */
+export async function getDraftAdpForPlayers(
+  filters: AdpFilters,
+  playerIds: readonly string[],
+): Promise<{ draft_count: number; values: Map<string, PlayerAdp> }> {
+  const ids = [...new Set(playerIds.filter((id) => id && id !== "0"))];
+  const { where, params } = draftSelection(filters);
+
+  const matchedDrafts = `
+    SELECT d.draft_id
+      FROM drafts d
+      JOIN leagues l ON l.league_id = d.league_id
+     WHERE ${where}`;
+
+  const counted = await pool.query<{ draft_count: number }>(
+    `SELECT count(*)::int AS draft_count FROM (${matchedDrafts}) md`,
+    params,
+  );
+  const draft_count = counted.rows[0]?.draft_count ?? 0;
+  if (draft_count === 0 || ids.length === 0) {
+    return { draft_count, values: new Map() };
+  }
+
+  const rowParams = [...params];
+  const bind = (value: unknown) => `$${rowParams.push(value)}`;
+  const idsBind = bind(ids);
+  const minPicks = bind(filters.min_picks);
+
+  const { rows } = await pool.query<{ player_id: string; adp: number; picks: number }>(
+    `WITH matched_drafts AS (${matchedDrafts})
+     SELECT dp.player_id,
+            round(avg(dp.pick_no)::numeric, 2)::float8 AS adp,
+            count(*)::int AS picks
+       FROM draft_picks dp
+       JOIN matched_drafts md ON md.draft_id = dp.draft_id
+      WHERE dp.player_id = ANY(${idsBind}::varchar[])
+      GROUP BY dp.player_id
+     HAVING count(*) >= ${minPicks}`,
+    rowParams,
+  );
+
+  const values = new Map<string, PlayerAdp>();
+  for (const r of rows) values.set(r.player_id, { adp: r.adp, picks: r.picks });
+  return { draft_count, values };
+}

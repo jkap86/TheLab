@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 
 import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
+import { useManagerAdpValue } from "../hooks/use-manager-adp-value";
 import { useManagerKtc } from "../hooks/use-manager-ktc";
 import { useManagerRanks } from "../hooks/use-manager-ranks";
 import { DEFAULT_COLUMNS } from "../league-metrics";
@@ -23,14 +24,15 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   const view = useFilteredLeagues(searched);
 
   // The card chips are a bonus on top of the list, so a fetch that fails costs
-  // the chips and nothing else — both errors go deliberately unread. Two reads
+  // the chips and nothing else — the errors go deliberately unread. Three reads
   // rather than one because they answer different questions off different caches:
-  // a KTC scrape that is behind shouldn't cost the projected ranks. Both fetch
-  // over the unfiltered leagues, since the chips belong to every card the filters
-  // might later show.
+  // a KTC scrape that is behind shouldn't cost the projected ranks, and the ADP
+  // value is a third lens on top of both. All fetch over the unfiltered leagues,
+  // since the chips belong to every card the filters might later show.
   const leagues = view.data?.leagues ?? null;
   const ranks = useManagerRanks(searched, leagues);
   const ktc = useManagerKtc(searched, leagues);
+  const adp = useManagerAdpValue(searched, leagues);
 
   // Which metric each of the four stat columns shows, shared by every card so the
   // columns line up down the list — a change on any card's picker moves them all.
@@ -67,6 +69,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
             weeks={ranks.data?.weeks ?? []}
             ktc={ktc.data?.leagues[league.league_id] ?? null}
             valuedAt={ktc.data?.updated_at ?? null}
+            adp={adp.data?.leagues[league.league_id] ?? null}
             columns={columns}
             onColumnChange={setColumn}
           />
