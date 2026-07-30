@@ -1,0 +1,232 @@
+import {
+  formatPoints,
+  formatRecord,
+  formatValue,
+  formatWeekRange,
+} from "./format.ts";
+import type {
+  LeagueKtcEntry,
+  LeagueRank,
+  LeagueRankSet,
+  ManagerLeague,
+} from "./types";
+
+/**
+ * The metrics a league card can show in each of its stat columns, and how to
+ * read one off a league's cached ranks and KTC value.
+ *
+ * The collapsed card used to hard-code four rankings across it — record, points,
+ * KTC starter value, projected points — but a roster is more than where those
+ * four place it: two teams level on projected starters are not the same team when
+ * one carries twice the value behind its lineup. So each column is now a slot the
+ * reader points at a metric of their choosing, and this is the catalogue of what
+ * a slot can hold.
+ *
+ * Two shapes live in one list on purpose. A *rank* metric answers "where does
+ * this roster sit" as `#N of M`, tinted and metered by where in its league it
+ * falls; a *value* metric answers "how much" as a plain number with no league to
+ * place it against (KTC bench value, the raw points total behind a rank). The
+ * card renders the two differently but picks them from the same menu, so a column
+ * showing the standings rank and one showing bench value are one click apart.
+ *
+ * Pure and free of runtime imports beyond {@link formatPoints} and its siblings —
+ * everything from {@link ./types} arrives as an erased `import type` — so the
+ * accessors can be read and tested without a fetch behind them, the same bar as
+ * `shares` and `filters` beside it.
+ */
+
+/** What a metric reads from: one league's cached ranks, KTC value and horizon. */
+export type MetricContext = {
+  league: ManagerLeague;
+  ranks: LeagueRankSet | null;
+  ktc: LeagueKtcEntry | null;
+  /** The weeks behind the projected numbers, for a hover that says what it covers. */
+  weeks: number[];
+  /** When the KTC values were scraped, for the KTC metrics' hover. */
+  valuedAt: string | null;
+};
+
+/**
+ * One column's worth of read: a rank to place and meter, or a value to print.
+ *
+ * A `rank` cell carries the `{ rank, of }` the card tints and meters, or null
+ * when the ranking can't be formed yet; a `value` cell carries the already
+ * formatted string, or null when there is nothing to show. Both carry the hover
+ * title, so a metric owns everything the column needs to render it.
+ */
+export type MetricCell =
+  | { kind: "rank"; rank: LeagueRank | null; title: string }
+  | { kind: "value"; text: string | null; title: string };
+
+/** One selectable metric: its key, its short column label, and how to read it. */
+export type LeagueMetric = {
+  /** Stable id, stored as a column's selection and keyed in the picker. */
+  key: string;
+  /** The uppercase column heading — kept short enough to sit in a stat column. */
+  label: string;
+  /** Reads this metric off one league's context into a renderable cell. */
+  cell: (ctx: MetricContext) => MetricCell;
+};
+
+/**
+ * The KTC column's hover, where the raw value, the board and the priced count
+ * answer — shared by every KTC metric so the tooltip reads the same whichever of
+ * them a column shows.
+ */
+function ktcTitle(ktc: LeagueKtcEntry | null, valuedAt: string | null): string {
+  if (!ktc || ktc.priced === 0) return "nothing priced on KeepTradeCut";
+  const board = ktc.superflex ? "superflex" : "1QB";
+  return [
+    ktc.starters_rank &&
+      `#${ktc.starters_rank.rank} of ${ktc.starters_rank.of} by starter value`,
+    ktc.split && `${formatValue(ktc.split.starters)} starting`,
+    ktc.split && `${formatValue(ktc.split.bench)} on the bench`,
+    `${formatValue(ktc.total)} KeepTradeCut dynasty ${board} value`,
+    `${ktc.priced} of ${ktc.rostered} rostered players priced`,
+    valuedAt && `scraped ${new Date(valuedAt).toLocaleString()}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** The projected-points hover, shared by the projected rank and its raw total. */
+function projTitle(
+  proj: { rank: number; of: number; points: number } | null,
+  weeks: number[],
+  ranked: boolean,
+): string {
+  if (!proj) return "nothing left to project";
+  const horizon = `best lineup each week · ${formatWeekRange(weeks)}`;
+  return ranked
+    ? `#${proj.rank} of ${proj.of} by projected starters · ${formatPoints(
+        proj.points,
+      )} · ${horizon}`
+    : `${formatPoints(proj.points)} projected · ${horizon}`;
+}
+
+/**
+ * Every metric a stat column can show, in the order the picker lists them: the
+ * four original rankings, each paired where it makes sense with the raw number
+ * behind it, plus the two KTC totals a starter rank alone can't tell apart.
+ */
+export const LEAGUE_METRICS: LeagueMetric[] = [
+  {
+    key: "standing",
+    label: "Standing",
+    cell: ({ ranks, league }) => ({
+      kind: "rank",
+      rank: ranks?.standing ?? null,
+      title: ranks?.standing
+        ? `#${ranks.standing.rank} of ${ranks.standing.of} by record${
+            league.record ? ` · ${formatRecord(league.record)}` : ""
+          }`
+        : "no standing yet",
+    }),
+  },
+  {
+    key: "points",
+    label: "Points",
+    cell: ({ ranks }) => {
+      const points = ranks?.points ?? null;
+      return {
+        kind: "rank",
+        rank: points,
+        title: points
+          ? `#${points.rank} of ${points.of} by points for · ${formatPoints(
+              points.pointsFor,
+            )} pts`
+          : "no points scored yet",
+      };
+    },
+  },
+  {
+    key: "points_for",
+    label: "Points for",
+    cell: ({ ranks }) => {
+      const points = ranks?.points ?? null;
+      return {
+        kind: "value",
+        text: points ? formatPoints(points.pointsFor) : null,
+        title: points
+          ? `${formatPoints(points.pointsFor)} points for`
+          : "no points scored yet",
+      };
+    },
+  },
+  {
+    key: "proj",
+    label: "Proj start",
+    cell: ({ ranks, weeks }) => {
+      const proj = ranks?.proj ?? null;
+      return {
+        kind: "rank",
+        rank: proj,
+        title: projTitle(proj, weeks, true),
+      };
+    },
+  },
+  {
+    key: "proj_pts",
+    label: "Proj pts",
+    cell: ({ ranks, weeks }) => {
+      const proj = ranks?.proj ?? null;
+      return {
+        kind: "value",
+        text: proj ? formatPoints(proj.points) : null,
+        title: projTitle(proj, weeks, false),
+      };
+    },
+  },
+  {
+    key: "ktc_start",
+    label: "KTC start",
+    cell: ({ ktc, valuedAt }) => ({
+      kind: "rank",
+      rank: ktc?.starters_rank ?? null,
+      title: ktcTitle(ktc, valuedAt),
+    }),
+  },
+  {
+    key: "ktc_total",
+    label: "KTC total",
+    cell: ({ ktc, valuedAt }) => ({
+      kind: "value",
+      // A priced count of zero is a real, empty roster rather than a value of
+      // zero — an em dash, not "0", the same reading the card's KTC chip takes.
+      text: ktc && ktc.priced > 0 ? formatValue(ktc.total) : null,
+      title: ktcTitle(ktc, valuedAt),
+    }),
+  },
+  {
+    key: "ktc_bench",
+    label: "KTC bench",
+    cell: ({ ktc, valuedAt }) => ({
+      kind: "value",
+      // `split` is null when there is no lineup to divide the value by — a league
+      // with nothing left to project — so bench has no answer, not a zero.
+      text: ktc?.split ? formatValue(ktc.split.bench) : null,
+      title: ktcTitle(ktc, valuedAt),
+    }),
+  },
+];
+
+/** The metric list keyed by id, for resolving a column's stored selection. */
+export const LEAGUE_METRICS_BY_KEY: Record<string, LeagueMetric> =
+  Object.fromEntries(LEAGUE_METRICS.map((metric) => [metric.key, metric]));
+
+/**
+ * The four columns a card opens with — the rankings it showed before the slots
+ * were made selectable, so the default view is unchanged.
+ */
+export const DEFAULT_COLUMNS: string[] = [
+  "standing",
+  "points",
+  "ktc_start",
+  "proj",
+];
+
+/** A metric's compact value for the picker menu: `#N` for a rank, the number for a value. */
+export function metricPreview(cell: MetricCell): string {
+  if (cell.kind === "rank") return cell.rank ? `#${cell.rank.rank}` : "—";
+  return cell.text ?? "—";
+}

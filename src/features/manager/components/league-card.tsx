@@ -1,32 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import {
-  formatPoints,
-  formatRecord,
-  formatValue,
-  formatWeekRange,
-} from "../format";
+import { formatRecord } from "../format";
+import type { MetricContext } from "../league-metrics";
 import type { LeagueKtcEntry, LeagueRankSet, ManagerLeague } from "../types";
 import { LeagueDetailPanel } from "./league-detail-panel";
+import { MetricColumn } from "./metric-column";
 import { Chevron } from "./ui";
 
 /**
  * One league in the leagues list: a dense, glassy row that reads at a glance and
  * opens the full standings-and-rosters panel on click.
  *
- * What the collapsed row is *for* is the four rankings across it — where this
- * manager stands by record, by points scored, by KTC starter value and by
- * projected points. Each is the same shape (`#N of M`) so they line up column to
- * column down the whole list, and each is tinted and metered by where in its
- * league it falls: near the top reads in the accent, near the bottom in rose,
- * the middle left in plain ink. The number is always the real read; the colour
- * is a second, faster one.
+ * The four stat columns across it are each a slot the reader points at a metric —
+ * where this manager stands by record, by points, by KTC starter value and by
+ * projected points to start with, but swappable to the raw number behind a rank
+ * or to KTC bench value from the label's picker. Which metric each slot shows is
+ * held above this card, in {@link ManagerLeagues}, so every card shows the same
+ * four and the columns line up column to column down the whole list.
  *
- * The raw KTC total that used to sit on the row moves onto the KTC column's
- * hover, where the value, the board and the priced count still answer — the row
- * itself is kept to name, record and the four ranks.
+ * The name and chevron are the expand target; the stat columns are their own
+ * pickers, so the card is no longer one button — clicking a column opens its
+ * menu rather than the panel.
  */
 export function LeagueCard({
   league,
@@ -34,6 +30,8 @@ export function LeagueCard({
   weeks,
   ktc,
   valuedAt,
+  columns,
+  onColumnChange,
 }: {
   league: ManagerLeague;
   /**
@@ -51,25 +49,55 @@ export function LeagueCard({
    * on the same terms as `ranks`.
    */
   ktc: LeagueKtcEntry | null;
-  /** When those KTC values were scraped, for the KTC column's hover. */
+  /** When those KTC values were scraped, for the KTC metrics' hover. */
   valuedAt: string | null;
+  /** The metric key each of the four stat columns shows, shared by every card. */
+  columns: string[];
+  /** Point a column at another metric (applies to every card at once). */
+  onColumnChange: (slot: number, key: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // Which column's picker is open, if any — one at a time, so opening one closes
+  // the last. Lifted here (not into each column) so the row can lift its stacking
+  // order while a menu overhangs the card below it, and so an outside click has a
+  // single thing to close.
+  const [openSlot, setOpenSlot] = useState<number | null>(null);
+  const statsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (openSlot === null) return;
+    const onDown = (event: MouseEvent) => {
+      if (statsRef.current && !statsRef.current.contains(event.target as Node)) {
+        setOpenSlot(null);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenSlot(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openSlot]);
 
   const record = league.record;
-  const pointsRank = ranks?.points ?? null;
-  const proj = ranks?.proj ?? null;
-  const board = ktc?.superflex ? "superflex" : "1QB";
+  const ctx: MetricContext = { league, ranks, ktc, weeks, valuedAt };
 
   return (
-    <li className="group rounded-xl border border-foreground/10 bg-gradient-to-b from-foreground/[0.06] to-foreground/[0.015] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_28px_-16px_rgba(0,0,0,0.7)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_20px_44px_-18px_rgba(0,0,0,0.85)] motion-reduce:transition-none motion-reduce:hover:translate-y-0">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-        className="flex w-full flex-col items-stretch gap-3 rounded-xl px-4 py-3 text-left sm:flex-row sm:items-center sm:gap-4"
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+    <li
+      className={`group relative rounded-xl border border-foreground/10 bg-gradient-to-b from-foreground/[0.06] to-foreground/[0.015] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_28px_-16px_rgba(0,0,0,0.7)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_20px_44px_-18px_rgba(0,0,0,0.85)] motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
+        openSlot !== null ? "z-30" : ""
+      }`}
+    >
+      <div className="flex w-full flex-col items-stretch gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left"
+        >
           <Chevron open={expanded} size="md" />
           <StatusDot status={league.status} />
           <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold">
@@ -80,49 +108,29 @@ export function LeagueCard({
               {formatRecord(record)}
             </span>
           )}
-        </div>
+        </button>
 
-        <div className="flex shrink-0 items-stretch divide-x divide-foreground/10">
-          <RankStat
-            label="Standing"
-            rank={ranks?.standing ?? null}
-            title={
-              ranks?.standing
-                ? `#${ranks.standing.rank} of ${ranks.standing.of} by record${
-                    record ? ` · ${formatRecord(record)}` : ""
-                  }`
-                : "no standing yet"
-            }
-          />
-          <RankStat
-            label="Points"
-            rank={pointsRank}
-            title={
-              pointsRank
-                ? `#${pointsRank.rank} of ${pointsRank.of} by points for · ${formatPoints(
-                    pointsRank.pointsFor,
-                  )} pts`
-                : "no points scored yet"
-            }
-          />
-          <RankStat
-            label="KTC start"
-            rank={ktc?.starters_rank ?? null}
-            title={ktcTitle(ktc, board, valuedAt)}
-          />
-          <RankStat
-            label="Proj start"
-            rank={proj}
-            title={
-              proj
-                ? `#${proj.rank} of ${proj.of} by projected starters · ${formatPoints(
-                    proj.points,
-                  )} · best lineup each week · ${formatWeekRange(weeks)}`
-                : "nothing left to project"
-            }
-          />
+        <div
+          ref={statsRef}
+          className="flex shrink-0 items-stretch divide-x divide-foreground/10"
+        >
+          {columns.map((key, slot) => (
+            <MetricColumn
+              key={slot}
+              metricKey={key}
+              ctx={ctx}
+              open={openSlot === slot}
+              onToggle={() =>
+                setOpenSlot((current) => (current === slot ? null : slot))
+              }
+              onSelect={(metricKey) => {
+                onColumnChange(slot, metricKey);
+                setOpenSlot(null);
+              }}
+            />
+          ))}
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t border-foreground/10 py-4">
@@ -130,97 +138,6 @@ export function LeagueCard({
         </div>
       )}
     </li>
-  );
-}
-
-/** The hover text for the KTC column, where the raw value now lives. */
-function ktcTitle(
-  ktc: LeagueKtcEntry | null,
-  board: string,
-  valuedAt: string | null,
-): string {
-  if (!ktc || ktc.priced === 0) return "nothing priced on KeepTradeCut";
-  return [
-    ktc.starters_rank &&
-      `#${ktc.starters_rank.rank} of ${ktc.starters_rank.of} by starter value`,
-    ktc.split && `${formatValue(ktc.split.starters)} starting`,
-    `${formatValue(ktc.total)} KeepTradeCut dynasty ${board} value`,
-    `${ktc.priced} of ${ktc.rostered} rostered players priced`,
-    valuedAt && `scraped ${new Date(valuedAt).toLocaleString()}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-const TIER_TEXT: Record<Tier, string> = {
-  hi: "text-active",
-  mid: "text-foreground/85",
-  lo: "text-rose-300",
-};
-const TIER_FILL: Record<Tier, string> = {
-  hi: "bg-active",
-  mid: "bg-foreground/40",
-  lo: "bg-rose-400/80",
-};
-
-type Tier = "hi" | "mid" | "lo";
-
-/**
- * Where a rank falls in its league as a fraction (1 for first, 0 for last), and
- * the tier that fraction lands in. The tiers are wide bands, not thirds, so the
- * accent is reserved for genuinely near the top and rose for genuinely near the
- * bottom — most rows read as the neutral middle, which is what keeps a card of
- * four colours from looking like an alarm.
- */
-function rankTier(rank: { rank: number; of: number }): { p: number; tier: Tier } {
-  const p = rank.of <= 1 ? 1 : (rank.of - rank.rank) / (rank.of - 1);
-  const tier: Tier = p >= 0.62 ? "hi" : p <= 0.3 ? "lo" : "mid";
-  return { p, tier };
-}
-
-/**
- * One ranked column: a label, `#N of M`, and a meter of where in the league that
- * sits. A null rank keeps the column — an em dash and an empty track — so a
- * loading or unrankable metric doesn't shift the ones beside it.
- */
-function RankStat({
-  label,
-  rank,
-  title,
-}: {
-  label: string;
-  rank: { rank: number; of: number } | null;
-  title: string;
-}) {
-  const t = rank ? rankTier(rank) : null;
-  return (
-    <div title={title} className="flex w-20 shrink-0 flex-col gap-1 px-2.5">
-      <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-foreground/40">
-        {label}
-      </span>
-      {rank && t ? (
-        <span className="flex items-baseline gap-0.5 leading-none">
-          <span className={`text-base font-bold tabular-nums ${TIER_TEXT[t.tier]}`}>
-            #{rank.rank}
-          </span>
-          <span className="text-[11px] tabular-nums text-foreground/40">
-            /{rank.of}
-          </span>
-        </span>
-      ) : (
-        <span className="text-base font-bold leading-none text-foreground/25">
-          —
-        </span>
-      )}
-      <span className="h-1 w-full overflow-hidden rounded-full bg-foreground/10">
-        {rank && t && (
-          <span
-            className={`block h-full rounded-full ${TIER_FILL[t.tier]}`}
-            style={{ width: `${Math.max(6, t.p * 100)}%` }}
-          />
-        )}
-      </span>
-    </div>
   );
 }
 
