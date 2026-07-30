@@ -286,6 +286,35 @@ stops holding, a comment saying it does would not have caught it.
   use `white` — it was the old convention and has been fully migrated.
 - Wrap page content in `<PageShell>` rather than repeating the container
   classes.
+- **Keyframes live in `globals.css`, not beside the component that uses them.**
+  Tailwind v4 has no per-component keyframe mechanism, so `FlaskLoader`'s four
+  animations are named there once and the component references them through
+  inline `animation`. Two habits travel with that. Per-element timing (a
+  bubble's duration and delay) stays in the component as data, since a keyframe
+  can't carry it and a class per bubble would be four near-identical rules. And
+  an SVG shape animated with `transform` needs `transform-box: fill-box`
+  (`.flask-bub`) or `translateY`/`scale` pivot on the SVG root rather than the
+  shape — the bubbles would fly across the flask instead of rising in it.
+- **A decorative animation freezes under `prefers-reduced-motion`, it doesn't
+  disappear.** The media query in `globals.css` kills `animation` on
+  `.flask-loader *`, which leaves a static flask that still reads as a loading
+  mark — the bubbles rest at their keyframe start (opacity 0), so what remains
+  is the glass. Dropping the whole indicator would take the *status* away from
+  the reader who asked for less motion, which is not what they asked for.
+- **The flask's glass is the `active` token; its liquid is literal hex, and that
+  is the exception rather than a lapse.** `@theme` registers exactly two colors,
+  `active` and `foreground`, so a two-stop gradient — a lighter top and a darker
+  bottom, plus a surface and a bubble tint — has no token to read, and the
+  logo's magenta isn't registered at all. Those five values live in one `TONES`
+  table in the component instead of being sprinkled through the markup, which is
+  what keeps the exception containable. Anything that isn't a gradient stop still
+  takes the token: the outline, the fill wash and the highlight all resolve
+  `var(--color-active)` / `var(--color-foreground)` so a retheme reaches them.
+- **A pure-SVG component is not a client component.** `FlaskLoader` has no
+  interactivity, so it renders on the server too and stays out of the bundle;
+  what makes that safe is `useId` for its gradient and clip ids, so two loaders
+  on one page can't collide over a hardcoded `id`. Reach for `"use client"`
+  when there's state or a handler, not because a component draws.
 - **The tools page's account section resolves in place; the other two searches
   navigate.** `ManagerSearch` and `PicktrackerSearch` hand what you typed to a
   route and let the destination resolve it, so a typo is only discovered as a
@@ -294,10 +323,43 @@ stops holding, a comment saying it does would not have caught it.
   Sleeper resolves a user id as readily as a name — what you typed is not proof
   of who you meant, which is what makes the extra request worth making before a
   tool is picked. A resubmit aborts the lookup still in flight, or the slower
-  response wins whichever was asked for last. The resolved user lives in
-  component state and nothing else reads it yet: a reload clears it, and handing
-  that identity to the tools below is the next step, not something the section
-  already does.
+  response wins whichever was asked for last. That resolved identity is now what
+  the section is *for*: `ToolsHome` holds it and hands it down, so the extra
+  request buys the grid below something and not just a confirmation. A reload
+  still clears it — it lives in component state and nowhere else.
+- **One tool card reads that account; the rest stay links, and that asymmetry is
+  the point.** `ToolGrid` renders `ToolLinkCard` for every tool except the pick
+  tracker, which gets `PicktrackerCard`: a league *id* is the only thing the
+  tracker needs and a resolved account already knows every one of them, so the
+  card lists them inline and jumps straight there rather than sending you to a
+  search for something you'd have to go read off Sleeper. With no account
+  resolved it falls back to the plain link card, whose destination is manual
+  league-id entry — which is also how the tracker gets opened from a league chat
+  mid-draft, where there is no Sleeper account in hand. Don't "finish the job" by
+  giving the other cards pickers: a tool keyed by manager is already served by
+  the username, and only this one is keyed by something the account has to be
+  expanded to learn.
+- **`useUserLeagues` is not `useManagerLeagues`, for the reason the four manager
+  sub-resource hooks *are* one hook.** Both decode the same NDJSON stream off
+  `/api/user/[username]/leagues`, but the picker wants the list and none of the
+  progress-bar machinery the manager tool's header is built around, and it clears
+  `loading` on the first `result` rather than waiting out a background refresh
+  that may still be syncing — a menu is fillable from the cached copy. Two hooks
+  that differ in what they guarantee are two hooks; two that differ only in a URL
+  are one.
+- **The three manager tabs are one scaffold, `LeaguesViewLayout`, over one hook,
+  `useFilteredLeagues`.** Leagues, players and leaguemates were line-for-line
+  copies of the same chrome — wide shell, cold-load state, header and count line,
+  filter bar, the note that stands in when the filters match nothing — and three
+  copies of that are one edit away from disagreeing about how a failed refresh or
+  an empty account looks, which reads as a bug in whichever tab didn't get
+  edited. Only three things ever varied: the count line, the body, and that the
+  leagues tab says "X of Y" when narrowed. The body is `children` rendered
+  *below* the empty-filter check, so a tab only ever reasons about a non-empty
+  list. The split between the two is deliberate: the layout is the chrome, the
+  hook is the state behind it, and `filtered` stays a value the page can read
+  because the players and leaguemates shares memoise on it — buried in the chrome
+  it would be out of reach.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
