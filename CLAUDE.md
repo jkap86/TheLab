@@ -606,14 +606,20 @@ stops holding, a comment saying it does would not have caught it.
   first.** A draft position is a rank where lower is better, so adding raw ADPs
   gives a deep roster a bigger (worse) number and lets a stud *lower* the total.
   `adpValue` inverts it onto a scale, and the shape of that inversion is the
-  point: value decays exponentially with a 24-pick half-life, because the gap
-  between picks 1 and 2 is worth vastly more than the gap between 100 and 101,
-  and a plain `maxPick − adp` would overvalue bench depth and undervalue the
-  players a season is won with. Both constants (`ADP_PEAK`, `ADP_HALF_LIFE`) are
-  **modeling choices, not facts** — the half-life is two rounds of a twelve-team
-  league, chosen because it prices an early first at roughly twice a late second,
-  and it is meant to be tuned against real boards. Treat a change to it as a
-  change to every number on the card, not a constant tweak.
+  point: value decays across a league's **startable pool** (`teams × starting
+  slots`), not a fixed pick count, so the gap between picks 1 and 2 is worth
+  vastly more than the gap between 100 and 101, and a plain `maxPick − adp` would
+  overvalue bench depth. Anchoring to the pool rather than the pick count is what
+  makes a late first-rounder worth the same in a 10- and a 14-team league, and a
+  deeper-starting league (superflex, extra flex, IDP) carry value further down
+  the board — because it starts more players (`startingSlotCount` reuses the slot
+  vocabulary, so a new flex counts the moment the solver learns it). The one knob
+  is the **steepness** — how many times value halves across that pool — and it is
+  a *user control*, not a hardcoded constant: three presets in the shared ADP bar,
+  sent to the route as a `steepness` param it parses (a matched string pair with
+  the client, like the board vocabulary). It is a modeling choice and changing it
+  reprices every card, which is why it is exposed rather than baked in; `ADP_PEAK`
+  is only the scale the numbers are read on.
 - **This is the third team-value lens, and the three answer different
   questions.** `ktc` prices a *dynasty* asset, `ranks` models a *season*, and
   `adp-value` reads the *market consensus* of the drafts this app crawled — which
