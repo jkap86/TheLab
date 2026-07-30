@@ -293,6 +293,13 @@ export type WeeklyTeamPoints = {
    * can't be projected (no slots or scoring on file, no rosters) is absent.
    */
   points: Map<string, Map<number, number>>;
+  /**
+   * The other half of `points`, keyed the same way: each team's
+   * `weekly_bench_points` — what its non-starters project over the horizon. The
+   * weekly solve computes both at once, so carrying the bench costs nothing extra
+   * and lets the ranks route place a roster by depth as well as by starters.
+   */
+  bench: Map<string, Map<number, number>>;
 };
 
 /**
@@ -315,7 +322,7 @@ export async function getWeeklyTeamPoints({
   leagues: readonly LeagueTeamsInput[];
 }): Promise<WeeklyTeamPoints> {
   const input = await readBatchInputs(season, leagues);
-  if (!input) return { weeks: [], points: new Map() };
+  if (!input) return { weeks: [], points: new Map(), bench: new Map() };
   const { projectable, weeks, stats, positions } = input;
 
   // Bucketed by player once, so each league scores its own rosters' rows rather
@@ -328,6 +335,7 @@ export async function getWeeklyTeamPoints({
   }
 
   const points = new Map<string, Map<number, number>>();
+  const bench = new Map<string, Map<number, number>>();
   for (const league of projectable) {
     const scoring = league.scoringSettings;
     const weeklyPoints = groupWeeklyPoints(
@@ -338,6 +346,7 @@ export async function getWeeklyTeamPoints({
     const slots = recognisedSlots(league.rosterPositions);
 
     const byTeam = new Map<number, number>();
+    const byTeamBench = new Map<number, number>();
     for (const team of league.teams) {
       const candidates = lineupCandidates(
         team,
@@ -347,16 +356,20 @@ export async function getWeeklyTeamPoints({
         () => 0,
       );
 
-      byTeam.set(
-        team.roster_id,
-        weeklyLineupSplit(slots, weeklyRosters(candidates, weeks, weeklyPoints))
-          .points,
+      // One solve yields both halves — the starters' total and the bench's — so
+      // ranking a roster by depth costs nothing beyond ranking it by starters.
+      const split = weeklyLineupSplit(
+        slots,
+        weeklyRosters(candidates, weeks, weeklyPoints),
       );
+      byTeam.set(team.roster_id, split.points);
+      byTeamBench.set(team.roster_id, split.bench_points);
     }
     points.set(league.league_id, byTeam);
+    bench.set(league.league_id, byTeamBench);
   }
 
-  return { weeks, points };
+  return { weeks, points, bench };
 }
 
 export type OptimalLineups = {

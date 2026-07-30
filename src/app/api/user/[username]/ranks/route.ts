@@ -37,7 +37,7 @@ export async function GET(
   // Sequential rather than parallel: which rosters to project is the answer to
   // the first read.
   const leagues = await getManagerLeagueRosters(userId, season);
-  const { weeks, points } = await getWeeklyTeamPoints({
+  const { weeks, points, bench } = await getWeeklyTeamPoints({
     season,
     leagues: leagues.map((l) => ({
       league_id: l.league_id,
@@ -70,12 +70,20 @@ export async function GET(
 
     const totals = points.get(league.league_id);
     const proj = totals ? projectedRank(totals, own.roster_id) : null;
+    // Ranked by the bench half of the same solve, so depth places a roster the
+    // way its starters do — highest bench first, null where nothing is behind a
+    // starter (rankOf's all-zero guard).
+    const benchTotals = bench.get(league.league_id);
+    const projBench = benchTotals
+      ? projectedRank(benchTotals, own.roster_id)
+      : null;
 
-    if (!standing && !pointsRank && !proj) continue;
+    if (!standing && !pointsRank && !proj && !projBench) continue;
     ranks[league.league_id] = {
       standing,
       points: pointsRank ? { ...pointsRank, pointsFor: own.fpts } : null,
       proj,
+      proj_bench: projBench,
     };
   }
 
