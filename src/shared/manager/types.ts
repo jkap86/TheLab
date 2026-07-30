@@ -1,3 +1,5 @@
+import type { DraftPickAsset } from "./draft-picks";
+
 /**
  * A manager's league — the shape read from Postgres by {@link getManagerLeagues}
  * and sent to the client on the leagues stream. Single source of truth for both
@@ -67,6 +69,13 @@ export type LeagueTeam = {
   starters: string[];
   reserve: string[];
   taxi: string[];
+  /**
+   * The future draft picks this team currently owns, resolved from the league's
+   * traded picks (see {@link ownedDraftPicks}) — its own untraded picks plus any
+   * it acquired, each tagged with the roster it originally belonged to. Empty for
+   * a redraft league or a dynasty whose picks have never been traded.
+   */
+  picks: DraftPickAsset[];
 };
 
 /**

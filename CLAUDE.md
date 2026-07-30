@@ -263,17 +263,18 @@ composition file starts making a decision, that decision wants a pure module.
 
 **A second and third entry point is how that drift arrives at scale.** Once
 `outlook` grew `getWeeklyTeamPoints` and `getOptimalLineups` beside
-`getLeagueOutlook`, four rules were retyped once per entry point — the IR/taxi
-exclusion, the projectable-league guard, the player-id union, and which slots the
-solver recognises — and none of the three copies was tested, because the
-composition file deliberately has no test. They live once now:
+`getLeagueOutlook`, four rules were retyped once per entry point — which players
+are lineup candidates, the projectable-league guard, the player-id union, and
+which slots the solver recognises — and none of the three copies was tested,
+because the composition file deliberately has no test. They live once now:
 `projections/candidates` owns `lineupCandidates`, `isProjectable` and
 `rosterPlayerIds`, and `optimal` owns `recognisedSlots` (which `compareLineup`
 had also spelled out inline, and which can't live in `candidates` without a
 cycle). What that buys is not lines — the extraction is roughly line-neutral —
 but that `getWeeklyTeamPoints` can no longer disagree with `getLeagueOutlook`
-about who is allowed to start, and that a new Sleeper reserve category is one
-edit with a test over it rather than three edits and a hope.
+about who is allowed to start, and that a change to who counts as a candidate —
+the whole roster today, IR and taxi included as bench depth — is one edit with a
+test over it rather than three edits and a hope.
 
 Two details worth keeping. `lineupCandidates` takes the scorer as a callback,
 because the three callers want different numbers off the same roster — a season
@@ -572,10 +573,11 @@ stops holding, a comment saying it does would not have caught it.
   A total says nothing about shape: two rosters worth 40k are not the same roster
   when one can start 30k of it and the other is depth behind a thin lineup. So
   `/api/user/[username]/ktc` sends `total`, `starters` and `bench`, with `bench`
-  computed as `total − starters` so the three always reconcile — everything not
-  in the lineup lands there, IR and taxi included, which is the honest reading of
-  "value this roster holds and cannot play" even though the roster panel lists
-  those under headings of their own. The starting half is summed by walking the
+  computed as `total − starters` so the three always reconcile — everything not in
+  the optimal lineup lands there, the bench plus any IR or taxi player who didn't
+  crack it (they are candidates now, so a stashed stud lands in `starters`
+  instead), which is the honest reading of "value this roster holds and isn't
+  starting". The starting half is summed by walking the
   *roster* and asking whether each player starts, never by walking the lineup, so
   a lineup naming someone the roster doesn't hold can't hand back a negative
   bench (`rosterKtcValue`, tested). Its cell goes blank when nothing is priced,
@@ -636,9 +638,22 @@ stops holding, a comment saying it does would not have caught it.
   scores in the two weeks he is the better start, and a single total calls those
   the same. The columns are labelled once per section (`RosterSection` takes
   `columns`, sized to match the cells so the headings stay over them) rather than
-  on every row. IR and taxi get the one `proj` column instead: a player Sleeper
-  won't let start has no starting half, so a split there would be two ways of
-  writing zero.
+  on every row. IR and taxi are no longer a section of their own: a stashed player
+  is treated as bench depth that could be started, so it sits in the bench list
+  with the same `start`/`bench` split as the rest of it (the user chose this over
+  keeping them unstartable — Sleeper needs a roster move to seat one).
+- **The roster panel lists a team's future draft picks under its bench.**
+  `getLeagueDetail` resolves each roster's owned picks from the league's
+  `traded_picks` — the whole pick grid for the seasons that appear in trades, with
+  the traded rows overriding who holds each cell — in `ownedDraftPicks` (pure and
+  tested, beside `shares` and `rank`). A pick is tagged with the roster it
+  originally belonged to, so the client marks the ones a team *acquired* ("1st
+  from Bob") apart from its own, resolving the source name from the teams it
+  already has rather than a per-pick field on the wire. The rounds run only as
+  deep as the deepest round anyone has traded, because Sleeper doesn't hand back a
+  league's rookie-draft round count and inventing rounds that may not exist is
+  worse than under-reporting a quiet tail; a redraft league (or a dynasty whose
+  picks have never moved) has no `traded_picks` and so shows nothing.
 
 ## External API gotchas
 
@@ -794,8 +809,10 @@ stops holding, a comment saying it does would not have caught it.
   Sleeper's own lineups use it — the IDP leagues here start players at DL whose
   `position` reads LB. `getFantasyPositions` is the query; a player the cache
   doesn't know is eligible for nothing, which is better than guessing and
-  recommending a lineup Sleeper would reject. Exclude IR and taxi from the
-  candidates for the same reason.
+  recommending a lineup Sleeper would reject. IR and taxi players *are* candidates,
+  though — this tool treats a stashed player as bench depth that could be started
+  rather than as unavailable, a deliberate choice (Sleeper needs a roster move to
+  seat one, so the lineup is "best available once activated").
 - **An optimal lineup that is arbitrary about interchangeable slots reads as a
   mistake.** The matching is free to seat the worse of two backs at RB1, or a
   15-point back in FLEX with a 14-point back at RB — same total, but as advice it
