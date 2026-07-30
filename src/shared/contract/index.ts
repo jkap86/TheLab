@@ -171,17 +171,27 @@ export type LeagueRankSet = {
   points: (LeagueRank & { pointsFor: number }) | null;
   /** By projected points (`weekly_optimal_points`, this league's scoring). */
   proj: ProjectedRank | null;
+  /**
+   * By projected bench points (`weekly_bench_points`, this league's scoring) —
+   * the depth a roster carries without playing, ranked highest-first so the
+   * deepest bench is #1. Null on the same terms as `proj`: nothing left to
+   * project, or every roster's bench prices at zero (an undrafted or shallow
+   * league where no one is behind a starter). Carries the total, like `proj`.
+   */
+  proj_bench: ProjectedRank | null;
 };
 
 /**
  * `GET /api/user/[username]/ranks` — where the manager's roster sits in each of
- * their leagues, by record, by points for, and by projected points.
+ * their leagues, by record, by points for, by projected points, and by projected
+ * bench.
  *
- * Three rankings rather than one because a card shows all three side by side and
- * two of them (record, points for) cost nothing the rosters read wasn't already
- * fetching; only the projected rank needs the projections behind it. The KTC
- * starter-value rank travels with the sibling `ktc` route instead, since it is
- * the one that already has the prices.
+ * Several rankings rather than one because a card shows them side by side and two
+ * of them (record, points for) cost nothing the rosters read wasn't already
+ * fetching; only the projected ranks need the projections behind them, and the
+ * starters and bench come out of one weekly solve. The KTC starter-value rank
+ * travels with the sibling `ktc` route instead, since it is the one that already
+ * has the prices.
  *
  * Read-only like the sibling `players` route: it ranks over the rosters and
  * projections the background work has stored, so a manager the leagues stream

@@ -30,6 +30,7 @@ const ranks: LeagueRankSet = {
   standing: { rank: 3, of: 12 },
   points: { rank: 5, of: 12, pointsFor: 1234.56 },
   proj: { rank: 2, of: 12, points: 1875.4 },
+  proj_bench: { rank: 7, of: 12, points: 512.3 },
 };
 
 const ktc: LeagueKtcEntry = {
@@ -81,6 +82,19 @@ describe("rank metrics", () => {
     assert.equal(standing.kind === "rank" && standing.rank, null);
     assert.equal(metricPreview(standing), "—");
   });
+
+  test("projected bench ranks a roster by its depth", () => {
+    const bench = cell("proj_bench");
+    assert.equal(bench.kind, "rank");
+    assert.equal(bench.kind === "rank" && bench.rank?.rank, 7);
+    assert.equal(bench.kind === "rank" && bench.rank?.of, 12);
+    assert.equal(metricPreview(bench), "#7");
+  });
+
+  test("projected bench is null before the projections land", () => {
+    const bench = cell("proj_bench", { ranks: null });
+    assert.equal(bench.kind === "rank" && bench.rank, null);
+  });
 });
 
 describe("value metrics", () => {
@@ -99,6 +113,19 @@ describe("value metrics", () => {
   test("points-for prints the season total behind the points rank", () => {
     const pf = cell("points_for");
     assert.equal(pf.kind === "value" && pf.text, "1,234.56");
+  });
+
+  test("projected bench points print the total behind the bench rank", () => {
+    const pts = cell("proj_bench_pts");
+    assert.equal(pts.kind, "value");
+    assert.equal(pts.kind === "value" && pts.text, "512.30");
+    assert.equal(metricPreview(pts), "512.30");
+  });
+
+  test("projected bench points are absent, not zero, before the data lands", () => {
+    const pts = cell("proj_bench_pts", { ranks: null });
+    assert.equal(pts.kind === "value" && pts.text, null);
+    assert.equal(metricPreview(pts), "—");
   });
 
   test("KTC bench has no answer when the roster can't be split", () => {

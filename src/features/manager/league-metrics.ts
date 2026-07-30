@@ -89,16 +89,29 @@ function ktcTitle(ktc: LeagueKtcEntry | null, valuedAt: string | null): string {
     .join(" · ");
 }
 
-/** The projected-points hover, shared by the projected rank and its raw total. */
+/**
+ * The projected-points hover, shared by all four projected metrics — the starter
+ * rank and its total, and the bench rank and its total. `basis` names which half
+ * of the lineup the number counts, so the same builder reads "by projected
+ * starters" or "by projected bench", and the horizon line says whether the points
+ * are what each week's best lineup scores or what it leaves on the bench.
+ */
 function projTitle(
   proj: { rank: number; of: number; points: number } | null,
   weeks: number[],
   ranked: boolean,
+  basis: "starters" | "bench",
 ): string {
-  if (!proj) return "nothing left to project";
-  const horizon = `best lineup each week · ${formatWeekRange(weeks)}`;
+  if (!proj) {
+    return basis === "bench"
+      ? "nothing projected on the bench"
+      : "nothing left to project";
+  }
+  const horizon = `${
+    basis === "bench" ? "benched each week" : "best lineup each week"
+  } · ${formatWeekRange(weeks)}`;
   return ranked
-    ? `#${proj.rank} of ${proj.of} by projected starters · ${formatPoints(
+    ? `#${proj.rank} of ${proj.of} by projected ${basis} · ${formatPoints(
         proj.points,
       )} · ${horizon}`
     : `${formatPoints(proj.points)} projected · ${horizon}`;
@@ -107,7 +120,10 @@ function projTitle(
 /**
  * Every metric a stat column can show, in the order the picker lists them: the
  * four original rankings, each paired where it makes sense with the raw number
- * behind it, plus the two KTC totals a starter rank alone can't tell apart.
+ * behind it, the projected bench beside the projected starters (depth ranked the
+ * same way, since two teams level on starters aren't level when one carries twice
+ * as much behind them), plus the two KTC totals a starter rank alone can't tell
+ * apart.
  */
 export const LEAGUE_METRICS: LeagueMetric[] = [
   {
@@ -161,7 +177,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
       return {
         kind: "rank",
         rank: proj,
-        title: projTitle(proj, weeks, true),
+        title: projTitle(proj, weeks, true, "starters"),
       };
     },
   },
@@ -173,7 +189,31 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
       return {
         kind: "value",
         text: proj ? formatPoints(proj.points) : null,
-        title: projTitle(proj, weeks, false),
+        title: projTitle(proj, weeks, false, "starters"),
+      };
+    },
+  },
+  {
+    key: "proj_bench",
+    label: "Proj bench",
+    cell: ({ ranks, weeks }) => {
+      const bench = ranks?.proj_bench ?? null;
+      return {
+        kind: "rank",
+        rank: bench,
+        title: projTitle(bench, weeks, true, "bench"),
+      };
+    },
+  },
+  {
+    key: "proj_bench_pts",
+    label: "Bench pts",
+    cell: ({ ranks, weeks }) => {
+      const bench = ranks?.proj_bench ?? null;
+      return {
+        kind: "value",
+        text: bench ? formatPoints(bench.points) : null,
+        title: projTitle(bench, weeks, false, "bench"),
       };
     },
   },
