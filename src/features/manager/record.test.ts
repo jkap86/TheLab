@@ -16,6 +16,7 @@ const league = (
   avatar: null,
   record,
   settings: null,
+  roster_positions: null,
   scoring_settings: null,
 });
 

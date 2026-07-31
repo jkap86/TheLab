@@ -6,9 +6,18 @@ export type { UserLeaguesState } from "./use-user-leagues";
 export {
   BEST_BALL_OPTIONS,
   DEFAULT_LEAGUE_FILTERS,
+  IDP_OPTIONS,
+  SCORING_OPTIONS,
+  STATUS_OPTIONS,
+  SUPERFLEX_OPTIONS,
+  TE_PREMIUM_OPTIONS,
   TYPE_OPTIONS,
   activeFilterCount,
+  deriveScoring,
   filterSummary,
+  hasIdpSlots,
+  hasTePremium,
+  leagueType,
   matchesFilters,
 } from "./league-filters";
 export type { LeagueFilters } from "./league-filters";

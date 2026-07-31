@@ -1,3 +1,4 @@
+import { isSuperflexLineup } from "../../shared/ktc/roster.ts";
 import {
   MONTH_ABBREVIATIONS,
   formatRangeDate,
@@ -6,14 +7,19 @@ import {
   shiftMonths,
   todayIso,
 } from "../shared/date-range.ts";
+import { deriveScoring } from "../shared/league-filters.ts";
 import type { ManagerLeague } from "./types";
 
 // The date primitives moved to `features/shared` once the trades page needed the
 // same ones; they are re-exported here because this module's own consumers (the
 // drawer, the scrubber, `range-domain`) already import them from it, and one
 // canonical definition read under two names is better than two definitions.
+// `deriveScoring` went the same way for the same reason — the league filters
+// bucket a league by receptions too, and `features/shared` can't import a
+// feature, so the definition lives there and this is the second name for it.
 export {
   MONTH_ABBREVIATIONS,
+  deriveScoring,
   formatRangeDate,
   formatRangeMonth,
   shiftDays,
@@ -215,28 +221,19 @@ export function rangeLabel(range: AdpRange): string {
 }
 
 /**
- * The scoring bucket a league falls in, from its `rec` points. Mirrors the
- * `SCORING_SQL` the endpoint groups by exactly — absent/unparseable and
- * anything under half a point is standard — so a filter seeded from a league
- * matches the league it came from rather than landing a bucket off.
- */
-export function deriveScoring(
-  scoring: Record<string, number> | null,
-): "std" | "half_ppr" | "ppr" {
-  const rec = scoring?.rec;
-  if (typeof rec !== "number") return "std";
-  if (rec >= 1) return "ppr";
-  if (rec >= 0.5) return "half_ppr";
-  return "std";
-}
-
-/**
  * Fill the league-setting controls from one of the manager's leagues — the
- * "associated league setting" shortcut. It sets only what a league payload
- * carries: type, scoring, best ball and size. `range`, `draftType` and
- * `superflex` are left as they were: the first two aren't league settings, and
- * superflex lives in `roster_positions`, which the client league doesn't carry,
- * so it stays a deliberate manual choice.
+ * "associated league setting" shortcut. It sets what a league payload carries:
+ * type, scoring, best ball, size and — since the leagues stream started sending
+ * `roster_positions` for the league filters — whether it starts more than one
+ * quarterback. `range` and `draftType` are left as they were: they aren't league
+ * settings at all.
+ *
+ * Superflex was the one league setting this couldn't seed, and it is the one that
+ * moves a board most: a superflex population prices quarterbacks like first-round
+ * assets, so "match a league" that left it alone could hand a two-QB league the
+ * board it is least like. It reads the same predicate `/api/adp` classifies
+ * stored leagues with, so the seeded filter lands on the population the league
+ * itself belongs to.
  */
 export function seedFromLeague(
   controls: AdpControls,
@@ -253,6 +250,7 @@ export function seedFromLeague(
     ...controls,
     leagueType,
     scoring: deriveScoring(league.scoring_settings),
+    superflex: isSuperflexLineup(league.roster_positions) ? "yes" : "no",
     bestBall: settings.best_ball === 1 ? "yes" : "no",
     teams: String(league.total_rosters),
   };

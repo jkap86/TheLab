@@ -34,6 +34,7 @@ type Row = {
   losses: string | null;
   ties: string | null;
   settings: Record<string, unknown> | null;
+  roster_positions: string[] | null;
   scoring_settings: Record<string, number> | null;
 };
 
@@ -65,7 +66,7 @@ export async function getManagerLeagues(
   const { rows } = await pool.query<Row>(
     `SELECT
         l.league_id, l.name, l.season, l.status, l.total_rosters, l.avatar,
-        l.settings, l.scoring_settings,
+        l.settings, l.roster_positions, l.scoring_settings,
         mr.settings->>'wins'   AS wins,
         mr.settings->>'losses' AS losses,
         mr.settings->>'ties'   AS ties
@@ -95,6 +96,7 @@ export async function getManagerLeagues(
             ties: Number(r.ties ?? 0),
           },
     settings: r.settings,
+    roster_positions: r.roster_positions,
     scoring_settings: r.scoring_settings,
   }));
 }

@@ -607,12 +607,13 @@ stops holding, a comment saying it does would not have caught it.
   `defaultAdpControls()` takes no argument, the provider seeds itself, and both
   the null and that hook are gone. Shared *provider*, still two separate
   selections. "Match a league" is the one bridge, and it is
-  deliberately partial: it seeds the four *league settings* from one of the
-  manager's leagues, while the date range and draft type stay manual (they aren't
-  league settings at all) and so does superflex — that lives in
-  `roster_positions`, which the client's league object doesn't carry. Seeding it
-  from nothing would mean guessing, and a wrong guess here reads off the wrong
-  KTC-style board.
+  deliberately partial: it seeds the *league settings* from one of the manager's
+  leagues, while the date range and draft type stay manual — they aren't league
+  settings at all. Superflex was outside it too, for want of `roster_positions` on
+  the client league; the league filters put that on the wire, so it is seeded now
+  through the same predicate `/api/adp` classifies stored leagues with. That one
+  matters most of the set: guessing it reads a two-QB league off the board it is
+  least like.
 - **The ADP controls are a drawer behind one button, not a bar on the page.** Ten
   selects and a caption sat above the first row of every manager tab — ~110px of
   chrome, wrapping to three lines on a laptop — for settings that are chosen once
@@ -735,6 +736,34 @@ stops holding, a comment saying it does would not have caught it.
     dialog also carries how many leagues it would leave, which is why the
     selection is edited as a draft and committed on Apply: those counts can't be
     read while the list behind them moves.
+- **The seven league filters are three bands, and three of them read something
+  other than `settings`.** Status, type and format describe the league; superflex
+  and IDP describe the lineup it starts; the reception bucket and TE premium
+  describe what it pays — which is the axis a reader arrives with, so the dialog
+  groups them that way rather than stacking seven equal rows. One dialog, so the
+  trades page's league filter gained all five with it. Four things worth keeping:
+  - **Each borrows the predicate that already owns the question.**
+    `isSuperflexLineup` is the same slot walk that picks a league's KTC board,
+    `IDP_SLOTS` is derived from `SLOT_POSITIONS` the way `DEFENSIVE_SLOTS` is, and
+    `deriveScoring` is the bucket `/api/adp` groups by — so a league filtered as
+    superflex here is priced off the superflex board there. `league-filters.ts` is
+    tested, so the two slot predicates come in relatively with an explicit `.ts`
+    extension; `deriveScoring` moved *down* into it under the rule above, since
+    `features/shared` can't import `manager/adp-controls` — which now re-exports it
+    for its own consumers.
+  - **IDP is not `DEFENSIVE_SLOTS`.** Nearly every league starts a team defence,
+    so that set says nothing about what game a league is playing; starting a
+    linebacker does. The wider set still gates the projections caveat, which is
+    why the two are separate derivations off one table rather than one set used
+    twice.
+  - **The Complete status is the complement of the live ones, not a match on
+    `"complete"`.** An end-of-season spelling this code doesn't know would
+    otherwise be visible in the total and in none of the buckets, which reads as a
+    filter losing leagues.
+  - **`roster_positions` crosses the wire for this.** It is the one thing
+    `settings` doesn't carry that the client now asks two questions of, which is
+    also what retires the note on `seedFromLeague` that superflex had to stay
+    manual for want of it.
 - **`SiteHeader` is the only global chrome, and it is one link plus a slot.**
   Every tool is reached by navigating away from `/tools`, which used to leave the
   back button as the only way home; the slim bar in `app/layout.tsx` closes that
