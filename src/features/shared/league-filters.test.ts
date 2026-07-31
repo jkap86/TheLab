@@ -6,8 +6,11 @@ import {
   type FilterRule,
   type LeagueFilters,
   activeFilterCount,
+  activeFilters,
+  clearFilter,
   compare,
   filterSummary,
+  leagueBreakdown,
   matchesFilters,
   scoringKeyOptions,
   scoringValue,
@@ -376,5 +379,129 @@ describe("filterSummary", () => {
       }),
       "in season · qb+sf ≥ 2 · bonus rec te > 0.5",
     );
+  });
+});
+
+/**
+ * The dialog's readout rail restates the selection as chips that strike
+ * themselves out, so each active filter has to be addressable as well as
+ * nameable — and clearing one has to leave the rest exactly as they were.
+ */
+describe("activeFilters and clearFilter", () => {
+  const built: LeagueFilters = {
+    ...only({ status: "in_season", type: "2" }),
+    slots: [
+      { key: "QB+SF", op: "gte", value: 2 },
+      { key: "IDP", op: "eq", value: 0 },
+    ],
+    scoring: [{ key: "rec", op: "eq", value: 0.5 }],
+  };
+
+  test("names every narrowing filter, and nothing when none are", () => {
+    assert.deepEqual(activeFilters(DEFAULT_LEAGUE_FILTERS), []);
+    assert.deepEqual(
+      activeFilters(built).map((f) => f.label),
+      ["in season", "dynasty", "qb+sf ≥ 2", "idp = 0", "rec = 0.5"],
+    );
+  });
+
+  test("the count and the summary are the same walk, so they can't disagree", () => {
+    assert.equal(activeFilterCount(built), activeFilters(built).length);
+    assert.equal(
+      filterSummary(built),
+      activeFilters(built)
+        .map((f) => f.label)
+        .join(" · "),
+    );
+  });
+
+  test("clearing a fixed filter returns it to 'all', not to nothing", () => {
+    const type = activeFilters(built).find(
+      (f) => f.kind === "fixed" && f.field === "type",
+    )!;
+    const cleared = clearFilter(built, type);
+    assert.equal(cleared.type, "all");
+    // Everything else survives untouched — the chip lifts one filter out.
+    assert.equal(cleared.status, "in_season");
+    assert.deepEqual(cleared.slots, built.slots);
+    assert.deepEqual(cleared.scoring, built.scoring);
+  });
+
+  test("clearing a rule removes the one at that position, not one like it", () => {
+    // Two identical rules are indistinguishable by value, which is why the
+    // address is a position: removing "the matching one" would be ambiguous.
+    const twice: LeagueFilters = {
+      ...DEFAULT_LEAGUE_FILTERS,
+      slots: [
+        { key: "K", op: "eq", value: 0 },
+        { key: "K", op: "eq", value: 0 },
+      ],
+    };
+    const first = activeFilters(twice)[0];
+    assert.equal(clearFilter(twice, first).slots.length, 1);
+
+    const idp = activeFilters(built).find(
+      (f) => f.kind === "slot" && f.index === 1,
+    )!;
+    const cleared = clearFilter(built, idp);
+    assert.deepEqual(cleared.slots, [{ key: "QB+SF", op: "gte", value: 2 }]);
+    assert.deepEqual(cleared.scoring, built.scoring);
+    assert.equal(cleared.type, "2");
+  });
+
+  test("clearing every chip in turn lands back on the defaults", () => {
+    let filters = built;
+    // Backwards, because clearing by index shifts the ones after it — which is
+    // what the rail does anyway, since it re-derives after every click.
+    for (const entry of activeFilters(built).reverse()) {
+      filters = clearFilter(filters, entry);
+    }
+    assert.deepEqual(filters, DEFAULT_LEAGUE_FILTERS);
+  });
+});
+
+/**
+ * The rail's composition list. Each row is a filter rather than a predicate of
+ * its own, which is what keeps "Superflex 17" equal to what the superflex
+ * quick-add would leave.
+ */
+describe("leagueBreakdown", () => {
+  const ONE_QB_LINEUP = league(null, { roster_positions: ONE_QB });
+
+  test("counts each axis over the leagues handed in", () => {
+    const rows = leagueBreakdown([
+      league({ type: 2 }, { roster_positions: [...ONE_QB, "SUPER_FLEX"] }),
+      league({ type: 2, best_ball: 1 }, { roster_positions: [...ONE_QB, "LB"] }),
+      league({ type: 0 }, { roster_positions: ONE_QB }),
+    ]);
+    assert.deepEqual(
+      rows.map((r) => [r.key, r.count]),
+      [
+        ["dynasty", 2],
+        ["superflex", 1],
+        ["idp", 1],
+        ["best_ball", 1],
+      ],
+    );
+  });
+
+  test("an unsynced lineup is not evidence of a superflex or IDP league", () => {
+    // The same null rule the slot filters hold to: unknown fails the row rather
+    // than reading as zero on one side or a match on the other.
+    const rows = leagueBreakdown([league({ type: 2 })]);
+    const count = (key: string) => rows.find((r) => r.key === key)!.count;
+    assert.equal(count("dynasty"), 1);
+    assert.equal(count("superflex"), 0);
+    assert.equal(count("idp"), 0);
+  });
+
+  test("an empty list is four zeros rather than no rows", () => {
+    // The rail draws the rows whenever anything matched, so a shape that varies
+    // with the data would make the panel's height jump as filters move.
+    assert.deepEqual(
+      leagueBreakdown([]).map((r) => r.count),
+      [0, 0, 0, 0],
+    );
+    assert.equal(leagueBreakdown([ONE_QB_LINEUP]).length, 4);
   });
 });
