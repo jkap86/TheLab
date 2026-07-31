@@ -103,8 +103,11 @@ function Wordmark() {
       aria-label="The Lab — all tools"
       className="group flex flex-none items-center gap-2.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/60"
     >
-      <span className="lab-key lab-notch h-[37px] w-[34px] transition-[filter] duration-300 group-hover:[filter:drop-shadow(0_4px_7px_rgba(0,0,0,0.7))_drop-shadow(0_0_14px_rgba(0,255,229,0.55))]">
-        <span className="lab-face lab-notch h-[34px] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.34),inset_0_0_14px_-6px_rgba(0,255,229,0.75)]">
+      {/* The key sizes itself off the face rather than the other way round: the
+          face carries the 34px square and the wrapper shrink-wraps it, so no
+          box here is a percentage of a box that is itself sizing to content. */}
+      <span className="lab-key lab-notch inline-flex h-[37px] transition-[filter] duration-300 group-hover:[filter:drop-shadow(0_4px_7px_rgba(0,0,0,0.7))_drop-shadow(0_0_14px_rgba(0,255,229,0.55))]">
+        <span className="lab-face lab-notch flex h-[34px] w-[34px] items-center justify-center shadow-[inset_0_1.5px_0_rgba(255,255,255,0.34),inset_0_0_14px_-6px_rgba(0,255,229,0.75)]">
           <FlaskGlyph />
         </span>
       </span>

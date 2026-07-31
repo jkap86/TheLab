@@ -61,7 +61,11 @@ export function ToolsMenu() {
   }, [open]);
 
   return (
-    <div ref={wrapper} className="relative flex-none">
+    // `flex` so the trigger is a flex item rather than an inline-level box: an
+    // inline-flex key in a block would sit on a line box and carry its
+    // descender space, which is a few pixels of the bar's height spent on
+    // nothing.
+    <div ref={wrapper} className="relative flex flex-none">
       <button
         ref={trigger}
         type="button"
@@ -73,9 +77,16 @@ export function ToolsMenu() {
         // pressed, so it is the one part standing above the plate. It travels
         // its own thickness on `:active` (`lab-key-press`), which is the whole
         // payoff of building the depth out of a stacked layer.
-        className="lab-key lab-key-active lab-key-press lab-notch h-[37px] transition-[filter] duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/70"
+        //
+        // The face is the flex row, not the button: a `<button>` is the one
+        // element engines disagree about as a flex container, and the row is
+        // what the whole part's width comes from. `whitespace-nowrap` says the
+        // glyph, the label and the chevron are one line under any layout — the
+        // failure worth ruling out is them stacking into a keycap three rows
+        // tall, which the bar has no height for and cannot clip.
+        className="lab-key lab-key-active lab-key-press lab-notch inline-flex h-[37px] transition-[filter] duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/70"
       >
-        <span className="lab-face lab-face-active lab-notch h-[34px] gap-2 px-3 font-display text-[11px] font-extrabold uppercase tracking-[0.1em]">
+        <span className="lab-face lab-face-active lab-notch flex h-[34px] items-center justify-center gap-2 whitespace-nowrap px-3 font-display text-[11px] font-extrabold uppercase tracking-[0.1em]">
           <GridGlyph />
           <span className="hidden sm:inline">Tools</span>
           <Chevron open={open} />

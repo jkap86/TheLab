@@ -67,73 +67,86 @@ body {
    whole vocabulary: the tools trigger is raised, the current-page chip is a
    well. Keep that distinction — a raised label invites a press that does
    nothing.
+
+   **They hold the material and nothing else — no `display`, no width.** Layout
+   stays in utilities on the elements, so a part is laid out by the same
+   mechanism as everything else on the page and a key survives its material
+   failing to arrive: a face that isn't a flex row is a bare label, but a face
+   whose *stylesheet* owned the row stacks its icon, label and chevron down the
+   page and pushes the whole bar open. The rule to keep is that these classes
+   may change how a part looks and never how big it is.
+
+   **They are in `@layer components` for the same reason.** Unlayered, they
+   outrank every Tailwind utility on the same element — which silently ate the
+   wordmark's hover glow and its inset, both written as utilities over a
+   `.lab-*` base. In the layer the call site wins, which is what a call site
+   spelling out `group-hover:[filter:…]` already assumed.
 --------------------------------------------------------------------------- */
-.lab-notch {
-  clip-path: polygon(
-    7px 0,
-    100% 0,
-    100% calc(100% - 7px),
-    calc(100% - 7px) 100%,
-    0 100%,
-    0 7px
-  );
-}
-.lab-notch-lg {
-  clip-path: polygon(
-    11px 0,
-    100% 0,
-    100% calc(100% - 11px),
-    calc(100% - 11px) 100%,
-    0 100%,
-    0 11px
-  );
-}
+@layer components {
+  .lab-notch {
+    clip-path: polygon(
+      7px 0,
+      100% 0,
+      100% calc(100% - 7px),
+      calc(100% - 7px) 100%,
+      0 100%,
+      0 7px
+    );
+  }
+  .lab-notch-lg {
+    clip-path: polygon(
+      11px 0,
+      100% 0,
+      100% calc(100% - 11px),
+      calc(100% - 11px) 100%,
+      0 100%,
+      0 11px
+    );
+  }
 
-/* Wrapper: the side wall. `padding-bottom` is the part's thickness. */
-.lab-key {
-  position: relative;
-  display: inline-flex;
-  padding-bottom: 3px;
-  background: var(--edge);
-  filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.7));
-}
-.lab-key-active {
-  background: var(--edge-active);
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6))
-    drop-shadow(0 0 16px rgba(0, 255, 229, 0.45));
-}
-/* Child: the lit face. The inset top line is the specular edge that sells the
-   bevel; the inset bottom is the face curving away from the light. */
-.lab-face {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(160deg, #2a4a60, #0f2130);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.34),
-    inset 0 -3px 6px rgba(0, 0, 0, 0.55);
-}
-.lab-face-active {
-  background: linear-gradient(180deg, #a8fff4, #00ddc6);
-  color: #052029;
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9);
-}
-/* A key travels its own thickness when pressed, so the face meets the wall. */
-.lab-key-press:active {
-  padding-bottom: 0;
-  padding-top: 3px;
-}
+  /* Wrapper: the side wall. `padding-bottom` is the part's thickness — the one
+     box property here, and it changes the face's position rather than its
+     size. */
+  .lab-key {
+    position: relative;
+    padding-bottom: 3px;
+    background: var(--edge);
+    filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.7));
+  }
+  .lab-key-active {
+    background: var(--edge-active);
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6))
+      drop-shadow(0 0 16px rgba(0, 255, 229, 0.45));
+  }
+  /* Child: the lit face. The inset top line is the specular edge that sells the
+     bevel; the inset bottom is the face curving away from the light. */
+  .lab-face {
+    background: linear-gradient(160deg, #2a4a60, #0f2130);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.34),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.55);
+  }
+  .lab-face-active {
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    color: #052029;
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9);
+  }
+  /* A key travels its own thickness when pressed, so the face meets the wall. */
+  .lab-key-press:active {
+    padding-bottom: 0;
+    padding-top: 3px;
+  }
 
-/* The inverse: a recessed well. Used for the bar's current-page chip and as
-   the trough a raised part sits in. */
-.lab-well {
-  background: #07131e;
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.8),
-    inset 0 0 0 1px rgba(0, 255, 229, 0.14);
+  /* The inverse: a recessed well. Used for the bar's current-page chip and as
+     the trough a raised part sits in. */
+  .lab-well {
+    background: #07131e;
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.8),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.14);
+  }
 }
 
 /* Flask loader (features/shared/ui/flask-loader) — the bubbling animation.

@@ -929,7 +929,29 @@ stops holding, a comment saying it does would not have caught it.
   press me, recessed means you are here.** The tools trigger is a raised keycap
   that travels its own thickness on `:active`; the current-page chip is a
   recessed well; the icon tiles are moulded. Break that pairing and a label
-  invites a press that does nothing. Four things in `globals.css` hold it up:
+  invites a press that does nothing. Six things in `globals.css` hold it up:
+  - **A `.lab-*` class carries material and never layout**, and it is in
+    `@layer components` so a utility beside it wins. Both halves were learned the
+    same way. `.lab-face` used to own `display: flex` and `width: 100%`, so a
+    browser holding a copy of the stylesheet from before the redesign — a stale
+    dev chunk is enough, and one survived a server restart here — laid the tools
+    trigger out as an inline box at *min-content* width: the glyph, the label and
+    the chevron stacked three rows deep, the keycap burst out of a bar with no
+    height for it, and every other part centred against the wreckage. That is the
+    whole of the "app bar is broken" report. Layout now comes from the same
+    utilities as the rest of the page, so the same missing stylesheet costs the
+    machining and nothing else. And unlayered, these rules outranked every utility
+    on their own elements, which had quietly eaten the wordmark's hover glow and
+    its inset — the call sites had been writing `group-hover:[filter:…]` into a
+    void.
+  - **A key sizes itself off its face, never the reverse.** The face carries the
+    box (`w-[34px]`, or the label's own padding) and the wrapper shrink-wraps it,
+    so no part of the bar is a percentage of a box that is itself sizing to
+    content — the construct engines disagree about, and the one that collapsed to
+    min-content above. The face is also the flex row rather than the `<button>`,
+    since a form control is the element engines disagree about as a flex
+    container, and it is `whitespace-nowrap`: the failure worth making impossible
+    is contents stacking in chrome that cannot grow to hold them.
   - **`clip-path` cuts a `box-shadow` off.** A notched part cannot cast its
     shadow or glow with `box-shadow` at all — `filter: drop-shadow()` applies
     after clipping and follows the notched silhouette, which is why `.lab-key`
