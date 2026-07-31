@@ -366,6 +366,17 @@ decisions live in the pair rather than in the components:
   bound, for the reason `/api/adp` drops an undated draft — there is no honest
   side of the boundary to put it on.
 
+**The league filters' rule lists are AND-only, and that difference from the
+trades selection is deliberate.** Both let a reader build a list rather than pick
+from fixed chips, so they look like the same control and invite being unified —
+they are not. A trade selection is a set of *subjects* ("any of these three
+players"), where `any` is the natural reading as often as `all`. A league rule
+narrows on an *attribute* (`QB+SF ≥ 2`, `rec = 0.5`), and the question people
+arrive with is "dynasty leagues that start two QBs" — every rule narrowing. An OR
+there would additionally need each rule to say which group it joins, which is a
+control nobody asked for. Adding a mode to the league rules is not the small
+symmetry it looks like.
+
 Validation earns its keep when a value reaches SQL as anything but a bound
 parameter. `scoring` picks the column `projections/queries` interpolates into
 `ORDER BY`, so it is a closed enum that fails the request on an unknown value —
@@ -821,34 +832,60 @@ stops holding, a comment saying it does would not have caught it.
     dialog also carries how many leagues it would leave, which is why the
     selection is edited as a draft and committed on Apply: those counts can't be
     read while the list behind them moves.
-- **The seven league filters are three bands, and three of them read something
-  other than `settings`.** Status, type and format describe the league; superflex
-  and IDP describe the lineup it starts; the reception bucket and TE premium
-  describe what it pays — which is the axis a reader arrives with, so the dialog
-  groups them that way rather than stacking seven equal rows. One dialog, so the
-  trades page's league filter gained all five with it. Four things worth keeping:
-  - **Each borrows the predicate that already owns the question.**
-    `isSuperflexLineup` is the same slot walk that picks a league's KTC board,
-    `IDP_SLOTS` is derived from `SLOT_POSITIONS` the way `DEFENSIVE_SLOTS` is, and
-    `deriveScoring` is the bucket `/api/adp` groups by — so a league filtered as
-    superflex here is priced off the superflex board there. `league-filters.ts` is
-    tested, so the two slot predicates come in relatively with an explicit `.ts`
-    extension; `deriveScoring` moved *down* into it under the rule above, since
-    `features/shared` can't import `manager/adp-controls` — which now re-exports it
-    for its own consumers.
-  - **IDP is not `DEFENSIVE_SLOTS`.** Nearly every league starts a team defence,
-    so that set says nothing about what game a league is playing; starting a
-    linebacker does. The wider set still gates the projections caveat, which is
-    why the two are separate derivations off one table rather than one set used
-    twice.
+- **The league filters are three fixed segments and two lists of rules the reader
+  writes.** Status, type and format describe what a league *is*, and stay
+  segments because each is a closed set of three or four answers. What its lineup
+  starts and what its scoring pays are not closed sets, so they are rows —
+  `QB+SF ≥ 2`, `IDP = 0`, `rec = 0.5`, `bonus_rec_te > 0` — each a slot group or
+  a `scoring_settings` key, a comparison and a number, added with a `+` and
+  removed with an `×`. They replaced four fixed pairs (superflex/one-QB,
+  IDP/offense, the reception bucket, TE premium), which were four hard-coded
+  questions out of a space readers arrive with their own question in: "no
+  kicker", "three flexes", "half PPR with a TE bonus over half a point". One
+  dialog, so the trades page's league filter gained the rules with it. Six things
+  worth keeping:
+  - **The four old chips survive as quick-adds that write the equivalent rule.**
+    `qb+sf ≥ 2` *is* `isSuperflexLineup`; the preset is the one-click path and
+    the row is what you edit it into. A preset already on the list is dimmed
+    rather than hidden, so the row doesn't reflow as it's used.
+  - **A slot group is a predicate derived from the solver's tables, never a
+    list.** `QB+SF` is `QB_ELIGIBLE_STARTING_SLOTS` — the same slot walk that
+    picks a league's KTC board — `IDP` is `IDP_SLOTS`, `FLEX` is the multi-position
+    slots that take neither a QB nor a defender (so `WRRB_FLEX` and `REC_FLEX`
+    count as flexes without being named), and `Starters` is "not a bench slot",
+    which has to keep counting a slot spelling this build has never seen. A new
+    flex therefore counts the moment the solver learns it. `league-filters.ts` is
+    tested, so both slot modules come in relatively with an explicit `.ts`
+    extension.
+  - **Null and zero are different answers, per rule.** `k = 0` means "leagues
+    without a kicker", and a league whose `roster_positions` were never synced is
+    not evidence of one — an unknown lineup fails a slot rule rather than reading
+    as zero. A key *absent from a stored* `scoring_settings` is 0, though, because
+    Sleeper omits what a league doesn't pay for: that is exactly what makes
+    `bonus_rec_te > 0` the TE-premium question. A missing blob is unknown again.
+  - **Comparisons carry an epsilon.** A passing yard is 0.04 and a reception 0.5;
+    `rec === 0.5` is one binary representation away from reporting that a half-PPR
+    league doesn't pay half a point.
+  - **The scoring key menu is read off the leagues in hand**, the way the trades
+    page's menus are read off the trades — what a league pays for is a house rule,
+    and a fixed list would offer keys nobody scores while hiding the one someone
+    wants. `COMMON_SCORING_KEYS` only *ranks* them, and is the fallback on a cold
+    load. A rule's own key is always an option in its row, since a preset can name
+    a key no league in view scores and a `<select>` whose value is absent from its
+    options silently shows a different one.
   - **The Complete status is the complement of the live ones, not a match on
     `"complete"`.** An end-of-season spelling this code doesn't know would
     otherwise be visible in the total and in none of the buckets, which reads as a
     filter losing leagues.
-  - **`roster_positions` crosses the wire for this.** It is the one thing
-    `settings` doesn't carry that the client now asks two questions of, which is
-    also what retires the note on `seedFromLeague` that superflex had to stay
-    manual for want of it.
+  `roster_positions` crosses the wire for this — it is what `settings` doesn't
+  carry and the rules count over, which is also what retires the note on
+  `seedFromLeague` that superflex had to stay manual for want of it. `IDP_SLOTS`
+  is still not `DEFENSIVE_SLOTS`: nearly every league starts a team defence, so
+  that set says nothing about what game a league is playing while starting a
+  linebacker does, and the wider set still gates the projections caveat.
+  `deriveScoring` stays in this file — the filters no longer bucket anything, but
+  it is the bucket `/api/adp` groups by and `adp-controls` re-exports it, since
+  `features/shared` can't import a feature.
 - **`SiteHeader` is the only global chrome, and it is three zones: the mark
   home, the page you are on, and every tool.** Every tool is reached by navigating
   away from `/tools`, which used to leave the back button as the only way home;

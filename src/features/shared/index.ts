@@ -5,22 +5,33 @@ export { useUserLeagues } from "./use-user-leagues";
 export type { UserLeaguesState } from "./use-user-leagues";
 export {
   BEST_BALL_OPTIONS,
+  COMMON_SCORING_KEYS,
+  COMPARE_OPS,
   DEFAULT_LEAGUE_FILTERS,
-  IDP_OPTIONS,
-  SCORING_OPTIONS,
+  SLOT_GROUPS,
   STATUS_OPTIONS,
-  SUPERFLEX_OPTIONS,
-  TE_PREMIUM_OPTIONS,
   TYPE_OPTIONS,
   activeFilterCount,
+  compare,
   deriveScoring,
   filterSummary,
-  hasIdpSlots,
-  hasTePremium,
+  formatRuleValue,
   leagueType,
   matchesFilters,
+  matchesScoringRule,
+  matchesSlotRule,
+  scoringKeyLabel,
+  scoringKeyOptions,
+  scoringValue,
+  slotCount,
+  slotGroupLabel,
 } from "./league-filters";
-export type { LeagueFilters } from "./league-filters";
+export type {
+  CompareOp,
+  FilterRule,
+  LeagueFilters,
+  SlotGroup,
+} from "./league-filters";
 export {
   MONTH_ABBREVIATIONS,
   formatRangeDate,
