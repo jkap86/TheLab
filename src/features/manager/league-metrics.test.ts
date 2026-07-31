@@ -5,9 +5,9 @@ import {
   DEFAULT_COLUMNS,
   LEAGUE_METRICS,
   LEAGUE_METRICS_BY_KEY,
-  metricPreview,
   type MetricContext,
 } from "./league-metrics.ts";
+import { metricPreview } from "./metric-cell.ts";
 import type {
   LeagueAdpEntry,
   LeagueKtcEntry,

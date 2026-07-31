@@ -82,16 +82,26 @@ function settingNumber(league: ManagerLeague, key: string): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
+/**
+ * A league's Sleeper type as a number: 0 redraft, 1 keeper, 2 dynasty.
+ *
+ * Sleeper omits `type` for standard redraft leagues, so a missing value is 0 —
+ * the same assumption `/api/adp` makes in SQL, and the reason this is a function
+ * rather than a field read at each call site: the share cards count dynasty and
+ * redraft leagues off it too, and a second copy of the fallback is a second
+ * chance to forget it.
+ */
+export function leagueType(league: ManagerLeague): number {
+  return settingNumber(league, "type") ?? 0;
+}
+
 /** Whether a league passes the active filters. */
 export function matchesFilters(
   league: ManagerLeague,
   filters: LeagueFilters,
 ): boolean {
   if (filters.type !== "all") {
-    // Sleeper omits `type` for standard redraft leagues; treat missing as 0.
-    if ((settingNumber(league, "type") ?? 0) !== Number(filters.type)) {
-      return false;
-    }
+    if (leagueType(league) !== Number(filters.type)) return false;
   }
   if (filters.bestBall !== "all") {
     const isBestBall = settingNumber(league, "best_ball") === 1;

@@ -721,12 +721,13 @@ stops holding, a comment saying it does would not have caught it.
   you left). Counting membership would quietly deflate every share on the page,
   so `playerShares` counts only leagues that contributed a roster, and an empty
   roster (pre-draft) still counts: holding nobody is a real answer.
-- **The shares list is one line a row, unlike the roster panel's two.** That rule
-  is about a panel rendering at half a card's width; this page has the full shell,
-  so the name is in no danger and splitting it would only add height to a list
-  several hundred rows long. Both numbers are kept — the count is what's actually
-  held and compares between players, the share is what it means for a portfolio
-  and moves when the filters do.
+- **The shares are cards, the same card a league wears.** They were a dense table
+  of two fixed numbers — the count and that count as a percentage — while the
+  leagues tab beside them carried four pickable stat columns; the columns are the
+  point of the change, and a table row 28px tall has nowhere to put them. Both
+  numbers are kept and are still what the cards open on: the count is what's
+  actually held and compares between players, the share is what it means for a
+  portfolio and moves when the filters do.
 - **A leaguemate is shared by membership, though a player share is counted by
   roster — the opposite choices on purpose.** The ghost `league_users` rows that
   would deflate a player share are exactly who this page is for: someone
@@ -739,30 +740,25 @@ stops holding, a comment saying it does would not have caught it.
   and dropped by the counting, which takes the self id as an argument for it.
   Rows are labelled by `display_name` per the standings rule (recognising the
   same person across leagues is the page), and the list itself is the player
-  shares list with a person in the player column: same grid, same two numbers,
-  same expansion.
-- **`ShareList`'s optional `value` column is two whole grid templates, not one
-  interpolated.** The players view puts ADP between the name and the counts; the
-  leaguemates view has nothing to put there. So `COLUMNS` and
-  `COLUMNS_WITH_VALUE` are both written out in full — Tailwind only sees class
-  strings it can read literally, and a template assembled from fragments compiles
-  to no grid at all. The cell is gated on the column existing rather than on
-  having a number, so a row with no ADP still fills its track and the columns
-  below it stay aligned; a caller omitting `value` gets the four-column grid
-  byte-for-byte as it was, which is what keeps the leaguemates list unchanged.
-- **Both share views *are* `ShareList`.** The grid template, the heading row, the
-  count-and-percent cells and the expansion were copied between
-  `player-shares` and `leaguemate-shares` — only the heading word and the first
-  column's contents ever differed — so they live once in `share-list.tsx` and each
-  view is now ~30 lines naming its own column. Two copies of a grid template is
-  one width change away from the headings sitting over the wrong numbers in
-  whichever file didn't get edited, and that would look like a data bug rather
-  than a CSS one. What a caller supplies is `icon` (a position pill, an avatar)
-  and an optional `note` — the dim trailing detail, which is the NFL team on a
-  player row and nothing on a person. The name span and its truncation stay in
-  `ShareList`, since losing the name is the failure both lists are laid out to
-  avoid. `Chevron` and `SharedLeagueRow` remain in `ui.tsx`: the standings and the
-  roster panel use them too, so they are atoms rather than part of this table.
+  shares list with a person in the player column: same card, same columns, same
+  expansion.
+- **Both share views *are* `ShareList`, and a share row *is* `ShareCard`.** The
+  card chrome, the stat columns and the expansion were copied between
+  `player-shares` and `leaguemate-shares` — only the first column's contents and
+  which metrics are on offer ever differed — so they live once and each view is
+  now ~30 lines naming its own. What a caller supplies is `icon` (a position pill,
+  an avatar), an optional `note` — the dim trailing detail, the NFL team on a
+  player row and nothing on a person — the metric catalogue, and its default
+  columns. The one asymmetry is `adpFor`: the players view resolves a board entry
+  per row for the ADP metrics, and the leaguemates view omits it because its menu
+  holds nothing that reads one. `Chevron` and `SharedLeagueRow` remain in `ui.tsx`:
+  the standings and the roster panel use them too, so they are atoms rather than
+  part of this list.
+- **Which metric each share column shows lives in `ShareList`, not in the card** —
+  the same rule as `ManagerLeagues` above the league cards, for the same reason: a
+  list several hundred rows long is scanned vertically, and per-card columns would
+  make it unreadable. `ShareCard` holds only whether *it* is expanded and whether
+  one of its menus is up.
 - **The expanded standings are ordered by projected points, not by record.**
   What the panel adds over Sleeper is the projection, so the Proj column is the
   one the rows are ranked on — the numbers descend down the page, and the `#`
@@ -787,28 +783,53 @@ stops holding, a comment saying it does would not have caught it.
   the module keeps the pure-and-tested bar its neighbours `shares` and `filters`
   hold: everything from `./types` arrives as an erased `import type`, so the
   accessors test without a fetch (`league-metrics.test.ts`).
-- **There are three metric catalogues, one per grain, and that is the axis they
-  divide on — not the screen they appear on.** `ColumnPicker` is the shared
-  control; what differs is what a row *is*:
+- **There are four metric catalogues, one per grain, and that is the axis they
+  divide on — not the screen they appear on.** `ColumnPicker` and `MetricColumn`
+  are the shared controls; what differs is what a row *is*:
 
   | Module | Grain | Where |
   | --- | --- | --- |
   | `league-metrics` | one league | collapsed card |
   | `standings-metrics` | one team | expanded panel's standings |
   | `roster-metrics` | one player | expanded panel's roster list |
+  | `share-metrics` | one subject held across several leagues | players and leaguemates cards |
 
   Put a metric where its subject lives, not where you happen to want to see it.
-  KTC and ADP appear in all three and mean something different each time — a
+  KTC and ADP appear in most of them and mean something different each time — a
   whole roster summed in `standings-metrics`, a single player's price in
-  `roster-metrics` — which is why the same lens is not one shared metric. The
-  other split worth keeping: only `league-metrics` holds `rank` cells, because
-  only the collapsed card places a league against its peers; the standings and
-  roster panels are already ranked lists, so their columns are plain values and a
-  rank in them would be a second ordering competing with the rows. All three hold
-  the same pure-and-tested bar, and all three are *client* modules under
-  `features/` — they format for display, so they belong beside the components,
-  and their `./format.ts` import is relative with an explicit extension for the
-  usual test-runner reason.
+  `roster-metrics`, and in `share-metrics` that same player's price shown against
+  *how many of your leagues hold him* — which is why the same lens is not one
+  shared metric. The other split worth keeping: only `league-metrics` holds `rank`
+  cells, because only the collapsed card places a league against its peers; the
+  standings and roster panels are already ranked lists, so their columns are plain
+  values and a rank in them would be a second ordering competing with the rows.
+  All four hold the same pure-and-tested bar, and all four are *client* modules
+  under `features/` — they format for display, so they belong beside the
+  components, and their `./format.ts` import is relative with an explicit
+  extension for the usual test-runner reason.
+- **The share catalogue serves two views and is still one grain.** A player share
+  and a leaguemate share are the same subject shape — something held across some
+  of the manager's leagues — and the only thing a player has that a person does
+  not is a price on the ADP board. That is two extra metrics
+  (`PLAYER_SHARE_METRICS = SHARE_METRICS + the ADP pair`), not a second catalogue;
+  the leaguemates menu never lists them, so the null they would read can't
+  surface. Its record metrics are the **manager's** own over the leagues behind
+  the row — how the teams holding a player are doing, how he fares against the
+  crowd a leaguemate is part of — and they carry the two `aggregateRecord` rules
+  intact: counted over leagues that report a record, and no games played is an em
+  dash rather than `.000`.
+- **A share cell is a third shape beside `rank` and `value`, and the difference is
+  the tinting.** `metric-cell.ts` holds the vocabulary all four catalogues speak
+  (`MetricCell`, `Metric<C>`, `metricPreview`) precisely because it is no longer
+  about leagues. A `share` cell is `N of M` where *more is more*, metered by the
+  plain fraction and never tiered: a rank's colour bands read 8-of-121 as a bad
+  result the way 8th-of-12 is, which would paint nearly every row of a shares list
+  red. Same menu, three cells, one column drawing them (`MetricColumn`, generic in
+  its context so a league card and a share card share it). The cluster around them
+  is shared too: `MetricColumns` owns one-menu-at-a-time, the outside click and
+  Escape, and reports *whether* a menu is up back to the card — which is the only
+  part the card needs, since the element that must lift its stacking order while a
+  menu overhangs the row below is the card's own.
 - **The rank metrics come from one batch route,
   `/api/user/[username]/ranks`.** A collapsed league costs no request — the
   panel loads on expand — and a hundred cards each fetching a league detail to

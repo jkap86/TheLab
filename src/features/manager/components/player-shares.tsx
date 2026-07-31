@@ -1,7 +1,8 @@
 "use client";
 
-import type { AdpPlayerPayload } from "../types";
+import { DEFAULT_PLAYER_COLUMNS, PLAYER_SHARE_METRICS } from "../share-metrics";
 import type { PlayerShare } from "../shares";
+import type { AdpPlayerPayload } from "../types";
 import { ShareList } from "./share-list";
 import { PositionBadge } from "./ui";
 
@@ -9,12 +10,14 @@ import { PositionBadge } from "./ui";
  * Every player the manager rosters, most-owned first, each expanding to the
  * leagues that hold him.
  *
- * The table itself is `ShareList`, which `leaguemate-shares` also is — this file
+ * The list itself is `ShareList`, which `leaguemate-shares` also is — this file
  * is only what goes in the first column (the position pill, and the NFL team as
- * the dim note after the name) and the optional ADP column. The ADP is looked up
- * by player id from the board `useAdp` fetched; a player the board didn't price
- * — too few picks in the matched drafts, or none at all — gets an em dash, the
- * same distinction the projections carry between a real zero and no data.
+ * the dim note after the name) and which metrics the cards' stat columns can
+ * hold. Players get the ADP ones on top of the shared count-and-record set: the
+ * price is looked up by player id from the board `useAdp` fetched, and a player
+ * the board didn't price — too few picks in the matched drafts, or none at all —
+ * reads as an em dash, the same distinction the projections carry between a real
+ * zero and no data.
  */
 export function PlayerShares({
   shares,
@@ -29,28 +32,14 @@ export function PlayerShares({
 }) {
   return (
     <ShareList
-      heading="Player"
       rows={shares}
       leagueCount={leagueCount}
       rowKey={(share) => share.player_id}
       icon={(share) => <PositionBadge position={share.position} />}
       note={(share) => share.team}
-      valueHeading="ADP"
-      value={(share) => <AdpValue entry={adp.get(share.player_id) ?? null} />}
+      metrics={PLAYER_SHARE_METRICS}
+      defaultColumns={DEFAULT_PLAYER_COLUMNS}
+      adpFor={(share) => adp.get(share.player_id) ?? null}
     />
-  );
-}
-
-/** One player's ADP cell: the average, with its spread and sample on hover. */
-function AdpValue({ entry }: { entry: AdpPlayerPayload | null }) {
-  if (!entry) return <span className="text-foreground/25">—</span>;
-  return (
-    <span
-      title={`Picks ${entry.min_pick}–${entry.max_pick} · ${entry.picks} draft${
-        entry.picks === 1 ? "" : "s"
-      } · ±${entry.stdev.toFixed(1)}`}
-    >
-      {entry.adp.toFixed(1)}
-    </span>
   );
 }
