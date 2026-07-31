@@ -415,10 +415,14 @@ stops holding, a comment saying it does would not have caught it.
   and `ToolLinkCard` renders an `aria-disabled`, dimmed `div` instead of a
   `Link` — there is nothing useful behind any of these cards without knowing
   whose leagues to read. What resolving unlocks differs by tool, which is where
-  the two overrides come in: the manager card takes an `href` override straight
-  to `/manager/<username>/leagues`, skipping the username search it would
-  otherwise land you on (you just typed that name — asking twice is the drift
-  `UserLookup` exists to prevent), and the pick tracker gets `PicktrackerCard`
+  the two overrides come in: a tool carrying `hrefFor` resolves its own
+  destination from the account, skipping the username search it would otherwise
+  land you on (you just typed that name — asking twice is the drift `UserLookup`
+  exists to prevent) — the manager tool is *three* such cards, Leagues, Players
+  and Leaguemates, because its tabs answer different questions and are separate
+  routes, so the grid links each rather than dropping you on Leagues to navigate
+  again; they share the account-less `/manager` href, which is why cards are
+  keyed by name. And the pick tracker gets `PicktrackerCard`
   instead, listing the account's leagues inline because a league *id* is the one
   thing a username does **not** give you and the account already knows every one.
   Its picker is its own gate — there is no way to the tracker without choosing a
