@@ -78,8 +78,8 @@ export function UserLookup({
   };
 
   return (
-    <section className="mb-10 rounded-xl border border-foreground/10 bg-foreground/[0.02] p-6">
-      <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-foreground/45">
+    <section className="mb-10 rounded-2xl border border-foreground/12 bg-foreground/[0.04] p-6 shadow-[0_24px_60px_-34px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+      <h2 className="mb-4 font-display text-[11px] font-medium uppercase tracking-[0.28em] text-active/80">
         Your Sleeper account
       </h2>
 
@@ -90,18 +90,29 @@ export function UserLookup({
             name={user.display_name || user.username}
             size="lg"
           />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             {/* Sleeper lets a display name go missing, and falls back to the
                 username itself — the same pairing `ManagerHeader` shows. */}
-            <p className="truncate text-2xl font-semibold tracking-tight">
+            <p className="truncate font-display text-2xl font-semibold tracking-tight">
               {user.display_name || user.username}
             </p>
             <p className="text-sm text-foreground/45">@{user.username}</p>
           </div>
+          {/* This account is resolved (right avatar, right spelling) — the whole
+              point of looking it up before a tool is picked — so it reads as a
+              live connection. The dot's expanding ring animates via `tools-pulse`
+              and freezes under reduced motion (`.tools-anim`). */}
+          <span className="hidden shrink-0 items-center gap-2 text-xs text-foreground/55 sm:inline-flex">
+            <span
+              className="tools-anim h-1.5 w-1.5 rounded-full bg-active"
+              style={{ animation: "tools-pulse 2.4s ease-out infinite" }}
+            />
+            Connected
+          </span>
           <button
             type="button"
             onClick={handleChange}
-            className="ml-auto shrink-0 rounded-lg border border-foreground/15 px-4 py-2 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/50"
+            className="shrink-0 rounded-lg border border-foreground/15 px-4 py-2 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/50"
           >
             Change
           </button>

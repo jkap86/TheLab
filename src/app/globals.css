@@ -11,6 +11,11 @@
 @theme {
   --color-active: #00ffe5;
   --color-foreground: #ffffff;
+
+  /* The display face (Orbitron, loaded in layout.tsx) behind the `font-display`
+     utility. Only the tools page's wordmark and tool names reach for it; body
+     text stays on the default sans. */
+  --font-display: var(--font-orbitron);
 }
 
 :root {
@@ -82,11 +87,62 @@ body {
     opacity: 0;
   }
 }
+/* Tools page ambience (features/tools). Same rule as the flask loader: Tailwind
+   v4 has no per-component keyframe mechanism, so the aurora backdrop's drift and
+   the account's "connected" pulse are named here once and referenced through
+   inline `animation`. Per-blob position/size/duration stay on the element as
+   data — a keyframe can't carry them. The three drifts differ so the glows
+   don't move in lockstep. */
+@keyframes aurora-drift-1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(7%, 9%) scale(1.12);
+  }
+}
+@keyframes aurora-drift-2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-8%, 6%) scale(1.08);
+  }
+}
+@keyframes aurora-drift-3 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1.05);
+  }
+  50% {
+    transform: translate(6%, -7%) scale(0.94);
+  }
+}
+/* The resolved-account "connected" dot: a ring that expands and fades. The
+   colour is the `active` token's value inline, since a keyframe can't read a
+   CSS custom property through `box-shadow` spread the way a property can. */
+@keyframes tools-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 229, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgba(0, 255, 229, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 229, 0);
+  }
+}
+
 /* Respect a reader who asked the OS for less motion: freeze the flask rather
    than bubble at them. Bubbles rest at opacity 0 (keyframe start), so what's
-   left is a calm, static flask that still reads as a loading mark. */
+   left is a calm, static flask that still reads as a loading mark. The tools
+   page's ambient drift and pulse (`.tools-anim`) freeze on the same terms —
+   the glows and the account panel simply hold still. */
 @media (prefers-reduced-motion: reduce) {
-  .flask-loader * {
+  .flask-loader *,
+  .tools-anim {
     animation: none !important;
   }
 }
