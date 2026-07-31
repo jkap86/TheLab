@@ -948,7 +948,7 @@ stops holding, a comment saying it does would not have caught it.
   press me, recessed means you are here.** The tools trigger is a raised keycap
   that travels its own thickness on `:active`; the current-page chip is a
   recessed well; the icon tiles are moulded. Break that pairing and a label
-  invites a press that does nothing. Six things in `globals.css` hold it up:
+  invites a press that does nothing. Seven things in `globals.css` hold it up:
   - **A `.lab-*` class carries material and never layout**, and it is in
     `@layer components` so a utility beside it wins. Both halves were learned the
     same way. `.lab-face` used to own `display: flex` and `width: 100%`, so a
@@ -990,11 +990,15 @@ stops holding, a comment saying it does would not have caught it.
   - **`.lab-chip` is that grammar off the bar**, for a control that stays a
     rounded pill: nothing clips it, so its side wall can simply *be* a shadow
     (`0 3px 0 var(--edge)`) and the whole part is one element rather than the
-    wrapper-and-face pair `.lab-key` needs. Three triggers share it — the league
-    filters, the trade filters and the ADP board — which is the point of putting
-    it in `globals.css` rather than in one of them: `LeagueFiltersModal` renders
-    on two pages, and one control with two looks is exactly the drift a shared
-    class prevents.
+    wrapper-and-face pair `.lab-key` needs. It obeys both halves of the first
+    rule — material only, inside the layer — so a chip that loses its stylesheet
+    is a plain pill rather than a control that resizes. Three triggers share it
+    — the league filters, the trade filters and the ADP board — which is the
+    point of putting it in `globals.css` rather than in one of them:
+    `LeagueFiltersModal` renders on two pages, and one control with two looks is
+    exactly the drift a shared class prevents. Its one unlayered rule is the
+    reduced-motion override, which has to outrank the layered `:active` it
+    cancels.
   The notch is kept for the small parts and the panel stays rounded (the `H3`
   mockup of three): six rows of 11px text want a calm surface, and nothing else
   in the app has to change its corners to match.
