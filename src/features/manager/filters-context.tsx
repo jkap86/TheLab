@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 
 import { type AdpControls, defaultAdpControls } from "./adp-controls";
 import { DEFAULT_LEAGUE_FILTERS, type LeagueFilters } from "@/features/shared";
@@ -51,6 +51,15 @@ export function useLeagueFilters(): LeagueFiltersValue {
 type AdpControlsValue = {
   controls: AdpControls;
   setControls: (controls: AdpControls) => void;
+  /** Back to the default board — the current season, whole, no narrowing. */
+  resetControls: () => void;
+  /**
+   * The season a board defaults to, which the drawer needs beyond the current
+   * selection: it decides which relative presets can mean anything (only a
+   * season containing today can have a "last 30 days") and it is what Reset
+   * returns to.
+   */
+  defaultSeason: string;
 };
 
 const AdpControlsContext = createContext<AdpControlsValue | null>(null);
@@ -67,20 +76,31 @@ const AdpControlsContext = createContext<AdpControlsValue | null>(null);
  *
  * It holds a real selection from the start, unlike the league filters' sibling
  * history here: the board used to open on the viewed season, which this provider
- * doesn't know, so `controls` was null until a tab filled it in. A date range
- * needs no season, so the default is season-independent and the null — with the
- * `?? defaultAdpControls(season)` each consumer carried — is gone.
+ * didn't know, so `controls` was null until a tab filled it in and every consumer
+ * carried a `?? defaultAdpControls(season)`. The season is back — a board that
+ * pools two of them is wrong at every row — but the null is not: the *layout*
+ * supplies it as a prop, one place, before any tab renders.
  */
 export function AdpControlsProvider({
+  season,
   children,
 }: {
+  /** The season a board opens on; the manager layout passes `DEFAULT_SEASON`. */
+  season: string;
   children: React.ReactNode;
 }) {
-  const [controls, setControls] = useState<AdpControls>(defaultAdpControls);
+  const [controls, setControls] = useState<AdpControls>(() => defaultAdpControls(season));
+  const value = useMemo(
+    () => ({
+      controls,
+      setControls,
+      resetControls: () => setControls(defaultAdpControls(season)),
+      defaultSeason: season,
+    }),
+    [controls, season],
+  );
   return (
-    <AdpControlsContext.Provider value={{ controls, setControls }}>
-      {children}
-    </AdpControlsContext.Provider>
+    <AdpControlsContext.Provider value={value}>{children}</AdpControlsContext.Provider>
   );
 }
 

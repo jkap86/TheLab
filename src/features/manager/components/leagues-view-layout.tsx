@@ -65,7 +65,7 @@ export function LeaguesViewLayout({
 }) {
   const { data, searched, progress, refreshing, error, filters, setFilters, filtered } =
     view;
-  const { controls, setControls } = useAdpControls();
+  const { controls, setControls, resetControls, defaultSeason } = useAdpControls();
   const [boardOpen, setBoardOpen] = useState(false);
 
   // Gated on the drawer being open: a tab nobody has opened the board on should
@@ -130,6 +130,7 @@ export function LeaguesViewLayout({
           hasLeagues ? (
             <AdpTrigger
               range={controls.range}
+              season={controls.season}
               draftCount={board.data?.draft_count ?? null}
               loading={board.loading}
               onClick={() => setBoardOpen(true)}
@@ -158,6 +159,8 @@ export function LeaguesViewLayout({
         onClose={() => setBoardOpen(false)}
         controls={controls}
         onChange={setControls}
+        onReset={resetControls}
+        defaultSeason={defaultSeason}
         leagues={data.leagues}
         board={board}
         density={density}

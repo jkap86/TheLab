@@ -1,20 +1,21 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 
 import {
-  ADP_RANGE_PRESETS,
   type AdpControls,
   type AdpRange,
-  defaultAdpControls,
+  DEFAULT_ADP_RANGE,
+  adpRangePresets,
+  boardLabel,
   rangeBounds,
-  rangeLabel,
+  seasonOptions,
   seedFromLeague,
   todayIso,
 } from "../adp-controls";
 import type { AdpState } from "../hooks/use-adp";
 import type { AdpDensityState } from "../hooks/use-adp-density";
-import type { ManagerLeague } from "../types";
+import type { DraftDensityMonth, ManagerLeague } from "../types";
 import { RangeScrubber } from "./range-scrubber";
 import { PositionBadge } from "./ui";
 
@@ -82,11 +83,13 @@ const STEEPNESS_OPTS = [
  */
 export function AdpTrigger({
   range,
+  season,
   draftCount,
   loading,
   onClick,
 }: {
   range: AdpRange;
+  season: string;
   /** Drafts the current board matched; null before the first board lands. */
   draftCount: number | null;
   loading: boolean;
@@ -102,7 +105,7 @@ export function AdpTrigger({
       <span className="text-[11px] font-bold uppercase tracking-wider text-active/80">
         ADP
       </span>
-      {rangeLabel(range)}
+      {boardLabel(range, season)}
       <span className="font-normal text-foreground/40">
         {draftCount === null
           ? loading
@@ -134,6 +137,8 @@ export function AdpDrawer({
   onClose,
   controls,
   onChange,
+  onReset,
+  defaultSeason,
   leagues,
   board,
   density,
@@ -142,10 +147,14 @@ export function AdpDrawer({
   onClose: () => void;
   controls: AdpControls;
   onChange: (controls: AdpControls) => void;
+  /** Back to the default board — held by the store, which owns what "default" is. */
+  onReset: () => void;
+  /** The season a board opens on; decides which relative presets can mean anything. */
+  defaultSeason: string;
   leagues: ManagerLeague[];
   /** The board these controls produce; `data` is null until the first load lands. */
   board: AdpState;
-  /** Crawled drafts per month, for the range scrubber's strip. */
+  /** Crawled drafts per month and season, for the range scrubber's strip. */
   density: AdpDensityState;
 }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -180,6 +189,21 @@ export function AdpDrawer({
     };
   }, [open]);
 
+  // The seasons on offer and the strip behind the window are both slices of the
+  // one density read. Memoised on the rows so the scrubber's own domain memo
+  // isn't invalidated by a fresh array every render.
+  const seasons = useMemo(
+    () => seasonOptions(density.months, controls.season, defaultSeason),
+    [density.months, controls.season, defaultSeason],
+  );
+  const seasonMonths = useMemo(
+    () =>
+      controls.season === "all"
+        ? density.months
+        : density.months.filter((m) => m.season === controls.season),
+    [density.months, controls.season],
+  );
+
   if (!open) return null;
 
   const { draft_count, player_count, players } = board.data ?? {
@@ -212,7 +236,7 @@ export function AdpDrawer({
               {draft_count === null
                 ? "Loading…"
                 : `${draft_count.toLocaleString()} draft${draft_count === 1 ? "" : "s"}`}{" "}
-              · {rangeLabel(controls.range)}
+              · {boardLabel(controls.range, controls.season)}
             </p>
           </div>
           <button
@@ -228,8 +252,35 @@ export function AdpDrawer({
         {/* Pinned: everything that changes the board stays on screen while the
             board itself scrolls under it. */}
         <div className="flex flex-col gap-3 border-b border-foreground/10 bg-foreground/[0.02] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
+              Season
+            </span>
+            <div className="flex flex-1 gap-1">
+              {seasons.map((season) => (
+                <Segment
+                  key={season}
+                  active={controls.season === season}
+                  onClick={() =>
+                    // The window is dropped with the season, not carried across
+                    // it: a date range is a cut *inside* one, so the same dates
+                    // against a different season are a window that mostly isn't
+                    // there — and silently returning an empty board is worse
+                    // than starting the new season whole.
+                    onChange({ ...controls, season, range: DEFAULT_ADP_RANGE })
+                  }
+                >
+                  {season === "all" ? "All" : season}
+                </Segment>
+              ))}
+            </div>
+          </div>
+
           <RangeControl
             range={controls.range}
+            season={controls.season}
+            defaultSeason={defaultSeason}
+            months={seasonMonths}
             density={density}
             today={todayIso()}
             onChange={(range) => onChange({ ...controls, range })}
@@ -387,7 +438,7 @@ export function AdpDrawer({
         <footer className="flex items-center gap-3 border-t border-foreground/10 bg-foreground/[0.015] px-4 py-2.5">
           <button
             type="button"
-            onClick={() => onChange(defaultAdpControls())}
+            onClick={onReset}
             className="rounded-md border border-foreground/10 bg-foreground/5 px-3 py-1.5 text-sm font-medium text-foreground/75 transition-colors hover:border-foreground/25 hover:text-foreground"
           >
             Reset
@@ -419,12 +470,14 @@ export function AdpBoardCaption({
   loading,
   error,
   range,
+  season,
 }: {
   /** Drafts the current filters matched; null while the first board loads. */
   draftCount: number | null;
   loading: boolean;
   error: string | null;
   range: AdpRange;
+  season: string;
 }): ReactNode {
   if (error) {
     return <span className="text-amber-300">ADP unavailable — {error}</span>;
@@ -438,7 +491,8 @@ export function AdpBoardCaption({
         {draftCount.toLocaleString()}
       </b>{" "}
       crawled {draftCount === 1 ? "draft" : "drafts"} from{" "}
-      {rangeLabel(range).toLowerCase()} in this app’s data — not market ADP.
+      {boardLabel(range, season).toLowerCase()} in this app’s data — not market
+      ADP.
       {loading && <span className="text-foreground/35"> Updating…</span>}
     </>
   );
@@ -456,43 +510,63 @@ export function AdpBoardCaption({
  */
 function RangeControl({
   range,
+  season,
+  defaultSeason,
+  months,
   density,
   today,
   onChange,
 }: {
   range: AdpRange;
+  season: string;
+  defaultSeason: string;
+  /** The density rows for this season — what the strip is drawn from. */
+  months: DraftDensityMonth[];
   density: AdpDensityState;
   /** `YYYY-MM-DD`, resolving the relative presets. */
   today: string;
   onChange: (range: AdpRange) => void;
 }) {
+  const presets = adpRangePresets(season, defaultSeason);
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
-          Drafted
-        </span>
-        {ADP_RANGE_PRESETS.map((preset) => (
-          <button
-            key={preset.value}
-            type="button"
-            onClick={() => onChange({ preset: preset.value, from: null, to: null })}
-            aria-pressed={range.preset === preset.value}
-            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-              range.preset === preset.value
-                ? "border-active/35 bg-active/10 text-active"
-                : "border-foreground/10 bg-foreground/5 text-foreground/50 hover:border-foreground/25 hover:text-foreground/80"
-            }`}
-          >
-            {preset.chip}
-          </button>
-        ))}
-      </div>
+      {/* The same label-and-segments row as the season above and the value curve
+          below, rather than the loose pills this was: rows of controls that
+          behave identically shouldn't look like different kinds of control. A
+          custom window lights none of them, which is the honest state — the
+          caption under the strip is where its dates are read.
+
+          A finished season leaves one preset, and a row of one is no choice at
+          all, so it isn't drawn: the strip and its calendar markers are the
+          control there, which is what they were for. */}
+      {presets.length > 1 && (
+        <div className="flex items-center gap-2">
+          <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
+            Drafted
+          </span>
+          <div className="flex flex-1 gap-1">
+            {presets.map((preset) => (
+              <Segment
+                key={preset.value}
+                active={range.preset === preset.value}
+                onClick={() => onChange({ preset: preset.value, from: null, to: null })}
+              >
+                {preset.chip}
+              </Segment>
+            ))}
+          </div>
+        </div>
+      )}
 
       <RangeScrubber
         range={range}
+        season={season}
         bounds={rangeBounds(range, today)}
-        density={density}
+        months={months}
+        // Only a board that can contain today gets an axis running to it.
+        live={season === "all" || season === defaultSeason}
+        error={density.error}
+        loading={density.loading}
         today={today}
         onChange={onChange}
       />

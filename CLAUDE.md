@@ -603,9 +603,16 @@ stops holding, a comment saying it does would not have caught it.
   provider holds a selection from the start, `AdpControls` used to open as
   **null** — its default was the viewed season, which the layout doesn't know, so
   each tab filled it in through a `useAdpControlsFor(season)` the consumers all
-  carried a `?? defaultAdpControls(season)` for. A date range needs no season, so
-  `defaultAdpControls()` takes no argument, the provider seeds itself, and both
-  the null and that hook are gone. Shared *provider*, still two separate
+  carried a `?? defaultAdpControls(season)` for. The season is back on the
+  controls — a board pooling two of them is wrong at every row — but the null is
+  not, and the difference is where it comes from: the **layout** passes
+  `DEFAULT_SEASON` as a prop, once, before any tab renders. A layout is a server
+  component, so that constant crosses to the client store the way a server fact
+  should, rather than being re-derived from a clock in pure client code, where it
+  would be a guess about when Sleeper rolls a league year over. The provider also
+  owns `resetControls` and hands out `defaultSeason` for the same reason: what
+  "default" means is the store's business, and the drawer needs it to know which
+  relative presets can mean anything. Shared *provider*, still two separate
   selections. "Match a league" is the one bridge, and it is
   deliberately partial: it seeds the *league settings* from one of the manager's
   leagues, while the date range and draft type stay manual — they aren't league
@@ -613,7 +620,9 @@ stops holding, a comment saying it does would not have caught it.
   the client league; the league filters put that on the wire, so it is seeded now
   through the same predicate `/api/adp` classifies stored leagues with. That one
   matters most of the set: guessing it reads a two-QB league off the board it is
-  least like.
+  least like. The season is seeded for the same kind of reason — a 2025 league's
+  board is read from 2025 drafts, and leaving it on this year prices the league
+  against a market it was never in.
 - **The ADP controls are a drawer behind one button, not a bar on the page.** Ten
   selects and a caption sat above the first row of every manager tab — ~110px of
   chrome, wrapping to three lines on a laptop — for settings that are chosen once
@@ -635,11 +644,35 @@ stops holding, a comment saying it does would not have caught it.
   the layout and gated on `open`, so a tab nobody opened it on costs no request;
   on the Players tab that means the same board is fetched twice while the drawer is
   up, which is a bounded cost paid only while someone is looking at both.
+- **The season is the board's population; the window is a cut inside it.** The
+  drawer leads with a row of season segments (`seasonOptions`, taken from the
+  density rows so a season nobody has crawled isn't offered, with the current one
+  and the selected one always present) and the range narrows within whichever is
+  chosen. Three things follow that are easy to undo by treating the two as peers:
+  - **Changing season drops the window.** The same dates against a different
+    season are a window that mostly isn't there, and an empty board is a worse
+    answer than the new season whole.
+  - **Which presets exist depends on the season** (`adpRangePresets`). A relative
+    preset is measured back from today, so it only means something on a board that
+    can *contain* today — "the last 30 days" of 2024 is an empty board, and a chip
+    that reliably returns nothing is worse than no chip. Twelve months goes
+    further: inside one season it is the season with extra steps, so it survives
+    only on the all-seasons board. A finished season is left with one preset, and
+    the row isn't drawn at all — a row of one is no choice, and the strip and its
+    markers are the control there.
+  - **The strip is the season's, not the calendar's.** `/api/adp/density` returns
+    `(season, month, drafts)` and the drawer slices to the season it is showing;
+    `densityThrough` then runs the axis to today only for a board still being
+    drafted, since an axis running from a finished season to today is mostly
+    blank. A season-scoped domain is also why a band clipped to a sliver is now
+    dropped rather than drawn (`MIN_BAND_FRACTION`): the left edge *is* a season
+    boundary, so the last four days of the previous regular season arrive as a 2px
+    chip reading "R".
 - **The window is chosen against the drafts, not against a calendar widget.**
   `RangeScrubber` is a brush over a histogram of the crawled drafts
   (`/api/adp/density`), and it replaced a pair of `mm/dd/yyyy` inputs that asked
   you to name a date while telling you nothing about where the drafts were —
-  you guessed, then read the count that came back. Four things in it are
+  you guessed, then read the count that came back. Six things in it are
   decisions, not styling:
   - **A handle on an edge of the domain is an *open* bound, not that date**
     (`edgeBounds` in `range-domain`, pure and tested). It is what keeps "all
@@ -666,7 +699,38 @@ stops holding, a comment saying it does would not have caught it.
     though it is still a preset *value* — it is what moving a handle produces.
     The relative presets keep earning their place for the reason they always did:
     "Last 90 days" is still the last 90 days tomorrow, where the dates behind it
-    would not be.
+    would not be. They are laid out as the same label-and-segments row as the
+    season above and the value curve below, because rows of controls that behave
+    identically shouldn't look like different kinds of control — which is also
+    why the 12-month chip reads `12 mo`: as an equal quarter of that row it is
+    ~72px on a phone, and "12 months" wraps to two lines in it. The unbounded
+    preset names what it covers (`All 2026` / `All time`), and `boardLabel` folds
+    it into the season everywhere the board is named at all — "2026 · All time"
+    would be claiming two contradictory things. `rangeLabel` still names the
+    window alone, which is right only under the strip, where the season it
+    belongs to is the row above.
+  - **What the gesture means depends on where it starts** — the brush split
+    everyone already knows. Inside the window drags the *window* (`panWindow`,
+    clamped at the domain edges with its length intact, because a pan that
+    silently shortened the span answers a different question than the one being
+    dragged); outside it sweeps a new one. The consequence worth stating is that
+    a **press has to be able to mean nothing at all**: sweeping used to commit on
+    pointer-down, so the lightest tap anywhere on the strip collapsed the window
+    to the single day under the finger — which on a phone is what "I meant to
+    scroll" looks like. `SWEEP_SLOP` is that: a few pixels of travel before a
+    press counts as drawing.
+  - **A date the control is about is a date the control says.** Three readouts,
+    none of them decoration: a bubble follows the pointer over the strip (the
+    answer to "what is this bar" used to require dragging a handle onto it), the
+    handles are a thumb rather than a hairline (a 12px target over a 2px mark is
+    one you miss on a phone, and missing it *swept a new window*), and the
+    caption spells out the dates behind a preset's name — `rangeSummary`, which
+    is what `rangeLabel` deliberately doesn't say. The label stays "Last 90 days"
+    everywhere it stands alone, because the name survives the passage of time;
+    inside the control, where the handles are sitting on those dates, naming the
+    window without naming its edges leaves them to be read off the axis. Panning
+    is the one gesture with no bubble — both ends are moving, and the caption's
+    live pair says more than one date would.
 - **A modal that refocuses itself must not depend on its callers' callbacks.**
   `AdpDrawer`'s open effect held `onClose` in its deps, and every caller passes a
   fresh arrow each render — so every keystroke re-ran it and `panel.focus()` took
@@ -1221,8 +1285,19 @@ stops holding, a comment saying it does would not have caught it.
   `start_before` (`YYYY-MM-DD`, read in ET against `drafts.start_time`) is when it
   *happened*. Every dynasty league runs a rookie draft in May and a startup in
   August under one season label, so "the last 30 days" is a question a season
-  cannot express — which is why the drawer offers the range and never sends a
-  season. Three consequences worth keeping:
+  cannot express — and the 2026 rookie class is not in a 2025 draft at all, which
+  is the question a range cannot express. **The drawer sends both**, and the
+  season leads: it is the board's population, the range a cut inside it.
+  It briefly sent only the range, on the reasoning that the range was the finer
+  tool. It is, and it is the wrong axis to be finest on: pooled across seasons
+  the top of a twelve-month board is taken in ~46% of the drafts averaged,
+  because half of them were drafted from a different player pool. Four
+  consequences worth keeping:
+  - **An omitted `season` is not a season default — it is a default that
+    switches itself off.** `DEFAULT_SEASON` applies only when the caller bounded
+    the board *neither* way, so a client that leaves the season out and narrows a
+    window silently goes back to spanning every season. `adpQueryString` sends it
+    every time, `"all"` included.
   - A date bound drops drafts Sleeper never gave a `start_time`, because there is
     no honest side of the boundary for them. An unbounded board still counts them,
     so **"all time" can match more drafts than a range covering every date on
