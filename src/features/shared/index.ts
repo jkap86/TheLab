@@ -5,22 +5,33 @@ export { useUserLeagues } from "./use-user-leagues";
 export type { UserLeaguesState } from "./use-user-leagues";
 export {
   BEST_BALL_OPTIONS,
+  COMMON_SCORING_KEYS,
+  COMPARE_OPS,
   DEFAULT_LEAGUE_FILTERS,
-  IDP_OPTIONS,
-  SCORING_OPTIONS,
+  SLOT_GROUPS,
   STATUS_OPTIONS,
-  SUPERFLEX_OPTIONS,
-  TE_PREMIUM_OPTIONS,
   TYPE_OPTIONS,
   activeFilterCount,
+  compare,
   deriveScoring,
   filterSummary,
-  hasIdpSlots,
-  hasTePremium,
+  formatRuleValue,
   leagueType,
   matchesFilters,
+  matchesScoringRule,
+  matchesSlotRule,
+  scoringKeyLabel,
+  scoringKeyOptions,
+  scoringValue,
+  slotCount,
+  slotGroupLabel,
 } from "./league-filters";
-export type { LeagueFilters } from "./league-filters";
+export type {
+  CompareOp,
+  FilterRule,
+  LeagueFilters,
+  SlotGroup,
+} from "./league-filters";
 export {
   MONTH_ABBREVIATIONS,
   formatRangeDate,
@@ -30,8 +41,18 @@ export {
   todayIso,
 } from "./date-range";
 export { ordinal } from "./format";
+export {
+  TOOL_GROUPS,
+  isToolActive,
+  toolHref,
+  tools,
+  toolsInGroup,
+} from "./tools";
+export type { Tool, ToolGroup, ToolIconName } from "./tools";
 export { PageShell } from "./ui/page-shell";
 export { SiteHeader } from "./ui/site-header";
+export { ToolsMenu } from "./ui/tools-menu";
+export { ToolIcon } from "./ui/tool-icon";
 export { Avatar } from "./ui/avatar";
 export { FlaskLoader } from "./ui/flask-loader";
 export { LeagueFiltersModal } from "./ui/league-filters-modal";

@@ -366,6 +366,17 @@ decisions live in the pair rather than in the components:
   bound, for the reason `/api/adp` drops an undated draft — there is no honest
   side of the boundary to put it on.
 
+**The league filters' rule lists are AND-only, and that difference from the
+trades selection is deliberate.** Both let a reader build a list rather than pick
+from fixed chips, so they look like the same control and invite being unified —
+they are not. A trade selection is a set of *subjects* ("any of these three
+players"), where `any` is the natural reading as often as `all`. A league rule
+narrows on an *attribute* (`QB+SF ≥ 2`, `rec = 0.5`), and the question people
+arrive with is "dynasty leagues that start two QBs" — every rule narrowing. An OR
+there would additionally need each rule to say which group it joins, which is a
+control nobody asked for. Adding a mode to the league rules is not the small
+symmetry it looks like.
+
 Validation earns its keep when a value reaches SQL as anything but a bound
 parameter. `scoring` picks the column `projections/queries` interpolates into
 `ORDER BY`, so it is a closed enum that fails the request on an unknown value —
@@ -508,11 +519,14 @@ stops holding, a comment saying it does would not have caught it.
   and Leaguemates, because its tabs answer different questions and are separate
   routes, so the grid links each rather than dropping you on Leagues to navigate
   again; they share the account-less `/manager` href, which is why cards are
-  keyed by name. **`hrefFor` receives the username already URL-encoded** — the
-  grid encodes once, at the single call site, so a new tool must interpolate it
-  bare. Encoding again inside `hrefFor` double-escapes and yields a 404 for any
-  account whose name isn't plain ASCII, which is exactly the account nobody
-  tests with. The pick tracker has no `hrefFor`, because a league *id* is the one
+  keyed by name. **`hrefFor` receives the username already URL-encoded** — a new
+  tool must interpolate it bare, because encoding again double-escapes and yields
+  a 404 for any account whose name isn't plain ASCII, which is exactly the
+  account nobody tests with. The encoding itself lives in `toolHref` (in
+  `features/shared/tools.ts`, pure and tested): the grid was the single call site
+  until the app bar's menu became the second, and a rule two callers have to
+  remember is a rule one of them eventually won't. The pick tracker has no
+  `hrefFor`, because a league *id* is the one
   thing a username does **not** give you — it links to `/picktracker` and that
   page does the choosing.
 - **Choosing a league is a step of the pick tracker, not of picking a tool.** The
@@ -781,8 +795,9 @@ stops holding, a comment saying it does would not have caught it.
   same facts on all of them; only the headline count differs, which is what
   `stat` is. **It is pinned under the app bar and it carries no tabs** — those
   two go together: a card that stays on screen is paying for its height out of
-  the list behind it, so navigation moved up to `ManagerTabs` in the bar and what
-  is left is identity, state and the record readout. It offsets by
+  the list behind it, so navigation left the card entirely (first to a tab strip
+  in the bar, then to the bar's tools menu, which listed the three views anyway)
+  and what is left is identity, state and the record readout. It offsets by
   `--site-header-h` rather than a retyped number, bleeds `-mx-4 px-4` to
   `PageShell`'s `wide` gutter and paints `--background`, because a transparent
   pinned card lets the rows scroll through the gaps around its rounded corners.
@@ -817,57 +832,143 @@ stops holding, a comment saying it does would not have caught it.
     dialog also carries how many leagues it would leave, which is why the
     selection is edited as a draft and committed on Apply: those counts can't be
     read while the list behind them moves.
-- **The seven league filters are three bands, and three of them read something
-  other than `settings`.** Status, type and format describe the league; superflex
-  and IDP describe the lineup it starts; the reception bucket and TE premium
-  describe what it pays — which is the axis a reader arrives with, so the dialog
-  groups them that way rather than stacking seven equal rows. One dialog, so the
-  trades page's league filter gained all five with it. Four things worth keeping:
-  - **Each borrows the predicate that already owns the question.**
-    `isSuperflexLineup` is the same slot walk that picks a league's KTC board,
-    `IDP_SLOTS` is derived from `SLOT_POSITIONS` the way `DEFENSIVE_SLOTS` is, and
-    `deriveScoring` is the bucket `/api/adp` groups by — so a league filtered as
-    superflex here is priced off the superflex board there. `league-filters.ts` is
-    tested, so the two slot predicates come in relatively with an explicit `.ts`
-    extension; `deriveScoring` moved *down* into it under the rule above, since
-    `features/shared` can't import `manager/adp-controls` — which now re-exports it
-    for its own consumers.
-  - **IDP is not `DEFENSIVE_SLOTS`.** Nearly every league starts a team defence,
-    so that set says nothing about what game a league is playing; starting a
-    linebacker does. The wider set still gates the projections caveat, which is
-    why the two are separate derivations off one table rather than one set used
-    twice.
+- **The league filters are three fixed segments and two lists of rules the reader
+  writes.** Status, type and format describe what a league *is*, and stay
+  segments because each is a closed set of three or four answers. What its lineup
+  starts and what its scoring pays are not closed sets, so they are rows —
+  `QB+SF ≥ 2`, `IDP = 0`, `rec = 0.5`, `bonus_rec_te > 0` — each a slot group or
+  a `scoring_settings` key, a comparison and a number, added with a `+` and
+  removed with an `×`. They replaced four fixed pairs (superflex/one-QB,
+  IDP/offense, the reception bucket, TE premium), which were four hard-coded
+  questions out of a space readers arrive with their own question in: "no
+  kicker", "three flexes", "half PPR with a TE bonus over half a point". One
+  dialog, so the trades page's league filter gained the rules with it. Six things
+  worth keeping:
+  - **The four old chips survive as quick-adds that write the equivalent rule.**
+    `qb+sf ≥ 2` *is* `isSuperflexLineup`; the preset is the one-click path and
+    the row is what you edit it into. A preset already on the list is dimmed
+    rather than hidden, so the row doesn't reflow as it's used.
+  - **A slot group is a predicate derived from the solver's tables, never a
+    list.** `QB+SF` is `QB_ELIGIBLE_STARTING_SLOTS` — the same slot walk that
+    picks a league's KTC board — `IDP` is `IDP_SLOTS`, `FLEX` is the multi-position
+    slots that take neither a QB nor a defender (so `WRRB_FLEX` and `REC_FLEX`
+    count as flexes without being named), and `Starters` is "not a bench slot",
+    which has to keep counting a slot spelling this build has never seen. A new
+    flex therefore counts the moment the solver learns it. `league-filters.ts` is
+    tested, so both slot modules come in relatively with an explicit `.ts`
+    extension.
+  - **Null and zero are different answers, per rule.** `k = 0` means "leagues
+    without a kicker", and a league whose `roster_positions` were never synced is
+    not evidence of one — an unknown lineup fails a slot rule rather than reading
+    as zero. A key *absent from a stored* `scoring_settings` is 0, though, because
+    Sleeper omits what a league doesn't pay for: that is exactly what makes
+    `bonus_rec_te > 0` the TE-premium question. A missing blob is unknown again.
+  - **Comparisons carry an epsilon.** A passing yard is 0.04 and a reception 0.5;
+    `rec === 0.5` is one binary representation away from reporting that a half-PPR
+    league doesn't pay half a point.
+  - **The scoring key menu is read off the leagues in hand**, the way the trades
+    page's menus are read off the trades — what a league pays for is a house rule,
+    and a fixed list would offer keys nobody scores while hiding the one someone
+    wants. `COMMON_SCORING_KEYS` only *ranks* them, and is the fallback on a cold
+    load. A rule's own key is always an option in its row, since a preset can name
+    a key no league in view scores and a `<select>` whose value is absent from its
+    options silently shows a different one.
   - **The Complete status is the complement of the live ones, not a match on
     `"complete"`.** An end-of-season spelling this code doesn't know would
     otherwise be visible in the total and in none of the buckets, which reads as a
     filter losing leagues.
-  - **`roster_positions` crosses the wire for this.** It is the one thing
-    `settings` doesn't carry that the client now asks two questions of, which is
-    also what retires the note on `seedFromLeague` that superflex had to stay
-    manual for want of it.
-- **`SiteHeader` is the only global chrome, and it is one link plus a slot.**
-  Every tool is reached by navigating away from `/tools`, which used to leave the
-  back button as the only way home; the slim bar in `app/layout.tsx` closes that
-  loop. It hides itself on `/tools` — a link to the page you are on is noise, and
-  that page leads with its own header — which is the whole reason it reads
-  `usePathname` and therefore the whole reason it is a client component. Its
-  container matches `PageShell`'s so the wordmark lines up with the content under
-  it. It is **pinned**, so the way home is reachable from the bottom of a
-  several-hundred-row list and not only from the top; its height is
+  `roster_positions` crosses the wire for this — it is what `settings` doesn't
+  carry and the rules count over, which is also what retires the note on
+  `seedFromLeague` that superflex had to stay manual for want of it. `IDP_SLOTS`
+  is still not `DEFENSIVE_SLOTS`: nearly every league starts a team defence, so
+  that set says nothing about what game a league is playing while starting a
+  linebacker does, and the wider set still gates the projections caveat.
+  `deriveScoring` stays in this file — the filters no longer bucket anything, but
+  it is the bucket `/api/adp` groups by and `adp-controls` re-exports it, since
+  `features/shared` can't import a feature.
+- **`SiteHeader` is the only global chrome, and it is three zones: the mark
+  home, the page you are on, and every tool.** Every tool is reached by navigating
+  away from `/tools`, which used to leave the back button as the only way home;
+  the slim bar in `app/layout.tsx` closes that loop. It hides itself on `/tools`
+  — the wordmark and the whole tool list *are* that page — which is the whole
+  reason it reads `usePathname` and therefore the whole reason it is a client
+  component. Its container matches `PageShell`'s so the wordmark lines up with
+  the content under it. It is **pinned**, so the way home is reachable from the
+  bottom of a several-hundred-row list and not only from the top; its height is
   `--site-header-h` (a variable, not padding) because the manager card pins
   itself directly underneath and has to know where this ends.
-  This still does **not** make it a site nav. `children` is a slot for chrome
-  belonging to the section you are already in — `ManagerTabs` today — not a place
-  to list routes; two navigation systems on one page is what that rule prevents,
-  and moving the manager tabs *into* the one bar is the opposite of adding a
-  second. The slot is filled in `app/layout.tsx` rather than by `SiteHeader`
-  importing the component, because `features/shared` must not import a feature;
-  `ManagerTabs` reads the route itself and renders nothing off a manager view, so
-  composing it there costs every other page nothing. It interpolates the
-  `usePathname` segment **bare** — that string is already URL-encoded, and
-  encoding it twice 404s any manager whose name isn't plain ASCII (the same trap
-  as the tool grid's `hrefFor`) — and it is the URL's own spelling rather than the
-  resolved username, since Sleeper resolves a user id as readily as a name.
+  **It carries a route list now, which this note used to forbid.** The old rule
+  was that a second navigation system competes with the first; what it produced
+  instead was `/tools` as a mandatory waypoint between any two tools, since the
+  bar's single link home was the only way out of one. `ToolsMenu` is not a second
+  system — it is the *only* one, the tools grid reached without the round trip,
+  read from the same catalogue that grid renders (which is why `tools.data` moved
+  to `features/shared/tools.ts`, with `features/tools` re-exporting it under the
+  usual mover's rule).
+- **The bar's middle zone states where you are; it does not switch.** It held
+  `ManagerTabs` — Leagues, Players, Leaguemates — and that was a second way to do
+  what the menu already does, since those are three of its six entries. So the
+  component is gone, the bar's `children` slot with it, and what sits there is the
+  tool's own name from `activeTool(pathname)`: one claim, from the catalogue, so
+  the label and the menu's highlight cannot disagree. **Null is a real answer** —
+  `/manager` is the username search and belongs to no tool, so the bar names
+  nothing rather than guessing. The cost is real and was the trade asked for:
+  Leagues → Players is two presses now instead of one.
+- **A tool's `pattern` matches by prefix and the first match wins, so catalogue
+  order is load-bearing.** `isToolActive` compares segment by segment and accepts
+  a longer pathname, which is what makes `/picktracker` name the tool while you
+  are at `/picktracker/[leagueId]`. Nothing nests today — the six patterns are
+  disjoint — but the moment one is a prefix of another (`/trades` beside a
+  `/trades/*` detail tool, or a broad `/manager/*` beside the three view
+  patterns), the broader one silently wins every match if it is listed first, and
+  the symptom is a bar that names the wrong tool rather than an error. Put the
+  more specific pattern earlier, and remember the same list drives the menu's
+  order on screen — the two are one array on purpose, so a reorder for matching
+  is also a reorder for the reader.
+- **The bar is machined, not glass, and the material has a grammar: raised means
+  press me, recessed means you are here.** The tools trigger is a raised keycap
+  that travels its own thickness on `:active`; the current-page chip is a
+  recessed well; the icon tiles are moulded. Break that pairing and a label
+  invites a press that does nothing. Four things in `globals.css` hold it up:
+  - **`clip-path` cuts a `box-shadow` off.** A notched part cannot cast its
+    shadow or glow with `box-shadow` at all — `filter: drop-shadow()` applies
+    after clipping and follows the notched silhouette, which is why `.lab-key`
+    reaches for `filter` and why a "simplification" back to `box-shadow` silently
+    deletes every shadow in the bar.
+  - **Thickness is a stacked layer, not a shadow.** Wrapper is the dark side
+    wall, child is the lit face, the wrapper's `padding-bottom` is how thick the
+    part is. That is also what makes the press animation free: swap the padding
+    to the top and the face meets the wall.
+  - **The bar's extruded edge is drawn *inside* the header box** (`--bar-edge-h`,
+    counted into `--site-header-h`). As an outside shadow it would be covered by
+    the manager card, which pins at exactly that offset.
+  - **The plate is opaque.** The glass-and-blur bar it replaced was legible
+    because of an alpha chosen to survive `backdrop-filter` being unsupported; a
+    surface with visible thickness has no such out — page content showing through
+    an extrusion reads as a rendering bug, so there is no translucency to tune.
+  The notch is kept for the small parts and the panel stays rounded (the `H3`
+  mockup of three): six rows of 11px text want a calm surface, and nothing else
+  in the app has to change its corners to match.
+- **The menu's open state is the route it was opened on, not a boolean.**
+  Navigating is what a nav menu is *for*, so `openedAt === pathname` closes it on
+  arrival as a matter of arithmetic; a boolean would need an effect to notice the
+  route changed, which is a cascading render (and what the lint rule objects to).
+  It also closes on Escape — returning focus to the trigger — and on a press
+  outside it.
+- **A tool entry in the bar links where the same card on `/tools` greys out.**
+  The grid is where an account is resolved, so a dead card there is a prompt; in a
+  nav bar it would be a dead end. Without an account an entry lands on the
+  username search the tool starts with, and the panel's account row — avatar and
+  `@username`, or "no account connected" — says which of the two you are getting.
+  That row is also what makes "Leagues" mean *your* leagues in a menu that never
+  names the manager.
+- **The wordmark keeps its text at every width, which is what dropping the tabs
+  bought.** Three tabs, a mark, a wordmark and a trigger did not fit a 390px bar,
+  and the wordmark was the part that gave way (behind a `:has()` query asking
+  whether the slot was filled). A mark, a wordmark, one chip and the trigger fit
+  with room to spare, so that rule and the marker attribute behind it are gone.
+  The part that yields now is the chip, which `truncate`s if a tool name ever runs
+  long.
 - **The four manager sub-resource hooks are one hook, bound four ways.**
   `useManagerPlayers`, `useManagerLeaguemates`, `useManagerRanks` and
   `useManagerKtc` read `/api/user/[username]/{players,leaguemates,ranks,ktc}`,

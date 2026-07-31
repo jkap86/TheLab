@@ -3,12 +3,15 @@ import { describe, test } from "node:test";
 
 import {
   DEFAULT_LEAGUE_FILTERS,
+  type FilterRule,
   type LeagueFilters,
   activeFilterCount,
+  compare,
   filterSummary,
-  hasIdpSlots,
-  hasTePremium,
   matchesFilters,
+  scoringKeyOptions,
+  scoringValue,
+  slotCount,
 } from "./league-filters.ts";
 import type { ManagerLeague } from "@/shared/manager";
 
@@ -16,7 +19,7 @@ import type { ManagerLeague } from "@/shared/manager";
  * The filters read Sleeper's `settings` blob, which is loosely typed and omits
  * defaults — so the interesting cases are the missing and wrong-typed fields.
  *
- * The later filters read the other loosely-typed halves of a league — `status`,
+ * The rule lists read the other loosely-typed halves of a league —
  * `roster_positions` and `scoring_settings` — so the helper takes those as
  * overrides rather than growing a second fixture.
  */
@@ -42,6 +45,10 @@ const only = (filters: Partial<LeagueFilters>): LeagueFilters => ({
   ...DEFAULT_LEAGUE_FILTERS,
   ...filters,
 });
+
+/** A slot rule and a scoring rule, spelled the way the dialog writes them. */
+const slots = (...rules: FilterRule[]) => only({ slots: rules });
+const scoring = (...rules: FilterRule[]) => only({ scoring: rules });
 
 /** A one-QB lineup, the base the roster-position cases vary from. */
 const ONE_QB = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "BN", "BN"];
@@ -119,136 +126,201 @@ describe("matchesFilters", () => {
     }
   });
 
-  test("splits superflex from one-QB lineups off the slots", () => {
+  test("a QB+SF rule is the superflex question, and counts a second bare QB", () => {
     const superflex = league(null, {
       roster_positions: [...ONE_QB, "SUPER_FLEX"],
     });
     const oneQb = league(null, { roster_positions: ONE_QB });
-
-    assert.equal(matchesFilters(superflex, only({ superflex: "yes" })), true);
-    assert.equal(matchesFilters(superflex, only({ superflex: "no" })), false);
-    assert.equal(matchesFilters(oneQb, only({ superflex: "yes" })), false);
-    assert.equal(matchesFilters(oneQb, only({ superflex: "no" })), true);
-  });
-
-  test("counts a second bare QB slot as superflex, not just SUPER_FLEX", () => {
     const twoQb = league(null, { roster_positions: ["QB", "QB", "RB", "BN"] });
-    assert.equal(matchesFilters(twoQb, only({ superflex: "yes" })), true);
+    const rule: FilterRule = { key: "QB+SF", op: "gte", value: 2 };
+
+    assert.equal(matchesFilters(superflex, slots(rule)), true);
+    assert.equal(matchesFilters(twoQb, slots(rule)), true);
+    assert.equal(matchesFilters(oneQb, slots(rule)), false);
+    assert.equal(
+      matchesFilters(oneQb, slots({ key: "QB+SF", op: "eq", value: 1 })),
+      true,
+    );
   });
 
-  test("splits IDP leagues off the slots, DEF alone not counting", () => {
+  test("an IDP rule reads the slot vocabulary, DEF alone not counting", () => {
     const idp = league(null, { roster_positions: [...ONE_QB, "LB", "DB"] });
     const flexIdp = league(null, { roster_positions: [...ONE_QB, "IDP_FLEX"] });
     const teamDef = league(null, { roster_positions: [...ONE_QB, "DEF"] });
+    const any: FilterRule = { key: "IDP", op: "gt", value: 0 };
 
     for (const l of [idp, flexIdp]) {
-      assert.equal(matchesFilters(l, only({ idp: "yes" })), true);
-      assert.equal(matchesFilters(l, only({ idp: "no" })), false);
+      assert.equal(matchesFilters(l, slots(any)), true);
+      assert.equal(matchesFilters(l, slots({ ...any, op: "eq", value: 0 })), false);
     }
     // Nearly every league starts a team defence, so it says nothing about the
     // game being played — only an individual defender does.
-    assert.equal(matchesFilters(teamDef, only({ idp: "yes" })), false);
-    assert.equal(matchesFilters(teamDef, only({ idp: "no" })), true);
+    assert.equal(matchesFilters(teamDef, slots(any)), false);
+    assert.equal(
+      matchesFilters(teamDef, slots({ ...any, op: "eq", value: 0 })),
+      true,
+    );
   });
 
-  test("puts a league with no stored slots on the 'no' side of both", () => {
-    // The same answer the rest of the app gives an unknown lineup (it prices off
-    // the 1QB board). What matters here is that the two sides still sum to the
-    // list rather than the league vanishing from both.
+  test("counts every offensive flex as one group, whatever a league calls it", () => {
+    const threeFlex = league(null, {
+      roster_positions: [...ONE_QB, "WRRB_FLEX", "REC_FLEX"],
+    });
+    assert.equal(
+      matchesFilters(threeFlex, slots({ key: "FLEX", op: "eq", value: 3 })),
+      true,
+    );
+    // SUPER_FLEX takes a quarterback, so it is not one of them.
+    const superflex = league(null, {
+      roster_positions: [...ONE_QB, "SUPER_FLEX"],
+    });
+    assert.equal(
+      matchesFilters(superflex, slots({ key: "FLEX", op: "eq", value: 1 })),
+      true,
+    );
+  });
+
+  test("counts starters as everything that isn't a bench slot", () => {
+    const l = league(null, {
+      roster_positions: [...ONE_QB, "IR", "TAXI", "TAXI"],
+    });
+    assert.equal(matchesFilters(l, slots({ key: "STARTERS", op: "eq", value: 7 })), true);
+    assert.equal(matchesFilters(l, slots({ key: "BN", op: "eq", value: 2 })), true);
+    assert.equal(matchesFilters(l, slots({ key: "TAXI", op: "eq", value: 2 })), true);
+  });
+
+  test("a league with no stored slots fails a slot rule rather than reading as zero", () => {
+    // The trap the whole null/zero split exists for: `k = 0` means "leagues
+    // without a kicker", and an unsynced lineup is not evidence of one.
     const unknown = league(null);
-    assert.equal(matchesFilters(unknown, only({ superflex: "no" })), true);
-    assert.equal(matchesFilters(unknown, only({ idp: "no" })), true);
+    assert.equal(matchesFilters(unknown, slots({ key: "K", op: "eq", value: 0 })), false);
+    assert.equal(matchesFilters(unknown, slots({ key: "K", op: "gte", value: 1 })), false);
   });
 
-  test("buckets scoring by reception points", () => {
-    const cases: [number | undefined, LeagueFilters["scoring"]][] = [
-      [1, "ppr"],
-      [0.5, "half_ppr"],
-      [0, "std"],
-      [undefined, "std"],
-    ];
-    for (const [rec, bucket] of cases) {
-      const l = league(null, {
-        scoring_settings: rec === undefined ? null : { rec },
-      });
-      assert.equal(matchesFilters(l, only({ scoring: bucket })), true);
-      assert.equal(
-        matchesFilters(l, only({ scoring: bucket === "ppr" ? "std" : "ppr" })),
-        false,
-      );
-    }
+  test("a scoring rule asks the rate directly rather than a bucket", () => {
+    const ppr = league(null, { scoring_settings: { rec: 1 } });
+    const half = league(null, { scoring_settings: { rec: 0.5 } });
+    const std = league(null, { scoring_settings: { rec: 0 } });
+
+    assert.equal(matchesFilters(ppr, scoring({ key: "rec", op: "gte", value: 1 })), true);
+    assert.equal(matchesFilters(half, scoring({ key: "rec", op: "eq", value: 0.5 })), true);
+    assert.equal(matchesFilters(half, scoring({ key: "rec", op: "gte", value: 1 })), false);
+    assert.equal(matchesFilters(std, scoring({ key: "rec", op: "lt", value: 0.5 })), true);
+    // The bucket boundaries the old filter rounded to are now expressible either
+    // side of: a 0.4-point league is neither standard nor half in one word.
+    const odd = league(null, { scoring_settings: { rec: 0.4 } });
+    assert.equal(matchesFilters(odd, scoring({ key: "rec", op: "gt", value: 0.25 })), true);
   });
 
-  test("splits TE premium leagues, whatever the reception bucket", () => {
+  test("an unpaid stat is zero, which is how TE premium is asked", () => {
     const premium = league(null, {
       scoring_settings: { rec: 1, bonus_rec_te: 0.5 },
     });
     const plain = league(null, { scoring_settings: { rec: 1 } });
+    const rule: FilterRule = { key: "bonus_rec_te", op: "gt", value: 0 };
 
-    assert.equal(matchesFilters(premium, only({ tePremium: "yes" })), true);
-    assert.equal(matchesFilters(premium, only({ tePremium: "no" })), false);
-    assert.equal(matchesFilters(plain, only({ tePremium: "yes" })), false);
-    assert.equal(matchesFilters(plain, only({ tePremium: "no" })), true);
-    // The two are independent axes: a premium league is still a PPR league.
+    assert.equal(matchesFilters(premium, scoring(rule)), true);
+    assert.equal(matchesFilters(plain, scoring(rule)), false);
     assert.equal(
-      matchesFilters(premium, only({ tePremium: "yes", scoring: "ppr" })),
+      matchesFilters(plain, scoring({ ...rule, op: "eq", value: 0 })),
       true,
     );
   });
 
-  test("requires every active filter to pass", () => {
-    const dynastyBestBall = league({ type: 2, best_ball: 1 });
-    assert.equal(
-      matchesFilters(dynastyBestBall, only({ type: "2", bestBall: "yes" })),
-      true,
-    );
-    assert.equal(
-      matchesFilters(dynastyBestBall, only({ type: "2", bestBall: "no" })),
-      false,
-    );
-    assert.equal(
-      matchesFilters(dynastyBestBall, only({ type: "1", bestBall: "yes" })),
-      false,
-    );
+  test("a league with no stored scoring fails a scoring rule", () => {
+    // Unlike an absent key inside a stored blob, an absent blob is not a claim
+    // that the league pays nothing.
+    const unknown = league(null);
+    const rule: FilterRule = { key: "bonus_rec_te", op: "eq", value: 0 };
+    assert.equal(matchesFilters(unknown, scoring(rule)), false);
   });
 
-  test("requires the roster and scoring filters to pass together too", () => {
+  test("requires every rule to pass, alongside the fixed filters", () => {
     const superflexIdp = league({ type: 2 }, {
       roster_positions: [...ONE_QB, "SUPER_FLEX", "LB"],
       scoring_settings: { rec: 1, bonus_rec_te: 1 },
     });
     assert.equal(
-      matchesFilters(
-        superflexIdp,
-        only({ superflex: "yes", idp: "yes", scoring: "ppr", tePremium: "yes" }),
-      ),
+      matchesFilters(superflexIdp, {
+        ...only({ type: "2" }),
+        slots: [
+          { key: "QB+SF", op: "gte", value: 2 },
+          { key: "IDP", op: "gt", value: 0 },
+        ],
+        scoring: [
+          { key: "rec", op: "gte", value: 1 },
+          { key: "bonus_rec_te", op: "gt", value: 0 },
+        ],
+      }),
       true,
     );
     assert.equal(
-      matchesFilters(superflexIdp, only({ superflex: "yes", idp: "no" })),
+      matchesFilters(
+        superflexIdp,
+        slots(
+          { key: "QB+SF", op: "gte", value: 2 },
+          { key: "IDP", op: "eq", value: 0 },
+        ),
+      ),
+      false,
+    );
+    assert.equal(
+      matchesFilters(superflexIdp, { ...slots({ key: "IDP", op: "gt", value: 0 }), type: "1" }),
       false,
     );
   });
-});
 
-describe("hasIdpSlots", () => {
-  test("reads the slot vocabulary rather than a list of names", () => {
-    assert.equal(hasIdpSlots(league(null, { roster_positions: ["DL"] })), true);
-    assert.equal(hasIdpSlots(league(null, { roster_positions: ["DEF"] })), false);
-    assert.equal(hasIdpSlots(league(null, { roster_positions: [] })), false);
-    assert.equal(hasIdpSlots(league(null)), false);
+  test("a rule naming a slot group this build doesn't know fails rather than passes", () => {
+    const l = league(null, { roster_positions: ONE_QB });
+    assert.equal(matchesFilters(l, slots({ key: "OL", op: "eq", value: 0 })), false);
   });
 });
 
-describe("hasTePremium", () => {
-  test("any positive bonus counts, and a missing one doesn't", () => {
-    const withBonus = (bonus_rec_te: number) =>
-      league(null, { scoring_settings: { rec: 1, bonus_rec_te } });
-    assert.equal(hasTePremium(withBonus(0.5)), true);
-    assert.equal(hasTePremium(withBonus(1)), true);
-    assert.equal(hasTePremium(withBonus(0)), false);
-    assert.equal(hasTePremium(league(null, { scoring_settings: { rec: 1 } })), false);
-    assert.equal(hasTePremium(league(null)), false);
+/**
+ * Rates are floats Sleeper stores as fractions — a passing yard is 0.04 — so the
+ * comparisons carry a tolerance rather than trusting binary equality.
+ */
+describe("compare", () => {
+  test("equality survives a float that isn't exactly the number typed", () => {
+    assert.equal(compare(0.1 + 0.2, "eq", 0.3), true);
+    assert.equal(compare(0.1 + 0.2, "ne", 0.3), false);
+    assert.equal(compare(0.5, "eq", 1), false);
+  });
+
+  test("the bounds are inclusive where they say they are", () => {
+    assert.equal(compare(1, "gte", 1), true);
+    assert.equal(compare(1, "lte", 1), true);
+    assert.equal(compare(1, "gt", 1), false);
+    assert.equal(compare(1, "lt", 1), false);
+    assert.equal(compare(2, "gt", 1), true);
+    assert.equal(compare(0, "lt", 1), true);
+  });
+});
+
+describe("slotCount and scoringValue", () => {
+  test("null is unknown and 0 is an answer", () => {
+    const lineup = league(null, { roster_positions: ONE_QB });
+    assert.equal(slotCount(lineup, "K"), 0);
+    assert.equal(slotCount(league(null), "K"), null);
+
+    const scored = league(null, { scoring_settings: { rec: 1 } });
+    assert.equal(scoringValue(scored, "bonus_rec_te"), 0);
+    assert.equal(scoringValue(league(null), "rec"), null);
+  });
+});
+
+describe("scoringKeyOptions", () => {
+  test("offers the keys the leagues in hand actually score", () => {
+    const keys = scoringKeyOptions([
+      league(null, { scoring_settings: { pass_td: 4, rec: 1 } }),
+      league(null, { scoring_settings: { rec: 0.5, house_rule: 3 } }),
+    ]);
+    assert.deepEqual(keys, ["rec", "pass_td", "house_rule"]);
+  });
+
+  test("falls back to the common keys on a cold load", () => {
+    // With no leagues streamed yet the dialog still has to offer something.
+    assert.equal(scoringKeyOptions([])[0], "rec");
   });
 });
 
@@ -262,30 +334,24 @@ describe("activeFilterCount", () => {
     assert.equal(activeFilterCount(DEFAULT_LEAGUE_FILTERS), 0);
   });
 
-  test("counts each filter that is not 'all'", () => {
+  test("counts each fixed filter that is not 'all'", () => {
     assert.equal(activeFilterCount(only({ type: "2" })), 1);
     assert.equal(activeFilterCount(only({ bestBall: "no" })), 1);
     assert.equal(activeFilterCount(only({ type: "2", bestBall: "no" })), 2);
   });
 
-  test("counts the roster and scoring filters too", () => {
-    assert.equal(activeFilterCount(only({ status: "in_season" })), 1);
-    assert.equal(activeFilterCount(only({ superflex: "yes" })), 1);
-    assert.equal(activeFilterCount(only({ idp: "no" })), 1);
-    assert.equal(activeFilterCount(only({ scoring: "ppr" })), 1);
-    assert.equal(activeFilterCount(only({ tePremium: "yes" })), 1);
-    // Every axis at once — the count has to keep up with the type.
+  test("counts each rule on its own, since each narrows on its own", () => {
+    assert.equal(activeFilterCount(slots({ key: "QB+SF", op: "gte", value: 2 })), 1);
     assert.equal(
       activeFilterCount({
-        type: "2",
-        bestBall: "no",
-        status: "in_season",
-        superflex: "yes",
-        idp: "no",
-        scoring: "ppr",
-        tePremium: "yes",
+        ...only({ status: "in_season", type: "2" }),
+        slots: [
+          { key: "QB+SF", op: "gte", value: 2 },
+          { key: "IDP", op: "eq", value: 0 },
+        ],
+        scoring: [{ key: "rec", op: "gte", value: 1 }],
       }),
-      7,
+      5,
     );
   });
 });
@@ -301,11 +367,14 @@ describe("filterSummary", () => {
     assert.equal(filterSummary(only({ type: "0", bestBall: "no" })), "redraft · lineup");
   });
 
-  test("names the roster and scoring filters in the dialog's own order", () => {
+  test("spells a rule out with its symbol, fixed filters first", () => {
     assert.equal(
-      filterSummary(only({ scoring: "half_ppr", status: "in_season", superflex: "yes" })),
-      "in season · superflex · half ppr",
+      filterSummary({
+        ...only({ status: "in_season" }),
+        slots: [{ key: "QB+SF", op: "gte", value: 2 }],
+        scoring: [{ key: "bonus_rec_te", op: "gt", value: 0.5 }],
+      }),
+      "in season · qb+sf ≥ 2 · bonus rec te > 0.5",
     );
-    assert.equal(filterSummary(only({ idp: "no", tePremium: "yes" })), "offense only · te premium");
   });
 });

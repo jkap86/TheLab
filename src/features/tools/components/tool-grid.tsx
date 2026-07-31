@@ -1,6 +1,7 @@
 import type { UserInfo } from "@/shared/contract";
 
-import { tools } from "../tools.data";
+import { toolHref, tools } from "@/features/shared";
+
 import { ToolLinkCard } from "./tool-link-card";
 
 /**
@@ -15,7 +16,9 @@ import { ToolLinkCard } from "./tool-link-card";
  * the tracker, not of picking a tool.
  *
  * Cards are keyed by name rather than href, because the manager views share the
- * account-less one.
+ * account-less one. Destinations go through `toolHref`, which the app bar's menu
+ * also calls — the username is URL-encoded there, once, rather than at each
+ * call site.
  */
 export function ToolGrid({ user }: { user: UserInfo | null }) {
   return (
@@ -24,11 +27,7 @@ export function ToolGrid({ user }: { user: UserInfo | null }) {
         <li key={tool.text}>
           <ToolLinkCard
             tool={tool}
-            href={
-              user && tool.hrefFor
-                ? tool.hrefFor(encodeURIComponent(user.username))
-                : tool.href
-            }
+            href={toolHref(tool, user?.username ?? null)}
             disabled={!user}
           />
         </li>
