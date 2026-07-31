@@ -119,6 +119,7 @@ Use the helpers in `@/shared/db` rather than hand-rolling:
 | --- | --- |
 | A transaction | `withTransaction(client => …)` — never write `BEGIN`/`COMMIT`/`ROLLBACK` yourself |
 | Work that must not run twice | `withAdvisoryLock(LOCK_KEYS.x, …)`, returns `null` if someone else holds it |
+| Work whose *result* a caller needs | `withBlockingAdvisoryLock(key, …)` — waits instead of skipping |
 | Multi-row insert/upsert | `bulkInsert` — chunks and parameterises |
 | Cache freshness gate (whole table) | `isFresh(table, ttlMs)` / `countRows(table)` |
 | JSONB parameter | `jsonb(value)` |
@@ -127,11 +128,52 @@ Use the helpers in `@/shared/db` rather than hand-rolling:
 New advisory lock? Add it to the `LOCK_KEYS` table in `shared/db/lock.ts` so
 collisions stay visible.
 
+**Skipping and waiting are different locks, and picking the wrong one is how a
+loop stacks or a request lies.** `withAdvisoryLock` never waits: a caller that
+loses the race returns `null`, meaning "someone else is doing this" — right for
+the background loops, where queueing behind another instance would pile ticks up
+instead of shedding them. `withBlockingAdvisoryLock` waits in `pg_advisory_lock`,
+which is right where the caller needs the *result* and not just the work done —
+a manager's league sync, where skipping would hand back an empty page while the
+data is being written a connection away. The wait is server-side, so a queued
+caller costs one idle pool connection and no polling. Keep it to per-key,
+short-lived work; a background loop that blocks is the stacking problem again.
+
+**A per-key lock is computed, not listed** — `managerSyncLockKey(userId)` hashes
+the id into the object slot under one class id, because you cannot enumerate
+every manager in `LOCK_KEYS` ahead of time. The rule above still holds for the
+fixed locks; this is the escape hatch for a lock whose identity is data, and it
+is why the class id is what's reserved rather than the pair. Both helpers drop
+the connection when *unlock* fails rather than returning it to the pool: a
+session lock outlives `release()`, so a recycled connection would hold the key
+until the process dies.
+
 `isFresh` judges a **whole table** by its newest `updated_at`, so it only fits a
 cache that is replaced all at once (`players`, `ktc_values`). A table holding
 independently-refreshed slices needs its own gate, or writing any slice marks
-every slice fresh — `projections` is per `(season, week)`, so its sync selects
-the stale weeks with a `NOT EXISTS … updated_at > now() - $ttl` query instead.
+every slice fresh — `projections` is per `(season, week)`.
+
+**Judge that gate by whether the fetch happened, not by whether it left rows.**
+The projections gate used to read the `projections` rows themselves, which is
+wrong for the case that matters: a week Sleeper hasn't published yet stores *no*
+rows, so it read as never-synced and came due again on every tick — refetched
+every 15 minutes for as long as the window before publication lasts, and, because
+the horizon budget takes the earliest stale weeks first, able to crowd published
+weeks out of the per-tick cap indefinitely. `projection_week_syncs` stamps
+`(season, week)` on a **successful** fetch whether or not it returned anything,
+so an empty week waits out the same TTL as a full one. A *failed* fetch stamps
+nothing and retries next tick, which is the one case that should stay eager. The
+general shape: when "nothing came back" is a legitimate answer, freshness is a
+fact about the sync and belongs in its own table, not inferred from the data.
+
+The same trap has a second instance worth recognising, because it does not look
+like a freshness bug at all. A league Sleeper has deleted answers 200-with-null
+forever, so its `updated_at` never advances and it occupies a slot in every
+refresh rotation — one wasted request per pass, and live leagues get crowded out
+as deletions accumulate. `leagues.gone_at` marks it and the crawler skips it; the
+row and its drafts **stay**, because they still feed ADP, and a manager-driven
+sync that finds the league alive again clears the marker. Deleting the row would
+have thrown away good data to fix a scheduling problem.
 
 Refreshing a slice that can shrink means **upsert then delete what's missing, in
 one transaction** — an upsert alone leaves rows that quietly look current
@@ -332,6 +374,11 @@ stops holding, a comment saying it does would not have caught it.
   what keeps the exception containable. Anything that isn't a gradient stop still
   takes the token: the outline, the fill wash and the highlight all resolve
   `var(--color-active)` / `var(--color-foreground)` so a retheme reaches them.
+  `ToolsBackdrop`'s aurora is the second instance of that exception and follows
+  the same containment — literal `rgba` stops because a three-colour glow has two
+  colours with no token, with cyan still spelled as the `active` value so the one
+  that *does* have a token stays recognisable. Two instances is a pattern now: a
+  gradient may hold literal colour, everything around it takes the token.
 - **A pure-SVG component is not a client component.** `FlaskLoader` has no
   interactivity, so it renders on the server too and stays out of the bundle;
   what makes that safe is `useId` for its gradient and clip ids, so two loaders
@@ -391,7 +438,12 @@ stops holding, a comment saying it does would not have caught it.
   `loading` on the first `result` rather than waiting out a background refresh
   that may still be syncing — a menu is fillable from the cached copy. Two hooks
   that differ in what they guarantee are two hooks; two that differ only in a URL
-  are one.
+  are one. The line worth drawing inside that: **the guarantee is theirs, the
+  protocol is shared.** Splitting an NDJSON buffer into whole lines is not a
+  guarantee either hook makes, so `takeLines` lives once in
+  `features/shared/ndjson.ts` — two copies of it was the same drift the
+  `shared/query` primitives were consolidated to stop. Keeping two hooks does not
+  mean keeping two of everything in them.
 - **The three manager tabs are one scaffold, `LeaguesViewLayout`, over one hook,
   `useFilteredLeagues`.** Leagues, players and leaguemates were line-for-line
   copies of the same chrome — wide shell, cold-load state, header and count line,
