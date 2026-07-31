@@ -13,9 +13,10 @@
  * no fixed chip can carry it, because the date moves every April — a marker can.
  *
  * Pure and testable like its neighbours `shares` and `league-metrics`: a table
- * and two functions over it, no I/O. It lives here rather than in `shared/`
- * because only the drawer reads it; move it out the day something server-side
- * needs to label a date.
+ * and a few functions over it, no I/O. It lives here rather than in `shared/`
+ * because only this feature reads it — the drawer's markers and the header's
+ * kickoff countdown; move it out the day something server-side needs to label
+ * a date.
  */
 
 /** What a marker is. The draft is an instant; the other two are spans. */
@@ -79,6 +80,25 @@ const NFL_SEASONS: readonly NflSeason[] = [
     regular: ["2026-09-10", "2027-01-03"],
   },
 ];
+
+/**
+ * The *provisional* instant a season's first regular-season game kicks off, in
+ * epoch ms — null for a season the table doesn't know, never a guess.
+ *
+ * Provisional because the authority is Sleeper's schedule call (`/api/kickoff`
+ * reads it, `useKickoff` asks): this is the countdown's fallback for a season
+ * Sleeper hasn't scheduled yet, which is exactly the spring window this
+ * table's own dates are provisional in. The date is the regular season's own
+ * start; the hour is the traditional Thursday-opener slot, 8:20 PM Eastern,
+ * because the table carries dates and not hours. The offset is a constant
+ * `-04:00` since every opener is played in September, which is always Eastern
+ * *daylight* time.
+ */
+export function firstKickoff(season: string): number | null {
+  const row = NFL_SEASONS.find((s) => String(s.season) === season);
+  if (!row) return null;
+  return new Date(`${row.regular[0]}T20:20:00-04:00`).getTime();
+}
 
 /** Every marker the table holds, in date order. */
 export function nflMarkers(): NflMarker[] {

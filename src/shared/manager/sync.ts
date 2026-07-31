@@ -4,7 +4,7 @@ import {
   withBlockingAdvisoryLock,
 } from "@/shared/db";
 import { getNflState, getUserLeagues } from "@/shared/sleeper";
-import type { SleeperLeague } from "@/shared/sleeper";
+import type { SleeperLeague, SleeperNflState } from "@/shared/sleeper";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
 import { fetchLeagueGraph, type WeekRange } from "./graph";
@@ -71,11 +71,17 @@ const emptyCounts = (): LeagueCounts => ({
 /**
  * The current NFL week, floored to 1: offseason moves are logged at week 1 while
  * Sleeper's state reports week 0. Nothing exists past it, so it bounds every
- * transaction fetch.
+ * transaction fetch. Split from {@link getCurrentWeek} for callers that already
+ * hold the state — the crawler derives this and its freshness tier from one
+ * fetch.
  */
+export function flooredWeek(state: SleeperNflState | null): number {
+  return Math.max(state?.week ?? 1, 1);
+}
+
+/** {@link flooredWeek} of a fresh `state/nfl` read. */
 export async function getCurrentWeek(): Promise<number> {
-  const nflState = await getNflState();
-  return Math.max(nflState?.week ?? 1, 1);
+  return flooredWeek(await getNflState());
 }
 
 /**

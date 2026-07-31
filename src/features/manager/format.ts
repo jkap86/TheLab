@@ -26,6 +26,31 @@ export function formatWinPct(pct: number | null): string {
 }
 
 /**
+ * Time remaining as a countdown, e.g. `"37d 04h 12m 45s"`, `"4h 09m 00s"`,
+ * `"12m 03s"`, `"41s"`.
+ *
+ * Units the countdown has outgrown drop off the left as they empty — weeks out
+ * it reads in days, on game day in hours — while everything after the leading
+ * unit is zero-padded so the string ticks in place rather than reflowing.
+ * Never negative: an instant already passed clamps to `"0s"`, though callers
+ * generally hide the timer before that.
+ */
+export function formatCountdown(msLeft: number): string {
+  const total = Math.max(0, Math.floor(msLeft / 1000));
+  const days = Math.floor(total / 86_400);
+  const hours = Math.floor((total % 86_400) / 3_600);
+  const minutes = Math.floor((total % 3_600) / 60);
+  const seconds = total % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  if (days > 0)
+    return `${days}d ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+  if (hours > 0) return `${hours}h ${pad(minutes)}m ${pad(seconds)}s`;
+  if (minutes > 0) return `${minutes}m ${pad(seconds)}s`;
+  return `${seconds}s`;
+}
+
+/**
  * Fantasy points to two decimals with locale grouping, e.g. `"1,234.56"`.
  * Always two, because a column of points that changes width row to row is
  * hard to scan.

@@ -1,8 +1,15 @@
-import { useId, type ReactNode } from "react";
+import {
+  useCallback,
+  useId,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 import { Avatar } from "@/features/shared";
 
-import { formatRecord, formatWinPct } from "../format";
+import { formatCountdown, formatRecord, formatWinPct } from "../format";
+import { useKickoff } from "../hooks/use-kickoff";
+import { firstKickoff } from "../nfl-calendar";
 import type { OverallRecord } from "../record";
 import type { LeaguesResult, SyncProgress } from "../types";
 
@@ -128,7 +135,11 @@ export function ManagerHeader({
                 {season}
               </span>
             </div>
-            <RecordLine record={record} leagueCount={leagueCount} />
+            <RecordLine
+              record={record}
+              leagueCount={leagueCount}
+              season={season}
+            />
             <RecordBar record={record} />
           </div>
 
@@ -168,47 +179,113 @@ export function ManagerHeader({
 /**
  * The record, and what it was counted over.
  *
- * Nothing played is its own state rather than `0-0` and `.000`, which would
- * dress a season that hasn't started up as a season of losses — see
- * {@link aggregateRecord}. The two ways to get there are distinguished, because
- * "your filters left nothing" and "week 1 hasn't happened" are different
- * problems for the reader.
+ * A season that hasn't started still shows its `0-0`: the digits are a true
+ * count of games played, so the guard against dressing preseason up as a season
+ * of losses lives in the pct alone — null rather than zero, an em dash on the
+ * dial, never `.000` — see {@link aggregateRecord}. Only "your filters left
+ * nothing" keeps its own words, because a `0-0` counted over no records at all
+ * would be quoting records that don't exist.
  *
  * The count rides here rather than in a stat cell of its own: `record.leagues`
  * is smaller than the list — Sleeper keeps a manager in `league_users` after
  * they stop holding a team — and a denominator that small is only honest beside
- * the number it divides.
+ * the number it divides. The countdown to the season's opening kickoff rides
+ * here too: it is the *when* of the `0-0` changing, and it retires itself the
+ * moment that stops being a question.
  */
 function RecordLine({
   record,
   leagueCount,
+  season,
 }: {
   record: OverallRecord;
   leagueCount: number;
+  season: string;
 }) {
   return (
     <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px] leading-snug">
-      {record.games === 0 ? (
-        <span className="text-foreground/55">
-          {record.leagues === 0
-            ? "No records in these leagues"
-            : "Season hasn't started"}
-        </span>
+      {record.leagues === 0 ? (
+        <span className="text-foreground/55">No records in these leagues</span>
       ) : (
         <span className="font-mono font-semibold tabular-nums">
           {formatRecord(record)}
         </span>
       )}
-      {/* No separator between the two: at phone width the line wraps — "Season
-          hasn't started" is most of it — and a dot left hanging off the end of
-          the first line reads as a typo. The weight and colour do the same job
-          on one line or two. */}
+      {/* No separator between the two: at phone width the line can wrap — "No
+          records in these leagues" is most of it — and a dot left hanging off
+          the end of the first line reads as a typo. The weight and colour do
+          the same job on one line or two. */}
       <span className="text-foreground/40">
         <span className="tabular-nums">{record.leagues}</span> of{" "}
         <span className="tabular-nums">{leagueCount}</span> league
         {leagueCount === 1 ? "" : "s"}
       </span>
+      <KickoffCountdown season={season} />
     </p>
+  );
+}
+
+/**
+ * A live countdown to the season's opening kickoff, on the line the `0-0`
+ * shares — the when of that record changing.
+ *
+ * The instant comes from Sleeper's schedule call ({@link useKickoff}); the NFL
+ * calendar table's provisional date stands in only when Sleeper hasn't
+ * scheduled the season, and nothing renders until that question settles —
+ * appearing once with the right instant beats appearing twice with two. The
+ * tick reads the viewer's own clock, because how long *they* wait is a fact
+ * about their wall clock (the `todayIso` side of the two-todays rule), and it
+ * starts only after mount, since server and client have no "now" they agree
+ * on — the account store's hydration rule, applied to a clock. Past kickoff it
+ * renders nothing rather than a zero: from then on the record digits are the
+ * season's own story.
+ */
+function KickoffCountdown({ season }: { season: string }) {
+  const scheduled = useKickoff(season);
+  const kickoff =
+    scheduled === undefined ? null : (scheduled ?? firstKickoff(season));
+  const now = useTick(kickoff);
+
+  if (kickoff === null || now === null || now >= kickoff) return null;
+
+  return (
+    <span className="text-foreground/40">
+      Kickoff in{" "}
+      <span className="font-mono tabular-nums text-foreground/55">
+        {formatCountdown(kickoff - now)}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The clock behind the countdown, as an external store — which a wall clock
+ * is (`useSyncExternalStore`, the account store's shape). The snapshot is the
+ * current *whole second*: it has to be stable within a render or reading it
+ * would loop, and a countdown has no use for the milliseconds anyway. The
+ * server snapshot is null — there is no "now" the two sides agree on, the
+ * account store's hydration rule applied to a clock — so the timer appears
+ * only after mount. The subscription starts nothing once `until` has passed,
+ * and the interval retires itself when it does, so a header left open across
+ * kickoff stops re-rendering a hidden timer.
+ */
+function useTick(until: number | null): number | null {
+  const subscribe = useCallback(
+    (onTick: () => void) => {
+      if (until === null || Date.now() >= until) return () => {};
+      const id = setInterval(() => {
+        onTick();
+        if (Date.now() >= until) clearInterval(id);
+      }, 1000);
+      return () => clearInterval(id);
+    },
+    [until],
+  );
+
+  return useSyncExternalStore<number | null>(
+    subscribe,
+    () => Math.floor(Date.now() / 1000) * 1000,
+    () => null,
   );
 }
 
