@@ -1,8 +1,9 @@
 "use client";
 
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
+  type ActiveFilter,
   BEST_BALL_OPTIONS,
   COMPARE_OPS,
   DEFAULT_LEAGUE_FILTERS,
@@ -12,7 +13,10 @@ import {
   STATUS_OPTIONS,
   TYPE_OPTIONS,
   activeFilterCount,
+  activeFilters,
+  clearFilter,
   formatRuleValue,
+  leagueBreakdown,
   matchesFilters,
   matchesScoringRule,
   matchesSlotRule,
@@ -31,6 +35,21 @@ import type { ManagerLeague } from "@/shared/manager";
  * opening anything. That is bought back twice — the trigger wears the count of
  * active filters, and the header names the selection in words beside the
  * numbers it scopes (`filterSummary`).
+ *
+ * **The panel is a bay layout with a readout rail.** The three fixed segments
+ * are facts about a league and compress into one trough at the top; the two rule
+ * lists — what a lineup starts, what a scoring page pays — sit side by side
+ * underneath as equal bays. Stacked, as they were, the rules fell below a 60vh
+ * scroll box and the feature read as missing: the segments alone filled the
+ * panel, so a reader who wanted "superflex leagues that pay a TE bonus" had to
+ * scroll past everything they *didn't* want to find the control that asks it.
+ *
+ * The rail on the right is the other half of that. The match count used to be a
+ * line of footer text next to Apply; it is the number the whole dialog exists to
+ * move, so it is a readout with a meter, the active selection as chips that
+ * strike themselves out, and a note on what the survivors actually are. It is
+ * beside the controls rather than under them because it changes while you edit
+ * — a number you have to scroll to is a number you check once.
  *
  * A native `<dialog>` rather than a hand-rolled overlay: the focus trap, the
  * inert background, Esc-to-close and the backdrop are all the platform's, and
@@ -73,6 +92,13 @@ export function LeagueFiltersModal({
   // derived from the list rather than listed — see `scoringKeyOptions`.
   const scoringKeys = useMemo(() => scoringKeyOptions(leagues), [leagues]);
 
+  // The survivors, not just how many: the rail breaks them down, and the footer
+  // counts them. One walk, so the two can't report different totals.
+  const matched = useMemo(
+    () => leagues.filter((league) => matchesFilters(league, draft)),
+    [leagues, draft],
+  );
+
   return (
     <>
       <button
@@ -104,13 +130,23 @@ export function LeagueFiltersModal({
         onClick={(event) => {
           if (event.target === ref.current) ref.current?.close();
         }}
-        className="m-auto w-[min(560px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
+        className="m-auto w-[min(1040px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
       >
         <div
-          className="filters-dialog-panel overflow-hidden rounded-2xl border border-active/20 bg-gradient-to-b from-[#12212e] to-[#0b1621] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(255,255,255,0.06)]"
+          className="filters-dialog-panel relative overflow-hidden rounded-2xl border border-active/20 bg-gradient-to-b from-[#14242f] to-[#0a1520] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),0_0_60px_-20px_rgba(0,255,229,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]"
           style={{ animation: "dialog-rise 0.18s cubic-bezier(0.2,0.9,0.3,1)" }}
         >
-          <div className="flex items-center gap-3 border-b border-foreground/10 px-5 py-4">
+          {/*
+            The panel's specular rail. The header plate and the app bar both
+            catch a cyan highlight along their lit edge; without it a panel this
+            large reads as a flat sheet rather than as a milled face.
+          */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-active/70 to-transparent"
+          />
+
+          <div className="flex items-center gap-3 border-b border-foreground/10 bg-gradient-to-b from-foreground/[0.05] to-transparent px-5 py-4">
             <h2
               id="league-filters-title"
               className="text-base font-semibold tracking-tight"
@@ -123,74 +159,94 @@ export function LeagueFiltersModal({
           </div>
 
           {/*
-            Three groups and two rule lists don't fit a laptop's viewport, so the
-            sections scroll and the footer — where the match count and Apply are —
-            stays put below them. Scrolling the whole panel would put the count
-            that justifies the click off screen at exactly the moment it changes.
+            The controls scroll and the footer — where Apply is — stays put below
+            them. On a laptop nothing needs to scroll at all, which is the point
+            of the two-column bay; on a phone the whole grid collapses to one
+            column and this is what keeps Apply reachable.
           */}
-          <div className="flex max-h-[min(60vh,30rem)] flex-col gap-5 overflow-y-auto p-5">
-            <Section label="League">
-              <FilterGroup
-                label="Status"
-                options={STATUS_OPTIONS}
-                value={draft.status}
-                leagues={leagues}
-                probe={(value) => ({ ...draft, status: value })}
-                onPick={(status) => setDraft({ ...draft, status })}
-              />
-              <FilterGroup
-                label="Type"
-                options={TYPE_OPTIONS}
-                value={draft.type}
-                leagues={leagues}
-                probe={(value) => ({ ...draft, type: value })}
-                onPick={(type) => setDraft({ ...draft, type })}
-              />
-              <FilterGroup
-                label="Format"
-                options={BEST_BALL_OPTIONS}
-                value={draft.bestBall}
-                leagues={leagues}
-                probe={(value) => ({ ...draft, bestBall: value })}
-                onPick={(bestBall) => setDraft({ ...draft, bestBall })}
-              />
-            </Section>
+          <div className="max-h-[min(72vh,36rem)] overflow-y-auto p-5">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_15rem]">
+              <div className="flex min-w-0 flex-col gap-4">
+                {/*
+                  One trough for the three fixed segments, laid out as a
+                  label-and-keys grid so all three labels sit in one column. Each
+                  option is a raised key in a recessed slot — the app bar's
+                  material, and the reason the selected one can simply be the
+                  cyan face rather than needing a border to say so.
+                */}
+                <div className="lab-well grid grid-cols-1 gap-x-3 gap-y-2 rounded-xl px-4 py-3.5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+                  <SegmentGroup
+                    label="Status"
+                    options={STATUS_OPTIONS}
+                    value={draft.status}
+                    leagues={leagues}
+                    probe={(value) => ({ ...draft, status: value })}
+                    onPick={(status) => setDraft({ ...draft, status })}
+                  />
+                  <SegmentGroup
+                    label="Type"
+                    options={TYPE_OPTIONS}
+                    value={draft.type}
+                    leagues={leagues}
+                    probe={(value) => ({ ...draft, type: value })}
+                    onPick={(type) => setDraft({ ...draft, type })}
+                  />
+                  <SegmentGroup
+                    label="Format"
+                    options={BEST_BALL_OPTIONS}
+                    value={draft.bestBall}
+                    leagues={leagues}
+                    probe={(value) => ({ ...draft, bestBall: value })}
+                    onPick={(bestBall) => setDraft({ ...draft, bestBall })}
+                  />
+                </div>
 
-            <RuleSection
-              label="Roster slots"
-              empty="Any lineup. Add a rule to narrow by what a league starts."
-              rules={draft.slots}
-              onChange={(slots) => setDraft({ ...draft, slots })}
-              keyOptions={SLOT_GROUPS.map((group) => ({
-                value: group.key,
-                label: group.label,
-                hint: group.hint,
-              }))}
-              newRule={{ key: "QB+SF", op: "gte", value: 2 }}
-              presets={SLOT_PRESETS}
-              step={1}
-              leagues={leagues}
-              match={matchesSlotRule}
-            />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <RuleBay
+                    label="Roster slots"
+                    empty="Any lineup. Add a rule to narrow by what a league starts."
+                    rules={draft.slots}
+                    onChange={(slots) => setDraft({ ...draft, slots })}
+                    keyOptions={SLOT_GROUPS.map((group) => ({
+                      value: group.key,
+                      label: group.label,
+                      hint: group.hint,
+                    }))}
+                    newRule={{ key: "QB+SF", op: "gte", value: 2 }}
+                    presets={SLOT_PRESETS}
+                    step={1}
+                    leagues={leagues}
+                    match={matchesSlotRule}
+                  />
 
-            <RuleSection
-              label="Scoring settings"
-              empty="Any scoring. Add a rule to narrow by what a league pays."
-              rules={draft.scoring}
-              onChange={(scoring) => setDraft({ ...draft, scoring })}
-              keyOptions={scoringKeys.map((key) => ({
-                value: key,
-                label: scoringKeyLabel(key),
-              }))}
-              newRule={{ key: scoringKeys[0] ?? "rec", op: "eq", value: 1 }}
-              presets={SCORING_PRESETS}
-              step={0.5}
-              leagues={leagues}
-              match={matchesScoringRule}
-            />
+                  <RuleBay
+                    label="Scoring settings"
+                    empty="Any scoring. Add a rule to narrow by what a league pays."
+                    rules={draft.scoring}
+                    onChange={(scoring) => setDraft({ ...draft, scoring })}
+                    keyOptions={scoringKeys.map((key) => ({
+                      value: key,
+                      label: scoringKeyLabel(key),
+                    }))}
+                    newRule={{ key: scoringKeys[0] ?? "rec", op: "eq", value: 1 }}
+                    presets={SCORING_PRESETS}
+                    step={0.5}
+                    leagues={leagues}
+                    match={matchesScoringRule}
+                  />
+                </div>
+              </div>
+
+              <MatchRail
+                matched={matched}
+                total={leagues.length}
+                filters={draft}
+                onChange={setDraft}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 border-t border-foreground/10 px-5 py-4">
+          <div className="flex items-center gap-3 border-t border-foreground/10 bg-gradient-to-b from-transparent to-black/25 px-5 py-4">
             <button
               type="button"
               onClick={() => setDraft(DEFAULT_LEAGUE_FILTERS)}
@@ -198,11 +254,20 @@ export function LeagueFiltersModal({
             >
               Reset
             </button>
-            <span className="text-sm text-foreground/60">
+            {/*
+              The count lives in the rail, which is beside the controls only once
+              there is room for it. Below that width the rail is stacked at the
+              bottom of a scrolling panel, so the footer states the number again
+              — same `matched`, so the two can't disagree.
+            */}
+            <span className="text-sm text-foreground/60 lg:hidden">
               <b className="font-semibold tabular-nums text-foreground">
-                {leagues.filter((l) => matchesFilters(l, draft)).length}
+                {matched.length}
               </b>{" "}
-              leagues match
+              of {leagues.length} match
+            </span>
+            <span className="hidden text-xs text-foreground/40 lg:inline">
+              Every filter narrows — a league has to pass all of them.
             </span>
             <button
               type="button"
@@ -219,37 +284,14 @@ export function LeagueFiltersModal({
 }
 
 /**
- * A band of related filters under one eyebrow.
+ * The uppercase caption over every group, slot and readout in the panel.
  *
- * A flat stack reads as a pile of unrelated questions; the bands say what each
- * is *about* — the league itself, the lineup it starts, the points it pays —
- * which is also the axis a reader arrives with ("show me my superflex leagues"
- * is a roster question they'd otherwise scan every group for). The eyebrow
- * carries the uppercase treatment the group labels used to, so the two levels
- * stay distinguishable without a second border.
+ * One string rather than the same six utilities retyped nine times: these are
+ * the only labels in the dialog and they are the thing that would drift into
+ * three sizes as sections were added.
  */
-function Section({
-  label,
-  children,
-  trailing,
-}: {
-  label: string;
-  children: ReactNode;
-  trailing?: ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-active/70">
-          {label}
-        </span>
-        <span className="h-px flex-1 bg-foreground/10" />
-        {trailing}
-      </div>
-      {children}
-    </section>
-  );
-}
+const CAPTION =
+  "font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40";
 
 /**
  * One fixed filter's options, each labelled with how many leagues it would leave.
@@ -258,8 +300,15 @@ function Section({
  * answer to "is it worth narrowing to this" before the list moves. It's probed
  * against the rest of the *draft*, so the numbers describe the selection being
  * built rather than each filter in isolation.
+ *
+ * It renders a fragment of two cells rather than a box of its own, so the three
+ * groups share the trough's grid and their labels line up in one column — the
+ * label-above-keys stack this replaced spent a row per group on a caption. Below
+ * `sm` the grid is one column and the labels *do* sit above their keys: in a
+ * gutter beside three wrapped rows of chips, a centred caption floats halfway
+ * down the block it names.
  */
-function FilterGroup<T extends string>({
+function SegmentGroup<T extends string>({
   label,
   options,
   value,
@@ -286,9 +335,9 @@ function FilterGroup<T extends string>({
   );
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <span className="text-xs font-semibold text-foreground/45">{label}</span>
-      <div className="flex flex-wrap gap-2">
+    <>
+      <span className={CAPTION}>{label}</span>
+      <div className="flex flex-wrap gap-1.5">
         {options.map((option, i) => {
           const selected = option.value === value;
           return (
@@ -297,16 +346,16 @@ function FilterGroup<T extends string>({
               type="button"
               aria-pressed={selected}
               onClick={() => onPick(option.value)}
-              className={`inline-flex items-baseline gap-2 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${
+              className={`inline-flex items-baseline gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-bold ${
                 selected
-                  ? "border-active/45 bg-active/10 text-foreground"
-                  : "border-foreground/10 bg-foreground/[0.04] text-foreground/60 hover:border-foreground/25 hover:text-foreground"
+                  ? "lab-chip-on"
+                  : "lab-chip text-foreground/70 hover:text-foreground"
               }`}
             >
               {option.label}
               <span
-                className={`font-mono text-[11px] tabular-nums ${
-                  selected ? "text-active" : "text-foreground/30"
+                className={`font-mono text-[10px] tabular-nums ${
+                  selected ? "text-[#052029]/60" : "text-foreground/35"
                 }`}
               >
                 {counts[i]}
@@ -315,7 +364,7 @@ function FilterGroup<T extends string>({
           );
         })}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -337,7 +386,7 @@ const SCORING_PRESETS: { label: string; rule: FilterRule }[] = [
 ];
 
 /**
- * A list of rules the reader builds, with the button that adds one.
+ * A list of rules the reader builds, in a bay of its own.
  *
  * The presets are the point of the shape as much as the rows are: the four fixed
  * pairs this replaced were the four questions worth one click, and they still are
@@ -346,8 +395,13 @@ const SCORING_PRESETS: { label: string; rule: FilterRule }[] = [
  * `qb+sf = 3`). A preset already on the list is dimmed rather than hidden, so the
  * row doesn't reflow as you use it, and clicking it again is a no-op rather than
  * a duplicate rule that narrows nothing twice.
+ *
+ * A dimmed preset is drawn **flat**, where a live one is a raised key. That is
+ * the app bar's grammar held to at the smallest size: a part that does nothing
+ * when pressed must not look pressable. The live ones are half the thickness of
+ * a segment key, since a shortcut is a lesser press than the filter it writes.
  */
-function RuleSection({
+function RuleBay({
   label,
   empty,
   rules,
@@ -381,22 +435,18 @@ function RuleSection({
     onChange(rules.map((r, i) => (i === index ? rule : r)));
 
   return (
-    <Section
-      label={label}
-      trailing={
-        <button
-          type="button"
-          onClick={() => onChange([...rules, newRule])}
-          className="inline-flex items-center gap-1 rounded-full border border-active/35 bg-active/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-active transition-colors hover:bg-active/20"
-        >
-          <span aria-hidden="true" className="text-sm leading-none">
-            +
-          </span>
-          Rule
-        </button>
-      }
-    >
-      <div className="flex flex-col gap-2">
+    <section className="lab-well flex flex-col gap-3 rounded-xl p-3.5">
+      <div className="flex items-center gap-2.5">
+        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-active/75">
+          {label}
+        </span>
+        <span className="h-px flex-1 bg-foreground/10" />
+        {rules.length > 0 && (
+          <span className={CAPTION}>{rules.length}</span>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         {rules.length === 0 && (
           <p className="text-xs text-foreground/35">{empty}</p>
         )}
@@ -420,12 +470,20 @@ function RuleSection({
             onRemove={() => onChange(rules.filter((_, j) => j !== i))}
           />
         ))}
+        <button
+          type="button"
+          onClick={() => onChange([...rules, newRule])}
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-active/35 bg-active/[0.06] py-1.5 text-[11px] font-bold uppercase tracking-wider text-active transition-colors hover:bg-active/15"
+        >
+          <span aria-hidden="true" className="text-sm leading-none">
+            +
+          </span>
+          Rule
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/30">
-          Quick add
-        </span>
+        <span className={CAPTION}>Quick add</span>
         {presets.map((preset) => {
           const already = has(preset.rule);
           return (
@@ -434,10 +492,10 @@ function RuleSection({
               type="button"
               disabled={already}
               onClick={() => onChange([...rules, preset.rule])}
-              className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+              className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
                 already
-                  ? "cursor-default border-active/20 bg-active/5 text-active/40"
-                  : "border-foreground/10 bg-foreground/[0.04] text-foreground/55 hover:border-foreground/25 hover:text-foreground"
+                  ? "cursor-default bg-active/[0.07] text-active/40 shadow-[inset_0_0_0_1px_rgba(0,255,229,0.18)]"
+                  : "lab-chip lab-chip-sm text-foreground/60 hover:text-foreground"
               }`}
             >
               {preset.label}
@@ -445,7 +503,7 @@ function RuleSection({
           );
         })}
       </div>
-    </Section>
+    </section>
   );
 }
 
@@ -462,8 +520,13 @@ function RuleSection({
  * against the kept row's rule.
  *
  * The trailing count is what this rule *alone* leaves, not what the draft leaves
- * — the footer states that. Per rule it is the answer to "is this the rule that
+ * — the rail states that. Per rule it is the answer to "is this the rule that
  * emptied my list", which a running total can't give once there are three of them.
+ *
+ * The row sits at half a bay's width, so its parts are sized rather than left to
+ * flex: everything but the key menu takes exactly what its content needs, and the
+ * menu takes the rest. A long scoring key truncates, which is the trade the
+ * two-column bay makes.
  */
 function RuleRow({
   rule,
@@ -485,13 +548,18 @@ function RuleRow({
   const [edit, setEdit] = useState<string | null>(null);
   const text = edit ?? formatRuleValue(rule.value);
 
+  // Inset parts, laid in the bay's trough: a control you type into is a slot,
+  // not a key. The dark face and the top shadow are what say so.
+  const inset =
+    "rounded-md border border-foreground/10 bg-[#06111b] px-1.5 py-1 text-[13px] font-bold text-foreground shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] outline-none focus-visible:border-active/60";
+
   return (
-    <div className="flex items-center gap-1.5 rounded-xl border border-foreground/10 bg-foreground/[0.04] p-1.5">
+    <div className="flex items-center gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.05] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
       <select
         aria-label="Filter on"
         value={rule.key}
         onChange={(e) => onChange({ ...rule, key: e.target.value })}
-        className="min-w-0 flex-1 truncate rounded-lg border border-foreground/10 bg-[#0b1621] px-2 py-1.5 text-sm font-semibold text-foreground outline-none focus-visible:border-active/60"
+        className={`min-w-0 flex-1 truncate ${inset}`}
       >
         {extraKey !== null && (
           <option value={extraKey}>{extraKey.replace(/_/g, " ")}</option>
@@ -509,7 +577,7 @@ function RuleRow({
         onChange={(e) =>
           onChange({ ...rule, op: e.target.value as FilterRule["op"] })
         }
-        className="rounded-lg border border-foreground/10 bg-[#0b1621] px-2 py-1.5 text-center text-sm font-bold text-active outline-none focus-visible:border-active/60"
+        className={`shrink-0 text-center text-active ${inset}`}
       >
         {COMPARE_OPS.map((op) => (
           <option key={op.value} value={op.value} aria-label={op.label}>
@@ -532,12 +600,14 @@ function RuleRow({
           }
         }}
         onBlur={() => setEdit(null)}
-        className="w-16 rounded-lg border border-foreground/10 bg-[#0b1621] px-2 py-1.5 text-center text-sm font-semibold tabular-nums text-foreground outline-none focus-visible:border-active/60"
+        // The spinners would eat a third of a field this narrow, and the step is
+        // reachable from the keyboard either way.
+        className={`w-13 shrink-0 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${inset}`}
       />
 
       <span
         title="Leagues matching this rule on its own"
-        className="w-8 shrink-0 text-center font-mono text-[11px] tabular-nums text-foreground/35"
+        className="w-6 shrink-0 text-center font-mono text-[10px] tabular-nums text-foreground/35"
       >
         {count}
       </span>
@@ -546,12 +616,153 @@ function RuleRow({
         type="button"
         aria-label="Remove rule"
         onClick={onRemove}
-        className="rounded-lg border border-foreground/10 px-2 py-1.5 text-sm font-bold leading-none text-foreground/40 transition-colors hover:border-[#ff5f6d]/50 hover:text-[#ff5f6d]"
+        className="shrink-0 rounded-md border border-foreground/10 px-1.5 py-1 text-sm font-bold leading-none text-foreground/40 transition-colors hover:border-[#ff5f6d]/50 hover:text-[#ff5f6d]"
       >
         ×
       </button>
     </div>
   );
+}
+
+/**
+ * The live readout: how many leagues survive the draft, what is doing the
+ * narrowing, and what the survivors are.
+ *
+ * Three things it says that a footer count can't. The **meter** puts the number
+ * against the account it came out of, so "17" reads as a fifth of the leagues
+ * rather than as a bare figure. The **chips** are the selection restated outside
+ * the controls that built it — which matters most for the rules, since a slot
+ * rule and a scoring rule live in different bays and a reader narrowing to
+ * nothing otherwise has two lists to audit; each strikes itself out in place, so
+ * backing off one filter costs a click rather than a hunt. And the **breakdown**
+ * answers the question the count raises — 17 of what kind — along the axes that
+ * say what game a league is playing.
+ *
+ * It edits the same draft the controls do rather than holding state, so a chip's
+ * `×` and the row it names are one selection seen twice.
+ */
+function MatchRail({
+  matched,
+  total,
+  filters,
+  onChange,
+}: {
+  matched: readonly ManagerLeague[];
+  total: number;
+  filters: LeagueFilters;
+  onChange: (filters: LeagueFilters) => void;
+}) {
+  const active = activeFilters(filters);
+  const breakdown = useMemo(() => leagueBreakdown(matched), [matched]);
+  // A cold load has no leagues to be a share of, and 0/0 is not 0% — it is a
+  // question with no answer yet, so the meter and the percentage sit it out.
+  const share = total > 0 ? matched.length / total : null;
+
+  return (
+    <aside
+      aria-label="Matching leagues"
+      className="lab-well flex flex-col gap-4 rounded-xl p-4 lg:sticky lg:top-0 lg:self-start"
+    >
+      <div className="flex flex-col gap-1">
+        <span className={CAPTION}>Leagues matching</span>
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-[2.5rem] font-bold leading-none tabular-nums text-active [text-shadow:0_0_22px_rgba(0,255,229,0.45)]">
+            {matched.length}
+          </span>
+          <span className="text-xs text-foreground/45">
+            of {total}
+            {share !== null && ` · ${Math.round(share * 100)}%`}
+          </span>
+        </div>
+      </div>
+
+      <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10 shadow-[inset_0_1px_2px_rgba(0,0,0,0.7)]">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-[#00b8a4] to-active shadow-[0_0_10px_rgba(0,255,229,0.7)] transition-[width] duration-200"
+          style={{ width: `${(share ?? 0) * 100}%` }}
+        />
+      </div>
+
+      <Divider />
+
+      <div className="flex flex-col gap-2">
+        <span className={CAPTION}>Narrowing</span>
+        {active.length === 0 ? (
+          <p className="text-xs text-foreground/35">
+            Nothing yet — every league is in.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {active.map((entry) => (
+              <ActiveChip
+                key={chipKey(entry)}
+                entry={entry}
+                onRemove={() => onChange(clearFilter(filters, entry))}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {matched.length > 0 && (
+        <>
+          <Divider />
+          <div className="flex flex-col gap-1.5">
+            <span className={CAPTION}>Of these {matched.length}</span>
+            <dl className="flex flex-col gap-1">
+              {breakdown.map((row) => (
+                <div
+                  key={row.key}
+                  className="flex items-baseline justify-between gap-2 text-xs"
+                >
+                  <dt className="text-foreground/55">{row.label}</dt>
+                  <dd className="font-mono tabular-nums text-foreground/90">
+                    {row.count}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </>
+      )}
+    </aside>
+  );
+}
+
+/**
+ * A rule is addressed by position, so two identical rules need distinguishing
+ * keys — which the index gives and the label doesn't.
+ */
+function chipKey(entry: ActiveFilter): string {
+  return entry.kind === "fixed"
+    ? `fixed:${entry.field}`
+    : `${entry.kind}:${entry.index}`;
+}
+
+function ActiveChip({
+  entry,
+  onRemove,
+}: {
+  entry: ActiveFilter;
+  onRemove: () => void;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-active/25 bg-active/10 py-0.5 pl-2 pr-1 font-mono text-[11px] text-foreground/85">
+      {entry.label}
+      <button
+        type="button"
+        aria-label={`Stop filtering by ${entry.label}`}
+        onClick={onRemove}
+        className="leading-none text-foreground/45 transition-colors hover:text-[#ff5f6d]"
+      >
+        ×
+      </button>
+    </span>
+  );
+}
+
+function Divider() {
+  return <span aria-hidden="true" className="h-px bg-foreground/10" />;
 }
 
 function FilterIcon({ dim }: { dim: boolean }) {

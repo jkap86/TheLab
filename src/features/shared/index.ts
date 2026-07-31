@@ -12,10 +12,13 @@ export {
   STATUS_OPTIONS,
   TYPE_OPTIONS,
   activeFilterCount,
+  activeFilters,
+  clearFilter,
   compare,
   deriveScoring,
   filterSummary,
   formatRuleValue,
+  leagueBreakdown,
   leagueType,
   matchesFilters,
   matchesScoringRule,
@@ -27,8 +30,10 @@ export {
   slotGroupLabel,
 } from "./league-filters";
 export type {
+  ActiveFilter,
   CompareOp,
   FilterRule,
+  LeagueBreakdownRow,
   LeagueFilters,
   SlotGroup,
 } from "./league-filters";

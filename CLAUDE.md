@@ -905,6 +905,43 @@ stops holding, a comment saying it does would not have caught it.
   `deriveScoring` stays in this file — the filters no longer bucket anything, but
   it is the bucket `/api/adp` groups by and `adp-controls` re-exports it, since
   `features/shared` can't import a feature.
+- **The filters dialog is a bay layout with a readout rail, and the two halves
+  fix different failures.** Stacked — three segment groups, then the two rule
+  lists — the rules fell below a 60vh scroll box, so a reader who wanted
+  "superflex leagues that pay a TE bonus" scrolled past everything they *didn't*
+  want to reach the control that asks it, and the feature read as missing. The
+  segments are facts about a league and compress into one trough; the rule lists
+  sit side by side under it as equal bays, which on a laptop puts every rule and
+  both quick-add trays on screen at once. Four things worth keeping:
+  - **The rail is beside the controls, not under them.** The match count was a
+    line of footer text next to Apply, and it is the number the whole dialog
+    exists to move — it changes while you edit, and a number you have to scroll
+    to is a number you check once. So it is a readout with a meter against the
+    account it came out of, and the footer restates it only below the width where
+    the rail is stacked (same `matched`, so the two can't disagree).
+  - **The chips are the selection restated outside the controls that built it.**
+    That matters most for the rules: a slot rule and a scoring rule live in
+    different bays, so a reader who narrowed to nothing otherwise has two lists to
+    audit. Each strikes itself out in place, which is what `clearFilter` is —
+    and it addresses a rule by **position**, since two identical rules are
+    indistinguishable and "remove the matching one" would be ambiguous.
+  - **`activeFilters` is one walk, and the count, the summary and the chips are
+    all derived from it.** They were three walks over the same fields, which is
+    three chances for a filter added above to be counted and not named, or named
+    and not removable. Its labels are already lower case, because the summary
+    reads mid-sentence and a chip beside it saying "Dynasty" would be the same
+    selection under two spellings.
+  - **The breakdown rows are filters, not predicates.** `leagueBreakdown` counts
+    each row with `matchesFilters`, so "Superflex 17" is by construction the
+    number the superflex quick-add would leave — and it inherits the null rule
+    for free, an unsynced lineup failing the row exactly as it fails the rule.
+    It is counted over the *matched* list, since the rail's question is what you
+    just narrowed to and not what the account holds.
+  The one thing that reliably regresses here is that a **dimmed quick-add is
+  drawn flat where a live one is a raised key**. That is the app bar's grammar
+  held to at the smallest size: a part that does nothing when pressed must not
+  look pressable, so the already-added state loses its wall rather than only
+  dimming its text.
 - **`SiteHeader` is the only global chrome, and it is three zones: the mark
   home, the page you are on, and every tool.** Every tool is reached by navigating
   away from `/tools`, which used to leave the back button as the only way home;
@@ -998,7 +1035,13 @@ stops holding, a comment saying it does would not have caught it.
     `LeagueFiltersModal` renders on two pages, and one control with two looks is
     exactly the drift a shared class prevents. Its one unlayered rule is the
     reduced-motion override, which has to outrank the layered `:active` it
-    cancels.
+    cancels. **`.lab-chip-sm` is the same pill at half the thickness**, worn
+    *with* `.lab-chip` and overriding only the wall and its press travel:
+    thickness is how a secondary press says so, which the filters' quick-adds
+    need because they sit in a bay whose segment keys are full height and a tray
+    of five parts at that height reads as five more filters rather than as the
+    one-click path to a rule. It is declared after `.lab-chip:active` so its own
+    press wins.
   The notch is kept for the small parts and the panel stays rounded (the `H3`
   mockup of three): six rows of 11px text want a calm surface, and nothing else
   in the app has to change its corners to match.

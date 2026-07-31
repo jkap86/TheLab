@@ -403,6 +403,89 @@ const FILTERS: {
 ];
 
 /**
+ * One filter currently narrowing the list, named and addressable.
+ *
+ * Everything the page says about the selection is derived from this list — the
+ * count on the trigger, the words beside the header's record, and the chips in
+ * the dialog's readout rail. They used to be three walks over the same fields,
+ * which is three chances for a filter added above to be counted and not named,
+ * or named and not removable.
+ *
+ * `label` is already lower case, because the summary reads mid-sentence
+ * ("counting dynasty · qb+sf ≥ 2") and a chip beside it saying "Dynasty" would
+ * be the same selection under two spellings. A rule reads as its symbol form for
+ * the reason the rows do: a list of six is scanned, not read.
+ *
+ * The address is a field for a fixed filter and a *position* for a rule, which
+ * is what {@link clearFilter} needs to undo one — rules are identified by where
+ * they sit, since two identical rules are indistinguishable and removing "the
+ * matching one" would be ambiguous.
+ */
+export type ActiveFilter =
+  | { kind: "fixed"; field: "type" | "bestBall" | "status"; label: string }
+  | { kind: "slot"; index: number; label: string }
+  | { kind: "scoring"; index: number; label: string };
+
+/** Every filter narrowing the list, fixed ones first, in the dialog's order. */
+export function activeFilters(filters: LeagueFilters): ActiveFilter[] {
+  const fixed = FILTERS.flatMap(({ key, options }): ActiveFilter[] => {
+    const value = filters[key];
+    if (value === "all") return [];
+    const label = options.find((o) => o.value === value)?.label;
+    return label ? [{ kind: "fixed", field: key, label: label.toLowerCase() }] : [];
+  });
+  const slots = filters.slots.map(
+    (rule, index): ActiveFilter => ({
+      kind: "slot",
+      index,
+      label: ruleText(rule, slotGroupLabel).toLowerCase(),
+    }),
+  );
+  const scoring = filters.scoring.map(
+    (rule, index): ActiveFilter => ({
+      kind: "scoring",
+      index,
+      label: ruleText(rule, scoringKeyLabel).toLowerCase(),
+    }),
+  );
+  return [...fixed, ...slots, ...scoring];
+}
+
+/**
+ * The selection with one filter lifted out — what a readout chip's `×` applies.
+ *
+ * A fixed filter goes back to `"all"` rather than being deleted, since it is a
+ * field with a neutral value and not a member of a list. The switch is spelled
+ * out per field rather than written as a computed key so the compiler keeps
+ * checking that `"all"` is a value each of the three unions actually holds.
+ */
+export function clearFilter(
+  filters: LeagueFilters,
+  active: ActiveFilter,
+): LeagueFilters {
+  if (active.kind === "slot") {
+    return {
+      ...filters,
+      slots: filters.slots.filter((_, i) => i !== active.index),
+    };
+  }
+  if (active.kind === "scoring") {
+    return {
+      ...filters,
+      scoring: filters.scoring.filter((_, i) => i !== active.index),
+    };
+  }
+  switch (active.field) {
+    case "type":
+      return { ...filters, type: "all" };
+    case "bestBall":
+      return { ...filters, bestBall: "all" };
+    case "status":
+      return { ...filters, status: "all" };
+  }
+}
+
+/**
  * How many filters are narrowing the list — the count on the modal's trigger.
  *
  * A rule counts as one, so eight slot rules read as eight: they are eight
@@ -410,11 +493,7 @@ const FILTERS: {
  * a selection that is doing most of the work.
  */
 export function activeFilterCount(filters: LeagueFilters): number {
-  return (
-    FILTERS.filter(({ key }) => filters[key] !== "all").length +
-    filters.slots.length +
-    filters.scoring.length
-  );
+  return activeFilters(filters).length;
 }
 
 /**
@@ -423,26 +502,58 @@ export function activeFilterCount(filters: LeagueFilters): number {
  * With the controls behind a modal, this is the only thing on the page saying
  * what the header's record and win pct are counted over — so it names the
  * *scope* of those numbers rather than decorating the trigger button.
- *
- * Lower case because it is read mid-sentence ("counting dynasty · qb+sf ≥ 2"),
- * where the buttons' own capitalised labels read as proper nouns. Same tables
- * either way, so a renamed option or slot group can't say two different things.
  */
 export function filterSummary(filters: LeagueFilters): string {
-  const fixed = FILTERS.flatMap(({ key, options }) => {
-    const value = filters[key];
-    if (value === "all") return [];
-    const label = options.find((o) => o.value === value)?.label;
-    return label ? [label.toLowerCase()] : [];
-  });
-  const slots = filters.slots.map((rule) =>
-    ruleText(rule, slotGroupLabel).toLowerCase(),
-  );
-  const scoring = filters.scoring.map((rule) =>
-    ruleText(rule, scoringKeyLabel).toLowerCase(),
-  );
-  const parts = [...fixed, ...slots, ...scoring];
+  const parts = activeFilters(filters).map((f) => f.label);
   return parts.length ? parts.join(" · ") : "all leagues";
+}
+
+/** One line of the readout rail's composition list. */
+export type LeagueBreakdownRow = { key: string; label: string; count: number };
+
+/**
+ * What the leagues left over actually *are*, along the axes that say what game
+ * is being played.
+ *
+ * Each row is a filter rather than a hand-written predicate, so a row and the
+ * quick-add that selects it can't disagree — "Superflex 17" is by construction
+ * the number the `qb+sf ≥ 2` rule would leave. That also inherits the null rule
+ * for free: a league whose lineup was never synced is not evidence of a
+ * superflex league, so it fails the row the same way it fails the rule.
+ *
+ * The rows are counted over whatever list is handed in, which is the *matched*
+ * list — the rail's question is "what did I just narrow to", not "what does this
+ * account hold".
+ */
+const BREAKDOWN_ROWS: {
+  key: string;
+  label: string;
+  filters: Partial<LeagueFilters>;
+}[] = [
+  { key: "dynasty", label: "Dynasty", filters: { type: "2" } },
+  {
+    key: "superflex",
+    label: "Superflex",
+    filters: { slots: [{ key: "QB+SF", op: "gte", value: 2 }] },
+  },
+  {
+    key: "idp",
+    label: "IDP",
+    filters: { slots: [{ key: "IDP", op: "gt", value: 0 }] },
+  },
+  { key: "best_ball", label: "Best ball", filters: { bestBall: "yes" } },
+];
+
+export function leagueBreakdown(
+  leagues: readonly ManagerLeague[],
+): LeagueBreakdownRow[] {
+  return BREAKDOWN_ROWS.map(({ key, label, filters }) => ({
+    key,
+    label,
+    count: leagues.filter((league) =>
+      matchesFilters(league, { ...DEFAULT_LEAGUE_FILTERS, ...filters }),
+    ).length,
+  }));
 }
 
 /** Read a numeric field out of a league's Sleeper `settings` blob. */

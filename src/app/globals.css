@@ -179,6 +179,31 @@ body {
       0 1px 0 var(--edge),
       0 3px 7px -4px rgba(0, 0, 0, 0.75);
   }
+  /* The same pill at half the thickness, worn *with* `.lab-chip`.
+
+     A shortcut is a lesser press than the thing it writes: the league filters'
+     quick adds sit inside a bay whose segment keys are full-thickness, and a
+     tray of five parts at the same height reads as five more filters rather than
+     as the one-click path to a rule. Thickness is the only difference, which is
+     why this overrides the wall and its press travel and nothing else — the
+     face, the hover and the padding all still come from `.lab-chip` and the call
+     site. It is declared after `.lab-chip:active` so its own press wins. */
+  .lab-chip-sm {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.4),
+      0 2px 0 var(--edge),
+      0 4px 8px -4px rgba(0, 0, 0, 0.7);
+  }
+  .lab-chip-sm:active {
+    transform: translateY(1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.45),
+      0 1px 0 var(--edge),
+      0 2px 5px -3px rgba(0, 0, 0, 0.7);
+  }
+
   /* The cyan key, for a control that is currently narrowing something. */
   .lab-chip-on {
     background: linear-gradient(180deg, #a8fff4, #00ddc6);
