@@ -393,8 +393,9 @@ stops holding, a comment saying it does would not have caught it.
   of who you meant, which is what makes the extra request worth making before a
   tool is picked. A resubmit aborts the lookup still in flight, or the slower
   response wins whichever was asked for last. That resolved identity is now what
-  the section is *for*: `ToolsHome` holds it and hands it down, so the extra
-  request buys the grid below something and not just a confirmation.
+  the section is *for*: `ToolsHome` writes it to the shared account store and the
+  grid below reads it, as does the pick tracker's own page — so the extra request
+  buys the tools something and not just a confirmation.
 - **That account is the app's only client-side persistence, and it is a
   `useSyncExternalStore` over one `localStorage` key.** A reload, or a trip out
   to a tool and back, used to drop you at an empty search box — with the grid
@@ -405,11 +406,18 @@ stops holding, a comment saying it does would not have caught it.
   mismatch this shape exists to avoid. The snapshot is the **raw string**, parsed
   in a `useMemo` keyed on it, because `useSyncExternalStore` compares snapshots
   by identity and a fresh `JSON.parse` per read looks like a change every render
-  and loops. And `storeUser` notifies its own listeners by hand, since the
+  and loops. And `storeAccount` notifies its own listeners by hand, since the
   `storage` event fires in *other* tabs but never the one that wrote. Only the
   resolved `UserInfo` is kept; leagues re-derive from `user_id`. Writes are
   wrapped in `try`/`catch` because storage can be blocked — persistence here is a
-  convenience, never correctness.
+  convenience, never correctness, which is why a blocked write still lands in the
+  module-level `memoryFallback`: with the store as the only state, dropping it
+  would discard a successful lookup and leave the grid locked.
+  It lives in `features/shared/account.ts` rather than beside the tools page that
+  writes it, because a tool *page* reads it: the pick tracker's league picker is
+  on `/picktracker` and fills itself from the account resolved on `/tools`. That
+  is what the persistence buys beyond surviving a reload — a tool can skip asking
+  for a username a second time even though it is a separate route.
 - **The account is the key to the whole grid: every card is inert until one
   resolves.** Each tool reads that account, so `ToolGrid` passes `disabled={!user}`
   and `ToolLinkCard` renders an `aria-disabled`, dimmed `div` instead of a
@@ -426,19 +434,22 @@ stops holding, a comment saying it does would not have caught it.
   grid encodes once, at the single call site, so a new tool must interpolate it
   bare. Encoding again inside `hrefFor` double-escapes and yields a 404 for any
   account whose name isn't plain ASCII, which is exactly the account nobody
-  tests with. And the pick tracker gets `PicktrackerCard`
-  instead, listing the account's leagues inline because a league *id* is the one
-  thing a username does **not** give you and the account already knows every one.
-  Its picker is its own gate — there is no way to the tracker without choosing a
-  league — so it needs no `disabled` state of its own once an account is in hand.
-- **The tools grid no longer links to manual league-id entry, but the page is
-  still there.** `/picktracker` (the `page.tsx`, distinct from
-  `/picktracker/[leagueId]`) takes a raw id and still answers; gating the grid
-  only took away the *link* to it. That path is worth remembering before treating
-  the route as dead code: it is how the tracker opens from a league chat
-  mid-draft, where there is a league id in the URL bar and no Sleeper account in
-  hand. If the no-account state should reach it again, that is a deliberate
-  exception to the gate above and not a bug in it.
+  tests with. The pick tracker has no `hrefFor`, because a league *id* is the one
+  thing a username does **not** give you — it links to `/picktracker` and that
+  page does the choosing.
+- **Choosing a league is a step of the pick tracker, not of picking a tool.** The
+  combobox over an account's hundred-odd leagues used to sit inside the grid's
+  tool tile (a `PicktrackerCard` that replaced the link entirely); it is on
+  `/picktracker` now and the grid card is an ordinary `ToolLinkCard` like every
+  other one. Moving it costs no extra typing precisely because the account is
+  persisted — the page reads the same stored `UserInfo` and lists its leagues
+  without a second username prompt. Two things that page keeps: the raw-id form
+  stays *below* the picker whether or not an account is stored, because that is
+  the path the route was built for (opened from a league chat mid-draft, where
+  there is an id in the URL bar and no Sleeper account in hand), and with no
+  account it is the whole page — `useUserLeagues(null)` fetches nothing, so the
+  no-account state is idle rather than empty. `/picktracker` is therefore not a
+  page the grid merely declines to link to any more; it is where the tool starts.
 - **`useUserLeagues` is not `useManagerLeagues`, for the reason the four manager
   sub-resource hooks *are* one hook.** Both decode the same NDJSON stream off
   `/api/user/[username]/leagues`, but the picker wants the list and none of the

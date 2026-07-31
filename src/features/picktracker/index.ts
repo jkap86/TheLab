@@ -1,2 +1,2 @@
-export { PicktrackerSearch } from "./components/picktracker-search";
+export { PicktrackerHome } from "./components/picktracker-home";
 export { PicktrackerBoard } from "./components/picktracker-board";
