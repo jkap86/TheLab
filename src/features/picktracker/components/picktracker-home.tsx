@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { useStoredAccount } from "@/features/shared";
+import { useStoredAccount, useUserLeagues } from "@/features/shared";
 
-import { useUserLeagues } from "../hooks/use-user-leagues";
 import { LeaguePicker } from "./league-picker";
 import { PicktrackerSearch } from "./picktracker-search";
 

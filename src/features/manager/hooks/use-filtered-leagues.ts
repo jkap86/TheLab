@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 
-import { matchesFilters } from "../filters";
+import { matchesFilters } from "@/features/shared";
 import { useLeagueFilters } from "../filters-context";
 import { useManagerLeagues } from "./use-manager-leagues";
 

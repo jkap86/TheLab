@@ -1,22 +1,20 @@
 import { isSuperflexLineup } from "../../shared/ktc/roster.ts";
 import { IDP_SLOTS } from "../../shared/projections/slots.ts";
-import { deriveScoring } from "./adp-controls.ts";
-import type { ManagerLeague } from "./types";
+import type { ManagerLeague } from "@/shared/manager";
 
 /**
  * League list filtering. Kept apart from the control that renders it so the
  * matching rules — which encode Sleeper's settings quirks — can be read and
  * tested on their own.
  *
- * Three of the seven filters read something other than the `settings` blob, and
+ * Two of the seven filters read the lineup rather than the `settings` blob, and
  * each borrows the predicate that already owns the question rather than writing
- * a second one: `isSuperflexLineup` (the same slot walk that picks a league's
- * KTC board), `IDP_SLOTS` (derived from the solver's own vocabulary), and
- * `deriveScoring` (the buckets `/api/adp` groups by). Those come in relatively
- * with an explicit `.ts` extension for the reason the tests do — Node's test
- * runner strips types but doesn't know the `@/*` aliases — and each is free of
- * runtime imports beyond the slot table, so none of them drags `pg` into the
- * bundle.
+ * a second one: `isSuperflexLineup` is the same slot walk that picks a league's
+ * KTC board, and `IDP_SLOTS` is derived from the solver's own vocabulary. Both
+ * come in relatively with an explicit `.ts` extension for the reason the tests do
+ * — Node's test runner strips types but doesn't know the `@/*` aliases — and
+ * neither drags `pg` into the bundle. The `ManagerLeague` import is type-only, so
+ * it is erased and the alias costs nothing.
  */
 
 export type LeagueFilters = {
@@ -217,6 +215,28 @@ export function hasIdpSlots(league: ManagerLeague): boolean {
 export function hasTePremium(league: ManagerLeague): boolean {
   const bonus = league.scoring_settings?.bonus_rec_te;
   return typeof bonus === "number" && bonus > 0;
+}
+
+/**
+ * The scoring bucket a league falls in, from its `rec` points. Mirrors the
+ * `SCORING_SQL` `/api/adp` groups by exactly — absent/unparseable and anything
+ * under half a point is standard — so a filter seeded from a league matches the
+ * league it came from rather than landing a bucket off.
+ *
+ * It lives here rather than in `manager/adp-controls`, where it started, because
+ * both ends of the app now bucket a league this way: the ADP drawer's "match a
+ * league" and this file's own scoring filter. `features/shared` can't import a
+ * feature, so the definition moved down and `adp-controls` re-exports it — the
+ * same trade the date primitives made, and for the same reason.
+ */
+export function deriveScoring(
+  scoring: Record<string, number> | null,
+): "std" | "half_ppr" | "ppr" {
+  const rec = scoring?.rec;
+  if (typeof rec !== "number") return "std";
+  if (rec >= 1) return "ppr";
+  if (rec >= 0.5) return "half_ppr";
+  return "std";
 }
 
 /** Whether a league passes the active filters. */

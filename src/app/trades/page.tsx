@@ -1,10 +1,10 @@
 import { PageShell } from "@/features/shared";
-import { ToolPlaceholder } from "@/features/tools";
+import { TradesHome } from "@/features/trades";
 
-export default function Page() {
+export default function TradesPage() {
   return (
-    <PageShell>
-      <ToolPlaceholder href="/trades" />
+    <PageShell width="wide">
+      <TradesHome />
     </PageShell>
   );
 }

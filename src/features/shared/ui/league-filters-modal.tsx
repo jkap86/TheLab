@@ -14,8 +14,8 @@ import {
   TYPE_OPTIONS,
   activeFilterCount,
   matchesFilters,
-} from "../filters";
-import type { ManagerLeague } from "../types";
+} from "../league-filters";
+import type { ManagerLeague } from "@/shared/manager";
 
 /**
  * The league filters, behind a modal.

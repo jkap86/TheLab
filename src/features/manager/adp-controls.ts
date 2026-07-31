@@ -1,5 +1,30 @@
 import { isSuperflexLineup } from "../../shared/ktc/roster.ts";
+import {
+  MONTH_ABBREVIATIONS,
+  formatRangeDate,
+  formatRangeMonth,
+  shiftDays,
+  shiftMonths,
+  todayIso,
+} from "../shared/date-range.ts";
+import { deriveScoring } from "../shared/league-filters.ts";
 import type { ManagerLeague } from "./types";
+
+// The date primitives moved to `features/shared` once the trades page needed the
+// same ones; they are re-exported here because this module's own consumers (the
+// drawer, the scrubber, `range-domain`) already import them from it, and one
+// canonical definition read under two names is better than two definitions.
+// `deriveScoring` went the same way for the same reason — the league filters
+// bucket a league by receptions too, and `features/shared` can't import a
+// feature, so the definition lives there and this is the second name for it.
+export {
+  MONTH_ABBREVIATIONS,
+  deriveScoring,
+  formatRangeDate,
+  formatRangeMonth,
+  shiftDays,
+  todayIso,
+};
 
 /**
  * The ADP board controls on the Players tab: which crawled drafts the column's
@@ -179,27 +204,6 @@ export function rangeBounds(range: AdpRange, today: string): AdpRangeBounds {
 }
 
 /**
- * Spelled out rather than left to `Intl`, so a date reads the same in every
- * locale the app is opened in — and so the axis initials the scrubber labels its
- * ticks with are the same list, not a second one that could disagree.
- */
-export const MONTH_ABBREVIATIONS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-] as const;
-
-/** `2026-06-01` → `Jun 1, 2026`. */
-export function formatRangeDate(date: string): string {
-  const [year, month, day] = date.split("-");
-  return `${MONTH_ABBREVIATIONS[Number(month) - 1]} ${Number(day)}, ${year}`;
-}
-
-/** `2026-06` → `Jun 2026`. What a bar on the scrubber's axis is. */
-export function formatRangeMonth(month: string): string {
-  return `${MONTH_ABBREVIATIONS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
-}
-
-/**
  * What the range says on the trigger and in the drawer's header. A preset keeps
  * its name — "Last 90 days" stays true as time passes, where the dates behind it
  * would have to be re-read — and only a custom window spells its dates out.
@@ -214,50 +218,6 @@ export function rangeLabel(range: AdpRange): string {
   if (to) return `Through ${formatRangeDate(to)}`;
   // A custom range with neither end set narrows nothing, so say what it does.
   return "All time";
-}
-
-/** Today where the reader is, as `YYYY-MM-DD` — the argument {@link rangeBounds} wants. */
-export function todayIso(now: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-/** Shift a `YYYY-MM-DD` by whole days, in UTC so no zone can move the boundary. */
-export function shiftDays(date: string, days: number): string {
-  const ms = Date.parse(`${date}T00:00:00Z`) + days * 86_400_000;
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
-/**
- * Shift by whole months, keeping the day of the month where one exists. Day 31
- * has no counterpart in a 30-day month, so the result is clamped to that month's
- * last day rather than rolling into the next one — a "last 12 months" window
- * starting on the 1st of the wrong month is a whole month of drafts.
- */
-function shiftMonths(date: string, months: number): string {
-  const [year, month, day] = date.split("-").map(Number);
-  const target = new Date(Date.UTC(year, month - 1 + months, 1));
-  const lastDay = new Date(
-    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  target.setUTCDate(Math.min(day, lastDay));
-  return target.toISOString().slice(0, 10);
-}
-
-/**
- * The scoring bucket a league falls in, from its `rec` points. Mirrors the
- * `SCORING_SQL` the endpoint groups by exactly — absent/unparseable and
- * anything under half a point is standard — so a filter seeded from a league
- * matches the league it came from rather than landing a bucket off.
- */
-export function deriveScoring(
-  scoring: Record<string, number> | null,
-): "std" | "half_ppr" | "ppr" {
-  const rec = scoring?.rec;
-  if (typeof rec !== "number") return "std";
-  if (rec >= 1) return "ppr";
-  if (rec >= 0.5) return "half_ppr";
-  return "std";
 }
 
 /**
