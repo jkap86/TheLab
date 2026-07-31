@@ -33,6 +33,7 @@ const league = (over: Partial<ManagerLeague>): ManagerLeague => ({
   avatar: null,
   record: null,
   settings: null,
+  roster_positions: null,
   scoring_settings: null,
   ...over,
 });
@@ -201,6 +202,7 @@ describe("seedFromLeague", () => {
       league({
         total_rosters: 10,
         settings: { type: 2, best_ball: 1 },
+        roster_positions: ["QB", "RB", "WR", "SUPER_FLEX", "BN"],
         scoring_settings: { rec: 0.5 },
       }),
     );
@@ -208,6 +210,7 @@ describe("seedFromLeague", () => {
     assert.equal(seeded.scoring, "half_ppr");
     assert.equal(seeded.bestBall, "yes");
     assert.equal(seeded.teams, "10");
+    assert.equal(seeded.superflex, "yes");
     // The season *is* a league setting: matching a 2025 league while leaving the
     // board on this year prices it against a market it was never in.
     assert.equal(seeded.season, "2026");
@@ -218,7 +221,17 @@ describe("seedFromLeague", () => {
     // Not league settings — left exactly as they were.
     assert.deepEqual(seeded.range, { preset: "custom", from: "2025-05-01", to: null });
     assert.equal(seeded.draftType, "auction");
-    assert.equal(seeded.superflex, "yes");
+  });
+
+  test("seeds superflex off the slots, so a 1QB league resets it", () => {
+    // The board a two-QB league belongs to is the one thing this shortcut used
+    // to leave pointing at whatever was there before.
+    const base: AdpControls = { ...defaultAdpControls(SEASON), superflex: "yes" };
+    const seeded = seedFromLeague(
+      base,
+      league({ roster_positions: ["QB", "RB", "WR", "TE", "FLEX", "BN"] }),
+    );
+    assert.equal(seeded.superflex, "no");
   });
 
   test("a league Sleeper omits `type` for reads as redraft, lineup", () => {

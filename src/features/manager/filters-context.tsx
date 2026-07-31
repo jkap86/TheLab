@@ -3,7 +3,7 @@
 import { createContext, useContext, useMemo, useState } from "react";
 
 import { type AdpControls, defaultAdpControls } from "./adp-controls";
-import { DEFAULT_LEAGUE_FILTERS, type LeagueFilters } from "./filters";
+import { DEFAULT_LEAGUE_FILTERS, type LeagueFilters } from "@/features/shared";
 
 type LeagueFiltersValue = {
   filters: LeagueFilters;

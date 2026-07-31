@@ -5,9 +5,9 @@ import {
   DEFAULT_COLUMNS,
   LEAGUE_METRICS,
   LEAGUE_METRICS_BY_KEY,
-  metricPreview,
   type MetricContext,
 } from "./league-metrics.ts";
+import { metricPreview } from "./metric-cell.ts";
 import type {
   LeagueAdpEntry,
   LeagueKtcEntry,
@@ -24,6 +24,7 @@ const league: ManagerLeague = {
   avatar: null,
   record: { wins: 9, losses: 4, ties: 0 },
   settings: null,
+  roster_positions: null,
   scoring_settings: null,
 };
 

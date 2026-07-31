@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Orbitron } from "next/font/google";
 import "./globals.css";
 
+import { ManagerTabs } from "@/features/manager";
 import { SiteHeader } from "@/features/shared";
 
 const geistSans = Geist({
@@ -45,7 +46,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${orbitron.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SiteHeader />
+        {/* The bar's contextual slot: the manager tabs render themselves only
+            on a manager view, so composing them here costs every other page
+            nothing and keeps `features/shared` from importing a feature. */}
+        <SiteHeader>
+          <ManagerTabs />
+        </SiteHeader>
         {children}
       </body>
     </html>

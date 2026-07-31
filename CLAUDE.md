@@ -46,8 +46,9 @@ src/shared/    Domain logic, one folder per concern.
   why the leagues one streams progress, and the pick tracker follows a draft
   *while it happens*, for any league id whether a sync has seen it or not; a
   cached copy would be behind the room. **Every other route under that prefix is
-  *not* an exception** — `…/players`, `…/leaguemates`, `…/ranks`, `…/ktc` and
-  `…/adp-value` today: they read the rosters and membership that stream writes,
+  *not* an exception** — `…/players`, `…/leaguemates`, `…/ranks`, `…/ktc`,
+  `…/adp-value` and `…/trades` today: they read the rosters, membership and
+  transactions that stream writes,
   so a manager it has never run for gets an empty answer rather than a second
   sync of their own. That is the rule for a new sibling too, so this list has
   gone stale twice; the prefix is not what makes a route an exception, being
@@ -195,7 +196,7 @@ Filtering *on* those blobs takes two habits:
   whole query on the one league holding a junk value. Write
   `CASE WHEN settings->>'type' ~ '^[0-9]+$' THEN (settings->>'type')::int ELSE 0
   END`, and let the fallback match what the client already assumes (a missing
-  `type` is redraft — see `features/manager/filters`).
+  `type` is redraft — see `features/shared/league-filters`).
 - **Parenthesise a SQL fragment you intend to reuse.** Call sites append their
   own comparison, so a fragment ending in `= 1` makes `${FRAG} = $1` a chained
   `=`, which Postgres rejects. `shared/manager/adp` builds its `WHERE` this way.
@@ -321,6 +322,32 @@ the sign they are house rules and not local details:
   an undrafted league.
 
 A fourth module of this kind should be checked against both before it is written.
+
+`trades` is the same cut on both sides of the wire, and it is worth reading as a
+pair. `shared/trades/assemble` turns Sleeper's flat maps — `adds` is player →
+roster, `draft_picks` carries its own owners, `waiver_budget` its own sender and
+receiver — into one *side* per participating roster holding what that roster
+received; `features/trades/filters` decides which of those trades a reader is
+looking at. Both are pure and tested, and the thin I/O around them
+(`shared/trades/queries`, the route, the page) has no rules of its own. Three
+decisions live in the pair rather than in the components:
+
+- **A side is what was received, never both halves.** What a roster gave up is
+  exactly what the other sides received, and storing both is one edit away from
+  them disagreeing. Sides come from `roster_ids` rather than from the assets, so
+  a roster that only gave things up — a real case in the three-way trades some
+  leagues run — still appears.
+- **The filters ask what *moved*, not who ended up with it.** `tradeAssets`
+  pools the sides, so looking a player up finds his trade without knowing which
+  way he went. A filter that only answers when you already know the answer is
+  the trap; which side each asset landed on is the trade's own display.
+- **`all` and `any` are both real questions** — "did these two managers trade
+  with each other" against "anything involving any of these three players" — so
+  the selection carries one mode over the whole of it. The date window is not
+  one of the alternatives: it always narrows, because it is a bound rather than
+  a selection. And a trade Sleeper filed with no timestamp is dropped by *any*
+  bound, for the reason `/api/adp` drops an undated draft — there is no honest
+  side of the boundary to put it on.
 
 Validation earns its keep when a value reaches SQL as anything but a bound
 parameter. `scoring` picks the column `projections/queries` interpolates into
@@ -496,7 +523,41 @@ stops holding, a comment saying it does would not have caught it.
   guarantee either hook makes, so `takeLines` lives once in
   `features/shared/ndjson.ts` — two copies of it was the same drift the
   `shared/query` primitives were consolidated to stop. Keeping two hooks does not
-  mean keeping two of everything in them.
+  mean keeping two of everything in them. It lives in `features/shared` rather
+  than in the pick tracker that first wrote it, because the trades page reads the
+  same list for the same reason — an account's leagues, off the stream that syncs
+  them.
+- **A piece read by a second tool moves to `features/shared`; it does not get
+  imported across features.** The trades page needed the league-filter
+  vocabulary, the modal that drives it, the date primitives and `ordinal`, and
+  all four were sitting in `features/manager`. They are
+  `features/shared/league-filters.ts`, `ui/league-filters-modal.tsx`,
+  `date-range.ts` and `format.ts` now. Two habits keep that cheap. The mover
+  **re-exports from where its old consumers already import it** —
+  `adp-controls` still hands out `todayIso` and `shiftDays`, `manager/format`
+  still hands out `ordinal` — so one canonical definition is read under two names
+  rather than a sweep through a dozen call sites. And what moves is only what a
+  second tool actually reads: `manager/format` keeps the records, points and week
+  horizons only that tool renders, because a shared module that collects a
+  feature's whole vocabulary is just the feature again under another name.
+- **The trades page carries two filter sets, like the manager tabs, and for the
+  same reason.** The league filters say *which leagues' trades are in the list at
+  all*; the trade filters say *which of those trades* — window, players, picks,
+  managers. One is about where you play, the other about what happened there, so
+  they stay two triggers rather than two tabs of one dialog. Both are applied on
+  the client over one read of the season's trades, and that is the shape the
+  filters demand rather than a shortcut: the league filters run against the
+  league list the page already streams (the same `settings` quirks
+  `matchesFilters` reads), and the trade filters' own menus are read *off the
+  trades* — which players moved, who deals most, which pick seasons are on the
+  table. The unnarrowed set has to be in hand either way, which is why the route
+  takes no query string beyond the season. Two details in the menus: each option
+  carries how many trades it would leave, counted over everything *except* the
+  selection itself — counting over the narrowed list collapses a menu to its own
+  selection the moment you make one, and it can't be widened again without being
+  cleared — and the whole page is every trade in those leagues, not only the ones
+  the account was party to. What the leaguemates are doing is most of what is
+  worth reading; the managers filter is what narrows it back.
 - **The three manager tabs are one scaffold, `LeaguesViewLayout`, over one hook,
   `useFilteredLeagues`.** Leagues, players and leaguemates were line-for-line
   copies of the same chrome — wide shell, cold-load state, header and count line,
@@ -553,13 +614,15 @@ stops holding, a comment saying it does would not have caught it.
   "default" means is the store's business, and the drawer needs it to know which
   relative presets can mean anything. Shared *provider*, still two separate
   selections. "Match a league" is the one bridge, and it is
-  deliberately partial: it seeds the *league settings* from one of the
-  manager's leagues — season included, since a 2025 league's board is read from
-  2025 drafts — while the date range and draft type stay manual (they aren't
-  league settings at all) and so does superflex — that lives in
-  `roster_positions`, which the client's league object doesn't carry. Seeding it
-  from nothing would mean guessing, and a wrong guess here reads off the wrong
-  KTC-style board.
+  deliberately partial: it seeds the *league settings* from one of the manager's
+  leagues, while the date range and draft type stay manual — they aren't league
+  settings at all. Superflex was outside it too, for want of `roster_positions` on
+  the client league; the league filters put that on the wire, so it is seeded now
+  through the same predicate `/api/adp` classifies stored leagues with. That one
+  matters most of the set: guessing it reads a two-QB league off the board it is
+  least like. The season is seeded for the same kind of reason — a 2025 league's
+  board is read from 2025 drafts, and leaving it on this year prices the league
+  against a market it was never in.
 - **The ADP controls are a drawer behind one button, not a bar on the page.** Ten
   selects and a caption sat above the first row of every manager tab — ~110px of
   chrome, wrapping to three lines on a laptop — for settings that are chosen once
@@ -699,9 +762,14 @@ stops holding, a comment saying it does would not have caught it.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
   being looked at, the season, the sync state and the manager's record are the
   same facts on all of them; only the headline count differs, which is what
-  `stat` is. The tabs live there because they are what makes a second view
-  reachable, and they link with the URL's own spelling of the manager rather than
-  the resolved username, since Sleeper resolves a user id as readily as a name.
+  `stat` is. **It is pinned under the app bar and it carries no tabs** — those
+  two go together: a card that stays on screen is paying for its height out of
+  the list behind it, so navigation moved up to `ManagerTabs` in the bar and what
+  is left is identity, state and the record readout. It offsets by
+  `--site-header-h` rather than a retyped number, bleeds `-mx-4 px-4` to
+  `PageShell`'s `wide` gutter and paints `--background`, because a transparent
+  pinned card lets the rows scroll through the gaps around its rounded corners.
+  Its `z-40` sits above the cards' `z-30` menus and below the drawer's `z-50`.
 - **The header's second zone is the record readout, and it is where the filter
   bar used to be.** The two rows of segment buttons are behind a modal
   (`LeagueFiltersModal`) whose trigger sits in the state cluster — next to
@@ -732,16 +800,57 @@ stops holding, a comment saying it does would not have caught it.
     dialog also carries how many leagues it would leave, which is why the
     selection is edited as a draft and committed on Apply: those counts can't be
     read while the list behind them moves.
-- **`SiteHeader` is the only global chrome, and it is one link.** Every tool is
-  reached by navigating away from `/tools`, which used to leave the back button
-  as the only way home; the slim bar in `app/layout.tsx` closes that loop. It
-  hides itself on `/tools` — a link to the page you are on is noise, and that
-  page leads with its own header — which is the whole reason it reads
+- **The seven league filters are three bands, and three of them read something
+  other than `settings`.** Status, type and format describe the league; superflex
+  and IDP describe the lineup it starts; the reception bucket and TE premium
+  describe what it pays — which is the axis a reader arrives with, so the dialog
+  groups them that way rather than stacking seven equal rows. One dialog, so the
+  trades page's league filter gained all five with it. Four things worth keeping:
+  - **Each borrows the predicate that already owns the question.**
+    `isSuperflexLineup` is the same slot walk that picks a league's KTC board,
+    `IDP_SLOTS` is derived from `SLOT_POSITIONS` the way `DEFENSIVE_SLOTS` is, and
+    `deriveScoring` is the bucket `/api/adp` groups by — so a league filtered as
+    superflex here is priced off the superflex board there. `league-filters.ts` is
+    tested, so the two slot predicates come in relatively with an explicit `.ts`
+    extension; `deriveScoring` moved *down* into it under the rule above, since
+    `features/shared` can't import `manager/adp-controls` — which now re-exports it
+    for its own consumers.
+  - **IDP is not `DEFENSIVE_SLOTS`.** Nearly every league starts a team defence,
+    so that set says nothing about what game a league is playing; starting a
+    linebacker does. The wider set still gates the projections caveat, which is
+    why the two are separate derivations off one table rather than one set used
+    twice.
+  - **The Complete status is the complement of the live ones, not a match on
+    `"complete"`.** An end-of-season spelling this code doesn't know would
+    otherwise be visible in the total and in none of the buckets, which reads as a
+    filter losing leagues.
+  - **`roster_positions` crosses the wire for this.** It is the one thing
+    `settings` doesn't carry that the client now asks two questions of, which is
+    also what retires the note on `seedFromLeague` that superflex had to stay
+    manual for want of it.
+- **`SiteHeader` is the only global chrome, and it is one link plus a slot.**
+  Every tool is reached by navigating away from `/tools`, which used to leave the
+  back button as the only way home; the slim bar in `app/layout.tsx` closes that
+  loop. It hides itself on `/tools` — a link to the page you are on is noise, and
+  that page leads with its own header — which is the whole reason it reads
   `usePathname` and therefore the whole reason it is a client component. Its
   container matches `PageShell`'s so the wordmark lines up with the content under
-  it. This does **not** make it a nav: the manager tabs still carry movement
-  between manager views, and adding routes here would put two navigation systems
-  on the same page.
+  it. It is **pinned**, so the way home is reachable from the bottom of a
+  several-hundred-row list and not only from the top; its height is
+  `--site-header-h` (a variable, not padding) because the manager card pins
+  itself directly underneath and has to know where this ends.
+  This still does **not** make it a site nav. `children` is a slot for chrome
+  belonging to the section you are already in — `ManagerTabs` today — not a place
+  to list routes; two navigation systems on one page is what that rule prevents,
+  and moving the manager tabs *into* the one bar is the opposite of adding a
+  second. The slot is filled in `app/layout.tsx` rather than by `SiteHeader`
+  importing the component, because `features/shared` must not import a feature;
+  `ManagerTabs` reads the route itself and renders nothing off a manager view, so
+  composing it there costs every other page nothing. It interpolates the
+  `usePathname` segment **bare** — that string is already URL-encoded, and
+  encoding it twice 404s any manager whose name isn't plain ASCII (the same trap
+  as the tool grid's `hrefFor`) — and it is the URL's own spelling rather than the
+  resolved username, since Sleeper resolves a user id as readily as a name.
 - **The four manager sub-resource hooks are one hook, bound four ways.**
   `useManagerPlayers`, `useManagerLeaguemates`, `useManagerRanks` and
   `useManagerKtc` read `/api/user/[username]/{players,leaguemates,ranks,ktc}`,
@@ -759,6 +868,29 @@ stops holding, a comment saying it does would not have caught it.
   `loading` because its panel mounts on expand. `useManagerLeagues` is not one
   either — it decodes an NDJSON stream. Two hooks that differ in what they
   guarantee are two hooks.
+- **The leagues route lists the leagues you *fielded a team in*, not every
+  membership Sleeper reports.** `getManagerLeagues` narrows the `league_users`
+  join by `FIELDED_A_TEAM_SQL`: a roster owned now, or a place in the draft when
+  it happened. Membership alone is not evidence of a team — Sleeper leaves you in
+  `league_users` after you stop holding one — so a league joined and abandoned
+  arrived looking exactly like one being played, and every page downstream counts
+  over this list. The draft half is what keeps a **guillotine** league in it:
+  being knocked out is that game's ending, not an exit, and the roster is gone
+  either way. Both draft signals are read because neither covers the other —
+  `draft_order` is null until an order is set (a league can hold rosters with no
+  draft yet), and `picked_by` is an empty string on an autopick, so a manager who
+  autopicked appears in the order and nowhere in the picks. The knock-on is worth
+  stating: a league you left *does* now drop out, and with it its leaguemates.
+  **Every read answering "this manager's leagues" applies it**, not just the
+  route — `getManagerLeagueRosters` behind `ranks`, `ktc` and `adp-value`, and
+  `getManagerLeaguemates` — because a league missing from the list but still
+  ranked and priced is a projection solve per team for rows nobody renders, and
+  one narrowed read beside an unnarrowed one is two answers to the same question.
+  `getManagerRosters` needs no clause: it joins on `owner_id`, which is this
+  predicate's first half. Inside `getManagerLeaguemates` the two halves pull
+  opposite ways on purpose — which leagues count is this predicate, who counts
+  within one is bare membership, so the guillotine leaguemate the page exists for
+  survives.
 - **A player share is out of the leagues that hold a roster of yours, not the
   leagues listed.** They are different numbers — 121 leagues, 113 rosters for the
   account this was built against — because Sleeper keeps you in `league_users`
@@ -766,12 +898,13 @@ stops holding, a comment saying it does would not have caught it.
   you left). Counting membership would quietly deflate every share on the page,
   so `playerShares` counts only leagues that contributed a roster, and an empty
   roster (pre-draft) still counts: holding nobody is a real answer.
-- **The shares list is one line a row, unlike the roster panel's two.** That rule
-  is about a panel rendering at half a card's width; this page has the full shell,
-  so the name is in no danger and splitting it would only add height to a list
-  several hundred rows long. Both numbers are kept — the count is what's actually
-  held and compares between players, the share is what it means for a portfolio
-  and moves when the filters do.
+- **The shares are cards, the same card a league wears.** They were a dense table
+  of two fixed numbers — the count and that count as a percentage — while the
+  leagues tab beside them carried four pickable stat columns; the columns are the
+  point of the change, and a table row 28px tall has nowhere to put them. Both
+  numbers are kept and are still what the cards open on: the count is what's
+  actually held and compares between players, the share is what it means for a
+  portfolio and moves when the filters do.
 - **A leaguemate is shared by membership, though a player share is counted by
   roster — the opposite choices on purpose.** The ghost `league_users` rows that
   would deflate a player share are exactly who this page is for: someone
@@ -784,30 +917,25 @@ stops holding, a comment saying it does would not have caught it.
   and dropped by the counting, which takes the self id as an argument for it.
   Rows are labelled by `display_name` per the standings rule (recognising the
   same person across leagues is the page), and the list itself is the player
-  shares list with a person in the player column: same grid, same two numbers,
-  same expansion.
-- **`ShareList`'s optional `value` column is two whole grid templates, not one
-  interpolated.** The players view puts ADP between the name and the counts; the
-  leaguemates view has nothing to put there. So `COLUMNS` and
-  `COLUMNS_WITH_VALUE` are both written out in full — Tailwind only sees class
-  strings it can read literally, and a template assembled from fragments compiles
-  to no grid at all. The cell is gated on the column existing rather than on
-  having a number, so a row with no ADP still fills its track and the columns
-  below it stay aligned; a caller omitting `value` gets the four-column grid
-  byte-for-byte as it was, which is what keeps the leaguemates list unchanged.
-- **Both share views *are* `ShareList`.** The grid template, the heading row, the
-  count-and-percent cells and the expansion were copied between
-  `player-shares` and `leaguemate-shares` — only the heading word and the first
-  column's contents ever differed — so they live once in `share-list.tsx` and each
-  view is now ~30 lines naming its own column. Two copies of a grid template is
-  one width change away from the headings sitting over the wrong numbers in
-  whichever file didn't get edited, and that would look like a data bug rather
-  than a CSS one. What a caller supplies is `icon` (a position pill, an avatar)
-  and an optional `note` — the dim trailing detail, which is the NFL team on a
-  player row and nothing on a person. The name span and its truncation stay in
-  `ShareList`, since losing the name is the failure both lists are laid out to
-  avoid. `Chevron` and `SharedLeagueRow` remain in `ui.tsx`: the standings and the
-  roster panel use them too, so they are atoms rather than part of this table.
+  shares list with a person in the player column: same card, same columns, same
+  expansion.
+- **Both share views *are* `ShareList`, and a share row *is* `ShareCard`.** The
+  card chrome, the stat columns and the expansion were copied between
+  `player-shares` and `leaguemate-shares` — only the first column's contents and
+  which metrics are on offer ever differed — so they live once and each view is
+  now ~30 lines naming its own. What a caller supplies is `icon` (a position pill,
+  an avatar), an optional `note` — the dim trailing detail, the NFL team on a
+  player row and nothing on a person — the metric catalogue, and its default
+  columns. The one asymmetry is `adpFor`: the players view resolves a board entry
+  per row for the ADP metrics, and the leaguemates view omits it because its menu
+  holds nothing that reads one. `Chevron` and `SharedLeagueRow` remain in `ui.tsx`:
+  the standings and the roster panel use them too, so they are atoms rather than
+  part of this list.
+- **Which metric each share column shows lives in `ShareList`, not in the card** —
+  the same rule as `ManagerLeagues` above the league cards, for the same reason: a
+  list several hundred rows long is scanned vertically, and per-card columns would
+  make it unreadable. `ShareCard` holds only whether *it* is expanded and whether
+  one of its menus is up.
 - **The expanded standings are ordered by projected points, not by record.**
   What the panel adds over Sleeper is the projection, so the Proj column is the
   one the rows are ranked on — the numbers descend down the page, and the `#`
@@ -832,28 +960,53 @@ stops holding, a comment saying it does would not have caught it.
   the module keeps the pure-and-tested bar its neighbours `shares` and `filters`
   hold: everything from `./types` arrives as an erased `import type`, so the
   accessors test without a fetch (`league-metrics.test.ts`).
-- **There are three metric catalogues, one per grain, and that is the axis they
-  divide on — not the screen they appear on.** `ColumnPicker` is the shared
-  control; what differs is what a row *is*:
+- **There are four metric catalogues, one per grain, and that is the axis they
+  divide on — not the screen they appear on.** `ColumnPicker` and `MetricColumn`
+  are the shared controls; what differs is what a row *is*:
 
   | Module | Grain | Where |
   | --- | --- | --- |
   | `league-metrics` | one league | collapsed card |
   | `standings-metrics` | one team | expanded panel's standings |
   | `roster-metrics` | one player | expanded panel's roster list |
+  | `share-metrics` | one subject held across several leagues | players and leaguemates cards |
 
   Put a metric where its subject lives, not where you happen to want to see it.
-  KTC and ADP appear in all three and mean something different each time — a
+  KTC and ADP appear in most of them and mean something different each time — a
   whole roster summed in `standings-metrics`, a single player's price in
-  `roster-metrics` — which is why the same lens is not one shared metric. The
-  other split worth keeping: only `league-metrics` holds `rank` cells, because
-  only the collapsed card places a league against its peers; the standings and
-  roster panels are already ranked lists, so their columns are plain values and a
-  rank in them would be a second ordering competing with the rows. All three hold
-  the same pure-and-tested bar, and all three are *client* modules under
-  `features/` — they format for display, so they belong beside the components,
-  and their `./format.ts` import is relative with an explicit extension for the
-  usual test-runner reason.
+  `roster-metrics`, and in `share-metrics` that same player's price shown against
+  *how many of your leagues hold him* — which is why the same lens is not one
+  shared metric. The other split worth keeping: only `league-metrics` holds `rank`
+  cells, because only the collapsed card places a league against its peers; the
+  standings and roster panels are already ranked lists, so their columns are plain
+  values and a rank in them would be a second ordering competing with the rows.
+  All four hold the same pure-and-tested bar, and all four are *client* modules
+  under `features/` — they format for display, so they belong beside the
+  components, and their `./format.ts` import is relative with an explicit
+  extension for the usual test-runner reason.
+- **The share catalogue serves two views and is still one grain.** A player share
+  and a leaguemate share are the same subject shape — something held across some
+  of the manager's leagues — and the only thing a player has that a person does
+  not is a price on the ADP board. That is two extra metrics
+  (`PLAYER_SHARE_METRICS = SHARE_METRICS + the ADP pair`), not a second catalogue;
+  the leaguemates menu never lists them, so the null they would read can't
+  surface. Its record metrics are the **manager's** own over the leagues behind
+  the row — how the teams holding a player are doing, how he fares against the
+  crowd a leaguemate is part of — and they carry the two `aggregateRecord` rules
+  intact: counted over leagues that report a record, and no games played is an em
+  dash rather than `.000`.
+- **A share cell is a third shape beside `rank` and `value`, and the difference is
+  the tinting.** `metric-cell.ts` holds the vocabulary all four catalogues speak
+  (`MetricCell`, `Metric<C>`, `metricPreview`) precisely because it is no longer
+  about leagues. A `share` cell is `N of M` where *more is more*, metered by the
+  plain fraction and never tiered: a rank's colour bands read 8-of-121 as a bad
+  result the way 8th-of-12 is, which would paint nearly every row of a shares list
+  red. Same menu, three cells, one column drawing them (`MetricColumn`, generic in
+  its context so a league card and a share card share it). The cluster around them
+  is shared too: `MetricColumns` owns one-menu-at-a-time, the outside click and
+  Escape, and reports *whether* a menu is up back to the card — which is the only
+  part the card needs, since the element that must lift its stacking order while a
+  menu overhangs the row below is the card's own.
 - **The rank metrics come from one batch route,
   `/api/user/[username]/ranks`.** A collapsed league costs no request — the
   panel loads on expand — and a hundred cards each fetching a league detail to

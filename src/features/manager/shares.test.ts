@@ -13,6 +13,7 @@ const league = (league_id: string, name = `League ${league_id}`): ManagerLeague 
   avatar: null,
   record: null,
   settings: null,
+  roster_positions: null,
   scoring_settings: null,
 });
 

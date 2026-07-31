@@ -2,18 +2,20 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 
-import { PageShell } from "@/features/shared";
+import {
+  LeagueFiltersModal,
+  PageShell,
+  filterSummary,
+} from "@/features/shared";
 
 import { adpQueryString, todayIso } from "../adp-controls";
-import { filterSummary } from "../filters";
 import { useAdpControls } from "../filters-context";
 import { useAdp } from "../hooks/use-adp";
 import { useAdpDensity } from "../hooks/use-adp-density";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
 import { aggregateRecord } from "../record";
 import { AdpDrawer, AdpTrigger } from "./adp-drawer";
-import { LeagueFiltersModal } from "./league-filters-modal";
-import { ManagerHeader, type HeaderStat, type ManagerTab } from "./manager-header";
+import { ManagerHeader, type HeaderStat } from "./manager-header";
 import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
 import { PanelMessage } from "./ui";
 
@@ -49,13 +51,11 @@ import { PanelMessage } from "./ui";
  */
 export function LeaguesViewLayout({
   view,
-  active,
   stat,
   adpCaption,
   children,
 }: {
   view: FilteredLeagues;
-  active: ManagerTab;
   /** The tab's own headline count, shown in the header readout's side rail. */
   stat: HeaderStat;
   /** The line under the ADP bar — what it drives on this tab. */
@@ -108,8 +108,6 @@ export function LeaguesViewLayout({
     <PageShell width="wide">
       <ManagerHeader
         user={user}
-        searched={searched}
-        active={active}
         season={season}
         refreshing={refreshing}
         progress={progress}

@@ -1,5 +1,6 @@
 export { AdpControlsProvider, LeagueFiltersProvider } from "./filters-context";
 export { ManagerSearch } from "./components/manager-search";
+export { ManagerTabs } from "./components/manager-tabs";
 export { ManagerLeagues } from "./components/manager-leagues";
 export { ManagerPlayers } from "./components/manager-players";
 export { ManagerLeaguemates } from "./components/manager-leaguemates";

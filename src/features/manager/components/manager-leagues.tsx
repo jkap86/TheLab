@@ -54,7 +54,6 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   return (
     <LeaguesViewLayout
       view={view}
-      active="leagues"
       stat={{
         label: "Leagues",
         value: showing,

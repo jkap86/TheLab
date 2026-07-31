@@ -15,6 +15,15 @@ export type ManagerLeague = {
   record: { wins: number; losses: number; ties: number } | null;
   /** League config (roster slots, waivers, etc.), as stored by Sleeper. */
   settings: Record<string, unknown> | null;
+  /**
+   * The lineup slots, in order — `["QB","RB",…,"BN"]` as Sleeper stores them.
+   *
+   * Carried on the wire because it holds the two facts about a league that
+   * `settings` doesn't: whether it starts more than one quarterback, and whether
+   * it starts individual defenders. Both are filters on the client, and both are
+   * read through the shared slot vocabulary rather than by matching slot names.
+   */
+  roster_positions: string[] | null;
   /** Scoring rules keyed by stat, as stored by Sleeper. */
   scoring_settings: Record<string, number> | null;
 };
