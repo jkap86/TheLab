@@ -120,15 +120,14 @@ export function TradeFiltersModal({
         type="button"
         onClick={open}
         aria-haspopup="dialog"
-        className={`inline-flex items-center gap-2 rounded-full border py-1.5 pl-3 pr-3.5 text-sm font-semibold transition-colors ${
-          active > 0
-            ? "border-active/35 bg-active/10 text-foreground hover:border-active/55 hover:bg-active/15"
-            : "border-foreground/10 bg-foreground/5 text-foreground/70 hover:border-foreground/25 hover:text-foreground"
+        // Same raised pill as its neighbour — see `LeagueFiltersModal`.
+        className={`inline-flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm font-semibold ${
+          active > 0 ? "lab-chip-on" : "lab-chip text-foreground/85"
         }`}
       >
         Trades
         {active > 0 && (
-          <span className="rounded-[5px] bg-active px-1.5 py-0.5 text-[11px] font-bold leading-none text-[#04141a]">
+          <span className="rounded-[5px] bg-[#052029] px-1.5 py-0.5 text-[11px] font-bold leading-none text-active">
             {active}
           </span>
         )}

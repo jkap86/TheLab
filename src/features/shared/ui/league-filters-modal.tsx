@@ -79,16 +79,17 @@ export function LeagueFiltersModal({
         type="button"
         onClick={open}
         aria-haspopup="dialog"
-        className={`inline-flex items-center gap-2 rounded-full border py-1.5 pl-3 pr-3.5 text-sm font-semibold transition-colors ${
-          active > 0
-            ? "border-active/35 bg-active/10 text-foreground hover:border-active/55 hover:bg-active/15"
-            : "border-foreground/10 bg-foreground/5 text-foreground/70 hover:border-foreground/25 hover:text-foreground"
+        // A raised part, because it is pressable — the app bar's grammar, in the
+        // pill form `.lab-chip` carries. The cyan face is reserved for a filter
+        // actually narrowing something, which is this button's one signal.
+        className={`inline-flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm font-semibold ${
+          active > 0 ? "lab-chip-on" : "lab-chip text-foreground/85"
         }`}
       >
         <FilterIcon dim={active === 0} />
         Filters
         {active > 0 && (
-          <span className="rounded-[5px] bg-active px-1.5 py-0.5 text-[11px] font-bold leading-none text-[#04141a]">
+          <span className="rounded-[5px] bg-[#052029] px-1.5 py-0.5 text-[11px] font-bold leading-none text-active">
             {active}
           </span>
         )}
@@ -558,7 +559,7 @@ function FilterIcon({ dim }: { dim: boolean }) {
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      className={`h-3.5 w-3.5 ${dim ? "stroke-foreground/40" : "stroke-active"}`}
+      className={`h-3.5 w-3.5 ${dim ? "stroke-foreground/55" : "stroke-[#052029]"}`}
       fill="none"
       strokeWidth={1.6}
       strokeLinecap="round"

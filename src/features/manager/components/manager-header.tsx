@@ -6,7 +6,7 @@ import { formatRecord, formatWinPct } from "../format";
 import type { OverallRecord } from "../record";
 import type { LeaguesResult, SyncProgress } from "../types";
 
-/** A view's own headline count, shown as a cell in the readout's side rail. */
+/** A view's own headline count, shown on the plate's state line. */
 export type HeaderStat = {
   label: string;
   value: ReactNode;
@@ -15,14 +15,23 @@ export type HeaderStat = {
 };
 
 /**
- * Who is being looked at, how fresh it is, and how their season is going.
+ * Who is being looked at, how their season is going, and the two controls that
+ * narrow it.
  *
- * One rail card in two zones. The top zone is identity and state; the bottom is
- * the *readout* — the manager's record across the filtered leagues, shown as
- * shape before digits (a dial for the win percentage, a proportion bar for the
- * wins and losses behind it), with the view's own count in a side rail. That
- * bottom zone is where the league filters used to sit: they are behind
- * {@link LeagueFiltersModal} now, whose trigger is up in the state cluster.
+ * **Two parts, not one card.** It was one block stacking identity, season, both
+ * control pills, a 108px dial, the record and two stat cells — about 470px of a
+ * 700px phone before the first row of the list, with the controls wrapping onto
+ * their own lines because they shared a flex row with the season. So the parts
+ * are separated by what they *are*: an identity plate carrying the account and
+ * its record, and a control dock under it. They read as two parts because the
+ * material says so — the plate is a milled face, the dock a recessed trough the
+ * controls are seated in, the same raised/recessed grammar the app bar keeps.
+ *
+ * The plate absorbs the `Rostered` cell that used to stand on its own: how many
+ * of the leagues on screen carry a record is the record's denominator, so it
+ * belongs on the line with it rather than in a rail of its own (the rule
+ * {@link aggregateRecord} states — a population-derived number travels with its
+ * population).
  *
  * It carries no tabs, and neither does the bar any more: moving between Leagues,
  * Players and Leaguemates is three entries in the app bar's tools menu, which
@@ -71,11 +80,12 @@ export function ManagerHeader({
   stat: HeaderStat;
   /**
    * The filters' trigger. Omitted where a view has nothing to filter (e.g. a
-   * manager with no leagues), which leaves the state cluster to the season.
+   * manager with no leagues), which leaves the dock with nothing to seat and so
+   * drops it entirely.
    */
   filters?: ReactNode;
   /**
-   * The ADP board's trigger, beside the filters' own. Two buttons rather than
+   * The ADP board's trigger, beside the filters' own. Two controls rather than
    * two tabs of one dialog, because they narrow different populations — these
    * leagues against every crawled draft — and merging them would suggest one
    * selection where there are two.
@@ -85,71 +95,171 @@ export function ManagerHeader({
   return (
     // Pinned directly under the app bar, so who you are looking at and how their
     // season is going stay on screen while a several-hundred-row list scrolls
-    // past. The bleed (`-mx-4 px-4`) and the opaque background are what the card
-    // needs to cover that list rather than let it show through the gaps around
-    // its rounded corners; `PageShell`'s `wide` gutter is the 4 they match.
-    <header className="sticky top-[var(--site-header-h)] z-40 -mx-4 mb-6 bg-[var(--background)] px-4 pb-4 pt-2">
-      <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-gradient-to-br from-foreground/[0.055] to-foreground/[0.01] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_-22px_rgba(0,0,0,0.8)]">
-        {/* The cyan rail down the card, echoing the league rows' accent. */}
+    // past. The bleed (`-mx-4 px-4`) and the opaque background are what the
+    // header needs to cover that list rather than let it show through the gaps
+    // around its rounded corners; `PageShell`'s `wide` gutter is the 4 they match.
+    <header className="sticky top-[var(--site-header-h)] z-40 -mx-4 mb-6 flex flex-col gap-2 bg-[var(--background)] px-4 pb-4 pt-2">
+      <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.075),rgba(255,255,255,0.02)_60%,rgba(255,255,255,0.008))] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.12),inset_0_-2px_8px_rgba(0,0,0,0.5),0_18px_40px_-22px_rgba(0,0,0,0.9)]">
+        {/* The cyan rail down the plate, echoing the league rows' accent. */}
         <span
           aria-hidden="true"
           className="absolute inset-y-0 left-0 z-[2] w-1 bg-gradient-to-b from-active to-active/30 shadow-[0_0_16px_rgba(0,255,229,0.4)]"
         />
+        {/* The specular sweep that reads as a milled face under a light. It is
+            the plate's only decoration and sits under the content, not over it. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_30%,rgba(255,255,255,0.06)_48%,transparent_62%)]"
+        />
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 py-3.5 pl-6 pr-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <Avatar
-              url={user.avatar_url}
-              name={user.display_name || user.username}
-              size="lg"
-            />
-            <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight">
-              {user.display_name || user.username}
-            </h1>
+        <div className="relative flex items-center gap-3 py-3 pl-5 pr-4 sm:gap-4 sm:py-4 sm:pl-6 sm:pr-5">
+          <Avatar
+            url={user.avatar_url}
+            name={user.display_name || user.username}
+            size="lg"
+          />
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight sm:text-2xl">
+                {user.display_name || user.username}
+              </h1>
+              <span className="flex-none rounded-[5px] bg-active/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-active/80">
+                {season}
+              </span>
+            </div>
+            <RecordLine record={record} leagueCount={leagueCount} />
+            <RecordBar record={record} />
           </div>
 
-          <div className="ml-auto flex flex-wrap items-center gap-2.5">
-            <span className="rounded-md bg-foreground/5 px-2 py-0.5 text-sm text-foreground/55">
-              {season}
-            </span>
-            {filters}
-            {board}
-            {refreshing && <RefreshingPill progress={progress} />}
-            {summary && summary.failed > 0 && (
-              <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-sm text-amber-300">
-                {summary.failed} failed to sync
-              </span>
-            )}
-            {refreshError && (
-              <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-sm text-amber-300">
-                Refresh failed — showing cached data
-              </span>
-            )}
-          </div>
+          <WinPctGauge pct={record.pct} />
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-7 gap-y-5 border-t border-foreground/10 py-4 pl-6 pr-5">
-          <WinPctGauge pct={record.pct} />
-          <RecordSplit record={record} scope={scope} />
-
-          <div className="flex w-full flex-col gap-3 border-t border-foreground/10 pt-3.5 sm:ml-auto sm:w-auto sm:border-l sm:border-t-0 sm:pl-7 sm:pt-0">
-            <StatCell label={stat.label} value={stat.value} sub={stat.sub} />
-            <StatCell
-              label="Rostered"
-              value={record.leagues}
-              sub={`of ${leagueCount} shown`}
-            />
-          </div>
+        <div className="relative flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 px-5 py-2.5 text-[11px] sm:px-6">
+          <StatLine {...stat} />
+          <Dot />
+          <span className="text-foreground/35">
+            <span className="text-foreground/25">Counting</span> {scope}
+          </span>
+          {refreshing && <RefreshingPill progress={progress} />}
+          {summary && summary.failed > 0 && (
+            <Warning>{summary.failed} failed to sync</Warning>
+          )}
+          {refreshError && <Warning>Refresh failed — showing cached data</Warning>}
         </div>
       </div>
+
+      {/* The dock. A recessed trough rather than a second card, so the controls
+          read as parts seated in the header rather than as more of the plate's
+          content — and so the two of them can sit together without implying one
+          selection, which is what a single dialog over both would suggest. It
+          hugs what it holds (`w-fit`): a trough running the width of a desktop
+          card with two chips at the left end is mostly empty slot. */}
+      {(filters || board) && (
+        <div className="lab-well lab-notch-lg flex w-fit max-w-full flex-wrap items-center gap-2 p-2">
+          {filters}
+          {board}
+        </div>
+      )}
     </header>
+  );
+}
+
+/**
+ * The record, and what it was counted over.
+ *
+ * Nothing played is its own state rather than `0-0` and `.000`, which would
+ * dress a season that hasn't started up as a season of losses — see
+ * {@link aggregateRecord}. The two ways to get there are distinguished, because
+ * "your filters left nothing" and "week 1 hasn't happened" are different
+ * problems for the reader.
+ *
+ * The count rides here rather than in a stat cell of its own: `record.leagues`
+ * is smaller than the list — Sleeper keeps a manager in `league_users` after
+ * they stop holding a team — and a denominator that small is only honest beside
+ * the number it divides.
+ */
+function RecordLine({
+  record,
+  leagueCount,
+}: {
+  record: OverallRecord;
+  leagueCount: number;
+}) {
+  return (
+    <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px] leading-snug">
+      {record.games === 0 ? (
+        <span className="text-foreground/55">
+          {record.leagues === 0
+            ? "No records in these leagues"
+            : "Season hasn't started"}
+        </span>
+      ) : (
+        <span className="font-mono font-semibold tabular-nums">
+          {formatRecord(record)}
+        </span>
+      )}
+      {/* No separator between the two: at phone width the line wraps — "Season
+          hasn't started" is most of it — and a dot left hanging off the end of
+          the first line reads as a typo. The weight and colour do the same job
+          on one line or two. */}
+      <span className="text-foreground/40">
+        <span className="tabular-nums">{record.leagues}</span> of{" "}
+        <span className="tabular-nums">{leagueCount}</span> league
+        {leagueCount === 1 ? "" : "s"}
+      </span>
+    </p>
+  );
+}
+
+/**
+ * The same three numbers as proportion — where a .520 season and a .680 one are
+ * told apart at a glance rather than by reading.
+ *
+ * An unplayed season keeps the empty rail rather than dropping it, so the plate
+ * is the same height in September as in December: a card that pins itself under
+ * the app bar can't change how much of the list it covers as the season turns
+ * over.
+ */
+function RecordBar({ record }: { record: OverallRecord }) {
+  const parts = [
+    {
+      key: "w",
+      count: record.wins,
+      tone: "bg-gradient-to-r from-active/50 to-active shadow-[0_0_10px_rgba(0,255,229,0.35)]",
+    },
+    { key: "l", count: record.losses, tone: "bg-foreground/[0.16]" },
+    { key: "t", count: record.ties, tone: "bg-amber-400/50" },
+  ];
+
+  return (
+    // The digits in `RecordLine` are the accessible reading of this; the bar is
+    // the same three numbers as shape.
+    // Capped rather than full-bleed: on a wide card the same three numbers
+    // stretched a metre across the plate, which reads as a progress bar for
+    // something rather than a proportion between two counts.
+    <div aria-hidden="true" className="mt-2 flex h-[5px] max-w-[420px] gap-0.5">
+      {record.games === 0 ? (
+        <span className="block flex-1 rounded-sm bg-foreground/[0.07]" />
+      ) : (
+        parts
+          .filter((part) => part.count > 0)
+          .map((part) => (
+            <span
+              key={part.key}
+              className={`block rounded-sm ${part.tone}`}
+              style={{ flexGrow: part.count }}
+            />
+          ))
+      )}
+    </div>
   );
 }
 
 /**
  * The win percentage as a dial.
  *
- * The number is the one figure on the card that is a verdict rather than a
+ * The number is the one figure on the plate that is a verdict rather than a
  * count, so it is drawn against the field it lives in — half the ring is a .500
  * season — where a bare `.537` reads as another statistic. Pure SVG, so it
  * renders on the server and stays out of the bundle; `useId` keeps the gradient
@@ -162,7 +272,7 @@ function WinPctGauge({ pct }: { pct: number | null }) {
   const circumference = 2 * Math.PI * 44;
 
   return (
-    <div className="relative grid h-[108px] w-[108px] flex-none place-items-center">
+    <div className="relative grid h-[68px] w-[68px] flex-none place-items-center sm:h-[78px] sm:w-[78px]">
       <svg viewBox="0 0 100 100" className="absolute inset-0 -rotate-90">
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
@@ -175,7 +285,7 @@ function WinPctGauge({ pct }: { pct: number | null }) {
           cy="50"
           r="44"
           fill="none"
-          strokeWidth="6"
+          strokeWidth="7"
           className="stroke-foreground/[0.07]"
         />
         {pct !== null && (
@@ -184,7 +294,7 @@ function WinPctGauge({ pct }: { pct: number | null }) {
             cy="50"
             r="44"
             fill="none"
-            strokeWidth="6"
+            strokeWidth="7"
             strokeLinecap="round"
             stroke={`url(#${gradientId})`}
             strokeDasharray={circumference}
@@ -194,10 +304,14 @@ function WinPctGauge({ pct }: { pct: number | null }) {
         )}
       </svg>
       <div className="flex flex-col items-center gap-0.5">
-        <span className="font-mono text-[25px] font-semibold leading-none tabular-nums tracking-tight">
+        <span
+          className={`font-mono text-[15px] font-semibold leading-none tabular-nums tracking-tight sm:text-lg ${
+            pct === null ? "text-foreground/35" : ""
+          }`}
+        >
           {formatWinPct(pct)}
         </span>
-        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-foreground/40">
+        <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-foreground/40 sm:text-[9px]">
           Win pct
         </span>
       </div>
@@ -206,128 +320,38 @@ function WinPctGauge({ pct }: { pct: number | null }) {
 }
 
 /**
- * The record behind that dial: the figure, the proportion it comes from, and
- * what it was counted over.
- *
- * Nothing played is its own state rather than `0-0` and `.000`, which would
- * dress a season that hasn't started up as a season of losses — see
- * {@link aggregateRecord}. The two ways to get there are distinguished, because
- * "your filters left nothing" and "week 1 hasn't happened" are different
- * problems for the reader.
+ * The view's own headline count, on the plate's state line rather than in a rail
+ * of its own — it is one number with a label, and a rail is what two of them
+ * needed.
  */
-function RecordSplit({
-  record,
-  scope,
-}: {
-  record: OverallRecord;
-  scope: string;
-}) {
-  if (record.games === 0) {
-    return (
-      <div className="flex min-w-[240px] flex-1 flex-col gap-1.5">
-        <span className="text-lg font-medium text-foreground/45">
-          {record.leagues === 0
-            ? "No records in these leagues"
-            : "Season hasn't started"}
-        </span>
-        <span className="text-xs text-foreground/35">
-          {record.leagues === 0
-            ? "Nothing here holds a roster yet."
-            : `${record.leagues} team${record.leagues === 1 ? "" : "s"} drafted, no games played.`}
-        </span>
-        <ScopeLine scope={scope} />
-      </div>
-    );
-  }
-
-  const parts: { key: string; label: string; count: number; tone: string }[] = [
-    {
-      key: "w",
-      label: "Won",
-      count: record.wins,
-      tone: "bg-gradient-to-r from-active/50 to-active shadow-[0_0_12px_rgba(0,255,229,0.35)]",
-    },
-    { key: "l", label: "Lost", count: record.losses, tone: "bg-foreground/[0.16]" },
-    { key: "t", label: "Tied", count: record.ties, tone: "bg-amber-400/50" },
-  ];
-
+function StatLine({ label, value, sub }: HeaderStat) {
   return (
-    <div className="flex min-w-[240px] flex-1 flex-col gap-2.5">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="font-mono text-[25px] font-semibold leading-none tabular-nums tracking-tight">
-          {formatRecord(record)}
-        </span>
-        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-foreground/40">
-          across{" "}
-          <span className="tabular-nums">{record.leagues}</span> league
-          {record.leagues === 1 ? "" : "s"}
-        </span>
-      </div>
-
-      {/* The same three numbers as proportion — where a .520 season and a .680
-          one are told apart at a glance rather than by reading. */}
-      <div aria-hidden="true" className="flex h-2 gap-0.5">
-        {parts
-          .filter((part) => part.count > 0)
-          .map((part) => (
-            <span
-              key={part.key}
-              className={`block rounded-sm ${part.tone}`}
-              style={{ flexGrow: part.count }}
-            />
-          ))}
-      </div>
-
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-foreground/45">
-        {/* Ties are dropped when there are none, the same convention
-            `formatRecord` follows — most leagues never tie, and a `Tied 0`
-            standing next to two real numbers reads as a third one. */}
-        {parts
-          .filter((part) => part.key !== "t" || record.ties > 0)
-          .map((part) => (
-            <span key={part.key} className="inline-flex items-center gap-1.5">
-              <span
-                aria-hidden="true"
-                className={`h-[7px] w-[7px] rounded-[2px] ${
-                  part.key === "w"
-                    ? "bg-active"
-                    : part.key === "t"
-                      ? "bg-amber-400/70"
-                      : "bg-foreground/25"
-                }`}
-              />
-              {part.label}{" "}
-              <b className="font-mono font-semibold tabular-nums text-foreground/70">
-                {part.count}
-              </b>
-            </span>
-          ))}
-        <ScopeLine scope={scope} />
-      </div>
-    </div>
-  );
-}
-
-/** What the record was counted over — the filter selection, in words. */
-function ScopeLine({ scope }: { scope: string }) {
-  return (
-    <span className="text-xs text-foreground/35">
-      <span className="text-foreground/25">Counting</span> {scope}
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-foreground/40">
+        {label}
+      </span>
+      <span className="font-mono text-[13px] font-semibold tabular-nums leading-none">
+        {value}
+      </span>
+      {sub && <span className="text-foreground/35">{sub}</span>}
     </span>
   );
 }
 
-function StatCell({ label, value, sub }: HeaderStat) {
+/** The separator between two facts on one line. */
+function Dot() {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-foreground/40">
-        {label}
-      </span>
-      <span className="font-mono text-[17px] font-semibold leading-none tabular-nums">
-        {value}
-      </span>
-      {sub && <span className="text-[11px] text-foreground/35">{sub}</span>}
-    </div>
+    <span aria-hidden="true" className="text-foreground/20">
+      ·
+    </span>
+  );
+}
+
+function Warning({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-amber-300">
+      {children}
+    </span>
   );
 }
 
@@ -337,8 +361,8 @@ function RefreshingPill({ progress }: { progress: SyncProgress | null }) {
       ? ` ${progress.loaded}/${progress.total}`
       : "…";
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-active/30 bg-active/10 px-3 py-1 text-sm text-active">
-      <span className="h-3 w-3 animate-spin rounded-full border-2 border-active/40 border-t-active" />
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-active/30 bg-active/10 px-2.5 py-0.5 text-active">
+      <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-active/40 border-t-active" />
       Refreshing{suffix}
     </span>
   );
