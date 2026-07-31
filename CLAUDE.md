@@ -422,7 +422,11 @@ stops holding, a comment saying it does would not have caught it.
   and Leaguemates, because its tabs answer different questions and are separate
   routes, so the grid links each rather than dropping you on Leagues to navigate
   again; they share the account-less `/manager` href, which is why cards are
-  keyed by name. And the pick tracker gets `PicktrackerCard`
+  keyed by name. **`hrefFor` receives the username already URL-encoded** — the
+  grid encodes once, at the single call site, so a new tool must interpolate it
+  bare. Encoding again inside `hrefFor` double-escapes and yields a 404 for any
+  account whose name isn't plain ASCII, which is exactly the account nobody
+  tests with. And the pick tracker gets `PicktrackerCard`
   instead, listing the account's leagues inline because a league *id* is the one
   thing a username does **not** give you and the account already knows every one.
   Its picker is its own gate — there is no way to the tracker without choosing a
