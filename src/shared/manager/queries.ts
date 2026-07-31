@@ -55,18 +55,52 @@ export async function getManagerSyncedAt(
 }
 
 /**
+ * Sleeper's `settings.type` for a **chopped** league — its native guillotine
+ * format, where the week's low scorer is eliminated and their players go back
+ * into the pool. It sits alongside 0 redraft, 1 keeper and 2 dynasty; the
+ * client's own type filter spells the same code (`features/shared/league-filters`).
+ */
+const CHOPPED_LEAGUE_TYPE = 3;
+
+/**
+ * Whether the league is a chopped one, read off its settings blob.
+ *
+ * Regex-guarded before the cast for the house reason: Sleeper omits its defaults
+ * and doesn't promise types, so one league holding junk in `type` must not fail
+ * the whole query. The fallback is redraft, which is not chopped either way —
+ * the same shape and the same fallback as `LEAGUE_TYPE_SQL` in `./adp`.
+ *
+ * Parenthesised as a whole because it ends in a comparison and is interpolated
+ * into a larger boolean.
+ */
+const CHOPPED_LEAGUE_SQL = `(
+  (CASE WHEN l.settings->>'type' ~ '^[0-9]+$'
+        THEN (l.settings->>'type')::int ELSE 0 END) = ${CHOPPED_LEAGUE_TYPE}
+)`;
+
+/**
  * True where the manager fielded a team in the league — holds a roster now, or
- * was in the draft when it happened.
+ * was chopped out of a league whose whole point is chopping people out.
  *
  * Membership alone is not that: Sleeper keeps a manager in `league_users` after
  * they stop holding a team, so a league someone joined and left arrives looking
- * exactly like one they play in, minus a roster. The draft half is what keeps a
- * *guillotine* league — where being knocked out is the game, not an exit — in the
- * list after elimination takes the roster away. Both signals are read because
- * neither covers the other: `draft_order` is null until an order is set (and a
- * league can be mid-startup with rosters and no draft yet), while `picked_by` is
- * an empty string on an autopick, so a manager who autopicked their whole draft
- * appears in the order and nowhere in the picks.
+ * exactly like one they play in, minus a roster.
+ *
+ * Losing the roster means two opposite things depending on the format, which is
+ * why the draft half is **gated on {@link CHOPPED_LEAGUE_SQL}** rather than
+ * standing alone. In a chopped league being knocked out is the game's ending,
+ * not an exit, so the league belongs in the list afterwards — it was played to
+ * completion. Everywhere else a vanished roster means the manager walked away,
+ * and an ungated draft half kept those leagues in the list forever on the
+ * strength of a draft they attended once. Sleeper models the format natively
+ * now, so this is an exact test where it used to be an approximation that
+ * couldn't tell the two apart.
+ *
+ * Within a chopped league both draft signals are read, because neither covers
+ * the other: `draft_order` is null until an order is set (and a league can be
+ * mid-startup with rosters and no draft yet), while `picked_by` is an empty
+ * string on an autopick, so a manager who autopicked their whole draft appears
+ * in the order and nowhere in the picks.
  *
  * Every read that answers "this manager's leagues" applies it, so the leagues
  * route and the batch reads behind the cards can't disagree about which leagues
@@ -84,16 +118,19 @@ const FIELDED_A_TEAM_SQL = `(
     SELECT 1 FROM rosters r
      WHERE r.league_id = l.league_id AND r.owner_id = $1
   )
-  OR EXISTS (
-    SELECT 1 FROM drafts d
-     WHERE d.league_id = l.league_id
-       AND (
-         jsonb_exists(d.draft_order, $1)
-         OR EXISTS (
-           SELECT 1 FROM draft_picks p
-            WHERE p.draft_id = d.draft_id AND p.picked_by = $1
+  OR (
+    ${CHOPPED_LEAGUE_SQL}
+    AND EXISTS (
+      SELECT 1 FROM drafts d
+       WHERE d.league_id = l.league_id
+         AND (
+           jsonb_exists(d.draft_order, $1)
+           OR EXISTS (
+             SELECT 1 FROM draft_picks p
+              WHERE p.draft_id = d.draft_id AND p.picked_by = $1
+           )
          )
-       )
+    )
   )
 )`;
 

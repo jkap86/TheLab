@@ -18,8 +18,11 @@ import type { ManagerLeague } from "@/shared/manager";
  */
 
 export type LeagueFilters = {
-  /** Sleeper `settings.type`: "all" or a stringified 0=redraft, 1=keeper, 2=dynasty. */
-  type: "all" | "0" | "1" | "2";
+  /**
+   * Sleeper `settings.type`: "all" or a stringified 0=redraft, 1=keeper,
+   * 2=dynasty, 3=chopped (its native guillotine format).
+   */
+  type: "all" | "0" | "1" | "2" | "3";
   /** Sleeper `settings.best_ball`: "all", or filter by best-ball on/off. */
   bestBall: "all" | "yes" | "no";
   /** Where the league is in its season — see {@link LIVE_STATUSES}. */
@@ -59,6 +62,7 @@ export const TYPE_OPTIONS: { value: LeagueFilters["type"]; label: string }[] = [
   { value: "0", label: "Redraft" },
   { value: "1", label: "Keeper" },
   { value: "2", label: "Dynasty" },
+  { value: "3", label: "Chopped" },
 ];
 
 export const BEST_BALL_OPTIONS: {
@@ -168,7 +172,11 @@ function settingNumber(league: ManagerLeague, key: string): number | undefined {
 }
 
 /**
- * A league's Sleeper type as a number: 0 redraft, 1 keeper, 2 dynasty.
+ * A league's Sleeper type as a number: 0 redraft, 1 keeper, 2 dynasty, 3 chopped.
+ *
+ * Chopped is Sleeper's own guillotine format, and it is the code `getManagerLeagues`
+ * tests to decide whether a manager with no roster left the league or was
+ * eliminated from it — the one place the distinction changes what is on screen.
  *
  * Sleeper omits `type` for standard redraft leagues, so a missing value is 0 —
  * the same assumption `/api/adp` makes in SQL, and the reason this is a function

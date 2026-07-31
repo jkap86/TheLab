@@ -59,6 +59,19 @@ describe("matchesFilters", () => {
     assert.equal(matchesFilters(dynasty, only({ type: "1" })), false);
   });
 
+  test("matches a chopped league on its own code, not as a redraft", () => {
+    // Sleeper's native guillotine format. It has to be selectable in its own
+    // right: `getManagerLeagues` keeps a rosterless chopped league in the list
+    // and drops every other rosterless one, so these are the leagues a reader
+    // most needs to isolate — and a type visible in the total and in none of
+    // the buckets reads as a filter losing leagues.
+    const chopped = league({ type: 3 });
+    assert.equal(matchesFilters(chopped, only({ type: "3" })), true);
+    assert.equal(matchesFilters(chopped, only({ type: "0" })), false);
+    assert.equal(matchesFilters(chopped, only({ type: "2" })), false);
+    assert.equal(matchesFilters(league({ type: 2 }), only({ type: "3" })), false);
+  });
+
   test("treats a missing type as redraft, which Sleeper omits", () => {
     for (const l of [league({}), league(null)]) {
       assert.equal(matchesFilters(l, only({ type: "0" })), true);
