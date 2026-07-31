@@ -2,6 +2,7 @@ import type {
   AdpDensityPayload,
   AdpPayload,
   AdpPlayerPayload,
+  KickoffPayload,
   LeagueAdpEntry,
   LeagueDetailPayload,
   LeagueKtcEntry,
@@ -63,6 +64,9 @@ export type {
 
 /** The `/api/adp/density` response the range scrubber draws its strip from. */
 export type AdpDensityResult = AdpDensityPayload;
+
+/** The `/api/kickoff` response the header's countdown counts to. */
+export type KickoffResult = KickoffPayload;
 
 /** A team as sent to the client (manager avatar id resolved to a URL). */
 export type LeagueTeamView = LeagueTeamPayload;

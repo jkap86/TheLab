@@ -185,3 +185,21 @@ export type SleeperNflState = {
    */
   season_start_date?: string | null;
 };
+
+/**
+ * One game of a season's NFL schedule, from the undocumented data host (the
+ * projections' host, same caveats). Every field is optional because nothing
+ * about this endpoint is promised — read from it defensively and treat an
+ * unrecognisable entry as absent rather than guessing at it.
+ */
+export type SleeperScheduleGame = {
+  game_id?: string | null;
+  week?: number | null;
+  status?: string | null;
+  /** Game day as `YYYY-MM-DD`. */
+  date?: string | null;
+  /** Kickoff as epoch ms — Sleeper's usual clock (drafts, `last_modified`). */
+  start_time?: number | null;
+  home?: string | null;
+  away?: string | null;
+};

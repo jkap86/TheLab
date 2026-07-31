@@ -59,7 +59,16 @@ src/shared/    Domain logic, one folder per concern.
   so a manager it has never run for gets an empty answer rather than a second
   sync of their own. That is the rule for a new sibling too, so this list has
   gone stale twice; the prefix is not what makes a route an exception, being
-  *the thing that resolves or follows* is.) Where a read needs to know what week it is, derive it from
+  *the thing that resolves or follows* is.) `/api/kickoff` is the one route
+  that is neither cache-backed nor a resolver: it reads Sleeper's schedule call
+  through an in-memory read-through cache (`shared/schedule`) — one small
+  request per process per half-day for a value that barely moves, too light to
+  earn a table, a migration or an advisory lock, while the cache still keeps
+  page views from fanning out to Sleeper. It follows the projection gate's
+  lesson in miniature: the cache stamps the *attempt*, so a season answering
+  null (not scheduled yet) waits out its own shorter TTL rather than refetching
+  per request, and a failed fetch stores nothing and serves stale. Where a read
+  needs to know what week it is, derive it from
   stored data too: `projections/queries`
   takes the weeks still ahead from `game_date` rather than `state/nfl`, so it can
   only ever name weeks that are actually here to read.
@@ -857,11 +866,24 @@ stops holding, a comment saying it does would not have caught it.
     the totals and the card shows it — a denominator smaller than the list is
     only honest if it is stated.
   - **No games and `.000` are different answers**, so `pct` is null rather than
-    zero and the readout says the season hasn't started. Preseason every league
-    reports `0-0-0`; a win percentage there is a claim about games nobody played.
-    The two ways to reach an empty readout — filters that left nothing, and a
-    season that hasn't kicked off — say different things, because they are
-    different problems for the reader.
+    zero and the dial draws an em dash before kickoff. Preseason every league
+    reports `0-0-0`; a win percentage there is a claim about games nobody played,
+    while the `0-0` itself is a true count, so the record line shows the digits
+    even then. Only filters that leave no records keep their own words — a `0-0`
+    counted over nothing would be quoting records that don't exist.
+  - **The record line carries a live countdown to the season's opening kickoff,
+    and the instant is Sleeper's word before it is ours.** `useKickoff` asks
+    `/api/kickoff` (the schedule call's earliest week-1 `start_time`); the NFL
+    calendar table's `firstKickoff` — the regular season's start date at the
+    traditional 8:20 PM ET slot, explicitly provisional — stands in only when
+    Sleeper hasn't scheduled the season, which is the same spring window the
+    table's own dates are provisional in. Nothing renders until that question
+    settles, so the timer appears once with the right instant rather than twice
+    with two. It ticks on the reader's own clock (the `todayIso` side of the
+    two-todays rule), starts only after mount (the account store's hydration
+    rule, applied to a clock), and past kickoff renders nothing rather than a
+    zero — the interval retires itself too, so a header left open across
+    kickoff stops re-rendering a hidden timer.
   - **A modal hides its own state, so the state is repeated outside it.** The
     trigger wears the count of active filters and the readout names the selection
     in words (`filterSummary`, lower case because it is read mid-sentence). Both
@@ -1388,6 +1410,14 @@ stops holding, a comment saying it does would not have caught it.
   and the v1 host answers that path with 200 and an object of empty objects, so a
   wrong base looks like working code with no data. Build the URL with
   `sleeperDataUrl`, not `sleeperUrl`.
+- **The season schedule lives on that host too**
+  (`schedule/nfl/regular/<season>`), and nothing about it is promised: read it
+  through `shared/schedule/parse`, which trusts only a week-1 `start_time` that
+  is plausibly epoch *milliseconds* — Sleeper's usual clock, but a seconds
+  epoch would read as January 1970 and count down to fifty years ago, so the
+  parse rejects the wrong unit rather than believing it. A schedule that names
+  dates without times answers null, and the client falls back to the NFL
+  calendar table's provisional instant instead of the server inventing an hour.
 - **A weekly projections response is ~9,400 entries and only ~800 are real.** The
   rest are placeholders for players with no game that week: `game_id` null and
   nothing in `stats` but ADP keys. Store them and every one reads as "projected
