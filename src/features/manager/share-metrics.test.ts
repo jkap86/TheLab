@@ -25,6 +25,7 @@ function league(
     avatar: null,
     record: { wins: 6, losses: 4, ties: 0 },
     settings: null,
+    roster_positions: null,
     scoring_settings: null,
     ...extra,
   };

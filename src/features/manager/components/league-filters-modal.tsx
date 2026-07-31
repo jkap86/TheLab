@@ -1,11 +1,16 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 
 import {
   BEST_BALL_OPTIONS,
   DEFAULT_LEAGUE_FILTERS,
+  IDP_OPTIONS,
   type LeagueFilters,
+  SCORING_OPTIONS,
+  STATUS_OPTIONS,
+  SUPERFLEX_OPTIONS,
+  TE_PREMIUM_OPTIONS,
   TYPE_OPTIONS,
   activeFilterCount,
   matchesFilters,
@@ -108,23 +113,77 @@ export function LeagueFiltersModal({
             </kbd>
           </div>
 
-          <div className="flex flex-col gap-5 p-5">
-            <FilterGroup
-              label="Type"
-              options={TYPE_OPTIONS}
-              value={draft.type}
-              leagues={leagues}
-              probe={(value) => ({ ...draft, type: value })}
-              onPick={(type) => setDraft({ ...draft, type })}
-            />
-            <FilterGroup
-              label="Format"
-              options={BEST_BALL_OPTIONS}
-              value={draft.bestBall}
-              leagues={leagues}
-              probe={(value) => ({ ...draft, bestBall: value })}
-              onPick={(bestBall) => setDraft({ ...draft, bestBall })}
-            />
+          {/*
+            Seven groups don't fit a laptop's viewport, so the sections scroll
+            and the footer — where the match count and Apply are — stays put
+            below them. Scrolling the whole panel would put the count that
+            justifies the click off screen at exactly the moment it changes.
+          */}
+          <div className="flex max-h-[min(60vh,30rem)] flex-col gap-5 overflow-y-auto p-5">
+            <Section label="League">
+              <FilterGroup
+                label="Status"
+                options={STATUS_OPTIONS}
+                value={draft.status}
+                leagues={leagues}
+                probe={(value) => ({ ...draft, status: value })}
+                onPick={(status) => setDraft({ ...draft, status })}
+              />
+              <FilterGroup
+                label="Type"
+                options={TYPE_OPTIONS}
+                value={draft.type}
+                leagues={leagues}
+                probe={(value) => ({ ...draft, type: value })}
+                onPick={(type) => setDraft({ ...draft, type })}
+              />
+              <FilterGroup
+                label="Format"
+                options={BEST_BALL_OPTIONS}
+                value={draft.bestBall}
+                leagues={leagues}
+                probe={(value) => ({ ...draft, bestBall: value })}
+                onPick={(bestBall) => setDraft({ ...draft, bestBall })}
+              />
+            </Section>
+
+            <Section label="Roster positions">
+              <FilterGroup
+                label="Quarterbacks"
+                options={SUPERFLEX_OPTIONS}
+                value={draft.superflex}
+                leagues={leagues}
+                probe={(value) => ({ ...draft, superflex: value })}
+                onPick={(superflex) => setDraft({ ...draft, superflex })}
+              />
+              <FilterGroup
+                label="Defense"
+                options={IDP_OPTIONS}
+                value={draft.idp}
+                leagues={leagues}
+                probe={(value) => ({ ...draft, idp: value })}
+                onPick={(idp) => setDraft({ ...draft, idp })}
+              />
+            </Section>
+
+            <Section label="Scoring settings">
+              <FilterGroup
+                label="Receptions"
+                options={SCORING_OPTIONS}
+                value={draft.scoring}
+                leagues={leagues}
+                probe={(value) => ({ ...draft, scoring: value })}
+                onPick={(scoring) => setDraft({ ...draft, scoring })}
+              />
+              <FilterGroup
+                label="Tight ends"
+                options={TE_PREMIUM_OPTIONS}
+                value={draft.tePremium}
+                leagues={leagues}
+                probe={(value) => ({ ...draft, tePremium: value })}
+                onPick={(tePremium) => setDraft({ ...draft, tePremium })}
+              />
+            </Section>
           </div>
 
           <div className="flex items-center gap-3 border-t border-foreground/10 px-5 py-4">
@@ -152,6 +211,30 @@ export function LeagueFiltersModal({
         </div>
       </dialog>
     </>
+  );
+}
+
+/**
+ * A band of related filters under one eyebrow.
+ *
+ * Seven groups in a flat stack read as seven unrelated questions; three bands
+ * say what each is *about* — the league itself, the lineup it starts, the points
+ * it pays — which is also the axis a reader arrives with ("show me my superflex
+ * leagues" is a roster question they'd otherwise scan every group for). The
+ * eyebrow carries the uppercase treatment the group labels used to, so the two
+ * levels stay distinguishable without a second border.
+ */
+function Section({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-active/70">
+          {label}
+        </span>
+        <span className="h-px flex-1 bg-foreground/10" />
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -191,9 +274,7 @@ function FilterGroup<T extends string>({
 
   return (
     <div className="flex flex-col gap-2.5">
-      <span className="text-xs font-bold uppercase tracking-[0.16em] text-foreground/40">
-        {label}
-      </span>
+      <span className="text-xs font-semibold text-foreground/45">{label}</span>
       <div className="flex flex-wrap gap-2">
         {options.map((option, i) => {
           const selected = option.value === value;

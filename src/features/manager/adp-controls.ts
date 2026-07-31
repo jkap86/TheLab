@@ -1,3 +1,4 @@
+import { isSuperflexLineup } from "../../shared/ktc/roster.ts";
 import type { ManagerLeague } from "./types";
 
 /**
@@ -261,11 +262,18 @@ export function deriveScoring(
 
 /**
  * Fill the league-setting controls from one of the manager's leagues — the
- * "associated league setting" shortcut. It sets only what a league payload
- * carries: type, scoring, best ball and size. `range`, `draftType` and
- * `superflex` are left as they were: the first two aren't league settings, and
- * superflex lives in `roster_positions`, which the client league doesn't carry,
- * so it stays a deliberate manual choice.
+ * "associated league setting" shortcut. It sets what a league payload carries:
+ * type, scoring, best ball, size and — since the leagues stream started sending
+ * `roster_positions` for the league filters — whether it starts more than one
+ * quarterback. `range` and `draftType` are left as they were: they aren't league
+ * settings at all.
+ *
+ * Superflex was the one league setting this couldn't seed, and it is the one that
+ * moves a board most: a superflex population prices quarterbacks like first-round
+ * assets, so "match a league" that left it alone could hand a two-QB league the
+ * board it is least like. It reads the same predicate `/api/adp` classifies
+ * stored leagues with, so the seeded filter lands on the population the league
+ * itself belongs to.
  */
 export function seedFromLeague(
   controls: AdpControls,
@@ -282,6 +290,7 @@ export function seedFromLeague(
     ...controls,
     leagueType,
     scoring: deriveScoring(league.scoring_settings),
+    superflex: isSuperflexLineup(league.roster_positions) ? "yes" : "no",
     bestBall: settings.best_ball === 1 ? "yes" : "no",
     teams: String(league.total_rosters),
   };
