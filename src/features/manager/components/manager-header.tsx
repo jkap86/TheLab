@@ -168,11 +168,12 @@ export function ManagerHeader({
 /**
  * The record, and what it was counted over.
  *
- * Nothing played is its own state rather than `0-0` and `.000`, which would
- * dress a season that hasn't started up as a season of losses — see
- * {@link aggregateRecord}. The two ways to get there are distinguished, because
- * "your filters left nothing" and "week 1 hasn't happened" are different
- * problems for the reader.
+ * A season that hasn't started still shows its `0-0`: the digits are a true
+ * count of games played, so the guard against dressing preseason up as a season
+ * of losses lives in the pct alone — null rather than zero, an em dash on the
+ * dial, never `.000` — see {@link aggregateRecord}. Only "your filters left
+ * nothing" keeps its own words, because a `0-0` counted over no records at all
+ * would be quoting records that don't exist.
  *
  * The count rides here rather than in a stat cell of its own: `record.leagues`
  * is smaller than the list — Sleeper keeps a manager in `league_users` after
@@ -188,21 +189,17 @@ function RecordLine({
 }) {
   return (
     <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px] leading-snug">
-      {record.games === 0 ? (
-        <span className="text-foreground/55">
-          {record.leagues === 0
-            ? "No records in these leagues"
-            : "Season hasn't started"}
-        </span>
+      {record.leagues === 0 ? (
+        <span className="text-foreground/55">No records in these leagues</span>
       ) : (
         <span className="font-mono font-semibold tabular-nums">
           {formatRecord(record)}
         </span>
       )}
-      {/* No separator between the two: at phone width the line wraps — "Season
-          hasn't started" is most of it — and a dot left hanging off the end of
-          the first line reads as a typo. The weight and colour do the same job
-          on one line or two. */}
+      {/* No separator between the two: at phone width the line can wrap — "No
+          records in these leagues" is most of it — and a dot left hanging off
+          the end of the first line reads as a typo. The weight and colour do
+          the same job on one line or two. */}
       <span className="text-foreground/40">
         <span className="tabular-nums">{record.leagues}</span> of{" "}
         <span className="tabular-nums">{leagueCount}</span> league

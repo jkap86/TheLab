@@ -839,11 +839,11 @@ stops holding, a comment saying it does would not have caught it.
     the totals and the card shows it — a denominator smaller than the list is
     only honest if it is stated.
   - **No games and `.000` are different answers**, so `pct` is null rather than
-    zero and the readout says the season hasn't started. Preseason every league
-    reports `0-0-0`; a win percentage there is a claim about games nobody played.
-    The two ways to reach an empty readout — filters that left nothing, and a
-    season that hasn't kicked off — say different things, because they are
-    different problems for the reader.
+    zero and the dial draws an em dash before kickoff. Preseason every league
+    reports `0-0-0`; a win percentage there is a claim about games nobody played,
+    while the `0-0` itself is a true count, so the record line shows the digits
+    even then. Only filters that leave no records keep their own words — a `0-0`
+    counted over nothing would be quoting records that don't exist.
   - **A modal hides its own state, so the state is repeated outside it.** The
     trigger wears the count of active filters and the readout names the selection
     in words (`filterSummary`, lower case because it is read mid-sentence). Both
