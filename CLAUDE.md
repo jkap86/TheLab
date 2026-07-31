@@ -636,9 +636,14 @@ stops holding, a comment saying it does would not have caught it.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
   being looked at, the season, the sync state and the manager's record are the
   same facts on all of them; only the headline count differs, which is what
-  `stat` is. The tabs live there because they are what makes a second view
-  reachable, and they link with the URL's own spelling of the manager rather than
-  the resolved username, since Sleeper resolves a user id as readily as a name.
+  `stat` is. **It is pinned under the app bar and it carries no tabs** — those
+  two go together: a card that stays on screen is paying for its height out of
+  the list behind it, so navigation moved up to `ManagerTabs` in the bar and what
+  is left is identity, state and the record readout. It offsets by
+  `--site-header-h` rather than a retyped number, bleeds `-mx-4 px-4` to
+  `PageShell`'s `wide` gutter and paints `--background`, because a transparent
+  pinned card lets the rows scroll through the gaps around its rounded corners.
+  Its `z-40` sits above the cards' `z-30` menus and below the drawer's `z-50`.
 - **The header's second zone is the record readout, and it is where the filter
   bar used to be.** The two rows of segment buttons are behind a modal
   (`LeagueFiltersModal`) whose trigger sits in the state cluster — next to
@@ -669,16 +674,29 @@ stops holding, a comment saying it does would not have caught it.
     dialog also carries how many leagues it would leave, which is why the
     selection is edited as a draft and committed on Apply: those counts can't be
     read while the list behind them moves.
-- **`SiteHeader` is the only global chrome, and it is one link.** Every tool is
-  reached by navigating away from `/tools`, which used to leave the back button
-  as the only way home; the slim bar in `app/layout.tsx` closes that loop. It
-  hides itself on `/tools` — a link to the page you are on is noise, and that
-  page leads with its own header — which is the whole reason it reads
+- **`SiteHeader` is the only global chrome, and it is one link plus a slot.**
+  Every tool is reached by navigating away from `/tools`, which used to leave the
+  back button as the only way home; the slim bar in `app/layout.tsx` closes that
+  loop. It hides itself on `/tools` — a link to the page you are on is noise, and
+  that page leads with its own header — which is the whole reason it reads
   `usePathname` and therefore the whole reason it is a client component. Its
   container matches `PageShell`'s so the wordmark lines up with the content under
-  it. This does **not** make it a nav: the manager tabs still carry movement
-  between manager views, and adding routes here would put two navigation systems
-  on the same page.
+  it. It is **pinned**, so the way home is reachable from the bottom of a
+  several-hundred-row list and not only from the top; its height is
+  `--site-header-h` (a variable, not padding) because the manager card pins
+  itself directly underneath and has to know where this ends.
+  This still does **not** make it a site nav. `children` is a slot for chrome
+  belonging to the section you are already in — `ManagerTabs` today — not a place
+  to list routes; two navigation systems on one page is what that rule prevents,
+  and moving the manager tabs *into* the one bar is the opposite of adding a
+  second. The slot is filled in `app/layout.tsx` rather than by `SiteHeader`
+  importing the component, because `features/shared` must not import a feature;
+  `ManagerTabs` reads the route itself and renders nothing off a manager view, so
+  composing it there costs every other page nothing. It interpolates the
+  `usePathname` segment **bare** — that string is already URL-encoded, and
+  encoding it twice 404s any manager whose name isn't plain ASCII (the same trap
+  as the tool grid's `hrefFor`) — and it is the URL's own spelling rather than the
+  resolved username, since Sleeper resolves a user id as readily as a name.
 - **The four manager sub-resource hooks are one hook, bound four ways.**
   `useManagerPlayers`, `useManagerLeaguemates`, `useManagerRanks` and
   `useManagerKtc` read `/api/user/[username]/{players,leaguemates,ranks,ktc}`,

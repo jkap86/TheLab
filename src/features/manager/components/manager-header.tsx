@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { useId, type ReactNode } from "react";
 
 import { Avatar } from "@/features/shared";
@@ -6,15 +5,6 @@ import { Avatar } from "@/features/shared";
 import { formatRecord, formatWinPct } from "../format";
 import type { OverallRecord } from "../record";
 import type { LeaguesResult, SyncProgress } from "../types";
-
-/** The manager views sharing this header, in the order they're shown. */
-const TABS = [
-  { key: "leagues", label: "Leagues" },
-  { key: "players", label: "Players" },
-  { key: "leaguemates", label: "Leaguemates" },
-] as const;
-
-export type ManagerTab = (typeof TABS)[number]["key"];
 
 /** A view's own headline count, shown as a cell in the readout's side rail. */
 export type HeaderStat = {
@@ -25,28 +15,25 @@ export type HeaderStat = {
 };
 
 /**
- * Who is being looked at, which view of them is open, how fresh it is, and how
- * their season is going.
+ * Who is being looked at, how fresh it is, and how their season is going.
  *
- * One rail card in two zones. The top zone is identity, tabs and state; the
- * bottom is the *readout* — the manager's record across the filtered leagues,
- * shown as shape before digits (a dial for the win percentage, a proportion bar
- * for the wins and losses behind it), with the view's own count in a side rail.
- * That bottom zone is where the league filters used to sit: they are behind
+ * One rail card in two zones. The top zone is identity and state; the bottom is
+ * the *readout* — the manager's record across the filtered leagues, shown as
+ * shape before digits (a dial for the win percentage, a proportion bar for the
+ * wins and losses behind it), with the view's own count in a side rail. That
+ * bottom zone is where the league filters used to sit: they are behind
  * {@link LeagueFiltersModal} now, whose trigger is up in the state cluster.
+ *
+ * It carries no tabs. Moving between the three views is {@link ManagerTabs}, up
+ * in the app bar — this card is pinned below that bar, so a row spent on
+ * navigation is a row of the list it would cover.
  *
  * Every `/manager/[searched]/…` view renders this. The identity, the season, the
  * sync state and the record are the same facts on all of them; only `stat`
  * differs, which is why it is a prop rather than three copies of this card.
- *
- * `searched` is the URL segment rather than the resolved username, so the links
- * stay on whatever spelling the visitor arrived with (Sleeper resolves a user id
- * as readily as a name).
  */
 export function ManagerHeader({
   user,
-  searched,
-  active,
   season,
   refreshing,
   progress,
@@ -60,8 +47,6 @@ export function ManagerHeader({
   board,
 }: {
   user: LeaguesResult["user"];
-  searched: string;
-  active: ManagerTab;
   season: string;
   refreshing: boolean;
   progress: SyncProgress | null;
@@ -97,7 +82,12 @@ export function ManagerHeader({
   board?: ReactNode;
 }) {
   return (
-    <header className="mb-8">
+    // Pinned directly under the app bar, so who you are looking at and how their
+    // season is going stay on screen while a several-hundred-row list scrolls
+    // past. The bleed (`-mx-4 px-4`) and the opaque background are what the card
+    // needs to cover that list rather than let it show through the gaps around
+    // its rounded corners; `PageShell`'s `wide` gutter is the 4 they match.
+    <header className="sticky top-[var(--site-header-h)] z-40 -mx-4 mb-6 bg-[var(--background)] px-4 pb-4 pt-2">
       <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-gradient-to-br from-foreground/[0.055] to-foreground/[0.01] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_-22px_rgba(0,0,0,0.8)]">
         {/* The cyan rail down the card, echoing the league rows' accent. */}
         <span
@@ -116,31 +106,6 @@ export function ManagerHeader({
               {user.display_name || user.username}
             </h1>
           </div>
-
-          <span
-            aria-hidden="true"
-            className="hidden w-px self-stretch bg-foreground/10 md:block"
-          />
-
-          <nav className="flex items-center gap-6" aria-label="Manager views">
-            {TABS.map((tab) => {
-              const isActive = tab.key === active;
-              return (
-                <Link
-                  key={tab.key}
-                  href={`/manager/${encodeURIComponent(searched)}/${tab.key}`}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`relative whitespace-nowrap py-1.5 text-sm font-semibold transition-colors ${
-                    isActive
-                      ? "text-foreground after:absolute after:inset-x-0 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-active after:shadow-[0_0_12px_rgba(0,255,229,0.55)]"
-                      : "text-foreground/50 hover:text-foreground/80"
-                  }`}
-                >
-                  {tab.label}
-                </Link>
-              );
-            })}
-          </nav>
 
           <div className="ml-auto flex flex-wrap items-center gap-2.5">
             <span className="rounded-md bg-foreground/5 px-2 py-0.5 text-sm text-foreground/55">
