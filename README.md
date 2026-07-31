@@ -140,11 +140,17 @@ migrations have applied. They are Node-only, `unref`'d so they never hold the
 process open, and guarded by Postgres advisory locks so extra instances sharing
 one database don't duplicate the work.
 
-- **League crawler** (every 60s) — re-syncs the stalest stored leagues, then
-  enumerates a few league members to discover leagues it has never seen. This is
-  what grows the corpus; it is seeded by the first username anyone searches.
-  Both passes are bounded, so a tick costs roughly the same no matter how large
-  the corpus gets.
+- **League crawler** (ticks every 60s) — re-syncs the stalest stored leagues,
+  then enumerates a few league members to discover leagues it has never seen.
+  This is what grows the corpus; it is seeded by the first username anyone
+  searches. Both passes are bounded, so a tick costs roughly the same no matter
+  how large the corpus gets. How long a league stays fresh between re-syncs is
+  seasonal, read off Sleeper's NFL state each tick: 15 minutes in the regular
+  season, an hour through the 75-day draft window before kickoff, six hours in
+  the deep offseason. The log is the telemetry — a summary when a tick did work,
+  an idle heartbeat at most every 15 minutes, and a warning when the stalest
+  league is more than twice the active TTL overdue, which is the sign the batch
+  can no longer keep up with the corpus.
 - **KTC scheduler** (every 15 min) — refreshes dynasty values, records a daily
   snapshot per player, and chips away at the per-player history backfill (5
   players per tick; their pages are 3–6MB each).
@@ -162,7 +168,7 @@ one database don't duplicate the work.
 | Data | TTL |
 | --- | --- |
 | Manager league sync | 10 min |
-| Stored league (crawler refresh) | 15 min |
+| Stored league (crawler refresh) | seasonal: 15 min in-season, 1 hour in the draft window, 6 hours offseason |
 | KTC values | 15 min |
 | Weekly projections — current + next week | 1 hour |
 | Manager league-list enumeration | 6 hours |

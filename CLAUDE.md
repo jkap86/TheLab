@@ -241,6 +241,24 @@ hour. Where the slow tier is also large, cap how many slices a tick will fetch
 (`HORIZON_WEEKS_PER_TICK`) and report what the cap deferred — a skipped slice that
 reads as "fresh" is how a backfill silently stops advancing.
 
+The league crawler is the third instance of that rule, varying on time instead of
+slice: every league moves at the same speed *at once*, and what changes is the
+season, so `manager/crawl-ttl` picks one TTL per tick from live NFL state — 15
+minutes in-season, an hour through the 75-day window before kickoff (draft season
+feeds the ADP board, where "the last 30 days" is a real question), six hours in
+the deep offseason. Only `"regular"` is matched by name: Sleeper labels most of
+the offseason `"off"` and flips to `"pre"` only around the preseason games, so
+the window before `season_start_date` decides the rest, and a missing or
+unparseable date fails toward the *fresh* tier — extra fetches are the failure
+you can see. A TTL is also a capacity claim, not just a freshness one: the
+refresh batch retires 15 leagues a minute, so 15 minutes is honorable to 225
+leagues and past that silently stops being a promise. That is why the scheduler
+warns when the stalest league is past twice the active TTL, heartbeats when idle
+(a drained queue and a dead loop used to log identically), and why
+`CRAWL_LEAGUE_BATCH` moves on that telemetry rather than on intuition — the tick
+interval is execution granularity, not the freshness period, and halving it
+doubles cost for nothing a bigger batch wouldn't do better.
+
 ## Testing
 
 `npm test` runs Node's built-in runner over `src/**/*.test.ts`. No framework, no
