@@ -178,4 +178,10 @@ export type SleeperNflState = {
   season: string;
   season_type: string;
   display_week: number;
+  /**
+   * Kickoff of the regular season, `YYYY-MM-DD`. Undocumented and not promised
+   * present, so consumers must not trust it — `manager/crawl-ttl` falls back to
+   * its freshest tier when it is absent or unparseable.
+   */
+  season_start_date?: string | null;
 };
