@@ -611,6 +611,16 @@ stops holding, a comment saying it does would not have caught it.
   focus off whatever was in use. That was survivable while the drawer held only
   selects; it is not survivable for a slider nudged one arrow-press at a time. The
   callback lives in a ref and the effect depends on `open` alone.
+- **Decide per read whether a failure is fatal — on the client too, not just in a
+  route.** `/api/league/[leagueId]` already catches its projections read and
+  sends `outlook: null`, and the KTC route lets a failed solve cost the split but
+  not the value. `useAdpDensity` is the same call one layer out: a failure leaves
+  `months` empty rather than tearing the control down, because the bars are the
+  only part of the scrubber that needs them — the presets, the NFL markers and
+  the handles all work on dates alone, so the strip degrades to a bare axis and
+  the caption says the activity is unavailable. Ask what a read is *load-bearing*
+  for before letting its failure propagate; here it decorates a control that
+  still functions without it.
 - **`useAdp` is not keyed to the manager, unlike every other hook on these
   pages.** The four sub-resource hooks re-fetch on the leagues array because they
   read what that stream wrote; ADP describes the whole crawled database narrowed
