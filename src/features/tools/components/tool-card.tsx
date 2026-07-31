@@ -1,16 +1,13 @@
-import type { ReactNode } from "react";
-
 /**
- * The glass card surface every tool card shares — the link cards, the disabled
- * placeholder, and the pick tracker's container. Kept in one place so a change
- * to the card look can't drift between the three (the same reason `ShareList`
- * owns its grid template once).
+ * The glass card surface every tool card shares — the live link and the
+ * disabled, account-less one. Kept in one place so a change to the card look
+ * can't drift between them (the same reason `ShareList` owns its grid template
+ * once).
  *
  * The hover payoff — the lit edge, the light sweep, the bracket glow, the
  * growing accent rule — is driven by `group-hover`, so it only fires where the
- * caller adds `TOOL_CARD_HOVER` (which includes `group`). An inert card
- * (disabled, or the pick tracker container whose picker is the real control)
- * takes `TOOL_CARD_SURFACE` alone and stays still.
+ * caller adds `TOOL_CARD_HOVER` (which includes `group`). A disabled card takes
+ * `TOOL_CARD_SURFACE` alone and stays still.
  */
 export const TOOL_CARD_SURFACE =
   "relative flex h-full flex-col overflow-hidden rounded-2xl border border-foreground/12 " +
@@ -34,23 +31,20 @@ function Bracket({ position, sides }: { position: string; sides: string }) {
 
 /**
  * The inner content of a tool card: corner brackets, the light-sweep, the tool
- * name in the display face, an accent rule that grows across the card on hover,
- * the description, and an optional slot below it (the pick tracker's league
- * picker). No icon and no code label — the name carries the card.
+ * name in the display face, the "go" chevron, an accent rule that grows across
+ * the card on hover, and the description. No icon and no code label — the name
+ * carries the card.
  *
- * `arrow` shows the "go" chevron; it's for the link cards, not the pick tracker
- * (whose picker, not the card, is what you act on).
+ * Every card is a link now (the pick tracker's league picker moved to its own
+ * page), so there is no slot below the description and no card without the
+ * chevron.
  */
 export function ToolCardContent({
   text,
   description,
-  arrow = false,
-  children,
 }: {
   text: string;
   description: string;
-  arrow?: boolean;
-  children?: ReactNode;
 }) {
   return (
     <>
@@ -68,14 +62,12 @@ export function ToolCardContent({
         <span className="font-display text-xl font-semibold tracking-tight text-balance">
           {text}
         </span>
-        {arrow && (
-          <span
-            aria-hidden
-            className="ml-auto text-foreground/40 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-active"
-          >
-            →
-          </span>
-        )}
+        <span
+          aria-hidden
+          className="ml-auto text-foreground/40 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-active"
+        >
+          →
+        </span>
       </span>
 
       {/* The accent rule: a short cyan hairline that extends full-width on hover. */}
@@ -85,8 +77,6 @@ export function ToolCardContent({
       />
 
       <p className="relative z-10 mt-4 text-sm text-foreground/60">{description}</p>
-
-      {children && <div className="relative z-10 mt-4">{children}</div>}
     </>
   );
 }

@@ -62,12 +62,19 @@ const STEEPNESS_OPTS = [
 ] as const;
 
 /**
- * The button that opens the board, sitting in the manager header's filter row.
+ * The button that opens the board, sitting in the manager header's state cluster
+ * beside the league filters' own trigger.
  *
  * It carries the two facts worth having without opening anything: the window the
  * board covers and how many crawled drafts that matched. The ten selects this
  * replaced cost ~110px above every tab's first row for controls that are read
  * once and then ignored.
+ *
+ * It wears the same pill as the filters trigger but never its accent: that
+ * button tints when a filter is *active*, a state this one doesn't have — a
+ * board is always chosen — so borrowing the tint would spend the header's one
+ * "something is narrowed" signal on a constant. The cyan is kept to the `ADP`
+ * tag, which says which of the two neighbouring buttons this is.
  */
 export function AdpTrigger({
   range,
@@ -85,13 +92,14 @@ export function AdpTrigger({
     <button
       type="button"
       onClick={onClick}
-      className="ml-auto inline-flex items-center gap-2 rounded-lg border border-active/30 bg-active/[0.08] px-3 py-1.5 text-sm font-semibold text-active transition-colors hover:border-active/50 hover:bg-active/[0.14]"
+      aria-haspopup="dialog"
+      className="inline-flex items-center gap-2 rounded-full border border-foreground/10 bg-foreground/5 py-1.5 pl-3 pr-3.5 text-sm font-semibold text-foreground/70 transition-colors hover:border-foreground/25 hover:text-foreground"
     >
-      <span className="text-xs font-bold uppercase tracking-wider text-active/70">
+      <span className="text-[11px] font-bold uppercase tracking-wider text-active/80">
         ADP
       </span>
-      <span className="text-foreground/80">{rangeLabel(range)}</span>
-      <span className="text-foreground/45">
+      {rangeLabel(range)}
+      <span className="font-normal text-foreground/40">
         {draftCount === null
           ? loading
             ? "loading…"

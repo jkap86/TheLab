@@ -66,22 +66,13 @@ export function ManagerPlayers({ searched }: { searched: string }) {
     <LeaguesViewLayout
       view={view}
       active="players"
-      count={
-        <>
-          <span className="text-sm text-foreground/60">
-            <b className="text-base font-bold text-foreground">
-              {shares ? shares.players.length : "—"}
-            </b>{" "}
-            player{shares?.players.length === 1 ? "" : "s"}
-          </span>
-          {shares && (
-            <span className="text-sm text-foreground/45">
-              across {shares.league_count} league
-              {shares.league_count === 1 ? "" : "s"}
-            </span>
-          )}
-        </>
-      }
+      stat={{
+        label: "Players",
+        value: shares ? shares.players.length : "—",
+        sub: shares
+          ? `across ${shares.league_count} league${shares.league_count === 1 ? "" : "s"}`
+          : undefined,
+      }}
       adpCaption={
         <AdpBoardCaption
           draftCount={adp.data?.draft_count ?? null}

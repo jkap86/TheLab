@@ -43,22 +43,13 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
     <LeaguesViewLayout
       view={view}
       active="leaguemates"
-      count={
-        <>
-          <span className="text-sm text-foreground/60">
-            <b className="text-base font-bold text-foreground">
-              {shares ? shares.mates.length : "—"}
-            </b>{" "}
-            leaguemate{shares?.mates.length === 1 ? "" : "s"}
-          </span>
-          {shares && (
-            <span className="text-sm text-foreground/45">
-              across {shares.league_count} league
-              {shares.league_count === 1 ? "" : "s"}
-            </span>
-          )}
-        </>
-      }
+      stat={{
+        label: "Leaguemates",
+        value: shares ? shares.mates.length : "—",
+        sub: shares
+          ? `across ${shares.league_count} league${shares.league_count === 1 ? "" : "s"}`
+          : undefined,
+      }}
       adpCaption="ADP board and value settings apply on the Players and Leagues tabs."
     >
       {/* A failed refetch must not blank rows the hook deliberately kept —

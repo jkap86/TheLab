@@ -5,7 +5,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ManagerLeague } from "@/shared/manager";
 
 /**
- * A searchable, keyboard-navigable league picker for the pick tracker card.
+ * A searchable, keyboard-navigable league picker for the pick tracker's landing
+ * page.
  *
  * A native `<select>` can't be filtered and an account here can hold 100+
  * leagues, so this is a combobox: type to narrow the list by name, arrow keys to

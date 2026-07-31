@@ -12,6 +12,20 @@ export function formatRecord(record: Record_): string {
 }
 
 /**
+ * A win percentage the way a standings page writes one: `.537`, `1.000`, and an
+ * em dash where nothing has been played.
+ *
+ * Three decimals with the leading zero dropped is the convention every sport
+ * uses for this number, and it keeps the string four characters wide so it
+ * doesn't reflow the gauge it sits inside. Null is the {@link aggregateRecord}
+ * no-games case, not a formatting failure — see the rule there.
+ */
+export function formatWinPct(pct: number | null): string {
+  if (pct === null) return "—";
+  return pct.toFixed(3).replace(/^0\./, ".");
+}
+
+/**
  * Fantasy points to two decimals with locale grouping, e.g. `"1,234.56"`.
  * Always two, because a column of points that changes width row to row is
  * hard to scan.

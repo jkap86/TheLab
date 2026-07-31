@@ -26,7 +26,8 @@ export type UserLeaguesState = {
  * waiting for a refresh that may still be syncing behind it.
  *
  * Keyed by `userId` (a Sleeper id resolves as readily as a name): passing null —
- * no account looked up yet — fetches nothing and reports an empty, idle state.
+ * no account stored yet — fetches nothing and reports an empty, idle state,
+ * which is the whole no-account path on this page (the id form still works).
  */
 export function useUserLeagues(userId: string | null): UserLeaguesState {
   const [leagues, setLeagues] = useState<ManagerLeague[] | null>(null);

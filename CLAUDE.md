@@ -394,8 +394,9 @@ stops holding, a comment saying it does would not have caught it.
   of who you meant, which is what makes the extra request worth making before a
   tool is picked. A resubmit aborts the lookup still in flight, or the slower
   response wins whichever was asked for last. That resolved identity is now what
-  the section is *for*: `ToolsHome` holds it and hands it down, so the extra
-  request buys the grid below something and not just a confirmation.
+  the section is *for*: `ToolsHome` writes it to the shared account store and the
+  grid below reads it, as does the pick tracker's own page — so the extra request
+  buys the tools something and not just a confirmation.
 - **That account is the app's only client-side persistence, and it is a
   `useSyncExternalStore` over one `localStorage` key.** A reload, or a trip out
   to a tool and back, used to drop you at an empty search box — with the grid
@@ -406,11 +407,18 @@ stops holding, a comment saying it does would not have caught it.
   mismatch this shape exists to avoid. The snapshot is the **raw string**, parsed
   in a `useMemo` keyed on it, because `useSyncExternalStore` compares snapshots
   by identity and a fresh `JSON.parse` per read looks like a change every render
-  and loops. And `storeUser` notifies its own listeners by hand, since the
+  and loops. And `storeAccount` notifies its own listeners by hand, since the
   `storage` event fires in *other* tabs but never the one that wrote. Only the
   resolved `UserInfo` is kept; leagues re-derive from `user_id`. Writes are
   wrapped in `try`/`catch` because storage can be blocked — persistence here is a
-  convenience, never correctness.
+  convenience, never correctness, which is why a blocked write still lands in the
+  module-level `memoryFallback`: with the store as the only state, dropping it
+  would discard a successful lookup and leave the grid locked.
+  It lives in `features/shared/account.ts` rather than beside the tools page that
+  writes it, because a tool *page* reads it: the pick tracker's league picker is
+  on `/picktracker` and fills itself from the account resolved on `/tools`. That
+  is what the persistence buys beyond surviving a reload — a tool can skip asking
+  for a username a second time even though it is a separate route.
 - **The account is the key to the whole grid: every card is inert until one
   resolves.** Each tool reads that account, so `ToolGrid` passes `disabled={!user}`
   and `ToolLinkCard` renders an `aria-disabled`, dimmed `div` instead of a
@@ -427,19 +435,22 @@ stops holding, a comment saying it does would not have caught it.
   grid encodes once, at the single call site, so a new tool must interpolate it
   bare. Encoding again inside `hrefFor` double-escapes and yields a 404 for any
   account whose name isn't plain ASCII, which is exactly the account nobody
-  tests with. And the pick tracker gets `PicktrackerCard`
-  instead, listing the account's leagues inline because a league *id* is the one
-  thing a username does **not** give you and the account already knows every one.
-  Its picker is its own gate — there is no way to the tracker without choosing a
-  league — so it needs no `disabled` state of its own once an account is in hand.
-- **The tools grid no longer links to manual league-id entry, but the page is
-  still there.** `/picktracker` (the `page.tsx`, distinct from
-  `/picktracker/[leagueId]`) takes a raw id and still answers; gating the grid
-  only took away the *link* to it. That path is worth remembering before treating
-  the route as dead code: it is how the tracker opens from a league chat
-  mid-draft, where there is a league id in the URL bar and no Sleeper account in
-  hand. If the no-account state should reach it again, that is a deliberate
-  exception to the gate above and not a bug in it.
+  tests with. The pick tracker has no `hrefFor`, because a league *id* is the one
+  thing a username does **not** give you — it links to `/picktracker` and that
+  page does the choosing.
+- **Choosing a league is a step of the pick tracker, not of picking a tool.** The
+  combobox over an account's hundred-odd leagues used to sit inside the grid's
+  tool tile (a `PicktrackerCard` that replaced the link entirely); it is on
+  `/picktracker` now and the grid card is an ordinary `ToolLinkCard` like every
+  other one. Moving it costs no extra typing precisely because the account is
+  persisted — the page reads the same stored `UserInfo` and lists its leagues
+  without a second username prompt. Two things that page keeps: the raw-id form
+  stays *below* the picker whether or not an account is stored, because that is
+  the path the route was built for (opened from a league chat mid-draft, where
+  there is an id in the URL bar and no Sleeper account in hand), and with no
+  account it is the whole page — `useUserLeagues(null)` fetches nothing, so the
+  no-account state is idle rather than empty. `/picktracker` is therefore not a
+  page the grid merely declines to link to any more; it is where the tool starts.
 - **`useUserLeagues` is not `useManagerLeagues`, for the reason the four manager
   sub-resource hooks *are* one hook.** Both decode the same NDJSON stream off
   `/api/user/[username]/leagues`, but the picker wants the list and none of the
@@ -456,11 +467,15 @@ stops holding, a comment saying it does would not have caught it.
 - **The three manager tabs are one scaffold, `LeaguesViewLayout`, over one hook,
   `useFilteredLeagues`.** Leagues, players and leaguemates were line-for-line
   copies of the same chrome — wide shell, cold-load state, header and count line,
-  filter bar, the note that stands in when the filters match nothing — and three
-  copies of that are one edit away from disagreeing about how a failed refresh or
-  an empty account looks, which reads as a bug in whichever tab didn't get
-  edited. Only three things ever varied: the count line, the body, and that the
-  leagues tab says "X of Y" when narrowed. The body is `children` rendered
+  filter control, the note that stands in when the filters match nothing — and
+  three copies of that are one edit away from disagreeing about how a failed
+  refresh or an empty account looks, which reads as a bug in whichever tab didn't
+  get edited. Only three things ever varied: the count line, the body, and that
+  the leagues tab says "X of Y" when narrowed. That count is a `stat`
+  (`{label, value, sub}`) rather than a free `ReactNode`, because it is now laid
+  out as a cell in the header's readout rail: three tabs formatting their own
+  label-over-number is the drift this scaffold exists to stop. The body is
+  `children` rendered
   *below* the empty-filter check, so a tab only ever reasons about a non-empty
   list. The split between the two is deliberate: the layout is the chrome, the
   hook is the state behind it, and `filtered` stays a value the page can read
@@ -507,9 +522,15 @@ stops holding, a comment saying it does would not have caught it.
 - **The ADP controls are a drawer behind one button, not a bar on the page.** Ten
   selects and a caption sat above the first row of every manager tab — ~110px of
   chrome, wrapping to three lines on a laptop — for settings that are chosen once
-  and then read. `AdpTrigger` rides in the header's filter row instead (a bar that
-  already exists, so it costs no height) badged with the range and the draft count,
-  which is what a reader needs without opening anything. Two things inside the
+  and then read. `AdpTrigger` rides in the header's state cluster instead, beside
+  the league filters' own trigger, badged with the range and the draft count,
+  which is what a reader needs without opening anything. They stay **two buttons**
+  rather than two tabs of one dialog for the reason the two filter sets stay
+  independent: one narrows this manager's leagues, the other the whole crawled
+  database, and one dialog over both would suggest a single selection. The pill is
+  shared but the accent is not — the filters trigger tints when a filter is
+  active, a state the board has no equivalent of, so tinting this one too would
+  spend that signal on a constant. Two things inside the
   drawer are load-bearing. The controls are **pinned** and only the board scrolls:
   the point of the shape is that changing a filter and watching the ADP move is one
   glance, which a stacked panel loses by pushing the board below the fold. And the
@@ -525,16 +546,48 @@ stops holding, a comment saying it does would not have caught it.
   by settings, so it calls `/api/adp` directly and re-fetches on the *query
   string*. It keeps the one habit they share — loaded data is never blanked on
   refetch — because a filter tweak that flashes every ADP cell to an em dash and
-  back is worse than a moment of staleness. A `null` query means the season isn't
-  known yet, which is the one case where there is genuinely nothing to ask for.
+  back is worse than a moment of staleness. A `null` query means don't ask at all,
+  which is how the layout keeps a closed drawer from costing a request — the
+  Players tab passes its query unconditionally, since its ADP column is on screen
+  either way.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
-  being looked at, the season and the sync state are the same facts on all of
-  them; only the count line under them differs, which is what `children` is. The
-  tabs live there because they are what makes a second view reachable, and they
-  link with the URL's own spelling of the manager rather than the resolved
-  username, since Sleeper resolves a user id as readily as a name.
+  being looked at, the season, the sync state and the manager's record are the
+  same facts on all of them; only the headline count differs, which is what
+  `stat` is. The tabs live there because they are what makes a second view
+  reachable, and they link with the URL's own spelling of the manager rather than
+  the resolved username, since Sleeper resolves a user id as readily as a name.
+- **The header's second zone is the record readout, and it is where the filter
+  bar used to be.** The two rows of segment buttons are behind a modal
+  (`LeagueFiltersModal`) whose trigger sits in the state cluster — next to
+  `AdpTrigger`, which the same move brought up there from its own bar — and the
+  space they freed carries the manager's season across the filtered leagues: a
+  dial for the win percentage, a proportion bar for the wins and losses behind
+  it. Four things that look like polish and are not:
+  - **The record is summed over `filtered`, not over the account.** That is the
+    point of putting it next to the filters — "how am I doing in my dynasty
+    leagues" is a different question from "how am I doing", and both are one
+    click apart. `LeaguesViewLayout` memoises it so the header renders numbers
+    rather than deriving them.
+  - **It is counted over leagues that *carry* a record.** Membership without a
+    roster arrives as `record: null` (the same Sleeper quirk that would deflate a
+    player share), so `aggregateRecord` returns the contributing count alongside
+    the totals and the card shows it — a denominator smaller than the list is
+    only honest if it is stated.
+  - **No games and `.000` are different answers**, so `pct` is null rather than
+    zero and the readout says the season hasn't started. Preseason every league
+    reports `0-0-0`; a win percentage there is a claim about games nobody played.
+    The two ways to reach an empty readout — filters that left nothing, and a
+    season that hasn't kicked off — say different things, because they are
+    different problems for the reader.
+  - **A modal hides its own state, so the state is repeated outside it.** The
+    trigger wears the count of active filters and the readout names the selection
+    in words (`filterSummary`, lower case because it is read mid-sentence). Both
+    come from the same option table the dialog's buttons do. Each option in the
+    dialog also carries how many leagues it would leave, which is why the
+    selection is edited as a draft and committed on Apply: those counts can't be
+    read while the list behind them moves.
 - **`SiteHeader` is the only global chrome, and it is one link.** Every tool is
   reached by navigating away from `/tools`, which used to leave the back button
   as the only way home; the slim bar in `app/layout.tsx` closes that loop. It
