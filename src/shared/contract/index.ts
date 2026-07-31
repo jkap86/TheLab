@@ -15,6 +15,7 @@ import type {
 import type { KtcRosterValue } from "@/shared/ktc";
 import type { PlaceholderPick } from "@/shared/picktracker";
 import type { PlayersSyncSummary, PlayerSummary } from "@/shared/players";
+import type { Trade } from "@/shared/trades";
 import type {
   LeagueOutlook,
   ProjectionFilters,
@@ -200,6 +201,37 @@ export type ManagerLeaguematesPayload = {
   members: Record<string, string[]>;
   /** User ids → display name and avatar, for every id above. */
   users: Record<string, LeaguematePayload>;
+};
+
+/**
+ * `GET /api/user/[username]/trades` — every completed trade in the manager's
+ * leagues for a season, newest first.
+ *
+ * The same side-map shape as {@link ManagerPlayersPayload}: a trade carries ids,
+ * and the players and managers those ids name are resolved once each in the maps
+ * beside them rather than repeated per trade — a player traded in ten leagues is
+ * one entry here. The league is an id for the same reason: the client already
+ * holds the league list off the leagues stream, which is also what its league
+ * filters read, so a name and a settings blob per trade would be repeated dozens
+ * of times over.
+ *
+ * Read-only over what the leagues stream synced, like its siblings under this
+ * prefix — a manager it has never run for gets an empty list rather than a sync
+ * of their own, and a league is only as complete as the transaction weeks that
+ * sync has fetched.
+ */
+export type ManagerTradesPayload = {
+  season: string;
+  /** Newest first, by when each trade completed. */
+  trades: Trade[];
+  /** Player ids → name/position/team, for every player in `trades` the cache knows. */
+  players: Record<string, PlayerSummary>;
+  /**
+   * User ids → display name and avatar, for every side of every trade whose
+   * roster has a cached owner. A side naming a user id absent here is one whose
+   * member row isn't stored; the client falls back to the roster number.
+   */
+  managers: Record<string, LeaguematePayload>;
 };
 
 /**

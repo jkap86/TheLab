@@ -6,7 +6,8 @@ import type { LeaguesStreamMessage } from "@/shared/contract";
 import type { ManagerLeague } from "@/shared/manager";
 import { errorMessage } from "@/shared/util";
 
-import { apiFetch, isAbortError, takeLines } from "@/features/shared";
+import { apiFetch, isAbortError } from "./api";
+import { takeLines } from "./ndjson";
 
 export type UserLeaguesState = {
   leagues: ManagerLeague[] | null;

@@ -1,4 +1,4 @@
-import type { ManagerLeague } from "./types";
+import type { ManagerLeague } from "@/shared/manager";
 
 /**
  * League list filtering. Kept apart from the control that renders it so the

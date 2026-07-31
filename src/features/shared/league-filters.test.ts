@@ -6,8 +6,8 @@ import {
   activeFilterCount,
   filterSummary,
   matchesFilters,
-} from "./filters.ts";
-import type { ManagerLeague } from "./types.ts";
+} from "./league-filters.ts";
+import type { ManagerLeague } from "@/shared/manager";
 
 /**
  * The filters read Sleeper's `settings` blob, which is loosely typed and omits
