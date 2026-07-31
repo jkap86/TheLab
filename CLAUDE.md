@@ -33,7 +33,14 @@ src/shared/    Domain logic, one folder per concern.
   `SLOT_POSITIONS` rather than listed, so a new IDP slot gates the
   "projections read low" caveat the moment the solver learns it; before this,
   the set was retyped in two components and a new slot would have silently
-  missed the warning.
+  missed the warning. **Two derived sets now, and they are not
+  interchangeable** — `IDP_SLOTS` is `DEFENSIVE_SLOTS` without `DEF`, because
+  nearly every league starts a team defence (so that set barely distinguishes
+  leagues) while starting a linebacker makes it a different game entirely. The
+  filters narrow on the narrow set; the projections caveat wants the wide one,
+  since Sleeper under-projects the team unit too. Adding a third derivation is
+  cheap and correct — deriving is the rule here, and what varies is only which
+  positions the predicate accepts.
 - A module owns its tables. If you need data from another concern, add a query
   to *that* module and call it — don't write SQL against a table your module
   doesn't own. (`ktc/match` used to query `players` directly; it doesn't now.)
@@ -297,6 +304,16 @@ epoch milliseconds in the parser would bake this process's timezone into every
 answer — a bug that looks like an off-by-one day and only in some deployments.
 An absent bound is `null`, not a default, since a range is two independent halves
 and an open end has to be expressible.
+
+**There are two "today"s, and they answer to different people.** `TODAY_ET`
+is server-side and Eastern because it decides what the NFL has already played —
+a fact about the schedule, not about the reader. `todayIso` in
+`features/shared/date-range` is client-side and *local*, because it anchors what
+a reader means by "last 30 days". Neither is a candidate to replace the other,
+and the seam holds because the client sends the resolved `YYYY-MM-DD` bounds
+rather than a relative phrase — the window a reader picked is the window the
+query runs. Reach for one because of whose day you are naming, not because it is
+the one nearest to hand.
 
 `manager/shares` is that shape on the client: `playerShares` takes the leagues,
 the rosters and the players cache as arguments and counts, so the rules that
