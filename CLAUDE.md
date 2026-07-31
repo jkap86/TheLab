@@ -508,11 +508,14 @@ stops holding, a comment saying it does would not have caught it.
   and Leaguemates, because its tabs answer different questions and are separate
   routes, so the grid links each rather than dropping you on Leagues to navigate
   again; they share the account-less `/manager` href, which is why cards are
-  keyed by name. **`hrefFor` receives the username already URL-encoded** — the
-  grid encodes once, at the single call site, so a new tool must interpolate it
-  bare. Encoding again inside `hrefFor` double-escapes and yields a 404 for any
-  account whose name isn't plain ASCII, which is exactly the account nobody
-  tests with. The pick tracker has no `hrefFor`, because a league *id* is the one
+  keyed by name. **`hrefFor` receives the username already URL-encoded** — a new
+  tool must interpolate it bare, because encoding again double-escapes and yields
+  a 404 for any account whose name isn't plain ASCII, which is exactly the
+  account nobody tests with. The encoding itself lives in `toolHref` (in
+  `features/shared/tools.ts`, pure and tested): the grid was the single call site
+  until the app bar's menu became the second, and a rule two callers have to
+  remember is a rule one of them eventually won't. The pick tracker has no
+  `hrefFor`, because a league *id* is the one
   thing a username does **not** give you — it links to `/picktracker` and that
   page does the choosing.
 - **Choosing a league is a step of the pick tracker, not of picking a tool.** The
@@ -845,29 +848,69 @@ stops holding, a comment saying it does would not have caught it.
     `settings` doesn't carry that the client now asks two questions of, which is
     also what retires the note on `seedFromLeague` that superflex had to stay
     manual for want of it.
-- **`SiteHeader` is the only global chrome, and it is one link plus a slot.**
-  Every tool is reached by navigating away from `/tools`, which used to leave the
-  back button as the only way home; the slim bar in `app/layout.tsx` closes that
-  loop. It hides itself on `/tools` — a link to the page you are on is noise, and
-  that page leads with its own header — which is the whole reason it reads
-  `usePathname` and therefore the whole reason it is a client component. Its
-  container matches `PageShell`'s so the wordmark lines up with the content under
-  it. It is **pinned**, so the way home is reachable from the bottom of a
-  several-hundred-row list and not only from the top; its height is
+- **`SiteHeader` is the only global chrome, and it is three zones: the mark
+  home, a contextual slot, and every tool.** Every tool is reached by navigating
+  away from `/tools`, which used to leave the back button as the only way home;
+  the slim bar in `app/layout.tsx` closes that loop. It hides itself on `/tools`
+  — the wordmark and the whole tool list *are* that page — which is the whole
+  reason it reads `usePathname` and therefore the whole reason it is a client
+  component. Its container matches `PageShell`'s so the wordmark lines up with
+  the content under it. It is **pinned**, so the way home is reachable from the
+  bottom of a several-hundred-row list and not only from the top; its height is
   `--site-header-h` (a variable, not padding) because the manager card pins
   itself directly underneath and has to know where this ends.
-  This still does **not** make it a site nav. `children` is a slot for chrome
-  belonging to the section you are already in — `ManagerTabs` today — not a place
-  to list routes; two navigation systems on one page is what that rule prevents,
-  and moving the manager tabs *into* the one bar is the opposite of adding a
-  second. The slot is filled in `app/layout.tsx` rather than by `SiteHeader`
-  importing the component, because `features/shared` must not import a feature;
-  `ManagerTabs` reads the route itself and renders nothing off a manager view, so
-  composing it there costs every other page nothing. It interpolates the
-  `usePathname` segment **bare** — that string is already URL-encoded, and
-  encoding it twice 404s any manager whose name isn't plain ASCII (the same trap
-  as the tool grid's `hrefFor`) — and it is the URL's own spelling rather than the
-  resolved username, since Sleeper resolves a user id as readily as a name.
+  **It carries a route list now, which this note used to forbid.** The old rule
+  was that a second navigation system competes with the first; what it produced
+  instead was `/tools` as a mandatory waypoint between any two tools, since the
+  bar's single link home was the only way out of one. `ToolsMenu` is not a second
+  system — it is the *only* one, the tools grid reached without the round trip,
+  read from the same catalogue that grid renders (which is why `tools.data` moved
+  to `features/shared/tools.ts`, with `features/tools` re-exporting it under the
+  usual mover's rule). `children` is unchanged: a slot for chrome belonging to the
+  section you are already in — `ManagerTabs` today — movement *within* a tool
+  rather than between tools. That slot is still filled in `app/layout.tsx` rather
+  than by `SiteHeader` importing the component, because `features/shared` must not
+  import a feature; the menu can live in the bar precisely because the catalogue
+  moved down to a layer both may read. `ManagerTabs` reads the route itself and
+  renders nothing off a manager view, so composing it there costs every other page
+  nothing. It interpolates the `usePathname` segment **bare** — that string is
+  already URL-encoded, and encoding it twice 404s any manager whose name isn't
+  plain ASCII (the same trap `toolHref` now holds in one place) — and it is the
+  URL's own spelling rather than the resolved username, since Sleeper resolves a
+  user id as readily as a name.
+- **The bar's two surfaces are a glass and a solid, and which is which is a
+  legibility rule rather than a taste.** `--surface-glass` (the bar) is the page
+  colour at 0.85 under `backdrop-blur`: what passes behind a bar is the page you
+  are already reading, so a hint of it showing through is depth. `--surface-menu`
+  (the panel) is opaque, because what passes behind *it* is the text its own
+  labels would be read against. Both alphas are chosen to survive with the blur
+  absent — `backdrop-filter` is a progressive enhancement, off in more renderers
+  than you would guess, and a menu that is only legible when it blurs is a menu
+  that is sometimes unreadable.
+- **The menu's open state is the route it was opened on, not a boolean.**
+  Navigating is what a nav menu is *for*, so `openedAt === pathname` closes it on
+  arrival as a matter of arithmetic; a boolean would need an effect to notice the
+  route changed, which is a cascading render (and what the lint rule objects to).
+  It also closes on Escape — returning focus to the trigger — and on a press
+  outside it.
+- **A tool entry in the bar links where the same card on `/tools` greys out.**
+  The grid is where an account is resolved, so a dead card there is a prompt; in a
+  nav bar it would be a dead end. Without an account an entry lands on the
+  username search the tool starts with, and the panel's account row — avatar and
+  `@username`, or "no account connected" — says which of the two you are getting.
+  That row is also what makes "Leagues" mean *your* leagues in a menu that never
+  names the manager.
+- **The wordmark's text stands down on a phone only where the contextual slot is
+  filled.** A bar seating three manager tabs *and* the tools trigger has no room
+  for it at 390px; every other page does, and a bare glyph over an empty bar is
+  the worse trade. The slot decides for itself whether it exists (`ManagerTabs`
+  reads the route), so the bar can't be told in props what is in it —
+  `max-sm:group-has-[[data-bar-slot]]/bar:hidden` asks the DOM. Three details are
+  load-bearing: the marker attribute (not `nav`, which the menu's own panel would
+  match), `max-sm:` rather than an `sm:` override (`:has()` outweighs a plain
+  breakpoint utility, so the override would silently lose), and the **named**
+  group (`group-hover` matches *any* `.group` ancestor, so an unnamed group on the
+  bar would light the wordmark's hover from the far end of it).
 - **The four manager sub-resource hooks are one hook, bound four ways.**
   `useManagerPlayers`, `useManagerLeaguemates`, `useManagerRanks` and
   `useManagerKtc` read `/api/user/[username]/{players,leaguemates,ranks,ktc}`,

@@ -21,10 +21,28 @@
 :root {
   --background: rgb(10, 20, 30);
 
+  /* The background as a *layer*: the same colour, translucent, for chrome that
+     floats over the page and blurs what passes behind it (`SiteHeader` and its
+     tools menu). Spelled as its own `rgba` rather than an opacity modifier on
+     `--background`, since a Tailwind opacity modifier over a custom property
+     resolves through `color-mix` and this needs to be exactly the page colour at
+     a known alpha. */
+  --surface-glass: rgba(10, 20, 30, 0.85);
+
+  /* A panel that *overlaps* content rather than capping it: the tools menu sits
+     on top of a page, so it is opaque and lifted a shade above the background.
+     A bar can be see-through because what passes behind it is the page you are
+     already reading; a menu can't, because what passes behind it is the text
+     its own labels would be read against — and the blur that would otherwise
+     soften it is a progressive enhancement, absent wherever `backdrop-filter`
+     is unsupported or disabled. Both alphas are set to survive that: the bar
+     stays legible unblurred too. */
+  --surface-menu: rgb(17, 29, 41);
+
   /* The height of the pinned app bar (`SiteHeader`). Anything that pins itself
      underneath — the manager card — offsets by this, so the two measurements
      can't drift into a gap or an overlap. */
-  --site-header-h: 3rem;
+  --site-header-h: 3.5rem;
 
   font-size: 16px;
 }
@@ -140,7 +158,8 @@ body {
   }
 }
 
-/* The league-filters dialog rising into place. Named here for the same reason
+/* The league-filters dialog rising into place — and the app bar's tools menu,
+   which is the same gesture at a smaller scale. Named here for the same reason
    the flask's animations are: Tailwind v4 has no per-component keyframes, and
    the panel needs the timing function inline anyway. */
 @keyframes dialog-rise {
@@ -160,7 +179,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .flask-loader *,
   .tools-anim,
-  .filters-dialog-panel {
+  .filters-dialog-panel,
+  .tools-menu-panel {
     animation: none !important;
   }
 }

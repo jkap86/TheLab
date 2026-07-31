@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import type { Tool } from "../tools.data";
+import type { Tool } from "@/features/shared";
 import {
   TOOL_CARD_HOVER,
   TOOL_CARD_SURFACE,

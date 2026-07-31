@@ -40,9 +40,17 @@ export function ManagerTabs() {
   return (
     <nav
       aria-label="Manager views"
+      // Marks the bar's contextual slot as filled: the wordmark's text stands
+      // down on a phone when these are present, and the bar has no other way to
+      // know — this component decides from the route whether it renders at all.
+      data-bar-slot
+      // A segmented control rather than three underlined words: the bar's other
+      // control is the tools trigger, a pill, and two navigation affordances
+      // sitting side by side should look like the same kind of thing.
+      //
       // Scrolls rather than wraps: the bar is a fixed height, so a narrow phone
       // pushes the last tab sideways instead of off the bottom of the bar.
-      className="-mb-px flex min-w-0 items-center gap-5 self-stretch overflow-x-auto"
+      className="flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-full border border-foreground/12 bg-foreground/[0.05] p-0.5"
     >
       {TABS.map((tab) => {
         const isActive = tab.key === view;
@@ -51,10 +59,10 @@ export function ManagerTabs() {
             key={tab.key}
             href={`/manager/${searched}/${tab.key}`}
             aria-current={isActive ? "page" : undefined}
-            className={`relative flex flex-none items-center whitespace-nowrap text-sm font-semibold transition-colors ${
+            className={`flex flex-none items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold transition-colors sm:px-3 sm:text-[13px] ${
               isActive
-                ? "text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-active after:shadow-[0_0_12px_rgba(0,255,229,0.55)]"
-                : "text-foreground/50 hover:text-foreground/80"
+                ? "bg-active/12 text-active shadow-[inset_0_0_0_1px_rgba(0,255,229,0.35)]"
+                : "text-foreground/55 hover:bg-foreground/[0.07] hover:text-foreground"
             }`}
           >
             {tab.label}
