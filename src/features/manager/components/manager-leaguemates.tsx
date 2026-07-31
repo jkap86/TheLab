@@ -49,7 +49,6 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
           ? `across ${shares.league_count} league${shares.league_count === 1 ? "" : "s"}`
           : undefined,
       }}
-      adpCaption="ADP board and value settings apply on the Players and Leagues tabs."
     >
       {/* A failed refetch must not blank rows the hook deliberately kept —
           the error replaces the list only when there is nothing to keep. */}

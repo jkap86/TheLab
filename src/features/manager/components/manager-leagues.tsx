@@ -59,7 +59,6 @@ export function ManagerLeagues({ searched }: { searched: string }) {
         value: showing,
         sub: showing === total ? undefined : `of ${total} total`,
       }}
-      adpCaption="Value curve sets how top-heavy the ADP-value columns are; each league is priced on its own season’s board. The drawer’s date range and board filters drive the Players-tab ADP."
     >
       <ul className="flex flex-col gap-4 w-full">
         {view.filtered.map((league) => (
