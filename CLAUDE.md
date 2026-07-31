@@ -914,6 +914,17 @@ stops holding, a comment saying it does would not have caught it.
   `/manager` is the username search and belongs to no tool, so the bar names
   nothing rather than guessing. The cost is real and was the trade asked for:
   Leagues → Players is two presses now instead of one.
+- **A tool's `pattern` matches by prefix and the first match wins, so catalogue
+  order is load-bearing.** `isToolActive` compares segment by segment and accepts
+  a longer pathname, which is what makes `/picktracker` name the tool while you
+  are at `/picktracker/[leagueId]`. Nothing nests today — the six patterns are
+  disjoint — but the moment one is a prefix of another (`/trades` beside a
+  `/trades/*` detail tool, or a broad `/manager/*` beside the three view
+  patterns), the broader one silently wins every match if it is listed first, and
+  the symptom is a bar that names the wrong tool rather than an error. Put the
+  more specific pattern earlier, and remember the same list drives the menu's
+  order on screen — the two are one array on purpose, so a reorder for matching
+  is also a reorder for the reader.
 - **The bar is machined, not glass, and the material has a grammar: raised means
   press me, recessed means you are here.** The tools trigger is a raised keycap
   that travels its own thickness on `:active`; the current-page chip is a
