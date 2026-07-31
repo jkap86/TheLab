@@ -366,6 +366,17 @@ decisions live in the pair rather than in the components:
   bound, for the reason `/api/adp` drops an undated draft — there is no honest
   side of the boundary to put it on.
 
+**The league filters' rule lists are AND-only, and that difference from the
+trades selection is deliberate.** Both let a reader build a list rather than pick
+from fixed chips, so they look like the same control and invite being unified —
+they are not. A trade selection is a set of *subjects* ("any of these three
+players"), where `any` is the natural reading as often as `all`. A league rule
+narrows on an *attribute* (`QB+SF ≥ 2`, `rec = 0.5`), and the question people
+arrive with is "dynasty leagues that start two QBs" — every rule narrowing. An OR
+there would additionally need each rule to say which group it joins, which is a
+control nobody asked for. Adding a mode to the league rules is not the small
+symmetry it looks like.
+
 Validation earns its keep when a value reaches SQL as anything but a bound
 parameter. `scoring` picks the column `projections/queries` interpolates into
 `ORDER BY`, so it is a closed enum that fails the request on an unknown value —
