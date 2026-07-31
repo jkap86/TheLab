@@ -80,7 +80,9 @@ export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom";
  * names the range where it stands alone (the trigger, the drawer's header), and
  * `chip` is what the row reads — dropping "Last" is what keeps that row on one
  * line at the drawer's width, and inside the row the word is implied by the
- * "Drafted" label anyway.
+ * "Drafted" label anyway. `12 mo` is abbreviated a step further because the
+ * four are laid out as equal segments: on a phone they are ~72px each, which
+ * "12 months" wraps to two lines in and takes the whole row's height with it.
  *
  * `custom` is deliberately **not** on this list, though it is still a preset
  * value. It used to be a fifth chip that revealed two date inputs; the range
@@ -92,7 +94,7 @@ export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom";
 export const ADP_RANGE_PRESETS: { value: AdpRangePreset; label: string; chip: string }[] = [
   { value: "30d", label: "Last 30 days", chip: "30 days" },
   { value: "90d", label: "Last 90 days", chip: "90 days" },
-  { value: "12m", label: "Last 12 months", chip: "12 months" },
+  { value: "12m", label: "Last 12 months", chip: "12 mo" },
   { value: "all", label: "All time", chip: "All time" },
 ];
 
@@ -213,6 +215,25 @@ export function rangeLabel(range: AdpRange): string {
   if (to) return `Through ${formatRangeDate(to)}`;
   // A custom range with neither end set narrows nothing, so say what it does.
   return "All time";
+}
+
+/**
+ * The dates a range actually resolves to, in words — `since Aug 1, 2025`, `up
+ * to Mar 3, 2026`, the pair when it is bounded both ways.
+ *
+ * It is what {@link rangeLabel} deliberately doesn't say. A preset keeps its
+ * name everywhere the label is read alone, because the name stays true as time
+ * passes; but *inside* the control, where the handles are sitting on those
+ * dates, naming the window without naming its edges leaves the reader to work
+ * back from the axis. Null when the range bounds nothing — "all time" needs no
+ * gloss, and an empty summary is what the caller skips rendering.
+ */
+export function rangeSummary(range: AdpRange, today: string): string | null {
+  const { from, to } = rangeBounds(range, today);
+  if (from && to) return `${formatRangeDate(from)} – ${formatRangeDate(to)}`;
+  if (from) return `since ${formatRangeDate(from)}`;
+  if (to) return `up to ${formatRangeDate(to)}`;
+  return null;
 }
 
 /** Today where the reader is, as `YYYY-MM-DD` — the argument {@link rangeBounds} wants. */

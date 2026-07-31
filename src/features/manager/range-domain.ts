@@ -1,4 +1,4 @@
-import { shiftDays } from "./adp-controls.ts";
+import { MONTH_ABBREVIATIONS, shiftDays } from "./adp-controls.ts";
 import type { AdpRange } from "./adp-controls.ts";
 
 /**
@@ -64,14 +64,14 @@ export function monthBars(
 
 /** Where a date sits on the domain, 0–1, clamped to its ends. */
 export function fractionOf(domain: ScrubDomain, date: string): number {
-  const span = days(domain.from, domain.to);
+  const span = daysBetween(domain.from, domain.to);
   if (span <= 0) return 0;
-  return clamp(days(domain.from, date) / span, 0, 1);
+  return clamp(daysBetween(domain.from, date) / span, 0, 1);
 }
 
 /** The date at a fraction of the domain, snapped to a whole day. */
 export function dateAtFraction(domain: ScrubDomain, fraction: number): string {
-  const span = days(domain.from, domain.to);
+  const span = daysBetween(domain.from, domain.to);
   return shiftDays(domain.from, Math.round(clamp(fraction, 0, 1) * span));
 }
 
@@ -112,6 +112,69 @@ export function edgeBounds(
   };
 }
 
+/**
+ * Slide a window along the axis without changing its length.
+ *
+ * Dragging the selected block is the half of a brush the scrubber was missing:
+ * "the same fortnight, a month earlier" took two handle drags, and the second
+ * one had to be measured by eye against the first. The shift is clamped rather
+ * than the window being squashed at the edge — a pan that silently shortened
+ * the span would answer a different question than the one being dragged.
+ */
+export function panWindow(
+  window: { from: string; to: string },
+  deltaDays: number,
+  domain: ScrubDomain,
+): { from: string; to: string } {
+  const shift = clamp(
+    deltaDays,
+    -daysBetween(domain.from, window.from),
+    daysBetween(window.to, domain.to),
+  );
+  return { from: shiftDays(window.from, shift), to: shiftDays(window.to, shift) };
+}
+
+/** A label on the month axis, with the extent it is centred over. */
+export type AxisTick = {
+  month: string;
+  left: number;
+  width: number;
+  label: string;
+  /** January, which reads as the year — the one tick that anchors the rest. */
+  year: boolean;
+};
+
+/**
+ * The axis labels, thinned to what the width can hold.
+ *
+ * A month gets its name where there is room for one, its initial where there
+ * isn't, and nothing at all once even the initials would collide — at which
+ * point the January ticks are the axis. That is the same rule at three
+ * densities rather than three rules: the domain is however many months have
+ * been crawled, so a twelve-month axis and a five-year one are the same
+ * control.
+ *
+ * January always reads as the year instead of a name. It is the only tick that
+ * says *which* May a bar is, and a reader scanning for last summer needs the
+ * boundary more than the month.
+ */
+export function axisTicks(bars: readonly MonthBar[], domain: ScrubDomain): AxisTick[] {
+  const named = bars.length <= 13;
+  const initials = bars.length <= 30;
+
+  return bars.flatMap((bar): AxisTick[] => {
+    const month = Number(bar.month.slice(5, 7));
+    const january = month === 1;
+    if (!january && !initials) return [];
+    const label = january
+      ? bar.month.slice(0, 4)
+      : named
+        ? MONTH_ABBREVIATIONS[month - 1]
+        : MONTH_ABBREVIATIONS[month - 1].charAt(0);
+    return [{ month: bar.month, label, year: january, ...monthExtent(bar.month, domain) }];
+  });
+}
+
 /** `2026-05-14` → `2026-05`. */
 function monthOf(date: string): string {
   return date.slice(0, 7);
@@ -130,8 +193,13 @@ function addMonths(month: string, delta: number): string {
   return new Date(Date.UTC(year, m - 1 + delta, 1)).toISOString().slice(0, 7);
 }
 
-/** Whole days from `a` to `b`; negative when `b` is earlier. */
-function days(a: string, b: string): number {
+/**
+ * Whole days from `a` to `b`; negative when `b` is earlier. Exported because
+ * the scrubber counts in days too — the slider positions its handles read, the
+ * span it reports — and two spellings of a date subtraction is one timezone
+ * assumption away from disagreeing.
+ */
+export function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
 

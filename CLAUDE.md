@@ -577,7 +577,7 @@ stops holding, a comment saying it does would not have caught it.
   `RangeScrubber` is a brush over a histogram of the crawled drafts
   (`/api/adp/density`), and it replaced a pair of `mm/dd/yyyy` inputs that asked
   you to name a date while telling you nothing about where the drafts were —
-  you guessed, then read the count that came back. Four things in it are
+  you guessed, then read the count that came back. Six things in it are
   decisions, not styling:
   - **A handle on an edge of the domain is an *open* bound, not that date**
     (`edgeBounds` in `range-domain`, pure and tested). It is what keeps "all
@@ -604,7 +604,33 @@ stops holding, a comment saying it does would not have caught it.
     though it is still a preset *value* — it is what moving a handle produces.
     The relative presets keep earning their place for the reason they always did:
     "Last 90 days" is still the last 90 days tomorrow, where the dates behind it
-    would not be.
+    would not be. They are laid out as the same label-and-segments row as the
+    value curve below them, because two rows of controls that behave identically
+    shouldn't look like two kinds of control — which is also why the 12-month
+    chip reads `12 mo`: as an equal quarter of that row it is ~72px on a phone,
+    and "12 months" wraps to two lines in it.
+  - **What the gesture means depends on where it starts** — the brush split
+    everyone already knows. Inside the window drags the *window* (`panWindow`,
+    clamped at the domain edges with its length intact, because a pan that
+    silently shortened the span answers a different question than the one being
+    dragged); outside it sweeps a new one. The consequence worth stating is that
+    a **press has to be able to mean nothing at all**: sweeping used to commit on
+    pointer-down, so the lightest tap anywhere on the strip collapsed the window
+    to the single day under the finger — which on a phone is what "I meant to
+    scroll" looks like. `SWEEP_SLOP` is that: a few pixels of travel before a
+    press counts as drawing.
+  - **A date the control is about is a date the control says.** Three readouts,
+    none of them decoration: a bubble follows the pointer over the strip (the
+    answer to "what is this bar" used to require dragging a handle onto it), the
+    handles are a thumb rather than a hairline (a 12px target over a 2px mark is
+    one you miss on a phone, and missing it *swept a new window*), and the
+    caption spells out the dates behind a preset's name — `rangeSummary`, which
+    is what `rangeLabel` deliberately doesn't say. The label stays "Last 90 days"
+    everywhere it stands alone, because the name survives the passage of time;
+    inside the control, where the handles are sitting on those dates, naming the
+    window without naming its edges leaves them to be read off the axis. Panning
+    is the one gesture with no bubble — both ends are moving, and the caption's
+    live pair says more than one date would.
 - **A modal that refocuses itself must not depend on its callers' callbacks.**
   `AdpDrawer`'s open effect held `onClose` in its deps, and every caller passes a
   fresh arrow each render — so every keystroke re-ran it and `panel.focus()` took

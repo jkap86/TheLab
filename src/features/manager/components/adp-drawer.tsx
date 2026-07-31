@@ -468,25 +468,26 @@ function RangeControl({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* The same label-and-segments row as the value curve below, rather than
+          the loose pills this was: two rows of controls that behave identically
+          shouldn't look like two kinds of control. A custom window lights none
+          of them, which is the honest state — the caption under the strip is
+          where its dates are read. */}
+      <div className="flex items-center gap-2">
         <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
           Drafted
         </span>
-        {ADP_RANGE_PRESETS.map((preset) => (
-          <button
-            key={preset.value}
-            type="button"
-            onClick={() => onChange({ preset: preset.value, from: null, to: null })}
-            aria-pressed={range.preset === preset.value}
-            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-              range.preset === preset.value
-                ? "border-active/35 bg-active/10 text-active"
-                : "border-foreground/10 bg-foreground/5 text-foreground/50 hover:border-foreground/25 hover:text-foreground/80"
-            }`}
-          >
-            {preset.chip}
-          </button>
-        ))}
+        <div className="flex flex-1 gap-1">
+          {ADP_RANGE_PRESETS.map((preset) => (
+            <Segment
+              key={preset.value}
+              active={range.preset === preset.value}
+              onClick={() => onChange({ preset: preset.value, from: null, to: null })}
+            >
+              {preset.chip}
+            </Segment>
+          ))}
+        </div>
       </div>
 
       <RangeScrubber

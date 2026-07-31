@@ -7,6 +7,7 @@ import {
   deriveScoring,
   rangeBounds,
   rangeLabel,
+  rangeSummary,
   seedFromLeague,
   todayIso,
   type AdpControls,
@@ -257,6 +258,35 @@ describe("rangeLabel", () => {
     assert.equal(rangeLabel({ preset: "custom", from: null, to: "2026-07-31" }), "Through Jul 31, 2026");
     // Neither end set narrows nothing, so say what it does rather than "Custom".
     assert.equal(rangeLabel({ preset: "custom", from: null, to: null }), "All time");
+  });
+});
+
+describe("rangeSummary", () => {
+  test("says the dates a preset's name doesn't", () => {
+    // The label stays "Last 90 days"; inside the scrubber, where the handles
+    // are sitting on those dates, the reader shouldn't have to work them back
+    // off the axis.
+    assert.equal(rangeSummary({ preset: "90d", from: null, to: null }, TODAY), "since May 2, 2026");
+    assert.equal(rangeSummary({ preset: "12m", from: null, to: null }, TODAY), "since Jul 31, 2025");
+  });
+
+  test("a bounded range reads as its pair, a half-open one as its end", () => {
+    const custom = (from: string | null, to: string | null): AdpRange => ({
+      preset: "custom",
+      from,
+      to,
+    });
+    assert.equal(
+      rangeSummary(custom("2026-06-01", "2026-07-31"), TODAY),
+      "Jun 1, 2026 – Jul 31, 2026",
+    );
+    assert.equal(rangeSummary(custom(null, "2026-07-31"), TODAY), "up to Jul 31, 2026");
+  });
+
+  test("an unbounded range has nothing to add", () => {
+    // "All time" needs no gloss, and null is what the caller skips rendering.
+    assert.equal(rangeSummary({ preset: "all", from: null, to: null }, TODAY), null);
+    assert.equal(rangeSummary({ preset: "custom", from: null, to: null }, TODAY), null);
   });
 });
 
