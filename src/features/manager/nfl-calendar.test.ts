@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { nflMarkers, nflMarkersIn } from "./nfl-calendar.ts";
+import { firstKickoff, nflMarkers, nflMarkersIn } from "./nfl-calendar.ts";
 
 describe("nflMarkers", () => {
   test("every season contributes a draft, a preseason and a regular season", () => {
@@ -69,5 +69,17 @@ describe("nflMarkersIn", () => {
 
   test("an inverted window matches nothing rather than everything", () => {
     assert.deepEqual(nflMarkersIn("2026-07-31", "2026-01-01"), []);
+  });
+});
+
+describe("firstKickoff", () => {
+  test("is the regular season's opening day at the traditional 8:20 ET slot", () => {
+    assert.equal(firstKickoff("2026"), Date.parse("2026-09-10T20:20:00-04:00"));
+    assert.equal(firstKickoff("2025"), Date.parse("2025-09-04T20:20:00-04:00"));
+  });
+
+  test("a season off the table is null, not a guess", () => {
+    assert.equal(firstKickoff("2031"), null);
+    assert.equal(firstKickoff(""), null);
   });
 });

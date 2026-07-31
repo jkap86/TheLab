@@ -550,5 +550,20 @@ export type ProjectionsSyncPayload = ProjectionsSyncSummary;
 /** What `/api/players/sync` answers with — see {@link ProjectionsSyncPayload}. */
 export type PlayersSyncPayload = PlayersSyncSummary;
 
+/**
+ * `GET /api/kickoff?season=YYYY` — when the season's first regular-season game
+ * kicks off, per Sleeper's schedule call.
+ *
+ * `kickoff` is epoch ms, and null is a real answer, not a failure: Sleeper
+ * hasn't scheduled the season (or has scheduled it only to the day), so there
+ * is no instant to count down to. The client falls back to the NFL calendar
+ * table's provisional date in that case — the same claim the ADP scrubber's
+ * markers make — rather than the server inventing an hour.
+ */
+export type KickoffPayload = {
+  season: string;
+  kickoff: number | null;
+};
+
 /** The error body every league API route returns on a non-2xx. */
 export type ApiErrorPayload = { error: string };

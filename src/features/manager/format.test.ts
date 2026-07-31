@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  formatCountdown,
   formatPoints,
   formatRecord,
   formatValue,
@@ -36,6 +37,28 @@ describe("formatWinPct", () => {
 
   test("shows nothing played as an em dash, not as zero", () => {
     assert.equal(formatWinPct(null), "—");
+  });
+});
+
+describe("formatCountdown", () => {
+  test("reads in days with the trailing units padded in place", () => {
+    const ms = ((37 * 24 + 4) * 3600 + 12 * 60 + 45) * 1000;
+    assert.equal(formatCountdown(ms), "37d 04h 12m 45s");
+  });
+
+  test("drops units the countdown has outgrown", () => {
+    assert.equal(formatCountdown((4 * 3600 + 9 * 60) * 1000), "4h 09m 00s");
+    assert.equal(formatCountdown((12 * 60 + 3) * 1000), "12m 03s");
+    assert.equal(formatCountdown(41 * 1000), "41s");
+  });
+
+  test("an instant already passed clamps to zero rather than negative", () => {
+    assert.equal(formatCountdown(0), "0s");
+    assert.equal(formatCountdown(-5000), "0s");
+  });
+
+  test("floors a partial second so the last tick reads 0s, not 1s", () => {
+    assert.equal(formatCountdown(999), "0s");
   });
 });
 
