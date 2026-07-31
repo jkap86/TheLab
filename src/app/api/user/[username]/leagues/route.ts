@@ -52,7 +52,14 @@ export async function GET(
   const isStale = !syncedAt || Date.now() - syncedAt.getTime() >= SYNC_TTL_MS;
   const wantRefresh = force || isStale;
   // Skip a duplicate background refresh only when we can still serve cache.
+  // Check and reserve back-to-back with no await between them — the reservation
+  // used to happen inside the stream, after the cached-leagues read, and two
+  // requests in that window both passed the check and both ran the full forced
+  // sync. (Cold requests deliberately don't dedupe here: each caller needs a
+  // progress stream, and the per-manager advisory lock inside
+  // `syncManagerLeagues` keeps the losers from repeating the winner's fan-out.)
   const willRefresh = wantRefresh && !(hasCache && refreshInFlight.has(refreshKey));
+  if (willRefresh) refreshInFlight.add(refreshKey);
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -83,35 +90,34 @@ export async function GET(
 
         // 2. Sync — background refresh (cache already sent) or cold foreground.
         if (willRefresh) {
-          refreshInFlight.add(refreshKey);
-          try {
-            const summary = await syncManagerLeagues(user.user_id, season, {
-              force: true,
-              onProgress: (progress) =>
-                send({
-                  type: "progress",
-                  phase: hasCache ? "refresh" : "initial",
-                  ...progress,
-                }),
-            });
-            const leagues = await getManagerLeagues(user.user_id, season);
-            send({
-              type: "result",
-              user: userInfo,
-              season,
-              leagues,
-              stale: false,
-              refreshing: false,
-              summary,
-            });
-          } finally {
-            refreshInFlight.delete(refreshKey);
-          }
+          const summary = await syncManagerLeagues(user.user_id, season, {
+            force: true,
+            onProgress: (progress) =>
+              send({
+                type: "progress",
+                phase: hasCache ? "refresh" : "initial",
+                ...progress,
+              }),
+          });
+          const leagues = await getManagerLeagues(user.user_id, season);
+          send({
+            type: "result",
+            user: userInfo,
+            season,
+            leagues,
+            stale: false,
+            refreshing: false,
+            summary,
+          });
         }
       } catch (error) {
         console.error("[leagues] sync failed:", error);
         send({ type: "error", error: "Failed to sync leagues" });
       } finally {
+        // Released here rather than around the sync alone: the reservation is
+        // taken before the stream starts, so a cache read that throws must
+        // still let a later request refresh this manager.
+        if (willRefresh) refreshInFlight.delete(refreshKey);
         if (!closed) {
           try {
             controller.close();

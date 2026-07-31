@@ -7,6 +7,7 @@ import {
   claimStaleLeagues,
   countDueLeagues,
   knownLeagueIds,
+  markLeaguesGone,
   pendingManagers,
   stampManagers,
 } from "./crawl-queue";
@@ -51,7 +52,10 @@ export type RefreshResult = {
   refreshed: number;
   /** leagues whose refresh failed; rotated to the back of the queue. */
   refreshFailed: number;
-  /** leagues Sleeper no longer serves (deleted). Rows are left in place. */
+  /**
+   * Leagues Sleeper no longer serves (deleted). Rows are left in place — their
+   * drafts still feed ADP — but tombstoned out of the refresh queue.
+   */
   gone: number;
   /** leagues still past the freshness TTL after this tick. */
   due: number;
@@ -109,14 +113,14 @@ async function refreshStaleLeagues(
   if (leagueIds.length === 0) return { ...NO_REFRESH, due };
 
   const leagues: SleeperLeague[] = [];
-  let gone = 0;
+  const goneIds: string[] = [];
   let failed = 0;
 
   await mapWithConcurrency(leagueIds, CRAWL_CONCURRENCY, async (leagueId) => {
     try {
       const league = await getLeague(leagueId);
       if (league) leagues.push(league);
-      else gone += 1;
+      else goneIds.push(leagueId);
     } catch (error) {
       failed += 1;
       console.warn(
@@ -126,6 +130,10 @@ async function refreshStaleLeagues(
     }
   });
 
+  // Tombstoned so the queue stops claiming them — an unmarked deleted league
+  // stays due forever and burns a slot plus a Sleeper request every rotation.
+  await markLeaguesGone(goneIds);
+
   const result = await syncLeagueGraphs(leagues, currentWeek, {
     concurrency: CRAWL_CONCURRENCY,
   });
@@ -133,7 +141,7 @@ async function refreshStaleLeagues(
   return {
     refreshed: result.loaded,
     refreshFailed: failed + result.failed,
-    gone,
+    gone: goneIds.length,
     // The batch we just claimed no longer counts as due unless it failed.
     due: Math.max(due - result.loaded, 0),
   };

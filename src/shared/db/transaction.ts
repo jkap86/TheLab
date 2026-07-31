@@ -13,6 +13,7 @@ export async function withTransaction<T>(
   fn: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
   const client = await pool.connect();
+  let rollbackFailed = false;
   try {
     await client.query("BEGIN");
     const result = await fn(client);
@@ -24,10 +25,14 @@ export async function withTransaction<T>(
     try {
       await client.query("ROLLBACK");
     } catch (rollbackError) {
-      console.error("[db] ROLLBACK failed:", rollbackError);
+      rollbackFailed = true;
+      console.error("[db] ROLLBACK failed; dropping connection:", rollbackError);
     }
     throw error;
   } finally {
-    client.release();
+    // A client whose ROLLBACK failed may still be inside the aborted
+    // transaction; a healthy release would hand the next borrower a connection
+    // that rejects every query. Destroy it instead, as `lock.ts` does.
+    client.release(rollbackFailed);
   }
 }

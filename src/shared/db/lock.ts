@@ -17,7 +17,65 @@ export const LOCK_KEYS = {
   ktcHistory: [8675309, 3],
   /** Weekly projections sync (`shared/projections/sync.ts`). */
   projections: [8675309, 4],
+  /** Sleeper players-map refresh (`shared/players/sync.ts`). */
+  players: [8675309, 5],
 } as const satisfies Record<string, AdvisoryLockKey>;
+
+/**
+ * The per-manager league sync's lock key: one lock per manager, in a class of
+ * its own so hashed ids can't collide with the fixed keys above. The hash is
+ * FNV-1a folded to a signed int32 — collisions across managers are possible and
+ * only cost an unnecessary skip, never a correctness failure.
+ */
+/**
+ * Run `fn` while holding a Postgres advisory lock, waiting for it rather than
+ * skipping — the counterpart to {@link withAdvisoryLock} for work a caller
+ * needs the *result* of, not just done. Waiting happens server-side in
+ * `pg_advisory_lock`, so a queued caller costs one idle pool connection and no
+ * polling. Use where the contended work is per-key and short-lived (a
+ * manager's league sync), not for the background loops — a loop that queues
+ * behind another instance instead of skipping would stack ticks.
+ */
+export async function withBlockingAdvisoryLock<T>(
+  [classId, objId]: AdvisoryLockKey,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  let unlockFailed = false;
+
+  try {
+    await client.query(`SELECT pg_advisory_lock($1::int, $2::int)`, [
+      classId,
+      objId,
+    ]);
+    try {
+      return await fn();
+    } finally {
+      // Same discipline as above: a session lock outlives release(), so a
+      // failed unlock must drop the connection or hold the key forever.
+      try {
+        await client.query(`SELECT pg_advisory_unlock($1::int, $2::int)`, [
+          classId,
+          objId,
+        ]);
+      } catch (error) {
+        unlockFailed = true;
+        console.error("[db] Advisory unlock failed; dropping connection:", error);
+      }
+    }
+  } finally {
+    client.release(unlockFailed);
+  }
+}
+
+export function managerSyncLockKey(userId: string): AdvisoryLockKey {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < userId.length; i++) {
+    hash ^= userId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return [8675310, hash | 0];
+}
 
 /**
  * Run `fn` while holding a Postgres advisory lock, or return `null` immediately
