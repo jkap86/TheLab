@@ -26,7 +26,8 @@ export async function countDueLeagues(
   const { rows } = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count
        FROM leagues
-      WHERE season = $1 AND updated_at < now() - $2::interval`,
+      WHERE season = $1 AND updated_at < now() - $2::interval
+        AND gone_at IS NULL`,
     [season, msInterval(ttlMs)],
   );
   return Number(rows[0].count);
@@ -51,6 +52,7 @@ export async function claimStaleLeagues(
               SELECT league_id
                 FROM leagues
                WHERE season = $1 AND updated_at < now() - $2::interval
+                 AND gone_at IS NULL
                ORDER BY sync_attempt_at ASC NULLS FIRST
                LIMIT $3
             )
@@ -81,6 +83,22 @@ export async function pendingManagers(
     [season, msInterval(ttlMs), limit],
   );
   return rows.map((r) => r.user_id);
+}
+
+/**
+ * Tombstone leagues Sleeper no longer serves, so the refresh queue stops
+ * claiming them: an unmarked deleted league is due forever — its `updated_at`
+ * never advances — and permanently burns a claim slot plus a Sleeper request
+ * per rotation. The rows stay (their drafts still feed ADP), and the marker is
+ * cleared by `persistLeagueGraph` if a manager-driven sync finds the league
+ * alive again.
+ */
+export async function markLeaguesGone(leagueIds: string[]): Promise<void> {
+  if (leagueIds.length === 0) return;
+  await pool.query(
+    `UPDATE leagues SET gone_at = now() WHERE league_id = ANY($1::varchar[])`,
+    [leagueIds],
+  );
 }
 
 /**

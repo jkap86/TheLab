@@ -26,14 +26,21 @@ function subscribe(onStoreChange: () => void) {
   };
 }
 
+// When `localStorage` is blocked (a privacy policy, an old private mode), the
+// account still has to live *somewhere* for this session — the store is the
+// only state, so with no fallback a successful lookup would be silently
+// discarded and the grid would stay locked with nothing to show for it.
+// Persistence is the convenience; this variable is the correctness.
+let memoryFallback: string | null = null;
+
 // The raw string, not the parsed object: `useSyncExternalStore` compares
 // snapshots by identity, so a fresh `JSON.parse` on every read would look like a
 // change each render and loop. Parsing happens once, in a memo keyed on this.
 function readStored(): string | null {
   try {
-    return window.localStorage.getItem(STORAGE_KEY);
+    return window.localStorage.getItem(STORAGE_KEY) ?? memoryFallback;
   } catch {
-    return null;
+    return memoryFallback;
   }
 }
 
@@ -43,11 +50,13 @@ function readServer(): null {
 }
 
 function storeUser(user: UserInfo | null) {
+  const serialized = user ? JSON.stringify(user) : null;
+  memoryFallback = serialized;
   try {
-    if (user) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    if (serialized) window.localStorage.setItem(STORAGE_KEY, serialized);
     else window.localStorage.removeItem(STORAGE_KEY);
   } catch {
-    // Storage can be blocked; persistence is a convenience, not correctness.
+    // Storage can be blocked; the memory fallback above carries the session.
   }
   // `storage` events don't fire in the tab that wrote, so notify our own.
   listeners.forEach((onStoreChange) => onStoreChange());

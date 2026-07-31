@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import type { ManagerAdpValuePayload } from "@/shared/contract";
+import type {
+  ApiErrorPayload,
+  ManagerAdpValuePayload,
+} from "@/shared/contract";
 import { isSuperflexLineup } from "@/shared/ktc";
 import {
   STEEPNESS_HALVINGS,
@@ -10,10 +13,10 @@ import {
   getDraftAdpForPlayers,
   getLeagueTypes,
   getManagerLeagueRosters,
+  leagueAdpPool,
   parseSteepness,
   rankOf,
   rosterAdpValue,
-  startingSlotCount,
 } from "@/shared/manager";
 import type { AdpFilters } from "@/shared/manager";
 import { getOptimalLineups } from "@/shared/projections";
@@ -52,6 +55,21 @@ export async function GET(
   // param; an unknown value falls back to the default rather than being trusted.
   const halvings = STEEPNESS_HALVINGS[parseSteepness(searchParams.get("steepness"))];
 
+  try {
+    return await adpValuePayload(username, userId, season, halvings);
+  } catch (error) {
+    console.error("[adp-value] query failed:", error);
+    const payload: ApiErrorPayload = { error: "Failed to load ADP values" };
+    return NextResponse.json(payload, { status: 500 });
+  }
+}
+
+async function adpValuePayload(
+  username: string,
+  userId: string,
+  season: string,
+  halvings: number,
+) {
   const leagues = await getManagerLeagueRosters(userId, season);
   const withOwn = leagues.filter((league) =>
     league.teams.some((t) => t.owner_id === userId),
@@ -131,11 +149,7 @@ export async function GET(
     const own = league.teams.find((t) => t.owner_id === userId)!;
     const board = boardValues.get(leagueBoard.get(league.league_id)!)!;
 
-    // The startable pool the curve is anchored to: teams × starting slots. A
-    // league with no slots on file falls back to a typical lineup depth, since a
-    // pool of zero would collapse the whole curve.
-    const pool =
-      league.teams.length * (startingSlotCount(league.roster_positions) || 9);
+    const pool = leagueAdpPool(league.teams.length, league.roster_positions);
 
     // Curve this board's ADP into values for this league's pool. The pool is per
     // league, so two leagues sharing a board are still priced on their own size.

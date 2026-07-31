@@ -619,10 +619,12 @@ stops holding, a comment saying it does would not have caught it.
   team.
 - **The KTC metrics are batched like the rank ones, and for the same reason.** A
   collapsed card costs no request, so a hundred of them each fetching a value
-  would undo that. The route reads `getManagerLeagueRosters` and drops every team
-  but the manager's own *before* the projections read — a hundred leagues of
-  twelve rosters is twelve times the lineup solving for eleven answers nobody
-  asked for. `getOptimalLineups` is the third entry point in `projections/outlook`
+  would undo that. The route reads `getManagerLeagueRosters` and prices and
+  solves *every* team, not just the manager's own — the card carries a
+  starter-value rank now, and a rank of one roster can't be known without the
+  other eleven's starter values, so the old shortcut of dropping them before the
+  projections read is gone on purpose.
+  `getOptimalLineups` is the third entry point in `projections/outlook`
   beside `getLeagueOutlook` and `getWeeklyTeamPoints`, and it is the cheapest of
   the three per team: the aggregate lineup is ranked on a season total, so the
   stat lines are summed once for the whole account (scoring is linear, so a

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ApiErrorPayload } from "@/shared/contract";
 import { resolveManagerUser } from "@/shared/manager";
+import { isSeason } from "@/shared/query";
 import type { SleeperUser } from "@/shared/sleeper";
 import { DEFAULT_SEASON } from "@/shared/sleeper";
 
@@ -54,12 +55,23 @@ export async function resolveManagerRequest(
 
   const searchParams = new URL(request.url).searchParams;
 
+  // Rejected rather than passed through: a junk season would reach Sleeper,
+  // sync nothing, and stamp a `manager_syncs` row keyed to it — the caller
+  // would see an indistinguishable "manager has no leagues" instead of a 400.
+  const season = searchParams.get("season")?.trim();
+  if (season && !isSeason(season)) {
+    const error: ApiErrorPayload = {
+      error: `Invalid season: ${season}. Expected a 4-digit year.`,
+    };
+    return { ok: false, response: NextResponse.json(error, { status: 400 }) };
+  }
+
   return {
     ok: true,
     username,
     user: resolved.user,
     userId: resolved.user.user_id,
-    season: searchParams.get("season")?.trim() || DEFAULT_SEASON,
+    season: season || DEFAULT_SEASON,
     searchParams,
   };
 }

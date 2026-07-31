@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type {
+  ApiErrorPayload,
   LeaguematePayload,
   ManagerLeaguematesPayload,
 } from "@/shared/contract";
@@ -30,21 +31,27 @@ export async function GET(
   if (!resolved.ok) return resolved.response;
   const { userId, season } = resolved;
 
-  const { members, users } = await getManagerLeaguemates(userId, season);
+  try {
+    const { members, users } = await getManagerLeaguemates(userId, season);
 
-  const resolvedUsers: Record<string, LeaguematePayload> = {};
-  for (const [id, u] of Object.entries(users)) {
-    resolvedUsers[id] = {
-      user_id: u.user_id,
-      display_name: u.display_name,
-      avatar_url: sleeperAvatarUrl(u.avatar, "thumb"),
+    const resolvedUsers: Record<string, LeaguematePayload> = {};
+    for (const [id, u] of Object.entries(users)) {
+      resolvedUsers[id] = {
+        user_id: u.user_id,
+        display_name: u.display_name,
+        avatar_url: sleeperAvatarUrl(u.avatar, "thumb"),
+      };
+    }
+
+    const payload: ManagerLeaguematesPayload = {
+      season,
+      members,
+      users: resolvedUsers,
     };
+    return NextResponse.json(payload);
+  } catch (error) {
+    console.error("[leaguemates] query failed:", error);
+    const payload: ApiErrorPayload = { error: "Failed to load leaguemates" };
+    return NextResponse.json(payload, { status: 500 });
   }
-
-  const payload: ManagerLeaguematesPayload = {
-    season,
-    members,
-    users: resolvedUsers,
-  };
-  return NextResponse.json(payload);
 }

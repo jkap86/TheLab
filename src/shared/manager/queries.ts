@@ -1,5 +1,6 @@
 import { pool } from "@/shared/db";
 
+import { LEAGUE_TYPE_SQL } from "./adp";
 import { LEAGUE_TYPE_CODES } from "./adp-filters";
 import type { LeagueType } from "./adp-filters";
 import { ownedDraftPicks } from "./draft-picks";
@@ -285,10 +286,8 @@ export async function getLeagueTypes(
   if (leagueIds.length === 0) return new Map();
 
   const { rows } = await pool.query<{ league_id: string; type_code: number }>(
-    `SELECT league_id,
-            CASE WHEN settings->>'type' ~ '^[0-9]+$'
-                 THEN (settings->>'type')::int ELSE 0 END AS type_code
-       FROM leagues
+    `SELECT league_id, ${LEAGUE_TYPE_SQL} AS type_code
+       FROM leagues l
       WHERE league_id = ANY($1::varchar[])`,
     [[...leagueIds]],
   );

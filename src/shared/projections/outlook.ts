@@ -87,9 +87,10 @@ export type TeamOutlook = LineupComparison & {
    * `weekly_optimal_points` broken out per player: what each one is projected for
    * in the weeks he makes that week's lineup, and in the weeks he doesn't.
    *
-   * Keyed by player id, over every player who was a candidate for this team's
-   * lineup — which is the whole roster, IR and taxi included, since a stashed
-   * player is treated as startable bench depth rather than as unavailable.
+   * Keyed by player id, over every candidate — the whole roster, IR and taxi
+   * included — who is projected in at least one remaining week. A player with
+   * no projection at all (out for the season, off Sleeper's slate) has no
+   * entry: the same absence-is-not-zero rule the weekly solve applies per week.
    *
    * A team-level answer rather than a league-level one, which is why it sits here
    * and not in `players`: the same projection makes the lineup on one roster and

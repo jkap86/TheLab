@@ -4,9 +4,11 @@ import { describe, test } from "node:test";
 import {
   ADP_PEAK,
   DEFAULT_STEEPNESS,
+  TYPICAL_STARTING_SLOTS,
   adpBoardFor,
   adpValue,
   boardSignature,
+  leagueAdpPool,
   parseSteepness,
   rosterAdpValue,
   startingSlotCount,
@@ -81,6 +83,20 @@ describe("startingSlotCount", () => {
   test("no slots on file is zero, not a guess", () => {
     assert.equal(startingSlotCount(null), 0);
     assert.equal(startingSlotCount([]), 0);
+  });
+});
+
+describe("leagueAdpPool", () => {
+  test("teams times starting slots", () => {
+    assert.equal(leagueAdpPool(12, ["QB", "RB", "WR", "BN"]), 36);
+  });
+
+  test("a league with no slots on file falls back to a typical lineup", () => {
+    // The fallback keeps the curve from collapsing to a pool of zero; the same
+    // number must reach the league route and the adp-value route, which is why
+    // it lives here and not retyped per caller.
+    assert.equal(leagueAdpPool(10, null), 10 * TYPICAL_STARTING_SLOTS);
+    assert.equal(leagueAdpPool(10, []), 10 * TYPICAL_STARTING_SLOTS);
   });
 });
 

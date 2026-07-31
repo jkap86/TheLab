@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-import type { ManagerKtcPayload } from "@/shared/contract";
+import type { ApiErrorPayload, ManagerKtcPayload } from "@/shared/contract";
 import {
   getKtcValuesBySleeperId,
   isSuperflexLineup,
+  ktcBoardValue,
   rosterKtcValue,
 } from "@/shared/ktc";
 import { getManagerLeagueRosters, rankOf } from "@/shared/manager";
@@ -42,6 +43,16 @@ export async function GET(
   if (!resolved.ok) return resolved.response;
   const { username, userId, season } = resolved;
 
+  try {
+    return await ktcPayload(username, userId, season);
+  } catch (error) {
+    console.error("[ktc] query failed:", error);
+    const payload: ApiErrorPayload = { error: "Failed to load KTC values" };
+    return NextResponse.json(payload, { status: 500 });
+  }
+}
+
+async function ktcPayload(username: string, userId: string, season: string) {
   // Sequential rather than parallel: which rosters to price is the answer to
   // the first read.
   const leagues = await getManagerLeagueRosters(userId, season);
@@ -100,8 +111,8 @@ export async function GET(
     for (const team of league.teams) {
       const values = new Map<string, number>();
       for (const id of team.players) {
-        const board = superflex ? ktc.values[id]?.sf : ktc.values[id]?.oneqb;
-        if (typeof board === "number") values.set(id, board);
+        const board = ktcBoardValue(superflex, ktc.values[id]);
+        if (board !== null) values.set(id, board);
       }
       const value = rosterKtcValue({
         players: team.players,

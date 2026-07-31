@@ -12,6 +12,23 @@
 import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../projections/slots.ts";
 
 /**
+ * The slots a quarterback can start in, derived from {@link SLOT_POSITIONS} the
+ * way `DEFENSIVE_SLOTS` is: a new QB-eligible flex counts the moment the solver
+ * learns it. Exported because the superflex question is asked in SQL too —
+ * `shared/manager/adp` classifies stored leagues with this same list, so the
+ * predicate that groups a draft into a board population can't drift from the
+ * one that picks a league's board here.
+ */
+export const QB_ELIGIBLE_STARTING_SLOTS: readonly string[] = Object.entries(
+  SLOT_POSITIONS,
+)
+  .filter(
+    ([slot, positions]) =>
+      !NON_STARTING_SLOTS.has(slot) && positions.includes("QB"),
+  )
+  .map(([slot]) => slot);
+
+/**
  * Whether a league starts more than one quarterback, which is the only question
  * KTC's two boards answer differently.
  *
@@ -20,22 +37,38 @@ import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../projections/slots.ts";
  * off the 1QB board understates every roster in it by roughly the value of its
  * starting quarterbacks. Which board priced a number therefore travels with it.
  *
- * Derived from {@link SLOT_POSITIONS} rather than testing for `SUPER_FLEX` by
- * name, for the reason `DEFENSIVE_SLOTS` is derived: a new QB-eligible flex
- * counts here the moment the solver learns it, where a hard-coded name would
- * quietly price those leagues off the wrong board.
+ * Derived from {@link QB_ELIGIBLE_STARTING_SLOTS} rather than testing for
+ * `SUPER_FLEX` by name, for the reason `DEFENSIVE_SLOTS` is derived: a new
+ * QB-eligible flex counts here the moment the solver learns it, where a
+ * hard-coded name would quietly price those leagues off the wrong board.
  */
 export function isSuperflexLineup(
   rosterPositions: readonly string[] | null,
 ): boolean {
   if (!rosterPositions) return false;
 
-  const qbSlots = rosterPositions.filter(
-    (slot) =>
-      !NON_STARTING_SLOTS.has(slot) &&
-      (SLOT_POSITIONS[slot] ?? []).includes("QB"),
+  const qbSlots = rosterPositions.filter((slot) =>
+    QB_ELIGIBLE_STARTING_SLOTS.includes(slot),
   );
   return qbSlots.length > 1;
+}
+
+/**
+ * The price a league reads for one player: the superflex or the 1QB number,
+ * per {@link isSuperflexLineup}. Null when KTC prices neither board (or the
+ * player is off the board entirely — pass `undefined` through), which callers
+ * must keep distinct from zero: being unpriced is a different claim from being
+ * worth nothing.
+ *
+ * One function rather than a `superflex ? sf : oneqb` per route, so every
+ * surface reads the same board the same way.
+ */
+export function ktcBoardValue(
+  superflex: boolean,
+  value: { sf: number | null; oneqb: number | null } | undefined,
+): number | null {
+  if (!value) return null;
+  return superflex ? value.sf : value.oneqb;
 }
 
 /** One roster's KeepTradeCut value, whole and split across its lineup. */

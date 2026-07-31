@@ -65,8 +65,9 @@ export async function getKtcValuesBySleeperId(
   let newest: Date | null = null;
   for (const r of rows) {
     values[r.sleeper_id] = { sf: r.sf_value, oneqb: r.oneqb_value };
-    // The sync replaces the whole table in one transaction, so these agree
-    // today; taking the newest keeps that from being something to rely on.
+    // The sync upserts the board and nulls what fell off it, all in one
+    // transaction, so every row it touched carries the same stamp; taking the
+    // newest keeps that from being something to rely on.
     if (!newest || r.updated_at > newest) newest = r.updated_at;
   }
 

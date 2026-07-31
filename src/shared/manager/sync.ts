@@ -1,4 +1,8 @@
-import { pool } from "@/shared/db";
+import {
+  managerSyncLockKey,
+  pool,
+  withBlockingAdvisoryLock,
+} from "@/shared/db";
 import { getNflState, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague } from "@/shared/sleeper";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
@@ -142,17 +146,41 @@ export async function syncLeagueGraphs(
 /**
  * Fetch a manager's leagues (and rosters, members, traded picks, drafts, and
  * draft picks) from Sleeper for a season and persist them to Postgres.
+ *
+ * Held under a per-manager advisory lock so concurrent callers — two tabs, or
+ * two app instances sharing one database — don't each run the full ~9-requests-
+ * per-league fan-out against Sleeper. The lock *waits* rather than skipping,
+ * because callers want the data, not just the work done: a loser that skipped
+ * would answer from a cache the winner is mid-way through writing. The
+ * freshness decision lives inside the lock (the "take it around the freshness
+ * check too" rule), and a sync that completed while we queued counts as this
+ * request's sync even when `force` is set — force means "the caller decided a
+ * refresh is due", and the winner just did that refresh.
  */
 export async function syncManagerLeagues(
   userId: string,
   season: string,
   options: SyncOptions = {},
 ): Promise<SyncSummary> {
+  const requestedAt = new Date();
+  return withBlockingAdvisoryLock(managerSyncLockKey(userId), () =>
+    syncManagerLeaguesLocked(userId, season, requestedAt, options),
+  );
+}
+
+async function syncManagerLeaguesLocked(
+  userId: string,
+  season: string,
+  requestedAt: Date,
+  options: SyncOptions,
+): Promise<SyncSummary> {
   const { force = false, concurrency, onProgress } = options;
 
-  if (!force) {
-    const syncedAt = await getManagerSyncedAt(userId, season);
-    if (syncedAt && Date.now() - syncedAt.getTime() < SYNC_TTL_MS) {
+  const syncedAt = await getManagerSyncedAt(userId, season);
+  if (syncedAt) {
+    const fresh = Date.now() - syncedAt.getTime() < SYNC_TTL_MS;
+    const finishedWhileWaiting = syncedAt >= requestedAt;
+    if (finishedWhileWaiting || (!force && fresh)) {
       return {
         season, skipped: true, total: 0, leagues: 0, failed: 0, ...emptyCounts(),
       };

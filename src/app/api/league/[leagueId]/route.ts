@@ -5,7 +5,11 @@ import type {
   LeagueDetailPayload,
   LeagueRosterValues,
 } from "@/shared/contract";
-import { getKtcValuesBySleeperId, isSuperflexLineup } from "@/shared/ktc";
+import {
+  getKtcValuesBySleeperId,
+  isSuperflexLineup,
+  ktcBoardValue,
+} from "@/shared/ktc";
 import type { KtcValueSet } from "@/shared/ktc";
 import {
   DEFAULT_STEEPNESS,
@@ -15,7 +19,7 @@ import {
   getDraftAdpForPlayers,
   getLeagueDetail,
   getLeagueTypes,
-  startingSlotCount,
+  leagueAdpPool,
 } from "@/shared/manager";
 import type { LeagueType, PlayerAdp } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
@@ -68,8 +72,8 @@ async function priceRosters(args: {
   for (const [id, value] of Object.entries(ktcSet.values)) {
     // An id KTC prices on neither board (a kicker, a defence) is left absent, not
     // zeroed — being off the board is a different claim from being worth nothing.
-    const priced = superflex ? value.sf : value.oneqb;
-    if (priced !== null && priced !== undefined) ktc[id] = priced;
+    const priced = ktcBoardValue(superflex, value);
+    if (priced !== null) ktc[id] = priced;
   }
 
   const leagueType = leagueTypes.get(leagueId) ?? "redraft";
@@ -81,12 +85,9 @@ async function priceRosters(args: {
     },
   );
 
-  // The startable pool the value curve is anchored to: teams × starting slots,
-  // computed exactly as the adp-value route does, falling back to a typical
-  // lineup depth so a league with no slots on file can't collapse the curve.
-  // This panel offers no steepness control, so it reads the default the collapsed
-  // card's ADP metric also starts from.
-  const pool = teams * (startingSlotCount(rosterPositions) || 9);
+  // This panel offers no steepness control, so it reads the default the
+  // collapsed card's ADP metric also starts from.
+  const pool = leagueAdpPool(teams, rosterPositions);
   const halvings = STEEPNESS_HALVINGS[DEFAULT_STEEPNESS];
 
   const adp: Record<string, number> = {};
@@ -122,6 +123,16 @@ export async function GET(
 ) {
   const { leagueId } = await params;
 
+  try {
+    return await leaguePayload(leagueId);
+  } catch (error) {
+    console.error(`[league] query failed for ${leagueId}:`, error);
+    const payload: ApiErrorPayload = { error: "Failed to load league" };
+    return NextResponse.json(payload, { status: 500 });
+  }
+}
+
+async function leaguePayload(leagueId: string) {
   const detail = await getLeagueDetail(leagueId);
   if (!detail) {
     const error: ApiErrorPayload = { error: "League not found" };

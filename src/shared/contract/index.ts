@@ -13,8 +13,12 @@ import type {
 } from "@/shared/manager";
 import type { KtcRosterValue } from "@/shared/ktc";
 import type { PlaceholderPick } from "@/shared/picktracker";
-import type { PlayerSummary } from "@/shared/players";
-import type { LeagueOutlook, ProjectionFilters } from "@/shared/projections";
+import type { PlayersSyncSummary, PlayerSummary } from "@/shared/players";
+import type {
+  LeagueOutlook,
+  ProjectionFilters,
+  ProjectionsSyncSummary,
+} from "@/shared/projections";
 
 /**
  * The wire contract between this app's API routes and the client that reads
@@ -487,6 +491,17 @@ export type PicktrackerPayload = {
   /** The placeholder now on the clock; null once the draft is complete. */
   next_pick: string | null;
 };
+
+/**
+ * What `/api/projections/sync` answers with. The sync routes have no client
+ * reader today (they exist for operators and cron), but their payloads live
+ * here with everyone else's — a payload declared beside its route is exactly
+ * the drift this module exists to stop.
+ */
+export type ProjectionsSyncPayload = ProjectionsSyncSummary;
+
+/** What `/api/players/sync` answers with — see {@link ProjectionsSyncPayload}. */
+export type PlayersSyncPayload = PlayersSyncSummary;
 
 /** The error body every league API route returns on a non-2xx. */
 export type ApiErrorPayload = { error: string };

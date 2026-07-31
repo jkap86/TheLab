@@ -43,7 +43,12 @@ export async function syncKtcValues(
       return { locked: false, skipped: true, count: await countRows("ktc_values") };
     }
 
-    const players = await fetchKtcDynastyRankings();
+    // One junk playerID would put a null into the table's integer primary key
+    // and fail the whole transaction — every 15 minutes, since the forced
+    // refresh retries the same page. Filter once, before both writes below.
+    const players = (await fetchKtcDynastyRankings()).filter(
+      (p) => typeof p.playerID === "number",
+    );
 
     // Resolve KTC entries to Sleeper player_ids from the cached players map.
     // Best-effort: make sure that cache exists first, but never let a players
@@ -85,6 +90,22 @@ export async function syncKtcValues(
             oneqb_position_rank = EXCLUDED.oneqb_position_rank,
             data = EXCLUDED.data, updated_at = now()`,
       });
+      // KTC's board is a churning top-~500, so a refresh can shrink: a player
+      // who fell off would otherwise keep his last price forever and quietly
+      // read as current. Null the values (rather than delete the row — history
+      // FKs it with ON DELETE CASCADE) inside the same transaction, guarded on
+      // a non-empty fetch so an upstream hiccup can't blank the board.
+      if (players.length > 0) {
+        await client.query(
+          `UPDATE ktc_values
+              SET sf_value = NULL, sf_rank = NULL, sf_position_rank = NULL,
+                  oneqb_value = NULL, oneqb_rank = NULL,
+                  oneqb_position_rank = NULL, updated_at = now()
+            WHERE ktc_id <> ALL($1::int[])
+              AND (sf_value IS NOT NULL OR oneqb_value IS NOT NULL)`,
+          [players.map((p) => p.playerID)],
+        );
+      }
       // Same transaction, and after the upsert above so every ktc_id the
       // snapshot references already exists (ktc_value_history FKs ktc_values).
       await recordDailySnapshot(client, players);
