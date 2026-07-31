@@ -714,6 +714,22 @@ stops holding, a comment saying it does would not have caught it.
   `loading` because its panel mounts on expand. `useManagerLeagues` is not one
   either — it decodes an NDJSON stream. Two hooks that differ in what they
   guarantee are two hooks.
+- **The leagues route lists the leagues you *fielded a team in*, not every
+  membership Sleeper reports.** `getManagerLeagues` narrows the `league_users`
+  join by `FIELDED_A_TEAM_SQL`: a roster owned now, or a place in the draft when
+  it happened. Membership alone is not evidence of a team — Sleeper leaves you in
+  `league_users` after you stop holding one — so a league joined and abandoned
+  arrived looking exactly like one being played, and every page downstream counts
+  over this list. The draft half is what keeps a **guillotine** league in it:
+  being knocked out is that game's ending, not an exit, and the roster is gone
+  either way. Both draft signals are read because neither covers the other —
+  `draft_order` is null until an order is set (a league can hold rosters with no
+  draft yet), and `picked_by` is an empty string on an autopick, so a manager who
+  autopicked appears in the order and nowhere in the picks. The knock-on is worth
+  stating: a league you left *does* now drop out, and with it its leaguemates.
+  Only the leagues route filters — the batch reads beside it (`ranks`, `ktc`,
+  `adp-value`, `leaguemates`) still key on membership and are keyed by league id
+  by a client that no longer asks about those leagues.
 - **A player share is out of the leagues that hold a roster of yours, not the
   leagues listed.** They are different numbers — 121 leagues, 113 rosters for the
   account this was built against — because Sleeper keeps you in `league_users`
