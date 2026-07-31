@@ -7,6 +7,7 @@ import type { UserInfo } from "@/shared/contract";
 import { useUserLeagues } from "../hooks/use-user-leagues";
 import type { Tool } from "../tools.data";
 import { LeaguePicker } from "./league-picker";
+import { TOOL_CARD_SURFACE, ToolCardContent } from "./tool-card";
 import { ToolLinkCard } from "./tool-link-card";
 
 /**
@@ -39,11 +40,8 @@ export function PicktrackerCard({
   };
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-foreground/10 bg-foreground/[0.02] p-6">
-      <span className="text-xl font-medium">{tool.text}</span>
-      <span className="mt-2 text-sm text-foreground/55">{tool.description}</span>
-
-      <div className="mt-4">
+    <div className={TOOL_CARD_SURFACE}>
+      <ToolCardContent text={tool.text} description={tool.description}>
         {error ? (
           <p role="alert" className="text-sm text-red-300">
             {error}
@@ -55,7 +53,7 @@ export function PicktrackerCard({
             onSelect={handleSelect}
           />
         )}
-      </div>
+      </ToolCardContent>
     </div>
   );
 }
