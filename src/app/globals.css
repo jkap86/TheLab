@@ -21,6 +21,11 @@
 :root {
   --background: rgb(10, 20, 30);
 
+  /* The height of the pinned app bar (`SiteHeader`). Anything that pins itself
+     underneath — the manager card — offsets by this, so the two measurements
+     can't drift into a gap or an overlap. */
+  --site-header-h: 3rem;
+
   font-size: 16px;
 }
 

@@ -65,7 +65,6 @@ export function ManagerPlayers({ searched }: { searched: string }) {
   return (
     <LeaguesViewLayout
       view={view}
-      active="players"
       stat={{
         label: "Players",
         value: shares ? shares.players.length : "—",

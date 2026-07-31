@@ -42,7 +42,6 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
   return (
     <LeaguesViewLayout
       view={view}
-      active="leaguemates"
       stat={{
         label: "Leaguemates",
         value: shares ? shares.mates.length : "—",
