@@ -67,7 +67,7 @@ const STEEPNESS_OPTS = [
 ] as const;
 
 /**
- * The button that opens the board, sitting in the manager header's state cluster
+ * The button that opens the board, seated in the manager header's control dock
  * beside the league filters' own trigger.
  *
  * It carries the two facts worth having without opening anything: the window the
@@ -75,7 +75,8 @@ const STEEPNESS_OPTS = [
  * replaced cost ~110px above every tab's first row for controls that are read
  * once and then ignored.
  *
- * It wears the same pill as the filters trigger but never its accent: that
+ * It wears the same raised pill (`.lab-chip`) as the filters trigger but never
+ * its accent face (`.lab-chip-on`): that
  * button tints when a filter is *active*, a state this one doesn't have — a
  * board is always chosen — so borrowing the tint would spend the header's one
  * "something is narrowed" signal on a constant. The cyan is kept to the `ADP`
@@ -100,7 +101,7 @@ export function AdpTrigger({
       type="button"
       onClick={onClick}
       aria-haspopup="dialog"
-      className="inline-flex items-center gap-2 rounded-full border border-foreground/10 bg-foreground/5 py-1.5 pl-3 pr-3.5 text-sm font-semibold text-foreground/70 transition-colors hover:border-foreground/25 hover:text-foreground"
+      className="lab-chip inline-flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm font-semibold text-foreground/85"
     >
       <span className="text-[11px] font-bold uppercase tracking-wider text-active/80">
         ADP

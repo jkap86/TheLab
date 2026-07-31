@@ -88,7 +88,7 @@ export function UserLookup({
           <Avatar
             url={user.avatar_url}
             name={user.display_name || user.username}
-            size="lg"
+            size="xl"
           />
           <div className="min-w-0 flex-1">
             {/* Sleeper lets a display name go missing, and falls back to the

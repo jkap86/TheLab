@@ -657,15 +657,16 @@ stops holding, a comment saying it does would not have caught it.
 - **The ADP controls are a drawer behind one button, not a bar on the page.** Ten
   selects and a caption sat above the first row of every manager tab — ~110px of
   chrome, wrapping to three lines on a laptop — for settings that are chosen once
-  and then read. `AdpTrigger` rides in the header's state cluster instead, beside
-  the league filters' own trigger, badged with the range and the draft count,
-  which is what a reader needs without opening anything. They stay **two buttons**
-  rather than two tabs of one dialog for the reason the two filter sets stay
-  independent: one narrows this manager's leagues, the other the whole crawled
-  database, and one dialog over both would suggest a single selection. The pill is
-  shared but the accent is not — the filters trigger tints when a filter is
-  active, a state the board has no equivalent of, so tinting this one too would
-  spend that signal on a constant. Two things inside the
+  and then read. `AdpTrigger` is seated in the header's control dock instead,
+  beside the league filters' own trigger, badged with the range and the draft
+  count, which is what a reader needs without opening anything. They stay **two
+  buttons** rather than two tabs of one dialog for the reason the two filter sets
+  stay independent: one narrows this manager's leagues, the other the whole
+  crawled database, and one dialog over both would suggest a single selection.
+  The pill is shared but the accent is not — the filters trigger takes the cyan
+  key face (`.lab-chip-on`) when a filter is active, a state the board has no
+  equivalent of, so tinting this one too would spend that signal on a constant.
+  Two things inside the
   drawer are load-bearing. The controls are **pinned** and only the board scrolls:
   the point of the shape is that changing a filter and watching the ADP move is one
   glance, which a stacked panel loses by pushing the board below the fold. And the
@@ -802,13 +803,31 @@ stops holding, a comment saying it does would not have caught it.
   `PageShell`'s `wide` gutter and paints `--background`, because a transparent
   pinned card lets the rows scroll through the gaps around its rounded corners.
   Its `z-40` sits above the cards' `z-30` menus and below the drawer's `z-50`.
-- **The header's second zone is the record readout, and it is where the filter
-  bar used to be.** The two rows of segment buttons are behind a modal
-  (`LeagueFiltersModal`) whose trigger sits in the state cluster — next to
-  `AdpTrigger`, which the same move brought up there from its own bar — and the
-  space they freed carries the manager's season across the filtered leagues: a
-  dial for the win percentage, a proportion bar for the wins and losses behind
-  it. Four things that look like polish and are not:
+- **The header is a plate and a dock, and the split is by what a thing *is*.**
+  Identity, the season and the record live on the plate; the two triggers are
+  seated in a recessed trough under it. It was one card stacking all of that plus
+  both controls, which on a phone was ~590px of a 700px screen — the controls
+  wrapping onto their own lines because they shared a flex row with the season —
+  against ~225px now, in either season state. Three things hold it up:
+  - **The material says which part is which**, the same raised/recessed grammar
+    as the app bar: the plate is a milled face (a specular sweep, the cyan rail),
+    the dock a well, the triggers raised keys in it. A control that looks like
+    content is one nobody presses.
+  - **The plate's height is the same in September as in December.** The record
+    bar keeps its empty rail when nothing has been played, because a card pinned
+    under the app bar can't change how much of the list it covers as the season
+    turns over.
+  - **The dock hugs what it holds** (`w-fit`). Run to the card's width, a trough
+    with two chips at the left end is mostly empty slot on a desktop.
+- **The plate's record readout is where the filter bar used to be.** The two rows
+  of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger is
+  down in the dock — next to `AdpTrigger`, which the same move brought there from
+  its own bar — and the space they freed carries the manager's season across the
+  filtered leagues: a dial for the win percentage, a proportion bar for the wins
+  and losses behind it. The `Rostered` cell that used to stand in a rail of its
+  own is folded onto the record's line, since how many of the leagues on screen
+  carry a record is that record's denominator and a population-derived number
+  travels with its population. Four things that look like polish and are not:
   - **The record is summed over `filtered`, not over the account.** That is the
     point of putting it next to the filters — "how am I doing in my dynasty
     leagues" is a different question from "how am I doing", and both are one
@@ -968,6 +987,14 @@ stops holding, a comment saying it does would not have caught it.
     because of an alpha chosen to survive `backdrop-filter` being unsupported; a
     surface with visible thickness has no such out — page content showing through
     an extrusion reads as a rendering bug, so there is no translucency to tune.
+  - **`.lab-chip` is that grammar off the bar**, for a control that stays a
+    rounded pill: nothing clips it, so its side wall can simply *be* a shadow
+    (`0 3px 0 var(--edge)`) and the whole part is one element rather than the
+    wrapper-and-face pair `.lab-key` needs. Three triggers share it — the league
+    filters, the trade filters and the ADP board — which is the point of putting
+    it in `globals.css` rather than in one of them: `LeagueFiltersModal` renders
+    on two pages, and one control with two looks is exactly the drift a shared
+    class prevents.
   The notch is kept for the small parts and the panel stays rounded (the `H3`
   mockup of three): six rows of 11px text want a calm surface, and nothing else
   in the app has to change its corners to match.

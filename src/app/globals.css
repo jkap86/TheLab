@@ -149,6 +149,59 @@ body {
   }
 }
 
+/* The same extrusion as `.lab-key`, for a control that stays a rounded pill.
+
+   A key builds its thickness out of a stacked layer because `clip-path` cuts a
+   `box-shadow` off; nothing here is clipped, so the side wall can simply *be* a
+   shadow (`0 3px 0 var(--edge)`) and the whole part is one element. Reach for
+   this on a filter or board trigger — anything that lives on a page rather than
+   in the app bar — and keep `.lab-key` for the notched parts up there.
+
+   Three call sites share it (the league filters, the trade filters and the ADP
+   board), which is the point: one control appearing on two pages with two looks
+   is the drift a shared class prevents. */
+.lab-chip {
+  background: linear-gradient(170deg, #2a4a60, #12242f);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+    0 3px 0 var(--edge),
+    0 6px 11px -5px rgba(0, 0, 0, 0.75);
+}
+.lab-chip:hover {
+  background: linear-gradient(170deg, #34586f, #162b38);
+}
+/* Pressed: the face travels its own thickness down onto the wall. */
+.lab-chip:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.5),
+    0 1px 0 var(--edge),
+    0 3px 7px -4px rgba(0, 0, 0, 0.75);
+}
+/* The cyan key, for a control that is currently narrowing something. */
+.lab-chip-on {
+  background: linear-gradient(180deg, #a8fff4, #00ddc6);
+  color: #052029;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9),
+    0 3px 0 var(--edge-active),
+    0 6px 14px -5px rgba(0, 255, 229, 0.4);
+}
+.lab-chip-on:hover {
+  background: linear-gradient(180deg, #c2fff8, #14e8d1);
+}
+.lab-chip-on:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -5px 9px -8px rgba(0, 90, 82, 0.9),
+    0 1px 0 var(--edge-active),
+    0 3px 9px -5px rgba(0, 255, 229, 0.4);
+}
+
 /* Flask loader (features/shared/ui/flask-loader) — the bubbling animation.
    Tailwind v4 has no per-component keyframe mechanism and the component needs
    several keyframes plus per-bubble delays, so they live here once and the
@@ -280,9 +333,15 @@ body {
     animation: none !important;
   }
   /* The key's travel is motion too: a reader who asked for less gets the
-     colour change and the glow, without the part moving under the finger. */
+     colour change and the glow, without the part moving under the finger. The
+     chip's press is the same gesture as a shadow, so only its travel is
+     dropped — the shadow still collapses, which is what says "pressed". */
   .lab-key-press:active {
     padding-bottom: 3px;
     padding-top: 0;
+  }
+  .lab-chip:active,
+  .lab-chip-on:active {
+    transform: none;
   }
 }
