@@ -254,8 +254,10 @@ query string and nothing else, so the SQL beside it only ever sees checked
 values. It takes the default season as an argument rather than importing
 `DEFAULT_SEASON` — that import is exactly what would make it untestable.
 
-**Three files now carry an ADP name, and two of them are called `adp-filters`.**
-Check which side of the wire you are on before editing one:
+**Three files carry an ADP name and they sit on opposite sides of the wire.**
+Check which side you are on before editing one — the two client files were both
+called `adp-filters` at one point, which is the collision this table exists to
+keep from coming back:
 
 | File | Side | Job |
 | --- | --- | --- |
@@ -283,11 +285,42 @@ named functions — absence means "off" for a flag like `?stats=1` and "don't
 filter" for a population filter like `?best_ball=`, and one function silently
 serving both meanings is the bug the split names.)
 
+**A date primitive earns its place there twice over.** `isIsoDate` does not stop
+at the `YYYY-MM-DD` shape, because `2026-02-31` passes a regex *and* parses —
+V8 rolls an out-of-range day forward to March 3 rather than failing, so a bad
+bound would silently become a different, real date. It formats the parsed date
+back and compares, and only a genuine day survives the round trip. And `isoDate`
+returns **the string it was given, not a timestamp**: what a bare date *means* is
+a zone question, and here the caller that knows the zone is SQL. Converting to
+epoch milliseconds in the parser would bake this process's timezone into every
+answer — a bug that looks like an off-by-one day and only in some deployments.
+An absent bound is `null`, not a default, since a range is two independent halves
+and an open end has to be expressible.
+
 `manager/shares` is that shape on the client: `playerShares` takes the leagues,
 the rosters and the players cache as arguments and counts, so the rules that
 decide what a share is out of can be read and tested without a fetch behind them.
 It sits beside `filters` because the two compose — the caller filters the league
 list, then counts over what's left.
+
+`manager/record` is the third module cut to that shape, and it is worth noticing
+that it re-encodes **the same two rules** rather than inventing any — which is
+the sign they are house rules and not local details:
+
+- *The denominator is what contributed, not what was listed.* `aggregateRecord`
+  counts leagues carrying a `record`, because Sleeper keeps a manager in
+  `league_users` after they stop holding a team, so a membership-only league
+  arrives with `record: null`. Exactly the trap `playerShares` counts around,
+  and the reason the count ships **with** the total — as with `outlook.weeks`
+  and KTC's `priced` of `rostered`, a population-derived number travels with its
+  population.
+- *Zero and absent are different answers.* `pct` is null before a game is
+  played, never `0`: preseason every record is `0-0-0`, and `.000` there is a
+  claim about a season that hasn't happened. The same call as an em dash rather
+  than `0.00` for an unprojected week, and no rank rather than "1st of 12" for
+  an undrafted league.
+
+A fourth module of this kind should be checked against both before it is written.
 
 Validation earns its keep when a value reaches SQL as anything but a bound
 parameter. `scoring` picks the column `projections/queries` interpolates into
