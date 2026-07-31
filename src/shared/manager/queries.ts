@@ -67,8 +67,15 @@ export async function getManagerSyncedAt(
  * an empty string on an autopick, so a manager who autopicked their whole draft
  * appears in the order and nowhere in the picks.
  *
- * `$1` is the manager's user id; `jsonb_exists` rather than the `?` operator so
- * the key test can't be misread as a placeholder by anything between here and
+ * Every read that answers "this manager's leagues" applies it, so the leagues
+ * route and the batch reads behind the cards can't disagree about which leagues
+ * those are — a league missing from the list but still ranked and priced is work
+ * done for rows nobody renders. The one exception needs none: `getManagerRosters`
+ * joins on `owner_id` already, which is the first half of this predicate.
+ *
+ * Interpolated, so a call site must alias `leagues` as `l` and bind the
+ * manager's user id as `$1`. `jsonb_exists` rather than the `?` operator so the
+ * key test can't be misread as a placeholder by anything between here and
  * Postgres.
  */
 const FIELDED_A_TEAM_SQL = `(
@@ -182,10 +189,15 @@ export async function getManagerRosters(
  *
  * The manager's own row is kept in `members` rather than filtered here: every
  * synced league has at least that row, so its presence is what separates "shared
- * with nobody" from "not cached", and the caller knows its own id. Membership,
- * not roster-holding, on purpose — Sleeper keeps a knocked-out or departed
- * manager in `league_users`, and someone you were in a guillotine league with is
- * still someone you know.
+ * with nobody" from "not cached", and the caller knows its own id.
+ *
+ * The two halves of "whose leaguemates" pull opposite ways here, and both are
+ * deliberate. *Which leagues* count is {@link FIELDED_A_TEAM_SQL}, the same
+ * population the leagues route lists — narrowing it anywhere else would leave
+ * this reporting people from a league the page doesn't show. *Who counts inside
+ * one* is membership and nothing more, because Sleeper keeps a knocked-out or
+ * departed manager in `league_users` and someone you were in a guillotine league
+ * with is still someone you know.
  *
  * `users` resolves each id once; where the same user was synced under different
  * names across leagues, the newest row wins.
@@ -206,6 +218,7 @@ export async function getManagerLeaguemates(
          ON me.league_id = lu.league_id AND me.user_id = $1
        JOIN leagues l ON l.league_id = lu.league_id
       WHERE l.season = $2
+        AND ${FIELDED_A_TEAM_SQL}
       ORDER BY lu.updated_at`,
     [userId, season],
   );
@@ -246,7 +259,8 @@ export async function getManagerLeagueRosters(
        FROM leagues l
        JOIN league_users lu
          ON lu.league_id = l.league_id AND lu.user_id = $1
-      WHERE l.season = $2`,
+      WHERE l.season = $2
+        AND ${FIELDED_A_TEAM_SQL}`,
     [userId, season],
   );
   if (leagues.length === 0) return [];

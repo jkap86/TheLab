@@ -727,9 +727,16 @@ stops holding, a comment saying it does would not have caught it.
   draft yet), and `picked_by` is an empty string on an autopick, so a manager who
   autopicked appears in the order and nowhere in the picks. The knock-on is worth
   stating: a league you left *does* now drop out, and with it its leaguemates.
-  Only the leagues route filters — the batch reads beside it (`ranks`, `ktc`,
-  `adp-value`, `leaguemates`) still key on membership and are keyed by league id
-  by a client that no longer asks about those leagues.
+  **Every read answering "this manager's leagues" applies it**, not just the
+  route — `getManagerLeagueRosters` behind `ranks`, `ktc` and `adp-value`, and
+  `getManagerLeaguemates` — because a league missing from the list but still
+  ranked and priced is a projection solve per team for rows nobody renders, and
+  one narrowed read beside an unnarrowed one is two answers to the same question.
+  `getManagerRosters` needs no clause: it joins on `owner_id`, which is this
+  predicate's first half. Inside `getManagerLeaguemates` the two halves pull
+  opposite ways on purpose — which leagues count is this predicate, who counts
+  within one is bare membership, so the guillotine leaguemate the page exists for
+  survives.
 - **A player share is out of the leagues that hold a roster of yours, not the
   leagues listed.** They are different numbers — 121 leagues, 113 rosters for the
   account this was built against — because Sleeper keeps you in `league_users`
