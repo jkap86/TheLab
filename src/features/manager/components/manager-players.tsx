@@ -91,20 +91,31 @@ export function ManagerPlayers({ searched }: { searched: string }) {
         ) : undefined
       }
     >
-      {rosters.error ? (
+      {/* A failed refetch must not blank rows the hook deliberately kept —
+          the error replaces the list only when there is nothing to keep. */}
+      {rosters.error && !shares ? (
         <ErrorCard message={rosters.error} />
       ) : !shares ? (
         <PanelMessage>Loading rosters…</PanelMessage>
-      ) : shares.players.length === 0 ? (
-        // Every filtered league is one whose rosters aren't cached, or one that
-        // hasn't drafted — a real answer, and not the same as an error.
-        <PanelMessage>No players rostered in these leagues yet.</PanelMessage>
       ) : (
-        <PlayerShares
-          shares={shares.players}
-          leagueCount={shares.league_count}
-          adp={adpByPlayer}
-        />
+        <>
+          {rosters.error && (
+            <div className="mb-3 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-sm text-amber-300">
+              Refresh failed — showing cached data
+            </div>
+          )}
+          {shares.players.length === 0 ? (
+            // Every filtered league is one whose rosters aren't cached, or one
+            // that hasn't drafted — a real answer, not the same as an error.
+            <PanelMessage>No players rostered in these leagues yet.</PanelMessage>
+          ) : (
+            <PlayerShares
+              shares={shares.players}
+              leagueCount={shares.league_count}
+              adp={adpByPlayer}
+            />
+          )}
+        </>
       )}
     </LeaguesViewLayout>
   );

@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 
+import { DEFAULT_ADP_STEEPNESS } from "../adp-controls";
 import { useAdpControls } from "../filters-context";
 import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
 import { useManagerAdpValue } from "../hooks/use-manager-adp-value";
@@ -37,7 +38,11 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   // filters beside it belong to the Players-tab per-player ADP. `null` controls
   // (untouched) means the default curve.
   const { controls } = useAdpControls();
-  const adp = useManagerAdpValue(searched, leagues, controls?.steepness ?? "balanced");
+  const adp = useManagerAdpValue(
+    searched,
+    leagues,
+    controls?.steepness ?? DEFAULT_ADP_STEEPNESS,
+  );
 
   // Which metric each of the four stat columns shows, shared by every card so the
   // columns line up down the list — a change on any card's picker moves them all.

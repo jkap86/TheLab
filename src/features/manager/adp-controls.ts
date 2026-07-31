@@ -52,6 +52,16 @@ export type AdpControls = {
   steepness: "flat" | "balanced" | "steep";
 };
 
+/**
+ * The curve applied when the ADP bar hasn't been touched. Matches the route's
+ * `DEFAULT_STEEPNESS`; the two ends carry the vocabulary separately, so this
+ * string is what "balanced" means on the wire. Named so a consumer that needs
+ * the default before the controls exist (the Leagues tab, seeding its fetch)
+ * reads this rather than retyping the string — a third spelling is a curve
+ * change away from the bar pricing one thing and displaying another.
+ */
+export const DEFAULT_ADP_STEEPNESS: AdpControls["steepness"] = "balanced";
+
 /** The `rounds_min`/`rounds_max` bounds each rounds bucket sends. */
 const ROUNDS_BOUNDS: Record<"rookie" | "full", { min?: number; max?: number }> = {
   // Rookie drafts are a handful of rounds; startups and redrafts fill a roster.
@@ -82,9 +92,7 @@ export function defaultAdpControls(season: string): AdpControls {
     bestBall: "all",
     teams: "all",
     rounds: "all",
-    // Matches the route's DEFAULT_STEEPNESS; the two ends carry the vocabulary
-    // separately, so this string is what "balanced" means on the wire.
-    steepness: "balanced",
+    steepness: DEFAULT_ADP_STEEPNESS,
   };
 }
 

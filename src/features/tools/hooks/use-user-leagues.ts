@@ -6,21 +6,13 @@ import type { LeaguesStreamMessage } from "@/shared/contract";
 import type { ManagerLeague } from "@/shared/manager";
 import { errorMessage } from "@/shared/util";
 
-import { apiFetch, isAbortError } from "@/features/shared";
+import { apiFetch, isAbortError, takeLines } from "@/features/shared";
 
 export type UserLeaguesState = {
   leagues: ManagerLeague[] | null;
   loading: boolean;
   error: string | null;
 };
-
-/** Split a growing buffer into whole lines, returning the unconsumed remainder. */
-function takeLines(buffer: string): { lines: string[]; rest: string } {
-  const parts = buffer.split("\n");
-  // The last piece has no terminating newline yet — hold it for the next chunk.
-  const rest = parts.pop() ?? "";
-  return { lines: parts.map((l) => l.trim()).filter(Boolean), rest };
-}
 
 /**
  * Streams a user's leagues from `/api/user/[username]/leagues` for the pick

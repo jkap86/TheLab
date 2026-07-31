@@ -61,19 +61,30 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
       }
       adpCaption="ADP board and value settings apply on the Players and Leagues tabs."
     >
-      {membership.error ? (
+      {/* A failed refetch must not blank rows the hook deliberately kept —
+          the error replaces the list only when there is nothing to keep. */}
+      {membership.error && !shares ? (
         <ErrorCard message={membership.error} />
       ) : !shares ? (
         <PanelMessage>Loading leaguemates…</PanelMessage>
-      ) : shares.mates.length === 0 ? (
-        // Every filtered league is one whose members aren't cached, or one the
-        // manager shares with nobody — a real answer, not an error.
-        <PanelMessage>No leaguemates in these leagues yet.</PanelMessage>
       ) : (
-        <LeaguemateShares
-          mates={shares.mates}
-          leagueCount={shares.league_count}
-        />
+        <>
+          {membership.error && (
+            <div className="mb-3 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-sm text-amber-300">
+              Refresh failed — showing cached data
+            </div>
+          )}
+          {shares.mates.length === 0 ? (
+            // Every filtered league is one whose members aren't cached, or one
+            // the manager shares with nobody — a real answer, not an error.
+            <PanelMessage>No leaguemates in these leagues yet.</PanelMessage>
+          ) : (
+            <LeaguemateShares
+              mates={shares.mates}
+              leagueCount={shares.league_count}
+            />
+          )}
+        </>
       )}
     </LeaguesViewLayout>
   );

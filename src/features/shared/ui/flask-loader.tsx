@@ -24,11 +24,19 @@ import { useId } from "react";
 export type FlaskVariant = "bubble" | "fill" | "pulse" | "reaction";
 export type FlaskTone = "magenta" | "cyan";
 
-const TONES: Record<FlaskTone, { top: string; bottom: string; surface: string; bubble: string }> =
-  {
-    magenta: { top: "#ff4d84", bottom: "#c81d52", surface: "#ff5f92", bubble: "#ffd6e4" },
-    cyan: { top: "#5cffef", bottom: "#00c2ad", surface: "#7dfff2", bubble: "#d4fffa" },
-  };
+const TONES: Record<
+  FlaskTone,
+  { top: string; bottom: string; surface: string; bubble: string; steam: string }
+> = {
+  magenta: {
+    top: "#ff4d84", bottom: "#c81d52", surface: "#ff5f92", bubble: "#ffd6e4",
+    steam: "#ffe3ee",
+  },
+  cyan: {
+    top: "#5cffef", bottom: "#00c2ad", surface: "#7dfff2", bubble: "#d4fffa",
+    steam: "#bfeee9",
+  },
+};
 
 const DEFAULT_TONE: Record<FlaskVariant, FlaskTone> = {
   bubble: "magenta",
@@ -91,7 +99,7 @@ export function FlaskLoader({
   /** Width in px; height follows the flask's aspect ratio. */
   size?: number;
   tone?: FlaskTone;
-  /** Accessible name, and shown under the flask when `showLabel` is set. */
+  /** Accessible name for the `role="status"` element; never rendered visibly. */
   label?: string;
   className?: string;
 }) {
@@ -180,7 +188,7 @@ export function FlaskLoader({
               cx={s.cx}
               cy={s.cy}
               r={s.r}
-              fill="#bfeee9"
+              fill={colors.steam}
               style={{ animation: `flask-steam ${s.dur}s ease-out ${s.delay}s infinite` }}
             />
           ))}

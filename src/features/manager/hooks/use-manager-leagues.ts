@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { LeaguesStreamMessage } from "@/shared/contract";
 import { errorMessage } from "@/shared/util";
 
-import { apiFetch, isAbortError } from "@/features/shared";
+import { apiFetch, isAbortError, takeLines } from "@/features/shared";
 import type { LeaguesResult, SyncProgress } from "../types";
 
 export type ManagerLeaguesState = {
@@ -14,14 +14,6 @@ export type ManagerLeaguesState = {
   refreshing: boolean;
   error: string | null;
 };
-
-/** Split a growing buffer into whole lines, returning the unconsumed remainder. */
-function takeLines(buffer: string): { lines: string[]; rest: string } {
-  const parts = buffer.split("\n");
-  // The last piece has no terminating newline yet — hold it for the next chunk.
-  const rest = parts.pop() ?? "";
-  return { lines: parts.map((l) => l.trim()).filter(Boolean), rest };
-}
 
 /**
  * Streams a manager's leagues from `/api/user/[username]/leagues`, decoding the
@@ -82,6 +74,16 @@ export function useManagerLeagues(searched: string): ManagerLeaguesState {
       } catch (err: unknown) {
         if (active && !isAbortError(err)) {
           setError(errorMessage(err, "Something went wrong"));
+        }
+      } finally {
+        // The stream can die before its final `result`/`error` message — a
+        // dropped connection mid-refresh, a proxy cutting a long sync. Only a
+        // message resets these, so without this backstop the header spins
+        // "Refreshing…" forever. On a clean finish they are already false/null
+        // and the set is a no-op.
+        if (active) {
+          setRefreshing(false);
+          setProgress(null);
         }
       }
     })();
