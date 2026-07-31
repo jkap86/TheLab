@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { isSuperflexLineup, rosterKtcValue } from "./roster.ts";
+import { isSuperflexLineup, ktcBoardValue, rosterKtcValue } from "./roster.ts";
 
 describe("isSuperflexLineup", () => {
   test("a single quarterback slot reads the 1QB board", () => {
@@ -148,5 +148,18 @@ describe("rosterKtcValue", () => {
       rostered: 0,
       split: { starters: 0, bench: 0 },
     });
+  });
+});
+
+describe("ktcBoardValue", () => {
+  test("reads the board the league plays", () => {
+    const value = { sf: 8000, oneqb: 5500 };
+    assert.equal(ktcBoardValue(true, value), 8000);
+    assert.equal(ktcBoardValue(false, value), 5500);
+  });
+
+  test("off the board is null, never zero", () => {
+    assert.equal(ktcBoardValue(true, undefined), null);
+    assert.equal(ktcBoardValue(false, { sf: 3000, oneqb: null }), null);
   });
 });

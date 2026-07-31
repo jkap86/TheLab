@@ -76,6 +76,30 @@ export function startingSlotCount(
 }
 
 /**
+ * Starting slots assumed for a league with no lineup on file — a typical
+ * 1QB/2RB/2WR/TE/2FLEX/K/DEF-ish depth. Only the fallback inside
+ * {@link leagueAdpPool}; named so the number isn't retyped per caller.
+ */
+export const TYPICAL_STARTING_SLOTS = 9;
+
+/**
+ * The startable pool a league's value curve is anchored to: teams × starting
+ * slots, falling back to a typical lineup depth so a league with no slots on
+ * file can't collapse the curve to a pool of zero.
+ *
+ * This is the one place that composition lives — the league detail route and
+ * the batched adp-value route both price rosters on it, and a fallback changed
+ * in one and not the other would make the roster panel's ADP column and the
+ * collapsed card's value quietly disagree for the same league.
+ */
+export function leagueAdpPool(
+  teams: number,
+  rosterPositions: readonly string[] | null,
+): number {
+  return teams * (startingSlotCount(rosterPositions) || TYPICAL_STARTING_SLOTS);
+}
+
+/**
  * One player's value from their average draft position, anchored to a league's
  * startable pool rather than to a fixed pick count.
  *
@@ -127,8 +151,10 @@ export type AdpRosterValue = {
  * value rather than count it as zero, and take `bench` as `total − starters` so
  * the three numbers reconcile and a lineup naming someone the roster doesn't
  * hold can't overdraw the bench. It is a parallel function rather than a reuse
- * of the KTC one so `shared/manager` needn't import `shared/ktc` for a non-KTC
- * purpose — the same call `leaguemate-shares` makes beside `shares`.
+ * of the KTC one because the split rules belong to this module's own lens —
+ * this file already reaches into `ktc/roster` for `isSuperflexLineup`, so the
+ * boundary being kept is conceptual (ADP value is not a KTC number), not an
+ * import restriction.
  */
 export function rosterAdpValue({
   players,

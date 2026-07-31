@@ -1,4 +1,5 @@
 import { pool } from "@/shared/db";
+import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
 
 import { LEAGUE_TYPE_CODES } from "./adp-filters";
 import type { AdpFilters } from "./adp-filters";
@@ -39,7 +40,10 @@ export type AdpResult = {
  * the same way the client-side league filters do (absent type = redraft).
  */
 // Each fragment is parenthesised because callers append their own comparison.
-const LEAGUE_TYPE_SQL = `
+// Written against a league table aliased `l`. Exported to `./queries`'
+// `getLeagueTypes` so the code grouping leagues into ADP boards and the filter
+// narrowing `/api/adp` can't classify the same league differently.
+export const LEAGUE_TYPE_SQL = `
   (CASE WHEN l.settings->>'type' ~ '^[0-9]+$'
         THEN (l.settings->>'type')::int ELSE 0 END)`;
 
@@ -51,9 +55,24 @@ const ROUNDS_SQL = `
   (CASE WHEN d.settings->>'rounds' ~ '^[0-9]+$'
         THEN (d.settings->>'rounds')::int END)`;
 
-/** Superflex is a roster slot, not a setting — a league either lists one or not. */
+/**
+ * Superflex means the lineup starts more than one quarterback — the same
+ * question `isSuperflexLineup` answers in TypeScript, asked of the stored
+ * blob. Counting QB-eligible slots rather than testing for `SUPER_FLEX` by
+ * name keeps the two classifiers agreeing: a two-QB league with no literal
+ * `SUPER_FLEX` slot is priced against the superflex board by `adpBoardFor`,
+ * so its draft has to be counted into that same population here, or it is
+ * averaged with (and pollutes) the 1QB drafts. The slot names interpolated
+ * below come from our own closed vocabulary in `projections/slots`, not from
+ * user input.
+ */
+const QB_SLOT_LIST = QB_ELIGIBLE_STARTING_SLOTS.map((s) => `'${s}'`).join(", ");
 const SUPERFLEX_SQL = `
-  (COALESCE(l.roster_positions @> '["SUPER_FLEX"]'::jsonb, false))`;
+  (CASE WHEN jsonb_typeof(l.roster_positions) = 'array'
+        THEN (SELECT count(*)
+                FROM jsonb_array_elements_text(l.roster_positions) AS s(slot)
+               WHERE s.slot IN (${QB_SLOT_LIST})) > 1
+        ELSE false END)`;
 
 /**
  * Scoring format from the per-reception value: Sleeper stores the rule, not the

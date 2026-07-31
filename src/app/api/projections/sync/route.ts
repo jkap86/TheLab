@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+import type {
+  ApiErrorPayload,
+  ProjectionsSyncPayload,
+} from "@/shared/contract";
 import { parseWeeks, syncProjections } from "@/shared/projections";
 import { isSeason } from "@/shared/query";
 
@@ -28,19 +32,18 @@ async function handler(request: Request) {
 
   const weeks = parseWeeks(params.getAll("week"));
   if (!weeks.ok) {
-    return NextResponse.json({ error: weeks.error }, { status: 400 });
+    const error: ApiErrorPayload = { error: weeks.error };
+    return NextResponse.json(error, { status: 400 });
   }
 
   const season = params.get("season");
   if (season !== null && !isSeason(season)) {
-    return NextResponse.json(
-      { error: "season must be a 4-digit year" },
-      { status: 400 },
-    );
+    const error: ApiErrorPayload = { error: "season must be a 4-digit year" };
+    return NextResponse.json(error, { status: 400 });
   }
 
   try {
-    const result = await syncProjections({
+    const result: ProjectionsSyncPayload = await syncProjections({
       season: season ?? undefined,
       weeks: weeks.weeks,
       // An explicit week is a request to fetch it, not to consult the cache.
@@ -49,10 +52,8 @@ async function handler(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     console.error("[proj] sync failed:", error);
-    return NextResponse.json(
-      { error: "Failed to sync projections" },
-      { status: 500 },
-    );
+    const payload: ApiErrorPayload = { error: "Failed to sync projections" };
+    return NextResponse.json(payload, { status: 500 });
   }
 }
 

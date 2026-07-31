@@ -46,6 +46,7 @@ export {
   adpBoardFor,
   adpValue,
   boardSignature,
+  leagueAdpPool,
   parseSteepness,
   rosterAdpValue,
   startingSlotCount,

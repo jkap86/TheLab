@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import type { ManagerPlayersPayload } from "@/shared/contract";
+import type { ApiErrorPayload, ManagerPlayersPayload } from "@/shared/contract";
 import { getManagerRosters } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 
@@ -27,13 +27,19 @@ export async function GET(
   if (!resolved.ok) return resolved.response;
   const { userId, season } = resolved;
 
-  // Sequential rather than parallel: which players to resolve is the answer to
-  // the first read.
-  const rosters = await getManagerRosters(userId, season);
-  const players = await getPlayersByIds([
-    ...new Set(Object.values(rosters).flat()),
-  ]);
+  try {
+    // Sequential rather than parallel: which players to resolve is the answer
+    // to the first read.
+    const rosters = await getManagerRosters(userId, season);
+    const players = await getPlayersByIds([
+      ...new Set(Object.values(rosters).flat()),
+    ]);
 
-  const payload: ManagerPlayersPayload = { season, rosters, players };
-  return NextResponse.json(payload);
+    const payload: ManagerPlayersPayload = { season, rosters, players };
+    return NextResponse.json(payload);
+  } catch (error) {
+    console.error("[players] query failed:", error);
+    const payload: ApiErrorPayload = { error: "Failed to load rosters" };
+    return NextResponse.json(payload, { status: 500 });
+  }
 }
