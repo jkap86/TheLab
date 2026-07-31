@@ -55,9 +55,53 @@ export async function getManagerSyncedAt(
 }
 
 /**
+ * True where the manager fielded a team in the league — holds a roster now, or
+ * was in the draft when it happened.
+ *
+ * Membership alone is not that: Sleeper keeps a manager in `league_users` after
+ * they stop holding a team, so a league someone joined and left arrives looking
+ * exactly like one they play in, minus a roster. The draft half is what keeps a
+ * *guillotine* league — where being knocked out is the game, not an exit — in the
+ * list after elimination takes the roster away. Both signals are read because
+ * neither covers the other: `draft_order` is null until an order is set (and a
+ * league can be mid-startup with rosters and no draft yet), while `picked_by` is
+ * an empty string on an autopick, so a manager who autopicked their whole draft
+ * appears in the order and nowhere in the picks.
+ *
+ * Every read that answers "this manager's leagues" applies it, so the leagues
+ * route and the batch reads behind the cards can't disagree about which leagues
+ * those are — a league missing from the list but still ranked and priced is work
+ * done for rows nobody renders. The one exception needs none: `getManagerRosters`
+ * joins on `owner_id` already, which is the first half of this predicate.
+ *
+ * Interpolated, so a call site must alias `leagues` as `l` and bind the
+ * manager's user id as `$1`. `jsonb_exists` rather than the `?` operator so the
+ * key test can't be misread as a placeholder by anything between here and
+ * Postgres.
+ */
+const FIELDED_A_TEAM_SQL = `(
+  EXISTS (
+    SELECT 1 FROM rosters r
+     WHERE r.league_id = l.league_id AND r.owner_id = $1
+  )
+  OR EXISTS (
+    SELECT 1 FROM drafts d
+     WHERE d.league_id = l.league_id
+       AND (
+         jsonb_exists(d.draft_order, $1)
+         OR EXISTS (
+           SELECT 1 FROM draft_picks p
+            WHERE p.draft_id = d.draft_id AND p.picked_by = $1
+         )
+       )
+  )
+)`;
+
+/**
  * Read a manager's leagues for a season from the DB, with the manager's own team
  * record and each league's settings/scoring. Assumes {@link syncManagerLeagues}
- * has run. The `league_users` join also scopes results to the manager's leagues.
+ * has run. The `league_users` join also scopes results to the manager's leagues,
+ * and {@link FIELDED_A_TEAM_SQL} narrows that to the ones they actually played.
  */
 export async function getManagerLeagues(
   userId: string,
@@ -76,6 +120,7 @@ export async function getManagerLeagues(
      LEFT JOIN rosters mr
        ON mr.league_id = l.league_id AND mr.owner_id = $1
      WHERE l.season = $2
+       AND ${FIELDED_A_TEAM_SQL}
      ORDER BY l.name`,
     [userId, season],
   );
@@ -146,10 +191,15 @@ export async function getManagerRosters(
  *
  * The manager's own row is kept in `members` rather than filtered here: every
  * synced league has at least that row, so its presence is what separates "shared
- * with nobody" from "not cached", and the caller knows its own id. Membership,
- * not roster-holding, on purpose — Sleeper keeps a knocked-out or departed
- * manager in `league_users`, and someone you were in a guillotine league with is
- * still someone you know.
+ * with nobody" from "not cached", and the caller knows its own id.
+ *
+ * The two halves of "whose leaguemates" pull opposite ways here, and both are
+ * deliberate. *Which leagues* count is {@link FIELDED_A_TEAM_SQL}, the same
+ * population the leagues route lists — narrowing it anywhere else would leave
+ * this reporting people from a league the page doesn't show. *Who counts inside
+ * one* is membership and nothing more, because Sleeper keeps a knocked-out or
+ * departed manager in `league_users` and someone you were in a guillotine league
+ * with is still someone you know.
  *
  * `users` resolves each id once; where the same user was synced under different
  * names across leagues, the newest row wins.
@@ -170,6 +220,7 @@ export async function getManagerLeaguemates(
          ON me.league_id = lu.league_id AND me.user_id = $1
        JOIN leagues l ON l.league_id = lu.league_id
       WHERE l.season = $2
+        AND ${FIELDED_A_TEAM_SQL}
       ORDER BY lu.updated_at`,
     [userId, season],
   );
@@ -210,7 +261,8 @@ export async function getManagerLeagueRosters(
        FROM leagues l
        JOIN league_users lu
          ON lu.league_id = l.league_id AND lu.user_id = $1
-      WHERE l.season = $2`,
+      WHERE l.season = $2
+        AND ${FIELDED_A_TEAM_SQL}`,
     [userId, season],
   );
   if (leagues.length === 0) return [];
