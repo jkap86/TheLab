@@ -18,10 +18,11 @@ export type ManagerLeague = {
   /**
    * The lineup slots, in order — `["QB","RB",…,"BN"]` as Sleeper stores them.
    *
-   * Carried on the wire because it holds the two facts about a league that
-   * `settings` doesn't: whether it starts more than one quarterback, and whether
-   * it starts individual defenders. Both are filters on the client, and both are
-   * read through the shared slot vocabulary rather than by matching slot names.
+   * Carried on the wire because it holds what `settings` doesn't: what a league
+   * actually starts. The client's slot rules count groups of these — how many
+   * QB-eligible slots, how many individual defenders, how many flexes — and every
+   * group is read through the shared slot vocabulary rather than by matching slot
+   * names, so a new flex counts the moment the solver learns it.
    */
   roster_positions: string[] | null;
   /** Scoring rules keyed by stat, as stored by Sleeper. */

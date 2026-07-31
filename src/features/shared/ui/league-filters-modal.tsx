@@ -4,16 +4,20 @@ import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 
 import {
   BEST_BALL_OPTIONS,
+  COMPARE_OPS,
   DEFAULT_LEAGUE_FILTERS,
-  IDP_OPTIONS,
+  type FilterRule,
   type LeagueFilters,
-  SCORING_OPTIONS,
+  SLOT_GROUPS,
   STATUS_OPTIONS,
-  SUPERFLEX_OPTIONS,
-  TE_PREMIUM_OPTIONS,
   TYPE_OPTIONS,
   activeFilterCount,
+  formatRuleValue,
   matchesFilters,
+  matchesScoringRule,
+  matchesSlotRule,
+  scoringKeyLabel,
+  scoringKeyOptions,
 } from "../league-filters";
 import type { ManagerLeague } from "@/shared/manager";
 
@@ -33,9 +37,9 @@ import type { ManagerLeague } from "@/shared/manager";
  * the two behaviours it doesn't give — closing on a backdrop *click*, and
  * discarding an unapplied edit — are the handlers below.
  *
- * The selection is edited as a draft and committed on Apply, because each option
- * carries the count of leagues it would leave: those counts are only readable if
- * the list behind the dialog isn't moving while you read them.
+ * The selection is edited as a draft and committed on Apply, because the counts
+ * beside every option and rule are only readable if the list behind the dialog
+ * isn't moving while you read them.
  */
 export function LeagueFiltersModal({
   filters,
@@ -64,6 +68,10 @@ export function LeagueFiltersModal({
     onChange(draft);
     ref.current?.close();
   }, [draft, onChange]);
+
+  // The scoring vocabulary is whatever these leagues actually pay for, so it is
+  // derived from the list rather than listed — see `scoringKeyOptions`.
+  const scoringKeys = useMemo(() => scoringKeyOptions(leagues), [leagues]);
 
   return (
     <>
@@ -114,10 +122,10 @@ export function LeagueFiltersModal({
           </div>
 
           {/*
-            Seven groups don't fit a laptop's viewport, so the sections scroll
-            and the footer — where the match count and Apply are — stays put
-            below them. Scrolling the whole panel would put the count that
-            justifies the click off screen at exactly the moment it changes.
+            Three groups and two rule lists don't fit a laptop's viewport, so the
+            sections scroll and the footer — where the match count and Apply are —
+            stays put below them. Scrolling the whole panel would put the count
+            that justifies the click off screen at exactly the moment it changes.
           */}
           <div className="flex max-h-[min(60vh,30rem)] flex-col gap-5 overflow-y-auto p-5">
             <Section label="League">
@@ -147,43 +155,38 @@ export function LeagueFiltersModal({
               />
             </Section>
 
-            <Section label="Roster positions">
-              <FilterGroup
-                label="Quarterbacks"
-                options={SUPERFLEX_OPTIONS}
-                value={draft.superflex}
-                leagues={leagues}
-                probe={(value) => ({ ...draft, superflex: value })}
-                onPick={(superflex) => setDraft({ ...draft, superflex })}
-              />
-              <FilterGroup
-                label="Defense"
-                options={IDP_OPTIONS}
-                value={draft.idp}
-                leagues={leagues}
-                probe={(value) => ({ ...draft, idp: value })}
-                onPick={(idp) => setDraft({ ...draft, idp })}
-              />
-            </Section>
+            <RuleSection
+              label="Roster slots"
+              empty="Any lineup. Add a rule to narrow by what a league starts."
+              rules={draft.slots}
+              onChange={(slots) => setDraft({ ...draft, slots })}
+              keyOptions={SLOT_GROUPS.map((group) => ({
+                value: group.key,
+                label: group.label,
+                hint: group.hint,
+              }))}
+              newRule={{ key: "QB+SF", op: "gte", value: 2 }}
+              presets={SLOT_PRESETS}
+              step={1}
+              leagues={leagues}
+              match={matchesSlotRule}
+            />
 
-            <Section label="Scoring settings">
-              <FilterGroup
-                label="Receptions"
-                options={SCORING_OPTIONS}
-                value={draft.scoring}
-                leagues={leagues}
-                probe={(value) => ({ ...draft, scoring: value })}
-                onPick={(scoring) => setDraft({ ...draft, scoring })}
-              />
-              <FilterGroup
-                label="Tight ends"
-                options={TE_PREMIUM_OPTIONS}
-                value={draft.tePremium}
-                leagues={leagues}
-                probe={(value) => ({ ...draft, tePremium: value })}
-                onPick={(tePremium) => setDraft({ ...draft, tePremium })}
-              />
-            </Section>
+            <RuleSection
+              label="Scoring settings"
+              empty="Any scoring. Add a rule to narrow by what a league pays."
+              rules={draft.scoring}
+              onChange={(scoring) => setDraft({ ...draft, scoring })}
+              keyOptions={scoringKeys.map((key) => ({
+                value: key,
+                label: scoringKeyLabel(key),
+              }))}
+              newRule={{ key: scoringKeys[0] ?? "rec", op: "eq", value: 1 }}
+              presets={SCORING_PRESETS}
+              step={0.5}
+              leagues={leagues}
+              match={matchesScoringRule}
+            />
           </div>
 
           <div className="flex items-center gap-3 border-t border-foreground/10 px-5 py-4">
@@ -217,14 +220,22 @@ export function LeagueFiltersModal({
 /**
  * A band of related filters under one eyebrow.
  *
- * Seven groups in a flat stack read as seven unrelated questions; three bands
- * say what each is *about* — the league itself, the lineup it starts, the points
- * it pays — which is also the axis a reader arrives with ("show me my superflex
- * leagues" is a roster question they'd otherwise scan every group for). The
- * eyebrow carries the uppercase treatment the group labels used to, so the two
- * levels stay distinguishable without a second border.
+ * A flat stack reads as a pile of unrelated questions; the bands say what each
+ * is *about* — the league itself, the lineup it starts, the points it pays —
+ * which is also the axis a reader arrives with ("show me my superflex leagues"
+ * is a roster question they'd otherwise scan every group for). The eyebrow
+ * carries the uppercase treatment the group labels used to, so the two levels
+ * stay distinguishable without a second border.
  */
-function Section({ label, children }: { label: string; children: ReactNode }) {
+function Section({
+  label,
+  children,
+  trailing,
+}: {
+  label: string;
+  children: ReactNode;
+  trailing?: ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
@@ -232,6 +243,7 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
           {label}
         </span>
         <span className="h-px flex-1 bg-foreground/10" />
+        {trailing}
       </div>
       {children}
     </section>
@@ -239,7 +251,7 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * One filter's options, each labelled with how many leagues it would leave.
+ * One fixed filter's options, each labelled with how many leagues it would leave.
  *
  * The count is what makes the dialog worth the click over the old bar: it is the
  * answer to "is it worth narrowing to this" before the list moves. It's probed
@@ -302,6 +314,241 @@ function FilterGroup<T extends string>({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** The old superflex and IDP chips, as the rules they always were. */
+const SLOT_PRESETS: { label: string; rule: FilterRule }[] = [
+  { label: "Superflex", rule: { key: "QB+SF", op: "gte", value: 2 } },
+  { label: "One QB", rule: { key: "QB+SF", op: "eq", value: 1 } },
+  { label: "IDP", rule: { key: "IDP", op: "gt", value: 0 } },
+  { label: "No IDP", rule: { key: "IDP", op: "eq", value: 0 } },
+  { label: "No kicker", rule: { key: "K", op: "eq", value: 0 } },
+];
+
+/** The reception buckets and TE premium, likewise. */
+const SCORING_PRESETS: { label: string; rule: FilterRule }[] = [
+  { label: "PPR", rule: { key: "rec", op: "gte", value: 1 } },
+  { label: "Half PPR", rule: { key: "rec", op: "eq", value: 0.5 } },
+  { label: "Standard", rule: { key: "rec", op: "lt", value: 0.5 } },
+  { label: "TE premium", rule: { key: "bonus_rec_te", op: "gt", value: 0 } },
+];
+
+/**
+ * A list of rules the reader builds, with the button that adds one.
+ *
+ * The presets are the point of the shape as much as the rows are: the four fixed
+ * pairs this replaced were the four questions worth one click, and they still are
+ * — they just write a rule now, which the reader can then edit into the question
+ * they actually have (`rec = 0.5` becomes `rec ≥ 0.4`; `qb+sf ≥ 2` becomes
+ * `qb+sf = 3`). A preset already on the list is dimmed rather than hidden, so the
+ * row doesn't reflow as you use it, and clicking it again is a no-op rather than
+ * a duplicate rule that narrows nothing twice.
+ */
+function RuleSection({
+  label,
+  empty,
+  rules,
+  onChange,
+  keyOptions,
+  newRule,
+  presets,
+  step,
+  leagues,
+  match,
+}: {
+  label: string;
+  empty: string;
+  rules: readonly FilterRule[];
+  onChange: (rules: FilterRule[]) => void;
+  keyOptions: { value: string; label: string; hint?: string }[];
+  /** What the add button appends — the rule most readers want first. */
+  newRule: FilterRule;
+  presets: { label: string; rule: FilterRule }[];
+  /** 1 for slot counts, 0.5 for scoring rates. */
+  step: number;
+  leagues: readonly ManagerLeague[];
+  match: (league: ManagerLeague, rule: FilterRule) => boolean;
+}) {
+  const has = (rule: FilterRule) =>
+    rules.some(
+      (r) => r.key === rule.key && r.op === rule.op && r.value === rule.value,
+    );
+
+  const replace = (index: number, rule: FilterRule) =>
+    onChange(rules.map((r, i) => (i === index ? rule : r)));
+
+  return (
+    <Section
+      label={label}
+      trailing={
+        <button
+          type="button"
+          onClick={() => onChange([...rules, newRule])}
+          className="inline-flex items-center gap-1 rounded-full border border-active/35 bg-active/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-active transition-colors hover:bg-active/20"
+        >
+          <span aria-hidden="true" className="text-sm leading-none">
+            +
+          </span>
+          Rule
+        </button>
+      }
+    >
+      <div className="flex flex-col gap-2">
+        {rules.length === 0 && (
+          <p className="text-xs text-foreground/35">{empty}</p>
+        )}
+        {rules.map((rule, i) => (
+          <RuleRow
+            // Rules are only appended and removed, never reordered, and the row
+            // holds no state of its own that a shifted index could carry over.
+            key={i}
+            rule={rule}
+            keyOptions={keyOptions}
+            step={step}
+            // A preset can write a key no league in view scores (`bonus_rec_te`
+            // where nobody pays it), and a select whose value isn't among its
+            // options silently shows the first one instead — so the rule's own
+            // key is always an option, whatever the data offered.
+            extraKey={
+              keyOptions.some((o) => o.value === rule.key) ? null : rule.key
+            }
+            count={leagues.filter((l) => match(l, rule)).length}
+            onChange={(next) => replace(i, next)}
+            onRemove={() => onChange(rules.filter((_, j) => j !== i))}
+          />
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/30">
+          Quick add
+        </span>
+        {presets.map((preset) => {
+          const already = has(preset.rule);
+          return (
+            <button
+              key={preset.label}
+              type="button"
+              disabled={already}
+              onClick={() => onChange([...rules, preset.rule])}
+              className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                already
+                  ? "cursor-default border-active/20 bg-active/5 text-active/40"
+                  : "border-foreground/10 bg-foreground/[0.04] text-foreground/55 hover:border-foreground/25 hover:text-foreground"
+              }`}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * One rule: what to measure, how to compare it, and to what.
+ *
+ * The number is held as text *only while it's being edited*, because a controlled
+ * numeric field parsed on every keystroke can't be cleared — emptying it to type
+ * `12` would snap to 0 and leave you typing `012`. The rule only takes a value a
+ * keystroke actually parses to, so a half-typed `0.` narrows nothing rather than
+ * matching nothing. The override drops on blur rather than living for the row's
+ * lifetime: rows are keyed by position, so a removal shifts a rule under a
+ * surviving row, and a permanent text buffer would show the deleted row's number
+ * against the kept row's rule.
+ *
+ * The trailing count is what this rule *alone* leaves, not what the draft leaves
+ * — the footer states that. Per rule it is the answer to "is this the rule that
+ * emptied my list", which a running total can't give once there are three of them.
+ */
+function RuleRow({
+  rule,
+  keyOptions,
+  extraKey,
+  step,
+  count,
+  onChange,
+  onRemove,
+}: {
+  rule: FilterRule;
+  keyOptions: { value: string; label: string; hint?: string }[];
+  extraKey: string | null;
+  step: number;
+  count: number;
+  onChange: (rule: FilterRule) => void;
+  onRemove: () => void;
+}) {
+  const [edit, setEdit] = useState<string | null>(null);
+  const text = edit ?? formatRuleValue(rule.value);
+
+  return (
+    <div className="flex items-center gap-1.5 rounded-xl border border-foreground/10 bg-foreground/[0.04] p-1.5">
+      <select
+        aria-label="Filter on"
+        value={rule.key}
+        onChange={(e) => onChange({ ...rule, key: e.target.value })}
+        className="min-w-0 flex-1 truncate rounded-lg border border-foreground/10 bg-[#0b1621] px-2 py-1.5 text-sm font-semibold text-foreground outline-none focus-visible:border-active/60"
+      >
+        {extraKey !== null && (
+          <option value={extraKey}>{extraKey.replace(/_/g, " ")}</option>
+        )}
+        {keyOptions.map((option) => (
+          <option key={option.value} value={option.value} title={option.hint}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+
+      <select
+        aria-label="Comparison"
+        value={rule.op}
+        onChange={(e) =>
+          onChange({ ...rule, op: e.target.value as FilterRule["op"] })
+        }
+        className="rounded-lg border border-foreground/10 bg-[#0b1621] px-2 py-1.5 text-center text-sm font-bold text-active outline-none focus-visible:border-active/60"
+      >
+        {COMPARE_OPS.map((op) => (
+          <option key={op.value} value={op.value} aria-label={op.label}>
+            {op.symbol}
+          </option>
+        ))}
+      </select>
+
+      <input
+        aria-label="Value"
+        type="number"
+        inputMode="decimal"
+        step={step}
+        value={text}
+        onChange={(e) => {
+          setEdit(e.target.value);
+          const parsed = Number(e.target.value);
+          if (e.target.value.trim() !== "" && Number.isFinite(parsed)) {
+            onChange({ ...rule, value: parsed });
+          }
+        }}
+        onBlur={() => setEdit(null)}
+        className="w-16 rounded-lg border border-foreground/10 bg-[#0b1621] px-2 py-1.5 text-center text-sm font-semibold tabular-nums text-foreground outline-none focus-visible:border-active/60"
+      />
+
+      <span
+        title="Leagues matching this rule on its own"
+        className="w-8 shrink-0 text-center font-mono text-[11px] tabular-nums text-foreground/35"
+      >
+        {count}
+      </span>
+
+      <button
+        type="button"
+        aria-label="Remove rule"
+        onClick={onRemove}
+        className="rounded-lg border border-foreground/10 px-2 py-1.5 text-sm font-bold leading-none text-foreground/40 transition-colors hover:border-[#ff5f6d]/50 hover:text-[#ff5f6d]"
+      >
+        ×
+      </button>
     </div>
   );
 }
