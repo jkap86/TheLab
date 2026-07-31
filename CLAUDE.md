@@ -466,11 +466,15 @@ stops holding, a comment saying it does would not have caught it.
 - **The three manager tabs are one scaffold, `LeaguesViewLayout`, over one hook,
   `useFilteredLeagues`.** Leagues, players and leaguemates were line-for-line
   copies of the same chrome — wide shell, cold-load state, header and count line,
-  filter bar, the note that stands in when the filters match nothing — and three
-  copies of that are one edit away from disagreeing about how a failed refresh or
-  an empty account looks, which reads as a bug in whichever tab didn't get
-  edited. Only three things ever varied: the count line, the body, and that the
-  leagues tab says "X of Y" when narrowed. The body is `children` rendered
+  filter control, the note that stands in when the filters match nothing — and
+  three copies of that are one edit away from disagreeing about how a failed
+  refresh or an empty account looks, which reads as a bug in whichever tab didn't
+  get edited. Only three things ever varied: the count line, the body, and that
+  the leagues tab says "X of Y" when narrowed. That count is a `stat`
+  (`{label, value, sub}`) rather than a free `ReactNode`, because it is now laid
+  out as a cell in the header's readout rail: three tabs formatting their own
+  label-over-number is the drift this scaffold exists to stop. The body is
+  `children` rendered
   *below* the empty-filter check, so a tab only ever reasons about a non-empty
   list. The split between the two is deliberate: the layout is the chrome, the
   hook is the state behind it, and `filtered` stays a value the page can read
@@ -520,11 +524,40 @@ stops holding, a comment saying it does would not have caught it.
 - The expanded league panel uses container queries (`@lg:`), not viewport
   breakpoints, because it renders at half width inside a card.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
-  being looked at, the season and the sync state are the same facts on all of
-  them; only the count line under them differs, which is what `children` is. The
-  tabs live there because they are what makes a second view reachable, and they
-  link with the URL's own spelling of the manager rather than the resolved
-  username, since Sleeper resolves a user id as readily as a name.
+  being looked at, the season, the sync state and the manager's record are the
+  same facts on all of them; only the headline count differs, which is what
+  `stat` is. The tabs live there because they are what makes a second view
+  reachable, and they link with the URL's own spelling of the manager rather than
+  the resolved username, since Sleeper resolves a user id as readily as a name.
+- **The header's second zone is the record readout, and it is where the filter
+  bar used to be.** The two rows of segment buttons are behind a modal
+  (`LeagueFiltersModal`) whose trigger sits in the state cluster, and the space
+  they freed carries the manager's season across the filtered leagues: a dial for
+  the win percentage, a proportion bar for the wins and losses behind it. Four
+  things that look like polish and are not:
+  - **The record is summed over `filtered`, not over the account.** That is the
+    point of putting it next to the filters — "how am I doing in my dynasty
+    leagues" is a different question from "how am I doing", and both are one
+    click apart. `LeaguesViewLayout` memoises it so the header renders numbers
+    rather than deriving them.
+  - **It is counted over leagues that *carry* a record.** Membership without a
+    roster arrives as `record: null` (the same Sleeper quirk that would deflate a
+    player share), so `aggregateRecord` returns the contributing count alongside
+    the totals and the card shows it — a denominator smaller than the list is
+    only honest if it is stated.
+  - **No games and `.000` are different answers**, so `pct` is null rather than
+    zero and the readout says the season hasn't started. Preseason every league
+    reports `0-0-0`; a win percentage there is a claim about games nobody played.
+    The two ways to reach an empty readout — filters that left nothing, and a
+    season that hasn't kicked off — say different things, because they are
+    different problems for the reader.
+  - **A modal hides its own state, so the state is repeated outside it.** The
+    trigger wears the count of active filters and the readout names the selection
+    in words (`filterSummary`, lower case because it is read mid-sentence). Both
+    come from the same option table the dialog's buttons do. Each option in the
+    dialog also carries how many leagues it would leave, which is why the
+    selection is edited as a draft and committed on Apply: those counts can't be
+    read while the list behind them moves.
 - **`SiteHeader` is the only global chrome, and it is one link.** Every tool is
   reached by navigating away from `/tools`, which used to leave the back button
   as the only way home; the slim bar in `app/layout.tsx` closes that loop. It

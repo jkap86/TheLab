@@ -60,15 +60,11 @@ export function ManagerLeagues({ searched }: { searched: string }) {
     <LeaguesViewLayout
       view={view}
       active="leagues"
-      count={
-        <span className="text-sm text-foreground/60">
-          <b className="text-base font-bold text-foreground">
-            {showing === total ? total : showing}
-          </b>{" "}
-          {showing === total ? "" : `of ${total} `}league
-          {total === 1 ? "" : "s"}
-        </span>
-      }
+      stat={{
+        label: "Leagues",
+        value: showing,
+        sub: showing === total ? undefined : `of ${total} total`,
+      }}
       adpCaption="Value curve sets how top-heavy the ADP-value columns are; each league is priced on its own board. The board filters drive the Players-tab ADP."
     >
       <ul className="flex flex-col gap-4 w-full">

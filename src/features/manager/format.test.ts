@@ -6,6 +6,7 @@ import {
   formatRecord,
   formatValue,
   formatWeekRange,
+  formatWinPct,
 } from "./format.ts";
 
 describe("formatRecord", () => {
@@ -19,6 +20,22 @@ describe("formatRecord", () => {
 
   test("handles an unplayed season", () => {
     assert.equal(formatRecord({ wins: 0, losses: 0, ties: 0 }), "0-0");
+  });
+});
+
+describe("formatWinPct", () => {
+  test("drops the leading zero, as a standings page does", () => {
+    assert.equal(formatWinPct(0.537), ".537");
+    assert.equal(formatWinPct(0.5), ".500");
+    assert.equal(formatWinPct(0), ".000");
+  });
+
+  test("keeps the leading digit of a perfect record", () => {
+    assert.equal(formatWinPct(1), "1.000");
+  });
+
+  test("shows nothing played as an em dash, not as zero", () => {
+    assert.equal(formatWinPct(null), "—");
   });
 });
 

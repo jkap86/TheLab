@@ -12,7 +12,7 @@ import { useManagerLeagues } from "./use-manager-leagues";
  * All three tabs — leagues, players, leaguemates — read the same stream and
  * narrow it with the same controls, then each does its own thing with what's
  * left. This is that common half: the stream result, the filter state the
- * {@link LeaguesFilters} bar drives, and the filtered list the views count over.
+ * {@link LeagueFiltersModal} drives, and the filtered list the views count over.
  *
  * It stays a hook rather than folding into the layout because each page still
  * owns its `filtered` list — the players and leaguemates shares memoise on it, so
