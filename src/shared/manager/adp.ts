@@ -211,8 +211,17 @@ export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
   };
 }
 
-/** Drafts crawled in one calendar month, ET. `month` is `YYYY-MM`. */
-export type DraftDensityMonth = { month: string; drafts: number };
+/**
+ * Drafts crawled in one calendar month, ET, for one season. `month` is
+ * `YYYY-MM`; `season` is the season those drafts were *for*, which is a
+ * different thing and frequently a different year — a startup run in January
+ * 2026 is a 2026 draft, and so is a rookie draft run that May.
+ *
+ * The split is what lets the drawer draw the strip for the season being read
+ * rather than for the calendar, which is the only way the strip can be the
+ * shape of a board that is itself cut to one season.
+ */
+export type DraftDensityMonth = { season: string; month: string; drafts: number };
 
 /**
  * How many drafts this app has crawled in each month — the shape behind the
@@ -229,10 +238,18 @@ export type DraftDensityMonth = { month: string; drafts: number };
  *
  * Months with no drafts are absent rather than zero; the client fills the gaps,
  * since it is the one that knows how far the axis runs.
+ *
+ * It *is* split by season, though, and that is not the same kind of narrowing.
+ * The season is the board's population, not one of its filters: a strip drawn
+ * across seasons would be the shape of a market the board never averages. So
+ * the season rides on every row and the client slices to the one it is showing
+ * — which also gives it the list of seasons there are drafts for, without a
+ * second query.
  */
 export async function getDraftDensity(): Promise<DraftDensityMonth[]> {
   const { rows } = await pool.query<DraftDensityMonth>(
-    `SELECT to_char(
+    `SELECT d.season,
+            to_char(
               to_timestamp(d.start_time::float8 / 1000) AT TIME ZONE 'America/New_York',
               'YYYY-MM') AS month,
             count(*)::int AS drafts
@@ -240,8 +257,8 @@ export async function getDraftDensity(): Promise<DraftDensityMonth[]> {
       WHERE d.start_time IS NOT NULL
         AND d.start_time > 0
         AND d.status = 'complete'
-      GROUP BY 1
-      ORDER BY 1`,
+      GROUP BY 1, 2
+      ORDER BY 1, 2`,
   );
   return rows;
 }

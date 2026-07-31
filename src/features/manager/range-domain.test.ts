@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   axisTicks,
   dateAtFraction,
+  densityThrough,
   drawnBounds,
   edgeBounds,
   fractionOf,
@@ -50,6 +51,27 @@ describe("scrubDomain", () => {
   test("ends on the real last day of a short month", () => {
     assert.equal(scrubDomain(density, "2026-02-10").to, "2026-02-28");
     assert.equal(scrubDomain(density, "2028-02-10").to, "2028-02-29");
+  });
+});
+
+describe("densityThrough", () => {
+  test("a board still being drafted runs to today", () => {
+    // The right edge is what "now" means to someone dragging toward it, so a
+    // quiet fortnight must not shorten the axis.
+    assert.equal(densityThrough(density, TODAY, true), TODAY);
+  });
+
+  test("a finished season stops at its last draft, not at today", () => {
+    // Today is months or years past anything that will ever be counted into a
+    // 2024 board; an axis running to it would be mostly blank.
+    assert.equal(densityThrough(density, TODAY, false), "2026-05-31");
+  });
+
+  test("a season with nothing crawled falls back to today", () => {
+    // Which gives scrubDomain its twelve-month empty domain rather than an axis
+    // of zero width.
+    assert.equal(densityThrough([], TODAY, false), TODAY);
+    assert.equal(densityThrough([{ month: "2025-05", drafts: 0 }], TODAY, false), TODAY);
   });
 });
 
@@ -202,11 +224,13 @@ describe("axisTicks", () => {
     assert.equal(label(axisTicks(monthBars([], domain), domain)), "Nov Dec 2026 Feb");
   });
 
-  test("drops to initials once the names would collide", () => {
+  test("drops to initials once the names would collide, and the year with them", () => {
+    // A four-digit year is three initials wide; at that density the tick is
+    // narrower than the label and "202" is what gets drawn.
     const domain = { from: "2025-01-01", to: "2026-06-30" };
     const ticks = axisTicks(monthBars([], domain), domain);
     assert.equal(ticks.length, 18);
-    assert.equal(label(ticks).slice(0, 14), "2025 F M A M J");
+    assert.equal(label(ticks).slice(0, 13), "’25 F M A M J");
   });
 
   test("leaves only the years on an axis too long even for initials", () => {

@@ -15,15 +15,18 @@ export type AdpDensityState = {
 };
 
 /**
- * Crawled drafts per month, off `/api/adp/density` — the strip the range
- * scrubber draws under the ADP board's window.
+ * Crawled drafts per month and season, off `/api/adp/density` — the strip the
+ * range scrubber draws under the ADP board's window, and the list of seasons the
+ * drawer offers.
  *
  * Unlike {@link useAdp}, which re-fetches on the board's query string, this
  * takes no query and re-fetches on nothing: the histogram describes the whole
  * crawled population *before* any board filter, deliberately, so that it holds
- * still while a window is dragged across it. `enabled` is the drawer being open,
- * which is the same gate the board itself is behind — a tab nobody opened the
- * drawer on costs no request.
+ * still while a window is dragged across it. The season rides on every row
+ * rather than being asked for, which is what lets the drawer slice to the season
+ * it is showing — and switch seasons — without a second request. `enabled` is
+ * the drawer being open, which is the same gate the board itself is behind — a
+ * tab nobody opened the drawer on costs no request.
  *
  * A failure leaves `months` empty rather than throwing the control away. The
  * scrubber still works without bars: the presets, the NFL calendar markers and

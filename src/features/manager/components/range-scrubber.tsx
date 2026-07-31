@@ -9,19 +9,20 @@ import {
 
 import {
   type AdpRange,
+  boardLabel,
   formatRangeDate,
   formatRangeMonth,
-  rangeLabel,
   rangeSummary,
   shiftDays,
 } from "../adp-controls";
-import type { AdpDensityState } from "../hooks/use-adp-density";
 import { type NflMarker, nflMarkersIn } from "../nfl-calendar";
 import {
+  type MonthBar,
   type ScrubDomain,
   axisTicks,
   dateAtFraction,
   daysBetween,
+  densityThrough,
   drawnBounds,
   edgeBounds,
   fractionOf,
@@ -66,15 +67,27 @@ import {
  */
 export function RangeScrubber({
   range,
+  season,
   bounds,
-  density,
+  months,
+  live,
+  error,
+  loading,
   today,
   onChange,
 }: {
   range: AdpRange;
+  /** The season these drafts are for — `"all"` when the board pools every one. */
+  season: string;
   /** The range resolved against today — a preset's dates, or the custom pair. */
   bounds: { from: string | null; to: string | null };
-  density: AdpDensityState;
+  /** Crawled drafts per month, already cut to `season` by the caller. */
+  months: readonly MonthBar[];
+  /** Drafts for this board are still being run, so the axis runs to today. */
+  live: boolean;
+  /** The density read failed; the strip degrades to a bare axis. */
+  error: string | null;
+  loading: boolean;
   /** `YYYY-MM-DD`. */
   today: string;
   onChange: (range: AdpRange) => void;
@@ -92,10 +105,10 @@ export function RangeScrubber({
   const [gesture, setGesture] = useState<Drag["mode"] | null>(null);
 
   const domain = useMemo(
-    () => scrubDomain(density.months, today),
-    [density.months, today],
+    () => scrubDomain(months, densityThrough(months, today, live)),
+    [months, today, live],
   );
-  const bars = useMemo(() => monthBars(density.months, domain), [density.months, domain]);
+  const bars = useMemo(() => monthBars(months, domain), [months, domain]);
   const ticks = useMemo(() => axisTicks(bars, domain), [bars, domain]);
   const markers = useMemo(() => nflMarkersIn(domain.from, domain.to), [domain]);
   const peak = bars.reduce((max, b) => Math.max(max, b.drafts), 0);
@@ -103,6 +116,17 @@ export function RangeScrubber({
   const drawn = drawnBounds(bounds, domain);
   const left = fractionOf(domain, drawn.from) * 100;
   const right = fractionOf(domain, drawn.to) * 100;
+
+  // A band clipped to a sliver by the domain's edge is a neighbouring season's
+  // tail, not a marker: on a season-scoped axis the left edge *is* a season
+  // boundary, so the last four days of the previous regular season arrive as a
+  // 2px chip reading "R". Clipping a partly-visible span is still right — it
+  // really did run through the months on screen — but below a couple of percent
+  // there is nothing left to read, and the draft is exempt because an instant
+  // has no width to lose.
+  const drawable = (marker: NflMarker) =>
+    marker.kind === "draft" ||
+    fractionOf(domain, marker.to) - fractionOf(domain, marker.from) >= MIN_BAND_FRACTION;
 
   const commit = (from: string, to: string) =>
     onChange(edgeBounds(from < to ? from : to, from < to ? to : from, domain));
@@ -322,7 +346,7 @@ export function RangeScrubber({
       </div>
 
       <div className="relative h-3.5">
-        {markers.map((marker) =>
+        {markers.filter(drawable).map((marker) =>
           marker.kind === "draft" ? (
             <DraftFlag
               key={marker.label}
@@ -361,7 +385,7 @@ export function RangeScrubber({
       </div>
 
       <p className="flex flex-wrap items-baseline gap-x-1.5 text-[0.7rem] tabular-nums text-foreground/45">
-        <span className="font-semibold text-active">{rangeLabel(range)}</span>
+        <span className="font-semibold text-active">{boardLabel(range, season)}</span>
         {summary !== null && <span className="text-foreground/40">{summary}</span>}
         {/* An unbounded range has no length to report — the strip's own span
             isn't it, since "all time" keeps matching drafts off both ends. */}
@@ -370,10 +394,12 @@ export function RangeScrubber({
             · {spanDays.toLocaleString()} day{spanDays === 1 ? "" : "s"}
           </span>
         )}
-        {density.error ? (
+        {error ? (
           <span className="text-foreground/30">· draft activity unavailable</span>
-        ) : peak === 0 && !density.loading ? (
-          <span className="text-foreground/30">· no crawled drafts to chart</span>
+        ) : peak === 0 && !loading ? (
+          <span className="text-foreground/30">
+            · no crawled drafts {season === "all" ? "to chart" : `for ${season}`}
+          </span>
         ) : null}
       </p>
     </div>
@@ -382,6 +408,9 @@ export function RangeScrubber({
 
 /** How far a press has to travel before it counts as drawing a window. */
 const SWEEP_SLOP = 4;
+
+/** Narrower than this and a season band is a rendering artefact, not a marker. */
+const MIN_BAND_FRACTION = 0.02;
 
 /** What a pointer is currently doing to the window, and what it needs to do it. */
 type Drag =

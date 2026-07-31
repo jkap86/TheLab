@@ -24,24 +24,47 @@ export type MonthBar = { month: string; drafts: number };
 
 /**
  * The strip's span: the first month holding a crawled draft, through the end of
- * the month containing `today`.
+ * the month containing `through`.
  *
- * It runs to today rather than to the last crawled draft because the right-hand
- * edge is what "now" means to a reader dragging toward it — a quiet fortnight
- * would otherwise shorten the axis and make an open end unreachable. It starts
- * at the data because there is nothing to select before it.
+ * For a season still being drafted, `through` is today: the right-hand edge is
+ * what "now" means to a reader dragging toward it, and a quiet fortnight must
+ * not shorten the axis and make an open end unreachable. For a season that is
+ * over, today is months or years past the last draft that will ever be counted,
+ * and an axis running to it would be mostly blank — {@link densityThrough}
+ * decides which. It starts at the data either way, because there is nothing to
+ * select before it.
  *
- * With no data at all the domain is the twelve months ending today, so the
- * control still works (the presets and the calendar markers don't need bars).
+ * With no data at all the domain is the twelve months ending at `through`, so
+ * the control still works (the presets and the calendar markers don't need bars).
  */
-export function scrubDomain(months: readonly MonthBar[], today: string): ScrubDomain {
+export function scrubDomain(months: readonly MonthBar[], through: string): ScrubDomain {
   const withDrafts = months.filter((m) => m.drafts > 0).map((m) => m.month);
-  const last = monthOf(today);
+  const last = monthOf(through);
   const first = withDrafts.length > 0 ? withDrafts.reduce((a, b) => (a < b ? a : b)) : null;
   return {
     from: `${first !== null && first < last ? first : addMonths(last, -11)}-01`,
     to: monthEnd(last),
   };
+}
+
+/**
+ * Where the strip's right-hand edge belongs: today while drafts for this board
+ * are still being run, otherwise the end of the last month that has any.
+ *
+ * `live` is the caller's question, not this module's — the all-seasons board and
+ * the current season are both open-ended, a finished season is not. The
+ * fallback when a season has no crawled drafts at all is `today`, which gives
+ * the twelve-month empty domain {@link scrubDomain} falls back to rather than an
+ * axis of zero width.
+ */
+export function densityThrough(
+  months: readonly MonthBar[],
+  today: string,
+  live: boolean,
+): string {
+  if (live) return today;
+  const last = months.filter((m) => m.drafts > 0).map((m) => m.month).sort().pop();
+  return last === undefined ? today : monthEnd(last);
 }
 
 /**
@@ -166,8 +189,13 @@ export function axisTicks(bars: readonly MonthBar[], domain: ScrubDomain): AxisT
     const month = Number(bar.month.slice(5, 7));
     const january = month === 1;
     if (!january && !initials) return [];
+    // A four-digit year is three times the width of the initials around it, so
+    // where the months are down to one letter the year gives up two of its own
+    // — a tick wider than its month is clipped, and "202" is not a year.
     const label = january
-      ? bar.month.slice(0, 4)
+      ? named || !initials
+        ? bar.month.slice(0, 4)
+        : `’${bar.month.slice(2, 4)}`
       : named
         ? MONTH_ABBREVIATIONS[month - 1]
         : MONTH_ABBREVIATIONS[month - 1].charAt(0);

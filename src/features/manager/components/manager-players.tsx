@@ -79,6 +79,7 @@ export function ManagerPlayers({ searched }: { searched: string }) {
           loading={adp.loading}
           error={adp.error}
           range={controls.range}
+          season={controls.season}
         />
       }
     >
