@@ -461,45 +461,6 @@ export function AdpDrawer({
 }
 
 /**
- * The Players tab's page-side line: how many crawled drafts the board matched,
- * and the standing caveat that the number describes this app's database and not
- * the market. The drawer names the board too, but this has to survive the drawer
- * being closed — the ADP column is on screen either way.
- */
-export function AdpBoardCaption({
-  draftCount,
-  loading,
-  error,
-  range,
-  season,
-}: {
-  /** Drafts the current filters matched; null while the first board loads. */
-  draftCount: number | null;
-  loading: boolean;
-  error: string | null;
-  range: AdpRange;
-  season: string;
-}): ReactNode {
-  if (error) {
-    return <span className="text-amber-300">ADP unavailable — {error}</span>;
-  }
-  if (draftCount === null) return "Loading ADP…";
-  if (draftCount === 0) return "No crawled drafts match these filters.";
-  return (
-    <>
-      Averaged over{" "}
-      <b className="font-semibold text-foreground/70">
-        {draftCount.toLocaleString()}
-      </b>{" "}
-      crawled {draftCount === 1 ? "draft" : "drafts"} from{" "}
-      {boardLabel(range, season).toLowerCase()} in this app’s data — not market
-      ADP.
-      {loading && <span className="text-foreground/35"> Updating…</span>}
-    </>
-  );
-}
-
-/**
  * The window control: a row of presets over the range scrubber.
  *
  * The presets are no longer a *mode* the scrubber is an alternative to — they

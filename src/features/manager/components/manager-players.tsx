@@ -9,7 +9,6 @@ import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
 import { useManagerPlayers } from "../hooks/use-manager-players";
 import { playerShares } from "../shares";
 import type { AdpPlayerPayload } from "../types";
-import { AdpBoardCaption } from "./adp-drawer";
 import { LeaguesViewLayout } from "./leagues-view-layout";
 import { ErrorCard } from "./manager-leagues-status";
 import { PlayerShares } from "./player-shares";
@@ -29,10 +28,10 @@ import { PanelMessage } from "./ui";
  *
  * The ADP column reads the shared ADP drawer — opened from the scaffold's
  * header, backed by the per-manager store — for which crawled drafts the average
- * is taken over, and `useAdp` fetches that board off the global `/api/adp`. This
- * tab owns the page-side caption, which is where the draft count lands with the
- * board it came from; the value-curve control in the drawer does nothing here (a
- * per-player ADP is a raw number) and drives the Leagues tab instead.
+ * is taken over, and `useAdp` fetches that board off the global `/api/adp`. The
+ * drawer's own trigger and caption name the board it came from; the value-curve
+ * control in the drawer does nothing here (a per-player ADP is a raw number) and
+ * drives the Leagues tab instead.
  */
 export function ManagerPlayers({ searched }: { searched: string }) {
   const view = useFilteredLeagues(searched);
@@ -72,15 +71,6 @@ export function ManagerPlayers({ searched }: { searched: string }) {
           ? `across ${shares.league_count} league${shares.league_count === 1 ? "" : "s"}`
           : undefined,
       }}
-      adpCaption={
-        <AdpBoardCaption
-          draftCount={adp.data?.draft_count ?? null}
-          loading={adp.loading}
-          error={adp.error}
-          range={controls.range}
-          season={controls.season}
-        />
-      }
     >
       {/* A failed refetch must not blank rows the hook deliberately kept —
           the error replaces the list only when there is nothing to keep. */}

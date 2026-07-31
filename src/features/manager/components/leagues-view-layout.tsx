@@ -45,21 +45,17 @@ import { PanelMessage } from "./ui";
  * beside the league filters' own, and the drawer behind it. The two triggers are
  * neighbours and not one control — the league filters narrow *this manager's
  * leagues*, the board narrows *the drafts in the database* — which is why they
- * are separate buttons rather than two sections of one dialog. Its caption, the
- * line naming the board on the page itself, has to survive the drawer being
- * closed, and is the tab's to supply through `adpCaption`.
+ * are separate buttons rather than two sections of one dialog. The board names
+ * itself inside the drawer; no tab repeats that on the page.
  */
 export function LeaguesViewLayout({
   view,
   stat,
-  adpCaption,
   children,
 }: {
   view: FilteredLeagues;
   /** The tab's own headline count, shown in the header readout's side rail. */
   stat: HeaderStat;
-  /** The line under the ADP bar — what it drives on this tab. */
-  adpCaption?: ReactNode;
   /** The tab's content, rendered once at least one league passes the filters. */
   children: ReactNode;
 }) {
@@ -143,9 +139,6 @@ export function LeaguesViewLayout({
         <EmptyState season={season} />
       ) : (
         <div className="flex flex-col gap-4">
-          {adpCaption && (
-            <p className="text-xs text-foreground/45">{adpCaption}</p>
-          )}
           {filtered.length === 0 ? (
             <PanelMessage>No leagues match these filters.</PanelMessage>
           ) : (
