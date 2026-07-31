@@ -8,6 +8,7 @@ import { adpQueryString, todayIso } from "../adp-controls";
 import { filterSummary } from "../filters";
 import { useAdpControls } from "../filters-context";
 import { useAdp } from "../hooks/use-adp";
+import { useAdpDensity } from "../hooks/use-adp-density";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
 import { aggregateRecord } from "../record";
 import { AdpDrawer, AdpTrigger } from "./adp-drawer";
@@ -76,6 +77,12 @@ export function LeaguesViewLayout({
     [controls],
   );
   const board = useAdp(boardOpen ? query : null);
+
+  // The strip the range scrubber draws, behind the same gate. It takes no query
+  // and re-fetches on nothing: it describes the crawled population *before* any
+  // board filter, which is what lets a window be dragged across it without the
+  // bars reshaping under the hand choosing them.
+  const density = useAdpDensity(boardOpen);
 
   // The header's record, over the leagues the filters leave — so it answers
   // "how am I doing in *these* leagues" and moves when the selection does.
@@ -155,6 +162,7 @@ export function LeaguesViewLayout({
         onChange={setControls}
         leagues={data.leagues}
         board={board}
+        density={density}
       />
     </PageShell>
   );

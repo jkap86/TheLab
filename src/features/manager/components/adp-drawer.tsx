@@ -7,11 +7,15 @@ import {
   type AdpControls,
   type AdpRange,
   defaultAdpControls,
+  rangeBounds,
   rangeLabel,
   seedFromLeague,
+  todayIso,
 } from "../adp-controls";
 import type { AdpState } from "../hooks/use-adp";
+import type { AdpDensityState } from "../hooks/use-adp-density";
 import type { ManagerLeague } from "../types";
+import { RangeScrubber } from "./range-scrubber";
 import { PositionBadge } from "./ui";
 
 const DRAFT_TYPE_OPTS = [
@@ -132,6 +136,7 @@ export function AdpDrawer({
   onChange,
   leagues,
   board,
+  density,
 }: {
   open: boolean;
   onClose: () => void;
@@ -140,15 +145,30 @@ export function AdpDrawer({
   leagues: ManagerLeague[];
   /** The board these controls produce; `data` is null until the first load lands. */
   board: AdpState;
+  /** Crawled drafts per month, for the range scrubber's strip. */
+  density: AdpDensityState;
 }) {
   const panel = useRef<HTMLDivElement>(null);
 
+  // Held in a ref so the effect below can depend on `open` alone. Callers pass a
+  // fresh arrow every render, so depending on `onClose` re-ran the whole effect
+  // on every keystroke — which meant `panel.focus()` fired again and took focus
+  // off whatever was being used. That was survivable while the drawer held only
+  // selects (each change already ends the interaction); it is not survivable for
+  // the range scrubber, whose handles are nudged with the arrow keys one press
+  // at a time.
+  const latestClose = useRef(onClose);
+  useEffect(() => {
+    latestClose.current = onClose;
+  }, [onClose]);
+
   // Escape closes, and the page behind stops scrolling while it's open — a
-  // full-height panel over a scrolling page reads as a rendering bug.
+  // full-height panel over a scrolling page reads as a rendering bug. Focus
+  // moves to the panel once, on open.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") latestClose.current();
     };
     document.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;
@@ -158,7 +178,7 @@ export function AdpDrawer({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -210,6 +230,8 @@ export function AdpDrawer({
         <div className="flex flex-col gap-3 border-b border-foreground/10 bg-foreground/[0.02] px-4 py-3">
           <RangeControl
             range={controls.range}
+            density={density}
+            today={todayIso()}
             onChange={(range) => onChange({ ...controls, range })}
           />
 
@@ -423,18 +445,25 @@ export function AdpBoardCaption({
 }
 
 /**
- * The window control: presets carry the intent ("recent drafts", "everything"),
- * and the two date fields appear only under Custom so the common path is one
- * click and the pinned block stays short.
+ * The window control: a row of presets over the range scrubber.
  *
- * Switching to Custom seeds nothing — an empty custom range is "all time", which
- * is honest about narrowing nothing rather than inventing a window.
+ * The presets are no longer a *mode* the scrubber is an alternative to — they
+ * fly the handles somewhere, and a custom window is what you get by moving one.
+ * That is why the "Custom…" chip is gone: it existed to reveal two date inputs,
+ * and there are none to reveal. The relative presets keep earning their place
+ * because they mean something a pair of dates can't — "Last 90 days" is still
+ * the last 90 days tomorrow.
  */
 function RangeControl({
   range,
+  density,
+  today,
   onChange,
 }: {
   range: AdpRange;
+  density: AdpDensityState;
+  /** `YYYY-MM-DD`, resolving the relative presets. */
+  today: string;
   onChange: (range: AdpRange) => void;
 }) {
   return (
@@ -447,7 +476,7 @@ function RangeControl({
           <button
             key={preset.value}
             type="button"
-            onClick={() => onChange({ ...range, preset: preset.value })}
+            onClick={() => onChange({ preset: preset.value, from: null, to: null })}
             aria-pressed={range.preset === preset.value}
             className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
               range.preset === preset.value
@@ -460,61 +489,14 @@ function RangeControl({
         ))}
       </div>
 
-      {range.preset === "custom" && (
-        <div className="flex items-center gap-2">
-          <DateField
-            label="From"
-            value={range.from}
-            max={range.to}
-            onChange={(from) => onChange({ ...range, from })}
-          />
-          <span aria-hidden="true" className="text-xs text-foreground/30">
-            →
-          </span>
-          <DateField
-            label="To"
-            value={range.to}
-            min={range.from}
-            onChange={(to) => onChange({ ...range, to })}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * One end of a custom range. `min`/`max` are the *other* end, so the picker
- * can't produce an inverted range — which the route rejects outright rather than
- * answering with an empty board.
- */
-function DateField({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  label: string;
-  value: string | null;
-  min?: string | null;
-  max?: string | null;
-  onChange: (value: string | null) => void;
-}) {
-  return (
-    <label className="flex flex-1 items-center gap-2">
-      <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
-        {label}
-      </span>
-      <input
-        type="date"
-        value={value ?? ""}
-        min={min ?? undefined}
-        max={max ?? undefined}
-        onChange={(e) => onChange(e.target.value || null)}
-        className="w-full rounded-md border border-foreground/10 bg-foreground/5 px-2 py-1 text-xs text-foreground transition-colors hover:border-foreground/20 focus:border-active/50 focus:outline-none [color-scheme:dark]"
+      <RangeScrubber
+        range={range}
+        bounds={rangeBounds(range, today)}
+        density={density}
+        today={today}
+        onChange={onChange}
       />
-    </label>
+    </div>
   );
 }
 

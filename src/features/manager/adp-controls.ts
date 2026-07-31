@@ -78,16 +78,22 @@ export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom";
 /**
  * The presets, in the order the drawer offers them. Two labels each: `label`
  * names the range where it stands alone (the trigger, the drawer's header), and
- * `chip` is what the row of five reads — dropping "Last" is what keeps that row
- * on one line at the drawer's width, and inside the row the word is implied by
- * the "Drafted" label anyway.
+ * `chip` is what the row reads — dropping "Last" is what keeps that row on one
+ * line at the drawer's width, and inside the row the word is implied by the
+ * "Drafted" label anyway.
+ *
+ * `custom` is deliberately **not** on this list, though it is still a preset
+ * value. It used to be a fifth chip that revealed two date inputs; the range
+ * scrubber replaced them, so a custom window is now what you get by moving a
+ * handle or taking a marker rather than a mode you enter first. The chips fly
+ * the handles somewhere, which is why the relative ones keep earning their place
+ * — "Last 90 days" stays true tomorrow, where the dates behind it would not.
  */
 export const ADP_RANGE_PRESETS: { value: AdpRangePreset; label: string; chip: string }[] = [
   { value: "30d", label: "Last 30 days", chip: "30 days" },
   { value: "90d", label: "Last 90 days", chip: "90 days" },
   { value: "12m", label: "Last 12 months", chip: "12 months" },
   { value: "all", label: "All time", chip: "All time" },
-  { value: "custom", label: "Custom…", chip: "Custom…" },
 ];
 
 /**
@@ -171,12 +177,25 @@ export function rangeBounds(range: AdpRange, today: string): AdpRangeBounds {
   }
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/**
+ * Spelled out rather than left to `Intl`, so a date reads the same in every
+ * locale the app is opened in — and so the axis initials the scrubber labels its
+ * ticks with are the same list, not a second one that could disagree.
+ */
+export const MONTH_ABBREVIATIONS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
 
-/** `2026-06-01` → `Jun 1, 2026`. Spelled out rather than left to `Intl`, so the label reads the same everywhere. */
+/** `2026-06-01` → `Jun 1, 2026`. */
 export function formatRangeDate(date: string): string {
   const [year, month, day] = date.split("-");
-  return `${MONTHS[Number(month) - 1]} ${Number(day)}, ${year}`;
+  return `${MONTH_ABBREVIATIONS[Number(month) - 1]} ${Number(day)}, ${year}`;
+}
+
+/** `2026-06` → `Jun 2026`. What a bar on the scrubber's axis is. */
+export function formatRangeMonth(month: string): string {
+  return `${MONTH_ABBREVIATIONS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
 }
 
 /**
@@ -203,7 +222,7 @@ export function todayIso(now: Date = new Date()): string {
 }
 
 /** Shift a `YYYY-MM-DD` by whole days, in UTC so no zone can move the boundary. */
-function shiftDays(date: string, days: number): string {
+export function shiftDays(date: string, days: number): string {
   const ms = Date.parse(`${date}T00:00:00Z`) + days * 86_400_000;
   return new Date(ms).toISOString().slice(0, 10);
 }

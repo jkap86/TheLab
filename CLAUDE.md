@@ -38,9 +38,9 @@ src/shared/    Domain logic, one folder per concern.
   to *that* module and call it — don't write SQL against a table your module
   doesn't own. (`ktc/match` used to query `players` directly; it doesn't now.)
 - **A cache-backed route reads and nothing else.** `/api/projections`,
-  `/api/league/[leagueId]` and `/api/adp` answer from what the background syncs
-  have stored; a slice that hasn't been synced comes back empty rather than
-  fetched on demand. (`/api/user/[username]`, `…/leagues` and
+  `/api/league/[leagueId]`, `/api/adp` and `/api/adp/density` answer from what the
+  background syncs have stored; a slice that hasn't been synced comes back empty
+  rather than fetched on demand. (`/api/user/[username]`, `…/leagues` and
   `/api/picktracker/[leagueId]` are the deliberate exceptions — resolving a
   manager and syncing their leagues is what the user routes are *for*, which is
   why the leagues one streams progress, and the pick tracker follows a draft
@@ -573,6 +573,44 @@ stops holding, a comment saying it does would not have caught it.
   the layout and gated on `open`, so a tab nobody opened it on costs no request;
   on the Players tab that means the same board is fetched twice while the drawer is
   up, which is a bounded cost paid only while someone is looking at both.
+- **The window is chosen against the drafts, not against a calendar widget.**
+  `RangeScrubber` is a brush over a histogram of the crawled drafts
+  (`/api/adp/density`), and it replaced a pair of `mm/dd/yyyy` inputs that asked
+  you to name a date while telling you nothing about where the drafts were —
+  you guessed, then read the count that came back. Four things in it are
+  decisions, not styling:
+  - **A handle on an edge of the domain is an *open* bound, not that date**
+    (`edgeBounds` in `range-domain`, pure and tested). It is what keeps "all
+    time" reachable by dragging and what stops the control quietly closing a
+    range that was deliberately half-open — a range is two independent halves,
+    and a control that can't express one is a control that loses it.
+  - **The strip is narrowed by nothing the drawer can change.** `getDraftDensity`
+    applies only the two conditions no filter can lift (a draft with no
+    `start_time` can't be placed in time; an unfinished one is never averaged).
+    Narrowing it by the live filters would reshape the bars under the hand
+    dragging across them. It follows that the strip and the board's `draft_count`
+    are different populations, which is why the scrubber shows **no count** — only
+    dates. The header states the real one.
+  - **The NFL calendar rides underneath, and its markers are controls.**
+    `nfl-calendar.ts` is a table of six dates a season (draft, preseason,
+    regular season) — clicking a band takes exactly that window, clicking the
+    draft flag starts the window there and leaves the end alone. That last one is
+    the point of the whole layer: "drafts since the NFL draft" is the most
+    natural cut of a rookie board there is and **no fixed preset can ever carry
+    it**, because the date moves every April. A new season is one row; a season
+    the league hasn't scheduled yet is provisional, which is why the labels name it.
+  - **The presets stayed and "Custom…" went.** The chips fly the handles rather
+    than switching a mode, so `ADP_RANGE_PRESETS` no longer offers `custom` even
+    though it is still a preset *value* — it is what moving a handle produces.
+    The relative presets keep earning their place for the reason they always did:
+    "Last 90 days" is still the last 90 days tomorrow, where the dates behind it
+    would not be.
+- **A modal that refocuses itself must not depend on its callers' callbacks.**
+  `AdpDrawer`'s open effect held `onClose` in its deps, and every caller passes a
+  fresh arrow each render — so every keystroke re-ran it and `panel.focus()` took
+  focus off whatever was in use. That was survivable while the drawer held only
+  selects; it is not survivable for a slider nudged one arrow-press at a time. The
+  callback lives in a ref and the effect depends on `open` alone.
 - **`useAdp` is not keyed to the manager, unlike every other hook on these
   pages.** The four sub-resource hooks re-fetch on the leagues array because they
   read what that stream wrote; ADP describes the whole crawled database narrowed

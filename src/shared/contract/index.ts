@@ -1,6 +1,7 @@
 import type {
   AdpFilters,
   AdpRosterValue,
+  DraftDensityMonth,
   LeagueDetail,
   Leaguemate,
   LeagueRank,
@@ -422,6 +423,20 @@ export type AdpPayload = {
   /** Players in the full filtered set; 0 when the requested page is past its end. */
   player_count: number;
   players: AdpPlayerPayload[];
+};
+
+/**
+ * `GET /api/adp/density` — crawled drafts per calendar month, for the strip the
+ * board's date range is chosen against.
+ *
+ * A separate route from `/api/adp` rather than a field on it, because it answers
+ * a question the board's filters must not touch: the histogram has to hold still
+ * while a window is dragged across it. Sending it with the board would tie the
+ * two together and refetch a whole shape every time one chip moves.
+ */
+export type AdpDensityPayload = {
+  /** Ascending by month; months with no crawled drafts are absent, not zero. */
+  months: DraftDensityMonth[];
 };
 
 /**

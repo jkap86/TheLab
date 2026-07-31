@@ -37,8 +37,8 @@ export { ownedDraftPicks } from "./draft-picks";
 export type { DraftPickAsset, TradedPick } from "./draft-picks";
 export { resolveManagerUser, toUserInfo } from "./resolve";
 export type { ResolvedManager } from "./resolve";
-export { getDraftAdp, getDraftAdpForPlayers } from "./adp";
-export type { AdpResult, AdpRow, PlayerAdp } from "./adp";
+export { getDraftAdp, getDraftAdpForPlayers, getDraftDensity } from "./adp";
+export type { AdpResult, AdpRow, DraftDensityMonth, PlayerAdp } from "./adp";
 export {
   ADP_PEAK,
   DEFAULT_STEEPNESS,

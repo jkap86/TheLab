@@ -211,6 +211,41 @@ export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
   };
 }
 
+/** Drafts crawled in one calendar month, ET. `month` is `YYYY-MM`. */
+export type DraftDensityMonth = { month: string; drafts: number };
+
+/**
+ * How many drafts this app has crawled in each month — the shape behind the
+ * board's date range, not a number to reconcile with it.
+ *
+ * Deliberately narrowed by *nothing* the ADP drawer can change. The strip it
+ * draws is the thing a reader drags a window across, so it has to hold still
+ * while they do it: narrowing it by the live filters would move the bars under
+ * the hand choosing them, and a histogram that reshapes as you scrub is worse
+ * than no histogram. The two conditions here are the ones no filter can lift —
+ * a draft with no `start_time` can't be placed in time at all (the same reason a
+ * date bound drops it), and an unfinished draft is never counted into an average
+ * whatever else is selected.
+ *
+ * Months with no drafts are absent rather than zero; the client fills the gaps,
+ * since it is the one that knows how far the axis runs.
+ */
+export async function getDraftDensity(): Promise<DraftDensityMonth[]> {
+  const { rows } = await pool.query<DraftDensityMonth>(
+    `SELECT to_char(
+              to_timestamp(d.start_time::float8 / 1000) AT TIME ZONE 'America/New_York',
+              'YYYY-MM') AS month,
+            count(*)::int AS drafts
+       FROM drafts d
+      WHERE d.start_time IS NOT NULL
+        AND d.start_time > 0
+        AND d.status = 'complete'
+      GROUP BY 1
+      ORDER BY 1`,
+  );
+  return rows;
+}
+
 /** One player's average draft position on a board, with the sample behind it. */
 export type PlayerAdp = { adp: number; picks: number };
 

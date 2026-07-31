@@ -1,4 +1,5 @@
 import type {
+  AdpDensityPayload,
   AdpPayload,
   AdpPlayerPayload,
   LeagueAdpEntry,
@@ -18,6 +19,7 @@ import type {
   ManagerRanksPayload,
 } from "@/shared/contract";
 import type {
+  DraftDensityMonth,
   DraftPickAsset,
   LeagueRank,
   ManagerLeague,
@@ -42,6 +44,7 @@ import type {
 export type {
   AdpPayload,
   AdpPlayerPayload,
+  DraftDensityMonth,
   DraftPickAsset,
   LeagueAdpEntry,
   LeagueKtcEntry,
@@ -57,6 +60,9 @@ export type {
   ProjectedRank,
   TeamOutlook,
 };
+
+/** The `/api/adp/density` response the range scrubber draws its strip from. */
+export type AdpDensityResult = AdpDensityPayload;
 
 /** A team as sent to the client (manager avatar id resolved to a URL). */
 export type LeagueTeamView = LeagueTeamPayload;
