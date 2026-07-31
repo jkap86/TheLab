@@ -46,8 +46,9 @@ src/shared/    Domain logic, one folder per concern.
   why the leagues one streams progress, and the pick tracker follows a draft
   *while it happens*, for any league id whether a sync has seen it or not; a
   cached copy would be behind the room. **Every other route under that prefix is
-  *not* an exception** — `…/players`, `…/leaguemates`, `…/ranks`, `…/ktc` and
-  `…/adp-value` today: they read the rosters and membership that stream writes,
+  *not* an exception** — `…/players`, `…/leaguemates`, `…/ranks`, `…/ktc`,
+  `…/adp-value` and `…/trades` today: they read the rosters, membership and
+  transactions that stream writes,
   so a manager it has never run for gets an empty answer rather than a second
   sync of their own. That is the rule for a new sibling too, so this list has
   gone stale twice; the prefix is not what makes a route an exception, being
@@ -322,6 +323,32 @@ the sign they are house rules and not local details:
 
 A fourth module of this kind should be checked against both before it is written.
 
+`trades` is the same cut on both sides of the wire, and it is worth reading as a
+pair. `shared/trades/assemble` turns Sleeper's flat maps — `adds` is player →
+roster, `draft_picks` carries its own owners, `waiver_budget` its own sender and
+receiver — into one *side* per participating roster holding what that roster
+received; `features/trades/filters` decides which of those trades a reader is
+looking at. Both are pure and tested, and the thin I/O around them
+(`shared/trades/queries`, the route, the page) has no rules of its own. Three
+decisions live in the pair rather than in the components:
+
+- **A side is what was received, never both halves.** What a roster gave up is
+  exactly what the other sides received, and storing both is one edit away from
+  them disagreeing. Sides come from `roster_ids` rather than from the assets, so
+  a roster that only gave things up — a real case in the three-way trades some
+  leagues run — still appears.
+- **The filters ask what *moved*, not who ended up with it.** `tradeAssets`
+  pools the sides, so looking a player up finds his trade without knowing which
+  way he went. A filter that only answers when you already know the answer is
+  the trap; which side each asset landed on is the trade's own display.
+- **`all` and `any` are both real questions** — "did these two managers trade
+  with each other" against "anything involving any of these three players" — so
+  the selection carries one mode over the whole of it. The date window is not
+  one of the alternatives: it always narrows, because it is a bound rather than
+  a selection. And a trade Sleeper filed with no timestamp is dropped by *any*
+  bound, for the reason `/api/adp` drops an undated draft — there is no honest
+  side of the boundary to put it on.
+
 Validation earns its keep when a value reaches SQL as anything but a bound
 parameter. `scoring` picks the column `projections/queries` interpolates into
 `ORDER BY`, so it is a closed enum that fails the request on an unknown value —
@@ -496,7 +523,41 @@ stops holding, a comment saying it does would not have caught it.
   guarantee either hook makes, so `takeLines` lives once in
   `features/shared/ndjson.ts` — two copies of it was the same drift the
   `shared/query` primitives were consolidated to stop. Keeping two hooks does not
-  mean keeping two of everything in them.
+  mean keeping two of everything in them. It lives in `features/shared` rather
+  than in the pick tracker that first wrote it, because the trades page reads the
+  same list for the same reason — an account's leagues, off the stream that syncs
+  them.
+- **A piece read by a second tool moves to `features/shared`; it does not get
+  imported across features.** The trades page needed the league-filter
+  vocabulary, the modal that drives it, the date primitives and `ordinal`, and
+  all four were sitting in `features/manager`. They are
+  `features/shared/league-filters.ts`, `ui/league-filters-modal.tsx`,
+  `date-range.ts` and `format.ts` now. Two habits keep that cheap. The mover
+  **re-exports from where its old consumers already import it** —
+  `adp-controls` still hands out `todayIso` and `shiftDays`, `manager/format`
+  still hands out `ordinal` — so one canonical definition is read under two names
+  rather than a sweep through a dozen call sites. And what moves is only what a
+  second tool actually reads: `manager/format` keeps the records, points and week
+  horizons only that tool renders, because a shared module that collects a
+  feature's whole vocabulary is just the feature again under another name.
+- **The trades page carries two filter sets, like the manager tabs, and for the
+  same reason.** The league filters say *which leagues' trades are in the list at
+  all*; the trade filters say *which of those trades* — window, players, picks,
+  managers. One is about where you play, the other about what happened there, so
+  they stay two triggers rather than two tabs of one dialog. Both are applied on
+  the client over one read of the season's trades, and that is the shape the
+  filters demand rather than a shortcut: the league filters run against the
+  league list the page already streams (the same `settings` quirks
+  `matchesFilters` reads), and the trade filters' own menus are read *off the
+  trades* — which players moved, who deals most, which pick seasons are on the
+  table. The unnarrowed set has to be in hand either way, which is why the route
+  takes no query string beyond the season. Two details in the menus: each option
+  carries how many trades it would leave, counted over everything *except* the
+  selection itself — counting over the narrowed list collapses a menu to its own
+  selection the moment you make one, and it can't be widened again without being
+  cleared — and the whole page is every trade in those leagues, not only the ones
+  the account was party to. What the leaguemates are doing is most of what is
+  worth reading; the managers filter is what narrows it back.
 - **The three manager tabs are one scaffold, `LeaguesViewLayout`, over one hook,
   `useFilteredLeagues`.** Leagues, players and leaguemates were line-for-line
   copies of the same chrome — wide shell, cold-load state, header and count line,

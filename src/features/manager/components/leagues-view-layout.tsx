@@ -2,17 +2,19 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 
-import { PageShell } from "@/features/shared";
+import {
+  LeagueFiltersModal,
+  PageShell,
+  filterSummary,
+} from "@/features/shared";
 
 import { adpQueryString, todayIso } from "../adp-controls";
-import { filterSummary } from "../filters";
 import { useAdpControls } from "../filters-context";
 import { useAdp } from "../hooks/use-adp";
 import { useAdpDensity } from "../hooks/use-adp-density";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
 import { aggregateRecord } from "../record";
 import { AdpDrawer, AdpTrigger } from "./adp-drawer";
-import { LeagueFiltersModal } from "./league-filters-modal";
 import { ManagerHeader, type HeaderStat, type ManagerTab } from "./manager-header";
 import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
 import { PanelMessage } from "./ui";

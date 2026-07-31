@@ -48,7 +48,8 @@ export const tools: Tool[] = [
   {
     href: "/trades",
     text: "Trades",
-    description: "View real trades.",
+    description:
+      "Read every trade in your leagues, by date, players, picks or manager.",
   },
   {
     href: "/lineupchecker",
