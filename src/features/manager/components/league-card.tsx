@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import { formatRecord } from "../format";
-import type { MetricContext } from "../league-metrics";
+import { LEAGUE_METRICS, type MetricContext } from "../league-metrics";
 import type {
   LeagueAdpEntry,
   LeagueKtcEntry,
@@ -11,7 +11,7 @@ import type {
   ManagerLeague,
 } from "../types";
 import { LeagueDetailPanel } from "./league-detail-panel";
-import { MetricColumn } from "./metric-column";
+import { MetricColumns } from "./metric-column";
 import { Chevron } from "./ui";
 
 /**
@@ -69,30 +69,10 @@ export function LeagueCard({
   onColumnChange: (slot: number, key: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  // Which column's picker is open, if any — one at a time, so opening one closes
-  // the last. Lifted here (not into each column) so the row can lift its stacking
-  // order while a menu overhangs the card below it, and so an outside click has a
-  // single thing to close.
-  const [openSlot, setOpenSlot] = useState<number | null>(null);
-  const statsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (openSlot === null) return;
-    const onDown = (event: MouseEvent) => {
-      if (statsRef.current && !statsRef.current.contains(event.target as Node)) {
-        setOpenSlot(null);
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpenSlot(null);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [openSlot]);
+  // Whether one of the stat columns has its picker open — the columns own which,
+  // but the row is what has to lift its stacking order while a menu overhangs the
+  // card below it.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const record = league.record;
   const ctx: MetricContext = { league, ranks, ktc, adp, weeks, valuedAt };
@@ -100,7 +80,7 @@ export function LeagueCard({
   return (
     <li
       className={`group relative rounded-xl border border-foreground/10 bg-gradient-to-b from-foreground/[0.06] to-foreground/[0.015] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_28px_-16px_rgba(0,0,0,0.7)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_20px_44px_-18px_rgba(0,0,0,0.85)] motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
-        openSlot !== null ? "z-30" : ""
+        menuOpen ? "z-30" : ""
       }`}
     >
       <div className="flex w-full flex-col items-stretch gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
@@ -122,26 +102,13 @@ export function LeagueCard({
           )}
         </button>
 
-        <div
-          ref={statsRef}
-          className="flex shrink-0 items-stretch divide-x divide-foreground/10"
-        >
-          {columns.map((key, slot) => (
-            <MetricColumn
-              key={slot}
-              metricKey={key}
-              ctx={ctx}
-              open={openSlot === slot}
-              onToggle={() =>
-                setOpenSlot((current) => (current === slot ? null : slot))
-              }
-              onSelect={(metricKey) => {
-                onColumnChange(slot, metricKey);
-                setOpenSlot(null);
-              }}
-            />
-          ))}
-        </div>
+        <MetricColumns
+          metrics={LEAGUE_METRICS}
+          ctx={ctx}
+          columns={columns}
+          onColumnChange={onColumnChange}
+          onOpenChange={setMenuOpen}
+        />
       </div>
 
       {expanded && (

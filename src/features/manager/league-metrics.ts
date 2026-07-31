@@ -4,10 +4,10 @@ import {
   formatValue,
   formatWeekRange,
 } from "./format.ts";
+import type { Metric } from "./metric-cell.ts";
 import type {
   LeagueAdpEntry,
   LeagueKtcEntry,
-  LeagueRank,
   LeagueRankSet,
   ManagerLeague,
 } from "./types";
@@ -50,26 +50,13 @@ export type MetricContext = {
 };
 
 /**
- * One column's worth of read: a rank to place and meter, or a value to print.
+ * One selectable league metric — {@link Metric} bound to this catalogue's grain.
  *
- * A `rank` cell carries the `{ rank, of }` the card tints and meters, or null
- * when the ranking can't be formed yet; a `value` cell carries the already
- * formatted string, or null when there is nothing to show. Both carry the hover
- * title, so a metric owns everything the column needs to render it.
+ * The cell shapes it can return, and the reason a rank and a value render
+ * differently, live with {@link MetricCell}: they are shared with the share cards'
+ * catalogue, which is drawn by the same column.
  */
-export type MetricCell =
-  | { kind: "rank"; rank: LeagueRank | null; title: string }
-  | { kind: "value"; text: string | null; title: string };
-
-/** One selectable metric: its key, its short column label, and how to read it. */
-export type LeagueMetric = {
-  /** Stable id, stored as a column's selection and keyed in the picker. */
-  key: string;
-  /** The uppercase column heading — kept short enough to sit in a stat column. */
-  label: string;
-  /** Reads this metric off one league's context into a renderable cell. */
-  cell: (ctx: MetricContext) => MetricCell;
-};
+export type LeagueMetric = Metric<MetricContext>;
 
 /**
  * The KTC column's hover, where the raw value, the board and the priced count
@@ -311,9 +298,3 @@ export const DEFAULT_COLUMNS: string[] = [
   "ktc_start",
   "proj",
 ];
-
-/** A metric's compact value for the picker menu: `#N` for a rank, the number for a value. */
-export function metricPreview(cell: MetricCell): string {
-  if (cell.kind === "rank") return cell.rank ? `#${cell.rank.rank}` : "—";
-  return cell.text ?? "—";
-}

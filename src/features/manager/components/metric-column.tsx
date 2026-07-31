@@ -1,35 +1,120 @@
 "use client";
 
-import {
-  LEAGUE_METRICS,
-  LEAGUE_METRICS_BY_KEY,
-  metricPreview,
-  type LeagueMetric,
-  type MetricCell,
-  type MetricContext,
-} from "../league-metrics";
+import { useEffect, useRef, useState } from "react";
+
+import { metricPreview, type Metric, type MetricCell } from "../metric-cell";
 
 /**
- * One stat column on a league card: the chosen metric, read off this league and
+ * The cluster of stat columns across a card — the league cards' four rankings,
+ * the share cards' four counts — and the one-menu-at-a-time behaviour behind
+ * them.
+ *
+ * It owns which column's picker is open because that is a fact about the cluster
+ * and not about either card: only one menu is up at a time, an outside click or
+ * Escape closes it, and both were written out twice before this. What the *card*
+ * still needs to know is whether a menu is up at all, so it can lift its stacking
+ * order while the menu overhangs the card below — that goes back up through
+ * `onOpenChange` rather than being solved here, since the element that has to be
+ * raised is the card's own.
+ *
+ * Which metric each slot shows is held higher still, in the list, so every card
+ * shows the same columns and they line up down the page.
+ */
+export function MetricColumns<C>({
+  metrics,
+  ctx,
+  columns,
+  onColumnChange,
+  onOpenChange,
+}: {
+  metrics: Metric<C>[];
+  ctx: C;
+  /** The metric key each column shows, shared by every card in the list. */
+  columns: string[];
+  /** Point a column at another metric (applies to every card at once). */
+  onColumnChange: (slot: number, key: string) => void;
+  /** Told whether any of this card's menus is open. Must be a stable callback. */
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [openSlot, setOpenSlot] = useState<number | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (openSlot === null) return;
+    const onDown = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpenSlot(null);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenSlot(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openSlot]);
+
+  useEffect(() => {
+    onOpenChange?.(openSlot !== null);
+  }, [openSlot, onOpenChange]);
+
+  return (
+    <div
+      ref={ref}
+      className="flex shrink-0 items-stretch divide-x divide-foreground/10"
+    >
+      {columns.map((key, slot) => (
+        <MetricColumn
+          key={slot}
+          metrics={metrics}
+          metricKey={key}
+          ctx={ctx}
+          open={openSlot === slot}
+          onToggle={() =>
+            setOpenSlot((current) => (current === slot ? null : slot))
+          }
+          onSelect={(metricKey) => {
+            onColumnChange(slot, metricKey);
+            setOpenSlot(null);
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One stat column on a card: the chosen metric, read off this card's subject and
  * rendered, with the column's label doubling as the trigger for a picker that
  * swaps the whole column to another metric.
  *
+ * Generic in what the metrics read from, because two grains now wear these
+ * columns — a league card reads a league's ranks and values, a share card reads
+ * the leagues behind one player or leaguemate. The catalogue is passed in rather
+ * than imported here, which is what keeps the column ignorant of both.
+ *
  * The selection is the card's to hold, not this column's — every card shows the
  * same four metrics so the columns line up down the list, so which metric a slot
- * shows is lifted to {@link LeagueCard} and the picker's open state with it. This
- * component is told which metric it holds and whether its menu is open, and
- * reports a toggle and a pick back up.
+ * shows is lifted to {@link LeagueCard} or {@link ShareCard}, and the picker's
+ * open state with it. This component is told which metric it holds and whether
+ * its menu is open, and reports a toggle and a pick back up.
  */
-export function MetricColumn({
+export function MetricColumn<C>({
+  metrics,
   metricKey,
   ctx,
   open,
   onToggle,
   onSelect,
 }: {
+  /** The catalogue this column picks from — the card's grain decides which. */
+  metrics: Metric<C>[];
   /** The selected metric's key; falls back to the first metric if unknown. */
   metricKey: string;
-  ctx: MetricContext;
+  ctx: C;
   /** Whether this column's picker menu is open — one at a time per card. */
   open: boolean;
   /** Toggle this column's menu (the card closes any other that was open). */
@@ -37,8 +122,7 @@ export function MetricColumn({
   /** Point this column at another metric. */
   onSelect: (key: string) => void;
 }) {
-  const metric: LeagueMetric =
-    LEAGUE_METRICS_BY_KEY[metricKey] ?? LEAGUE_METRICS[0];
+  const metric = metrics.find((m) => m.key === metricKey) ?? metrics[0];
   const cell = metric.cell(ctx);
 
   return (
@@ -82,7 +166,7 @@ export function MetricColumn({
           role="menu"
           className="absolute right-0 top-full z-30 mt-1.5 min-w-[9.5rem] rounded-lg border border-foreground/15 bg-[var(--background)] p-1 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.9)]"
         >
-          {LEAGUE_METRICS.map((option) => {
+          {metrics.map((option) => {
             const active = option.key === metric.key;
             return (
               <button
@@ -138,12 +222,39 @@ function rankTier(rank: { rank: number; of: number }): { p: number; tier: Tier }
 
 /**
  * The number and meter under a column's label. A rank is placed and metered by
- * where in its league it sits; a value is printed plain, since there is no
- * league to place it against. Both keep the same three-row height — label,
- * number, a track strip — so mixing rank and value columns in one row leaves the
- * numbers on a shared baseline.
+ * where in its league it sits; a share is metered by its plain fraction, more
+ * being more; a value is printed plain, since there is nothing to place it
+ * against. All three keep the same three-row height — label, number, a track
+ * strip — so mixing them in one row leaves the numbers on a shared baseline.
  */
 function StatBody({ cell, title }: { cell: MetricCell; title: string }) {
+  if (cell.kind === "share") {
+    // Metered but never tiered: a player in 8 of 121 leagues is a small share,
+    // not a bad one, so borrowing a rank's colours would read as an alarm on
+    // nearly every row. The accent marks the fill and the number stays neutral.
+    const p = cell.of > 0 ? cell.held / cell.of : 0;
+    return (
+      <>
+        <span title={title} className="flex items-baseline gap-0.5 leading-none">
+          <span className="text-base font-bold tabular-nums text-foreground/85">
+            {cell.held}
+          </span>
+          <span className="text-[11px] tabular-nums text-foreground/40">
+            /{cell.of}
+          </span>
+        </span>
+        <span className="h-1 w-full overflow-hidden rounded-full bg-foreground/10">
+          {cell.held > 0 && (
+            <span
+              className="block h-full rounded-full bg-active/70"
+              style={{ width: `${Math.max(6, p * 100)}%` }}
+            />
+          )}
+        </span>
+      </>
+    );
+  }
+
   if (cell.kind === "value") {
     return (
       <>
