@@ -15,8 +15,15 @@ export const dynamic = "force-dynamic";
  *   GET /api/adp?league_type=dynasty&superflex=true&teams_min=12&scoring=ppr
  *
  * Draft filters: `season` (4-digit year, repeatable/comma-separated, or `all`),
+ * `start_after`/`start_before` (`YYYY-MM-DD`, read in ET, both ends inclusive),
  * `draft_type` (snake|linear|auction), `draft_status`
  * (complete|drafting|paused|pre_draft), `rounds_min`, `rounds_max`.
+ *
+ * `season` and the date range are different cuts, not two spellings of one: a
+ * season is what a draft is *for*, the range is when it *happened*, and a
+ * league's rookie draft and its startup share the former while sitting months
+ * apart in the latter. Either bounds the board; giving neither falls back to
+ * `DEFAULT_SEASON` so a bare request can't scan every draft on file.
  *
  * League filters: `league_id`, `league_type` (redraft|keeper|dynasty),
  * `scoring` (std|half_ppr|ppr), `best_ball`, `superflex`, `teams_min`,

@@ -239,6 +239,10 @@ export function adpBoardFor({
 }): AdpFilters {
   return {
     seasons: [season],
+    // The league cards price a *season*, so this board is cut by season and not
+    // by date — the drawer's range narrows the Players-tab board only.
+    start_after: null,
+    start_before: null,
     draft_types: [...ADP_FILTER_DEFAULTS.draft_types],
     draft_statuses: [...ADP_FILTER_DEFAULTS.draft_statuses],
     league_ids: null,

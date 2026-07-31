@@ -18,8 +18,8 @@ import type { ManagerLeague } from "./types";
  * manager, the other about the market — so they don't share state.
  */
 export type AdpControls = {
-  /** A 4-digit season, or `"all"` for every season on file. */
-  season: string;
+  /** When the drafts happened — see {@link AdpRange}. */
+  range: AdpRange;
   /**
    * `"snakelinear"` is the default the route applies when `draft_type` is
    * omitted — auction is left out because its `pick_no` is nomination order, not
@@ -53,6 +53,51 @@ export type AdpControls = {
 };
 
 /**
+ * The window the board's drafts are taken from, as a preset plus the two dates a
+ * custom window carries.
+ *
+ * A window rather than a season because the two are different cuts of the same
+ * drafts: a season is what a draft is *for*, and every dynasty league runs a
+ * rookie draft in May and a startup in August under the one label. "The last 30
+ * days" is the question a board is usually being asked, and a season can't
+ * express it.
+ *
+ * The relative presets are resolved against a supplied `today` rather than a
+ * stored date ({@link rangeBounds}), so "last 90 days" keeps meaning that
+ * tomorrow — and stays a pure function worth testing.
+ */
+export type AdpRange = {
+  preset: AdpRangePreset;
+  /** `YYYY-MM-DD`, both inclusive. Read only when `preset` is `"custom"`; either may be null for an open end. */
+  from: string | null;
+  to: string | null;
+};
+
+export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom";
+
+/**
+ * The presets, in the order the drawer offers them. Two labels each: `label`
+ * names the range where it stands alone (the trigger, the drawer's header), and
+ * `chip` is what the row of five reads — dropping "Last" is what keeps that row
+ * on one line at the drawer's width, and inside the row the word is implied by
+ * the "Drafted" label anyway.
+ */
+export const ADP_RANGE_PRESETS: { value: AdpRangePreset; label: string; chip: string }[] = [
+  { value: "30d", label: "Last 30 days", chip: "30 days" },
+  { value: "90d", label: "Last 90 days", chip: "90 days" },
+  { value: "12m", label: "Last 12 months", chip: "12 months" },
+  { value: "all", label: "All time", chip: "All time" },
+  { value: "custom", label: "Custom…", chip: "Custom…" },
+];
+
+/**
+ * The board's window when the drawer hasn't been touched. Twelve months is wide
+ * enough that a quiet stretch of crawling still returns drafts, and narrow
+ * enough that last year's board isn't averaged into this year's.
+ */
+export const DEFAULT_ADP_RANGE: AdpRange = { preset: "12m", from: null, to: null };
+
+/**
  * The curve applied when the ADP bar hasn't been touched. Matches the route's
  * `DEFAULT_STEEPNESS`; the two ends carry the vocabulary separately, so this
  * string is what "balanced" means on the wire. Named so a consumer that needs
@@ -78,13 +123,16 @@ const LEAGUE_TYPE_NAME: Record<"0" | "1" | "2", string> = {
 };
 
 /**
- * The starting board: this season, every meaningful draft (snake + linear), no
- * league narrowing. `season` is the manager's viewed season so the timeframe
- * matches the leagues on screen.
+ * The starting board: the last twelve months of drafts, every meaningful draft
+ * type (snake + linear), no league narrowing.
+ *
+ * It takes no arguments, unlike the season-seeded default it replaces — which is
+ * why the shared store can hold a real selection from the start rather than a
+ * null the tabs each fill in once they know the season.
  */
-export function defaultAdpControls(season: string): AdpControls {
+export function defaultAdpControls(): AdpControls {
   return {
-    season,
+    range: DEFAULT_ADP_RANGE,
     draftType: "snakelinear",
     leagueType: "all",
     scoring: "all",
@@ -96,16 +144,84 @@ export function defaultAdpControls(season: string): AdpControls {
   };
 }
 
+/** The dates a range covers, as `YYYY-MM-DD`; null on a side it doesn't bound. */
+export type AdpRangeBounds = { from: string | null; to: string | null };
+
 /**
- * The seasons the timeframe control offers: the viewed season and the two before
- * it, plus `"all"`. A season with no crawled drafts simply comes back empty —
- * the caption says how many drafts matched, so an empty timeframe reads as "0
- * drafts" rather than a broken control.
+ * Resolve a range against today. The relative presets end open rather than at
+ * today: a draft in progress can carry a start time hours ahead, and a board
+ * that says "last 30 days" shouldn't drop it on a technicality.
+ *
+ * `today` is passed in (`YYYY-MM-DD`) rather than read from the clock so this
+ * stays pure — and so a board's query string only changes when the *date* does,
+ * not on every render.
  */
-export function seasonOptions(season: string): string[] {
-  const year = Number(season);
-  if (!Number.isInteger(year)) return [season, "all"];
-  return [String(year), String(year - 1), String(year - 2), "all"];
+export function rangeBounds(range: AdpRange, today: string): AdpRangeBounds {
+  switch (range.preset) {
+    case "all":
+      return { from: null, to: null };
+    case "custom":
+      return { from: range.from, to: range.to };
+    case "30d":
+      return { from: shiftDays(today, -30), to: null };
+    case "90d":
+      return { from: shiftDays(today, -90), to: null };
+    case "12m":
+      return { from: shiftMonths(today, -12), to: null };
+  }
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** `2026-06-01` → `Jun 1, 2026`. Spelled out rather than left to `Intl`, so the label reads the same everywhere. */
+export function formatRangeDate(date: string): string {
+  const [year, month, day] = date.split("-");
+  return `${MONTHS[Number(month) - 1]} ${Number(day)}, ${year}`;
+}
+
+/**
+ * What the range says on the trigger and in the drawer's header. A preset keeps
+ * its name — "Last 90 days" stays true as time passes, where the dates behind it
+ * would have to be re-read — and only a custom window spells its dates out.
+ */
+export function rangeLabel(range: AdpRange): string {
+  if (range.preset !== "custom") {
+    return ADP_RANGE_PRESETS.find((p) => p.value === range.preset)!.label;
+  }
+  const { from, to } = range;
+  if (from && to) return `${formatRangeDate(from)} – ${formatRangeDate(to)}`;
+  if (from) return `Since ${formatRangeDate(from)}`;
+  if (to) return `Through ${formatRangeDate(to)}`;
+  // A custom range with neither end set narrows nothing, so say what it does.
+  return "All time";
+}
+
+/** Today where the reader is, as `YYYY-MM-DD` — the argument {@link rangeBounds} wants. */
+export function todayIso(now: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** Shift a `YYYY-MM-DD` by whole days, in UTC so no zone can move the boundary. */
+function shiftDays(date: string, days: number): string {
+  const ms = Date.parse(`${date}T00:00:00Z`) + days * 86_400_000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
+ * Shift by whole months, keeping the day of the month where one exists. Day 31
+ * has no counterpart in a 30-day month, so the result is clamped to that month's
+ * last day rather than rolling into the next one — a "last 12 months" window
+ * starting on the 1st of the wrong month is a whole month of drafts.
+ */
+function shiftMonths(date: string, months: number): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const target = new Date(Date.UTC(year, month - 1 + months, 1));
+  const lastDay = new Date(
+    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  target.setUTCDate(Math.min(day, lastDay));
+  return target.toISOString().slice(0, 10);
 }
 
 /**
@@ -127,7 +243,7 @@ export function deriveScoring(
 /**
  * Fill the league-setting controls from one of the manager's leagues — the
  * "associated league setting" shortcut. It sets only what a league payload
- * carries: type, scoring, best ball and size. `season`, `draftType` and
+ * carries: type, scoring, best ball and size. `range`, `draftType` and
  * `superflex` are left as they were: the first two aren't league settings, and
  * superflex lives in `roster_positions`, which the client league doesn't carry,
  * so it stays a deliberate manual choice.
@@ -154,15 +270,23 @@ export function seedFromLeague(
 
 /**
  * The `/api/adp` query string for a board. An `"all"` control is left out so the
- * route's tri-state parser reads it as "don't narrow"; `draftType` and `season`
- * are always sent because they always mean something. `limit` is the board's max
- * so a deep-roster player still gets a number — the tail past 1,000 is beyond
- * any real draft.
+ * route's tri-state parser reads it as "don't narrow"; `draftType` is always
+ * sent because it always means something. `limit` is the board's max so a
+ * deep-roster player still gets a number — the tail past 1,000 is beyond any
+ * real draft.
+ *
+ * `today` resolves the relative ranges, and `season` is never sent: the range
+ * replaced it, and sending both would intersect two different cuts of the same
+ * drafts. An unbounded range therefore reaches the route as no bound at all,
+ * which is what makes "All time" mean it.
  */
-export function adpQueryString(controls: AdpControls): string {
+export function adpQueryString(controls: AdpControls, today: string): string {
   const params = new URLSearchParams();
   params.set("limit", "1000");
-  params.set("season", controls.season);
+
+  const { from, to } = rangeBounds(controls.range, today);
+  if (from) params.set("start_after", from);
+  if (to) params.set("start_before", to);
 
   params.set(
     "draft_type",

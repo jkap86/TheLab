@@ -1,13 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 import { PageShell } from "@/features/shared";
 
-import { defaultAdpControls, seasonOptions } from "../adp-controls";
+import { adpQueryString, todayIso } from "../adp-controls";
 import { useAdpControls } from "../filters-context";
+import { useAdp } from "../hooks/use-adp";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
-import { AdpFilters } from "./adp-filters";
+import { AdpDrawer, AdpTrigger } from "./adp-drawer";
 import { ManagerHeader, type ManagerTab } from "./manager-header";
 import { LeaguesFilters } from "./manager-leagues-filters";
 import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
@@ -30,10 +31,11 @@ import { PanelMessage } from "./ui";
  * to reason about a non-empty filtered list: the "no leagues match these filters"
  * case is handled here, above it, the same way for all three.
  *
- * The shared ADP bar lives here too, so it shows identically on all three tabs
- * from the one per-manager store, above the body but below the empty-filter
- * check — the board is a fact about the market, not about which leagues the
- * header filters leave. Its caption is the tab's to supply through `adpCaption`.
+ * The shared ADP board lives here too, so it opens identically from all three
+ * tabs off the one per-manager store: a trigger in the header's filter row and
+ * the drawer behind it. Its caption — the line naming the board on the page
+ * itself, which has to survive the drawer being closed — is the tab's to supply
+ * through `adpCaption`.
  */
 export function LeaguesViewLayout({
   view,
@@ -54,6 +56,17 @@ export function LeaguesViewLayout({
   const { data, searched, progress, refreshing, error, filters, setFilters, filtered } =
     view;
   const { controls, setControls } = useAdpControls();
+  const [boardOpen, setBoardOpen] = useState(false);
+
+  // Gated on the drawer being open: a tab nobody has opened the board on should
+  // cost no ADP request. On the Players tab that means the same board is fetched
+  // twice while the drawer is up — its own column already reads it — which is a
+  // bounded cost paid only while someone is looking at both.
+  const query = useMemo(
+    () => adpQueryString(controls, todayIso()),
+    [controls],
+  );
+  const board = useAdp(boardOpen ? query : null);
 
   // Cold load: nothing cached yet.
   if (!data) {
@@ -70,7 +83,6 @@ export function LeaguesViewLayout({
 
   const { user, season, summary } = data;
   const hasLeagues = data.leagues.length > 0;
-  const activeControls = controls ?? defaultAdpControls(season);
 
   return (
     <PageShell width="wide">
@@ -85,7 +97,18 @@ export function LeaguesViewLayout({
         refreshError={error}
         filters={
           hasLeagues ? (
-            <LeaguesFilters filters={filters} onChange={setFilters} />
+            <LeaguesFilters
+              filters={filters}
+              onChange={setFilters}
+              trailing={
+                <AdpTrigger
+                  range={controls.range}
+                  draftCount={board.data?.draft_count ?? null}
+                  loading={board.loading}
+                  onClick={() => setBoardOpen(true)}
+                />
+              }
+            />
           ) : undefined
         }
       >
@@ -96,13 +119,9 @@ export function LeaguesViewLayout({
         <EmptyState season={season} />
       ) : (
         <div className="flex flex-col gap-4">
-          <AdpFilters
-            controls={activeControls}
-            onChange={setControls}
-            leagues={data.leagues}
-            seasons={seasonOptions(season)}
-            caption={adpCaption}
-          />
+          {adpCaption && (
+            <p className="text-xs text-foreground/45">{adpCaption}</p>
+          )}
           {filtered.length === 0 ? (
             <PanelMessage>No leagues match these filters.</PanelMessage>
           ) : (
@@ -110,6 +129,15 @@ export function LeaguesViewLayout({
           )}
         </div>
       )}
+
+      <AdpDrawer
+        open={boardOpen}
+        onClose={() => setBoardOpen(false)}
+        controls={controls}
+        onChange={setControls}
+        leagues={data.leagues}
+        board={board}
+      />
     </PageShell>
   );
 }

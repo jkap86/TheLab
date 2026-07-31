@@ -49,34 +49,34 @@ export function useLeagueFilters(): LeagueFiltersValue {
 }
 
 type AdpControlsValue = {
-  /**
-   * Null until the user touches the bar — the default depends on the viewed
-   * season, which this provider (mounted in the layout) doesn't have, so each
-   * tab fills it in through {@link useAdpControlsFor}. Once set, it is the shared
-   * selection.
-   */
-  controls: AdpControls | null;
+  controls: AdpControls;
   setControls: (controls: AdpControls) => void;
 };
 
 const AdpControlsContext = createContext<AdpControlsValue | null>(null);
 
 /**
- * Holds the ADP bar's selection for one manager, shared by all three tabs — the
- * board filters that drive the Players-tab per-player ADP and the value-curve
- * steepness that drives the Leagues-tab team value.
+ * Holds the ADP drawer's selection for one manager, shared by all three tabs —
+ * the board filters that drive the Players-tab per-player ADP and the
+ * value-curve steepness that drives the Leagues-tab team value.
  *
  * Mounted once in the manager layout beside {@link LeagueFiltersProvider} and
  * reset per manager the same way (the layout keys the subtree on the searched
  * name), so a board or curve chosen on one tab carries to the next but starts
  * fresh when you look at someone else.
+ *
+ * It holds a real selection from the start, unlike the league filters' sibling
+ * history here: the board used to open on the viewed season, which this provider
+ * doesn't know, so `controls` was null until a tab filled it in. A date range
+ * needs no season, so the default is season-independent and the null — with the
+ * `?? defaultAdpControls(season)` each consumer carried — is gone.
  */
 export function AdpControlsProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [controls, setControls] = useState<AdpControls | null>(null);
+  const [controls, setControls] = useState<AdpControls>(defaultAdpControls);
   return (
     <AdpControlsContext.Provider value={{ controls, setControls }}>
       {children}
@@ -84,25 +84,11 @@ export function AdpControlsProvider({
   );
 }
 
-/** The raw shared ADP controls. Throws outside the manager layout's provider. */
+/** The shared ADP controls. Throws outside the manager layout's provider. */
 export function useAdpControls(): AdpControlsValue {
   const value = useContext(AdpControlsContext);
   if (!value) {
     throw new Error("useAdpControls must be used within an AdpControlsProvider");
   }
   return value;
-}
-
-/**
- * The shared ADP controls resolved against a known season: the stored selection
- * if the user has made one, otherwise this season's default board. Callers that
- * only need the steepness (which has a season-independent default) can read
- * {@link useAdpControls} directly instead.
- */
-export function useAdpControlsFor(season: string): {
-  controls: AdpControls;
-  setControls: (controls: AdpControls) => void;
-} {
-  const { controls, setControls } = useAdpControls();
-  return { controls: controls ?? defaultAdpControls(season), setControls };
 }

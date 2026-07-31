@@ -5,11 +5,17 @@ import {
   adpQueryString,
   defaultAdpControls,
   deriveScoring,
-  seasonOptions,
+  rangeBounds,
+  rangeLabel,
   seedFromLeague,
+  todayIso,
   type AdpControls,
+  type AdpRange,
 } from "./adp-controls.ts";
 import type { ManagerLeague } from "./types.ts";
+
+/** A fixed "today" so the relative presets resolve to asserted dates. */
+const TODAY = "2026-07-31";
 
 const league = (over: Partial<ManagerLeague>): ManagerLeague => ({
   league_id: "1",
@@ -29,18 +35,56 @@ const params = (query: string) =>
   Object.fromEntries(new URLSearchParams(query).entries());
 
 describe("adpQueryString", () => {
-  test("the default board sends this season, snake+linear, and nothing else", () => {
-    const query = params(adpQueryString(defaultAdpControls("2026")));
+  test("the default board sends the last twelve months, snake+linear, and nothing else", () => {
+    const query = params(adpQueryString(defaultAdpControls(), TODAY));
     assert.deepEqual(query, {
       limit: "1000",
-      season: "2026",
+      start_after: "2025-07-31",
       draft_type: "snake,linear",
     });
   });
 
+  test("season is never sent — the range replaced it", () => {
+    // Sending both would intersect two different cuts of the same drafts.
+    for (const preset of ["30d", "12m", "all"] as const) {
+      const query = params(
+        adpQueryString({ ...defaultAdpControls(), range: { preset, from: null, to: null } }, TODAY),
+      );
+      assert.equal("season" in query, false);
+    }
+  });
+
+  test("an unbounded range sends no date at all", () => {
+    const all = params(
+      adpQueryString(
+        { ...defaultAdpControls(), range: { preset: "all", from: null, to: null } },
+        TODAY,
+      ),
+    );
+    assert.equal("start_after" in all, false);
+    assert.equal("start_before" in all, false);
+  });
+
+  test("a custom range sends the ends it has, and only those", () => {
+    const query = (range: AdpRange) =>
+      params(adpQueryString({ ...defaultAdpControls(), range }, TODAY));
+
+    assert.deepEqual(
+      query({ preset: "custom", from: "2026-06-01", to: "2026-07-31" }),
+      {
+        limit: "1000",
+        draft_type: "snake,linear",
+        start_after: "2026-06-01",
+        start_before: "2026-07-31",
+      },
+    );
+    assert.equal("start_before" in query({ preset: "custom", from: "2026-06-01", to: null }), false);
+    assert.equal("start_after" in query({ preset: "custom", from: null, to: "2026-07-31" }), false);
+  });
+
   test("an 'all' control is omitted, not sent empty", () => {
     // Every league filter left on "all" must drop out entirely.
-    const query = params(adpQueryString(defaultAdpControls("2026")));
+    const query = params(adpQueryString(defaultAdpControls(), TODAY));
     for (const key of ["league_type", "scoring", "superflex", "best_ball"]) {
       assert.equal(key in query, false);
     }
@@ -48,7 +92,7 @@ describe("adpQueryString", () => {
 
   test("league settings map to the route's vocabulary", () => {
     const controls: AdpControls = {
-      season: "all",
+      range: { preset: "all", from: null, to: null },
       draftType: "auction",
       leagueType: "2",
       scoring: "ppr",
@@ -58,9 +102,8 @@ describe("adpQueryString", () => {
       rounds: "full",
       steepness: "steep",
     };
-    assert.deepEqual(params(adpQueryString(controls)), {
+    assert.deepEqual(params(adpQueryString(controls, TODAY)), {
       limit: "1000",
-      season: "all",
       draft_type: "auction",
       league_type: "dynasty",
       scoring: "ppr",
@@ -74,15 +117,15 @@ describe("adpQueryString", () => {
 
   test("steepness is a value-curve knob, not a board filter — never sent here", () => {
     // It drives the Leagues-tab team value, not which drafts /api/adp averages.
-    const flat = adpQueryString({ ...defaultAdpControls("2026"), steepness: "flat" });
-    const steep = adpQueryString({ ...defaultAdpControls("2026"), steepness: "steep" });
+    const flat = adpQueryString({ ...defaultAdpControls(), steepness: "flat" }, TODAY);
+    const steep = adpQueryString({ ...defaultAdpControls(), steepness: "steep" }, TODAY);
     assert.equal(flat, steep);
     assert.equal("steepness" in params(flat), false);
   });
 
   test("the rounds buckets bound one side each, all-rounds neither", () => {
     const round = (rounds: AdpControls["rounds"]) =>
-      params(adpQueryString({ ...defaultAdpControls("2026"), rounds }));
+      params(adpQueryString({ ...defaultAdpControls(), rounds }, TODAY));
     assert.equal("rounds_min" in round("all"), false);
     assert.equal("rounds_max" in round("all"), false);
     assert.deepEqual(
@@ -97,7 +140,7 @@ describe("adpQueryString", () => {
 
   test("a team count binds both bounds to an exact match", () => {
     const query = params(
-      adpQueryString({ ...defaultAdpControls("2026"), teams: "10" }),
+      adpQueryString({ ...defaultAdpControls(), teams: "10" }, TODAY),
     );
     assert.equal(query.teams_min, "10");
     assert.equal(query.teams_max, "10");
@@ -106,7 +149,7 @@ describe("adpQueryString", () => {
   test("the three explicit draft types pass through unchanged", () => {
     for (const draftType of ["snake", "linear", "auction"] as const) {
       const query = params(
-        adpQueryString({ ...defaultAdpControls("2026"), draftType }),
+        adpQueryString({ ...defaultAdpControls(), draftType }, TODAY),
       );
       assert.equal(query.draft_type, draftType);
     }
@@ -127,8 +170,8 @@ describe("deriveScoring", () => {
 describe("seedFromLeague", () => {
   test("fills the league settings and leaves the rest", () => {
     const base: AdpControls = {
-      ...defaultAdpControls("2026"),
-      season: "2025",
+      ...defaultAdpControls(),
+      range: { preset: "custom", from: "2025-05-01", to: null },
       draftType: "auction",
       superflex: "yes",
     };
@@ -145,20 +188,83 @@ describe("seedFromLeague", () => {
     assert.equal(seeded.bestBall, "yes");
     assert.equal(seeded.teams, "10");
     // Not league settings — left exactly as they were.
-    assert.equal(seeded.season, "2025");
+    assert.deepEqual(seeded.range, { preset: "custom", from: "2025-05-01", to: null });
     assert.equal(seeded.draftType, "auction");
     assert.equal(seeded.superflex, "yes");
   });
 
   test("a league Sleeper omits `type` for reads as redraft, lineup", () => {
-    const seeded = seedFromLeague(defaultAdpControls("2026"), league({ settings: {} }));
+    const seeded = seedFromLeague(defaultAdpControls(), league({ settings: {} }));
     assert.equal(seeded.leagueType, "0");
     assert.equal(seeded.bestBall, "no");
   });
 });
 
-describe("seasonOptions", () => {
-  test("offers the viewed season, two before it, and all", () => {
-    assert.deepEqual(seasonOptions("2026"), ["2026", "2025", "2024", "all"]);
+describe("rangeBounds", () => {
+  test("the relative presets count back from today and end open", () => {
+    // Open-ended on purpose: a draft in progress can carry a start time hours
+    // ahead, and "last 30 days" shouldn't drop it.
+    assert.deepEqual(rangeBounds({ preset: "30d", from: null, to: null }, TODAY), {
+      from: "2026-07-01",
+      to: null,
+    });
+    assert.deepEqual(rangeBounds({ preset: "90d", from: null, to: null }, TODAY), {
+      from: "2026-05-02",
+      to: null,
+    });
+    assert.deepEqual(rangeBounds({ preset: "12m", from: null, to: null }, TODAY), {
+      from: "2025-07-31",
+      to: null,
+    });
+  });
+
+  test("months are calendar months, clamped where the day doesn't exist", () => {
+    // Backing up 12 months from a leap day, or from the 31st of a month whose
+    // counterpart is shorter, must not roll into the next month — that would
+    // silently widen the window by a whole month.
+    assert.equal(rangeBounds({ preset: "12m", from: null, to: null }, "2024-02-29").from, "2023-02-28");
+    assert.equal(rangeBounds({ preset: "12m", from: null, to: null }, "2026-03-31").from, "2025-03-31");
+  });
+
+  test("day arithmetic crosses months and years", () => {
+    assert.equal(rangeBounds({ preset: "30d", from: null, to: null }, "2026-01-15").from, "2025-12-16");
+  });
+
+  test("all time bounds nothing; custom passes its own ends through", () => {
+    assert.deepEqual(rangeBounds({ preset: "all", from: null, to: null }, TODAY), {
+      from: null,
+      to: null,
+    });
+    assert.deepEqual(
+      rangeBounds({ preset: "custom", from: "2026-06-01", to: "2026-06-30" }, TODAY),
+      { from: "2026-06-01", to: "2026-06-30" },
+    );
+  });
+});
+
+describe("rangeLabel", () => {
+  test("a preset keeps its name, so it stays true tomorrow", () => {
+    assert.equal(rangeLabel({ preset: "90d", from: null, to: null }), "Last 90 days");
+    assert.equal(rangeLabel({ preset: "all", from: null, to: null }), "All time");
+  });
+
+  test("a custom range spells out the ends it has", () => {
+    assert.equal(
+      rangeLabel({ preset: "custom", from: "2026-06-01", to: "2026-07-31" }),
+      "Jun 1, 2026 – Jul 31, 2026",
+    );
+    assert.equal(rangeLabel({ preset: "custom", from: "2026-06-01", to: null }), "Since Jun 1, 2026");
+    assert.equal(rangeLabel({ preset: "custom", from: null, to: "2026-07-31" }), "Through Jul 31, 2026");
+    // Neither end set narrows nothing, so say what it does rather than "Custom".
+    assert.equal(rangeLabel({ preset: "custom", from: null, to: null }), "All time");
+  });
+});
+
+describe("todayIso", () => {
+  test("formats the local date, not the UTC one", () => {
+    // Late evening in a western zone is already tomorrow in UTC; the reader's
+    // "last 30 days" should start from the date on their calendar.
+    assert.equal(todayIso(new Date(2026, 6, 31, 23, 30)), "2026-07-31");
+    assert.equal(todayIso(new Date(2026, 0, 5, 0, 15)), "2026-01-05");
   });
 });

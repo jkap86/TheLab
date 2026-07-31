@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from "react";
 
-import { DEFAULT_ADP_STEEPNESS } from "../adp-controls";
 import { useAdpControls } from "../filters-context";
 import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
 import { useManagerAdpValue } from "../hooks/use-manager-adp-value";
@@ -34,15 +33,11 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   const leagues = view.data?.leagues ?? null;
   const ranks = useManagerRanks(searched, leagues);
   const ktc = useManagerKtc(searched, leagues);
-  // Only the steepness of the shared ADP bar drives the team value; the board
-  // filters beside it belong to the Players-tab per-player ADP. `null` controls
-  // (untouched) means the default curve.
+  // Only the steepness of the shared ADP drawer drives the team value; the board
+  // filters beside it belong to the Players-tab per-player ADP, and the drawer's
+  // date range with them — each league here is priced on its own season's board.
   const { controls } = useAdpControls();
-  const adp = useManagerAdpValue(
-    searched,
-    leagues,
-    controls?.steepness ?? DEFAULT_ADP_STEEPNESS,
-  );
+  const adp = useManagerAdpValue(searched, leagues, controls.steepness);
 
   // Which metric each of the four stat columns shows, shared by every card so the
   // columns line up down the list — a change on any card's picker moves them all.
@@ -69,7 +64,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
           {total === 1 ? "" : "s"}
         </span>
       }
-      adpCaption="Value curve sets how top-heavy the ADP-value columns are; each league is priced on its own board. The board filters drive the Players-tab ADP."
+      adpCaption="Value curve sets how top-heavy the ADP-value columns are; each league is priced on its own season’s board. The drawer’s date range and board filters drive the Players-tab ADP."
     >
       <ul className="flex flex-col gap-4 w-full">
         {view.filtered.map((league) => (

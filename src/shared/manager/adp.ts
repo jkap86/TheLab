@@ -87,6 +87,18 @@ const SCORING_SQL = `
    END)`;
 
 /**
+ * A bare `YYYY-MM-DD` against `drafts.start_time`, which Sleeper gives as epoch
+ * milliseconds. The date is read in ET — the zone the rest of this app dates
+ * things in (`TODAY_ET` in the projections reads) — rather than in whatever zone
+ * the Node process happens to run in, which is why the conversion is here and
+ * not in the parser. `offsetDays` shifts the boundary, so an inclusive end bound
+ * is midnight of the following day.
+ */
+const startTimeMs = (placeholder: string, offsetDays = 0) =>
+  `(extract(epoch from ((${placeholder}::date + ${offsetDays})::timestamp
+     AT TIME ZONE 'America/New_York')) * 1000)`;
+
+/**
  * The `WHERE` for the draft/league side of the query, plus the parameters it
  * binds. Returned together because the fragment's `$n` placeholders are
  * positions in this exact array — the caller appends its own params after.
@@ -97,6 +109,18 @@ function draftSelection(filters: AdpFilters): { where: string; params: unknown[]
   const clauses: string[] = [];
 
   if (filters.seasons) clauses.push(`d.season = ANY(${bind(filters.seasons)}::varchar[])`);
+
+  // A date bound drops drafts Sleeper never gave a `start_time` — they can't be
+  // placed in time at all, so there is no honest side of the boundary for them.
+  // An unbounded board still counts them, which is why "all time" can match more
+  // drafts than a range covering every date on file.
+  if (filters.start_after !== null) {
+    clauses.push(`d.start_time >= ${startTimeMs(bind(filters.start_after))}`);
+  }
+  if (filters.start_before !== null) {
+    // Exclusive against the next midnight, so the named end day is included whole.
+    clauses.push(`d.start_time < ${startTimeMs(bind(filters.start_before), 1)}`);
+  }
   if (filters.draft_types.length > 0) {
     clauses.push(`d.type = ANY(${bind(filters.draft_types)}::varchar[])`);
   }

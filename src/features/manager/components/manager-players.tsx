@@ -2,14 +2,14 @@
 
 import { useMemo } from "react";
 
-import { adpQueryString, defaultAdpControls } from "../adp-controls";
+import { adpQueryString, todayIso } from "../adp-controls";
 import { useAdpControls } from "../filters-context";
 import { useAdp } from "../hooks/use-adp";
 import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
 import { useManagerPlayers } from "../hooks/use-manager-players";
 import { playerShares } from "../shares";
 import type { AdpPlayerPayload } from "../types";
-import { AdpBoardCaption } from "./adp-filters";
+import { AdpBoardCaption } from "./adp-drawer";
 import { LeaguesViewLayout } from "./leagues-view-layout";
 import { ErrorCard } from "./manager-leagues-status";
 import { PlayerShares } from "./player-shares";
@@ -27,12 +27,12 @@ import { PanelMessage } from "./ui";
  * share is measured against rather than the players: dynasty-only and
  * redraft-only exposure are different portfolios.
  *
- * The ADP column reads the shared ADP bar — rendered by the scaffold, backed by
- * the per-manager store — for which crawled drafts the average is taken over,
- * and `useAdp` fetches that board off the global `/api/adp`. This tab owns the
- * bar's caption, which is where the draft count lands; the value-curve control in
- * the bar does nothing here (a per-player ADP is a raw number) and drives the
- * Leagues tab instead.
+ * The ADP column reads the shared ADP drawer — opened from the scaffold's
+ * header, backed by the per-manager store — for which crawled drafts the average
+ * is taken over, and `useAdp` fetches that board off the global `/api/adp`. This
+ * tab owns the page-side caption, which is where the draft count lands with the
+ * board it came from; the value-curve control in the drawer does nothing here (a
+ * per-player ADP is a raw number) and drives the Leagues tab instead.
  */
 export function ManagerPlayers({ searched }: { searched: string }) {
   const view = useFilteredLeagues(searched);
@@ -46,12 +46,14 @@ export function ManagerPlayers({ searched }: { searched: string }) {
     [view.filtered, rosters.data],
   );
 
-  // The ADP board defaults to the season on screen; null until the stream names
-  // it, which is the same beat the whole view is waiting on.
-  const season = view.data?.season ?? null;
+  // The board this tab's ADP column reads. Unlike the roster resources beside
+  // it, it doesn't wait on the leagues stream: the board is a fact about the
+  // crawled drafts, so it can be asked for the moment the page mounts.
   const { controls } = useAdpControls();
-  const activeControls = controls ?? (season ? defaultAdpControls(season) : null);
-  const adpQuery = activeControls ? adpQueryString(activeControls) : null;
+  const adpQuery = useMemo(
+    () => adpQueryString(controls, todayIso()),
+    [controls],
+  );
   const adp = useAdp(adpQuery);
 
   const adpByPlayer = useMemo(() => {
@@ -81,14 +83,12 @@ export function ManagerPlayers({ searched }: { searched: string }) {
         </>
       }
       adpCaption={
-        activeControls ? (
-          <AdpBoardCaption
-            draftCount={adp.data?.draft_count ?? null}
-            loading={adp.loading}
-            error={adp.error}
-            season={activeControls.season}
-          />
-        ) : undefined
+        <AdpBoardCaption
+          draftCount={adp.data?.draft_count ?? null}
+          loading={adp.loading}
+          error={adp.error}
+          range={controls.range}
+        />
       }
     >
       {/* A failed refetch must not blank rows the hook deliberately kept —

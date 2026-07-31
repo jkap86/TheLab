@@ -19,9 +19,17 @@ const BEST_BALL_OPTIONS: { value: LeagueFilters["bestBall"]; label: string }[] =
 export function LeaguesFilters({
   filters,
   onChange,
+  trailing,
 }: {
   filters: LeagueFilters;
   onChange: (filters: LeagueFilters) => void;
+  /**
+   * Pushed to the right of the row — the ADP drawer's trigger. It rides here
+   * rather than in a row of its own because a button costs no vertical space in
+   * a bar that already exists, which is the whole reason the drawer replaced the
+   * ten-select bar that used to sit under this card.
+   */
+  trailing?: React.ReactNode;
 }) {
   return (
     // The second zone of the manager header card: a hairline below the identity
@@ -50,6 +58,8 @@ export function LeaguesFilters({
           </SegmentButton>
         ))}
       </FilterGroup>
+
+      {trailing}
     </div>
   );
 }

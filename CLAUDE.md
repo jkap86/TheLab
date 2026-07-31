@@ -260,13 +260,14 @@ Check which side of the wire you are on before editing one:
 | File | Side | Job |
 | --- | --- | --- |
 | `shared/manager/adp-filters.ts` | server | validates `/api/adp`'s query string |
-| `features/manager/adp-controls.ts` | client, pure | *builds* that query string, seeds it from a league |
-| `features/manager/components/adp-filters.tsx` | client, UI | the bar that drives the controls |
+| `features/manager/adp-controls.ts` | client, pure | *builds* that query string, resolves the date range, seeds it from a league |
+| `features/manager/components/adp-drawer.tsx` | client, UI | the drawer that drives the controls |
 
 The two ends are a matched pair with no compiler link between them — the client
 writes the vocabulary the server parses (the scoring buckets, the league-type
-codes, the auction exclusion), so a value added on one side and not the other
-fails as an ignored parameter rather than a type error. `adp-controls` derives
+codes, the auction exclusion, the `start_after`/`start_before` dates), so a value
+added on one side and not the other fails as an ignored parameter rather than a
+type error. `adp-controls` derives
 its scoring bucket to mirror the endpoint's own `SCORING_SQL` for that reason:
 seeding a filter from a league has to land on the bucket that league would
 actually be counted in, or "match a league" quietly returns a board the league
@@ -479,25 +480,45 @@ stops holding, a comment saying it does would not have caught it.
   moves nothing.
 - **The manager tabs carry two independent filter sets, and sharing state between
   them would be a bug.** The header's `LeagueFilters` narrow *which of this
-  manager's leagues* a share is counted over; the ADP bar's `AdpControls` narrow
-  *which drafts in the database* the average is taken from. One is about the
-  manager, the other about the market, and they are only adjacent on screen — a
-  dynasty filter on the header means "count my dynasty leagues", the same word on
-  the ADP bar means "average dynasty drafts, including strangers'". They stay
+  manager's leagues* a share is counted over; the ADP drawer's `AdpControls`
+  narrow *which drafts in the database* the average is taken from. One is about
+  the manager, the other about the market, and they are only adjacent on screen —
+  a dynasty filter on the header means "count my dynasty leagues", the same word
+  in the drawer means "average dynasty drafts, including strangers'". They stay
   independent for that reason. Both are now provided from the same place —
   `AdpControlsProvider` sits beside `LeagueFiltersProvider` in the manager layout,
-  reset per manager by the same subtree key — because the ADP bar stopped being a
-  Players-tab control: its board filters drive that tab's per-player ADP *and* its
-  steepness drives the Leagues tab's team value, so a curve chosen on one tab has
-  to survive the trip to the other. Note the asymmetry with the league filters:
-  `AdpControls` starts as **null**, because its default depends on the viewed
-  season and the layout doesn't know it — each tab seeds it through
-  `useAdpControlsFor`. Shared *provider*, still two separate selections. "Match a league" is the one bridge, and it is
+  reset per manager by the same subtree key — because the ADP controls stopped
+  being a Players-tab thing: their board filters drive that tab's per-player ADP
+  *and* their steepness drives the Leagues tab's team value, so a curve chosen on
+  one tab has to survive the trip to the other. Unlike the league filters, whose
+  provider holds a selection from the start, `AdpControls` used to open as
+  **null** — its default was the viewed season, which the layout doesn't know, so
+  each tab filled it in through a `useAdpControlsFor(season)` the consumers all
+  carried a `?? defaultAdpControls(season)` for. A date range needs no season, so
+  `defaultAdpControls()` takes no argument, the provider seeds itself, and both
+  the null and that hook are gone. Shared *provider*, still two separate
+  selections. "Match a league" is the one bridge, and it is
   deliberately partial: it seeds the four *league settings* from one of the
-  manager's leagues, while season and draft type stay manual (they aren't league
-  settings at all) and so does superflex — that lives in `roster_positions`, which
-  the client's league object doesn't carry. Seeding it from nothing would mean
-  guessing, and a wrong guess here reads off the wrong KTC-style board.
+  manager's leagues, while the date range and draft type stay manual (they aren't
+  league settings at all) and so does superflex — that lives in
+  `roster_positions`, which the client's league object doesn't carry. Seeding it
+  from nothing would mean guessing, and a wrong guess here reads off the wrong
+  KTC-style board.
+- **The ADP controls are a drawer behind one button, not a bar on the page.** Ten
+  selects and a caption sat above the first row of every manager tab — ~110px of
+  chrome, wrapping to three lines on a laptop — for settings that are chosen once
+  and then read. `AdpTrigger` rides in the header's filter row instead (a bar that
+  already exists, so it costs no height) badged with the range and the draft count,
+  which is what a reader needs without opening anything. Two things inside the
+  drawer are load-bearing. The controls are **pinned** and only the board scrolls:
+  the point of the shape is that changing a filter and watching the ADP move is one
+  glance, which a stacked panel loses by pushing the board below the fold. And the
+  filters are chips (`ChipSelect` — a real `<select>` under the styling, so
+  keyboard and touch come free) rather than eight labelled rows, because the pinned
+  block has to stay short enough to leave the board room. The board is fetched by
+  the layout and gated on `open`, so a tab nobody opened it on costs no request;
+  on the Players tab that means the same board is fetched twice while the drawer is
+  up, which is a bounded cost paid only while someone is looking at both.
 - **`useAdp` is not keyed to the manager, unlike every other hook on these
   pages.** The four sub-resource hooks re-fetch on the leagues array because they
   read what that stream wrote; ADP describes the whole crawled database narrowed
@@ -707,7 +728,7 @@ stops holding, a comment saying it does would not have caught it.
   the board — because it starts more players (`startingSlotCount` reuses the slot
   vocabulary, so a new flex counts the moment the solver learns it). The one knob
   is the **steepness** — how many times value halves across that pool — and it is
-  a *user control*, not a hardcoded constant: three presets in the shared ADP bar,
+  a *user control*, not a hardcoded constant: three presets in the shared ADP drawer,
   sent to the route as a `steepness` param it parses (a matched string pair with
   the client, like the board vocabulary). It is a modeling choice and changing it
   reprices every card, which is why it is exposed rather than baked in; `ADP_PEAK`
@@ -909,6 +930,26 @@ stops holding, a comment saying it does would not have caught it.
   wherever the number surfaces, and expose filters that narrow the population:
   pooling a 4-round dynasty rookie draft with a 25-round startup averages two
   different games.
+- **A season and a date range are different cuts of the same drafts, and
+  `/api/adp` takes both.** `season` is what a draft is *for*; `start_after` /
+  `start_before` (`YYYY-MM-DD`, read in ET against `drafts.start_time`) is when it
+  *happened*. Every dynasty league runs a rookie draft in May and a startup in
+  August under one season label, so "the last 30 days" is a question a season
+  cannot express — which is why the drawer offers the range and never sends a
+  season. Three consequences worth keeping:
+  - A date bound drops drafts Sleeper never gave a `start_time`, because there is
+    no honest side of the boundary for them. An unbounded board still counts them,
+    so **"all time" can match more drafts than a range covering every date on
+    file** — say it in the caption rather than leaving it to be discovered.
+  - The two never intersect by accident: `DEFAULT_SEASON` applies only when the
+    caller bounded *neither* way. A request asking for "drafts since June" that
+    silently came back as "June drafts of this season" is the bug that rule
+    prevents; bounding nothing at all is still the expensive case, so that one
+    keeps its default.
+  - The date→timestamp conversion lives in SQL, not the parser, because what a
+    bare date *means* is a zone question and the parser has no business baking the
+    Node process's zone into it. The end bound is exclusive against the next ET
+    midnight so the named day is included whole.
 - **A draft's `pick_no` is not always a draft position.** In auction drafts it
   is nomination order, which is why `/api/adp` excludes them by default.
 - **A placeholder pick's number is its place in the kicker sequence, not its
