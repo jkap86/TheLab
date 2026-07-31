@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isToolActive, toolHref, tools, toolsInGroup } from "./tools.ts";
+import {
+  activeTool,
+  isToolActive,
+  toolHref,
+  tools,
+  toolsInGroup,
+} from "./tools.ts";
 
 const leagues = tools.find((t) => t.text === "Leagues")!;
 const trades = tools.find((t) => t.text === "Trades")!;
@@ -33,6 +39,15 @@ test("isToolActive matches a prefix, so a sub-route stays inside its tool", () =
   assert.equal(isToolActive(picktracker, "/picktracker"), true);
   assert.equal(isToolActive(picktracker, "/picktracker/123456"), true);
   assert.equal(isToolActive(trades, "/picktracker"), false);
+});
+
+test("activeTool names the tool the bar is standing in", () => {
+  assert.equal(activeTool("/manager/jkap86/players")?.text, "Players");
+  assert.equal(activeTool("/picktracker/123456")?.text, "Pick Tracker");
+  // The username search belongs to no tool — it is where you land before
+  // choosing one, so the bar names nothing rather than guessing "Leagues".
+  assert.equal(activeTool("/manager"), null);
+  assert.equal(activeTool("/tools"), null);
 });
 
 test("every tool lands in a group, and the groups partition the catalogue", () => {

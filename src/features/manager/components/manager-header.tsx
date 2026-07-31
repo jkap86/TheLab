@@ -24,8 +24,9 @@ export type HeaderStat = {
  * bottom zone is where the league filters used to sit: they are behind
  * {@link LeagueFiltersModal} now, whose trigger is up in the state cluster.
  *
- * It carries no tabs. Moving between the three views is {@link ManagerTabs}, up
- * in the app bar — this card is pinned below that bar, so a row spent on
+ * It carries no tabs, and neither does the bar any more: moving between Leagues,
+ * Players and Leaguemates is three entries in the app bar's tools menu, which
+ * already listed them. This card is pinned below that bar, so a row spent on
  * navigation is a row of the list it would cover.
  *
  * Every `/manager/[searched]/…` view renders this. The identity, the season, the

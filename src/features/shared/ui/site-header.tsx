@@ -2,59 +2,77 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
 
+import { activeTool } from "../tools";
+import { ToolIcon } from "./tool-icon";
 import { ToolsMenu } from "./tools-menu";
 
 /**
  * The app bar: the one piece of global chrome.
  *
- * Three zones, left to right — the mark home, a contextual slot, and the tools
- * menu. It is **pinned**, so both the way home and the way to any other tool are
- * reachable from the bottom of a several-hundred-row list and not only from the
- * top of it. Its height is `--site-header-h` rather than padding, because the
- * manager card pins itself directly underneath and has to know where this ends.
+ * Three zones, left to right — the mark home, the page you are on, and the
+ * tools menu. It is **pinned**, so both the way home and the way to any other
+ * tool are reachable from the bottom of a several-hundred-row list and not only
+ * from the top of it. Its height is `--site-header-h` rather than padding,
+ * because the manager card pins itself directly underneath and has to know
+ * where this ends — including the extruded edge, which is drawn inside this box
+ * for exactly that reason (see `--bar-edge-h`).
  *
  * **It carries a route list now, which the note here used to forbid.** The rule
- * was that a second navigation system on one page competes with the first; what
- * it produced instead was `/tools` as a mandatory waypoint between any two
- * tools, since the bar's single link home was the only way out of one. The menu
- * is not a second system — it is the *only* one, the tools grid reached without
- * the round trip, read from the same catalogue that grid renders. `children`
- * stays what it was: chrome belonging to the section you are already in
- * (`ManagerTabs` today), movement *within* a tool rather than between tools.
- * That slot is still filled by `app/layout.tsx` rather than by this file
- * importing a feature; the menu can live here because the catalogue moved to
- * `features/shared` when the bar became its second reader.
+ * was that a second navigation system competes with the first; what it produced
+ * instead was `/tools` as a mandatory waypoint between any two tools, since the
+ * bar's single link home was the only way out of one. `ToolsMenu` is not a
+ * second system — it is the *only* one, the tools grid reached without the
+ * round trip, read from the same catalogue that grid renders.
  *
- * The glass — a translucent background over `backdrop-blur` — is what makes it
- * read as a layer above the page rather than a strip of the same colour. It
- * replaces an opaque fill and needs no other change: the manager card pinned
- * underneath paints `--background` itself, so nothing shows through the seam
- * between them.
+ * **The middle zone states, it does not switch.** It held the manager tabs, and
+ * those were a second way to do what the menu already does: Leagues, Players and
+ * Leaguemates are three entries in it. So the bar names the tool you are in —
+ * one claim, from `activeTool`, so the label and the menu's highlight can't
+ * disagree — and every move between tools happens in one place. The chip is a
+ * recessed well rather than a raised key, which is the bar's whole material
+ * vocabulary in one detail: raised means press me, recessed means you are here.
  *
- * Hidden on `/tools` itself: the wordmark and the whole tool list are that
- * page, so the bar would be a smaller copy of what is already on screen.
+ * Hidden on `/tools` itself: the wordmark and the whole tool list are that page,
+ * so the bar would be a smaller copy of what is already on screen.
  * `usePathname` is why this is a client component.
  */
-export function SiteHeader({ children }: { children?: ReactNode }) {
+export function SiteHeader() {
   const pathname = usePathname();
   if (pathname === "/tools") return null;
 
+  const current = activeTool(pathname);
+
+  // Opaque, not glass: a plate with thickness can't be see-through, and the page
+  // scrolling under it would show through the extrusion. The inset top line is
+  // the specular edge every raised surface here shares.
   return (
-    <header className="sticky top-0 z-50 border-b border-foreground/10 bg-[var(--surface-glass)] backdrop-blur-xl">
-      {/* The accent hairline: the app's one colour, laid along the edge the bar
-          ends at, brightest under the content and fading to the gutters. */}
+    <header className="sticky top-0 z-50 h-[var(--site-header-h)] bg-[linear-gradient(180deg,#1c3041,#0b1622)] shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_22px_40px_-26px_rgba(0,0,0,1)]">
+      {/* The extruded bottom edge: a dark side wall with the accent lit along
+          its base. Inside the header box, so the manager card pinning at
+          `--site-header-h` lands flush against it rather than over it. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-active/45 to-transparent"
-      />
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[var(--bar-edge-h)] bg-[var(--edge)]"
+      >
+        <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-active/55 to-transparent" />
+      </span>
+
       {/* Match `PageShell`'s container so the wordmark lines up with the page
           content below it rather than floating at the viewport edge. */}
-      <div className="group/bar mx-auto flex h-[var(--site-header-h)] w-full max-w-4xl items-center gap-3 px-4 sm:gap-5 sm:px-6">
+      <div className="mx-auto flex h-[calc(var(--site-header-h)-var(--bar-edge-h))] w-full max-w-4xl items-center gap-2.5 px-4 sm:gap-3.5 sm:px-6">
         <Wordmark />
-        {children}
-        {/* Pushes the menu to the far edge whether or not the slot is filled. */}
+        {current && (
+          <>
+            <span aria-hidden className="flex-none text-foreground/25">
+              /
+            </span>
+            <CurrentPage
+              text={current.text}
+              icon={<ToolIcon name={current.icon} />}
+            />
+          </>
+        )}
         <div className="ml-auto flex-none">
           <ToolsMenu />
         </div>
@@ -64,50 +82,55 @@ export function SiteHeader({ children }: { children?: ReactNode }) {
 }
 
 /**
- * The way home: the flask mark, with the wordmark beside it.
+ * The way home: the flask mark as a moulded key, with the wordmark beside it.
  *
- * **The text drops out on a phone only when the contextual slot is filled.** A
- * bar seating three manager tabs *and* the tools trigger has no room for it at
- * 390px, and a logo is the one element that still says where you are without
- * its text — but on every other page there is room, and a bare glyph over an
- * empty bar is a worse trade. The slot renders itself (`ManagerTabs` decides
- * from the route whether it exists at all), so the bar can't be told in props
- * what is in it; `group-has-[[data-bar-slot]]` asks the DOM instead, and the
- * marker attribute is what keeps the menu's own `<nav>` from matching. `max-sm:`
- * is load-bearing rather than tidy: `:has()` outweighs a plain breakpoint
- * utility, so an `sm:inline` after it would not win. The bar's group is *named*
- * (`group/bar`) for a subtler reason — `group-hover` matches any `.group`
- * ancestor, not the nearest, so an unnamed group on the bar would light this
- * link's hover treatment up from anywhere in the bar, including the tools
- * trigger at the far end.
- *
- * It is drawn here rather than reusing `FlaskLoader`, which is an animated
+ * The mark is drawn here rather than reusing `FlaskLoader`, which is an animated
  * four-keyframe loading mark; this is a still glyph, and the two would fight
- * over what a flask on screen means.
+ * over what a flask on screen means. The wordmark takes the gradient the tools
+ * page's headline wears — the `foreground` token fading into a pale teal, a
+ * literal because a gradient stop has no token to read — so the two spellings of
+ * "The Lab" read as one brand.
  *
- * The wordmark takes the gradient the tools page's headline wears — the
- * `foreground` token fading into a pale teal, a literal because a gradient stop
- * has no token to read — so the two spellings of "The Lab" read as one brand.
+ * Both parts stay at every width. They used to compete with three manager tabs
+ * for a 390px bar; with the tabs gone the bar seats a mark, a wordmark, one chip
+ * and the trigger with room to spare, and the chip is the part that yields
+ * (`truncate`) if a tool name ever runs long.
  */
 function Wordmark() {
   return (
     <Link
       href="/tools"
       aria-label="The Lab — all tools"
-      className="group flex flex-none items-center gap-2.5"
+      className="group flex flex-none items-center gap-2.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/60"
     >
-      <span className="relative flex h-8 w-8 items-center justify-center rounded-xl border border-foreground/12 bg-foreground/[0.05] transition-colors duration-300 group-hover:border-active/50 group-hover:bg-active/10">
-        {/* The lit halo behind the glass tile, on hover only. */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-xl opacity-0 shadow-[0_0_18px_-2px_var(--color-active)] transition-opacity duration-300 group-hover:opacity-100"
-        />
-        <FlaskGlyph />
+      <span className="lab-key lab-notch h-[37px] w-[34px] transition-[filter] duration-300 group-hover:[filter:drop-shadow(0_4px_7px_rgba(0,0,0,0.7))_drop-shadow(0_0_14px_rgba(0,255,229,0.55))]">
+        <span className="lab-face lab-notch h-[34px] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.34),inset_0_0_14px_-6px_rgba(0,255,229,0.75)]">
+          <FlaskGlyph />
+        </span>
       </span>
-      <span className="bg-gradient-to-b from-foreground to-[#8feee6] bg-clip-text font-display text-[13px] font-bold uppercase tracking-[0.18em] text-transparent max-sm:group-has-[[data-bar-slot]]/bar:hidden">
+      <span className="bg-gradient-to-b from-foreground from-35% to-[#8feee6] bg-clip-text font-display text-[13px] font-bold uppercase tracking-[0.19em] text-transparent [filter:drop-shadow(0_1px_0_rgba(0,0,0,0.8))]">
         The Lab
       </span>
     </Link>
+  );
+}
+
+/**
+ * Where you are: the tool's icon and name in a recessed, notched well.
+ *
+ * Deliberately not a link and not a button — it is the bar's one piece of pure
+ * state. The well is what says so, against the raised trigger beside it.
+ */
+function CurrentPage({ text, icon }: { text: string; icon: React.ReactNode }) {
+  return (
+    <span className="lab-well lab-notch flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-active">
+      <span className="flex-none [&>svg]:h-[17px] [&>svg]:w-[17px]">
+        {icon}
+      </span>
+      <span className="truncate font-display text-[12.5px] font-bold tracking-tight sm:text-[13px]">
+        {text}
+      </span>
+    </span>
   );
 }
 

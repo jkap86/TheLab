@@ -784,8 +784,9 @@ stops holding, a comment saying it does would not have caught it.
   same facts on all of them; only the headline count differs, which is what
   `stat` is. **It is pinned under the app bar and it carries no tabs** — those
   two go together: a card that stays on screen is paying for its height out of
-  the list behind it, so navigation moved up to `ManagerTabs` in the bar and what
-  is left is identity, state and the record readout. It offsets by
+  the list behind it, so navigation left the card entirely (first to a tab strip
+  in the bar, then to the bar's tools menu, which listed the three views anyway)
+  and what is left is identity, state and the record readout. It offsets by
   `--site-header-h` rather than a retyped number, bleeds `-mx-4 px-4` to
   `PageShell`'s `wide` gutter and paints `--background`, because a transparent
   pinned card lets the rows scroll through the gaps around its rounded corners.
@@ -849,7 +850,7 @@ stops holding, a comment saying it does would not have caught it.
     also what retires the note on `seedFromLeague` that superflex had to stay
     manual for want of it.
 - **`SiteHeader` is the only global chrome, and it is three zones: the mark
-  home, a contextual slot, and every tool.** Every tool is reached by navigating
+  home, the page you are on, and every tool.** Every tool is reached by navigating
   away from `/tools`, which used to leave the back button as the only way home;
   the slim bar in `app/layout.tsx` closes that loop. It hides itself on `/tools`
   — the wordmark and the whole tool list *are* that page — which is the whole
@@ -866,27 +867,40 @@ stops holding, a comment saying it does would not have caught it.
   system — it is the *only* one, the tools grid reached without the round trip,
   read from the same catalogue that grid renders (which is why `tools.data` moved
   to `features/shared/tools.ts`, with `features/tools` re-exporting it under the
-  usual mover's rule). `children` is unchanged: a slot for chrome belonging to the
-  section you are already in — `ManagerTabs` today — movement *within* a tool
-  rather than between tools. That slot is still filled in `app/layout.tsx` rather
-  than by `SiteHeader` importing the component, because `features/shared` must not
-  import a feature; the menu can live in the bar precisely because the catalogue
-  moved down to a layer both may read. `ManagerTabs` reads the route itself and
-  renders nothing off a manager view, so composing it there costs every other page
-  nothing. It interpolates the `usePathname` segment **bare** — that string is
-  already URL-encoded, and encoding it twice 404s any manager whose name isn't
-  plain ASCII (the same trap `toolHref` now holds in one place) — and it is the
-  URL's own spelling rather than the resolved username, since Sleeper resolves a
-  user id as readily as a name.
-- **The bar's two surfaces are a glass and a solid, and which is which is a
-  legibility rule rather than a taste.** `--surface-glass` (the bar) is the page
-  colour at 0.85 under `backdrop-blur`: what passes behind a bar is the page you
-  are already reading, so a hint of it showing through is depth. `--surface-menu`
-  (the panel) is opaque, because what passes behind *it* is the text its own
-  labels would be read against. Both alphas are chosen to survive with the blur
-  absent — `backdrop-filter` is a progressive enhancement, off in more renderers
-  than you would guess, and a menu that is only legible when it blurs is a menu
-  that is sometimes unreadable.
+  usual mover's rule).
+- **The bar's middle zone states where you are; it does not switch.** It held
+  `ManagerTabs` — Leagues, Players, Leaguemates — and that was a second way to do
+  what the menu already does, since those are three of its six entries. So the
+  component is gone, the bar's `children` slot with it, and what sits there is the
+  tool's own name from `activeTool(pathname)`: one claim, from the catalogue, so
+  the label and the menu's highlight cannot disagree. **Null is a real answer** —
+  `/manager` is the username search and belongs to no tool, so the bar names
+  nothing rather than guessing. The cost is real and was the trade asked for:
+  Leagues → Players is two presses now instead of one.
+- **The bar is machined, not glass, and the material has a grammar: raised means
+  press me, recessed means you are here.** The tools trigger is a raised keycap
+  that travels its own thickness on `:active`; the current-page chip is a
+  recessed well; the icon tiles are moulded. Break that pairing and a label
+  invites a press that does nothing. Four things in `globals.css` hold it up:
+  - **`clip-path` cuts a `box-shadow` off.** A notched part cannot cast its
+    shadow or glow with `box-shadow` at all — `filter: drop-shadow()` applies
+    after clipping and follows the notched silhouette, which is why `.lab-key`
+    reaches for `filter` and why a "simplification" back to `box-shadow` silently
+    deletes every shadow in the bar.
+  - **Thickness is a stacked layer, not a shadow.** Wrapper is the dark side
+    wall, child is the lit face, the wrapper's `padding-bottom` is how thick the
+    part is. That is also what makes the press animation free: swap the padding
+    to the top and the face meets the wall.
+  - **The bar's extruded edge is drawn *inside* the header box** (`--bar-edge-h`,
+    counted into `--site-header-h`). As an outside shadow it would be covered by
+    the manager card, which pins at exactly that offset.
+  - **The plate is opaque.** The glass-and-blur bar it replaced was legible
+    because of an alpha chosen to survive `backdrop-filter` being unsupported; a
+    surface with visible thickness has no such out — page content showing through
+    an extrusion reads as a rendering bug, so there is no translucency to tune.
+  The notch is kept for the small parts and the panel stays rounded (the `H3`
+  mockup of three): six rows of 11px text want a calm surface, and nothing else
+  in the app has to change its corners to match.
 - **The menu's open state is the route it was opened on, not a boolean.**
   Navigating is what a nav menu is *for*, so `openedAt === pathname` closes it on
   arrival as a matter of arithmetic; a boolean would need an effect to notice the
@@ -900,17 +914,13 @@ stops holding, a comment saying it does would not have caught it.
   `@username`, or "no account connected" — says which of the two you are getting.
   That row is also what makes "Leagues" mean *your* leagues in a menu that never
   names the manager.
-- **The wordmark's text stands down on a phone only where the contextual slot is
-  filled.** A bar seating three manager tabs *and* the tools trigger has no room
-  for it at 390px; every other page does, and a bare glyph over an empty bar is
-  the worse trade. The slot decides for itself whether it exists (`ManagerTabs`
-  reads the route), so the bar can't be told in props what is in it —
-  `max-sm:group-has-[[data-bar-slot]]/bar:hidden` asks the DOM. Three details are
-  load-bearing: the marker attribute (not `nav`, which the menu's own panel would
-  match), `max-sm:` rather than an `sm:` override (`:has()` outweighs a plain
-  breakpoint utility, so the override would silently lose), and the **named**
-  group (`group-hover` matches *any* `.group` ancestor, so an unnamed group on the
-  bar would light the wordmark's hover from the far end of it).
+- **The wordmark keeps its text at every width, which is what dropping the tabs
+  bought.** Three tabs, a mark, a wordmark and a trigger did not fit a 390px bar,
+  and the wordmark was the part that gave way (behind a `:has()` query asking
+  whether the slot was filled). A mark, a wordmark, one chip and the trigger fit
+  with room to spare, so that rule and the marker attribute behind it are gone.
+  The part that yields now is the chip, which `truncate`s if a tool name ever runs
+  long.
 - **The four manager sub-resource hooks are one hook, bound four ways.**
   `useManagerPlayers`, `useManagerLeaguemates`, `useManagerRanks` and
   `useManagerKtc` read `/api/user/[username]/{players,leaguemates,ranks,ktc}`,

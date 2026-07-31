@@ -153,3 +153,16 @@ export function isToolActive(tool: Tool, pathname: string): boolean {
 export function toolsInGroup(group: ToolGroup): Tool[] {
   return tools.filter((tool) => tool.group === group);
 }
+
+/**
+ * The tool `pathname` is inside, or null.
+ *
+ * This is what the app bar names — the bar shows where you *are* rather than
+ * offering a switch, so the catalogue is the single source for both the label
+ * and the menu's highlight. Null is a real answer and the bar draws nothing for
+ * it: `/manager` is the username search, which belongs to no tool because it is
+ * what you land on before choosing one.
+ */
+export function activeTool(pathname: string): Tool | null {
+  return tools.find((tool) => isToolActive(tool, pathname)) ?? null;
+}

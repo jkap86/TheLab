@@ -21,28 +21,22 @@
 :root {
   --background: rgb(10, 20, 30);
 
-  /* The background as a *layer*: the same colour, translucent, for chrome that
-     floats over the page and blurs what passes behind it (`SiteHeader` and its
-     tools menu). Spelled as its own `rgba` rather than an opacity modifier on
-     `--background`, since a Tailwind opacity modifier over a custom property
-     resolves through `color-mix` and this needs to be exactly the page colour at
-     a known alpha. */
-  --surface-glass: rgba(10, 20, 30, 0.85);
-
-  /* A panel that *overlaps* content rather than capping it: the tools menu sits
-     on top of a page, so it is opaque and lifted a shade above the background.
-     A bar can be see-through because what passes behind it is the page you are
-     already reading; a menu can't, because what passes behind it is the text
-     its own labels would be read against — and the blur that would otherwise
-     soften it is a progressive enhancement, absent wherever `backdrop-filter`
-     is unsupported or disabled. Both alphas are set to survive that: the bar
-     stays legible unblurred too. */
-  --surface-menu: rgb(17, 29, 41);
-
   /* The height of the pinned app bar (`SiteHeader`). Anything that pins itself
      underneath — the manager card — offsets by this, so the two measurements
-     can't drift into a gap or an overlap. */
-  --site-header-h: 3.5rem;
+     can't drift into a gap or an overlap. It includes the bar's extruded bottom
+     edge (`--bar-edge-h`): the edge is drawn *inside* the header box rather
+     than as an outside shadow, or the card pinned at this offset would cover
+     it. */
+  --site-header-h: 3.75rem;
+  --bar-edge-h: 6px;
+
+  /* The extrusion palette. A raised surface is a bright face sitting on a dark
+     side wall; these are the two walls — one under an unlit face, one under a
+     cyan key. They are literals for the same reason a gradient stop is: a side
+     wall is a shading of a colour, and `@theme` registers only the two tokens.
+     Kept here, once, rather than sprinkled through the components. */
+  --edge: #05121d;
+  --edge-active: #00776b;
 
   font-size: 16px;
 }
@@ -51,6 +45,95 @@ body {
   background: var(--background);
   color: var(--color-foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+   The app bar's material: notched geometry over extruded surfaces.
+
+   Two things make this work, and both are why these are CSS classes rather than
+   a pile of arbitrary Tailwind values:
+
+   1. **`clip-path` cuts a `box-shadow` off.** A notched key can't cast its
+      shadow or glow with `box-shadow` — the clip removes it. `filter:
+      drop-shadow()` applies *after* clipping, so it follows the notched
+      silhouette instead. That is why `.lab-key` reaches for `filter`.
+   2. **The thickness is a stacked layer, not a shadow.** The wrapper is the
+      dark side wall and the child is the lit face; the wrapper's
+      `padding-bottom` is how thick the part is. Both share the clip, so the
+      wall shows only along the bottom edge — a real extrusion that survives
+      being clipped.
+
+   A raised part reads as pressable and a recessed one as a slot, which is the
+   whole vocabulary: the tools trigger is raised, the current-page chip is a
+   well. Keep that distinction — a raised label invites a press that does
+   nothing.
+--------------------------------------------------------------------------- */
+.lab-notch {
+  clip-path: polygon(
+    7px 0,
+    100% 0,
+    100% calc(100% - 7px),
+    calc(100% - 7px) 100%,
+    0 100%,
+    0 7px
+  );
+}
+.lab-notch-lg {
+  clip-path: polygon(
+    11px 0,
+    100% 0,
+    100% calc(100% - 11px),
+    calc(100% - 11px) 100%,
+    0 100%,
+    0 11px
+  );
+}
+
+/* Wrapper: the side wall. `padding-bottom` is the part's thickness. */
+.lab-key {
+  position: relative;
+  display: inline-flex;
+  padding-bottom: 3px;
+  background: var(--edge);
+  filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.7));
+}
+.lab-key-active {
+  background: var(--edge-active);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6))
+    drop-shadow(0 0 16px rgba(0, 255, 229, 0.45));
+}
+/* Child: the lit face. The inset top line is the specular edge that sells the
+   bevel; the inset bottom is the face curving away from the light. */
+.lab-face {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #2a4a60, #0f2130);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.55);
+}
+.lab-face-active {
+  background: linear-gradient(180deg, #a8fff4, #00ddc6);
+  color: #052029;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9);
+}
+/* A key travels its own thickness when pressed, so the face meets the wall. */
+.lab-key-press:active {
+  padding-bottom: 0;
+  padding-top: 3px;
+}
+
+/* The inverse: a recessed well. Used for the bar's current-page chip and as
+   the trough a raised part sits in. */
+.lab-well {
+  background: #07131e;
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.8),
+    inset 0 0 0 1px rgba(0, 255, 229, 0.14);
 }
 
 /* Flask loader (features/shared/ui/flask-loader) — the bubbling animation.
@@ -182,5 +265,11 @@ body {
   .filters-dialog-panel,
   .tools-menu-panel {
     animation: none !important;
+  }
+  /* The key's travel is motion too: a reader who asked for less gets the
+     colour change and the glow, without the part moving under the finger. */
+  .lab-key-press:active {
+    padding-bottom: 3px;
+    padding-top: 0;
   }
 }

@@ -69,82 +69,93 @@ export function ToolsMenu() {
         aria-expanded={open}
         aria-controls={panelId}
         aria-label="Tools"
-        className={`flex h-8 items-center gap-2 rounded-full border px-2.5 text-xs font-semibold transition-colors sm:px-3 ${
-          open
-            ? "border-active/50 bg-active/12 text-active"
-            : "border-foreground/12 bg-foreground/[0.05] text-foreground/70 hover:border-foreground/25 hover:bg-foreground/[0.09] hover:text-foreground"
-        }`}
+        // A raised cyan keycap: the one part of the bar that is meant to be
+        // pressed, so it is the one part standing above the plate. It travels
+        // its own thickness on `:active` (`lab-key-press`), which is the whole
+        // payoff of building the depth out of a stacked layer.
+        className="lab-key lab-key-active lab-key-press lab-notch h-[37px] transition-[filter] duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/70"
       >
-        <GridGlyph />
-        {/* The label is the affordance on a laptop and a luxury on a phone,
-            where the manager tabs beside it want every pixel of the bar. */}
-        <span className="hidden sm:inline">Tools</span>
-        <Chevron open={open} />
+        <span className="lab-face lab-face-active lab-notch h-[34px] gap-2 px-3 font-display text-[11px] font-extrabold uppercase tracking-[0.1em]">
+          <GridGlyph />
+          <span className="hidden sm:inline">Tools</span>
+          <Chevron open={open} />
+        </span>
       </button>
 
       {open && (
+        // A slab with a visible bottom edge, not a rectangle with a shadow: the
+        // wrapper is the edge and `.slab` is the lit face, the same two-layer
+        // extrusion the keys use. Rounded rather than notched — the notch is
+        // kept for the small parts, so six rows of 11px text sit on a calm
+        // surface (and nothing else in the app has to change its corners).
         <div
           id={panelId}
-          className="tools-menu-panel absolute right-0 top-full z-50 mt-2 w-[min(21rem,calc(100vw-1.5rem))] origin-top-right overflow-hidden rounded-2xl border border-foreground/12 bg-[var(--surface-menu)] shadow-[0_34px_80px_-30px_rgba(0,0,0,0.85)] backdrop-blur-2xl [animation:dialog-rise_140ms_ease-out]"
+          className="tools-menu-panel absolute right-0 top-full z-50 mt-2.5 w-[min(21.5rem,calc(100vw-1.5rem))] origin-top-right rounded-[20px] bg-[var(--edge)] pb-[5px] [animation:dialog-rise_140ms_ease-out] [filter:drop-shadow(0_30px_46px_rgba(0,0,0,0.88))_drop-shadow(0_0_24px_rgba(0,255,229,0.18))]"
         >
-          {/* A hairline of accent along the top edge, the same signature the
-              bar wears under itself. */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-active/60 to-transparent"
-          />
+          <div className="overflow-hidden rounded-[17px] bg-[linear-gradient(180deg,#17293b,#0c1a26)] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.16)]">
+            <AccountRow user={user} onNavigate={close} />
 
-          <AccountRow user={user} onNavigate={close} />
-
-          <nav
-            aria-label="Tools"
-            className="max-h-[calc(100vh-var(--site-header-h)-2rem)] overflow-y-auto p-2"
-          >
-            {TOOL_GROUPS.map((group) => (
-              <div key={group} className="mb-1 last:mb-0">
-                <p className="px-2 pb-1 pt-2 font-display text-[10px] font-semibold uppercase tracking-[0.24em] text-foreground/35">
-                  {group}
-                </p>
-                <ul>
-                  {toolsInGroup(group).map((tool) => {
-                    const active = isToolActive(tool, pathname);
-                    return (
-                      <li key={tool.text}>
-                        <Link
-                          href={toolHref(tool, user?.username ?? null)}
-                          onClick={close}
-                          aria-current={active ? "page" : undefined}
-                          className={`group flex items-start gap-3 rounded-xl px-2 py-2 transition-colors ${
-                            active
-                              ? "bg-active/10 text-active"
-                              : "text-foreground/85 hover:bg-foreground/[0.06]"
-                          }`}
-                        >
-                          <span
-                            className={`mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-lg border transition-colors ${
+            <nav
+              aria-label="Tools"
+              className="max-h-[calc(100vh-var(--site-header-h)-2rem)] overflow-y-auto p-2"
+            >
+              {TOOL_GROUPS.map((group) => (
+                <div key={group} className="mb-1 last:mb-0">
+                  <p className="flex items-center gap-2.5 px-2 pb-1.5 pt-2 font-display text-[9.5px] font-bold uppercase tracking-[0.26em] text-foreground/35">
+                    {group}
+                    <span
+                      aria-hidden
+                      className="h-px flex-1 bg-gradient-to-r from-active/35 to-transparent"
+                    />
+                  </p>
+                  <ul>
+                    {toolsInGroup(group).map((tool) => {
+                      const active = isToolActive(tool, pathname);
+                      return (
+                        <li key={tool.text}>
+                          <Link
+                            href={toolHref(tool, user?.username ?? null)}
+                            onClick={close}
+                            aria-current={active ? "page" : undefined}
+                            className={`group flex items-center gap-3 rounded-[13px] px-2 py-2 transition-colors ${
                               active
-                                ? "border-active/40 bg-active/10 text-active"
-                                : "border-foreground/10 bg-foreground/[0.04] text-foreground/55 group-hover:border-active/35 group-hover:text-active"
+                                ? "bg-gradient-to-b from-active/15 to-active/[0.04] shadow-[inset_0_1.5px_0_rgba(196,255,249,0.3),0_0_22px_-10px_rgba(0,255,229,0.8)]"
+                                : "hover:bg-foreground/[0.05]"
                             }`}
                           >
-                            <ToolIcon name={tool.icon} />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block font-display text-sm font-semibold tracking-tight">
-                              {tool.text}
+                            {/* A moulded tile: notched, bevelled, sitting in
+                                its own shadow. Lit cyan when it's the row you
+                                are standing on. */}
+                            <span
+                              className={`lab-notch flex h-[34px] w-[34px] flex-none items-center justify-center transition-colors ${
+                                active
+                                  ? "bg-[linear-gradient(160deg,#a8fff4,#00d9c3)] text-[#052029] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.85),0_2px_5px_-1px_rgba(0,0,0,0.7)]"
+                                  : "bg-[linear-gradient(160deg,#2b4b61,#10222f)] text-foreground/55 shadow-[inset_0_1.5px_0_rgba(255,255,255,0.3),inset_0_-3px_6px_rgba(0,0,0,0.6),0_2px_4px_-1px_rgba(0,0,0,0.8)] group-hover:text-active"
+                              }`}
+                            >
+                              <ToolIcon name={tool.icon} />
                             </span>
-                            <span className="mt-0.5 block text-xs leading-snug text-foreground/45">
-                              {tool.description}
+                            <span className="min-w-0">
+                              <span
+                                className={`block font-display text-[13px] font-bold tracking-tight ${
+                                  active ? "text-active" : "text-foreground/90"
+                                }`}
+                              >
+                                {tool.text}
+                              </span>
+                              <span className="mt-0.5 block text-[11.5px] leading-snug text-foreground/45">
+                                {tool.description}
+                              </span>
                             </span>
-                          </span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </nav>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </nav>
+          </div>
         </div>
       )}
     </div>
@@ -167,7 +178,7 @@ function AccountRow({
   onNavigate: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 border-b border-foreground/10 bg-foreground/[0.03] px-4 py-3">
+    <div className="flex items-center gap-3 border-b border-foreground/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent)] px-4 py-3">
       {user ? (
         <>
           <Avatar
@@ -186,7 +197,7 @@ function AccountRow({
           <Link
             href="/tools"
             onClick={onNavigate}
-            className="flex-none rounded-full border border-foreground/12 px-2.5 py-1 text-[11px] font-semibold text-foreground/60 transition-colors hover:border-active/40 hover:text-active"
+            className="lab-notch flex-none bg-active/10 px-2.5 py-1.5 font-display text-[9.5px] font-bold uppercase tracking-[0.14em] text-active shadow-[inset_0_0_0_1px_rgba(0,255,229,0.35)] transition-colors hover:bg-active/20"
           >
             Change
           </Link>
@@ -199,7 +210,7 @@ function AccountRow({
           <Link
             href="/tools"
             onClick={onNavigate}
-            className="flex-none rounded-full border border-active/40 bg-active/10 px-2.5 py-1 text-[11px] font-semibold text-active transition-colors hover:bg-active/20"
+            className="lab-notch flex-none bg-active/12 px-2.5 py-1.5 font-display text-[9.5px] font-bold uppercase tracking-[0.14em] text-active shadow-[inset_0_0_0_1px_rgba(0,255,229,0.45)] transition-colors hover:bg-active/22"
           >
             Connect
           </Link>
