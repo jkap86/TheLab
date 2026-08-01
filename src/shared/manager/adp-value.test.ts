@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   ADP_PEAK,
   DEFAULT_STEEPNESS,
+  STEEPNESS_RANGE,
   TYPICAL_STARTING_SLOTS,
   adpBoardFor,
   adpValue,
@@ -101,16 +102,32 @@ describe("leagueAdpPool", () => {
 });
 
 describe("parseSteepness", () => {
-  test("passes the three presets through", () => {
-    assert.equal(parseSteepness("flat"), "flat");
-    assert.equal(parseSteepness("balanced"), "balanced");
-    assert.equal(parseSteepness("steep"), "steep");
+  test("a number of halvings passes through, fractions included", () => {
+    // The slider's step is a quarter of a halving, so a whole-number parse would
+    // silently coarsen every curve between the notches.
+    assert.equal(parseSteepness("3"), 3);
+    assert.equal(parseSteepness("4.25"), 4.25);
   });
 
-  test("anything unknown falls back to the default", () => {
+  test("anything unparseable falls back to the default", () => {
     assert.equal(parseSteepness(null), DEFAULT_STEEPNESS);
     assert.equal(parseSteepness(undefined), DEFAULT_STEEPNESS);
     assert.equal(parseSteepness("garbage"), DEFAULT_STEEPNESS);
+    // An empty parameter is an absent one — `Number("")` is 0, which would clamp
+    // to the flattest curve on the scale rather than the default.
+    assert.equal(parseSteepness(""), DEFAULT_STEEPNESS);
+  });
+
+  test("out of range clamps rather than resetting", () => {
+    // The nearest curve on the scale is a better answer to "steeper than that"
+    // than silently pricing every roster on the default.
+    assert.equal(parseSteepness("99"), STEEPNESS_RANGE.max);
+    assert.equal(parseSteepness("-5"), STEEPNESS_RANGE.min);
+  });
+
+  test("the default sits inside the range", () => {
+    assert.ok(DEFAULT_STEEPNESS >= STEEPNESS_RANGE.min);
+    assert.ok(DEFAULT_STEEPNESS <= STEEPNESS_RANGE.max);
   });
 });
 

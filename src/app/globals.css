@@ -225,6 +225,88 @@ body {
       0 1px 0 var(--edge-active),
       0 3px 9px -5px rgba(0, 255, 229, 0.4);
   }
+
+  /* The same grammar for a continuous control: a milled slot with a raised key
+     riding in it — the ADP drawer's value curve. The track is recessed for the
+     reason the current-page chip is (it is the thing being read, not pressed)
+     and the thumb is a key, so what invites the grab is the part that moves.
+
+     A range input is styled through pseudo-elements per engine, and they can't
+     be grouped in one selector: an unknown pseudo-element voids the whole rule,
+     so WebKit's and Firefox's are written out separately even where they are
+     identical. `appearance: none` is what unhooks the native widget; it carries
+     no box of its own, so this still holds the material-only rule — the height,
+     the width and the layout all come from utilities at the call site. */
+  .lab-slider {
+    appearance: none;
+    background: transparent;
+    height: 18px;
+    cursor: pointer;
+  }
+  .lab-slider::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #0a1620, #16303e);
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.75),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .lab-slider::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #0a1620, #16303e);
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.75),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .lab-slider::-webkit-slider-thumb {
+    appearance: none;
+    /* Centres a 16px key on a 6px track: (6 − 16) / 2. Firefox centres its own. */
+    margin-top: -5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 2px 0 var(--edge-active),
+      0 4px 10px -3px rgba(0, 255, 229, 0.45);
+  }
+  .lab-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 2px 0 var(--edge-active),
+      0 4px 10px -3px rgba(0, 255, 229, 0.45);
+  }
+  /* The key travels its own thickness while held, like every other part. */
+  .lab-slider:active::-webkit-slider-thumb {
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.7),
+      0 1px 0 var(--edge-active),
+      0 2px 7px -3px rgba(0, 255, 229, 0.45);
+  }
+  .lab-slider:active::-moz-range-thumb {
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.7),
+      0 1px 0 var(--edge-active),
+      0 2px 7px -3px rgba(0, 255, 229, 0.45);
+  }
+  .lab-slider:focus-visible {
+    outline: none;
+  }
+  .lab-slider:focus-visible::-webkit-slider-thumb {
+    outline: 2px solid var(--color-active);
+    outline-offset: 2px;
+  }
+  .lab-slider:focus-visible::-moz-range-thumb {
+    outline: 2px solid var(--color-active);
+    outline-offset: 2px;
+  }
 }
 
 /* Flask loader (features/shared/ui/flask-loader) — the bubbling animation.

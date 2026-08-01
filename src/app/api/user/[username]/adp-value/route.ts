@@ -6,7 +6,6 @@ import type {
 } from "@/shared/contract";
 import { isSuperflexLineup } from "@/shared/ktc";
 import {
-  STEEPNESS_HALVINGS,
   adpBoardFor,
   adpValue,
   boardSignature,
@@ -51,9 +50,10 @@ export async function GET(
   if (!resolved.ok) return resolved.response;
   const { username, userId, season, searchParams } = resolved;
 
-  // The steepness of the value curve, chosen in the ADP bar and sent as a query
-  // param; an unknown value falls back to the default rather than being trusted.
-  const halvings = STEEPNESS_HALVINGS[parseSteepness(searchParams.get("steepness"))];
+  // The steepness of the value curve, chosen on the ADP drawer's slider and sent
+  // as a number of halvings; junk falls back to the default and an out-of-range
+  // value clamps rather than being trusted.
+  const halvings = parseSteepness(searchParams.get("steepness"));
 
   try {
     return await adpValuePayload(username, userId, season, halvings);

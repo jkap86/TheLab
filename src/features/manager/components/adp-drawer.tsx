@@ -1,16 +1,21 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  ADP_PEAK,
   type AdpControls,
   type AdpRange,
   DEFAULT_ADP_RANGE,
+  STEEPNESS_RANGE,
   adpRangePresets,
   boardLabel,
+  previewAdpPool,
+  previewAdpValue,
   rangeBounds,
   seasonOptions,
   seedFromLeague,
+  steepnessSummary,
   todayIso,
 } from "../adp-controls";
 import type { AdpState } from "../hooks/use-adp";
@@ -19,12 +24,12 @@ import type { DraftDensityMonth, ManagerLeague } from "../types";
 import { RangeScrubber } from "./range-scrubber";
 import { PositionBadge } from "./ui";
 
-const DRAFT_TYPE_OPTS = [
-  { value: "snakelinear", label: "Snake / Linear" },
-  { value: "snake", label: "Snake" },
-  { value: "linear", label: "Linear" },
-  { value: "auction", label: "Auction" },
-] as const;
+/**
+ * The board's grid, written out whole so Tailwind can see it, and shared by the
+ * heading row and the rows under it — a header laid out separately drifts the
+ * moment a width changes, the same rule the roster panel's `SectionLayout` holds.
+ */
+const BOARD_COLUMNS = "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.5rem_3.25rem]";
 
 const LEAGUE_TYPE_OPTS = [
   { value: "all", label: "All types" },
@@ -52,18 +57,14 @@ const BEST_BALL_OPTS = [
   { value: "yes", label: "Best ball" },
 ] as const;
 
+// What *kind* of draft, which is a round count underneath: a startup fills a
+// roster, a rookie draft is a handful of rounds. It replaced a snake/linear/auction
+// chip in this slot — the room's picking order is not a fact about the market it
+// priced, where a startup's 1.01 and a rookie draft's 1.01 are different players.
 const ROUNDS_OPTS = [
-  { value: "all", label: "All rounds" },
-  { value: "rookie", label: "≤5 (rookie)" },
-  { value: "full", label: "12+ (startup)" },
-] as const;
-
-// The value-curve steepness — how top-heavy the ADP → team-value curve is. It
-// drives the Leagues-tab card value, not which drafts the per-player ADP averages.
-const STEEPNESS_OPTS = [
-  { value: "flat", label: "Flat" },
-  { value: "balanced", label: "Balanced" },
-  { value: "steep", label: "Top-heavy" },
+  { value: "all", label: "All drafts" },
+  { value: "full", label: "Startup (12+ rds)" },
+  { value: "rookie", label: "Rookie (≤5 rds)" },
 ] as const;
 
 /**
@@ -159,6 +160,14 @@ export function AdpDrawer({
   density: AdpDensityState;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+
+  // The curve the slider is *currently* sitting on, while it is being dragged.
+  // The preview below has to re-price on every notch — watching the board bend
+  // is the whole reason the curve is a slider — but the committed value re-fetches
+  // every league's team value on the Leagues tab behind this drawer, so the store
+  // only moves when the handle is let go. Null means nothing is being dragged.
+  const [dragging, setDragging] = useState<number | null>(null);
+  const steepness = dragging ?? controls.steepness;
 
   // Held in a ref so the effect below can depend on `open` alone. Callers pass a
   // fresh arrow every render, so depending on `onClose` re-ran the whole effect
@@ -303,11 +312,11 @@ export function AdpDrawer({
               }}
             />
             <ChipSelect
-              value={controls.draftType}
-              options={DRAFT_TYPE_OPTS}
-              ariaLabel="Draft type"
-              narrowed={controls.draftType !== "snakelinear"}
-              onChange={(draftType) => onChange({ ...controls, draftType })}
+              value={controls.rounds}
+              options={ROUNDS_OPTS}
+              ariaLabel="Kind of draft"
+              narrowed={controls.rounds !== "all"}
+              onChange={(rounds) => onChange({ ...controls, rounds })}
             />
             <ChipSelect
               value={controls.leagueType}
@@ -338,13 +347,6 @@ export function AdpDrawer({
               onChange={(bestBall) => onChange({ ...controls, bestBall })}
             />
             <ChipSelect
-              value={controls.rounds}
-              options={ROUNDS_OPTS}
-              ariaLabel="Draft rounds"
-              narrowed={controls.rounds !== "all"}
-              onChange={(rounds) => onChange({ ...controls, rounds })}
-            />
-            <ChipSelect
               value={controls.teams}
               ariaLabel="League size"
               narrowed={controls.teams !== "all"}
@@ -359,22 +361,19 @@ export function AdpDrawer({
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
-              Value curve
-            </span>
-            <div className="flex flex-1 gap-1">
-              {STEEPNESS_OPTS.map((opt) => (
-                <Segment
-                  key={opt.value}
-                  active={controls.steepness === opt.value}
-                  onClick={() => onChange({ ...controls, steepness: opt.value })}
-                >
-                  {opt.label}
-                </Segment>
-              ))}
-            </div>
-          </div>
+          <SteepnessSlider
+            value={steepness}
+            onPreview={setDragging}
+            onCommit={(next) => {
+              setDragging(null);
+              // A release that didn't move it is not a change: committing it
+              // anyway would hand the store a fresh object and re-render the
+              // tab behind for nothing.
+              if (next !== controls.steepness) {
+                onChange({ ...controls, steepness: next });
+              }
+            }}
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -390,41 +389,69 @@ export function AdpDrawer({
             </p>
           ) : (
             <>
-              <div className="mb-1.5 grid grid-cols-[1.75rem_1fr_2rem_3rem_3rem] items-center gap-2 px-1 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/35">
+              <div className={`mb-1.5 grid ${BOARD_COLUMNS} items-center gap-2 px-1 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/35`}>
                 <span className="text-right">#</span>
                 <span>Player</span>
                 <span />
                 <span className="text-right">ADP</span>
-                <span className="text-right">Taken</span>
+                {/* "Taken" is a share, and the header is the only place to say of
+                    what — a column reading 46% next to an ADP of 3.2 is otherwise
+                    a number nobody can name. */}
+                <span
+                  className="text-right"
+                  title="Share of this board’s drafts the player was taken in"
+                >
+                  Taken
+                </span>
+                <span
+                  className="text-right"
+                  title={`Draft capital under the value curve above, on a ${previewAdpPool(controls.teams)}-slot startable pool — the shape a league card's team value is summed from`}
+                >
+                  Value
+                </span>
               </div>
               <ul>
-                {players.map((player) => (
-                  <li
-                    key={player.player_id}
-                    className="grid grid-cols-[1.75rem_1fr_2rem_3rem_3rem] items-center gap-2 border-t border-foreground/[0.04] px-1 py-1.5 text-sm"
-                  >
-                    <span className="text-right text-xs tabular-nums text-foreground/35">
-                      {player.rank}
-                    </span>
-                    <span className="truncate">
-                      {player.name}
-                      {player.team && (
-                        <span className="ml-1.5 text-xs text-foreground/35">
-                          {player.team}
-                        </span>
-                      )}
-                    </span>
-                    <PositionBadge position={player.position} />
-                    <span className="text-right font-semibold tabular-nums">
-                      {player.adp.toFixed(1)}
-                    </span>
-                    {/* Of the drafts on this board, not of every draft crawled —
-                        which is what makes it readable beside the ADP. */}
-                    <span className="text-right text-xs tabular-nums text-foreground/40">
-                      {draft_count ? `${Math.round((player.picks / draft_count) * 100)}%` : "—"}
-                    </span>
-                  </li>
-                ))}
+                {players.map((player) => {
+                  const value = previewAdpValue(player.adp, controls.teams, steepness);
+                  return (
+                    <li
+                      key={player.player_id}
+                      className={`grid ${BOARD_COLUMNS} items-center gap-2 border-t border-foreground/[0.04] px-1 py-1.5 text-sm`}
+                    >
+                      <span className="text-right text-xs tabular-nums text-foreground/35">
+                        {player.rank}
+                      </span>
+                      <span className="truncate">
+                        {player.name}
+                        {player.team && (
+                          <span className="ml-1.5 text-xs text-foreground/35">
+                            {player.team}
+                          </span>
+                        )}
+                      </span>
+                      <PositionBadge position={player.position} />
+                      <span className="text-right font-semibold tabular-nums">
+                        {player.adp.toFixed(1)}
+                      </span>
+                      {/* Of the drafts on this board, not of every draft crawled —
+                          which is what makes it readable beside the ADP. */}
+                      <span className="text-right text-xs tabular-nums text-foreground/40">
+                        {draft_count ? `${Math.round((player.picks / draft_count) * 100)}%` : "—"}
+                      </span>
+                      {/* The rail under the number is what makes the slider legible:
+                          the shape of the whole column bends as the curve does, where
+                          a row of digits only moves for the reader checking one. */}
+                      <span className="relative text-right text-xs tabular-nums text-active/80">
+                        {value.toLocaleString()}
+                        <span
+                          aria-hidden
+                          className="absolute inset-x-0 -bottom-0.5 h-px bg-active/45"
+                          style={{ transform: `scaleX(${value / ADP_PEAK})`, transformOrigin: "right" }}
+                        />
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
               {player_count !== null && player_count > players.length && (
                 <p className="px-1 pt-2 text-xs text-foreground/35">
@@ -444,8 +471,12 @@ export function AdpDrawer({
           >
             Reset
           </button>
+          {/* The value column has a premise the ADP beside it doesn't: this board
+              belongs to no league, so the curve is anchored to an assumed pool.
+              A number priced on an assumption says which one. */}
           <p className="min-w-0 flex-1 truncate text-xs text-foreground/35">
-            Averaged over this app’s crawled drafts — not market ADP.
+            This app’s crawled drafts, not market ADP · values on a{" "}
+            {previewAdpPool(controls.teams)}-slot pool
           </p>
           <button
             type="button"
@@ -532,6 +563,71 @@ function RangeControl({
         today={today}
         onChange={onChange}
       />
+    </div>
+  );
+}
+
+/**
+ * The value curve, as one continuous control.
+ *
+ * It was three segments — Flat, Balanced, Top-heavy — which is three points on a
+ * scale that is continuous underneath: the knob is how many times value halves
+ * across a league's startable pool, and there was never anything special about
+ * 3, 4 and 5. A slider says that, and the board below re-prices as it moves, so
+ * the curve is chosen by watching what it does rather than by reading three
+ * adjectives. The ends keep the adjectives as the axis labels, which is the job
+ * they were always doing.
+ *
+ * **Dragging previews; releasing commits.** Every committed value re-fetches the
+ * team value of every league on the tab behind this drawer, so a drag across the
+ * range would fire two dozen of those. `onPreview` runs per notch (the board
+ * below is local and free), `onCommit` runs on release — pointer, key or focus
+ * leaving, since a slider is as often nudged with the arrow keys as dragged.
+ */
+function SteepnessSlider({
+  value,
+  onPreview,
+  onCommit,
+}: {
+  value: number;
+  onPreview: (value: number) => void;
+  onCommit: (value: number) => void;
+}) {
+  // The release events carry no value of their own, so it is read back off the
+  // input — which is controlled, so what it holds is what was last previewed.
+  const commit = (e: { currentTarget: HTMLInputElement }) =>
+    onCommit(Number(e.currentTarget.value));
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline gap-2">
+        <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
+          Value curve
+        </span>
+        {/* The halving count is the honest parameter and an unreadable label, so
+            the readout says what it does to a board instead. */}
+        <span className="ml-auto text-[0.7rem] tabular-nums text-foreground/45">
+          {steepnessSummary(value)}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-[0.65rem] text-foreground/30">Flat</span>
+        <input
+          type="range"
+          className="lab-slider min-w-0 flex-1"
+          min={STEEPNESS_RANGE.min}
+          max={STEEPNESS_RANGE.max}
+          step={STEEPNESS_RANGE.step}
+          value={value}
+          aria-label="Value curve steepness"
+          aria-valuetext={steepnessSummary(value)}
+          onChange={(e) => onPreview(Number(e.target.value))}
+          onPointerUp={commit}
+          onKeyUp={commit}
+          onBlur={commit}
+        />
+        <span className="text-[0.65rem] text-foreground/30">Top-heavy</span>
+      </div>
     </div>
   );
 }

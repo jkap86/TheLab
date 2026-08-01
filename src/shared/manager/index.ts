@@ -43,7 +43,8 @@ export type { AdpResult, AdpRow, DraftDensityMonth, PlayerAdp } from "./adp";
 export {
   ADP_PEAK,
   DEFAULT_STEEPNESS,
-  STEEPNESS_HALVINGS,
+  STEEPNESS_RANGE,
+  TYPICAL_STARTING_SLOTS,
   adpBoardFor,
   adpValue,
   boardSignature,
@@ -52,7 +53,7 @@ export {
   rosterAdpValue,
   startingSlotCount,
 } from "./adp-value";
-export type { AdpRosterValue, Steepness } from "./adp-value";
+export type { AdpRosterValue } from "./adp-value";
 export {
   parseAdpFilters,
   ADP_FILTER_DEFAULTS,
