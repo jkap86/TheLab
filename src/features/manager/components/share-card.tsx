@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 
+import {
+  LIST_ROW_HOVER,
+  LIST_ROW_SURFACE,
+  RowSheen,
+} from "@/features/shared";
+
 import type { ShareMetric, ShareMetricContext } from "../share-metrics";
 import type { ManagerLeague } from "../types";
 import { MetricColumns } from "./metric-column";
@@ -52,11 +58,13 @@ export function ShareCard({
 
   return (
     <li
-      className={`group relative rounded-xl border border-foreground/10 bg-gradient-to-b from-foreground/[0.06] to-foreground/[0.015] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_28px_-16px_rgba(0,0,0,0.7)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_20px_44px_-18px_rgba(0,0,0,0.85)] motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
+      className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER} ${
         menuOpen ? "z-30" : ""
       }`}
     >
-      <div className="flex w-full flex-col items-stretch gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+      <RowSheen />
+
+      <div className="relative flex w-full flex-col items-stretch gap-3 px-4 py-3 pl-5 sm:flex-row sm:items-center sm:gap-4">
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
@@ -65,7 +73,11 @@ export function ShareCard({
         >
           <Chevron open={expanded} size="md" />
           {icon}
-          <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold">
+          {/* The display face and the size step down with it, exactly as on a
+              league card — the two lists are the same row wearing a different
+              subject, and a player's name reading larger than a league's would
+              say otherwise. */}
+          <h3 className="min-w-0 flex-1 truncate font-display text-sm font-semibold tracking-tight">
             {name}
           </h3>
           {note && (
@@ -85,7 +97,7 @@ export function ShareCard({
       </div>
 
       {expanded && (
-        <ul className="border-t border-foreground/10 px-4 py-3">
+        <ul className="relative border-t border-foreground/10 px-4 py-3">
           {leagues.map((league) => (
             <SharedLeagueRow key={league.league_id} league={league} />
           ))}

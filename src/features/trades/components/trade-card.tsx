@@ -1,6 +1,13 @@
 "use client";
 
-import { Avatar, MONTH_ABBREVIATIONS, ordinal } from "@/features/shared";
+import {
+  Avatar,
+  LIST_ROW_HOVER,
+  LIST_ROW_SURFACE,
+  MONTH_ABBREVIATIONS,
+  RowSheen,
+  ordinal,
+} from "@/features/shared";
 import type { ManagerLeague } from "@/shared/manager";
 
 import type { PlayerSummary, Trade, TradeManager, TradeSide } from "../types";
@@ -28,9 +35,14 @@ export function TradeCard({
   managers: Record<string, TradeManager>;
 }) {
   return (
-    <article className="overflow-hidden rounded-xl border border-foreground/10 bg-foreground/[0.02]">
-      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-foreground/10 px-4 py-2.5">
-        <h3 className="min-w-0 truncate text-sm font-semibold">
+    // The same lit surface a league or a share row wears: a trade *is* a row in a
+    // long list, and the three lists reading as one material is the point of
+    // sharing it. The side columns keep their own opaque ground below.
+    <article className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER} overflow-hidden`}>
+      <RowSheen />
+
+      <header className="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-foreground/10 px-4 py-2.5 pl-5">
+        <h3 className="min-w-0 truncate font-display text-[13px] font-semibold tracking-tight">
           {league?.name ?? trade.league_id}
         </h3>
         <span className="ml-auto text-xs tabular-nums text-foreground/50">
@@ -39,7 +51,7 @@ export function TradeCard({
         </span>
       </header>
 
-      <div className="grid gap-px bg-foreground/10 sm:grid-cols-2">
+      <div className="relative grid gap-px bg-foreground/10 sm:grid-cols-2">
         {trade.sides.map((side) => (
           <SideColumn
             key={side.roster_id}
@@ -71,7 +83,10 @@ function SideColumn({
     side.players.length === 0 && side.picks.length === 0 && side.faab === 0;
 
   return (
-    <div className="bg-[#0b1621] px-4 py-3">
+    // Translucent rather than the flat panel it was, so the card's own glass
+    // reads through it — the hairline between two sides is the grid's `gap-px`
+    // showing where the cells don't reach, which a translucent cell still leaves.
+    <div className="bg-foreground/[0.02] px-4 py-3">
       <div className="mb-2 flex items-center gap-2">
         <Avatar url={manager?.avatar_url} name={name} />
         <span className="min-w-0 truncate text-sm font-semibold">{name}</span>

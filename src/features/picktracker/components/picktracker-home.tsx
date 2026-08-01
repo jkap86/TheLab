@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { useStoredAccount, useUserLeagues } from "@/features/shared";
+import { PageHeading, useStoredAccount, useUserLeagues } from "@/features/shared";
 
 import { LeaguePicker } from "./league-picker";
 import { PicktrackerSearch } from "./picktracker-search";
@@ -37,14 +37,11 @@ export function PicktrackerHome() {
 
   return (
     <div>
-      <header className="mb-8">
-        <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-          Pick Tracker
-        </h1>
-        <p className="mt-3 text-lg text-foreground/60">
-          Follow a draft that uses kickers as rookie-pick placeholders.
-        </p>
-      </header>
+      <PageHeading
+        title="Pick Tracker"
+        lede="Follow a draft that uses kickers as rookie-pick placeholders."
+        className="mb-8"
+      />
 
       {user && (
         <section className="mb-8">

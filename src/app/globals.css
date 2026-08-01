@@ -428,13 +428,13 @@ body {
 /* Respect a reader who asked the OS for less motion: freeze the flask rather
    than bubble at them. Bubbles rest at opacity 0 (keyframe start), so what's
    left is a calm, static flask that still reads as a loading mark. The tools
-   page's ambient drift and pulse (`.tools-anim`) freeze on the same terms —
+   ambient drift and the account pulse (`.lab-anim`) freeze on the same terms —
    the glows and the account panel simply hold still. The filters dialog appears
    without the rise, which costs nothing: a modal that is simply *there* is still
    a modal, where a frozen entrance animation would leave it invisible. */
 @media (prefers-reduced-motion: reduce) {
   .flask-loader *,
-  .tools-anim,
+  .lab-anim,
   .filters-dialog-panel,
   .tools-menu-panel {
     animation: none !important;

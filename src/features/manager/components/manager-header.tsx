@@ -133,7 +133,7 @@ export function ManagerHeader({
 
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight sm:text-2xl">
+              <h1 className="min-w-0 truncate font-display text-base font-semibold tracking-tight sm:text-xl">
                 {user.display_name || user.username}
               </h1>
               <span className="flex-none rounded-[5px] bg-active/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-active/80">

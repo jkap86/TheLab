@@ -493,11 +493,38 @@ stops holding, a comment saying it does would not have caught it.
   what keeps the exception containable. Anything that isn't a gradient stop still
   takes the token: the outline, the fill wash and the highlight all resolve
   `var(--color-active)` / `var(--color-foreground)` so a retheme reaches them.
-  `ToolsBackdrop`'s aurora is the second instance of that exception and follows
+  `AmbientBackdrop`'s aurora is the second instance of that exception and follows
   the same containment — literal `rgba` stops because a three-colour glow has two
   colours with no token, with cyan still spelled as the `active` value so the one
   that *does* have a token stays recognisable. Two instances is a pattern now: a
   gradient may hold literal colour, everything around it takes the token.
+- **The tools page's treatment is the app's, and it is applied at three seams
+  rather than page by page.** The grid used to look like a different product from
+  the tool it opened — ambient aurora, glass, the display face and a gradient
+  wordmark on `/tools`, flat surfaces and body-face headings everywhere else. The
+  three pieces that closed it are shared, and each is shared for the usual
+  reason (a second reader appeared, and two copies would drift):
+  - `AmbientBackdrop` moved from `features/tools` to `features/shared` and is
+    rendered once in `app/layout.tsx`. It is `fixed` at `-z-10`, so no page is
+    laid out against it and none has to opt out.
+  - `PageHeading` is the eyebrow, the gradient display title and the lede, used
+    by every page that leads with a title. `size` is the only thing that varies —
+    `hero` for `/tools`, where the wordmark *is* the page, and `page` everywhere
+    else, where the app bar has already named the tool.
+  - `LIST_ROW_SURFACE` / `LIST_ROW_HOVER` / `RowSheen` are the tool cards' glass
+    held to a row's height, worn by league cards, share cards and trade cards.
+    What they deliberately don't take is the **corner brackets** — those are a
+    card-scale device, and four of them on each of a hundred-odd rows reads as
+    noise rather than as an instrument. Two details in `RowSheen` are
+    load-bearing. The light sweep is clipped by **its own box, not by the row's
+    `overflow`**: a stat column's picker menu hangs *below* the row it belongs
+    to, so `overflow-hidden` on the row would cut the menu off — a bug that only
+    appears once someone opens one. And the sheen must render *before* the row's
+    content, with that content positioned (`relative`), since an absolutely
+    positioned sibling paints above static content whatever the source order.
+  The display face travelled with them onto every named row, one size step down
+  (`text-sm` where the body face was `text-[15px]`): Orbitron is wider, so
+  holding the size would truncate a long league name sooner than before.
 - **A pure-SVG component is not a client component.** `FlaskLoader` has no
   interactivity, so it renders on the server too and stays out of the bundle;
   what makes that safe is `useId` for its gradient and clip ids, so two loaders
