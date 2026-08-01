@@ -7,7 +7,7 @@ import {
   listWeekProjections,
   parseProjectionFilters,
 } from "@/shared/projections";
-import { DEFAULT_SEASON } from "@/shared/sleeper";
+import { getActiveSeason } from "@/shared/season";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +28,10 @@ export const dynamic = "force-dynamic";
  * pull one in.
  */
 export async function GET(request: Request) {
-  const parsed = parseProjectionFilters(new URL(request.url).searchParams, DEFAULT_SEASON);
+  const parsed = parseProjectionFilters(
+    new URL(request.url).searchParams,
+    await getActiveSeason(),
+  );
   if (!parsed.ok) {
     const error: ApiErrorPayload = { error: parsed.error };
     return NextResponse.json(error, { status: 400 });

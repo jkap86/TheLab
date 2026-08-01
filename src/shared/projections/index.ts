@@ -65,9 +65,16 @@ export {
   horizonWeeks,
   parseWeeks,
   LAST_REGULAR_WEEK,
+  MAX_REQUESTED_WEEKS,
   PROJECTION_LOOKAHEAD,
 } from "./weeks";
 export type { ParsedWeeks } from "./weeks";
+export {
+  validateWeekProjections,
+  PROJECTIONS_MIN_ROWS,
+  PROJECTIONS_MAX_SHRINK,
+} from "./validate";
+export type { ProjectionsValidation } from "./validate";
 export {
   startProjectionsScheduler,
   PROJECTIONS_INTERVAL_MS,

@@ -4,7 +4,7 @@ import type { ApiErrorPayload } from "@/shared/contract";
 import { resolveManagerUser } from "@/shared/manager";
 import { isSeason } from "@/shared/query";
 import type { SleeperUser } from "@/shared/sleeper";
-import { DEFAULT_SEASON } from "@/shared/sleeper";
+import { getActiveSeason } from "@/shared/season";
 
 /**
  * The opening every route under `/api/user/[username]` shares: await the route
@@ -71,7 +71,9 @@ export async function resolveManagerRequest(
     username,
     user: resolved.user,
     userId: resolved.user.user_id,
-    season: season || DEFAULT_SEASON,
+    // Only the blank is filled from the resolver — an explicitly requested
+    // season is the caller's answer and stays exactly what they asked for.
+    season: season || (await getActiveSeason()),
     searchParams,
   };
 }

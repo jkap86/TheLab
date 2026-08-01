@@ -1,10 +1,6 @@
 import { LOCK_KEYS, withAdvisoryLock } from "@/shared/db";
-import {
-  DEFAULT_SEASON,
-  getLeague,
-  getNflState,
-  getUserLeagues,
-} from "@/shared/sleeper";
+import { getActiveSeason } from "@/shared/season";
+import { getLeague, getNflState, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague } from "@/shared/sleeper";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
@@ -17,6 +13,11 @@ import {
   stampManagers,
 } from "./crawl-queue";
 import { leagueCrawlTtl, type CrawlTier } from "./crawl-ttl";
+import {
+  remainingDue,
+  selectDiscoveryLeagues,
+  stampableManagers,
+} from "./discovery";
 import { flooredWeek, syncLeagueGraphs } from "./sync";
 
 /**
@@ -70,7 +71,12 @@ export type RefreshResult = {
   corpus: number;
   /** leagues past the freshness TTL when the tick started. */
   dueBefore: number;
-  /** leagues still past the TTL after this tick (estimate: dueBefore − refreshed). */
+  /**
+   * Leagues still past the TTL after this tick: `dueBefore − refreshed − gone`.
+   * Tombstoned leagues count as retired because `markLeaguesGone` takes them out
+   * of every future claim — leaving them in overstated the backlog the
+   * scheduler's missed-target warning reads. See `./discovery`.
+   */
   due: number;
   /**
    * Age of the stalest league at tick start. Past twice the TTL it means the
@@ -195,8 +201,9 @@ async function refreshStaleLeagues(
     corpus,
     dueBefore,
     oldestAgeMs,
-    // The batch we just claimed no longer counts as due unless it failed.
-    due: Math.max(dueBefore - result.loaded, 0),
+    // The batch we just claimed no longer counts as due unless it failed — and
+    // a tombstoned league leaves the queue for good, so it retires too.
+    due: remainingDue(dueBefore, result.loaded, goneIds.length),
   };
 }
 
@@ -235,41 +242,28 @@ async function discoverMemberLeagues(
     [...byManager.values()].flat().map((l) => l.league_id),
   );
 
-  // Fill up to the per-tick cap in queue order. A manager is only stamped once
-  // every one of their new leagues is in, so whoever doesn't fit comes back next
-  // tick with their leagues intact rather than silently losing them for a whole
-  // TTL cycle. A manager with more new leagues than the cap fits on their own is
-  // taken a capful at a time — the ones stored drop out of `unknown` next tick,
-  // so they still converge instead of deadlocking the queue.
-  const selected = new Map<string, SleeperLeague>();
-  const crawled: string[] = [];
+  // Fill up to the per-tick cap in queue order — see `./discovery` for what
+  // "eligible" means and why a manager is taken whole or not at all.
+  const selection = selectDiscoveryLeagues(userIds, byManager, known, cap);
 
-  for (const userId of userIds) {
-    const leagues = byManager.get(userId);
-    if (!leagues) continue; // enumeration failed — leave unstamped, retry later
-    const unknown = leagues.filter(
-      (l) => !known.has(l.league_id) && !selected.has(l.league_id),
-    );
-    if (selected.size + unknown.length > cap) {
-      for (const league of unknown.slice(0, cap - selected.size)) {
-        selected.set(league.league_id, league);
-      }
-      break;
-    }
-    for (const league of unknown) selected.set(league.league_id, league);
-    crawled.push(userId);
-  }
-
-  const result = await syncLeagueGraphs([...selected.values()], currentWeek, {
+  const result = await syncLeagueGraphs(selection.leagues, currentWeek, {
     concurrency: CRAWL_CONCURRENCY,
   });
-  await stampManagers(season, crawled);
+
+  // The invariant this pass rests on: stamping a manager suppresses them for
+  // the six-hour enumeration TTL, so a manager whose newly discovered league
+  // failed to sync must stay unstamped — otherwise that league stays unknown
+  // and nothing points at it again until some other member of it comes up.
+  const stamped = stampableManagers(selection, new Set(result.failedIds));
+  await stampManagers(season, stamped);
 
   return {
-    managersCrawled: crawled.length,
+    managersCrawled: stamped.length,
     discovered: result.loaded,
     discoverFailed: failed + result.failed,
-    deferred: userIds.length - crawled.length,
+    // Managers this tick did not retire: cap-deferred, enumeration failures, and
+    // those held back by a failed league. All three are unstamped and come back.
+    deferred: userIds.length - stamped.length,
   };
 }
 
@@ -299,7 +293,9 @@ export async function runLeagueCrawl(
   options: CrawlOptions = {},
 ): Promise<CrawlSummary> {
   const {
-    season = DEFAULT_SEASON,
+    // Resolved rather than compiled in, so a league-year rollover doesn't leave
+    // the crawler refreshing last season's leagues until someone redeploys.
+    season = await getActiveSeason(),
     leagueLimit = CRAWL_LEAGUE_BATCH,
     managerLimit = CRAWL_MANAGER_BATCH,
     discoveryCap = CRAWL_DISCOVERY_CAP,

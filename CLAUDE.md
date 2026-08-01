@@ -327,10 +327,85 @@ warns when the stalest league is past twice the active TTL, heartbeats when idle
 interval is execution granularity, not the freshness period, and halving it
 doubles cost for nothing a bigger batch wouldn't do better.
 
+## Operating safety
+
+Five rules that are about the app staying correct and unexploited rather than
+about how it is laid out. Each replaced something that read as fine and wasn't.
+
+- **A route that spends someone else's budget is an operator route.**
+  `/api/players/sync` and `/api/projections/sync` are POST-only and require
+  `INTERNAL_SYNC_SECRET` in the `x-internal-sync-secret` header; the decision is
+  pure and tested in `shared/internal-auth/policy.ts`, the `NextResponse` half is
+  `app/api/internal-auth.ts` — the same split, for the same reason, as
+  `resolveManagerUser` / `resolveManagerRequest`. Three details are load-bearing.
+  **Unconfigured is 503 in production**, never a pass and never a 403: failing
+  open would leave the endpoints exactly as exposed as they were, and a 403 makes
+  a missing variable indistinguishable from a wrong secret at 3am. **GET is 405**,
+  because a request that pulls tens of megabytes off Sleeper is a state change
+  whatever method it wears. And **a lost advisory lock is 409**, not a 200
+  describing someone else's run — which is what `PlayersSyncSummary.locked` was
+  added for. The public manager routes stay public; what
+  `/api/user/[username]/leagues` stops honouring from an anonymous caller is
+  `?refresh=1`, the knob, not the read. The blocking lock those routes sit on is
+  bounded now too (`ADVISORY_LOCK_WAIT_MS`, enforced by Postgres' own
+  `lock_timeout`), because an unbounded wait holds one pool connection per stuck
+  key and the keys are per manager.
+- **Judge a destructive reconciliation by whether the payload is a payload.**
+  Both syncs replace-and-delete, and both used to guard that on `length > 0` —
+  which every interesting failure passes. A 17-player KTC "board" nulls the other
+  480; a truncated projections week deletes the ~760 players it omits. So
+  `ktc/validate` and `projections/validate` are the gate, they run **before the
+  transaction opens**, and a refusal writes nothing *and stamps nothing* — no
+  `updated_at`, no `projection_week_syncs` row — so the next tick simply tries
+  again. Each carries the same three checks: an absolute floor, a maximum shrink
+  against what is stored, and a duplicate rule; and each treats **zero stored as a
+  first sync**, where only the floor applies, so a cold database still fills. The
+  numbers are named constants with the reasoning on them, because a threshold
+  without a rationale is a threshold someone will tune to zero.
+- **A manager is stamped only once every league discovered for them is in.**
+  Stamping suppresses that manager for the six-hour enumeration TTL, so stamping
+  alongside a failed league loses the league until some *other* member of it comes
+  up. `shared/manager/discovery.ts` holds it: `syncLeagueGraphs` reports
+  `loadedIds`/`failedIds` rather than counts, and the stamp is an **intersection
+  against ids**. Counts can't answer this, because two managers can share an
+  unknown league — attribution is deduplicated nowhere, only the *fetch* is, so a
+  shared failure unstamps everyone waiting on it. The same file owns
+  `remainingDue`: a tombstoned league leaves the queue as surely as a refreshed
+  one, and counting only the refreshed ones overstated the backlog the scheduler
+  warns on.
+- **The season is resolved, not compiled in.** `DEFAULT_SEASON` was a release note
+  disguised as a string. `shared/season` is an override (`NFL_SEASON_OVERRIDE`),
+  then Sleeper's `state/nfl` on a six-hour cache, then that constant as the floor.
+  Three rules make it safe in front of every request: an upstream outage falls back
+  to the last resolved value (and a failed attempt does **not** re-stamp the cache,
+  so recovery is immediate rather than waiting out a TTL nothing earned); a cached
+  value outlives its TTL when nothing better exists; and **an explicitly requested
+  season never comes here** — `?season=2024` is the caller's answer and historical
+  routes stay deterministic. Call it where a season would otherwise be *defaulted*
+  — a route with no `?season`, a background tick — and nowhere else. A page that
+  reads it must not be prerendered (`/trades` is `force-dynamic`), or the
+  resolution is baked into the bundle and it is a hardcoded constant again.
+  The UI's `nfl-calendar` is the *separate* concern: it derives provisional
+  markers past its table (Thursday after Labor Day, the Thursday in April 23–29,
+  preseason at −35/−12 days) so the ADP strip doesn't expire, bounded by the
+  window being drawn rather than by a clock — so server and client renders agree.
+- **Encrypted is not verified, and the difference has to be written down.**
+  `DATABASE_SSL_MODE` is `disable` / `verify-full` / `insecure-require`, defaulting
+  to the first for localhost and the second everywhere else; `DATABASE_CA_CERT`
+  supplies a provider's chain (unescaping `\n`, which is how a pasted certificate
+  arrives). The old behaviour survives under `insecure-require` — the name is the
+  point, since it was previously reached by *default* under an option spelled
+  `require`. An unrecognised mode throws. Beside it, a missing `DATABASE_URL` is
+  fatal in production: `instrumentation.ts` throws before starting a single loop,
+  because "alive but connected to libpq's defaults" is worse than not booting.
+
 ## Testing
 
-`npm test` runs Node's built-in runner over `src/**/*.test.ts`. No framework, no
-build step — Node 22 strips the TypeScript.
+`npm test` runs Node's built-in runner over `src/**/*.test.ts` through `tsx`.
+No framework, no build step — but not bare `node --test` either: Node 22's
+TypeScript stripping is behind an experimental flag and is not on across the
+22.x range `engines` allows, so that command fails with
+`ERR_UNKNOWN_FILE_EXTENSION` before a single test runs.
 
 Two constraints follow from that, and they shape where logic should live:
 

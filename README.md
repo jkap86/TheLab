@@ -25,8 +25,12 @@ while you work.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | yes | — | Postgres connection string. Also read by the `migrate:*` scripts. |
-| `DATABASE_SSL` | no | auto | `require` forces TLS on, `disable` forces it off. Auto-detects: off for `localhost`, on (relaxed verification) for remote/managed hosts. |
+| `DATABASE_URL` | yes | — | Postgres connection string. Also read by the `migrate:*` scripts. **Missing in production is a fatal startup error** — the server refuses to boot rather than let `pg` fall back to libpq's own defaults, and no background loop starts. In development it is a warning: the app renders, migrations are skipped, and the loops stay down. |
+| `DATABASE_SSL_MODE` | no | auto | `disable` \| `verify-full` \| `insecure-require`. Auto-detects: `disable` for `localhost`, `verify-full` for every other host. An unrecognised value fails loudly rather than falling back. |
+| `DATABASE_CA_CERT` | no | — | PEM certificate authority for `verify-full`, for providers whose chain isn't in Node's trust store. Literal `\n` sequences are unescaped, so a certificate pasted into a platform config UI works as-is. |
+| `DATABASE_SSL` | no | — | **Deprecated**, kept working: `disable` maps to `DATABASE_SSL_MODE=disable`, `require` to `insecure-require`. |
+| `INTERNAL_SYNC_SECRET` | in production, to use the sync routes | — | Shared secret gating the operator sync endpoints (see [Internal sync endpoints](#internal-sync-endpoints)). Sent as the `x-internal-sync-secret` header. In production an unset secret makes those routes answer **503** — they fail closed, never open. On a dev server an unset secret lets them through, so `npm run dev` can still force a sync by hand. |
+| `NFL_SEASON_OVERRIDE` | no | — | Pins the operating season (a 4-digit year). Otherwise the season is read from Sleeper's `state/nfl` and cached for six hours, so a league-year rollover needs no redeploy. An implausible value is ignored with a warning. |
 | `LEAGUE_CRAWLER` | no | on | Set to `off` to disable the background league crawler. |
 | `PROJECTIONS_SYNC` | no | on | Set to `off` to disable the weekly projections sync. Each week it refreshes is a ~5.6MB download. |
 
@@ -83,10 +87,37 @@ receives, so the two ends can't drift without a type error.
 | `GET /api/user/[username]` | Resolve a Sleeper user. |
 | `GET /api/user/[username]/leagues` | A manager's leagues, as a **newline-delimited JSON stream** (`result` / `progress` / `error` messages). Serves cached data immediately and pushes a second `result` when a background refresh finishes. |
 | `GET /api/league/[leagueId]` | One league's standings and rosters, with player ids resolved to names. |
-| `GET\|POST /api/players/sync` | Refresh the cached players map. `?force=1` bypasses the freshness gate. |
+| `POST /api/players/sync` | Refresh the cached players map. `?force=1` bypasses the freshness gate. **Internal** — see below. |
 | `GET /api/projections` | A week of stored projections, ranked by the requested scoring. Reads only — it never calls Sleeper. |
-| `GET\|POST /api/projections/sync` | Refresh stored weekly projections. Defaults to the current and next week if stale; `?force=1` ignores the freshness gate, `?week=1,2` backfills specific weeks, `?season=2025` picks another season. |
+| `POST /api/projections/sync` | Refresh stored weekly projections. Defaults to the current and next week if stale; `?force=1` ignores the freshness gate, `?week=1,2` backfills specific weeks (at most 18), `?season=2025` picks another season. **Internal** — see below. |
 | `GET /api/adp` | Average draft position over the crawled drafts, filtered by draft and league attributes. |
+
+#### Internal sync endpoints
+
+`/api/players/sync` and `/api/projections/sync` fan out to Sleeper — a forced
+players refresh is a ~5MB download Sleeper asks be taken at most once a day, and
+a projections week is ~5.6MB. They are operator tools, so:
+
+- They are **POST-only**. A `GET` answers `405`, because a request that pulls
+  tens of megabytes off an upstream is a state change whatever method it wears,
+  and a safe method invites a crawler or a link preview to run it.
+- They require `INTERNAL_SYNC_SECRET` in the `x-internal-sync-secret` header.
+  Missing header → `401`; wrong secret → `403`; secret not configured on a
+  production server → `503` (fail closed, and distinguishable from a wrong
+  secret at 3am). On a dev server with no secret configured they are open.
+- A run already in flight loses the advisory lock and answers `409` rather than
+  a `200` describing someone else's work.
+
+```bash
+curl -X POST -H "x-internal-sync-secret: $INTERNAL_SYNC_SECRET" \
+  "https://…/api/projections/sync?week=3,4"
+```
+
+`/api/user/[username]/leagues` stays public — it is the read every manager page
+makes and it answers from cache. What it no longer honours from an anonymous
+caller is `?refresh=1`, the knob that forces the full ~9-requests-per-league
+fan-out past the TTL; with the internal header it still works. Without it the
+parameter is simply ignored and the route behaves normally.
 
 `/api/adp` computes ADP from `draft_picks` — Sleeper has no ADP endpoint, so it
 describes the leagues in *this* database, not the market. The filters exist
@@ -200,16 +231,20 @@ Sleeper's nested payloads (settings, scoring, metadata, id arrays) are stored as
 | --- | --- |
 | `npm run dev` | Dev server. |
 | `npm run build` / `npm start` | Production build and serve. |
-| `npm test` | Unit tests. |
+| `npm test` | Unit tests (Node's test runner via `tsx`). |
+| `npm run typecheck` | `tsc --noEmit`. |
 | `npm run lint` | ESLint. |
 | `npm run migrate:up` / `:down` / `:redo` / `:create` | Migration CLI. |
 
 ## Tests
 
-`npm test` runs Node's built-in test runner over `src/**/*.test.ts` — no test
-framework dependency, and no build step, since Node 22 strips the TypeScript
-itself. Test files import with an explicit `.ts` extension so Node can resolve
-them directly.
+`npm test` runs Node's built-in test runner over `src/**/*.test.ts` through
+[`tsx`](https://tsx.is) — no test framework dependency and no build step. `tsx`
+rather than bare `node --test`: Node 22's TypeScript stripping is behind
+`--experimental-strip-types` and is not on by default across the 22.x range the
+`engines` field allows, so `node --test "src/**/*.test.ts"` fails with
+`ERR_UNKNOWN_FILE_EXTENSION` on, for instance, 22.16. Test files still import
+with an explicit `.ts` extension.
 
 Coverage is aimed at the logic that is pure, load-bearing, and most likely to
 break silently:
@@ -241,8 +276,17 @@ those paths are kept thin so the logic worth testing sits outside them.
 ## Deployment
 
 Runs on Heroku via the `Procfile` (`web: npm start`) with Node 22 pinned in
-`package.json` `engines`. Managed Postgres providers require TLS and present a
-self-signed chain, which `DATABASE_SSL`'s auto-detection already handles.
+`package.json` `engines`.
+
+Two settings need a decision before a production deploy:
+
+- **TLS.** The default for a remote host is `verify-full`, which verifies the
+  server's certificate. Managed providers present a chain Node's trust store
+  doesn't hold, so supply theirs as `DATABASE_CA_CERT`. If you need the previous
+  behaviour — encrypted but *unverified* — set
+  `DATABASE_SSL_MODE=insecure-require` and know that it accepts any certificate.
+- **`INTERNAL_SYNC_SECRET`.** Without it the two sync endpoints answer `503` in
+  production. That is deliberate: they are unauthenticated otherwise.
 `node-pg-migrate` and `pg` are kept as native Node modules via
 `serverExternalPackages` in `next.config.ts` — the migration runner loads
 migration files through a runtime `import()` the bundler can't statically

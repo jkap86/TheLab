@@ -7,15 +7,13 @@ import {
   withAdvisoryLock,
   withTransaction,
 } from "@/shared/db";
-import {
-  DEFAULT_SEASON,
-  fetchWeekProjections,
-  getNflState,
-} from "@/shared/sleeper";
+import { getActiveSeason } from "@/shared/season";
+import { fetchWeekProjections, getNflState } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
 import { toProjectionRows } from "./parse";
 import type { ProjectionRow } from "./parse";
+import { validateWeekProjections } from "./validate";
 import { horizonWeeks, targetWeeks } from "./weeks";
 
 /**
@@ -92,6 +90,14 @@ export type ProjectionsSyncSummary = {
   empty: number[];
   /** Weeks whose fetch or write failed. Logged, retried on a later tick. */
   failed: number[];
+  /**
+   * Weeks whose payload was refused as incomplete — nothing written, no
+   * freshness stamp, so the stored week is untouched and the next tick tries
+   * again. Separate from `failed` because the fetch *succeeded*: what was
+   * rejected is the data, and the reason travels with the week. See
+   * `./validate`.
+   */
+  rejected: { week: number; reason: string }[];
 };
 
 /**
@@ -125,6 +131,19 @@ async function staleWeeks(
     [weeks, season, msInterval(ttlMs)],
   );
   return rows.map((r) => r.week);
+}
+
+/**
+ * How many rows are stored for a `(season, week)` — the population a fresh
+ * payload's completeness is judged against. Zero is a first sync of that week.
+ */
+async function storedWeekCount(season: string, week: number): Promise<number> {
+  const { rows } = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count
+       FROM projections WHERE season = $1 AND week = $2`,
+    [season, week],
+  );
+  return Number(rows[0].count);
 }
 
 /** Stamp a week as fetched, empty or not — the marker `staleWeeks` reads. */
@@ -233,7 +252,11 @@ export async function syncProjections(
       }
     }
 
-    const season = options.season ?? state?.season ?? DEFAULT_SEASON;
+    // The state read above is the same call the resolver makes, so it wins when
+    // it worked; the resolver is the ladder underneath it (cached value, then
+    // the operator override, then the compiled-in fallback).
+    const season =
+      options.season ?? state?.season ?? (await getActiveSeason());
 
     const near = explicitWeeks ?? targetWeeks(state);
     const far = explicitWeeks ? [] : horizonWeeks(state);
@@ -253,6 +276,7 @@ export async function syncProjections(
     const synced: WeekSyncResult[] = [];
     const empty: number[] = [];
     const failed: number[] = [];
+    const rejected: { week: number; reason: string }[] = [];
 
     for (const week of due) {
       try {
@@ -269,9 +293,26 @@ export async function syncProjections(
           continue;
         }
 
-        const removed = await writeWeek(season, week, rows);
+        // Completeness gate, outside the transaction on purpose: a refusal must
+        // leave the stored week byte-for-byte as it was, and the cheapest way to
+        // guarantee that is never to open the transaction that deletes.
+        const previous = await storedWeekCount(season, week);
+        const validation = validateWeekProjections(rows, previous);
+        if (!validation.ok) {
+          console.error(
+            `[proj] Refused a suspicious payload for ${season} week ${week}: ` +
+              `${validation.reason} (previous=${validation.previous} ` +
+              `valid=${validation.valid} rejected=${validation.rejected} ` +
+              `parsed=${rows.length}). Stored rows left untouched.`,
+          );
+          // No `markWeekSynced`: the week stays stale so the next tick retries.
+          rejected.push({ week, reason: validation.reason });
+          continue;
+        }
+
+        const removed = await writeWeek(season, week, validation.rows);
         await markWeekSynced(season, week);
-        synced.push({ week, rows: rows.length, removed });
+        synced.push({ week, rows: validation.rows.length, removed });
       } catch (error) {
         failed.push(week);
         console.warn(
@@ -281,18 +322,21 @@ export async function syncProjections(
       }
     }
 
-    return { locked: false, season, synced, fresh, deferred, empty, failed };
+    return {
+      locked: false, season, synced, fresh, deferred, empty, failed, rejected,
+    };
   });
 
   return (
     summary ?? {
       locked: true,
-      season: options.season ?? DEFAULT_SEASON,
+      season: options.season ?? (await getActiveSeason()),
       synced: [],
       fresh: [],
       deferred: [],
       empty: [],
       failed: [],
+      rejected: [],
     }
   );
 }

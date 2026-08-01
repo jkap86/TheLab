@@ -8,7 +8,8 @@ import type {
 import { getLeaguesByIds } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 import { isSeason } from "@/shared/query";
-import { DEFAULT_SEASON, sleeperAvatarUrl } from "@/shared/sleeper";
+import { getActiveSeason } from "@/shared/season";
+import { sleeperAvatarUrl } from "@/shared/sleeper";
 import { getAllTrades, getTradeManagers } from "@/shared/trades";
 
 export const runtime = "nodejs";
@@ -34,7 +35,8 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: Request) {
   const requested = new URL(request.url).searchParams.get("season");
-  const season = requested && isSeason(requested) ? requested : DEFAULT_SEASON;
+  const season =
+    requested && isSeason(requested) ? requested : await getActiveSeason();
 
   try {
     const { trades, total } = await getAllTrades(season);

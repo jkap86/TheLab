@@ -1,4 +1,5 @@
 import { runner } from "node-pg-migrate";
+import { resolveDatabaseUrl } from "./config";
 import { dbSsl } from "./ssl";
 
 /**
@@ -13,13 +14,20 @@ import { dbSsl } from "./ssl";
  * node-pg-migrate takes a Postgres advisory lock and wraps all pending
  * migrations in a single transaction by default, so concurrent server boots
  * can't apply the same migration twice and a failure rolls the batch back.
+ *
+ * A missing `DATABASE_URL` is **fatal in production** and only a warning in
+ * development — see `./config`. Throwing here is what keeps
+ * `src/instrumentation.ts` from starting the crawler, the KTC scheduler and the
+ * projections sync against a database that was never configured.
  */
 export async function runMigrations(): Promise<void> {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.warn("[db] DATABASE_URL is not set; skipping migrations on boot.");
+  const resolved = resolveDatabaseUrl(process.env, isProduction());
+  if (!resolved.ok) {
+    if (resolved.fatal) throw new Error(`[db] ${resolved.message}`);
+    console.warn(`[db] ${resolved.message}`);
     return;
   }
+  const databaseUrl = resolved.url;
 
   const applied = await runner({
     // Pass a ClientConfig (not a bare string) so the on-boot migration connects
@@ -37,4 +45,14 @@ export async function runMigrations(): Promise<void> {
   } else {
     console.log("[db] Migrations up to date.");
   }
+}
+
+/**
+ * Whether this process is a production server.
+ *
+ * Read here rather than in `./config` so the rules stay pure and the ambient
+ * value is looked up in exactly one place.
+ */
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
 }
