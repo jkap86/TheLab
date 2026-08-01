@@ -889,22 +889,71 @@ stops holding, a comment saying it does would not have caught it.
   to be in hand), so what changed is how it arrives and how it is drawn. Four
   parts, and each fixes a different one of the reasons the cap existed:
   - **`/api/trades` is an NDJSON stream**, the leagues route's protocol and the
-    same `takeLines` decoding it — `meta` with the season's `total` first, then a
-    chunk per `TRADES_CHUNK_SIZE` trades. The page draws the newest trades
+    same `takeLines` decoding it — `meta` naming the season, then a `chunk` per
+    `TRADES_CHUNK_SIZE` trades. The page draws the newest trades
     while the rest is still arriving instead of holding a spinner until the last
     byte, and it says so while it is true (a count-up line that retires itself,
     where the old truncation note was permanent).
-  - **A chunk's four id maps are deltas, not snapshots.** Each carries only the
-    leagues, players, managers and KTC prices no earlier chunk did, so a player
-    traded in ten leagues crosses once for the whole stream. `features/trades/stream.ts` is that
-    merge, pure and tested; the hook is left with decoding and React state.
-    Merging is the load-bearing half — replacing would leave every card from an
-    earlier chunk unable to name its players, and worse the further you scroll.
-  - **The read is one query through a cursor**, not a chunk per round trip. The
-    ordering is newest-first over the whole season so the sort is unavoidable, but
-    it is paid once — and a keyset walk would need a tiebreaker the old `ORDER BY`
-    never had, since it ordered on the timestamp alone. `count(*) OVER ()` rides
-    on it, so `total` costs no second query and can't disagree with the rows.
+  - **Three things travel separately, because the first card should wait for the
+    fewest of them.** The `trades` go out the moment a cursor read returns; the
+    `names` that resolve their ids — leagues, players, managers, KTC — follow as
+    their own message once four parallel lookups answer; the `total` is its own
+    query and its own message whenever it lands. They were one message, so the
+    first card waited for the slowest of the three. What makes the split free is
+    that `TradeCard` already drew unresolved ids (a league falls back to its id,
+    a player to his, a side to its roster number) — so the placeholder path this
+    needs was the one already written for a league the sync hadn't reached.
+    The knock-on is on the page: an *unnarrowed* league filter must not filter
+    at all, or the newest trades vanish until their leagues are named.
+  - **A `names` message's four id maps are deltas, not snapshots.** Each carries
+    only the leagues, players, managers and KTC prices no earlier one did, so a
+    player traded in ten leagues crosses once for the whole stream.
+    `features/trades/stream.ts` is that merge, pure and tested; the fetcher is
+    left with decoding and cadence. Merging is the load-bearing half — replacing
+    would leave every card from an earlier chunk unable to name its players, and
+    worse the further you scroll.
+  - **The read is one query through a cursor, and keyset pagination was measured
+    against it and lost.** The ordering is newest-first over the whole season so
+    the sort is unavoidable, but it is paid once. Resuming on
+    `(coalesce(status_updated, created), transaction_id)` instead wins the first
+    page hands down (8ms against 117ms — a `LIMIT` lets the planner take a
+    fast-start ordered index walk) and loses the season badly (529ms against
+    232ms), because the resume predicate stops being selective as it goes and
+    the plan flips to a bitmap scan and a top-N heapsort that re-reads
+    everything still ahead of it. Its other selling point — no long-held
+    server-side state — is answered rather than traded away, since the walk is
+    now aborted the moment the client disconnects. `count(*) OVER ()` is gone
+    from it: the direct saving is ~4%, but a count that rides on the rows is a
+    count the first row cannot arrive without, which is what pinned the trades
+    behind it. It is `countAllTrades` now, over `TRADES_POPULATION_SQL` — the
+    predicate written once so the two queries cannot disagree about what the
+    season holds, which is the guarantee the window aggregate used to give.
+  - **`transactions_trade_recency_idx` is what the walk reads**, partial on
+    `type = 'trade' AND status = 'complete'` and ordered on the same
+    `coalesce(status_updated, created) DESC NULLS LAST` the route sorts by.
+    Trades are a few percent of a `transactions` table that is otherwise waivers
+    and free-agent claims, and both pre-existing indexes are `league_id`-leading
+    — right for the sync, useless to a read that wants the whole database by
+    time. The gain is real and modest (walk 319ms → 286ms, first chunk 190ms →
+    175ms), because what the index removes is the *filtering* and not the heap
+    access: the sync writes a league's week at a time, so a season's trades are
+    scattered across the same pages as its waivers. Worth having anyway — it
+    grows with every season the crawler adds, since trades stay a fixed small
+    share of roster moves.
+  - **An abandoned request stops the work rather than finishing it into a closed
+    socket**, which is the difference between a reader who bounces off this page
+    costing 4,000 trades and costing 50,000. `request.signal` reaches the
+    generator, which checks it at both ends of every cursor read; the route
+    checks it at every loop boundary and again after the four lookups (the
+    longest a chunk waits, so the likeliest moment to be left); and the
+    `finally` `return()`s the iterator whichever way the loop ended, which runs
+    the generator's own `finally` and hands the connection back. Measured
+    against a live server: while draining, 12 of 12 samples of `pg_stat_activity`
+    show a trades query running; after an abort, 0 of 36. Before this the loop
+    ran to the end of the season with every byte thrown away, because a
+    `ReadableStream`'s `start` is already running and nothing cancels it — the
+    old code noticed the disconnect only as an `enqueue` that threw, which
+    silenced the output and not the work.
   - **The list is windowed** (`TradesList`, `@tanstack/react-virtual`). 48k cards
     is a few million nodes; virtualising makes the count irrelevant to everything
     but the scrollbar. It virtualises the **window**, not a box of its own, so the
@@ -913,6 +962,40 @@ stops holding, a comment saying it does would not have caught it.
     heights are measured, not computed, and the gap between cards is padding
     *inside* each measured item, since a gap the virtualizer doesn't know about
     drifts down the list.
+  - **The client's own two costs are the cadence and the filter passes, and both
+    scale with the stream rather than with the season.** Publishing once per
+    network read meant dozens of React renders a second, each re-running two
+    filter passes over everything held and re-measuring the windowed list, so
+    `fetchTrades` coalesces onto `TRADES_PUBLISH_INTERVAL_MS` (300ms) — with
+    three exceptions that are immediate because a delay in them would be felt
+    rather than smoothed: the first state carrying trades (the spinner coming
+    off), completion, and an error. And the filtering is incremental
+    (`features/trades/incremental.ts`, pure and tested): the trades only ever
+    *append*, so a verdict already reached is still correct and a chunk costs
+    its own length — one pass over a 50k season instead of the ~1.27M predicate
+    evaluations fifty re-filters of a growing list add up to. What makes that
+    safe is `generation`: the caller hands over a string naming everything the
+    predicates close over, and a change to it throws the accumulated answer away
+    rather than appending to one computed under different rules. Two details
+    worth keeping — a chunk that contributes nothing hands the *previous* arrays
+    back rather than fresh equal ones, since the page memoises on their identity
+    and the virtualizer's measurement cache rides on it; and the accumulator is
+    `useState` adjusted during render (`useFilteredTrades`), never a ref, because
+    a ref written during render survives a concurrent render that was thrown
+    away, while React re-runs a self-adjusting component before committing
+    anything under it.
+  - **The stream is a React Query entry, so leaving `/trades` and coming back is
+    a cache hit.** It was `useState` inside the hook, which meant the most
+    expensive read in the app ran again on every visit and twice if two
+    components mounted the hook. `fetchTrades` publishes each state it reaches
+    into the entry and *then* resolves with the last of them — `fetchManagerLeagues`'s
+    rule, for the same reason: a query that resolved once would sit on a loading
+    screen through a response the page could already be drawing. The key is
+    `["trades", season]` and deliberately outside the manager prefix (this route
+    asks about no account, so a manager-wide invalidation has no business
+    throwing it away), and `TRADES_STALE_TIME` is the app's longest at 15
+    minutes — everywhere else a stale client read costs a request the server
+    answers from cache, and here it costs the whole season.
   The route also **gzips its own body** (`CompressionStream`): a season is ~13MB
   of the most repetitive JSON in the app and ~0.6MB encoded, Next doesn't compress
   a streamed response, and the `no-transform` that keeps a proxy from buffering

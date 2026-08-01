@@ -8,7 +8,9 @@ import { getPlayersByIds } from "@/shared/players";
 import { isSeason } from "@/shared/query";
 import { getActiveSeason } from "@/shared/season";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
-import { getTradeManagers, streamAllTrades } from "@/shared/trades";
+import { countAllTrades, getTradeManagers, streamAllTrades } from "@/shared/trades";
+
+import { startTradesTiming } from "./timing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,12 +41,37 @@ export const dynamic = "force-dynamic";
  * still counting rows, and nothing is capped. It follows the leagues stream's
  * protocol for that reason — one JSON object per line, discriminated by `type` —
  * so the client decodes it with the same `takeLines`.
+ *
+ * **Three things travel independently, and that is the shape of this handler.**
+ * The trades, the count, and the names the trades' ids stand for used to be one
+ * message, which meant the first card on screen waited for the slowest of the
+ * three. They are separated now, each on its own message:
+ *
+ * - the **trades** go out the moment a cursor read returns, before anything is
+ *   resolved about them;
+ * - the **names** — leagues, players, managers, KTC prices — follow as four
+ *   parallel lookups, and the card draws unresolved ids in the meantime, which
+ *   it already knew how to do (a league falls back to its id, a player to his, a
+ *   side to its roster number);
+ * - the **total** is a separate query started alongside the walk and sent
+ *   whenever it lands.
+ *
+ * **An abandoned request stops the work rather than finishing it into a closed
+ * socket.** The reader who opens this page and navigates away two seconds later
+ * is the common case, not the edge one — a season is tens of thousands of trades
+ * and several seconds of walking. `request.signal` is watched throughout: the
+ * generator is aborted through the same signal, the loop is checked at every
+ * boundary, and `return()`ing the iterator runs its `finally`, which closes the
+ * cursor and hands the connection back. Before this, navigating away left this
+ * handler reading the rest of the season and pricing players for it, holding a
+ * pooled connection the whole time, with every byte it produced thrown away.
  */
 export async function GET(request: Request) {
   const requested = new URL(request.url).searchParams.get("season");
   const season =
     requested && isSeason(requested) ? requested : await getActiveSeason();
 
+  const timing = startTradesTiming(season);
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -52,11 +79,33 @@ export async function GET(request: Request) {
       const send = (message: TradesStreamMessage) => {
         if (closed) return;
         try {
-          controller.enqueue(encoder.encode(JSON.stringify(message) + "\n"));
+          const bytes = encoder.encode(JSON.stringify(message) + "\n");
+          controller.enqueue(bytes);
+          timing.count("bytes", bytes.byteLength);
         } catch {
           closed = true; // client disconnected
         }
       };
+
+      // The walk is driven by hand rather than by `for await`, because the two
+      // ways out of it need different treatment: draining runs the generator's
+      // own `finally`, and abandoning it needs `return()` called explicitly.
+      const trades = streamAllTrades(season, { signal: request.signal });
+
+      // Fired once, and the handler is removed in the `finally` below — a
+      // listener left on a long-lived signal is the leak this shape is for.
+      // It only sets the flag and closes the walk; nothing in here writes to
+      // the controller, since the reason it is running is that nobody is
+      // reading.
+      const onAbort = () => {
+        closed = true;
+        // Not awaited — an abort handler is not a place to hold a promise, and
+        // the generator's own `finally` releases the connection either way —
+        // but caught, since an unawaited rejection here would take the process
+        // down over a connection that was being discarded anyway.
+        void trades.return(undefined).catch(() => {});
+      };
+      request.signal.addEventListener("abort", onAbort, { once: true });
 
       // What has already crossed the wire, so each chunk carries only what is
       // new. Held per request rather than per chunk: a season names a few
@@ -67,13 +116,45 @@ export async function GET(request: Request) {
       const sentPlayers = new Set<string>();
       const sentManagers = new Set<string>();
 
+      // Started before the walk and never awaited inline: the page meters
+      // against this number and is not built out of it, so the trades must not
+      // queue behind it. A failure costs the progress line its denominator and
+      // nothing else, which is why it is caught here rather than left to reject
+      // an unhandled promise once the request is gone.
+      const counted = timing
+        .phase("count", () => countAllTrades(season))
+        .then((total) => {
+          timing.mark("total-known");
+          timing.count("trades-total", total);
+          send({ type: "total", total });
+        })
+        .catch((error) => {
+          console.error("[trades] count failed:", error);
+        });
+
+      let outcome: "complete" | "aborted" | "failed" = "complete";
+
       try {
-        for await (const { trades, total } of streamAllTrades(season)) {
-          // The total rides on the first chunk, and the meta message goes out
-          // before that chunk's trades so the page has a target to meter
-          // against from its very first render.
-          if (total !== undefined) send({ type: "meta", season, total });
-          if (trades.length === 0) continue;
+        // Sent before anything is read, so the page has a container to fill and
+        // can draw its own loading state against a season it knows.
+        send({ type: "meta", season });
+
+        for (;;) {
+          if (request.signal.aborted) break;
+
+          const next = await timing.phase("db-read", () => trades.next());
+          timing.mark("first-row");
+          if (next.done || request.signal.aborted) break;
+
+          const chunk = next.value.trades;
+          if (chunk.length === 0) continue;
+
+          // The trades, before anything is known about the ids in them. This is
+          // the message the page's first paint waits on and the whole reason
+          // the names are a message of their own.
+          timing.phase("serialize", async () => send({ type: "chunk", trades: chunk }));
+          timing.mark("first-chunk");
+          timing.count("trades", chunk.length);
 
           const leagueIds: string[] = [];
           const playerIds: string[] = [];
@@ -84,7 +165,7 @@ export async function GET(request: Request) {
             out.push(id);
           };
 
-          for (const trade of trades) {
+          for (const trade of chunk) {
             take(trade.league_id, sentLeagues, leagueIds);
             for (const side of trade.sides) {
               side.players.forEach((id) => take(id, sentPlayers, playerIds));
@@ -92,20 +173,49 @@ export async function GET(request: Request) {
             }
           }
 
+          timing.count("players", playerIds.length);
+          timing.count("leagues", leagueIds.length);
+          timing.count("managers", managerIds.length);
+
+          // Nothing new to name is the common case late in a season, and it is
+          // worth skipping rather than sending an empty message the client has
+          // to decode to learn it was empty.
+          if (!playerIds.length && !managerIds.length && !leagueIds.length) {
+            continue;
+          }
+
           // Independent of each other, and each a no-op on an id set this chunk
-          // added nothing to — which is most chunks, late in a season.
+          // added nothing to. Timed individually as well as together: they run
+          // concurrently, so the four phase totals are what says which of them
+          // the request was actually waiting on.
           const [players, managers, leagues, ktc] = await Promise.all([
-            playerIds.length ? getPlayersByIds(playerIds) : {},
-            managerIds.length ? getTradeManagers(managerIds) : new Map(),
-            leagueIds.length ? getLeaguesByIds(leagueIds) : [],
+            playerIds.length
+              ? timing.phase("lookup-players", () => getPlayersByIds(playerIds))
+              : {},
+            managerIds.length
+              ? timing.phase("lookup-managers", () =>
+                  getTradeManagers(managerIds),
+                )
+              : new Map(),
+            leagueIds.length
+              ? timing.phase("lookup-leagues", () => getLeaguesByIds(leagueIds))
+              : [],
             // Keyed on the same new-ids list as the names, so a player priced
             // once is priced once for the whole stream. Both boards travel,
             // because which one a trade reads is its *league's* question and one
             // stream spans every crawled league.
             playerIds.length
-              ? getKtcValuesBySleeperId(playerIds)
+              ? timing.phase("lookup-ktc", () =>
+                  getKtcValuesBySleeperId(playerIds),
+                )
               : { values: {}, updated_at: null },
           ]);
+
+          // Checked again on the far side of four round trips: they are the
+          // longest a chunk waits, so this is the likeliest place for a reader
+          // to have left, and there is no point serialising ~1MB of names into
+          // a socket nobody is holding.
+          if (request.signal.aborted) break;
 
           const resolvedManagers: Record<string, LeaguematePayload> = {};
           for (const [id, m] of managers) {
@@ -116,16 +226,21 @@ export async function GET(request: Request) {
             };
           }
 
-          send({
-            type: "chunk",
-            trades,
-            leagues,
-            players,
-            managers: resolvedManagers,
-            ktc: ktc.values,
-          });
+          timing.phase("serialize", async () =>
+            send({
+              type: "names",
+              leagues,
+              players,
+              managers: resolvedManagers,
+              ktc: ktc.values,
+            }),
+          );
+          timing.mark("first-names");
         }
+
+        if (request.signal.aborted) outcome = "aborted";
       } catch (error) {
+        outcome = "failed";
         console.error("[trades] query failed:", error);
         // Sent down the stream rather than raised as a status, because by now
         // the response is a 200 with chunks already in it: a failure partway
@@ -133,6 +248,15 @@ export async function GET(request: Request) {
         // saying so beats discarding what arrived.
         send({ type: "error", error: "Failed to load trades" });
       } finally {
+        request.signal.removeEventListener("abort", onAbort);
+        // Unconditional, and not only on the abort path: a `break` out of the
+        // loop above leaves the generator suspended mid-walk, holding the
+        // cursor and its connection until it is collected. `return()` runs its
+        // `finally` now.
+        await trades.return(undefined).catch(() => {});
+        // Awaited so the count's own connection is accounted for before the
+        // request is called done; it is already caught, so this cannot throw.
+        await counted;
         if (!closed) {
           try {
             controller.close();
@@ -140,6 +264,7 @@ export async function GET(request: Request) {
             // already closed
           }
         }
+        timing.report(outcome);
       }
     },
   });

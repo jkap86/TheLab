@@ -7,6 +7,7 @@ import {
   FlaskLoader,
   LeagueFiltersModal,
   PageHeading,
+  activeFilterCount,
   filterSummary,
   matchesFilters,
   todayIso,
@@ -21,6 +22,7 @@ import {
   tradeRangeBounds,
 } from "../filters";
 import type { TradeFilters } from "../filters";
+import { useFilteredTrades } from "../hooks/use-filtered-trades";
 import { useTrades } from "../hooks/use-trades";
 import { DEFAULT_TRADE_COLUMNS, TRADE_METRICS } from "../trade-metrics";
 import { TradeFiltersModal } from "./trade-filters-modal";
@@ -93,25 +95,71 @@ export function TradesHome({ season }: { season: string }) {
   );
 
   const trades = useMemo(() => data?.trades ?? [], [data]);
-  const inLeagues = useMemo(() => {
-    const allowed = new Set(
+
+  // **No league filter means no league filtering at all**, which is not the
+  // micro-optimisation it looks like. The leagues arrive on their own messages
+  // now, a beat behind the trades they name, so a trade whose league hasn't been
+  // named yet is not in `allowed` — and filtering against that set would drop
+  // the newest trades on the page for as long as it took their names to land,
+  // which is exactly the first paint this work is about. Unnarrowed, there is
+  // nothing to ask, so nothing is dropped. Narrowed, an unnamed league honestly
+  // fails the filter, the same reading `matchesFilters` takes of a league whose
+  // `roster_positions` were never synced.
+  const leagueFiltersActive = activeFilterCount(leagueFilters) > 0;
+  const allowedLeagues = useMemo(() => {
+    if (!leagueFiltersActive) return null;
+    return new Set(
       leagues
         .filter((league) => matchesFilters(league, leagueFilters))
         .map((league) => league.league_id),
     );
-    return trades.filter((trade) => allowed.has(trade.league_id));
-  }, [trades, leagues, leagueFilters]);
+  }, [leagues, leagueFilters, leagueFiltersActive]);
 
-  const visible = useMemo(
-    () => inLeagues.filter((trade) => tradeMatches(trade, tradeFilters, bounds)),
-    [inLeagues, tradeFilters, bounds],
+  // Both filter passes, run over each chunk as it arrives rather than over the
+  // whole accumulated season on every render — see `../incremental` for what
+  // that saves and what makes it safe. The generation is this component's half
+  // of that contract: it has to name everything the two predicates below close
+  // over, or a filter change would be appended to an answer computed under the
+  // old rules.
+  const { inLeagues, visible } = useFilteredTrades(
+    trades,
+    [
+      data?.season ?? "",
+      // The set's *size*, not the filters that built it: a league arriving late
+      // can change which trades its own filter admits, and only while narrowed.
+      // Size is enough because the set only ever grows — leagues are appended,
+      // never revised — so a change to which leagues are allowed is either a
+      // filter change (named on the next line) or one more league in the set.
+      //
+      // A league arriving therefore costs a full re-pass, which is the honest
+      // price of the rule: a trade this filter rejected because its league was
+      // unknown has to be reconsidered. It stays bounded because leagues are
+      // named almost entirely in the stream's first chunks and the set stops
+      // growing long before the trades do — and it is only paid at all while a
+      // league filter is on, which is not the state the page opens in.
+      allowedLeagues ? `n${allowedLeagues.size}` : "all",
+      JSON.stringify(leagueFilters),
+      JSON.stringify(tradeFilters),
+      bounds.from ?? "",
+      bounds.to ?? "",
+    ].join("|"),
+    (trade) => !allowedLeagues || allowedLeagues.has(trade.league_id),
+    (trade) => tradeMatches(trade, tradeFilters, bounds),
   );
 
   // Nothing is capped any more, but a stream in flight is still a partial
   // season, and for the same render it looks identical: the filters count over
   // what has arrived. So it is said while it is true and stops being said when
   // the last chunk lands, where the old truncation note was permanent.
-  const pending = streaming && data ? data.total - data.trades.length : 0;
+  //
+  // `-1` is "still arriving, and how much of it is not known yet" — a real
+  // state now that the count is its own query rather than something the first
+  // row carried, and one the line below is written to say.
+  const pending = !streaming || !data
+    ? 0
+    : data.total == null
+      ? -1
+      : data.total - data.trades.length;
 
   return (
     <>
@@ -186,15 +234,22 @@ export function TradesHome({ season }: { season: string }) {
         </Note>
       ) : (
         <>
-          {pending > 0 && (
+          {pending !== 0 && (
             // A progress line rather than a bar: the cards below are already
             // readable and already the newest ones, so this is a footnote about
             // the tail of the season, not a thing to watch.
+            //
+            // The denominator is dropped rather than waited for. It is a
+            // separate query and lands a beat after the first trades, so
+            // withholding the whole line until then would make it appear a
+            // moment *after* the cards it is explaining — and "12,000 so far"
+            // is already the sentence's point.
             <p className="mb-3 text-xs text-foreground/45">
               Loading this season&rsquo;s trades —{" "}
-              {data!.trades.length.toLocaleString()} of{" "}
-              {data!.total.toLocaleString()} so far, newest first. The filters
-              count over these until the rest arrives.
+              {data!.trades.length.toLocaleString()}
+              {data!.total != null ? ` of ${data!.total.toLocaleString()}` : ""}{" "}
+              so far, newest first. The filters count over these until the rest
+              arrives.
             </p>
           )}
           <TradesList

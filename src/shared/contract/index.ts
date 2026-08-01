@@ -236,29 +236,62 @@ export type ManagerLeaguematesPayload = {
 export type TradesMetaMessage = {
   type: "meta";
   season: string;
-  /**
-   * How many completed trades the season holds — the length the stream will add
-   * up to, sent before any of them so the page can say what it is loading and
-   * meter the progress rather than counting up from nowhere.
-   *
-   * It is the board's whole population, not a cap on it: trades made before a
-   * league's startup draft finished are outside this count on the same terms
-   * they are outside the stream.
-   */
-  total: number;
 };
 
 /**
- * A slice of the season, plus whatever it is the first chunk to name.
+ * How many completed trades the season holds — the length the stream will add
+ * up to, so the page can meter its progress rather than counting up from
+ * nowhere.
  *
- * The four maps are **deltas, not snapshots** — merge them, never replace. Most
- * chunks late in a stream carry a handful of entries or none at all, because a
- * season's leagues and the players in it are named early and then repeat.
+ * **Its own message because it is its own query.** It used to ride on `meta` off
+ * a `count(*) OVER ()` on the streaming query, and the direct saving from
+ * dropping that is small — the `ORDER BY` materialises the whole result either
+ * way, so the window was only a counting pass over rows Postgres was already
+ * holding, worth ~4% of the walk at ~50k trades. What it actually buys is the
+ * decoupling: a number carried by the *rows* is a number the first row cannot
+ * arrive without, which pinned the whole protocol to sending nothing until the
+ * count existed. Off the rows, it is one 56ms query running beside the walk, and
+ * the trades stop waiting on it at all.
+ *
+ * It is counted over exactly the population the rows come from, which is what
+ * keeps two queries from disagreeing: both build on the same `season` predicate
+ * and the same startup-draft boundary, spelled once in `shared/trades/queries`.
+ * So it remains the board's whole population and not a cap on it — trades made
+ * before a league's startup draft finished are outside this count on the same
+ * terms they are outside the stream.
+ *
+ * A consumer that never sees one still works: it is a denominator for a progress
+ * line, not a thing the list is built out of.
+ */
+export type TradesTotalMessage = { type: "total"; total: number };
+
+/**
+ * A slice of the season — the trade rows alone, and nothing that resolves the
+ * ids in them.
+ *
+ * **The names travel separately ({@link TradesNamesMessage}) so this doesn't
+ * wait for them.** A chunk's trades are in hand the moment the cursor read
+ * returns; the four lookups that turn their ids into names are four more round
+ * trips, and sending them together meant the first card on screen waited for all
+ * of it. The card already draws an unresolved id — a league falls back to its
+ * id, a player to his, a side to its roster number — so the trades can be drawn
+ * and then named.
  */
 export type TradesChunkMessage = {
   type: "chunk";
   /** Newest first, continuing where the previous chunk stopped. */
   trades: Trade[];
+};
+
+/**
+ * What the ids in the chunk before this one mean.
+ *
+ * The four maps are **deltas, not snapshots** — merge them, never replace. Most
+ * chunks late in a stream carry a handful of entries or none at all, because a
+ * season's leagues and the players in it are named early and then repeat.
+ */
+export type TradesNamesMessage = {
+  type: "names";
   /** Leagues named by these trades that no earlier chunk sent. */
   leagues: ManagerLeague[];
   /** Player ids → name/position/team, for players no earlier chunk sent. */
@@ -299,7 +332,9 @@ export type TradesErrorMessage = { type: "error"; error: string };
 /** One newline-delimited JSON message on the `GET /api/trades` stream. */
 export type TradesStreamMessage =
   | TradesMetaMessage
+  | TradesTotalMessage
   | TradesChunkMessage
+  | TradesNamesMessage
   | TradesErrorMessage;
 
 /**
