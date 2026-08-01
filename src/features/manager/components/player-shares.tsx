@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_PLAYER_COLUMNS, PLAYER_SHARE_METRICS } from "../share-metrics";
+import { PLAYER_SHARE_METRICS } from "../share-metrics";
 import type { PlayerShare } from "../shares";
 import type { AdpPlayerPayload } from "../types";
 import { ShareList } from "./share-list";
@@ -23,12 +23,22 @@ export function PlayerShares({
   shares,
   leagueCount,
   adp,
+  columns,
+  onColumnChange,
+  onReset,
 }: {
   shares: PlayerShare[];
   /** Leagues the shares are out of — see `PlayerShares.league_count`. */
   leagueCount: number;
   /** ADP by player id, from the board the filters selected. */
   adp: Map<string, AdpPlayerPayload>;
+  /**
+   * The stat-column selection, owned by the tab above — the heading rail that
+   * edits it is pinned in the manager header, on the other side of this list.
+   */
+  columns: string[];
+  onColumnChange: (slot: number, key: string) => void;
+  onReset: () => void;
 }) {
   return (
     <ShareList
@@ -38,7 +48,9 @@ export function PlayerShares({
       icon={(share) => <PositionBadge position={share.position} />}
       note={(share) => share.team}
       metrics={PLAYER_SHARE_METRICS}
-      defaultColumns={DEFAULT_PLAYER_COLUMNS}
+      columns={columns}
+      onColumnChange={onColumnChange}
+      onReset={onReset}
       adpFor={(share) => adp.get(share.player_id) ?? null}
     />
   );

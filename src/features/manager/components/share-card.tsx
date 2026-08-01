@@ -37,6 +37,7 @@ export function ShareCard({
   ctx,
   columns,
   onColumnChange,
+  onReset,
 }: {
   name: string;
   /** Leads the name: a position pill, an avatar — whatever identifies the row. */
@@ -50,6 +51,8 @@ export function ShareCard({
   ctx: ShareMetricContext;
   columns: string[];
   onColumnChange: (slot: number, key: string) => void;
+  /** Hand the list its opening columns back, from the foot of a card's menu. */
+  onReset?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   // Whether one of the stat columns has its picker open — see the same note on
@@ -87,12 +90,17 @@ export function ShareCard({
           )}
         </button>
 
+        {/* `labels={false}` for the reason a league card passes it: the pinned
+            heading rail names these columns from `sm` up, and repeating them on
+            every row is what made a list-wide selection read as a per-row one. */}
         <MetricColumns
           metrics={metrics}
           ctx={ctx}
           columns={columns}
           onColumnChange={onColumnChange}
           onOpenChange={setMenuOpen}
+          onReset={onReset}
+          labels={false}
         />
       </div>
 

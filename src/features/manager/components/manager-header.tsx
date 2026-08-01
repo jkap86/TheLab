@@ -67,6 +67,7 @@ export function ManagerHeader({
   stat,
   filters,
   board,
+  columns,
 }: {
   user: LeaguesResult["user"];
   season: string;
@@ -109,6 +110,19 @@ export function ManagerHeader({
    * selection where there are two.
    */
   board?: ReactNode;
+  /**
+   * The list's stat-column headings, laid on the cards' geometry.
+   *
+   * It rides in the header rather than at the top of the list for one reason:
+   * this card is pinned, so anything inside it is pinned too, and a heading rail
+   * that scrolls away halfway down a hundred-row list leaves the numbers under it
+   * unlabelled. Sitting here it needs no offset of its own — measuring this
+   * card's height to pin a sibling beneath it is the machinery not writing it
+   * here avoids. It is outside the dock and outside the plate because it belongs
+   * to neither: it is the list's own header, and it is laid out to line up with
+   * the rows rather than with anything on this card.
+   */
+  columns?: ReactNode;
 }) {
   return (
     // Pinned directly under the app bar, so who you are looking at and how their
@@ -198,6 +212,8 @@ export function ManagerHeader({
           {board}
         </div>
       )}
+
+      {columns}
     </header>
   );
 }

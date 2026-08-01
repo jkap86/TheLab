@@ -65,16 +65,13 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   // mounts on expand and unmounts on collapse, which used to reset both tables
   // every time a different league was opened. One key per grain, not per league —
   // what a column means is a fact about the catalogue, not about this league.
-  const [teamColumns, setTeamColumn] = usePersistedColumns(
+  const { columns: teamColumns, setColumn: setTeamColumn } = usePersistedColumns(
     "standings",
     DEFAULT_TEAM_COLUMNS,
     TEAM_METRICS,
   );
-  const [rosterColumns, setRosterColumn] = usePersistedColumns(
-    "roster",
-    DEFAULT_PLAYER_COLUMNS,
-    PLAYER_METRICS,
-  );
+  const { columns: rosterColumns, setColumn: setRosterColumn } =
+    usePersistedColumns("roster", DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS);
   const [openPicker, setOpenPicker] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
