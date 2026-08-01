@@ -14,31 +14,27 @@
  * line and the rest — position, team, points — sits under it. The numbers keep
  * their own columns on that second line, which is what still makes them comparable
  * down the list.
+ *
+ * Which metric those two number columns show is a separate choice, held above the
+ * panel and rendered by the section's heading pickers; this only fixes their
+ * *count* and width. `SPLIT_LAYOUT`'s grid therefore carries exactly two number
+ * tracks, matching the two selectable value columns, and `NO_NUMBERS` carries none
+ * for a league with nothing to price.
  */
 export type SectionLayout = {
-  /** Column template: slot gutter, name/meta, then one column per number. */
+  /** Column template: slot gutter, name/meta, then one track per value column. */
   grid: string;
   /** How far the name reaches on its own line — the meta column plus the numbers. */
   nameSpan: string;
-  /** Headings for the number columns, left to right. */
-  columns: string[];
 };
 
 // Written out rather than assembled, so Tailwind sees every class string whole.
 export const NO_NUMBERS: SectionLayout = {
   grid: "grid-cols-[1.75rem_minmax(0,1fr)] @lg:grid-cols-[2.5rem_minmax(0,1fr)]",
   nameSpan: "col-span-1",
-  columns: [],
 };
 
 export const SPLIT_LAYOUT: SectionLayout = {
   grid: "grid-cols-[1.75rem_minmax(0,1fr)_3rem_3rem] @lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem_3.25rem]",
   nameSpan: "col-span-3",
-  columns: ["start", "bench"],
-};
-
-export const TOTAL_LAYOUT: SectionLayout = {
-  grid: "grid-cols-[1.75rem_minmax(0,1fr)_3rem] @lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem]",
-  nameSpan: "col-span-2",
-  columns: ["proj"],
 };

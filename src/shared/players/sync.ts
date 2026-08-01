@@ -3,6 +3,8 @@ import {
   countRows,
   isFresh,
   jsonb as j,
+  LOCK_KEYS,
+  withAdvisoryLock,
   withTransaction,
 } from "@/shared/db";
 import { getAllPlayers } from "@/shared/sleeper";
@@ -16,9 +18,24 @@ export type PlayersSyncSummary = { skipped: boolean; count: number };
  * Refresh the cached Sleeper players map. Skips the (large) download when the
  * cache is still fresh unless `force` is set. Upserts in chunks inside one
  * transaction.
+ *
+ * The advisory lock wraps the freshness check, not just the fetch — otherwise
+ * every instance decides for itself that a refresh is due and they queue up to
+ * download Sleeper's ~5MB map in turn, the one endpoint Sleeper asks be hit at
+ * most once a day. A caller that loses the race treats the winner's run as its
+ * own: the cache is being refreshed either way.
  */
 export async function syncPlayers(
   options: { force?: boolean } = {},
+): Promise<PlayersSyncSummary> {
+  const summary = await withAdvisoryLock(LOCK_KEYS.players, () =>
+    syncPlayersLocked(options),
+  );
+  return summary ?? { skipped: true, count: await countRows("players") };
+}
+
+async function syncPlayersLocked(
+  options: { force?: boolean },
 ): Promise<PlayersSyncSummary> {
   if (!options.force && (await isFresh("players", PLAYERS_TTL_MS))) {
     return { skipped: true, count: await countRows("players") };

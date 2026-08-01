@@ -5,6 +5,11 @@ export { jsonb } from "./json";
 export { msInterval } from "./interval";
 export { bulkInsert } from "./bulk";
 export { withTransaction } from "./transaction";
-export { withAdvisoryLock, LOCK_KEYS } from "./lock";
+export {
+  withAdvisoryLock,
+  withBlockingAdvisoryLock,
+  LOCK_KEYS,
+  managerSyncLockKey,
+} from "./lock";
 export type { AdvisoryLockKey } from "./lock";
 export { isFresh, countRows } from "./freshness";

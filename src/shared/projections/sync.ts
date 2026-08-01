@@ -96,7 +96,10 @@ export type ProjectionsSyncSummary = {
 
 /**
  * Which of `weeks` are stale, judged per week on the newest `updated_at` among
- * that week's rows. A week with no rows at all is due.
+ * that week's rows — or, for a week with no rows, on when it was last fetched
+ * (`projection_week_syncs`). Without the second gate an unpublished week is due
+ * on every tick, refetched forever, and — because the horizon budget takes the
+ * earliest stale weeks first — able to starve published weeks out of the cap.
  */
 async function staleWeeks(
   season: string,
@@ -112,10 +115,26 @@ async function staleWeeks(
              WHERE p.season = $2
                AND p.week = w.week
                AND p.updated_at > now() - $3::interval)
+        AND NOT EXISTS (
+            SELECT 1
+              FROM projection_week_syncs s
+             WHERE s.season = $2
+               AND s.week = w.week
+               AND s.synced_at > now() - $3::interval)
       ORDER BY w.week`,
     [weeks, season, msInterval(ttlMs)],
   );
   return rows.map((r) => r.week);
+}
+
+/** Stamp a week as fetched, empty or not — the marker `staleWeeks` reads. */
+function markWeekSynced(season: string, week: number): Promise<unknown> {
+  return pool.query(
+    `INSERT INTO projection_week_syncs (season, week, synced_at)
+     VALUES ($1, $2, now())
+     ON CONFLICT (season, week) DO UPDATE SET synced_at = now()`,
+    [season, week],
+  );
 }
 
 /**
@@ -242,12 +261,16 @@ export async function syncProjections(
 
         if (rows.length === 0) {
           // Sleeper answers 200 for a week it has nothing for, so this is a
-          // normal state (a week not published yet), not an error.
+          // normal state (a week not published yet), not an error. Still a
+          // successful fetch: stamp it so the week waits out its TTL instead
+          // of being refetched every tick.
+          await markWeekSynced(season, week);
           empty.push(week);
           continue;
         }
 
         const removed = await writeWeek(season, week, rows);
+        await markWeekSynced(season, week);
         synced.push({ week, rows: rows.length, removed });
       } catch (error) {
         failed.push(week);

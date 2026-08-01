@@ -1,7 +1,12 @@
 const SIZES = {
   sm: "h-5 w-5 text-[0.6rem] @lg:h-6 @lg:w-6 @lg:text-xs",
   md: "h-7 w-7 text-xs @lg:h-9 @lg:w-9 @lg:text-sm",
-  lg: "h-16 w-16 text-2xl",
+  // The manager header's identity plate: big enough to be the card's anchor,
+  // small enough to share a phone-width row with the win dial beside it.
+  lg: "h-11 w-11 text-lg",
+  // A page that is *about* one account — the tools lookup, a pick tracker's
+  // league — where the avatar is the subject rather than a label on a row.
+  xl: "h-16 w-16 text-2xl",
 } as const;
 
 /**

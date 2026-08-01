@@ -1,115 +1,103 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { PageShell } from "@/features/shared";
-
-import {
-  DEFAULT_LEAGUE_FILTERS,
-  matchesFilters,
-  type LeagueFilters,
-} from "../filters";
-import { useManagerLeagues } from "../hooks/use-manager-leagues";
+import { adpQueryString, todayIso } from "../adp-controls";
+import { useAdpControls } from "../filters-context";
+import { useAdp } from "../hooks/use-adp";
+import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
 import { useManagerPlayers } from "../hooks/use-manager-players";
 import { playerShares } from "../shares";
-import { ManagerHeader } from "./manager-header";
-import { LeaguesFilters } from "./manager-leagues-filters";
-import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
+import type { AdpPlayerPayload } from "../types";
+import { LeaguesViewLayout } from "./leagues-view-layout";
+import { ErrorCard } from "./manager-leagues-status";
 import { PlayerShares } from "./player-shares";
 import { PanelMessage } from "./ui";
 
 /**
- * Player shares: who this manager owns, and in how many of their leagues.
+ * Player shares: who this manager owns, in how many of their leagues, and each
+ * player's ADP.
  *
- * Rides on the same leagues stream as the leagues view — that is what syncs the
- * rosters this counts over, so asking for it here means the page is never
- * looking at a manager the sync hasn't run for. It also gives the filters
- * something to filter: the controls are the leagues view's, unchanged, and they
- * narrow the population a share is measured against rather than the players.
- * Dynasty-only exposure and redraft-only exposure are different portfolios.
+ * The same page as the leagues and leaguemates views — leagues stream, filters,
+ * and the shared chrome of {@link LeaguesViewLayout} — reading its own resource
+ * off the same stream. The rosters the leagues stream syncs are what a share is
+ * counted over, so asking for them here means the page is never looking at a
+ * manager the sync hasn't run for. The header filters narrow the population a
+ * share is measured against rather than the players: dynasty-only and
+ * redraft-only exposure are different portfolios.
+ *
+ * The ADP column reads the shared ADP drawer — opened from the scaffold's
+ * header, backed by the per-manager store — for which crawled drafts the average
+ * is taken over, and `useAdp` fetches that board off the global `/api/adp`. The
+ * drawer's own trigger and caption name the board it came from; the value-curve
+ * control in the drawer does nothing here (a per-player ADP is a raw number) and
+ * drives the Leagues tab instead.
  */
 export function ManagerPlayers({ searched }: { searched: string }) {
-  const { data, progress, refreshing, error } = useManagerLeagues(searched);
-  const rosters = useManagerPlayers(searched, data?.leagues ?? null);
-  const [filters, setFilters] = useState<LeagueFilters>(DEFAULT_LEAGUE_FILTERS);
-
-  const leagues = data?.leagues;
-  const filtered = useMemo(
-    () => (leagues ?? []).filter((league) => matchesFilters(league, filters)),
-    [leagues, filters],
-  );
+  const view = useFilteredLeagues(searched);
+  const rosters = useManagerPlayers(searched, view.data?.leagues ?? null);
 
   const shares = useMemo(
     () =>
       rosters.data
-        ? playerShares(filtered, rosters.data.rosters, rosters.data.players)
+        ? playerShares(view.filtered, rosters.data.rosters, rosters.data.players)
         : null,
-    [filtered, rosters.data],
+    [view.filtered, rosters.data],
   );
 
-  // Cold load: nothing cached yet.
-  if (!data) {
-    return (
-      <PageShell width="wide">
-        {error ? (
-          <ErrorCard message={error} />
-        ) : (
-          <LoadingState searched={searched} progress={progress} />
-        )}
-      </PageShell>
-    );
-  }
+  // The board this tab's ADP column reads. Unlike the roster resources beside
+  // it, it doesn't wait on the leagues stream: the board is a fact about the
+  // crawled drafts, so it can be asked for the moment the page mounts.
+  const { controls } = useAdpControls();
+  const adpQuery = useMemo(
+    () => adpQueryString(controls, todayIso()),
+    [controls],
+  );
+  const adp = useAdp(adpQuery);
 
-  const { user, season, summary } = data;
+  const adpByPlayer = useMemo(() => {
+    const map = new Map<string, AdpPlayerPayload>();
+    for (const player of adp.data?.players ?? []) map.set(player.player_id, player);
+    return map;
+  }, [adp.data]);
 
   return (
-    <PageShell width="wide">
-      <ManagerHeader
-        user={user}
-        searched={searched}
-        active="players"
-        season={season}
-        refreshing={refreshing}
-        progress={progress}
-        summary={summary}
-      >
-        <span className="text-lg font-medium">
-          {shares ? shares.players.length : "—"} player
-          {shares?.players.length === 1 ? "" : "s"}
-        </span>
-        {shares && (
-          <span className="text-sm text-foreground/45">
-            across {shares.league_count} league
-            {shares.league_count === 1 ? "" : "s"}
-          </span>
-        )}
-      </ManagerHeader>
-
-      {data.leagues.length === 0 ? (
-        <EmptyState season={season} />
+    <LeaguesViewLayout
+      view={view}
+      stat={{
+        label: "Players",
+        value: shares ? shares.players.length : "—",
+        sub: shares
+          ? `across ${shares.league_count} league${shares.league_count === 1 ? "" : "s"}`
+          : undefined,
+      }}
+    >
+      {/* A failed refetch must not blank rows the hook deliberately kept —
+          the error replaces the list only when there is nothing to keep. */}
+      {rosters.error && !shares ? (
+        <ErrorCard message={rosters.error} />
+      ) : !shares ? (
+        <PanelMessage>Loading rosters…</PanelMessage>
       ) : (
         <>
-          <LeaguesFilters filters={filters} onChange={setFilters} />
-          {rosters.error ? (
-            <ErrorCard message={rosters.error} />
-          ) : filtered.length === 0 ? (
-            <PanelMessage>No leagues match these filters.</PanelMessage>
-          ) : !shares ? (
-            <PanelMessage>Loading rosters…</PanelMessage>
-          ) : shares.players.length === 0 ? (
+          {rosters.error && (
+            <div className="mb-3 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-sm text-amber-300">
+              Refresh failed — showing cached data
+            </div>
+          )}
+          {shares.players.length === 0 ? (
             // Every filtered league is one whose rosters aren't cached, or one
-            // that hasn't drafted — a real answer, and not the same as an error.
-            <PanelMessage>
-              No players rostered in these leagues yet.
-            </PanelMessage>
+            // that hasn't drafted — a real answer, not the same as an error.
+            <PanelMessage>No players rostered in these leagues yet.</PanelMessage>
           ) : (
             <PlayerShares
               shares={shares.players}
               leagueCount={shares.league_count}
+              adp={adpByPlayer}
             />
           )}
         </>
       )}
-    </PageShell>
+    </LeaguesViewLayout>
   );
 }

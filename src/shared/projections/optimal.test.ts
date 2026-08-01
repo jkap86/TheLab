@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   compareLineup,
   optimalLineup,
+  recognisedSlots,
   startingSlots,
 } from "./optimal.ts";
 import type { RosterPlayer } from "./optimal.ts";
@@ -37,6 +38,24 @@ describe("startingSlots", () => {
       startingSlots(["QB", "RB", "BN", "FLEX", "IR", "BN", "TAXI"]),
       ["QB", "RB", "FLEX"],
     );
+  });
+});
+
+describe("recognisedSlots", () => {
+  test("keeps the startable slots in order, duplicates included", () => {
+    assert.deepEqual(
+      recognisedSlots(["QB", "RB", "RB", "BN", "WR", "IR", "FLEX"]),
+      ["QB", "RB", "RB", "WR", "FLEX"],
+    );
+  });
+
+  /**
+   * A slot with no positions is eligible for nobody, so leaving it in would seat
+   * an empty scoring zero and quietly drag the team's total down. `compareLineup`
+   * names it in `unknown_slots` instead; the batch callers just leave it out.
+   */
+  test("drops a slot the solver has no positions for", () => {
+    assert.deepEqual(recognisedSlots(["QB", "WEIRD_FLEX", "WR"]), ["QB", "WR"]);
   });
 });
 

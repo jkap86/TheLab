@@ -12,6 +12,45 @@ export function formatRecord(record: Record_): string {
 }
 
 /**
+ * A win percentage the way a standings page writes one: `.537`, `1.000`, and an
+ * em dash where nothing has been played.
+ *
+ * Three decimals with the leading zero dropped is the convention every sport
+ * uses for this number, and it keeps the string four characters wide so it
+ * doesn't reflow the gauge it sits inside. Null is the {@link aggregateRecord}
+ * no-games case, not a formatting failure — see the rule there.
+ */
+export function formatWinPct(pct: number | null): string {
+  if (pct === null) return "—";
+  return pct.toFixed(3).replace(/^0\./, ".");
+}
+
+/**
+ * Time remaining as a countdown, e.g. `"37d 04h 12m 45s"`, `"4h 09m 00s"`,
+ * `"12m 03s"`, `"41s"`.
+ *
+ * Units the countdown has outgrown drop off the left as they empty — weeks out
+ * it reads in days, on game day in hours — while everything after the leading
+ * unit is zero-padded so the string ticks in place rather than reflowing.
+ * Never negative: an instant already passed clamps to `"0s"`, though callers
+ * generally hide the timer before that.
+ */
+export function formatCountdown(msLeft: number): string {
+  const total = Math.max(0, Math.floor(msLeft / 1000));
+  const days = Math.floor(total / 86_400);
+  const hours = Math.floor((total % 86_400) / 3_600);
+  const minutes = Math.floor((total % 3_600) / 60);
+  const seconds = total % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  if (days > 0)
+    return `${days}d ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+  if (hours > 0) return `${hours}h ${pad(minutes)}m ${pad(seconds)}s`;
+  if (minutes > 0) return `${minutes}m ${pad(seconds)}s`;
+  return `${seconds}s`;
+}
+
+/**
  * Fantasy points to two decimals with locale grouping, e.g. `"1,234.56"`.
  * Always two, because a column of points that changes width row to row is
  * hard to scan.
@@ -21,6 +60,27 @@ export function formatPoints(points: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+/**
+ * A KeepTradeCut value with locale grouping and no decimals, e.g. `"41,320"`.
+ *
+ * The opposite convention to {@link formatPoints}, and deliberately: KTC's
+ * numbers are whole and four digits wide, so a decimal place would be two
+ * characters of noise on a chip already carrying three totals.
+ */
+export function formatValue(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+// `ordinal` moved to `features/shared/format.ts` when the trades page needed the
+// same words for a pick's round; it is re-exported here so this module's own
+// consumers keep reading it from where they always have.
+export { ordinal } from "../shared/format.ts";
+
+/** `3 weeks`, or `1 week` — for tooltips, where the count is spelled out. */
+export function weekCount(n: number): string {
+  return `${n} week${n === 1 ? "" : "s"}`;
 }
 
 /**

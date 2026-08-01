@@ -8,7 +8,14 @@
  * extension so Node's test runner can resolve the chain.
  */
 
-import { booleanFilter, enumList, integer, isSeason, list } from "../query/parse.ts";
+import {
+  booleanFilter,
+  enumList,
+  integer,
+  isoDate,
+  isSeason,
+  list,
+} from "../query/parse.ts";
 
 const DRAFT_TYPES = ["snake", "linear", "auction"] as const;
 const DRAFT_STATUSES = ["complete", "drafting", "paused", "pre_draft"] as const;
@@ -36,6 +43,15 @@ export const LEAGUE_TYPE_CODES: Record<LeagueType, number> = {
 export type AdpFilters = {
   /** Draft seasons to include; null when the caller asked for every season. */
   seasons: string[] | null;
+  /**
+   * Bounds on *when the draft happened*, as `YYYY-MM-DD` — a different cut from
+   * `seasons`, which is the season a draft is *for*. A 2026 rookie draft in May
+   * and a 2026 startup in August are one season and two very different markets,
+   * which is what a date range separates. Either half may be null for an open
+   * end; both null leaves the board unbounded in time.
+   */
+  start_after: string | null;
+  start_before: string | null;
   draft_types: DraftType[];
   draft_statuses: DraftStatus[];
   league_ids: string[] | null;
@@ -94,6 +110,12 @@ export type ParsedAdpFilters =
  *
  * The boolean filters are tri-state (`booleanFilter`): leaving `best_ball` off
  * must narrow nothing, which is different from `best_ball=false`.
+ *
+ * `defaultSeason` applies only when the caller bounded the board *neither* way —
+ * no `season` and no date range. A caller asking for "drafts since June" means
+ * exactly that, and quietly intersecting it with this season would hand back a
+ * range that silently isn't the one requested. Bounding nothing at all is still
+ * the expensive case, so that one keeps its default.
  */
 export function parseAdpFilters(
   params: URLSearchParams,
@@ -104,6 +126,23 @@ export function parseAdpFilters(
   const badSeason = seasonValues.find((s) => s.toLowerCase() !== "all" && !isSeason(s));
   if (badSeason) {
     return { ok: false, error: `Invalid season: ${badSeason}. Expected a 4-digit year or "all".` };
+  }
+
+  const startAfter = isoDate(params, "start_after");
+  if (!startAfter.ok) return startAfter;
+  const startBefore = isoDate(params, "start_before");
+  if (!startBefore.ok) return startBefore;
+  if (
+    startAfter.value !== null &&
+    startBefore.value !== null &&
+    startAfter.value > startBefore.value
+  ) {
+    // String order is date order for `YYYY-MM-DD`. An inverted range matches
+    // nothing, which reads as "no drafts crawled" rather than as the mistake.
+    return {
+      ok: false,
+      error: `Invalid range: start_after (${startAfter.value}) is later than start_before (${startBefore.value}).`,
+    };
   }
 
   const draftTypes = enumList(params, "draft_type", DRAFT_TYPES, [
@@ -155,6 +194,7 @@ export function parseAdpFilters(
   if (!offset.ok) return offset;
 
   const leagueIds = list(params, "league_id");
+  const dated = startAfter.value !== null || startBefore.value !== null;
 
   return {
     ok: true,
@@ -163,7 +203,11 @@ export function parseAdpFilters(
         ? null
         : seasonValues.length > 0
           ? seasonValues
-          : [defaultSeason],
+          : dated
+            ? null
+            : [defaultSeason],
+      start_after: startAfter.value,
+      start_before: startBefore.value,
       draft_types: draftTypes.value ?? [],
       draft_statuses: draftStatuses.value ?? [],
       league_ids: leagueIds.length > 0 ? leagueIds : null,

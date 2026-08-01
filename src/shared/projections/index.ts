@@ -15,10 +15,15 @@ export {
 export type { RankedProjection } from "./queries";
 export { aggregateWeeklyStats } from "./aggregate";
 export type { AggregatedProjection, PlayerWeekStats } from "./aggregate";
-export { getLeagueOutlook, getWeeklyTeamPoints } from "./outlook";
+export {
+  getLeagueOutlook,
+  getOptimalLineups,
+  getWeeklyTeamPoints,
+} from "./outlook";
 export type {
   LeagueOutlook,
   LeagueTeamsInput,
+  OptimalLineups,
   OutlookRoster,
   PlayerOutlook,
   TeamOutlook,
@@ -35,7 +40,12 @@ export type {
   ProjectionScoring,
 } from "./filters";
 export { scoreProjection, unprojectedScoring, derivedScoring } from "./score";
-export { optimalLineup, compareLineup, startingSlots } from "./optimal";
+export {
+  optimalLineup,
+  compareLineup,
+  startingSlots,
+  recognisedSlots,
+} from "./optimal";
 export type { RosterPlayer, LineupSlot, LineupComparison } from "./optimal";
 export {
   SLOT_POSITIONS,

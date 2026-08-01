@@ -136,8 +136,10 @@ export type MatchablePlayer = {
 export async function getMatchablePlayers(): Promise<MatchablePlayer[]> {
   const { rows } = await pool.query<MatchablePlayer>(
     `SELECT player_id, full_name, first_name, last_name, position, team,
-            (data->>'active')::boolean AS active,
-            NULLIF(left(data->>'birth_date', 4), '')::int AS birth_year
+            CASE WHEN data->>'active' IN ('true', 'false')
+                 THEN (data->>'active')::boolean END AS active,
+            CASE WHEN data->>'birth_date' ~ '^[0-9]{4}'
+                 THEN left(data->>'birth_date', 4)::int END AS birth_year
        FROM players
       WHERE position IS NOT NULL`,
   );

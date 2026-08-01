@@ -122,7 +122,8 @@ describe("weeklyLineupSplit", () => {
       ["RB"],
       [
         [p("rb1", "RB", 20), p("rb2", "RB", 10)],
-        [p("rb1", "RB", 0), p("rb2", "RB", 10)],
+        // rb1 is absent, not at zero — the omission the comment describes.
+        [p("rb2", "RB", 10)],
       ],
     );
     assert.equal(total, 30);

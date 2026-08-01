@@ -1,3 +1,6 @@
-export { ToolGrid } from "./components/tool-grid";
+export { ToolsHome } from "./components/tools-home";
+export { ToolsBackdrop } from "./components/tools-backdrop";
 export { ToolPlaceholder } from "./components/tool-placeholder";
-export { tools, type Tool } from "./tools.data";
+// The catalogue moved to `features/shared` when the app bar became its second
+// reader; re-exported from where this feature's consumers already import it.
+export { tools, toolHref, type Tool } from "@/features/shared";

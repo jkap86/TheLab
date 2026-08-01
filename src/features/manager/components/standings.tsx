@@ -1,9 +1,24 @@
 import { formatPoints, formatRecord, formatWeekRange } from "../format";
-import type { LeagueOutlook, LeagueTeamView } from "../types";
+import {
+  rosterValueTotal,
+  TEAM_METRICS,
+  TEAM_METRICS_BY_KEY,
+  type TeamMetric,
+} from "../standings-metrics";
+import type {
+  LeagueOutlook,
+  LeagueRosterValues,
+  LeagueTeamView,
+  TeamOutlook,
+} from "../types";
+import { ColumnPicker, type ColumnOption } from "./column-picker";
 import { managerLabel, TeamAvatar } from "./ui";
 
-/** What a team projects over the horizon, in its lineups and behind them. */
-type TeamProjection = { points: number; bench: number };
+/** The team metrics offered in every standings column's picker. */
+const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
+  key: m.key,
+  label: m.label,
+}));
 
 /**
  * The league table, rendered in the order given — the panel passes teams in
@@ -15,51 +30,85 @@ type TeamProjection = { points: number; bench: number };
  * 50/50 split it was the thing losing every fight for horizontal space — a name
  * squeezed between an avatar, a record and two totals truncates to nothing, and it
  * is the one field a reader is actually scanning for. The record, points for and
- * both projections sit on the second line under it.
+ * both value columns sit on the second line under it.
  *
  * The numbers keep their own columns on that line rather than being folded into a
  * sentence: they are the values worth comparing down the table, and a total buried
  * in a run of text under each name can't be.
  *
- * Bench sits beside Proj rather than replacing anything because the pair says
- * what neither says alone — two teams projecting the same points are not the same
- * team if one is carrying twice as much behind its starters.
+ * The two value columns are slots the reader points at a team-level metric —
+ * projected points and projected bench to start with, swappable to the season
+ * optimal, points for, or the roster's whole KTC / ADP total from the heading's
+ * picker. Which metric each shows is held above this table (in the panel) so both
+ * columns line up down the list and one picker moves the whole column.
  */
 export function Standings({
   teams,
   outlook,
+  values,
   selectedId,
   onSelect,
+  columns,
+  openPicker,
+  onTogglePicker,
+  onSelectColumn,
+  elevated,
 }: {
   teams: LeagueTeamView[];
   outlook: LeagueOutlook | null;
+  /** Per-player KTC and ADP values on this league's board, summed per team here. */
+  values: LeagueRosterValues;
   selectedId: number;
   onSelect: (rosterId: number) => void;
+  /** The metric key each of the two value columns shows. */
+  columns: string[];
+  /** Which picker is open across the whole panel, if any. */
+  openPicker: string | null;
+  /** Toggle a picker by its key (the panel closes any other that was open). */
+  onTogglePicker: (key: string) => void;
+  /** Point value column `slot` at another metric. */
+  onSelectColumn: (slot: number, key: string) => void;
+  /** Lift this half's stacking order while one of its pickers overhangs the rows. */
+  elevated: boolean;
 }) {
-  const projected = outlook
-    ? new Map(
-        outlook.teams.map((t) => [
-          t.roster_id,
-          { points: t.weekly_optimal_points, bench: t.weekly_bench_points },
-        ]),
-      )
+  // Per-team outlook, so a metric can read any of its totals. Absent (rather than
+  // an empty object) when the league has no projections at all, which is what
+  // gates the value columns off entirely.
+  const outlookByRoster = outlook
+    ? new Map(outlook.teams.map((t) => [t.roster_id, t]))
     : null;
 
   // Written out rather than assembled, so Tailwind sees both class strings.
-  const columns = projected
+  const grid = outlookByRoster
     ? "grid-cols-[1.25rem_minmax(0,1fr)_auto_auto] @lg:grid-cols-[2rem_minmax(0,1fr)_auto_auto]"
     : "grid-cols-[1.25rem_minmax(0,1fr)] @lg:grid-cols-[2rem_minmax(0,1fr)]";
-  const nameSpan = projected ? "col-span-3" : "col-span-1";
+  const nameSpan = outlookByRoster ? "col-span-3" : "col-span-1";
 
   return (
-    <div className="overflow-hidden rounded-lg border border-foreground/10">
+    <div
+      className={`relative rounded-lg border border-foreground/10 ${
+        // Only clip when there are no pickers: a picker's menu overhangs the rows,
+        // which `overflow-hidden` would cut off. With columns, the header and
+        // footer round the corners the clip otherwise would.
+        outlookByRoster ? "" : "overflow-hidden"
+      } ${elevated ? "z-30" : ""}`}
+    >
       <div
-        className={`grid ${columns} items-center gap-x-1 border-b border-foreground/10 bg-foreground/[0.03] px-1.5 py-2 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:gap-x-2 @lg:px-3 @lg:text-xs`}
+        className={`grid ${grid} items-center gap-x-1 rounded-t-lg border-b border-foreground/10 bg-foreground/[0.03] px-1.5 py-2 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:gap-x-2 @lg:px-3 @lg:text-xs`}
       >
         <span className="text-center">#</span>
         <span className="truncate">Manager</span>
-        {projected && <span className="text-right">Proj</span>}
-        {projected && <span className="text-right">Bench</span>}
+        {outlookByRoster &&
+          columns.map((key, slot) => (
+            <ColumnPicker
+              key={slot}
+              options={TEAM_METRIC_OPTIONS}
+              activeKey={key}
+              open={openPicker === `team-${slot}`}
+              onToggle={() => onTogglePicker(`team-${slot}`)}
+              onSelect={(metricKey) => onSelectColumn(slot, metricKey)}
+            />
+          ))}
       </div>
       <ul>
         {teams.map((team, i) => (
@@ -67,9 +116,11 @@ export function Standings({
             key={team.roster_id}
             team={team}
             rank={i + 1}
-            columns={columns}
+            grid={grid}
             nameSpan={nameSpan}
-            projected={projected ? (projected.get(team.roster_id) ?? null) : undefined}
+            columns={outlookByRoster ? columns : null}
+            teamOutlook={outlookByRoster?.get(team.roster_id)}
+            values={values}
             active={team.roster_id === selectedId}
             onSelect={() => onSelect(team.roster_id)}
           />
@@ -79,9 +130,8 @@ export function Standings({
         // The horizon travels with the number, as it does on the roster panel:
         // "rest of season" is however many weeks are actually stored, and a total
         // over three weeks next to one over eighteen is a different claim.
-        <p className="border-t border-foreground/10 px-1.5 py-1.5 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-3">
-          Proj · best lineup each week · Bench · what those lineups don&apos;t
-          start · {formatWeekRange(outlook.weeks)}
+        <p className="rounded-b-lg border-t border-foreground/10 px-1.5 py-1.5 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-3">
+          Projected over the rest of the season · {formatWeekRange(outlook.weeks)}
         </p>
       )}
     </div>
@@ -91,28 +141,39 @@ export function Standings({
 function StandingsRow({
   team,
   rank,
-  columns,
+  grid,
   nameSpan,
-  projected,
+  columns,
+  teamOutlook,
+  values,
   active,
   onSelect,
 }: {
   team: LeagueTeamView;
   rank: number;
-  columns: string;
-  /** How far the name reaches on its own line — the meta column plus the totals. */
+  grid: string;
+  /** How far the name reaches on its own line — the meta column plus the value columns. */
   nameSpan: string;
   /**
-   * Rest-of-season totals, started and benched: `undefined` when the league has no
-   * projections at all and the columns aren't there, `null` when they are and this
-   * team has no numbers for them.
+   * The two value columns' metric keys, or null when the league has no
+   * projections at all and the columns aren't there.
    */
-  projected: TeamProjection | null | undefined;
+  columns: string[] | null;
+  /** This team's outlook, or undefined when it has none — the metrics render an em dash. */
+  teamOutlook: TeamOutlook | undefined;
+  /** Per-player KTC and ADP values, summed to this roster's totals for those metrics. */
+  values: LeagueRosterValues;
   active: boolean;
   onSelect: () => void;
 }) {
   const record = formatRecord(team.record);
   const points = formatPoints(team.fpts);
+
+  // The KTC and ADP metrics read a whole-roster total; the projection ones ignore
+  // these. Computed once here rather than per cell, and only when there are value
+  // columns to feed.
+  const ktcTotal = columns ? rosterValueTotal(team.players, values.ktc) : null;
+  const adpTotal = columns ? rosterValueTotal(team.players, values.adp) : null;
 
   // The username identifies the person; the team name is a per-league nickname
   // that changes at will. Showing the username means the same opponent reads the
@@ -129,7 +190,7 @@ function StandingsRow({
         onClick={onSelect}
         title={title}
         aria-current={active ? "true" : undefined}
-        className={`grid w-full ${columns} items-center gap-x-1 gap-y-0.5 border-l-2 px-1.5 py-1.5 text-left transition-colors @lg:gap-x-2 @lg:px-3 @lg:py-2 ${
+        className={`grid w-full ${grid} items-center gap-x-1 gap-y-0.5 border-l-2 px-1.5 py-1.5 text-left transition-colors @lg:gap-x-2 @lg:px-3 @lg:py-2 ${
           active
             ? "border-active bg-active/10"
             : "border-transparent hover:bg-foreground/[0.04]"
@@ -151,35 +212,28 @@ function StandingsRow({
           {record} · {points} PF
         </span>
 
-        {projected !== undefined && (
-          <>
+        {columns?.map((key, slot) => {
+          const metric: TeamMetric = TEAM_METRICS_BY_KEY[key] ?? TEAM_METRICS[0];
+          const cell = metric.cell({
+            team,
+            outlook: teamOutlook,
+            ktcTotal,
+            adpTotal,
+            superflex: values.superflex,
+            draftCount: values.adp_draft_count,
+          });
+          return (
             <span
-              title={
-                projected === null
-                  ? "No projection"
-                  : `${formatPoints(projected.points)} projected, setting the best lineup each week`
-              }
+              key={slot}
+              title={cell.title}
               className={`text-right text-[0.7rem] tabular-nums @lg:text-sm ${
-                projected === null ? "text-foreground/25" : "text-foreground/70"
+                cell.text === null ? "text-foreground/25" : "text-foreground/70"
               }`}
             >
-              {projected === null ? "—" : formatPoints(projected.points)}
+              {cell.text ?? "—"}
             </span>
-            {/* Dimmer than the projected total on purpose: it is context for that
-                number rather than a rival to it, and a table of two equally loud
-                columns reads as though they were meant to be compared. */}
-            <span
-              title={
-                projected === null
-                  ? "No projection"
-                  : `${formatPoints(projected.bench)} projected for players those lineups never start`
-              }
-              className="text-right text-[0.7rem] tabular-nums text-foreground/40 @lg:text-sm"
-            >
-              {projected === null ? "—" : formatPoints(projected.bench)}
-            </span>
-          </>
-        )}
+          );
+        })}
       </button>
     </li>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // Both imported directly rather than through their barrels, which would pull
 // `pg`-backed code into the client bundle — see `slots.ts` and `rank.ts`.
@@ -8,6 +8,8 @@ import { orderByProjectedPoints } from "@/shared/manager/rank";
 import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 
 import { useLeagueDetail } from "../hooks/use-league-detail";
+import { DEFAULT_PLAYER_COLUMNS } from "../roster-metrics";
+import { DEFAULT_TEAM_COLUMNS } from "../standings-metrics";
 import type { LeagueDetailResult } from "../types";
 import { RosterDetail } from "./roster-detail";
 import { Standings } from "./standings";
@@ -56,22 +58,80 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   const [selectedId, setSelectedId] = useState<number>(teams[0].roster_id);
   const selected = teams.find((t) => t.roster_id === selectedId) ?? teams[0];
 
+  // Each table's two value columns are slots the reader points at a metric — the
+  // standings at a team-level one, the roster at a player-level one. The
+  // selection is held here rather than in either table so it outlives switching
+  // the selected team, and so one picker-at-a-time and an outside click have a
+  // single owner (as they do on the collapsed card).
+  const [teamColumns, setTeamColumns] = useState<string[]>(DEFAULT_TEAM_COLUMNS);
+  const [rosterColumns, setRosterColumns] = useState<string[]>(
+    DEFAULT_PLAYER_COLUMNS,
+  );
+  const [openPicker, setOpenPicker] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (openPicker === null) return;
+    const onDown = (event: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+        setOpenPicker(null);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenPicker(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openPicker]);
+
+  const togglePicker = (key: string) =>
+    setOpenPicker((current) => (current === key ? null : key));
+  const pickTeamColumn = (slot: number, key: string) => {
+    setTeamColumns((cols) => cols.map((c, i) => (i === slot ? key : c)));
+    setOpenPicker(null);
+  };
+  const pickRosterColumn = (slot: number, key: string) => {
+    setRosterColumns((cols) => cols.map((c, i) => (i === slot ? key : c)));
+    setOpenPicker(null);
+  };
+
+  // The open menu overhangs the rows below it, so the half it opens from lifts its
+  // stacking order over the other while a picker is open.
+  const teamPickerOpen = openPicker?.startsWith("team-") ?? false;
+
   // Even 50/50 split at every width; the children use @lg container queries to
   // shed non-essential columns once each half gets tight.
   return (
-    <div className="@container">
+    <div ref={panelRef} className="@container">
       <div className="grid grid-cols-2 gap-2 @lg:gap-4">
         <Standings
           teams={teams}
           outlook={data.outlook}
+          values={data.values}
           selectedId={selected.roster_id}
           onSelect={setSelectedId}
+          columns={teamColumns}
+          openPicker={openPicker}
+          onTogglePicker={togglePicker}
+          onSelectColumn={pickTeamColumn}
+          elevated={teamPickerOpen}
         />
         <RosterDetail
           team={selected}
+          teams={teams}
           players={data.players}
           rosterPositions={data.roster_positions}
           outlook={data.outlook}
+          values={data.values}
+          columns={rosterColumns}
+          openPicker={openPicker}
+          onTogglePicker={togglePicker}
+          onSelectColumn={pickRosterColumn}
+          elevated={openPicker !== null && !teamPickerOpen}
         />
       </div>
       <OutlookCaveat data={data} />

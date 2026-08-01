@@ -28,7 +28,10 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
         avatar = EXCLUDED.avatar, previous_league_id = EXCLUDED.previous_league_id,
         draft_id = EXCLUDED.draft_id, roster_positions = EXCLUDED.roster_positions,
         settings = EXCLUDED.settings, scoring_settings = EXCLUDED.scoring_settings,
-        metadata = EXCLUDED.metadata, updated_at = now()`,
+        metadata = EXCLUDED.metadata, updated_at = now(),
+        -- Sleeper just answered for this league, so any crawler tombstone is
+        -- stale — clearing it puts the league back in the refresh queue.
+        gone_at = NULL`,
   });
 
   // Child collections are replaced wholesale so the DB mirrors Sleeper.
