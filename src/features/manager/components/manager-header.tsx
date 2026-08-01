@@ -105,7 +105,12 @@ export function ManagerHeader({
     // past. The bleed (`-mx-4 px-4`) and the opaque background are what the
     // header needs to cover that list rather than let it show through the gaps
     // around its rounded corners; `PageShell`'s `wide` gutter is the 4 they match.
-    <header className="sticky top-[var(--site-header-h)] z-40 -mx-4 mb-6 flex flex-col gap-2 bg-[var(--background)] px-4 pb-4 pt-2">
+    //
+    // `-mt-10` cancels that same shell's `py-10` top padding, so the header's
+    // resting place *is* its pinned one: without it the plate sat 40px lower
+    // until the first scroll and then jumped up under the app bar, which reads
+    // as the page shifting rather than as a card pinning.
+    <header className="sticky top-[var(--site-header-h)] z-40 -mx-4 -mt-10 mb-6 flex flex-col gap-2 bg-[var(--background)] px-4 pb-4 pt-2">
       <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.075),rgba(255,255,255,0.02)_60%,rgba(255,255,255,0.008))] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.12),inset_0_-2px_8px_rgba(0,0,0,0.5),0_18px_40px_-22px_rgba(0,0,0,0.9)]">
         {/* The cyan rail down the plate, echoing the league rows' accent. */}
         <span
