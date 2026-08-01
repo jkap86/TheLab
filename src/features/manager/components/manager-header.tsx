@@ -7,7 +7,12 @@ import {
 
 import { Avatar } from "@/features/shared";
 
-import { formatCountdown, formatRecord, formatWinPct } from "../format";
+import {
+  countdownSegments,
+  formatCountdown,
+  formatRecord,
+  formatWinPct,
+} from "../format";
 import { useKickoff } from "../hooks/use-kickoff";
 import { firstKickoff } from "../nfl-calendar";
 import type { OverallRecord } from "../record";
@@ -76,14 +81,20 @@ export function ManagerHeader({
   /** The manager's season summed over the leagues the filters leave. */
   record: OverallRecord;
   /**
-   * Those filters in words. With the controls in a modal this is the only thing
-   * saying what the record is counted over, so it sits with the numbers rather
-   * than on the button that opens them.
+   * Those filters in words, or null where they narrow nothing. A modal hides its
+   * own state, so the selection is still repeated outside it — but only when
+   * there *is* one: "counting all leagues" is the default describing itself, and
+   * it sat on this card permanently for the sake of the rare case. Where it says
+   * something it says it beside the record, which is the number it qualifies.
    */
-  scope: string;
-  /** How many leagues the filters leave — what `record.leagues` is out of. */
+  scope: string | null;
+  /**
+   * How many leagues the filters leave — what `record.leagues` is out of. It is
+   * stated only where the two differ, since the usual case ("116 of 116") is a
+   * denominator restating its own numerator.
+   */
   leagueCount: number;
-  /** The view's own headline count. */
+  /** The view's own headline count, on the identity line beside the season. */
   stat: HeaderStat;
   /**
    * The filters' trigger. Omitted where a view has nothing to filter (e.g. a
@@ -140,18 +151,19 @@ export function ManagerHeader({
           />
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <h1 className="min-w-0 truncate font-display text-base font-semibold tracking-tight sm:text-xl">
                 {user.display_name || user.username}
               </h1>
               <span className="flex-none rounded-[5px] bg-active/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-active/80">
                 {season}
               </span>
+              <StatPill {...stat} />
             </div>
             <RecordLine
               record={record}
+              scope={scope}
               leagueCount={leagueCount}
-              season={season}
             />
             <RecordBar record={record} />
           </div>
@@ -159,12 +171,13 @@ export function ManagerHeader({
           <WinPctGauge pct={record.pct} />
         </div>
 
-        <div className="relative flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 px-5 py-2.5 text-[11px] sm:px-6">
-          <StatLine {...stat} />
-          <Dot />
-          <span className="text-foreground/35">
-            <span className="text-foreground/25">Counting</span> {scope}
-          </span>
+        {/* The state line, whose left end is the slot the headline count used to
+            hold. `min-h` rather than padding alone: the countdown resolves a
+            round trip after the plate paints and retires itself at kickoff, so
+            the row has to be the same height empty as full or the list below it
+            jumps twice a season. */}
+        <div className="relative flex min-h-[42px] flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 px-5 py-2 text-[11px] sm:px-6">
+          <KickoffCountdown season={season} />
           {refreshing && <RefreshingPill progress={progress} />}
           {summary && summary.failed > 0 && (
             <Warning>{summary.failed} failed to sync</Warning>
@@ -190,7 +203,8 @@ export function ManagerHeader({
 }
 
 /**
- * The record, and what it was counted over.
+ * The record, and — only where it isn't the whole list — what it was counted
+ * over.
  *
  * A season that hasn't started still shows its `0-0`: the digits are a true
  * count of games played, so the guard against dressing preseason up as a season
@@ -199,21 +213,23 @@ export function ManagerHeader({
  * nothing" keeps its own words, because a `0-0` counted over no records at all
  * would be quoting records that don't exist.
  *
- * The count rides here rather than in a stat cell of its own: `record.leagues`
- * is smaller than the list — Sleeper keeps a manager in `league_users` after
- * they stop holding a team — and a denominator that small is only honest beside
- * the number it divides. The countdown to the season's opening kickoff rides
- * here too: it is the *when* of the `0-0` changing, and it retires itself the
- * moment that stops being a question.
+ * `record.leagues` can be smaller than the list — Sleeper keeps a manager in
+ * `league_users` after they stop holding a team — and a denominator that small
+ * is only honest beside the number it divides. But it usually *isn't* smaller,
+ * and "116 of 116 leagues" is a denominator restating its numerator on a line
+ * that has to stay short. So the shortfall is stated and the agreement is not:
+ * the rule holds exactly where it means something. The count itself is up on
+ * the identity line, where it is a fact about the account rather than about
+ * this record.
  */
 function RecordLine({
   record,
+  scope,
   leagueCount,
-  season,
 }: {
   record: OverallRecord;
+  scope: string | null;
   leagueCount: number;
-  season: string;
 }) {
   return (
     <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px] leading-snug">
@@ -224,23 +240,36 @@ function RecordLine({
           {formatRecord(record)}
         </span>
       )}
-      {/* No separator between the two: at phone width the line can wrap — "No
-          records in these leagues" is most of it — and a dot left hanging off
-          the end of the first line reads as a typo. The weight and colour do
+      {/* No separator before it: at phone width the line can wrap and a dot left
+          hanging off the end of the first line reads as a typo. The colour does
           the same job on one line or two. */}
-      <span className="text-foreground/40">
-        <span className="tabular-nums">{record.leagues}</span> of{" "}
-        <span className="tabular-nums">{leagueCount}</span> league
-        {leagueCount === 1 ? "" : "s"}
-      </span>
-      <KickoffCountdown season={season} />
+      {scope && <span className="text-active/60">{scope}</span>}
+      {record.leagues > 0 && record.leagues < leagueCount && (
+        <span className="text-foreground/40">
+          from <span className="tabular-nums">{record.leagues}</span> of{" "}
+          <span className="tabular-nums">{leagueCount}</span> league
+          {leagueCount === 1 ? "" : "s"}
+        </span>
+      )}
     </p>
   );
 }
 
 /**
- * A live countdown to the season's opening kickoff, on the line the `0-0`
- * shares — the when of that record changing.
+ * A live countdown to the season's opening kickoff, drawn as a segment readout:
+ * one milled well per unit, seconds lit, units labelled under their digits.
+ *
+ * It holds the slot the headline count used to, which is the trade the plate is
+ * making — before kickoff the count is a constant and the clock is the only
+ * moving number on the card, so the moving one gets the instrument and the
+ * constant goes up beside the name. A cell is fixed-width and its digits are
+ * padded ({@link countdownSegments}), so the row ticks in place; the whole row
+ * narrows only when a unit empties for good.
+ *
+ * The cells are decoration to a screen reader — the digits are split across four
+ * elements and would be read as four numbers — so the group carries
+ * {@link formatCountdown}'s string as its label and the cells are hidden. The
+ * two are one calculation, so they cannot drift.
  *
  * The instant comes from Sleeper's schedule call ({@link useKickoff}); the NFL
  * calendar table's provisional date stands in only when Sleeper hasn't
@@ -259,13 +288,53 @@ function KickoffCountdown({ season }: { season: string }) {
     scheduled === undefined ? null : (scheduled ?? firstKickoff(season));
   const now = useTick(kickoff);
 
-  if (kickoff === null || now === null || now >= kickoff) return null;
+  if (kickoff === null || now === null) return null;
+
+  // Past kickoff the clock has nothing left to count, but the row it sits in is
+  // fixed height — a card pinned under the app bar can't change how much of the
+  // list it covers as the season turns over — so the slot states the season is
+  // running rather than being left as an empty tray.
+  if (now >= kickoff)
+    return (
+      <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-foreground/30">
+        Season underway
+      </span>
+    );
+
+  const left = kickoff - now;
+  const segments = countdownSegments(left);
 
   return (
-    <span className="text-foreground/40">
-      Kickoff in{" "}
-      <span className="font-mono tabular-nums text-foreground/55">
-        {formatCountdown(kickoff - now)}
+    <span
+      className="inline-flex items-center gap-2"
+      aria-label={`Kickoff in ${formatCountdown(left)}`}
+    >
+      <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-active/55">
+        Kickoff in
+      </span>
+      <span aria-hidden="true" className="inline-flex items-end gap-1">
+        {segments.map((segment, index) => (
+          <span
+            key={segment.unit}
+            className="lab-well min-w-[34px] rounded-md px-1.5 pb-1 pt-[3px] text-center"
+          >
+            <span
+              className={`block font-mono text-[15px] font-bold leading-[1.05] tabular-nums ${
+                // The seconds are the cell that is always moving, so they are
+                // the one carrying the accent — a lit digit reads as live where
+                // four of them read as a sign.
+                index === segments.length - 1
+                  ? "text-active drop-shadow-[0_0_12px_rgba(0,255,229,0.5)]"
+                  : "text-foreground/90"
+              }`}
+            >
+              {segment.value}
+            </span>
+            <span className="block text-[8px] font-bold uppercase tracking-[0.1em] text-foreground/30">
+              {segment.unit}
+            </span>
+          </span>
+        ))}
       </span>
     </span>
   );
@@ -410,29 +479,25 @@ function WinPctGauge({ pct }: { pct: number | null }) {
 }
 
 /**
- * The view's own headline count, on the plate's state line rather than in a rail
- * of its own — it is one number with a label, and a rail is what two of them
- * needed.
+ * The view's own headline count, as a pill on the identity line beside the
+ * season.
+ *
+ * It reads as a fact about the account — *this* manager, *this* season, *this*
+ * many leagues — which is what the line it now sits on already says, and it
+ * frees the state line below for the one number that moves. The `sub` stays
+ * with it: "of 121 total" is what the count is out of, and a denominator
+ * separated from its numerator is the thing this card keeps having to relearn.
  */
-function StatLine({ label, value, sub }: HeaderStat) {
+function StatPill({ label, value, sub }: HeaderStat) {
   return (
-    <span className="inline-flex items-baseline gap-1.5">
-      <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-foreground/40">
+    <span className="inline-flex flex-none items-baseline gap-1.5 rounded-[5px] border border-foreground/10 bg-foreground/[0.04] px-1.5 py-0.5 text-[10px]">
+      <span className="font-bold uppercase tracking-[0.12em] text-foreground/40">
         {label}
       </span>
-      <span className="font-mono text-[13px] font-semibold tabular-nums leading-none">
+      <span className="font-mono text-[12px] font-semibold leading-none tabular-nums text-foreground/85">
         {value}
       </span>
       {sub && <span className="text-foreground/35">{sub}</span>}
-    </span>
-  );
-}
-
-/** The separator between two facts on one line. */
-function Dot() {
-  return (
-    <span aria-hidden="true" className="text-foreground/20">
-      ·
     </span>
   );
 }
