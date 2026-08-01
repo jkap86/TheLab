@@ -182,22 +182,27 @@ export function ManagerHeader({
             <RecordBar record={record} />
           </div>
 
-          <WinPctGauge pct={record.pct} />
+          <HeaderReadout season={season} pct={record.pct} />
         </div>
 
-        {/* The state line, whose left end is the slot the headline count used to
-            hold. `min-h` rather than padding alone: the countdown resolves a
-            round trip after the plate paints and retires itself at kickoff, so
-            the row has to be the same height empty as full or the list below it
-            jumps twice a season. */}
-        <div className="relative flex min-h-[42px] flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 px-5 py-2 text-[11px] sm:px-6">
-          <KickoffCountdown season={season} />
-          {refreshing && <RefreshingPill progress={progress} />}
-          {summary && summary.failed > 0 && (
-            <Warning>{summary.failed} failed to sync</Warning>
-          )}
-          {refreshError && <Warning>Refresh failed — showing cached data</Warning>}
-        </div>
+        {/* The state line. It carries only what is transient — a refresh in
+            flight, a sync that failed — so it is drawn only when there is
+            something to say: with the countdown up in the readout slot, an
+            always-present row would be an empty band under the record for the
+            whole season. */}
+        {(refreshing ||
+          (summary && summary.failed > 0) ||
+          refreshError) && (
+          <div className="relative flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 px-5 py-2 text-[11px] sm:px-6">
+            {refreshing && <RefreshingPill progress={progress} />}
+            {summary && summary.failed > 0 && (
+              <Warning>{summary.failed} failed to sync</Warning>
+            )}
+            {refreshError && (
+              <Warning>Refresh failed — showing cached data</Warning>
+            )}
+          </div>
+        )}
       </div>
 
       {/* The dock. A recessed trough rather than a second card, so the controls
@@ -272,70 +277,69 @@ function RecordLine({
 }
 
 /**
- * A live countdown to the season's opening kickoff, drawn as a segment readout:
- * one milled well per unit, seconds lit, units labelled under their digits.
+ * The plate's right-hand readout: the countdown to kickoff while there is one,
+ * the win-percentage dial once the season is running.
  *
- * It holds the slot the headline count used to, which is the trade the plate is
- * making — before kickoff the count is a constant and the clock is the only
- * moving number on the card, so the moving one gets the instrument and the
- * constant goes up beside the name. A cell is fixed-width and its digits are
- * padded ({@link countdownSegments}), so the row ticks in place; the whole row
- * narrows only when a unit empties for good.
+ * They share the slot because they are never both worth drawing. Before kickoff
+ * every league reports `0-0` and the dial is an em dash by rule — a win
+ * percentage there is a claim about games nobody has played — while the clock is
+ * the only moving number on the card; after kickoff the clock has nothing left
+ * to count and the record is the season's own story. Giving the live one the
+ * instrument is the same trade the plate already made when the headline count
+ * moved up to the identity line.
  *
- * The cells are decoration to a screen reader — the digits are split across four
- * elements and would be read as four numbers — so the group carries
- * {@link formatCountdown}'s string as its label and the cells are hidden. The
- * two are one calculation, so they cannot drift.
- *
- * The instant comes from Sleeper's schedule call ({@link useKickoff}); the NFL
- * calendar table's provisional date stands in only when Sleeper hasn't
- * scheduled the season, and nothing renders until that question settles —
- * appearing once with the right instant beats appearing twice with two. The
- * tick reads the viewer's own clock, because how long *they* wait is a fact
- * about their wall clock (the `todayIso` side of the two-todays rule), and it
- * starts only after mount, since server and client have no "now" they agree
- * on — the account store's hydration rule, applied to a clock. Past kickoff it
- * renders nothing rather than a zero: from then on the record digits are the
- * season's own story.
+ * The two are the same box, so the swap costs the plate no height and the list
+ * pinned under it does not jump when the season turns over. The dial is also
+ * what stands in while the kickoff instant is still being resolved, which is
+ * why nothing here renders a placeholder of its own.
  */
-function KickoffCountdown({ season }: { season: string }) {
+function HeaderReadout({ season, pct }: { season: string; pct: number | null }) {
   const scheduled = useKickoff(season);
   const kickoff =
     scheduled === undefined ? null : (scheduled ?? firstKickoff(season));
   const now = useTick(kickoff);
 
-  if (kickoff === null || now === null) return null;
+  if (kickoff === null || now === null || now >= kickoff)
+    return <WinPctGauge pct={pct} />;
 
-  // Past kickoff the clock has nothing left to count, but the row it sits in is
-  // fixed height — a card pinned under the app bar can't change how much of the
-  // list it covers as the season turns over — so the slot states the season is
-  // running rather than being left as an empty tray.
-  if (now >= kickoff)
-    return (
-      <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-foreground/30">
-        Season underway
-      </span>
-    );
+  return <KickoffCountdown msLeft={kickoff - now} />;
+}
 
-  const left = kickoff - now;
-  const segments = countdownSegments(left);
+/**
+ * A live countdown to the season's opening kickoff, drawn as a segment readout:
+ * one milled well per unit, seconds lit, units labelled under their digits.
+ *
+ * It is laid out as a block of cells rather than a row of them because it sits
+ * in the dial's square slot — four cells in a line would be half the plate's
+ * width, where two rows of two occupy exactly the footprint the dial gives back.
+ * A cell is a fixed share of that block and its digits are padded
+ * ({@link countdownSegments}), so the readout ticks in place; the block reflows
+ * only when a unit empties for good.
+ *
+ * The cells are decoration to a screen reader — the digits are split across four
+ * elements and would be read as four numbers — so the group carries
+ * {@link formatCountdown}'s string as its label and the cells are hidden. The
+ * two are one calculation, so they cannot drift.
+ */
+function KickoffCountdown({ msLeft }: { msLeft: number }) {
+  const segments = countdownSegments(msLeft);
 
   return (
-    <span
-      className="inline-flex items-center gap-2"
-      aria-label={`Kickoff in ${formatCountdown(left)}`}
+    <div
+      className="grid h-[68px] w-[78px] flex-none content-center gap-1 sm:h-[78px] sm:w-[88px]"
+      aria-label={`Kickoff in ${formatCountdown(msLeft)}`}
     >
-      <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-active/55">
+      <span className="text-center text-[8px] font-bold uppercase leading-none tracking-[0.12em] text-active/55 sm:text-[9px]">
         Kickoff in
       </span>
-      <span aria-hidden="true" className="inline-flex items-end gap-1">
+      <span aria-hidden="true" className="grid grid-cols-2 gap-0.5">
         {segments.map((segment, index) => (
           <span
             key={segment.unit}
-            className="lab-well min-w-[34px] rounded-md px-1.5 pb-1 pt-[3px] text-center"
+            className="lab-well rounded-[4px] px-0.5 pb-0.5 pt-[2px] text-center"
           >
             <span
-              className={`block font-mono text-[15px] font-bold leading-[1.05] tabular-nums ${
+              className={`block font-mono text-[12px] font-bold leading-[1.05] tabular-nums sm:text-[13px] ${
                 // The seconds are the cell that is always moving, so they are
                 // the one carrying the accent — a lit digit reads as live where
                 // four of them read as a sign.
@@ -346,13 +350,13 @@ function KickoffCountdown({ season }: { season: string }) {
             >
               {segment.value}
             </span>
-            <span className="block text-[8px] font-bold uppercase tracking-[0.1em] text-foreground/30">
+            <span className="block text-[7px] font-bold uppercase tracking-[0.08em] text-foreground/30">
               {segment.unit}
             </span>
           </span>
         ))}
       </span>
-    </span>
+    </div>
   );
 }
 
@@ -436,7 +440,10 @@ function RecordBar({ record }: { record: OverallRecord }) {
  *
  * The number is the one figure on the plate that is a verdict rather than a
  * count, so it is drawn against the field it lives in — half the ring is a .500
- * season — where a bare `.537` reads as another statistic. Pure SVG, so it
+ * season — where a bare `.537` reads as another statistic. It shares its slot
+ * with the kickoff countdown ({@link HeaderReadout}), which is also why it keeps
+ * its em-dash face rather than being dropped before a season starts: it is what
+ * the plate shows while the kickoff instant is still resolving. Pure SVG, so it
  * renders on the server and stays out of the bundle; `useId` keeps the gradient
  * id unique in case two ever share a page.
  */
@@ -500,7 +507,7 @@ function WinPctGauge({ pct }: { pct: number | null }) {
  *
  * It reads as a fact about the account — *this* manager, *this* season, *this*
  * many leagues — which is what the line it now sits on already says, and it
- * frees the state line below for the one number that moves. The `sub` stays
+ * leaves the readout slot to whichever number is actually moving. The `sub` stays
  * with it: "of 121 total" is what the count is out of, and a denominator
  * separated from its numerator is the thing this card keeps having to relearn.
  */
