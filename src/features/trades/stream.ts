@@ -16,18 +16,24 @@ import type { TradesResult } from "./types";
  *
  * - The trades **append**. They arrive newest-first and stay in that order, so a
  *   chunk goes on the end.
- * - The four id maps **merge**. Each chunk carries only the leagues, players,
- *   managers and KTC prices no earlier chunk did, so replacing them would leave
- *   every card from an earlier chunk unable to name its own players — and the
- *   effect grows the further you scroll, which is exactly where it wouldn't be
- *   noticed.
+ * - The four id maps **merge**. Each `names` message carries only the leagues,
+ *   players, managers and KTC prices no earlier one did, so replacing them would
+ *   leave every card from an earlier chunk unable to name its own players — and
+ *   the effect grows the further you scroll, which is exactly where it wouldn't
+ *   be noticed.
  * - A half that gained nothing keeps its **identity**. Most chunks late in a
  *   season name no new league or player at all, and the page memoises on these,
  *   so rebuilding them anyway would re-run every filter pass for no change.
- * - `meta` **opens** a season and a `chunk` before one is dropped. The route
- *   always sends `meta` first, so that is defensive rather than expected — but a
- *   chunk that built its own container would have to invent a `total`, and a
- *   progress line reading "1,000 of 0" is worse than a beat of nothing.
+ * - `meta` **opens** a season, and everything before one is dropped. The route
+ *   always sends `meta` first and sends it before it reads anything, so that is
+ *   defensive rather than expected.
+ *
+ * **The trades and the names that resolve them are separate messages, and the
+ * trades come first.** A card is renderable without either its league's name or
+ * its players' — it draws the ids — so the route stopped making the trades wait
+ * on four lookups, and folding them in separately is what that costs here: two
+ * cases instead of one, and the small change that `total` is null until its own
+ * message arrives.
  */
 export type TradesStreamState = {
   /** What has arrived so far, or null before the opening `meta`. */
@@ -52,7 +58,7 @@ export function applyTradesMessage(
         ...state,
         data: {
           season: message.season,
-          total: message.total,
+          total: null,
           trades: [],
           leagues: [],
           players: {},
@@ -61,11 +67,25 @@ export function applyTradesMessage(
         },
       };
 
+    case "total": {
+      const { data } = state;
+      if (!data) return state;
+      return { ...state, data: { ...data, total: message.total } };
+    }
+
     case "chunk": {
+      const { data } = state;
+      if (!data || message.trades.length === 0) return state;
+      return {
+        ...state,
+        data: { ...data, trades: data.trades.concat(message.trades) },
+      };
+    }
+
+    case "names": {
       const { data } = state;
       if (!data) return state;
       if (
-        message.trades.length === 0 &&
         message.leagues.length === 0 &&
         Object.keys(message.players).length === 0 &&
         Object.keys(message.managers).length === 0 &&
@@ -77,9 +97,6 @@ export function applyTradesMessage(
         ...state,
         data: {
           ...data,
-          trades: message.trades.length
-            ? data.trades.concat(message.trades)
-            : data.trades,
           leagues: message.leagues.length
             ? data.leagues.concat(message.leagues)
             : data.leagues,

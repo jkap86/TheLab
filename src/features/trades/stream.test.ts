@@ -5,22 +5,12 @@ import type { TradesStreamMessage } from "@/shared/contract";
 
 import { applyTradesMessage, EMPTY_TRADES_STREAM } from "./stream.ts";
 
-const meta = (total: number): TradesStreamMessage => ({
-  type: "meta",
-  season: "2026",
-  total,
-});
+const meta = (): TradesStreamMessage => ({ type: "meta", season: "2026" });
 
-/** A chunk naming one trade, and whatever ids the caller says are new on it. */
-const chunk = (
-  ids: string[],
-  extra: {
-    leagues?: string[];
-    players?: string[];
-    managers?: string[];
-    ktc?: string[];
-  } = {},
-): TradesStreamMessage => ({
+const total = (n: number): TradesStreamMessage => ({ type: "total", total: n });
+
+/** A chunk of trades, which is now all a chunk is. */
+const chunk = (ids: string[]): TradesStreamMessage => ({
   type: "chunk",
   trades: ids.map((id) => ({
     transaction_id: id,
@@ -29,6 +19,18 @@ const chunk = (
     completed_at: 1_752_000_000_000,
     sides: [],
   })),
+});
+
+/** What the ids in the chunk before it stand for. */
+const names = (
+  extra: {
+    leagues?: string[];
+    players?: string[];
+    managers?: string[];
+    ktc?: string[];
+  } = {},
+): TradesStreamMessage => ({
+  type: "names",
   leagues: (extra.leagues ?? []).map(
     (id) => ({ league_id: id, name: id }) as never,
   ),
@@ -47,15 +49,27 @@ const fold = (messages: TradesStreamMessage[]) =>
   messages.reduce(applyTradesMessage, EMPTY_TRADES_STREAM);
 
 test("applyTradesMessage", async (t) => {
-  await t.test("meta opens the season with its total and nothing in it", () => {
-    const { data } = fold([meta(46_900)]);
-    assert.equal(data?.total, 46_900);
+  await t.test("meta opens the season with nothing in it", () => {
+    const { data } = fold([meta()]);
     assert.equal(data?.season, "2026");
     assert.deepEqual(data?.trades, []);
   });
 
+  // The count is its own query, so a season being drawn before it answers is a
+  // real state and not a gap to paper over with a zero.
+  await t.test("the total is null until its own message arrives", () => {
+    assert.equal(fold([meta(), chunk(["a"])]).data?.total, null);
+    assert.equal(fold([meta(), chunk(["a"]), total(46_900)]).data?.total, 46_900);
+  });
+
+  await t.test("the total can arrive before any trade does", () => {
+    const { data } = fold([meta(), total(46_900), chunk(["a"])]);
+    assert.equal(data?.total, 46_900);
+    assert.equal(data?.trades.length, 1);
+  });
+
   await t.test("trades append in arrival order, newest first", () => {
-    const { data } = fold([meta(4), chunk(["a", "b"]), chunk(["c", "d"])]);
+    const { data } = fold([meta(), chunk(["a", "b"]), chunk(["c", "d"])]);
     assert.deepEqual(
       data?.trades.map((tr) => tr.transaction_id),
       ["a", "b", "c", "d"],
@@ -63,28 +77,20 @@ test("applyTradesMessage", async (t) => {
   });
 
   await t.test("the total survives every chunk after it", () => {
-    const { data } = fold([meta(46_900), chunk(["a"]), chunk(["b"])]);
+    const { data } = fold([meta(), total(46_900), chunk(["a"]), chunk(["b"])]);
     assert.equal(data?.total, 46_900);
   });
 
-  // The rule the whole delta protocol rests on: a chunk names only what no
-  // earlier one did, so replacing rather than merging silently strips the maps
-  // back to whatever the last chunk happened to introduce.
-  await t.test("the id maps merge across chunks, they do not replace", () => {
+  // The rule the whole delta protocol rests on: a `names` message carries only
+  // what no earlier one did, so replacing rather than merging silently strips
+  // the maps back to whatever the last one happened to introduce.
+  await t.test("the id maps merge across messages, they do not replace", () => {
     const { data } = fold([
-      meta(2),
-      chunk(["a"], {
-        leagues: ["L1"],
-        players: ["p1"],
-        managers: ["m1"],
-        ktc: ["p1"],
-      }),
-      chunk(["b"], {
-        leagues: ["L2"],
-        players: ["p2"],
-        managers: ["m2"],
-        ktc: ["p2"],
-      }),
+      meta(),
+      chunk(["a"]),
+      names({ leagues: ["L1"], players: ["p1"], managers: ["m1"], ktc: ["p1"] }),
+      chunk(["b"]),
+      names({ leagues: ["L2"], players: ["p2"], managers: ["m2"], ktc: ["p2"] }),
     ]);
     assert.deepEqual(
       data?.leagues.map((l) => l.league_id),
@@ -95,11 +101,14 @@ test("applyTradesMessage", async (t) => {
     assert.deepEqual(Object.keys(data?.ktc ?? {}), ["p1", "p2"]);
   });
 
-  // What the page's memoisation reads. Most chunks late in a season introduce no
-  // league and no player, and rebuilding those halves anyway would re-run every
-  // filter pass over the whole season for no change.
+  // What the page's memoisation reads. Trades arrive without their names now, so
+  // the identity rule matters on every chunk rather than only on the late ones.
   await t.test("a half that gained nothing keeps its identity", () => {
-    const first = fold([meta(2), chunk(["a"], { leagues: ["L1"], players: ["p1"] })]);
+    const first = fold([
+      meta(),
+      chunk(["a"]),
+      names({ leagues: ["L1"], players: ["p1"] }),
+    ]);
     const second = applyTradesMessage(first, chunk(["b"]));
 
     assert.notEqual(second.data?.trades, first.data?.trades, "trades grew");
@@ -109,20 +118,31 @@ test("applyTradesMessage", async (t) => {
     assert.equal(second.data?.ktc, first.data?.ktc);
   });
 
-  await t.test("a chunk carrying nothing at all is not a new state", () => {
-    const first = fold([meta(0), chunk(["a"])]);
-    assert.equal(applyTradesMessage(first, chunk([])), first);
+  await t.test("a names message adds no trades", () => {
+    const first = fold([meta(), chunk(["a"])]);
+    const second = applyTradesMessage(first, names({ players: ["p1"] }));
+    assert.equal(second.data?.trades, first.data?.trades);
+    assert.deepEqual(Object.keys(second.data?.players ?? {}), ["p1"]);
   });
 
-  await t.test("a chunk before any meta is dropped rather than inventing a total", () => {
+  await t.test("a message carrying nothing at all is not a new state", () => {
+    const first = fold([meta(), chunk(["a"])]);
+    assert.equal(applyTradesMessage(first, chunk([])), first);
+    assert.equal(applyTradesMessage(first, names()), first);
+  });
+
+  await t.test("anything before meta is dropped rather than inventing a season", () => {
     assert.equal(fold([chunk(["a"])]).data, null);
+    assert.equal(fold([names({ players: ["p1"] })]).data, null);
+    assert.equal(fold([total(10)]).data, null);
   });
 
   // A read can fail partway through, and a real prefix of the season on screen
   // beats an empty page — so the error sits beside the data, never in place of it.
   await t.test("an error after chunks keeps what arrived", () => {
     const state = fold([
-      meta(46_900),
+      meta(),
+      total(46_900),
       chunk(["a", "b"]),
       { type: "error", error: "Failed to load trades" },
     ]);
