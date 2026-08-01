@@ -1,5 +1,7 @@
 "use client";
 
+import { useCallback, useState } from "react";
+
 import type { ColumnPreset, Metric } from "../metric-cell";
 import { ColumnsEditor } from "./columns-editor";
 import { MetricHeadings } from "./metric-column";
@@ -19,6 +21,13 @@ import { MetricHeadings } from "./metric-column";
  * gutter, the same column width — so each heading sits over the numbers it names.
  * The 1px transparent border is not a rounding error: the cards carry a border,
  * and without one here every heading would be a pixel out.
+ *
+ * **A heading is the only control here — there is no `Columns` chip beside it.**
+ * The chip and the menus were two ways to the same board and the chip knew less
+ * than the label: it always opened on slot 1, so changing the fourth column was
+ * a press to open and a second press to aim at the column already named on
+ * screen. Pressing a heading opens the editor armed on that heading's slot,
+ * which is the same gesture answering both.
  *
  * **The headings are drawn at every width — they used to drop below `sm` and let
  * the cards grow their own labels back.** That made the same list two different
@@ -50,28 +59,32 @@ export function ColumnsBar<C>({
   onColumns: (keys: readonly string[]) => void;
   onReset: () => void;
 }) {
-  return (
-    // Below `sm` this stacks for the same reason the cards do — the trigger takes
-    // the first line, the headings the second, whole — so the two lines of the
-    // rail sit over the two lines of every card under it.
-    <div className="flex flex-col gap-2 border border-transparent px-4 pl-5 sm:flex-row sm:items-end sm:gap-4">
-      <div className="flex min-w-0 flex-1 items-center">
-        <ColumnsEditor
-          metrics={metrics}
-          columns={columns}
-          presets={presets}
-          ctx={ctx}
-          previewLabel={previewLabel}
-          onColumnChange={onColumnChange}
-          onColumns={onColumns}
-          onReset={onReset}
-        />
-      </div>
+  /** Which heading opened the editor, and so which slot it opens armed on. */
+  const [openSlot, setOpenSlot] = useState<number | null>(null);
+  const close = useCallback(() => setOpenSlot(null), []);
 
+  return (
+    // Below `sm` the headings take a line of their own, as the cards' columns do
+    // — so the rail sits over the numbers it names at both widths. From `sm` up
+    // it rides at the end of the row, which with nothing to its left is what
+    // `justify-end` is for.
+    <div className="flex flex-col gap-2 border border-transparent px-4 pl-5 sm:flex-row sm:items-end sm:justify-end sm:gap-4">
       <MetricHeadings
         metrics={metrics}
         columns={columns}
+        onOpen={setOpenSlot}
+      />
+
+      <ColumnsEditor
+        metrics={metrics}
+        columns={columns}
+        presets={presets}
+        ctx={ctx}
+        previewLabel={previewLabel}
+        openSlot={openSlot}
+        onClose={close}
         onColumnChange={onColumnChange}
+        onColumns={onColumns}
         onReset={onReset}
       />
     </div>
