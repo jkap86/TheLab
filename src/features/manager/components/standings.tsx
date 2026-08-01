@@ -114,8 +114,11 @@ export function Standings({
             <ColumnPicker
               key={slot}
               // The second column only exists once the half is wide enough for
-              // it — see the class strings above.
-              wrapperClassName={slot === 0 ? "" : "hidden @lg:inline-flex"}
+              // it — see the class strings above. The first passes its display
+              // back explicitly, because this prop owns the cell's `display`.
+              wrapperClassName={
+                slot === 0 ? "inline-flex" : "hidden @lg:inline-flex"
+              }
               options={TEAM_METRIC_OPTIONS}
               activeKey={key}
               open={openPicker === `team-${slot}`}

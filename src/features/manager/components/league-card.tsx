@@ -44,6 +44,7 @@ export function LeagueCard({
   adp,
   columns,
   onColumnChange,
+  onReset,
 }: {
   league: ManagerLeague;
   /**
@@ -73,6 +74,8 @@ export function LeagueCard({
   columns: string[];
   /** Point a column at another metric (applies to every card at once). */
   onColumnChange: (slot: number, key: string) => void;
+  /** Hand the list its opening columns back, from the foot of a card's menu. */
+  onReset?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   // Whether one of the stat columns has its picker open — the columns own which,
@@ -116,12 +119,18 @@ export function LeagueCard({
           )}
         </button>
 
+        {/* `labels={false}`: the heading rail pinned above the list names these
+            columns from `sm` up, and the same four words repeated down a hundred
+            rows is what made a list-wide selection read as a per-card one. Below
+            that width the rail is gone and the labels come back. */}
         <MetricColumns
           metrics={LEAGUE_METRICS}
           ctx={ctx}
           columns={columns}
           onColumnChange={onColumnChange}
           onOpenChange={setMenuOpen}
+          onReset={onReset}
+          labels={false}
         />
       </div>
 

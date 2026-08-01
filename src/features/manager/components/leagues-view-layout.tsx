@@ -52,11 +52,19 @@ import { PanelMessage } from "./ui";
 export function LeaguesViewLayout({
   view,
   stat,
+  columns,
   children,
 }: {
   view: FilteredLeagues;
   /** The tab's own headline count, shown in the header readout's side rail. */
   stat: HeaderStat;
+  /**
+   * The tab's stat-column headings, pinned with the header — see
+   * {@link ManagerHeader}'s own note on why they ride there. Each tab builds its
+   * own, since the catalogue behind them is the tab's grain and not this
+   * scaffold's business; a tab whose list has no stat columns omits it.
+   */
+  columns?: ReactNode;
   /** The tab's content, rendered once at least one league passes the filters. */
   children: ReactNode;
 }) {
@@ -137,6 +145,9 @@ export function LeaguesViewLayout({
             />
           ) : undefined
         }
+        // Only where there are rows for it to head: a heading rail over "no
+        // leagues match these filters" names columns nothing is under.
+        columns={filtered.length > 0 ? columns : undefined}
       />
 
       {!hasLeagues ? (

@@ -2,13 +2,22 @@
 
 import { useMemo } from "react";
 
+import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
+
 import { adpQueryString, todayIso } from "../adp-controls";
 import { useAdpControls } from "../filters-context";
 import { useAdp } from "../hooks/use-adp";
 import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
+import {
+  DEFAULT_PLAYER_COLUMNS,
+  PLAYER_SHARE_COLUMN_PRESETS,
+  PLAYER_SHARE_METRICS,
+  type ShareMetricContext,
+} from "../share-metrics";
 import { useManagerPlayers } from "../hooks/use-manager-players";
 import { playerShares } from "../shares";
 import type { AdpPlayerPayload } from "../types";
+import { ColumnsBar } from "./columns-bar";
 import { LeaguesViewLayout } from "./leagues-view-layout";
 import { ErrorCard } from "./manager-leagues-status";
 import { PlayerShares } from "./player-shares";
@@ -61,6 +70,29 @@ export function ManagerPlayers({ searched }: { searched: string }) {
     return map;
   }, [adp.data]);
 
+  // The share grain's columns, remembered on the device like the leagues tab's.
+  // One key for both share views, because they are one catalogue: a selection
+  // naming the ADP columns simply falls back per slot on the leaguemates list,
+  // which has no board price to read — `resolveColumns` doing exactly what it
+  // was written for.
+  const { columns, setColumn, setColumns, reset } = usePersistedColumns(
+    "share",
+    DEFAULT_PLAYER_COLUMNS,
+    PLAYER_SHARE_METRICS,
+  );
+
+  // What the editor previews against — the most-owned player, named in its
+  // footer so a share count can't pass as the column's own answer.
+  const first = shares?.players[0] ?? null;
+  const previewCtx: ShareMetricContext | null =
+    first && shares
+      ? {
+          leagues: first.leagues,
+          leagueCount: shares.league_count,
+          adp: adpByPlayer.get(first.player_id) ?? null,
+        }
+      : null;
+
   return (
     <LeaguesViewLayout
       view={view}
@@ -71,6 +103,20 @@ export function ManagerPlayers({ searched }: { searched: string }) {
           ? `across ${shares.league_count} league${shares.league_count === 1 ? "" : "s"}`
           : undefined,
       }}
+      columns={
+        shares && shares.players.length > 0 ? (
+          <ColumnsBar
+            metrics={PLAYER_SHARE_METRICS}
+            columns={columns}
+            presets={PLAYER_SHARE_COLUMN_PRESETS}
+            ctx={previewCtx}
+            previewLabel={first?.name ?? null}
+            onColumnChange={setColumn}
+            onColumns={setColumns}
+            onReset={reset}
+          />
+        ) : undefined
+      }
     >
       {/* A failed refetch must not blank rows the hook deliberately kept —
           the error replaces the list only when there is nothing to keep. */}
@@ -94,6 +140,9 @@ export function ManagerPlayers({ searched }: { searched: string }) {
               shares={shares.players}
               leagueCount={shares.league_count}
               adp={adpByPlayer}
+              columns={columns}
+              onColumnChange={setColumn}
+              onReset={reset}
             />
           )}
         </>

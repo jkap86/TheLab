@@ -1,6 +1,6 @@
 import { leagueType } from "../shared/league-filters.ts";
 import { formatRecord, formatWinPct } from "./format.ts";
-import type { Metric } from "./metric-cell.ts";
+import type { ColumnPreset, Metric } from "./metric-cell.ts";
 import { aggregateRecord } from "./record.ts";
 import type { AdpPlayerPayload, ManagerLeague } from "./types";
 
@@ -89,6 +89,7 @@ function adpTitle(entry: AdpPlayerPayload | null): string {
 export const SHARE_METRICS: ShareMetric[] = [
   {
     key: "leagues",
+    group: "Exposure",
     label: "Leagues",
     cell: ({ leagues, leagueCount }) => ({
       kind: "share",
@@ -99,6 +100,7 @@ export const SHARE_METRICS: ShareMetric[] = [
   },
   {
     key: "share",
+    group: "Exposure",
     label: "Share",
     cell: ({ leagues, leagueCount }) => ({
       kind: "value",
@@ -111,6 +113,7 @@ export const SHARE_METRICS: ShareMetric[] = [
   },
   {
     key: "record",
+    group: "Season",
     label: "Record",
     cell: ({ leagues }) => {
       const record = aggregateRecord(leagues);
@@ -128,6 +131,7 @@ export const SHARE_METRICS: ShareMetric[] = [
   },
   {
     key: "win_pct",
+    group: "Season",
     label: "Win %",
     cell: ({ leagues }) => {
       const record = aggregateRecord(leagues);
@@ -145,6 +149,7 @@ export const SHARE_METRICS: ShareMetric[] = [
   },
   {
     key: "dynasty",
+    group: "League mix",
     label: "Dynasty",
     cell: ({ leagues }) => {
       const held = countType(leagues, 2);
@@ -158,6 +163,7 @@ export const SHARE_METRICS: ShareMetric[] = [
   },
   {
     key: "redraft",
+    group: "League mix",
     label: "Redraft",
     cell: ({ leagues }) => {
       const held = countType(leagues, 0);
@@ -171,6 +177,7 @@ export const SHARE_METRICS: ShareMetric[] = [
   },
   {
     key: "teams",
+    group: "League mix",
     label: "Teams",
     cell: ({ leagues }) => {
       if (leagues.length === 0) return { kind: "value", text: null, title: "no leagues" };
@@ -196,6 +203,7 @@ export const SHARE_METRICS: ShareMetric[] = [
 export const PLAYER_ADP_METRICS: ShareMetric[] = [
   {
     key: "adp",
+    group: "Draft market",
     label: "ADP",
     cell: ({ adp }) => ({
       kind: "value",
@@ -205,6 +213,7 @@ export const PLAYER_ADP_METRICS: ShareMetric[] = [
   },
   {
     key: "adp_spread",
+    group: "Draft market",
     label: "Picks",
     cell: ({ adp }) => ({
       kind: "value",
@@ -244,4 +253,27 @@ export const DEFAULT_LEAGUEMATE_COLUMNS: string[] = [
   "share",
   "record",
   "win_pct",
+];
+
+/**
+ * The boards a share list's editor offers, as questions about a row: how much of
+ * it is there, how the teams behind it are doing, and what kind of leagues those
+ * are.
+ *
+ * **One list for both views**, matching the one catalogue behind them. `Market`
+ * names the two player-only metrics, so it is offered only where the ADP ones
+ * are — the leaguemates list is handed {@link SHARE_COLUMN_PRESETS}, which stops
+ * short of it. The rest are honest on both, since a person and a player are held
+ * across leagues the same way.
+ */
+export const SHARE_COLUMN_PRESETS: ColumnPreset[] = [
+  { name: "Exposure", columns: ["leagues", "share", "dynasty", "redraft"] },
+  { name: "Season", columns: ["leagues", "record", "win_pct", "share"] },
+  { name: "League mix", columns: ["leagues", "dynasty", "redraft", "teams"] },
+];
+
+/** Those three, plus the board price only a player row can answer. */
+export const PLAYER_SHARE_COLUMN_PRESETS: ColumnPreset[] = [
+  ...SHARE_COLUMN_PRESETS,
+  { name: "Market", columns: ["leagues", "adp", "adp_spread", "share"] },
 ];

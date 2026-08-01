@@ -43,11 +43,16 @@ export function SiteHeader() {
 
   const current = activeTool(pathname);
 
-  // Opaque, not glass: a plate with thickness can't be see-through, and the page
-  // scrolling under it would show through the extrusion. The inset top line is
-  // the specular edge every raised surface here shares.
+  // Tinted glass rather than an opaque plate: the ambient aurora is fixed behind
+  // every page, and a solid bar cut a flat band across the top of it. The
+  // translucency is paired with `backdrop-blur` on purpose — that is what keeps
+  // the *page* from reading through the extrusion as legible scrolling rows,
+  // which is what the opacity was originally protecting against. Blur is not
+  // universally supported, so the two gradient stops stay dark enough to carry
+  // the bar's text on their own if it is dropped. The inset top line is the
+  // specular edge every raised surface here shares.
   return (
-    <header className="sticky top-0 z-50 h-[var(--site-header-h)] bg-[linear-gradient(180deg,#1c3041,#0b1622)] shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_22px_40px_-26px_rgba(0,0,0,1)]">
+    <header className="sticky top-0 z-50 h-[var(--site-header-h)] bg-[linear-gradient(180deg,rgba(28,48,65,0.72),rgba(11,22,34,0.82))] shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_22px_40px_-26px_rgba(0,0,0,1)] backdrop-blur-xl">
       {/* The extruded bottom edge: a dark side wall with the accent lit along
           its base. Inside the header box, so the manager card pinning at
           `--site-header-h` lands flush against it rather than over it. */}

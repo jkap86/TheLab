@@ -716,7 +716,57 @@ stops holding, a comment saying it does would not have caught it.
   **per slot**: a stored selection outlives the build that wrote it, so a metric
   since renamed or dropped falls back on its own rather than resetting three good
   choices with it, and `defaults` fixes the row's length so a table given a third
-  column lays out either way.
+  column lays out either way. Two writes sit beside it in the same pure module,
+  and each closes a hole the per-slot write left. `assignColumn` **swaps**: a
+  metric picked into a slot another slot already holds trades places with it,
+  rather than spending one of four columns — across a hundred-odd cards — on a
+  number already on screen. And **`reset` is what makes the persistence safe to
+  have**: the selection outlives the session, so without a way back a reader who
+  aimed all four somewhere unhelpful is followed by that board to every later
+  visit. It clears the key rather than writing today's defaults into it, since
+  what a table opens with is the catalogue's to change.
+- **The stat columns are named once above the list, not on every card.** The
+  selection has always been list-wide — one pick moves the column on all
+  hundred-odd rows — and drawing the labels per card said the opposite, which is
+  why changing the board read as four unrelated errands. `ColumnsBar` is that
+  heading rail: the labels are the same pickers in one place, laid on the cards'
+  own geometry (`COLUMN_BOX` in `metric-column.tsx`, written once so a heading
+  can't drift a pixel off the number under it, with a transparent `divide-x`
+  because the cards' own divider sits *inside* their box). Four things it
+  taught:
+  - **It rides inside `ManagerHeader`**, as a `columns` node, because that card is
+    pinned: a rail that scrolled away halfway down the list would leave the
+    numbers unlabelled. Sitting there it needs no offset of its own — measuring
+    the header's height to pin a sibling under it is the machinery this avoids.
+  - **The cards keep their labels below `sm`** (`labels={false}` hides them from
+    `sm` up), because that is the width where a card stops being a row and the
+    rail stops sitting over anything. Hiding them takes them out of the
+    accessibility tree too, so an `sr-only` name at exactly those widths keeps a
+    screen reader from announcing "#3 of 12" with no word for what it ranks.
+  - **The column is as wide as the longest label, not the widest number** — 96px
+    from `sm` up, where 80px truncated a third of the catalogue. Below `sm` it
+    stays 80px, since four of anything wider overflows a phone; the two rules are
+    one rule, because the wide column exists to hold a heading and there is no
+    heading down there.
+  - **The share lists' selection moved up to the tab** for the same reason: the
+    rail that edits it is in the header, on the other side of the list, and one
+    selection can't be owned by two places. Both share views share the key
+    `share`, which is the grain rule doing its job — a stored `adp` column simply
+    falls back per slot on the leaguemates list, which has no board price.
+- **`ColumnsEditor` is all four slots at once, and it commits live.** The
+  per-column menus are right for changing one column and wrong for changing the
+  board: four slots are rarely four independent choices, so recomposing them was
+  four menus and four passes over one flat list with nothing to see until the last
+  pick landed. The dialog is the slots across the top, the catalogue in captioned
+  bays (`Metric.group` + `groupMetrics`, so the catalogue stays one ordered array
+  rather than two lists that can disagree), and `ColumnPreset`s as one press each.
+  Where it parts company with `LeagueFiltersModal` is instructive: **that one
+  holds a draft because its options carry counts, and a count can't be read while
+  the list behind it moves.** Nothing here is counted — the slots preview what
+  each column will say — so there is nothing to protect from moving, which is why
+  the footer says `Done` and not `Apply`. A preview is against one arbitrary
+  subject, so the footer names it; the heading menus show no previews at all, for
+  the same reason.
 - **The account is the key to the whole grid: every card is inert until one
   resolves.** Each tool reads that account, so `ToolGrid` passes `disabled={!user}`
   and `ToolLinkCard` renders an `aria-disabled`, dimmed `div` instead of a
@@ -1093,7 +1143,21 @@ stops holding, a comment saying it does would not have caught it.
   Players tab passes its query unconditionally, since its ADP column is on screen
   either way.
 - The expanded league panel uses container queries (`@lg:`), not viewport
-  breakpoints, because it renders at half width inside a card.
+  breakpoints, because it renders at half width inside a card. **Both its halves
+  shed their second value column below `@lg`, and both shed it in three places at
+  once** — the grid template, the heading picker, and the row's own cell. A cell
+  rendered into a track that isn't there doesn't overflow, it *wraps* onto an
+  implicit second row, where the column's own `justify-self-end` lands it in the
+  rank gutter and pushes it off the left edge of the panel. That is what the
+  standings heading did on a phone.
+- **`hidden` does not beat a `display` utility that sorts after it.** Tailwind v4
+  emits the display utilities in *alphabetical* order, so `.block` loses to
+  `.hidden` (which is why the standings *cells* hid correctly) while
+  `.inline-flex`, `.inline` and `.table` all win against it. `ColumnPicker`
+  therefore takes its wrapper's `display` from the caller rather than owning
+  `inline-flex` itself — a shared component that hard-codes one is a component
+  no caller can hide, and the failure is silent in both the class list and the
+  compiler. Source order in the `class` attribute never enters into it.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
   being looked at, the season, the sync state and the manager's record are the
   same facts on all of them; only the headline count differs, which is what
@@ -1379,10 +1443,19 @@ stops holding, a comment saying it does would not have caught it.
   - **The bar's extruded edge is drawn *inside* the header box** (`--bar-edge-h`,
     counted into `--site-header-h`). As an outside shadow it would be covered by
     the manager card, which pins at exactly that offset.
-  - **The plate is opaque.** The glass-and-blur bar it replaced was legible
-    because of an alpha chosen to survive `backdrop-filter` being unsupported; a
-    surface with visible thickness has no such out — page content showing through
-    an extrusion reads as a rendering bug, so there is no translucency to tune.
+  - **The plate is tinted glass, and the blur is what makes that safe.** It was
+    opaque, on the reasoning that a surface with visible thickness can't have
+    page content showing through its extrusion. What that bought was a flat band
+    cut across the top of the ambient aurora, which is fixed behind every page
+    and is most of what makes the app read as one product. So the two gradient
+    stops carry an alpha and the bar carries `backdrop-blur` — the blur is the
+    load-bearing half, since it diffuses the rows scrolling underneath into
+    colour rather than legible content, which is the failure the opacity was
+    actually preventing. The stops are still dark enough to hold the bar's text
+    on their own where `backdrop-filter` is unsupported, the same out the
+    glass-and-blur bar before it relied on. The extruded bottom edge stays
+    opaque: it is the part that reads as thickness, and a translucent side wall
+    is what would look like a rendering bug.
   - **`.lab-chip` is that grammar off the bar**, for a control that stays a
     rounded pill: nothing clips it, so its side wall can simply *be* a shadow
     (`0 3px 0 var(--edge)`) and the whole part is one element rather than the

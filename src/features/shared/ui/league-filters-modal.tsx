@@ -456,7 +456,16 @@ function SegmentRow<T extends string>({
           className="filters-segment-pop absolute inset-x-0 top-full z-20 mt-1 rounded-xl border border-active/25 bg-gradient-to-b from-[#1b3040] to-[#0d1c27] p-2 shadow-[0_24px_50px_-20px_rgba(0,0,0,0.95),0_0_36px_-16px_rgba(0,255,229,0.35)]"
           style={{ animation: "dialog-rise 0.14s cubic-bezier(0.2,0.9,0.3,1)" }}
         >
-          <div className="flex flex-wrap gap-1.5">
+          {/*
+            One option per line, not a wrapping row of chips. Wrapped, the
+            options of a group broke into ragged lines whose length depended on
+            how long each label happened to be, so the counts — the number the
+            dialog is read for — landed at a different x on every line and there
+            was no column to compare them down. Stacked, the labels share a left
+            edge and the counts share a right one, which is what makes "84 in
+            season against 28 pre-draft" readable at a glance.
+          */}
+          <div className="flex flex-col gap-1">
             {options.map((option, i) => {
               const isSelected = option.value === value;
               return (
@@ -471,15 +480,15 @@ function SegmentRow<T extends string>({
                     onPick(option.value);
                     onClose();
                   }}
-                  className={`inline-flex items-baseline gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-bold ${
+                  className={`flex w-full items-baseline gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] font-bold ${
                     isSelected
                       ? "lab-chip-on"
                       : "lab-chip text-foreground/70 hover:text-foreground"
                   }`}
                 >
-                  {option.label}
+                  <span className="truncate">{option.label}</span>
                   <span
-                    className={`font-mono text-[10px] tabular-nums ${
+                    className={`ml-auto font-mono text-[10px] tabular-nums ${
                       isSelected ? "text-[#052029]/60" : "text-foreground/35"
                     }`}
                   >
