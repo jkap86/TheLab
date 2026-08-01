@@ -12,7 +12,17 @@ import { getAllPlayers } from "@/shared/sleeper";
 /** How long the cached players map stays fresh (Sleeper: refresh once/day). */
 export const PLAYERS_TTL_MS = 24 * 60 * 60 * 1000;
 
-export type PlayersSyncSummary = { skipped: boolean; count: number };
+export type PlayersSyncSummary = {
+  /**
+   * true when another instance held the lock and this run did nothing — the
+   * same field KTC and projections carry. Without it a caller couldn't tell a
+   * fresh-cache skip from someone else's in-flight download, which is the
+   * difference between "nothing to do" and "try again shortly".
+   */
+  locked: boolean;
+  skipped: boolean;
+  count: number;
+};
 
 /**
  * Refresh the cached Sleeper players map. Skips the (large) download when the
@@ -31,14 +41,16 @@ export async function syncPlayers(
   const summary = await withAdvisoryLock(LOCK_KEYS.players, () =>
     syncPlayersLocked(options),
   );
-  return summary ?? { skipped: true, count: await countRows("players") };
+  return (
+    summary ?? { locked: true, skipped: true, count: await countRows("players") }
+  );
 }
 
 async function syncPlayersLocked(
   options: { force?: boolean },
 ): Promise<PlayersSyncSummary> {
   if (!options.force && (await isFresh("players", PLAYERS_TTL_MS))) {
-    return { skipped: true, count: await countRows("players") };
+    return { locked: false, skipped: true, count: await countRows("players") };
   }
 
   const map = await getAllPlayers();
@@ -67,7 +79,7 @@ async function syncPlayersLocked(
     }),
   );
 
-  return { skipped: false, count: entries.length };
+  return { locked: false, skipped: false, count: entries.length };
 }
 
 /** Refresh the players cache if it is stale; a no-op when fresh. */

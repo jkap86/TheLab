@@ -8,6 +8,7 @@ import {
 import type { LeaguesStreamMessage } from "@/shared/contract";
 import { ensurePlayersFresh } from "@/shared/players";
 
+import { isInternalRequest } from "../../../internal-auth";
 import { resolveManagerRequest } from "../manager-request";
 
 export const runtime = "nodejs";
@@ -37,7 +38,12 @@ export async function GET(
   if (!resolved.ok) return resolved.response;
   const { user, season, searchParams } = resolved;
 
-  const force = searchParams.get("refresh") === "1";
+  // `?refresh=1` forces the full ~9-requests-per-league fan-out past the TTL, so
+  // it is an operator knob, not a public one: anonymous callers get the ordinary
+  // stale-while-revalidate behaviour and the parameter is ignored. The route
+  // itself stays public — this is a read every manager page makes, and the whole
+  // point is that it answers from cache.
+  const force = searchParams.get("refresh") === "1" && isInternalRequest(request);
 
   // Warm the players cache in the background (no-op when fresh).
   void ensurePlayersFresh().catch((error) => {

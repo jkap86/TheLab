@@ -22,6 +22,13 @@ async function tick(firstRun: boolean): Promise<void> {
     const summary = await syncKtcValues({ force: !firstRun });
     if (summary.locked) {
       console.log("[ktc] Values refresh already running elsewhere; skipped.");
+    } else if (summary.rejected) {
+      // `syncKtcValues` already logged the counts behind the refusal; this is
+      // the line that makes it visible in the loop's own narrative.
+      console.warn(
+        `[ktc] Values refresh rejected (${summary.rejected}); ` +
+          `${summary.count} stored value(s) preserved.`,
+      );
     } else if (summary.skipped) {
       console.log(`[ktc] Values still fresh; skipped (${summary.count} rows).`);
     } else {

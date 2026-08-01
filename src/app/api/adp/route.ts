@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { AdpPayload, AdpPlayerPayload, ApiErrorPayload } from "@/shared/contract";
 import { getDraftAdp, parseAdpFilters } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
-import { DEFAULT_SEASON } from "@/shared/sleeper";
+import { getActiveSeason } from "@/shared/season";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,7 +40,10 @@ export const dynamic = "force-dynamic";
  * defaults stay visible to the caller.
  */
 export async function GET(request: Request) {
-  const parsed = parseAdpFilters(new URL(request.url).searchParams, DEFAULT_SEASON);
+  const parsed = parseAdpFilters(
+    new URL(request.url).searchParams,
+    await getActiveSeason(),
+  );
   if (!parsed.ok) {
     const error: ApiErrorPayload = { error: parsed.error };
     return NextResponse.json(error, { status: 400 });

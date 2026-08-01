@@ -10,11 +10,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test \"src/**/*.test.ts\"",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "migrate:up": "node-pg-migrate up -m db/migrations",
     "migrate:down": "node-pg-migrate down -m db/migrations",
     "migrate:redo": "node-pg-migrate redo -m db/migrations",
-    "migrate:create": "node-pg-migrate create -m db/migrations -j sql"
+    "migrate:create": "node-pg-migrate create -m db/migrations -j sql",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "axios": "^1.18.1",
@@ -34,6 +35,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }

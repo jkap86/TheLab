@@ -8,6 +8,23 @@ import { pool } from "@/shared/db";
  * `ktc/match` stopped querying `players` directly.
  */
 
+/**
+ * How many stored players currently carry a price on either board.
+ *
+ * The population the completeness guard compares a fresh scrape against — not
+ * `countRows`, which counts players whose values were nulled by an earlier
+ * reconciliation too, and would make the board look bigger than it is. Zero is
+ * a first sync.
+ */
+export async function countPricedKtcValues(): Promise<number> {
+  const { rows } = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count
+       FROM ktc_values
+      WHERE sf_value IS NOT NULL OR oneqb_value IS NOT NULL`,
+  );
+  return Number(rows[0].count);
+}
+
 /** One player's value on both of KTC's boards; null where KTC prices neither. */
 export type KtcValue = { sf: number | null; oneqb: number | null };
 

@@ -1,4 +1,5 @@
 import {
+  AdvisoryLockTimeoutError,
   managerSyncLockKey,
   pool,
   withBlockingAdvisoryLock,
@@ -47,6 +48,14 @@ export type LeagueSyncResult = {
   loaded: number;
   failed: number;
   counts: LeagueCounts;
+  /**
+   * Which leagues were persisted and which failed, not just how many. The
+   * crawler stamps a manager only when every league it discovered for them is
+   * in, and with leagues shared between managers a count can't answer that —
+   * see `./discovery`.
+   */
+  loadedIds: string[];
+  failedIds: string[];
 };
 
 /** How long a manager's league sync stays fresh before we re-fetch Sleeper. */
@@ -120,6 +129,8 @@ export async function syncLeagueGraphs(
 
   let loaded = 0;
   let failed = 0;
+  const loadedIds: string[] = [];
+  const failedIds: string[] = [];
   const counts = emptyCounts();
 
   onProgress?.({ loaded, total, failed });
@@ -135,8 +146,10 @@ export async function syncLeagueGraphs(
       counts.draftPicks += graph.draftPicks.length;
       counts.transactions += graph.transactions.length;
       loaded += 1;
+      loadedIds.push(league.league_id);
     } catch (error) {
       failed += 1;
+      failedIds.push(league.league_id);
       console.error(
         `[leagues] failed to sync league ${league.league_id}:`,
         errorMessage(error),
@@ -146,7 +159,7 @@ export async function syncLeagueGraphs(
     }
   });
 
-  return { loaded, failed, counts };
+  return { loaded, failed, counts, loadedIds, failedIds };
 }
 
 /**
@@ -169,9 +182,23 @@ export async function syncManagerLeagues(
   options: SyncOptions = {},
 ): Promise<SyncSummary> {
   const requestedAt = new Date();
-  return withBlockingAdvisoryLock(managerSyncLockKey(userId), () =>
-    syncManagerLeaguesLocked(userId, season, requestedAt, options),
-  );
+  try {
+    return await withBlockingAdvisoryLock(managerSyncLockKey(userId), () =>
+      syncManagerLeaguesLocked(userId, season, requestedAt, options),
+    );
+  } catch (error) {
+    if (!(error instanceof AdvisoryLockTimeoutError)) throw error;
+    // The wait is bounded now (see ADVISORY_LOCK_WAIT_MS), so a holder that
+    // outruns it turns into a skip rather than a connection held for as long as
+    // they take. Reported as skipped, which is what it is: someone else is
+    // running this manager's sync, and the caller serves what is stored.
+    console.warn(
+      `[leagues] sync for ${userId} (${season}) is already running elsewhere; skipped.`,
+    );
+    return {
+      season, skipped: true, total: 0, leagues: 0, failed: 0, ...emptyCounts(),
+    };
+  }
 }
 
 async function syncManagerLeaguesLocked(
