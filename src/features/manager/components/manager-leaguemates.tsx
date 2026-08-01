@@ -17,7 +17,7 @@ import { ColumnsBar } from "./columns-bar";
 import { LeaguemateShares } from "./leaguemate-shares";
 import { LeaguesViewLayout } from "./leagues-view-layout";
 import { ErrorCard } from "./manager-leagues-status";
-import { PanelMessage } from "./ui";
+import { PanelLoading, PanelMessage } from "./ui";
 
 /**
  * Leaguemates: who this manager shares leagues with, and how many.
@@ -97,7 +97,7 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
       {membership.error && !shares ? (
         <ErrorCard message={membership.error} />
       ) : !shares ? (
-        <PanelMessage>Loading leaguemates…</PanelMessage>
+        <PanelLoading>Loading leaguemates…</PanelLoading>
       ) : (
         <>
           {membership.error && (

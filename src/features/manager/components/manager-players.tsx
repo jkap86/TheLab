@@ -21,7 +21,7 @@ import { ColumnsBar } from "./columns-bar";
 import { LeaguesViewLayout } from "./leagues-view-layout";
 import { ErrorCard } from "./manager-leagues-status";
 import { PlayerShares } from "./player-shares";
-import { PanelMessage } from "./ui";
+import { PanelLoading, PanelMessage } from "./ui";
 
 /**
  * Player shares: who this manager owns, in how many of their leagues, and each
@@ -123,7 +123,7 @@ export function ManagerPlayers({ searched }: { searched: string }) {
       {rosters.error && !shares ? (
         <ErrorCard message={rosters.error} />
       ) : !shares ? (
-        <PanelMessage>Loading rosters…</PanelMessage>
+        <PanelLoading>Loading rosters…</PanelLoading>
       ) : (
         <>
           {rosters.error && (

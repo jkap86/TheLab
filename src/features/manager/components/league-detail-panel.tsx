@@ -14,7 +14,7 @@ import { DEFAULT_TEAM_COLUMNS, TEAM_METRICS } from "../standings-metrics";
 import type { LeagueDetailResult } from "../types";
 import { RosterDetail } from "./roster-detail";
 import { Standings } from "./standings";
-import { PanelMessage } from "./ui";
+import { PanelLoading, PanelMessage } from "./ui";
 
 /**
  * The expanded contents of a league card: standings on the left, the selected
@@ -25,7 +25,7 @@ export function LeagueDetailPanel({ leagueId }: { leagueId: string }) {
   const { data, loading, error } = useLeagueDetail(leagueId);
 
   if (loading && !data) {
-    return <PanelMessage>Loading rosters…</PanelMessage>;
+    return <PanelLoading>Loading rosters…</PanelLoading>;
   }
   if (error) {
     return <PanelMessage tone="error">{error}</PanelMessage>;

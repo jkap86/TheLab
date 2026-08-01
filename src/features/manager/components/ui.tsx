@@ -1,4 +1,4 @@
-import { Avatar } from "@/features/shared";
+import { Avatar, FlaskLoader } from "@/features/shared";
 
 import { formatRecord } from "../format";
 import type { LeagueTeamView, ManagerLeague } from "../types";
@@ -163,5 +163,25 @@ export function PanelMessage({
     >
       {children}
     </p>
+  );
+}
+
+/**
+ * `PanelMessage`'s chrome around a wait, with the flask bubbling in it. The
+ * panel mounts on expand and its rosters are a fetch away, so this is the one
+ * panel state that is going somewhere — a still line of text says only that
+ * nothing has happened yet, which is what a slow league card looked like.
+ *
+ * The flask is small — the panel renders at half a card's width — and the
+ * message is a plain string rather than a node so it can be both the visible
+ * line and the loader's accessible name: the flask already carries the
+ * `role="status"`, so a second one under it would announce the wait twice.
+ */
+export function PanelLoading({ children }: { children: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1 rounded-lg border border-foreground/10 bg-foreground/[0.02] px-4 py-5 text-center text-sm text-foreground/45">
+      <FlaskLoader size={36} label={children} />
+      <p aria-hidden="true">{children}</p>
+    </div>
   );
 }
