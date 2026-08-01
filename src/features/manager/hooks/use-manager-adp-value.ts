@@ -15,17 +15,19 @@ export type ManagerAdpValueState = ManagerResourceState<ManagerAdpValueResult>;
  *
  * `steepness` rides in the path so a change to the value curve re-fetches the
  * whole board — it changes every roster's number, not which leagues are read,
- * and the route re-prices them all with the new curve.
+ * and the route re-prices them all with the new curve. It is a number of
+ * halvings rather than a preset name, so the slider that sets it re-fetches per
+ * notch it lands on and not per pixel it is dragged across.
  */
 export function useManagerAdpValue(
   searched: string,
   leagues: ManagerLeague[] | null,
-  steepness: string,
+  steepness: number,
 ): ManagerAdpValueState {
   return useManagerResource<ManagerAdpValueResult>(
     searched,
     leagues,
-    `adp-value?steepness=${encodeURIComponent(steepness)}`,
+    `adp-value?steepness=${steepness}`,
     "Failed to load draft values",
   );
 }

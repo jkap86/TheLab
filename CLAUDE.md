@@ -736,7 +736,15 @@ stops holding, a comment saying it does would not have caught it.
   glance, which a stacked panel loses by pushing the board below the fold. And the
   filters are chips (`ChipSelect` — a real `<select>` under the styling, so
   keyboard and touch come free) rather than eight labelled rows, because the pinned
-  block has to stay short enough to leave the board room. The board is fetched by
+  block has to stay short enough to leave the board room. **A chip asks the
+  question, not the column behind it**: the draft-kind chip is `rounds` under
+  "All drafts / Startup / Rookie", because the round count is the evidence and
+  what kind of draft it was is what a reader wants — it replaced a
+  snake/linear/auction chip in that slot, which named how a room picked rather
+  than what market it priced, and left the startup-against-rookie cut spelled out
+  as `≤5 rds` in a second chip. `draft_type` is a constant now (`snake,linear`)
+  for the reason it always defaulted that way: an auction's `pick_no` is
+  nomination order, so its "ADP" is not one. The board is fetched by
   the layout and gated on `open`, so a tab nobody opened it on costs no request;
   on the Players tab that means the same board is fetched twice while the drawer is
   up, which is a bounded cost paid only while someone is looking at both.
@@ -1119,6 +1127,16 @@ stops holding, a comment saying it does would not have caught it.
     of five parts at that height reads as five more filters rather than as the
     one-click path to a rule. It is declared after `.lab-chip:active` so its own
     press wins.
+  - **`.lab-slider` is that grammar for a continuous control** — the ADP drawer's
+    value curve: a milled slot with a raised key riding in it, recessed track
+    because it is read and raised thumb because it is grabbed. Two things it
+    teaches. A range input is styled through **per-engine pseudo-elements that
+    cannot share a selector** — one unknown pseudo-element voids the whole rule,
+    so WebKit's and Firefox's are written out twice even where they are identical,
+    and a "deduplication" of them silently deletes the styling in one browser.
+    And `appearance: none` is what unhooks the native widget while carrying no box
+    of its own, so the material-only rule still holds: the width and the layout
+    come from utilities at the call site.
   The notch is kept for the small parts and the panel stays rounded (the `H3`
   mockup of three): six rows of 11px text want a calm surface, and nothing else
   in the app has to change its corners to match.
@@ -1381,11 +1399,26 @@ stops holding, a comment saying it does would not have caught it.
   the board — because it starts more players (`startingSlotCount` reuses the slot
   vocabulary, so a new flex counts the moment the solver learns it). The one knob
   is the **steepness** — how many times value halves across that pool — and it is
-  a *user control*, not a hardcoded constant: three presets in the shared ADP drawer,
-  sent to the route as a `steepness` param it parses (a matched string pair with
-  the client, like the board vocabulary). It is a modeling choice and changing it
-  reprices every card, which is why it is exposed rather than baked in; `ADP_PEAK`
-  is only the scale the numbers are read on.
+  a *user control*, not a hardcoded constant: a slider in the shared ADP drawer,
+  sent to the route as a `steepness` param it clamps to `STEEPNESS_RANGE`. It is a
+  modeling choice and changing it reprices every card, which is why it is exposed
+  rather than baked in; `ADP_PEAK` is only the scale the numbers are read on.
+  **It is the one piece of that vocabulary the two ends do *not* carry
+  separately**, and the exception is instructive: the board filters are a matched
+  pair of strings because they name populations SQL has to recognise, where this
+  is a single scalar with an obvious ordering — so `adp-value.ts` owns the range
+  and its default, and the client reads them relatively (`.ts` extension, the way
+  it already reads `isSuperflexLineup`) rather than re-typing three preset names.
+  It *was* three names, and they were only ever three points on the scale; a
+  slider says so, and the drawer's board previews the curve as it moves. Two rules
+  travel with that. **Dragging previews, releasing commits** — a committed value
+  re-fetches every league's team value, so a drag across the range would fire two
+  dozen of those; the drawer holds the in-flight value locally and moves the store
+  on pointer-up, key-up or blur. And **a preview needs a pool it doesn't have**:
+  the drawer's board belongs to no league, so `previewAdpPool` anchors on the size
+  filter when one is set and a typical 12-team lineup otherwise — an assumption,
+  which is why the footer states it rather than letting the column pass as a card's
+  own number.
 - **This is the third team-value lens, and the three answer different
   questions.** `ktc` prices a *dynasty* asset, `ranks` models a *season*, and
   `adp-value` reads the *market consensus* of the drafts this app crawled — which

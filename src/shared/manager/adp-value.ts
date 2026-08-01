@@ -33,28 +33,41 @@ import type { AdpFilters, LeagueType, ScoringFormat } from "./adp-filters.ts";
 export const ADP_PEAK = 10_000;
 
 /**
- * The steepness of the value curve, as three presets the reader picks from the
- * ADP bar — the number of times value halves across a league's whole *startable
- * pool* (see {@link adpValue}). `balanced` (4) makes a league's last startable
- * pick worth ~1/16 of the 1.01; `flat` keeps depth worth more, `steep`
- * concentrates value at the very top. A `Steepness` is the only knob on the
- * curve, and it is expressed in halvings-per-pool rather than picks so it means
- * the same thing in a shallow league and a deep one.
+ * The steepness of the value curve: the number of times value halves across a
+ * league's whole *startable pool* (see {@link adpValue}). The default, 4, makes
+ * a league's last startable pick worth ~1/16 of the 1.01; a smaller number keeps
+ * depth worth more, a larger one concentrates value at the very top. It is the
+ * only knob on the curve, and it is expressed in halvings-per-pool rather than
+ * picks so it means the same thing in a shallow league and a deep one.
  *
- * The client writes these same three strings into its own `AdpControls` with no
- * compiler link — a matched pair, like the ADP board filters — so
- * {@link parseSteepness} tolerates anything unknown by falling back to the
- * default rather than trusting the query string.
+ * **It is a continuous number, not a set of presets.** It was three named
+ * strings (`flat`/`balanced`/`steep`) that the client re-typed into its own
+ * `AdpControls` with no compiler link — a matched pair like the ADP board
+ * filters, and the one that didn't need to be: this is a single scalar with an
+ * obvious ordering, so the client drives it with a slider and sends the number
+ * itself. The bounds live here because the *curve* owns what a sane halving
+ * count is; the client reads them (relatively, the way it already reads
+ * `isSuperflexLineup`) rather than spelling its own.
+ *
+ * {@link parseSteepness} still tolerates junk by clamping to the range and
+ * falling back to the default — a query string is never trusted.
  */
-export const STEEPNESS_HALVINGS = { flat: 3, balanced: 4, steep: 5 } as const;
-export type Steepness = keyof typeof STEEPNESS_HALVINGS;
-export const DEFAULT_STEEPNESS: Steepness = "balanced";
+export const STEEPNESS_RANGE = { min: 2, max: 8, step: 0.25 } as const;
+export const DEFAULT_STEEPNESS = 4;
 
-/** Read a `steepness` query value, falling back to the default for anything unknown. */
-export function parseSteepness(value: string | null | undefined): Steepness {
-  return value != null && value in STEEPNESS_HALVINGS
-    ? (value as Steepness)
-    : DEFAULT_STEEPNESS;
+/**
+ * Read a `steepness` query value: a number of halvings, clamped to
+ * {@link STEEPNESS_RANGE}, with anything unparseable falling back to the
+ * default. Clamping rather than rejecting is deliberate — an out-of-range curve
+ * is a caller asking for more of something real, and the nearest curve on the
+ * scale is a better answer than silently pricing every roster on the default.
+ */
+export function parseSteepness(value: string | null | undefined): number {
+  // An empty parameter is an absent one, not zero — `Number("")` is 0, which
+  // would clamp to the flattest curve on the scale rather than the default.
+  const parsed = value == null || value.trim() === "" ? Number.NaN : Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_STEEPNESS;
+  return Math.min(STEEPNESS_RANGE.max, Math.max(STEEPNESS_RANGE.min, parsed));
 }
 
 /**

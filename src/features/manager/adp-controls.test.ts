@@ -2,11 +2,16 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  ADP_PEAK,
+  DEFAULT_ADP_STEEPNESS,
   adpQueryString,
   adpRangePresets,
   boardLabel,
   defaultAdpControls,
   deriveScoring,
+  previewAdpPool,
+  previewAdpValue,
+  steepnessSummary,
   seasonOptions,
   rangeBounds,
   rangeLabel,
@@ -114,19 +119,18 @@ describe("adpQueryString", () => {
     const controls: AdpControls = {
       season: "2025",
       range: { preset: "all", from: null, to: null },
-      draftType: "auction",
       leagueType: "2",
       scoring: "ppr",
       superflex: "yes",
       bestBall: "no",
       teams: "12",
       rounds: "full",
-      steepness: "steep",
+      steepness: 5,
     };
     assert.deepEqual(params(adpQueryString(controls, TODAY)), {
       limit: "1000",
       season: "2025",
-      draft_type: "auction",
+      draft_type: "snake,linear",
       league_type: "dynasty",
       scoring: "ppr",
       superflex: "1",
@@ -139,8 +143,8 @@ describe("adpQueryString", () => {
 
   test("steepness is a value-curve knob, not a board filter — never sent here", () => {
     // It drives the Leagues-tab team value, not which drafts /api/adp averages.
-    const flat = adpQueryString({ ...defaultAdpControls(SEASON), steepness: "flat" }, TODAY);
-    const steep = adpQueryString({ ...defaultAdpControls(SEASON), steepness: "steep" }, TODAY);
+    const flat = adpQueryString({ ...defaultAdpControls(SEASON), steepness: 3 }, TODAY);
+    const steep = adpQueryString({ ...defaultAdpControls(SEASON), steepness: 6 }, TODAY);
     assert.equal(flat, steep);
     assert.equal("steepness" in params(flat), false);
   });
@@ -168,13 +172,62 @@ describe("adpQueryString", () => {
     assert.equal(query.teams_max, "10");
   });
 
-  test("the three explicit draft types pass through unchanged", () => {
-    for (const draftType of ["snake", "linear", "auction"] as const) {
+  test("a board is always over snake and linear drafts, never auctions", () => {
+    // An auction's `pick_no` is nomination order rather than a draft slot, so
+    // its "ADP" is not one. It stopped being a control when that chip became the
+    // startup/rookie question readers were actually asking it, so the parameter
+    // is now a constant — and this is what pins it.
+    for (const rounds of ["all", "rookie", "full"] as const) {
       const query = params(
-        adpQueryString({ ...defaultAdpControls(SEASON), draftType }, TODAY),
+        adpQueryString({ ...defaultAdpControls(SEASON), rounds }, TODAY),
       );
-      assert.equal(query.draft_type, draftType);
+      assert.equal(query.draft_type, "snake,linear");
     }
+  });
+});
+
+describe("steepnessSummary", () => {
+  test("reads the curve as what the last starter is worth", () => {
+    // 2^-halvings a full pool deep. The default halves four times, so the last
+    // startable pick is ~1/16 of the 1.01.
+    assert.equal(steepnessSummary(4), "last starter ≈ 6% of the 1.01");
+    assert.equal(steepnessSummary(2), "last starter ≈ 25% of the 1.01");
+  });
+
+  test("the steep end keeps a digit rather than rounding to nothing", () => {
+    // Rounded whole, the top of the range reads "0%", which says the curve
+    // stopped moving where it is in fact still halving.
+    assert.equal(steepnessSummary(8), "last starter ≈ 0.4% of the 1.01");
+  });
+});
+
+describe("previewAdpPool", () => {
+  test("uses the size filter when the board is narrowed to one", () => {
+    assert.equal(previewAdpPool("10"), 10 * 9);
+  });
+
+  test("an unnarrowed or junk size falls back to a typical 12-team league", () => {
+    // The drawer's board belongs to no league, so the preview needs a premise;
+    // a zero or unparseable one would collapse the curve rather than pick a pool.
+    assert.equal(previewAdpPool("all"), 12 * 9);
+    assert.equal(previewAdpPool("0"), 12 * 9);
+    assert.equal(previewAdpPool("nonsense"), 12 * 9);
+  });
+});
+
+describe("previewAdpValue", () => {
+  test("the top of the board is the peak, and value falls down it", () => {
+    assert.equal(previewAdpValue(1, "all", DEFAULT_ADP_STEEPNESS), ADP_PEAK);
+    assert.ok(
+      previewAdpValue(50, "all", DEFAULT_ADP_STEEPNESS) >
+        previewAdpValue(120, "all", DEFAULT_ADP_STEEPNESS),
+    );
+  });
+
+  test("a steeper curve is worth less everywhere but the very top", () => {
+    // What the slider does, and the reason the preview re-prices as it moves.
+    assert.ok(previewAdpValue(40, "all", 6) < previewAdpValue(40, "all", 3));
+    assert.equal(previewAdpValue(1, "all", 6), previewAdpValue(1, "all", 3));
   });
 });
 
@@ -194,7 +247,7 @@ describe("seedFromLeague", () => {
     const base: AdpControls = {
       ...defaultAdpControls(SEASON),
       range: { preset: "custom", from: "2025-05-01", to: null },
-      draftType: "auction",
+      rounds: "rookie",
       superflex: "yes",
     };
     const seeded = seedFromLeague(
@@ -220,7 +273,7 @@ describe("seedFromLeague", () => {
     );
     // Not league settings — left exactly as they were.
     assert.deepEqual(seeded.range, { preset: "custom", from: "2025-05-01", to: null });
-    assert.equal(seeded.draftType, "auction");
+    assert.equal(seeded.rounds, "rookie");
   });
 
   test("seeds superflex off the slots, so a 1QB league resets it", () => {

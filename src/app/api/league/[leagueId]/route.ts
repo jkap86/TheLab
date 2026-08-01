@@ -13,7 +13,6 @@ import {
 import type { KtcValueSet } from "@/shared/ktc";
 import {
   DEFAULT_STEEPNESS,
-  STEEPNESS_HALVINGS,
   adpBoardFor,
   adpValue,
   getDraftAdpForPlayers,
@@ -88,7 +87,7 @@ async function priceRosters(args: {
   // This panel offers no steepness control, so it reads the default the
   // collapsed card's ADP metric also starts from.
   const pool = leagueAdpPool(teams, rosterPositions);
-  const halvings = STEEPNESS_HALVINGS[DEFAULT_STEEPNESS];
+  const halvings = DEFAULT_STEEPNESS;
 
   const adp: Record<string, number> = {};
   const adp_position: Record<string, number> = {};

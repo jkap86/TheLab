@@ -1,5 +1,12 @@
 import { isSuperflexLineup } from "../../shared/ktc/roster.ts";
 import {
+  ADP_PEAK,
+  DEFAULT_STEEPNESS,
+  STEEPNESS_RANGE,
+  TYPICAL_STARTING_SLOTS,
+  adpValue,
+} from "../../shared/manager/adp-value.ts";
+import {
   MONTH_ABBREVIATIONS,
   formatRangeDate,
   formatRangeMonth,
@@ -25,6 +32,13 @@ export {
   shiftDays,
   todayIso,
 };
+
+// The value curve is the server's own, so its bounds and its default come from
+// the module that defines the curve rather than being re-typed here — this used
+// to be a matched pair of three strings with no compiler link, which is exactly
+// the drift the doc warns about for the board vocabulary. A pure→pure value
+// import, relative and with the extension, the way `isSuperflexLineup` above is.
+export { ADP_PEAK, DEFAULT_STEEPNESS, STEEPNESS_RANGE };
 
 /**
  * The ADP board controls on the Players tab: which crawled drafts the column's
@@ -60,12 +74,6 @@ export type AdpControls = {
   season: string;
   /** When within that season the drafts happened — see {@link AdpRange}. */
   range: AdpRange;
-  /**
-   * `"snakelinear"` is the default the route applies when `draft_type` is
-   * omitted — auction is left out because its `pick_no` is nomination order, not
-   * a draft slot. The three explicit values narrow to one type.
-   */
-  draftType: "snakelinear" | "snake" | "linear" | "auction";
   /** Sleeper `settings.type`: `"all"`, or 0 redraft / 1 keeper / 2 dynasty. */
   leagueType: "all" | "0" | "1" | "2";
   /** Derived from the league's `scoring_settings.rec`, not stored as such. */
@@ -75,21 +83,30 @@ export type AdpControls = {
   /** `"all"`, or an exact team count (`teams_min` = `teams_max`). */
   teams: "all" | string;
   /**
-   * The draft's round count, bucketed. A rookie draft's pick 1 and a startup's
-   * pick 1 are different games — the doc's own example — so the board can split
-   * the short rookie drafts from the full ones rather than average across them.
+   * The draft's round count, bucketed — which is to say *what kind of draft* it
+   * was: a rookie draft's pick 1 and a startup's pick 1 are different games, the
+   * doc's own example, so the board can split the short rookie drafts from the
+   * full ones rather than average across them. It is offered under those names
+   * rather than as a round count, because the round count is the evidence and
+   * the kind of draft is the question.
    */
   rounds: "all" | "rookie" | "full";
   /**
-   * How top-heavy the ADP → team-value curve is on the Leagues tab. Unlike every
+   * How top-heavy the ADP → team-value curve is on the Leagues tab, as the
+   * number of times value halves across a league's startable pool. Unlike every
    * field above it, this doesn't narrow *which drafts* are averaged — it sets how
    * a player's ADP converts into value once averaged, so it rides on the
    * per-player board (which is a raw number) doing nothing and drives the
-   * league-card team value instead. A matched string the
-   * `/api/user/[username]/adp-value` route parses — the same no-compiler-link
-   * pair the board vocabulary is — so a value added here must be added there too.
+   * league-card team value instead.
+   *
+   * A number rather than one of three preset names, because it is a single
+   * scalar with an obvious ordering and the three names were only ever three
+   * points on it — the drawer drives it with a slider and sends the number to
+   * `/api/user/[username]/adp-value`, which clamps it to {@link STEEPNESS_RANGE}.
+   * Both ends now read that range from one module, so this is no longer a
+   * vocabulary the two sides can drift apart on.
    */
-  steepness: "flat" | "balanced" | "steep";
+  steepness: number;
 };
 
 /**
@@ -213,14 +230,51 @@ export function seasonOptions(
 export const DEFAULT_ADP_RANGE: AdpRange = { preset: "all", from: null, to: null };
 
 /**
- * The curve applied when the ADP bar hasn't been touched. Matches the route's
- * `DEFAULT_STEEPNESS`; the two ends carry the vocabulary separately, so this
- * string is what "balanced" means on the wire. Named so a consumer that needs
- * the default before the controls exist (the Leagues tab, seeding its fetch)
- * reads this rather than retyping the string — a third spelling is a curve
- * change away from the bar pricing one thing and displaying another.
+ * The curve applied when the ADP drawer hasn't been touched. It *is* the curve
+ * module's own default rather than a second spelling of it: it used to be a
+ * string the two ends carried separately, and a third spelling was one curve
+ * change away from the drawer pricing one thing and displaying another.
  */
-export const DEFAULT_ADP_STEEPNESS: AdpControls["steepness"] = "balanced";
+export const DEFAULT_ADP_STEEPNESS: AdpControls["steepness"] = DEFAULT_STEEPNESS;
+
+/**
+ * The steepness slider's readout, in the units a reader actually holds a curve
+ * in: what a league's *last startable pick* is worth against the 1.01.
+ *
+ * A halving count is the honest parameter and a meaningless label — "4.25
+ * halvings per startable pool" is not a sentence anyone reads a board in. The
+ * curve is `2^(−halvings)` a full pool deep, so this is that fraction as a
+ * percentage, which moves visibly across the whole of the range (25% at the flat
+ * end, well under 1% at the steep one) and says what the number does.
+ */
+export function steepnessSummary(halvings: number): string {
+  const share = 2 ** -halvings * 100;
+  return `last starter ≈ ${share < 1 ? share.toFixed(1) : Math.round(share)}% of the 1.01`;
+}
+
+/**
+ * The startable pool the drawer's own preview prices against.
+ *
+ * The board in the drawer belongs to no league — it is the crawled market, not
+ * a roster — so there is no lineup to anchor the curve to the way
+ * `leagueAdpPool` does for a card. It uses the size filter when one is set (a
+ * board narrowed to 10-team drafts should preview on a 10-team pool) and a
+ * typical 12-team lineup otherwise, which is a *preview* premise and says so:
+ * the number beside a card is priced on that league's real slots.
+ */
+export function previewAdpPool(teams: AdpControls["teams"]): number {
+  const count = teams === "all" ? 12 : Number(teams);
+  return (Number.isFinite(count) && count > 0 ? count : 12) * TYPICAL_STARTING_SLOTS;
+}
+
+/** A board row's draft-capital value under the drawer's current curve. */
+export function previewAdpValue(
+  adp: number,
+  teams: AdpControls["teams"],
+  steepness: number,
+): number {
+  return adpValue(adp, previewAdpPool(teams), steepness);
+}
 
 /** The `rounds_min`/`rounds_max` bounds each rounds bucket sends. */
 const ROUNDS_BOUNDS: Record<"rookie" | "full", { min?: number; max?: number }> = {
@@ -238,7 +292,7 @@ const LEAGUE_TYPE_NAME: Record<"0" | "1" | "2", string> = {
 };
 
 /**
- * The starting board: one season of drafts, whole, every meaningful draft type
+ * The starting board: one season of drafts, whole, both meaningful draft types
  * (snake + linear), no league narrowing.
  *
  * The season is an argument again. It was dropped when the range replaced it,
@@ -253,7 +307,6 @@ export function defaultAdpControls(season: string): AdpControls {
   return {
     season,
     range: DEFAULT_ADP_RANGE,
-    draftType: "snakelinear",
     leagueType: "all",
     scoring: "all",
     superflex: "all",
@@ -356,8 +409,9 @@ export function rangeSummary(range: AdpRange, today: string): string | null {
  * "associated league setting" shortcut. It sets what a league payload carries:
  * type, scoring, best ball, size and — since the leagues stream started sending
  * `roster_positions` for the league filters — whether it starts more than one
- * quarterback. `range` and `draftType` are left as they were: they aren't league
- * settings at all.
+ * quarterback. `range` and `rounds` are left as they were: neither is a league
+ * setting — when a draft happened and what kind of draft it was are facts about
+ * the room, not about the league it filled.
  *
  * Superflex was the one league setting this couldn't seed, and it is the one that
  * moves a board most: a superflex population prices quarterbacks like first-round
@@ -397,8 +451,8 @@ export function seedFromLeague(
 
 /**
  * The `/api/adp` query string for a board. An `"all"` control is left out so the
- * route's tri-state parser reads it as "don't narrow"; `draftType` is always
- * sent because it always means something. `limit` is the board's max so a
+ * route's tri-state parser reads it as "don't narrow"; `draft_type` is always
+ * sent because a board is never over auctions. `limit` is the board's max so a
  * deep-roster player still gets a number — the tail past 1,000 is beyond any
  * real draft.
  *
@@ -419,10 +473,12 @@ export function adpQueryString(controls: AdpControls, today: string): string {
   if (from) params.set("start_after", from);
   if (to) params.set("start_before", to);
 
-  params.set(
-    "draft_type",
-    controls.draftType === "snakelinear" ? "snake,linear" : controls.draftType,
-  );
+  // Always snake + linear, and no longer a control. Auction is excluded because
+  // its `pick_no` is nomination order rather than a draft slot, so its "ADP" is
+  // not one; and snake against linear is a fact about how a room picked, not
+  // about the market it priced — the question readers arrived at that chip with
+  // was startup against rookie, which is `rounds`.
+  params.set("draft_type", "snake,linear");
 
   if (controls.leagueType !== "all") {
     params.set("league_type", LEAGUE_TYPE_NAME[controls.leagueType]);
