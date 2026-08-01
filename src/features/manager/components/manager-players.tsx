@@ -141,8 +141,6 @@ export function ManagerPlayers({ searched }: { searched: string }) {
               leagueCount={shares.league_count}
               adp={adpByPlayer}
               columns={columns}
-              onColumnChange={setColumn}
-              onReset={reset}
             />
           )}
         </>

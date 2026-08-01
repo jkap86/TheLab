@@ -24,9 +24,9 @@ import { Chevron, SharedLeagueRow } from "./ui";
  * the point, and a row 28 pixels tall has nowhere to put them. Which metric each
  * slot holds is {@link ShareList}'s, so the columns line up down the page.
  *
- * The name and chevron are the expand target and the stat columns are their own
- * pickers, exactly as on a league card — clicking a column opens its menu rather
- * than the card.
+ * The whole row is the expand target and the stat columns are numbers, exactly as
+ * on a league card — the pickers that aim them live in the heading rail above the
+ * list, since the selection is the list's.
  */
 export function ShareCard({
   name,
@@ -36,8 +36,6 @@ export function ShareCard({
   metrics,
   ctx,
   columns,
-  onColumnChange,
-  onReset,
 }: {
   name: string;
   /** Leads the name: a position pill, an avatar — whatever identifies the row. */
@@ -50,21 +48,11 @@ export function ShareCard({
   metrics: ShareMetric[];
   ctx: ShareMetricContext;
   columns: string[];
-  onColumnChange: (slot: number, key: string) => void;
-  /** Hand the list its opening columns back, from the foot of a card's menu. */
-  onReset?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  // Whether one of the stat columns has its picker open — see the same note on
-  // {@link LeagueCard}: the columns own which, the card owns the stacking order.
-  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <li
-      className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER} ${
-        menuOpen ? "z-30" : ""
-      }`}
-    >
+    <li className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER}`}>
       <RowSheen />
 
       <div className="relative flex w-full flex-col items-stretch gap-3 px-4 py-3 pl-5 sm:flex-row sm:items-center sm:gap-4">
@@ -90,18 +78,11 @@ export function ShareCard({
           )}
         </button>
 
-        {/* `labels={false}` for the reason a league card passes it: the pinned
-            heading rail names these columns from `sm` up, and repeating them on
-            every row is what made a list-wide selection read as a per-row one. */}
-        <MetricColumns
-          metrics={metrics}
-          ctx={ctx}
-          columns={columns}
-          onColumnChange={onColumnChange}
-          onOpenChange={setMenuOpen}
-          onReset={onReset}
-          labels={false}
-        />
+        {/* Numbers only, for the reason a league card carries none either: the
+            pinned heading rail names these columns at every width, and repeating
+            them on every row is what made a list-wide selection read as a
+            per-row one. */}
+        <MetricColumns metrics={metrics} ctx={ctx} columns={columns} />
       </div>
 
       {expanded && (

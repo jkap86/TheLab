@@ -24,8 +24,6 @@ export function PlayerShares({
   leagueCount,
   adp,
   columns,
-  onColumnChange,
-  onReset,
 }: {
   shares: PlayerShare[];
   /** Leagues the shares are out of — see `PlayerShares.league_count`. */
@@ -37,8 +35,6 @@ export function PlayerShares({
    * edits it is pinned in the manager header, on the other side of this list.
    */
   columns: string[];
-  onColumnChange: (slot: number, key: string) => void;
-  onReset: () => void;
 }) {
   return (
     <ShareList
@@ -49,8 +45,6 @@ export function PlayerShares({
       note={(share) => share.team}
       metrics={PLAYER_SHARE_METRICS}
       columns={columns}
-      onColumnChange={onColumnChange}
-      onReset={onReset}
       adpFor={(share) => adp.get(share.player_id) ?? null}
     />
   );

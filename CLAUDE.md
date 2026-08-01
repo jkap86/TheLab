@@ -738,16 +738,23 @@ stops holding, a comment saying it does would not have caught it.
     pinned: a rail that scrolled away halfway down the list would leave the
     numbers unlabelled. Sitting there it needs no offset of its own — measuring
     the header's height to pin a sibling under it is the machinery this avoids.
-  - **The cards keep their labels below `sm`** (`labels={false}` hides them from
-    `sm` up), because that is the width where a card stops being a row and the
-    rail stops sitting over anything. Hiding them takes them out of the
-    accessibility tree too, so an `sr-only` name at exactly those widths keeps a
-    screen reader from announcing "#3 of 12" with no word for what it ranks.
-  - **The column is as wide as the longest label, not the widest number** — 96px
-    from `sm` up, where 80px truncated a third of the catalogue. Below `sm` it
-    stays 80px, since four of anything wider overflows a phone; the two rules are
-    one rule, because the wide column exists to hold a heading and there is no
-    heading down there.
+  - **A card names none of its columns and holds no picker, at any width.** The
+    labels used to come back below `sm`, where the rail was dropped, and that
+    made one list two products either side of a breakpoint — a heading rail on a
+    laptop, four per-card labels and menus on a phone, saying the selection was a
+    fact about *this* card when it is a fact about the list. What actually breaks
+    down there is geometry, not the rail: a card stacks, so its columns take a
+    line of their own — so the rail stacks too (trigger on the first line,
+    headings on the second) and still sits over the numbers it names. The cards
+    keep an `sr-only` label per column, since nothing visible on the row says
+    what "#3 of 12" ranks.
+  - **The column is as wide as the longest label from `sm` up, and an equal share
+    of the row below it** — 96px up there, where 80px truncated a third of the
+    catalogue; `flex-1 min-w-0` down here, because four fixed 96px columns plus
+    the card's insets overflow a 390px screen while four equal shares of the
+    card's own line cannot overflow at all (and come out wider than the 80px this
+    used to hard-code). Both ends resolve through `COLUMN_BOX`/`COLUMN_ROW`, which
+    is what lets one heading rail serve two geometries.
   - **The share lists' selection moved up to the tab** for the same reason: the
     rail that edits it is in the header, on the other side of the list, and one
     selection can't be owned by two places. Both share views share the key
@@ -1571,8 +1578,8 @@ stops holding, a comment saying it does would not have caught it.
 - **Which metric each share column shows lives in `ShareList`, not in the card** —
   the same rule as `ManagerLeagues` above the league cards, for the same reason: a
   list several hundred rows long is scanned vertically, and per-card columns would
-  make it unreadable. `ShareCard` holds only whether *it* is expanded and whether
-  one of its menus is up.
+  make it unreadable. `ShareCard` holds only whether *it* is expanded — the
+  pickers are in the heading rail, so a card has no menu state to keep.
 - **The expanded standings are ordered by projected points, not by record.**
   What the panel adds over Sleeper is the projection, so the Proj column is the
   one the rows are ranked on — the numbers descend down the page, and the `#`
@@ -1640,10 +1647,11 @@ stops holding, a comment saying it does would not have caught it.
   result the way 8th-of-12 is, which would paint nearly every row of a shares list
   red. Same menu, three cells, one column drawing them (`MetricColumn`, generic in
   its context so a league card and a share card share it). The cluster around them
-  is shared too: `MetricColumns` owns one-menu-at-a-time, the outside click and
-  Escape, and reports *whether* a menu is up back to the card — which is the only
-  part the card needs, since the element that must lift its stacking order while a
-  menu overhangs the row below is the card's own.
+  is shared too: `MetricColumns` is the four cells in the columns' own geometry,
+  and it is *only* cells — one-menu-at-a-time, the outside click and Escape all
+  belong to `MetricHeadings` now, since the rail is the one place a column is
+  aimed from. That is what leaves a card with no stacking order to lift and no
+  menu state to report.
 - **The rank metrics come from one batch route,
   `/api/user/[username]/ranks`.** A collapsed league costs no request — the
   panel loads on expand — and a hundred cards each fetching a league detail to

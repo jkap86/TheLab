@@ -20,11 +20,15 @@ import { MetricHeadings } from "./metric-column";
  * The 1px transparent border is not a rounding error: the cards carry a border,
  * and without one here every heading would be a pixel out.
  *
- * **The headings drop below `sm` and the cards take their labels back.** That is
- * the width where a card stops being a row — it stacks, the name takes a line of
- * its own — so a heading rail above the list would be naming columns that are no
- * longer under it. The trigger stays at every width, since the editor is the one
- * control that works the same whatever the cards are doing.
+ * **The headings are drawn at every width — they used to drop below `sm` and let
+ * the cards grow their own labels back.** That made the same list two different
+ * things either side of one breakpoint: a table with a heading rail on a laptop,
+ * a stack of cards each naming its own four columns on a phone, which says the
+ * selection is a fact about a card when it is a fact about the list. What was
+ * actually breaking down there is geometry, not the rail — a card stacks, so its
+ * columns take a line of their own — so the rail stacks with it and its columns
+ * divide that line exactly as the cards' do, landing over the numbers they name
+ * at both widths.
  */
 export function ColumnsBar<C>({
   metrics,
@@ -47,7 +51,10 @@ export function ColumnsBar<C>({
   onReset: () => void;
 }) {
   return (
-    <div className="flex items-end gap-4 border border-transparent px-4 pl-5">
+    // Below `sm` this stacks for the same reason the cards do — the trigger takes
+    // the first line, the headings the second, whole — so the two lines of the
+    // rail sit over the two lines of every card under it.
+    <div className="flex flex-col gap-2 border border-transparent px-4 pl-5 sm:flex-row sm:items-end sm:gap-4">
       <div className="flex min-w-0 flex-1 items-center">
         <ColumnsEditor
           metrics={metrics}
@@ -61,14 +68,12 @@ export function ColumnsBar<C>({
         />
       </div>
 
-      <div className="hidden sm:block">
-        <MetricHeadings
-          metrics={metrics}
-          columns={columns}
-          onColumnChange={onColumnChange}
-          onReset={onReset}
-        />
-      </div>
+      <MetricHeadings
+        metrics={metrics}
+        columns={columns}
+        onColumnChange={onColumnChange}
+        onReset={onReset}
+      />
     </div>
   );
 }

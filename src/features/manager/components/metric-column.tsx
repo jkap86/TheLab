@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { metricPreview, type Metric, type MetricCell } from "../metric-cell";
+import type { Metric, MetricCell } from "../metric-cell";
 
 /**
  * The width and gutter one stat column takes, worn by the cells on a card and by
@@ -21,24 +21,37 @@ import { metricPreview, type Metric, type MetricCell } from "../metric-cell";
  * gutters counted, and the name beside it is the field that gives up the space —
  * it truncates to a tooltip, where a heading truncates to nothing.
  *
- * Below `sm` it stays 80px, because four of anything wider does not fit a phone:
- * 4 × 96 plus the card's own insets overflows a 390px screen. That is the same
- * width where the heading rail is dropped and the labels go back on the cards,
- * so the two rules are one rule — the wide column exists to hold a heading, and
- * there is no heading down there.
+ * **Below `sm` the columns divide the row instead of being 96px wide.** Four of
+ * them at that width plus the card's insets overflow a 390px screen, which is
+ * why the card stacks down there — the name takes the first line and the columns
+ * take the second, whole. So a column is an equal share of that line
+ * (`flex-1 min-w-0`, no fixed width to overflow), which on a phone is ~82px:
+ * wider than the 80px this used to hard-code, and, more to the point, a width
+ * the heading rail can reproduce exactly. That is what keeps one geometry at
+ * both breakpoints rather than two — see {@link MetricHeadings}.
  */
-const COLUMN_BOX = "w-20 shrink-0 px-2.5 sm:w-24";
+const COLUMN_BOX = "min-w-0 flex-1 px-2.5 sm:w-24 sm:flex-none sm:shrink-0";
 
 /**
- * One-menu-at-a-time, closing on an outside press or Escape, and reporting
- * whether anything is up.
+ * The box the four columns sit in, worn by a card's cells and by the heading rail
+ * alike — full width below `sm` where they divide a line of their own, shrink-
+ * wrapped from `sm` up where they ride at the end of a row.
  *
- * Shared by the cells on a card and the headings above the list because it is
- * the same rule in both places, and because the *card* is what has to lift its
- * stacking order while a menu overhangs the row below — which is why `open`
- * travels back out rather than being solved here.
+ * It is written beside {@link COLUMN_BOX} for the same reason: the rail only
+ * names the numbers under it if both ends resolve to the same width at the same
+ * breakpoint, and a retyped `w-full` is exactly how one end stops.
  */
-function useOneOpen(onOpenChange?: (open: boolean) => void) {
+const COLUMN_ROW = "flex w-full items-stretch sm:w-auto sm:shrink-0";
+
+/**
+ * One-menu-at-a-time, closing on an outside press or Escape.
+ *
+ * It belongs to the heading rail alone now: the pickers were on the cards too
+ * while the cards carried labels below `sm`, and a hundred rows each holding
+ * four menus was the per-card reading of a list-wide selection in its most
+ * literal form.
+ */
+function useOneOpen() {
   const [openSlot, setOpenSlot] = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -60,10 +73,6 @@ function useOneOpen(onOpenChange?: (open: boolean) => void) {
     };
   }, [openSlot]);
 
-  useEffect(() => {
-    onOpenChange?.(openSlot !== null);
-  }, [openSlot, onOpenChange]);
-
   const toggle = useCallback(
     (slot: number) =>
       setOpenSlot((current) => (current === slot ? null : slot)),
@@ -82,64 +91,28 @@ function useOneOpen(onOpenChange?: (open: boolean) => void) {
  * columns and they line up down the page; this renders them and owns nothing but
  * which picker is open.
  *
- * **The labels are optional, because the list may already be stating them.**
- * Where a heading row sits above the list ({@link MetricHeadings}), repeating the
- * label on all hundred-odd cards says the selection is a fact about *this* card,
- * which is the misreading the heading row exists to correct. Below `sm` the cards
- * stack and the heading row is dropped, so the labels come back — which is why
- * this is a breakpoint and not a boolean the caller resolves.
+ * **A card never names its columns — the heading rail does, at every width.** The
+ * label used to come back below `sm`, where the rail was dropped, which made the
+ * list read as two different products either side of that breakpoint: a heading
+ * row on a laptop, four per-card labels on a phone, saying the selection was a
+ * fact about *this* card. The rail is drawn at both widths now (it moves onto a
+ * line of its own down there, exactly as the card's columns do), so the labels
+ * come off here for good and the cards keep the numbers alone.
  */
 export function MetricColumns<C>({
   metrics,
   ctx,
   columns,
-  onColumnChange,
-  onOpenChange,
-  onReset,
-  labels = true,
 }: {
   metrics: Metric<C>[];
   ctx: C;
   /** The metric key each column shows, shared by every card in the list. */
   columns: string[];
-  /** Point a column at another metric (applies to every card at once). */
-  onColumnChange: (slot: number, key: string) => void;
-  /** Told whether any of this card's menus is open. Must be a stable callback. */
-  onOpenChange?: (open: boolean) => void;
-  /** Offered at the foot of every menu, where the list can hand the defaults back. */
-  onReset?: () => void;
-  /** False where a heading row above the list carries them at `sm` and up. */
-  labels?: boolean;
 }) {
-  const { ref, openSlot, toggle, close } = useOneOpen(onOpenChange);
-
   return (
-    <div
-      ref={ref}
-      className="flex shrink-0 items-stretch divide-x divide-foreground/10"
-    >
+    <div className={`${COLUMN_ROW} divide-x divide-foreground/10`}>
       {columns.map((key, slot) => (
-        <MetricColumn
-          key={slot}
-          metrics={metrics}
-          metricKey={key}
-          ctx={ctx}
-          labels={labels}
-          open={openSlot === slot}
-          onToggle={() => toggle(slot)}
-          onSelect={(metricKey) => {
-            onColumnChange(slot, metricKey);
-            close();
-          }}
-          // Closes behind you exactly as a pick does — it *is* a pick, of all
-          // four at once, and a menu still standing over columns that have
-          // already moved leaves the next press toggling it shut instead of
-          // doing what it looks like it does.
-          onReset={onReset && (() => {
-            onReset();
-            close();
-          })}
-        />
+        <MetricColumn key={slot} metrics={metrics} metricKey={key} ctx={ctx} />
       ))}
     </div>
   );
@@ -147,110 +120,41 @@ export function MetricColumns<C>({
 
 /**
  * One stat column on a card: the chosen metric, read off this card's subject and
- * rendered, with the column's label doubling as the trigger for a picker that
- * swaps the whole column to another metric.
+ * rendered, under the heading rail that names it.
  *
  * Generic in what the metrics read from, because two grains now wear these
  * columns — a league card reads a league's ranks and values, a share card reads
  * the leagues behind one player or leaguemate. The catalogue is passed in rather
  * than imported here, which is what keeps the column ignorant of both.
  *
- * The selection is the list's to hold, not this column's — every card shows the
- * same four metrics so the columns line up down the list. This component is told
- * which metric it holds and whether its menu is open, and reports a toggle and a
- * pick back up.
+ * It is a cell and nothing more: the selection is list-wide, so the control that
+ * moves it is the heading rail above the list and never a card, which is what
+ * frees a row of a hundred to be four numbers.
  */
 export function MetricColumn<C>({
   metrics,
   metricKey,
   ctx,
-  open,
-  onToggle,
-  onSelect,
-  onReset,
-  labels = true,
 }: {
   /** The catalogue this column picks from — the card's grain decides which. */
   metrics: Metric<C>[];
   /** The selected metric's key; falls back to the first metric if unknown. */
   metricKey: string;
   ctx: C;
-  /** Whether this column's picker menu is open — one at a time per card. */
-  open: boolean;
-  /** Toggle this column's menu (the card closes any other that was open). */
-  onToggle: () => void;
-  /** Point this column at another metric. */
-  onSelect: (key: string) => void;
-  /** Hand the whole list its opening columns back. */
-  onReset?: () => void;
-  /** False where a heading row above the list carries the label at `sm` and up. */
-  labels?: boolean;
 }) {
   const metric = metrics.find((m) => m.key === metricKey) ?? metrics[0];
   const cell = metric.cell(ctx);
 
   return (
-    <div
-      className={`group/col relative flex flex-col gap-1 ${COLUMN_BOX}`}
-    >
-      {/*
-        Hidden rather than absent above `sm`: with a heading row over the list the
-        label would be the same word repeated down a hundred rows, and it is the
-        heading that is the control there. `display: none` also takes the trigger
-        out of the tab order and out of reach of a click, so there is one picker
-        per column on screen and not two.
-      */}
-      <span className={labels ? "contents" : "contents sm:hidden"}>
-        <button
-          type="button"
-          onClick={onToggle}
-          title={cell.title}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          className="flex w-full items-center text-left"
-        >
-          <span
-            className={`min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wide transition-colors ${
-              open
-                ? "text-foreground/80"
-                : "text-foreground/40 group-hover/col:text-foreground/70"
-            }`}
-          >
-            {metric.label}
-          </span>
-        </button>
-        {/*
-          The picker's affordance, over the column's right gutter so it never
-          costs the label a character. It is always drawn: on `group-hover` alone
-          it never appeared on a touch device, leaving the one control that
-          changes the board with nothing to say it was a control.
-        */}
-        <Caret open={open} />
-      </span>
-
+    <div className={`relative flex flex-col gap-1 ${COLUMN_BOX}`}>
       {/*
         The name, for a reader who can't see the heading rail lining up with this
-        column. Hiding the visible label takes it out of the accessibility tree
-        too, which would leave a screen reader announcing "#3 of 12" with no word
-        for what it ranks. `hidden sm:block` scopes it to exactly the widths the
-        visible label is gone at, so it never reads twice.
+        column. Nothing on the card says what the number is, so without this a
+        screen reader announces "#3 of 12" with no word for what it ranks.
       */}
-      <span className="sr-only hidden sm:block">{metric.label}</span>
+      <span className="sr-only">{metric.label}</span>
 
       <StatBody cell={cell} title={cell.title} />
-
-      {open && (
-        <ColumnMenu
-          options={metrics.map((option) => ({
-            key: option.key,
-            label: option.label,
-            preview: metricPreview(option.cell(ctx)),
-          }))}
-          activeKey={metric.key}
-          onSelect={onSelect}
-          onReset={onReset}
-        />
-      )}
     </div>
   );
 }
@@ -262,7 +166,10 @@ export function MetricColumn<C>({
  * — but drawn per card it read as a per-card control, which is the whole reason
  * changing four columns felt like four unrelated errands. The headings are the
  * same pickers in one place, laid on the cards' own geometry so each sits over
- * the numbers it names.
+ * the numbers it names — at *every* width, which is what makes it the only
+ * picker there is: the cards used to grow their own labels and menus back below
+ * `sm`, so the same list was a table with a heading rail on a laptop and four
+ * per-card controls on a phone.
  *
  * It takes no context and shows no preview values: a heading belongs to the
  * whole list, and a preview here would be one arbitrary row's numbers offered as
@@ -285,13 +192,12 @@ export function MetricHeadings({
 
   return (
     // `divide-x divide-transparent` draws nothing and is not decoration: the
-    // cards' own columns carry a 1px divider *inside* their 80px box, so without
-    // the same border here every heading after the first would sit a pixel left
-    // of the number it names.
-    <div
-      ref={ref}
-      className="flex shrink-0 items-stretch divide-x divide-transparent"
-    >
+    // cards' own columns carry a 1px divider *inside* their box, so without the
+    // same border here every heading after the first would sit a pixel left of
+    // the number it names. It matters more below `sm`, where the columns divide
+    // the row rather than taking a fixed width — a missing border there is four
+    // pixels shared out unevenly, not one.
+    <div ref={ref} className={`${COLUMN_ROW} divide-x divide-transparent`}>
       {columns.map((key, slot) => {
         const metric = metrics.find((m) => m.key === key) ?? metrics[0];
         const open = openSlot === slot;
@@ -350,9 +256,10 @@ export function MetricHeadings({
 /**
  * The picker menu itself, hung under whichever label opened it.
  *
- * One component for the cells' menu and the headings' because they are the same
- * menu — the only difference is whether a preview number rides on each row, and
- * that is data the caller either has or doesn't.
+ * It shows no preview values, and that is the same rule as the rail it hangs
+ * from: a heading belongs to the whole list, so a preview here would be one
+ * arbitrary row's numbers offered as if they described the column. The editor is
+ * where previews belong, because it names the subject it previews against.
  *
  * The reset sits at the foot rather than in the list: it is not a metric, and a
  * thirteenth row among twelve metrics is how it would be picked by accident. It
@@ -365,7 +272,7 @@ function ColumnMenu({
   onSelect,
   onReset,
 }: {
-  options: { key: string; label: string; preview?: string }[];
+  options: { key: string; label: string }[];
   activeKey: string;
   onSelect: (key: string) => void;
   onReset?: () => void;
@@ -384,18 +291,13 @@ function ColumnMenu({
             role="menuitemradio"
             aria-checked={active}
             onClick={() => onSelect(option.key)}
-            className={`flex w-full items-center justify-between gap-4 rounded px-2 py-1.5 text-left text-xs transition-colors ${
+            className={`flex w-full items-center rounded px-2 py-1.5 text-left text-xs transition-colors ${
               active
                 ? "bg-active/15 text-active"
                 : "text-foreground/75 hover:bg-foreground/10 hover:text-foreground"
             }`}
           >
             <span className="truncate">{option.label}</span>
-            {option.preview !== undefined && (
-              <span className="shrink-0 tabular-nums text-foreground/40">
-                {option.preview}
-              </span>
-            )}
           </button>
         );
       })}
