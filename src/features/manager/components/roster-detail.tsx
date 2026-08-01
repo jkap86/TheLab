@@ -6,7 +6,7 @@ import { useMemo } from "react";
 // pull `pg`-backed code into the client bundle — see `slots.ts`.
 import { NON_STARTING_SLOTS } from "@/shared/projections/slots";
 
-import { formatPoints, formatRecord, formatWeekRange } from "../format";
+import { formatPoints } from "../format";
 import { PLAYER_METRICS } from "../roster-metrics";
 import type {
   LeagueOutlook,
@@ -20,7 +20,6 @@ import { DraftPicks } from "./draft-picks";
 import { PlayerRow } from "./player-row";
 import { NO_NUMBERS, SPLIT_LAYOUT } from "./roster-layout";
 import type { SectionLayout } from "./roster-layout";
-import { teamLabel, TeamAvatar } from "./ui";
 
 /** The player metrics offered in every roster column's picker. */
 const PLAYER_METRIC_OPTIONS: ColumnOption[] = PLAYER_METRICS.map((m) => ({
@@ -48,8 +47,10 @@ type SlotRow = { slot: string; player_id: string };
  * picker. Which metric each shows is held above this panel so the two sections'
  * columns line up and one picker moves the whole column.
  *
- * Below the `@lg` container width the record drops onto its own line under the
- * team name instead of competing with it for horizontal space.
+ * It names no team of its own. The plate that used to head it — avatar, team name
+ * and record — restated the standings row that is already highlighted a few pixels
+ * to the left, and on a phone it cost ~64px of a half that is ~155px wide before
+ * a single player was listed. The team name lives on that row's hover instead.
  */
 export function RosterDetail({
   team,
@@ -136,48 +137,11 @@ export function RosterDetail({
 
   return (
     <div
-      className={`rounded-lg border border-foreground/10 bg-foreground/[0.02] p-2.5 @lg:p-4 ${
+      className={`rounded-lg border border-foreground/10 bg-foreground/[0.02] p-2 @lg:p-4 ${
         elevated ? "relative z-30" : ""
       }`}
     >
-      {/* A recessed plate rather than a rule underneath: the app bar's grammar
-          says a well is the thing being read, and this names the team every list
-          below it belongs to. It carries no layout of its own (see the `.lab-*`
-          rule in globals.css) — the box comes from the utilities here.
-
-          The record still drops under the name below @lg: this half is ~150px on
-          a phone, which a name and two numbers on one line don't share. */}
-      <div className="lab-well rounded-lg px-2.5 py-2 @lg:flex @lg:items-center @lg:gap-3 @lg:px-3 @lg:py-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <TeamAvatar team={team} size="md" />
-          <div className="min-w-0">
-            <h4 className="truncate text-sm font-semibold text-foreground/90 @lg:text-base">
-              {teamLabel(team)}
-            </h4>
-            {team.manager?.team_name && team.manager.display_name && (
-              <p className="truncate text-xs text-foreground/45">
-                {team.manager.display_name}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="mt-1.5 flex items-baseline gap-2 text-sm @lg:mt-0 @lg:ml-auto @lg:block @lg:shrink-0 @lg:text-right">
-          <span className="font-medium tabular-nums text-foreground/85">
-            {formatRecord(team.record)}
-          </span>
-          <span className="block text-xs tabular-nums text-foreground/45">
-            {formatPoints(team.fpts)} PF
-          </span>
-        </div>
-      </div>
-
-      {teamOutlook && outlook && (
-        <LineupSummary
-          teamOutlook={teamOutlook}
-          weeks={outlook.weeks}
-          players={players}
-        />
-      )}
+      {teamOutlook && <LineupSummary teamOutlook={teamOutlook} players={players} />}
 
       <RosterSection
         title="Starters"
@@ -244,39 +208,32 @@ export function RosterDetail({
 }
 
 /**
- * The optimal lineup's projected total, and what it would take to get there.
+ * What it would take to reach the optimal lineup, and what the lineup misses.
  *
- * The week range sits beside it because the horizon is whatever has been synced,
- * not a fixed span — a short backfill shortens the number without invalidating
- * it, so it is stated rather than left to be assumed.
+ * The optimal *total* is deliberately not here. It is the number the standings
+ * beside this panel are ranked on — the selected row states it under whichever
+ * projection column is aimed at it, with the horizon the whole panel is read over
+ * spelled out once in that table's footer — so a chip repeating it here, above the
+ * lineup it belongs to, was the same claim twice and the second one had to carry
+ * its own week range to be honest. What is left is what the standings can't say:
+ * the points sitting on the bench, and who to move.
  */
 function LineupSummary({
   teamOutlook,
-  weeks,
   players,
 }: {
   teamOutlook: TeamOutlook;
-  weeks: number[];
   players: Record<string, PlayerSummary>;
 }) {
   const name = (id: string) => players[id]?.name ?? id;
+  if (teamOutlook.points_left <= 0 && teamOutlook.unknown_slots.length === 0) {
+    return null;
+  }
 
   return (
-    <div className="mt-3">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="flex items-baseline gap-1.5 rounded-md bg-active/10 px-2 py-1 text-[0.7rem] text-active">
-          <span className="font-medium">Optimal</span>
-          <span className="tabular-nums">
-            {formatPoints(teamOutlook.optimal_points)}
-          </span>
-        </span>
-        <span className="text-[0.65rem] uppercase tracking-wide text-foreground/35">
-          proj · {formatWeekRange(weeks)}
-        </span>
-      </div>
-
+    <div className="space-y-1.5">
       {teamOutlook.points_left > 0 && (
-        <p className="mt-1.5 text-[0.7rem] leading-relaxed text-foreground/50">
+        <p className="text-[0.7rem] leading-relaxed text-foreground/50">
           <span className="font-semibold text-active">
             +{formatPoints(teamOutlook.points_left)}
           </span>{" "}
@@ -291,7 +248,7 @@ function LineupSummary({
       )}
 
       {teamOutlook.unknown_slots.length > 0 && (
-        <p className="mt-1.5 text-[0.7rem] text-foreground/40">
+        <p className="text-[0.7rem] text-foreground/40">
           {teamOutlook.unknown_slots.join(", ")} left out — this lineup covers only
           part of the roster.
         </p>
@@ -331,10 +288,10 @@ function RosterSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mt-3">
-      <div
-        className={`mb-1.5 grid ${layout.grid} items-baseline gap-x-1 @lg:gap-x-2`}
-      >
+    // `first:mt-0` because the lineup summary above is conditional: with nothing
+    // to say about the bench, the Starters heading is the panel's first line.
+    <div className="mt-3 first:mt-0">
+      <div className={`mb-1.5 grid ${layout.grid} items-baseline gap-x-2`}>
         <span />
         <h5 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-foreground/35">
           {title}

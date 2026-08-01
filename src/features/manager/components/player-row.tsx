@@ -88,7 +88,7 @@ export function PlayerRow({
 
   return (
     <li
-      className={`grid ${layout.grid} items-center gap-x-1 gap-y-0.5 py-1.5 @lg:gap-x-2 ${
+      className={`grid ${layout.grid} items-center gap-x-2 gap-y-0.5 py-1.5 ${
         promoted ? "bg-active/[0.07]" : benched ? "opacity-50" : ""
       }`}
     >
