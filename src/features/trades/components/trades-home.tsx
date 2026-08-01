@@ -6,6 +6,7 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   FlaskLoader,
   LeagueFiltersModal,
+  PageHeading,
   filterSummary,
   matchesFilters,
   todayIso,
@@ -87,15 +88,20 @@ export function TradesHome({ season }: { season: string }) {
   return (
     <>
       <header className="mb-6 flex flex-wrap items-end gap-x-4 gap-y-3">
-        <div className="min-w-0">
-          <h1 className="text-3xl font-semibold tracking-tight">Trades</h1>
-          <p className="mt-1 min-w-0 truncate text-sm text-foreground/60">
-            {/* What the count beside it is over, in words — the two modals hide
-                their own state, so the scope is stated outside them. */}
-            {season} · every crawled league · {filterSummary(leagueFilters)} ·{" "}
-            {tradeFilterSummary(tradeFilters)}
-          </p>
-        </div>
+        {/* The scope line is the lede here: what the count beside it is over, in
+            words — the two modals hide their own state, so it is stated outside
+            them. It truncates rather than wrapping, since the count and both
+            triggers share the row. */}
+        <PageHeading
+          title="Trades"
+          lede={
+            <span className="block min-w-0 truncate text-sm">
+              {season} · every crawled league · {filterSummary(leagueFilters)} ·{" "}
+              {tradeFilterSummary(tradeFilters)}
+            </span>
+          }
+          className="min-w-0"
+        />
 
         <div className="ml-auto flex items-center gap-4">
           <p className="text-right text-sm text-foreground/60">

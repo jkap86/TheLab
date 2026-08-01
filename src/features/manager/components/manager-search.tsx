@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { PageHeading } from "@/features/shared";
+
 /**
  * Sleeper username entry — the way into the manager tool.
  *
@@ -22,14 +24,11 @@ export function ManagerSearch({ title }: { title: string }) {
 
   return (
     <div>
-      <header className="mb-8">
-        <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-          {title}
-        </h1>
-        <p className="mt-3 text-lg text-foreground/60">
-          Look up a Sleeper manager to browse their leagues.
-        </p>
-      </header>
+      <PageHeading
+        title={title}
+        lede="Look up a Sleeper manager to browse their leagues."
+        className="mb-8"
+      />
 
       <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
         <label htmlFor="manager-username" className="sr-only">

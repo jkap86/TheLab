@@ -101,10 +101,10 @@ export function UserLookup({
           {/* This account is resolved (right avatar, right spelling) — the whole
               point of looking it up before a tool is picked — so it reads as a
               live connection. The dot's expanding ring animates via `tools-pulse`
-              and freezes under reduced motion (`.tools-anim`). */}
+              and freezes under reduced motion (`.lab-anim`). */}
           <span className="hidden shrink-0 items-center gap-2 text-xs text-foreground/55 sm:inline-flex">
             <span
-              className="tools-anim h-1.5 w-1.5 rounded-full bg-active"
+              className="lab-anim h-1.5 w-1.5 rounded-full bg-active"
               style={{ animation: "tools-pulse 2.4s ease-out infinite" }}
             />
             Connected

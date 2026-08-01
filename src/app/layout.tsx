@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Orbitron } from "next/font/google";
 import "./globals.css";
 
-import { SiteHeader } from "@/features/shared";
+import { AmbientBackdrop, SiteHeader } from "@/features/shared";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,9 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 // Orbitron is the display face — the geometric, "instrument panel" letterform
-// the tools page leads with (wordmark and tool names). Only the weights that
-// page uses are loaded. Exposed as `--font-orbitron`, wired to the
-// `font-display` utility in globals.css; body copy stays on Geist.
+// every page's title and every named row wears (a tool card, a league, a share,
+// a trade's league). It stopped at the tools page once; carrying it into the
+// lists is what makes them read as the same instrument. Body copy stays on
+// Geist. Exposed as `--font-orbitron`, wired to `font-display` in globals.css.
 const orbitron = Orbitron({
   variable: "--font-orbitron",
   subsets: ["latin"],
@@ -45,6 +46,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${orbitron.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        {/* Behind every page rather than behind the tools page alone: the glows
+            are what made that grid read as a different app from the tool it
+            opened. Fixed and at `-z-10`, so nothing is laid out against it. */}
+        <AmbientBackdrop />
         {/* The bar takes no slot: it reads the route itself, names the tool you
             are in, and holds the menu that moves between them. */}
         <SiteHeader />
