@@ -1,7 +1,5 @@
 "use client";
 
-import { Fragment } from "react";
-
 import {
   Avatar,
   LIST_ROW_HOVER,
@@ -127,14 +125,21 @@ export function TradeCard({
 }
 
 /**
- * The narrow layout: a row per manager, receiving on the left and giving on the
- * right.
+ * The narrow layout: a block per manager — who they are on a line of their own,
+ * then what they received beside what they sent.
  *
- * The manager column is fixed and narrow because the assets are what is being
- * read across — a name is a label on the row, and letting it take a third of a
- * 390px screen would wrap every player in the two columns that matter. Assets
- * wrap rather than truncate for the same reason: a truncated "Christian McCa…"
- * beside a truncated pick is a card that has to be opened elsewhere to read.
+ * The manager used to be a third grid track, 4.75rem wide, which is where two
+ * separate failures came from: every name past six characters truncated
+ * (`cowpo…`, `BigDa…` — and recognising the person is the whole point of the
+ * line), and the value under it had ~76px to hold `KTC 14,315`, so it wrapped.
+ * Both are the same mistake — a label competing with the columns for width when
+ * it is not read across them. On its own line it has the card's whole width, so
+ * the name states itself and the value sits at the far end of the same line with
+ * room to spare, while the two asset columns go from ~41% of the card each to a
+ * half each.
+ *
+ * Assets wrap rather than truncate: a truncated "Christian McCa…" beside a
+ * truncated pick is a card that has to be opened elsewhere to read.
  *
  * What each column holds is said by the assets themselves — `+` on what a
  * manager came away with, `−` on what they sent — rather than by a pair of
@@ -161,67 +166,59 @@ function ExchangeTable({
   superflex: boolean;
 }) {
   return (
-    <div className="relative grid grid-cols-[4.75rem_1fr_1fr] gap-x-2 bg-foreground/[0.02] px-3 py-2 sm:hidden">
+    <div className="relative bg-foreground/[0.02] px-3 sm:hidden">
       {exchange.map((side, i) => {
         const manager = side.user_id ? managers[side.user_id] : undefined;
         const name = manager?.display_name || `Roster ${side.roster_id}`;
         // Guarded by `isPairedExchange` at the call site; a null here would be a
         // three-way trade, which never reaches this layout.
         const given = side.given ?? { players: [], picks: [], faab: 0 };
-        // The rule separates managers, so the first row doesn't wear one — with
-        // the headings gone it would sit a few pixels under the card header's
-        // own border and read as a doubled line.
-        const cell = i === 0 ? ROW_CELL : `${ROW_CELL} ${ROW_RULE}`;
 
         return (
-          <Fragment key={side.roster_id}>
-            {/* The value goes under the name rather than in a column of its
-                own: the manager column is 4.75rem here and the two asset columns
-                are what the row is read across, so a fifth track would come out
-                of them. */}
-            <div className={`${cell} flex min-w-0 flex-col gap-1`}>
-              <span className="flex min-w-0 items-center gap-1.5">
-                <Avatar url={manager?.avatar_url} name={name} />
-                <span className="min-w-0 truncate text-xs font-semibold">
-                  {name}
-                </span>
+          // The rule separates managers, so the first block doesn't wear one —
+          // with the headings gone it would sit a few pixels under the card
+          // header's own border and read as a doubled line.
+          <div
+            key={side.roster_id}
+            className={i === 0 ? "py-2" : "border-t border-foreground/10 py-2"}
+          >
+            <div className="mb-1.5 flex items-center gap-1.5">
+              <Avatar url={manager?.avatar_url} name={name} />
+              <span className="min-w-0 truncate text-xs font-semibold">
+                {name}
               </span>
-              <TradeValueTag
-                metric={metric}
-                ctx={{ received: side.received, ktc, superflex }}
+              {/* Pushed to the far end of the manager's own line, which is the
+                  width that keeps a five-figure total on one line. */}
+              <span className="ml-auto shrink-0 pl-2">
+                <TradeValueTag
+                  metric={metric}
+                  ctx={{ received: side.received, ktc, superflex }}
+                />
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-3">
+              <BundleList
+                bundle={side.received}
+                trade={trade}
+                players={players}
+                managers={managers}
+                sign="+"
+              />
+              <BundleList
+                bundle={given}
+                trade={trade}
+                players={players}
+                managers={managers}
+                sign="−"
               />
             </div>
-            <BundleList
-              bundle={side.received}
-              trade={trade}
-              players={players}
-              managers={managers}
-              sign="+"
-              className={cell}
-            />
-            <BundleList
-              bundle={given}
-              trade={trade}
-              players={players}
-              managers={managers}
-              sign="−"
-              className={cell}
-            />
-          </Fragment>
+          </div>
         );
       })}
     </div>
   );
 }
-
-const ROW_CELL = "py-2";
-
-/**
- * The rule between two managers' rows. It is worn by each of the three cells
- * rather than by a row wrapper, because the rows *are* grid cells — a wrapper
- * would take the columns out of the grid and let each row size its own.
- */
-const ROW_RULE = "border-t border-foreground/10";
 
 function SideColumn({
   side,
@@ -253,15 +250,18 @@ function SideColumn({
     // reads through it — the hairline between two sides is the grid's `gap-px`
     // showing where the cells don't reach, which a translucent cell still leaves.
     <div className="bg-foreground/[0.02] px-4 py-3">
+      {/* No "Receives" eyebrow: at half a card's width it spent ~70px of the
+          manager's line restating what every `+` under it already says — the
+          same reasoning that took the give/take headings off the narrow layout —
+          and the name is what was giving way for it. */}
       <div className="mb-2 flex items-center gap-2">
         <Avatar url={manager?.avatar_url} name={name} />
         <span className="min-w-0 truncate text-sm font-semibold">{name}</span>
-        <span className="ml-auto shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-foreground/35">
-          Receives
-        </span>
         {/* The one number on this side that isn't in the lines below it, so it
             sits at the end of the row the lines are headed by. */}
-        <TradeValueTag metric={metric} ctx={{ received, ktc, superflex }} />
+        <span className="ml-auto shrink-0 pl-2">
+          <TradeValueTag metric={metric} ctx={{ received, ktc, superflex }} />
+        </span>
       </div>
 
       <BundleList
@@ -290,28 +290,24 @@ function BundleList({
   players,
   managers,
   sign,
-  className = "",
 }: {
   bundle: TradeBundle;
   trade: Trade;
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
   sign: "+" | "−";
-  className?: string;
 }) {
   if (isEmptyBundle(bundle)) {
     // A side of a three-way can take nothing from this participant, and in the
     // give/take layout a giving column can be empty too; saying so is clearer
     // than a blank cell that reads as a rendering gap.
     return (
-      <p className={`${className} text-[13px] text-foreground/40 sm:text-sm`}>
-        Nothing
-      </p>
+      <p className="text-[13px] text-foreground/40 sm:text-sm">Nothing</p>
     );
   }
 
   return (
-    <ul className={`${className} flex flex-col gap-1.5`}>
+    <ul className="flex flex-col gap-1.5">
       {bundle.players.map((id) => (
         <li
           key={id}
