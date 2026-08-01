@@ -18,33 +18,18 @@ import { UserLookup } from "./user-lookup";
  * tracker's league picker is on `/picktracker`, not on the card here.
  * `UserLookup`'s "Change" button clears it by writing `null`.
  *
- * The title and the account card pin together as one plate, for the reason
- * `ManagerHeader` pins: the grid is a list you scroll, and whose account a card
- * would open is the fact every row of it depends on. Two details travel with
- * that, both learned there. The plate paints `--background` and bleeds to
- * `PageShell`'s gutter (`-mx-6 px-6`), because cards scrolling through the gaps
- * around a transparent pinned block reads as a rendering bug — it is the one
- * place on this page the aurora is covered. And `SiteHeader` hides itself on
- * `/tools`, so the plate pins at `top-0` rather than offsetting by
- * `--site-header-h`.
+ * The title and the account card scroll with the page and paint nothing. They
+ * used to pin as one plate over a block of flat `--background` — the one place
+ * on this page the aurora was covered — which cost a bleed to `PageShell`'s
+ * gutter and a fading `::after` below the plate, both there only to keep that
+ * paint from drawing a hard edge across the glows. The aurora reads through the
+ * whole page now, and none of that machinery is needed to hold it: a pinned
+ * block *has* to be opaque, since cards scrolling through a transparent one
+ * reads as a rendering bug, so dropping the paint is dropping the pin.
  *
- * The plate cancels `PageShell`'s top padding (`-mt-16`) rather than starting
- * below it. Unpinned it began 4rem down the page and then jumped up to `top-0`
- * on the first scroll — a header that moves as you scroll reads as a glitch, and
- * the plate is the one block on the page that is supposed to be fixed. Starting
- * it flush means its resting position *is* its pinned position, so nothing
- * moves. It also retires the `::before` that used to paint that 4rem: with no
- * gap above the plate there is no seam across the aurora to cover.
- *
- * The `::after` is the *other* end of that opacity, and it is the same seam
- * argument applied where the plate stops. A block of flat `--background` butted
- * straight against the aurora draws a hard horizontal line across the page —
- * the glows appear to switch on an inch below the account card, which reads as
- * the backdrop being clipped rather than as a pinned surface. So the paint fades
- * out over the 4rem below the plate instead of ending: the aurora comes up
- * through it gradually, and a card scrolling under the plate dims into it rather
- * than being cut off mid-row. It is `pointer-events-none` because it overhangs
- * the grid, which is made of links.
+ * It still cancels `PageShell`'s top padding (`-mt-16`), which is where the pin
+ * left it: flush at the top, so the wordmark leads the page rather than sitting
+ * 4rem down it.
  *
  * The lede sits *below* the card and only once an account is resolved: "pick a
  * tool to get started" is an instruction the grid can't carry out until then —
@@ -58,7 +43,7 @@ export function ToolsHome({ heading }: { heading: React.ReactNode }) {
 
   return (
     <>
-      <div className="sticky top-0 z-30 -mx-6 -mt-16 bg-[var(--background)] px-6 pb-5 pt-3 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent">
+      <div className="-mt-16 pb-5 pt-3">
         {heading}
         <div className="mt-6">
           <UserLookup user={user} onUserChange={storeAccount} />
