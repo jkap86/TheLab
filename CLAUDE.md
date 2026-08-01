@@ -515,28 +515,50 @@ stops holding, a comment saying it does would not have caught it.
   the section is *for*: `ToolsHome` writes it to the shared account store and the
   grid below reads it, as does the pick tracker's own page — so the extra request
   buys the tools something and not just a confirmation.
-- **That account is the app's only client-side persistence, and it is a
-  `useSyncExternalStore` over one `localStorage` key.** A reload, or a trip out
-  to a tool and back, used to drop you at an empty search box — with the grid
-  gated on the account, that made the gate feel like a wall. Three details are
-  load-bearing and easy to undo by "simplifying" the store away. The server has
-  no storage, so `getServerSnapshot` returns null and the account appears only
-  after hydration — reading `localStorage` during render is the hydration
-  mismatch this shape exists to avoid. The snapshot is the **raw string**, parsed
-  in a `useMemo` keyed on it, because `useSyncExternalStore` compares snapshots
-  by identity and a fresh `JSON.parse` per read looks like a change every render
-  and loops. And `storeAccount` notifies its own listeners by hand, since the
-  `storage` event fires in *other* tabs but never the one that wrote. Only the
-  resolved `UserInfo` is kept; leagues re-derive from `user_id`. Writes are
-  wrapped in `try`/`catch` because storage can be blocked — persistence here is a
-  convenience, never correctness, which is why a blocked write still lands in the
-  module-level `memoryFallback`: with the store as the only state, dropping it
-  would discard a successful lookup and leave the grid locked.
+- **Client-side persistence is one mechanism, `features/shared/local-store.ts`,
+  and a `useSyncExternalStore` over `localStorage` per key.** Two things are
+  stored — the resolved account and the stat-column selections — and they were
+  the same twenty lines, whose rules are subtle enough that a second copy is a
+  second chance to get one wrong. Three of them are load-bearing and easy to undo
+  by "simplifying" the store away. The server has no storage, so
+  `getServerSnapshot` returns null and a stored value appears only after
+  hydration — reading `localStorage` during render is the hydration mismatch this
+  shape exists to avoid. The snapshot is the **raw string**, parsed in a
+  `useMemo` keyed on it, because `useSyncExternalStore` compares snapshots by
+  identity and a fresh `JSON.parse` per read looks like a change every render and
+  loops. And a write notifies its own listeners by hand, since the `storage`
+  event fires in *other* tabs but never the one that wrote. Every key shares one
+  listener set: a reader of another key gets the identical string back, so React
+  re-renders only what moved. Writes are wrapped in `try`/`catch` because storage
+  can be blocked — persistence here is a convenience, never correctness, which is
+  why a blocked write still lands in the module-level `memoryFallback`: with the
+  store as the only state, dropping it would discard a successful lookup and
+  leave the grid locked.
+- **The account is what that store was built for.** A reload, or a trip out to a
+  tool and back, used to drop you at an empty search box — with the grid gated on
+  the account, that made the gate feel like a wall. Only the resolved `UserInfo`
+  is kept; leagues re-derive from `user_id`.
   It lives in `features/shared/account.ts` rather than beside the tools page that
   writes it, because a tool *page* reads it: the pick tracker's league picker is
   on `/picktracker` and fills itself from the account resolved on `/tools`. That
   is what the persistence buys beyond surviving a reload — a tool can skip asking
   for a username a second time even though it is a separate route.
+- **A stat-column selection is a preference, so it is stored, and it is keyed by
+  the catalogue's grain.** `usePersistedColumns(name, defaults, metrics)` is the
+  second thing in that store: which metric each slot shows is chosen once and
+  then read down a list several hundred rows long, so re-aiming four columns
+  after every reload was the whole cost. The key is the grain — `league`,
+  `standings`, `roster` — never the page or the league: a selection only means
+  anything against the catalogue it was picked from (see the four-catalogue table
+  above), and per-league keys would bring back exactly the unreadable list that
+  holding columns per *card* would. It matters most in the expanded panel, which
+  mounts on expand and unmounts on collapse, so its two tables used to reset
+  every time a different league was opened. `resolveColumns` (pure and tested,
+  `features/shared/columns.ts`) reconciles what was stored against the catalogue
+  **per slot**: a stored selection outlives the build that wrote it, so a metric
+  since renamed or dropped falls back on its own rather than resetting three good
+  choices with it, and `defaults` fixes the row's length so a table given a third
+  column lays out either way.
 - **The account is the key to the whole grid: every card is inert until one
   resolves.** Each tool reads that account, so `ToolGrid` passes `disabled={!user}`
   and `ToolLinkCard` renders an `aria-disabled`, dimmed `div` instead of a
