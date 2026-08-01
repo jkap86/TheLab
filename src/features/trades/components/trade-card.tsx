@@ -100,14 +100,21 @@ export function TradeCard({
 }
 
 /**
- * The narrow layout: a row per manager, giving on the left and receiving on the
- * right, under one pair of headings.
+ * The narrow layout: a row per manager, receiving on the left and giving on the
+ * right.
  *
  * The manager column is fixed and narrow because the assets are what is being
  * read across — a name is a label on the row, and letting it take a third of a
  * 390px screen would wrap every player in the two columns that matter. Assets
  * wrap rather than truncate for the same reason: a truncated "Christian McCa…"
  * beside a truncated pick is a card that has to be opened elsewhere to read.
+ *
+ * What each column holds is said by the assets themselves — `+` on what a
+ * manager came away with, `−` on what they sent — rather than by a pair of
+ * headings over the table. The headings cost a line of chrome on every card to
+ * label two columns whose rows already read as a ledger, and they were the only
+ * thing tying the sign of a line to a position on screen: a signed line still
+ * says which way it went when the row is read on its own.
  */
 function ExchangeTable({
   exchange,
@@ -122,38 +129,40 @@ function ExchangeTable({
 }) {
   return (
     <div className="relative grid grid-cols-[4.75rem_1fr_1fr] gap-x-2 bg-foreground/[0.02] px-3 py-2 sm:hidden">
-      <span />
-      <ColumnHeading>Gives</ColumnHeading>
-      <ColumnHeading>Receives</ColumnHeading>
-
-      {exchange.map((side) => {
+      {exchange.map((side, i) => {
         const manager = side.user_id ? managers[side.user_id] : undefined;
         const name = manager?.display_name || `Roster ${side.roster_id}`;
         // Guarded by `isPairedExchange` at the call site; a null here would be a
         // three-way trade, which never reaches this layout.
         const given = side.given ?? { players: [], picks: [], faab: 0 };
+        // The rule separates managers, so the first row doesn't wear one — with
+        // the headings gone it would sit a few pixels under the card header's
+        // own border and read as a doubled line.
+        const cell = i === 0 ? ROW_CELL : `${ROW_CELL} ${ROW_RULE}`;
 
         return (
           <Fragment key={side.roster_id}>
-            <div className={`${ROW_CELL} flex min-w-0 items-center gap-1.5`}>
+            <div className={`${cell} flex min-w-0 items-center gap-1.5`}>
               <Avatar url={manager?.avatar_url} name={name} />
               <span className="min-w-0 truncate text-xs font-semibold">
                 {name}
               </span>
             </div>
             <BundleList
-              bundle={given}
-              trade={trade}
-              players={players}
-              managers={managers}
-              className={ROW_CELL}
-            />
-            <BundleList
               bundle={side.received}
               trade={trade}
               players={players}
               managers={managers}
-              className={ROW_CELL}
+              sign="+"
+              className={cell}
+            />
+            <BundleList
+              bundle={given}
+              trade={trade}
+              players={players}
+              managers={managers}
+              sign="−"
+              className={cell}
             />
           </Fragment>
         );
@@ -162,20 +171,14 @@ function ExchangeTable({
   );
 }
 
+const ROW_CELL = "py-2";
+
 /**
  * The rule between two managers' rows. It is worn by each of the three cells
  * rather than by a row wrapper, because the rows *are* grid cells — a wrapper
  * would take the columns out of the grid and let each row size its own.
  */
-const ROW_CELL = "border-t border-foreground/10 py-2";
-
-function ColumnHeading({ children }: { children: string }) {
-  return (
-    <span className="pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-foreground/35">
-      {children}
-    </span>
-  );
-}
+const ROW_RULE = "border-t border-foreground/10";
 
 function SideColumn({
   side,
@@ -209,6 +212,7 @@ function SideColumn({
         trade={trade}
         players={players}
         managers={managers}
+        sign="+"
       />
     </div>
   );
@@ -217,18 +221,25 @@ function SideColumn({
 /**
  * What one bundle holds, as lines. Shared by both layouts so the two can't drift
  * about how a pick or a FAAB line reads.
+ *
+ * `sign` is the direction, and it is drawn per line rather than per column
+ * because a line is what gets read: `+` on an asset the manager came away with,
+ * `−` on one they sent. It is a real minus rather than a hyphen — beside a `+`
+ * at the same size a hyphen reads as a dash in the name behind it.
  */
 function BundleList({
   bundle,
   trade,
   players,
   managers,
+  sign,
   className = "",
 }: {
   bundle: TradeBundle;
   trade: Trade;
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
+  sign: "+" | "−";
   className?: string;
 }) {
   if (isEmptyBundle(bundle)) {
@@ -249,7 +260,12 @@ function BundleList({
           key={id}
           className="flex flex-wrap items-baseline gap-x-2 text-[13px] sm:text-sm"
         >
-          <span className="min-w-0 break-words">{players[id]?.name ?? id}</span>
+          {/* The sign sits inside the name's span rather than beside it, so a
+              wrapping line can't leave it stranded on a line of its own. */}
+          <span className="min-w-0 break-words">
+            <Sign sign={sign} />
+            {players[id]?.name ?? id}
+          </span>
           <span className="shrink-0 text-xs text-foreground/45">
             {[players[id]?.position, players[id]?.team]
               .filter(Boolean)
@@ -262,6 +278,7 @@ function BundleList({
           key={`${pick.season}-${pick.round}-${pick.roster_id}`}
           className="text-[13px] text-foreground/80 sm:text-sm"
         >
+          <Sign sign={sign} />
           {pick.season} {ordinal(pick.round)}
           {/* Whose pick it originally is, where the trade names that roster
               — a 2026 1st is a different asset depending on who it's from. */}
@@ -273,10 +290,23 @@ function BundleList({
       ))}
       {bundle.faab > 0 && (
         <li className="text-[13px] text-foreground/80 sm:text-sm">
-          ${bundle.faab} FAAB
+          <Sign sign={sign} />${bundle.faab} FAAB
         </li>
       )}
     </ul>
+  );
+}
+
+/**
+ * The direction mark on one line. Dimmer than the asset it marks — it is a
+ * qualifier on the line, not part of the name — and a hair wider than its glyph
+ * so `+` and `−` lines start at the same x whichever way an asset went.
+ */
+function Sign({ sign }: { sign: "+" | "−" }) {
+  return (
+    <span className="mr-1 inline-block w-[0.7em] tabular-nums text-foreground/45">
+      {sign}
+    </span>
   );
 }
 
