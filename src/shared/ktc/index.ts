@@ -15,6 +15,22 @@ export {
 } from "./history";
 export type { KtcHistorySummary } from "./history";
 export { resolveSleeperIds, normalizeName } from "./match";
+export {
+  validateKtcBoard,
+  KTC_MIN_PLAYERS,
+  KTC_MAX_SHRINK,
+  KTC_MAX_DUPLICATE_FRACTION,
+} from "./validate";
+export type { KtcValidation } from "./validate";
+export { getKtcValuesBySleeperId, countPricedKtcValues } from "./queries";
+export type { KtcValue, KtcValueSet } from "./queries";
+export {
+  isSuperflexLineup,
+  ktcBoardValue,
+  rosterKtcValue,
+  QB_ELIGIBLE_STARTING_SLOTS,
+} from "./roster";
+export type { KtcRosterValue } from "./roster";
 export { startKtcScheduler } from "./scheduler";
 export type {
   KtcPlayer,

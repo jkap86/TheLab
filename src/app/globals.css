@@ -11,10 +11,32 @@
 @theme {
   --color-active: #00ffe5;
   --color-foreground: #ffffff;
+
+  /* The display face (Orbitron, loaded in layout.tsx) behind the `font-display`
+     utility. Only the tools page's wordmark and tool names reach for it; body
+     text stays on the default sans. */
+  --font-display: var(--font-orbitron);
 }
 
 :root {
   --background: rgb(10, 20, 30);
+
+  /* The height of the pinned app bar (`SiteHeader`). Anything that pins itself
+     underneath — the manager card — offsets by this, so the two measurements
+     can't drift into a gap or an overlap. It includes the bar's extruded bottom
+     edge (`--bar-edge-h`): the edge is drawn *inside* the header box rather
+     than as an outside shadow, or the card pinned at this offset would cover
+     it. */
+  --site-header-h: 3.75rem;
+  --bar-edge-h: 6px;
+
+  /* The extrusion palette. A raised surface is a bright face sitting on a dark
+     side wall; these are the two walls — one under an unlit face, one under a
+     cyan key. They are literals for the same reason a gradient stop is: a side
+     wall is a shading of a colour, and `@theme` registers only the two tokens.
+     Kept here, once, rather than sprinkled through the components. */
+  --edge: #05121d;
+  --edge-active: #00776b;
 
   font-size: 16px;
 }
@@ -23,4 +45,411 @@ body {
   background: var(--background);
   color: var(--color-foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+   The app bar's material: notched geometry over extruded surfaces.
+
+   Two things make this work, and both are why these are CSS classes rather than
+   a pile of arbitrary Tailwind values:
+
+   1. **`clip-path` cuts a `box-shadow` off.** A notched key can't cast its
+      shadow or glow with `box-shadow` — the clip removes it. `filter:
+      drop-shadow()` applies *after* clipping, so it follows the notched
+      silhouette instead. That is why `.lab-key` reaches for `filter`.
+   2. **The thickness is a stacked layer, not a shadow.** The wrapper is the
+      dark side wall and the child is the lit face; the wrapper's
+      `padding-bottom` is how thick the part is. Both share the clip, so the
+      wall shows only along the bottom edge — a real extrusion that survives
+      being clipped.
+
+   A raised part reads as pressable and a recessed one as a slot, which is the
+   whole vocabulary: the tools trigger is raised, the current-page chip is a
+   well. Keep that distinction — a raised label invites a press that does
+   nothing.
+
+   **They hold the material and nothing else — no `display`, no width.** Layout
+   stays in utilities on the elements, so a part is laid out by the same
+   mechanism as everything else on the page and a key survives its material
+   failing to arrive: a face that isn't a flex row is a bare label, but a face
+   whose *stylesheet* owned the row stacks its icon, label and chevron down the
+   page and pushes the whole bar open. The rule to keep is that these classes
+   may change how a part looks and never how big it is.
+
+   **They are in `@layer components` for the same reason.** Unlayered, they
+   outrank every Tailwind utility on the same element — which silently ate the
+   wordmark's hover glow and its inset, both written as utilities over a
+   `.lab-*` base. In the layer the call site wins, which is what a call site
+   spelling out `group-hover:[filter:…]` already assumed.
+--------------------------------------------------------------------------- */
+@layer components {
+  .lab-notch {
+    clip-path: polygon(
+      7px 0,
+      100% 0,
+      100% calc(100% - 7px),
+      calc(100% - 7px) 100%,
+      0 100%,
+      0 7px
+    );
+  }
+  .lab-notch-lg {
+    clip-path: polygon(
+      11px 0,
+      100% 0,
+      100% calc(100% - 11px),
+      calc(100% - 11px) 100%,
+      0 100%,
+      0 11px
+    );
+  }
+
+  /* Wrapper: the side wall. `padding-bottom` is the part's thickness — the one
+     box property here, and it changes the face's position rather than its
+     size. */
+  .lab-key {
+    position: relative;
+    padding-bottom: 3px;
+    background: var(--edge);
+    filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.7));
+  }
+  .lab-key-active {
+    background: var(--edge-active);
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6))
+      drop-shadow(0 0 16px rgba(0, 255, 229, 0.45));
+  }
+  /* Child: the lit face. The inset top line is the specular edge that sells the
+     bevel; the inset bottom is the face curving away from the light. */
+  .lab-face {
+    background: linear-gradient(160deg, #2a4a60, #0f2130);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.34),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.55);
+  }
+  .lab-face-active {
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    color: #052029;
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9);
+  }
+  /* A key travels its own thickness when pressed, so the face meets the wall. */
+  .lab-key-press:active {
+    padding-bottom: 0;
+    padding-top: 3px;
+  }
+
+  /* The inverse: a recessed well. Used for the bar's current-page chip and as
+     the trough a raised part sits in. */
+  .lab-well {
+    background: #07131e;
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.8),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.14);
+  }
+
+  /* The same extrusion as `.lab-key`, for a control that stays a rounded pill.
+
+     A key builds its thickness out of a stacked layer because `clip-path` cuts a
+     `box-shadow` off; nothing here is clipped, so the side wall can simply *be* a
+     shadow (`0 3px 0 var(--edge)`) and the whole part is one element. Reach for
+     this on a filter or board trigger — anything that lives on a page rather than
+     in the app bar — and keep `.lab-key` for the notched parts up there.
+
+     Three call sites share it (the league filters, the trade filters and the ADP
+     board), which is the point: one control appearing on two pages with two looks
+     is the drift a shared class prevents. */
+  .lab-chip {
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+  }
+  .lab-chip:hover {
+    background: linear-gradient(170deg, #34586f, #162b38);
+  }
+  /* Pressed: the face travels its own thickness down onto the wall. */
+  .lab-chip:active {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -2px 5px rgba(0, 0, 0, 0.5),
+      0 1px 0 var(--edge),
+      0 3px 7px -4px rgba(0, 0, 0, 0.75);
+  }
+  /* The same pill at half the thickness, worn *with* `.lab-chip`.
+
+     A shortcut is a lesser press than the thing it writes: the league filters'
+     quick adds sit inside a bay whose segment keys are full-thickness, and a
+     tray of five parts at the same height reads as five more filters rather than
+     as the one-click path to a rule. Thickness is the only difference, which is
+     why this overrides the wall and its press travel and nothing else — the
+     face, the hover and the padding all still come from `.lab-chip` and the call
+     site. It is declared after `.lab-chip:active` so its own press wins. */
+  .lab-chip-sm {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.4),
+      0 2px 0 var(--edge),
+      0 4px 8px -4px rgba(0, 0, 0, 0.7);
+  }
+  .lab-chip-sm:active {
+    transform: translateY(1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.45),
+      0 1px 0 var(--edge),
+      0 2px 5px -3px rgba(0, 0, 0, 0.7);
+  }
+
+  /* The cyan key, for a control that is currently narrowing something. */
+  .lab-chip-on {
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    color: #052029;
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9),
+      0 3px 0 var(--edge-active),
+      0 6px 14px -5px rgba(0, 255, 229, 0.4);
+  }
+  .lab-chip-on:hover {
+    background: linear-gradient(180deg, #c2fff8, #14e8d1);
+  }
+  .lab-chip-on:active {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.7),
+      inset 0 -5px 9px -8px rgba(0, 90, 82, 0.9),
+      0 1px 0 var(--edge-active),
+      0 3px 9px -5px rgba(0, 255, 229, 0.4);
+  }
+
+  /* The same grammar for a continuous control: a milled slot with a raised key
+     riding in it — the ADP drawer's value curve. The track is recessed for the
+     reason the current-page chip is (it is the thing being read, not pressed)
+     and the thumb is a key, so what invites the grab is the part that moves.
+
+     A range input is styled through pseudo-elements per engine, and they can't
+     be grouped in one selector: an unknown pseudo-element voids the whole rule,
+     so WebKit's and Firefox's are written out separately even where they are
+     identical. `appearance: none` is what unhooks the native widget; it carries
+     no box of its own, so this still holds the material-only rule — the height,
+     the width and the layout all come from utilities at the call site. */
+  .lab-slider {
+    appearance: none;
+    background: transparent;
+    height: 18px;
+    cursor: pointer;
+  }
+  .lab-slider::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #0a1620, #16303e);
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.75),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .lab-slider::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #0a1620, #16303e);
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.75),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .lab-slider::-webkit-slider-thumb {
+    appearance: none;
+    /* Centres a 16px key on a 6px track: (6 − 16) / 2. Firefox centres its own. */
+    margin-top: -5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 2px 0 var(--edge-active),
+      0 4px 10px -3px rgba(0, 255, 229, 0.45);
+  }
+  .lab-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 2px 0 var(--edge-active),
+      0 4px 10px -3px rgba(0, 255, 229, 0.45);
+  }
+  /* The key travels its own thickness while held, like every other part. */
+  .lab-slider:active::-webkit-slider-thumb {
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.7),
+      0 1px 0 var(--edge-active),
+      0 2px 7px -3px rgba(0, 255, 229, 0.45);
+  }
+  .lab-slider:active::-moz-range-thumb {
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.7),
+      0 1px 0 var(--edge-active),
+      0 2px 7px -3px rgba(0, 255, 229, 0.45);
+  }
+  .lab-slider:focus-visible {
+    outline: none;
+  }
+  .lab-slider:focus-visible::-webkit-slider-thumb {
+    outline: 2px solid var(--color-active);
+    outline-offset: 2px;
+  }
+  .lab-slider:focus-visible::-moz-range-thumb {
+    outline: 2px solid var(--color-active);
+    outline-offset: 2px;
+  }
+}
+
+/* Flask loader (features/shared/ui/flask-loader) — the bubbling animation.
+   Tailwind v4 has no per-component keyframe mechanism and the component needs
+   several keyframes plus per-bubble delays, so they live here once and the
+   component references them by name through inline `animation`. `flask-bub`
+   gives each bubble a fill-box transform origin so `translateY`/`scale` pivot
+   on the bubble, not the SVG root. */
+.flask-bub {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes flask-rise {
+  0% {
+    transform: translateY(4px) scale(0.3);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.95;
+  }
+  75% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(-30px) scale(1);
+    opacity: 0;
+  }
+}
+@keyframes flask-fill {
+  0%,
+  100% {
+    transform: translateY(14px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes flask-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+@keyframes flask-steam {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(-18px) scale(1.3);
+    opacity: 0;
+  }
+}
+/* Tools page ambience (features/tools). Same rule as the flask loader: Tailwind
+   v4 has no per-component keyframe mechanism, so the aurora backdrop's drift and
+   the account's "connected" pulse are named here once and referenced through
+   inline `animation`. Per-blob position/size/duration stay on the element as
+   data — a keyframe can't carry them. The three drifts differ so the glows
+   don't move in lockstep. */
+@keyframes aurora-drift-1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(7%, 9%) scale(1.12);
+  }
+}
+@keyframes aurora-drift-2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-8%, 6%) scale(1.08);
+  }
+}
+@keyframes aurora-drift-3 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1.05);
+  }
+  50% {
+    transform: translate(6%, -7%) scale(0.94);
+  }
+}
+/* The resolved-account "connected" dot: a ring that expands and fades. The
+   colour is the `active` token's value inline, since a keyframe can't read a
+   CSS custom property through `box-shadow` spread the way a property can. */
+@keyframes tools-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 229, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgba(0, 255, 229, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 229, 0);
+  }
+}
+
+/* The league-filters dialog rising into place — and the app bar's tools menu,
+   which is the same gesture at a smaller scale. Named here for the same reason
+   the flask's animations are: Tailwind v4 has no per-component keyframes, and
+   the panel needs the timing function inline anyway. */
+@keyframes dialog-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+/* Respect a reader who asked the OS for less motion: freeze the flask rather
+   than bubble at them. Bubbles rest at opacity 0 (keyframe start), so what's
+   left is a calm, static flask that still reads as a loading mark. The tools
+   ambient drift and the account pulse (`.lab-anim`) freeze on the same terms —
+   the glows and the account panel simply hold still. The filters dialog appears
+   without the rise, which costs nothing: a modal that is simply *there* is still
+   a modal, where a frozen entrance animation would leave it invisible. */
+@media (prefers-reduced-motion: reduce) {
+  .flask-loader *,
+  .lab-anim,
+  .filters-dialog-panel,
+  .filters-segment-pop,
+  .tools-menu-panel {
+    animation: none !important;
+  }
+  /* The key's travel is motion too: a reader who asked for less gets the
+     colour change and the glow, without the part moving under the finger. The
+     chip's press is the same gesture as a shadow, so only its travel is
+     dropped — the shadow still collapses, which is what says "pressed". */
+  .lab-key-press:active {
+    padding-bottom: 3px;
+    padding-top: 0;
+  }
+  .lab-chip:active,
+  .lab-chip-on:active {
+    transform: none;
+  }
 }

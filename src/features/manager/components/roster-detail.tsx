@@ -7,46 +7,90 @@ import { useMemo } from "react";
 import { NON_STARTING_SLOTS } from "@/shared/projections/slots";
 
 import { formatPoints, formatRecord, formatWeekRange } from "../format";
+import { PLAYER_METRICS } from "../roster-metrics";
 import type {
   LeagueOutlook,
+  LeagueRosterValues,
   LeagueTeamView,
   PlayerSummary,
   TeamOutlook,
 } from "../types";
+import { ColumnPicker, type ColumnOption } from "./column-picker";
+import { DraftPicks } from "./draft-picks";
 import { PlayerRow } from "./player-row";
-import { NO_NUMBERS, SPLIT_LAYOUT, TOTAL_LAYOUT } from "./roster-layout";
+import { NO_NUMBERS, SPLIT_LAYOUT } from "./roster-layout";
 import type { SectionLayout } from "./roster-layout";
 import { teamLabel, TeamAvatar } from "./ui";
+
+/** The player metrics offered in every roster column's picker. */
+const PLAYER_METRIC_OPTIONS: ColumnOption[] = PLAYER_METRICS.map((m) => ({
+  key: m.key,
+  label: m.label,
+}));
 
 /** A row of the starters list: a slot and who is in it. */
 type SlotRow = { slot: string; player_id: string };
 
 /**
- * One team's full roster, grouped into starters, bench, IR and taxi, with each
- * player's projected points for the rest of the season.
+ * One team's full roster — starters and bench — plus its future draft picks, with
+ * each player's projected points for the rest of the season.
  *
  * The starters section shows the *best* lineup available to the team, not what
  * it is currently starting (see `outlook`), and the bench follows: a player the
  * optimal lineup starts is listed as a starter and highlighted, one it sits is
- * dimmed on the bench, so the two lists always read as one lineup.
+ * dimmed on the bench, so the two lists always read as one lineup. IR and taxi
+ * players aren't broken out — they're treated as bench depth (candidates for the
+ * lineup like anyone on the bench), so they simply sit in the bench list.
+ *
+ * The two value columns beside each player are slots the reader points at a
+ * player-level metric — the projected start/bench split to start with, swappable
+ * to the season total or to this player's KTC and ADP value from the heading's
+ * picker. Which metric each shows is held above this panel so the two sections'
+ * columns line up and one picker moves the whole column.
  *
  * Below the `@lg` container width the record drops onto its own line under the
  * team name instead of competing with it for horizontal space.
  */
 export function RosterDetail({
   team,
+  teams,
   players,
   rosterPositions,
   outlook,
+  values,
+  columns,
+  openPicker,
+  onTogglePicker,
+  onSelectColumn,
+  elevated,
 }: {
   team: LeagueTeamView;
+  /** Every team in the league, for naming the roster an acquired pick came from. */
+  teams: LeagueTeamView[];
   players: Record<string, PlayerSummary>;
   rosterPositions: string[] | null;
   outlook: LeagueOutlook | null;
+  /** Per-player KTC and ADP values on this league's board, for the value columns. */
+  values: LeagueRosterValues;
+  /** The metric key each of the two value columns shows. */
+  columns: string[];
+  /** Which picker is open across the whole panel, if any. */
+  openPicker: string | null;
+  /** Toggle a picker by its key (the panel closes any other that was open). */
+  onTogglePicker: (key: string) => void;
+  /** Point value column `slot` at another metric. */
+  onSelectColumn: (slot: number, key: string) => void;
+  /** Lift this half's stacking order while one of its pickers overhangs the rows. */
+  elevated: boolean;
 }) {
   const teamOutlook = useMemo(
     () => outlook?.teams.find((t) => t.roster_id === team.roster_id) ?? null,
     [outlook, team.roster_id],
+  );
+
+  const teamsById = useMemo(
+    () => new Map(teams.map((t) => [t.roster_id, t])),
+    [teams],
   );
 
   // Starters are positionally aligned with the league's non-bench slots. The
@@ -63,12 +107,11 @@ export function RosterDetail({
   }, [teamOutlook, rosterPositions, team.starters]);
 
   const bench = useMemo(() => {
-    const onField = new Set([
-      ...starters.map((s) => s.player_id),
-      ...team.reserve,
-      ...team.taxi,
-    ]);
-    const rest = team.players.filter((id) => id && !onField.has(id));
+    // Everyone not in the optimal starting lineup, IR and taxi included: those
+    // stashes are candidates for the lineup too now, so the ones that don't make
+    // it belong here rather than in sections of their own.
+    const starting = new Set(starters.map((s) => s.player_id));
+    const rest = team.players.filter((id) => id && !starting.has(id));
 
     // Best available first once there are projections to sort on: the point of
     // the bench in a lineup tool is who you might promote off it.
@@ -80,15 +123,31 @@ export function RosterDetail({
 
   const horizon = outlook?.weeks.length ?? 0;
 
-  // No projections means no number columns at all, so the headings go too — a
-  // "start / bench" label over a column of em dashes promises a breakdown that
-  // isn't there.
-  const lineupLayout = horizon > 0 ? SPLIT_LAYOUT : NO_NUMBERS;
-  const stashLayout = horizon > 0 ? TOTAL_LAYOUT : NO_NUMBERS;
+  // The value columns need something to show: a projection, or a KTC/ADP price.
+  // With none of the three — a league with no scoring on file and a roster KTC and
+  // ADP don't cover — the columns and their headings go, so a "start / bench"
+  // label doesn't promise a breakdown that isn't there.
+  const hasNumbers =
+    horizon > 0 ||
+    Object.keys(values.ktc).length > 0 ||
+    Object.keys(values.adp).length > 0;
+  const lineupLayout = hasNumbers ? SPLIT_LAYOUT : NO_NUMBERS;
+  const valueColumns = hasNumbers ? columns : [];
 
   return (
-    <div className="rounded-lg border border-foreground/10 bg-foreground/[0.02] p-2.5 @lg:p-4">
-      <div className="border-b border-foreground/10 pb-3 @lg:flex @lg:items-center @lg:gap-3 @lg:pb-4">
+    <div
+      className={`rounded-lg border border-foreground/10 bg-foreground/[0.02] p-2.5 @lg:p-4 ${
+        elevated ? "relative z-30" : ""
+      }`}
+    >
+      {/* A recessed plate rather than a rule underneath: the app bar's grammar
+          says a well is the thing being read, and this names the team every list
+          below it belongs to. It carries no layout of its own (see the `.lab-*`
+          rule in globals.css) — the box comes from the utilities here.
+
+          The record still drops under the name below @lg: this half is ~150px on
+          a phone, which a name and two numbers on one line don't share. */}
+      <div className="lab-well rounded-lg px-2.5 py-2 @lg:flex @lg:items-center @lg:gap-3 @lg:px-3 @lg:py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <TeamAvatar team={team} size="md" />
           <div className="min-w-0">
@@ -103,10 +162,10 @@ export function RosterDetail({
           </div>
         </div>
         <div className="mt-1.5 flex items-baseline gap-2 text-sm @lg:mt-0 @lg:ml-auto @lg:block @lg:shrink-0 @lg:text-right">
-          <span className="tabular-nums font-medium text-foreground/85">
+          <span className="font-medium tabular-nums text-foreground/85">
             {formatRecord(team.record)}
           </span>
-          <span className="block tabular-nums text-xs text-foreground/45">
+          <span className="block text-xs tabular-nums text-foreground/45">
             {formatPoints(team.fpts)} PF
           </span>
         </div>
@@ -120,7 +179,15 @@ export function RosterDetail({
         />
       )}
 
-      <RosterSection title="Starters" layout={lineupLayout}>
+      <RosterSection
+        title="Starters"
+        layout={lineupLayout}
+        valueColumns={valueColumns}
+        sectionKey="starters"
+        openPicker={openPicker}
+        onTogglePicker={onTogglePicker}
+        onSelectColumn={onSelectColumn}
+      >
         {starters.map((row, i) => (
           <PlayerRow
             key={`s-${i}`}
@@ -130,6 +197,8 @@ export function RosterDetail({
             outlook={outlook?.players[row.player_id]}
             split={teamOutlook?.weekly_split[row.player_id]}
             layout={lineupLayout}
+            columns={valueColumns}
+            values={values}
             horizon={horizon}
             promoted={teamOutlook?.start.includes(row.player_id)}
           />
@@ -137,7 +206,15 @@ export function RosterDetail({
       </RosterSection>
 
       {bench.length > 0 && (
-        <RosterSection title="Bench" layout={lineupLayout}>
+        <RosterSection
+          title="Bench"
+          layout={lineupLayout}
+          valueColumns={valueColumns}
+          sectionKey="bench"
+          openPicker={openPicker}
+          onTogglePicker={onTogglePicker}
+          onSelectColumn={onSelectColumn}
+        >
           {bench.map((id) => (
             <PlayerRow
               key={id}
@@ -146,6 +223,8 @@ export function RosterDetail({
               outlook={outlook?.players[id]}
               split={teamOutlook?.weekly_split[id]}
               layout={lineupLayout}
+              columns={valueColumns}
+              values={values}
               horizon={horizon}
               benched={teamOutlook?.sit.includes(id)}
             />
@@ -153,41 +232,13 @@ export function RosterDetail({
         </RosterSection>
       )}
 
-      {/* IR and taxi still show a projection — it is what a stash decision turns
-          on — but they are never candidates for the lineup above, since Sleeper
-          won't let them start. That is also why they get the season total rather
-          than the split: a player who cannot start has no starting half. */}
-      {team.reserve.length > 0 && (
-        <RosterSection title="IR" layout={stashLayout}>
-          {team.reserve.map((id) => (
-            <PlayerRow
-              key={id}
-              player={players[id]}
-              playerId={id}
-              slot="IR"
-              outlook={outlook?.players[id]}
-              layout={stashLayout}
-              horizon={horizon}
-            />
-          ))}
-        </RosterSection>
-      )}
+      <ValueFootnote columns={valueColumns} values={values} />
 
-      {team.taxi.length > 0 && (
-        <RosterSection title="Taxi" layout={stashLayout}>
-          {team.taxi.map((id) => (
-            <PlayerRow
-              key={id}
-              player={players[id]}
-              playerId={id}
-              slot="TX"
-              outlook={outlook?.players[id]}
-              layout={stashLayout}
-              horizon={horizon}
-            />
-          ))}
-        </RosterSection>
-      )}
+      <DraftPicks
+        picks={team.picks}
+        rosterId={team.roster_id}
+        teamsById={teamsById}
+      />
     </div>
   );
 }
@@ -255,15 +306,28 @@ function LineupSummary({
  *
  * Laid out on the same grid as its rows, so the headings sit over the numbers they
  * name. The first cell is the empty slot gutter — the headings start where the
- * names do.
+ * names do. Each value column's heading is a picker: clicking it swaps the whole
+ * column (in both sections at once) to another metric.
  */
 function RosterSection({
   title,
   layout,
+  valueColumns,
+  sectionKey,
+  openPicker,
+  onTogglePicker,
+  onSelectColumn,
   children,
 }: {
   title: string;
   layout: SectionLayout;
+  /** The two value columns' metric keys — empty when the section shows no numbers. */
+  valueColumns: string[];
+  /** Distinguishes this section's open picker from the other's; selection is shared. */
+  sectionKey: string;
+  openPicker: string | null;
+  onTogglePicker: (key: string) => void;
+  onSelectColumn: (slot: number, key: string) => void;
   children: React.ReactNode;
 }) {
   return (
@@ -275,16 +339,66 @@ function RosterSection({
         <h5 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-foreground/35">
           {title}
         </h5>
-        {layout.columns.map((label) => (
-          <span
-            key={label}
-            className="text-right text-[0.6rem] uppercase tracking-wide text-foreground/30"
-          >
-            {label}
-          </span>
+        {valueColumns.map((key, slot) => (
+          <ColumnPicker
+            key={slot}
+            // Paired with the layout's grid template and the rows' own cells:
+            // the second column appears only once this half is wide enough.
+            wrapperClassName={
+              slot === 0 ? "inline-flex" : "hidden @lg:inline-flex"
+            }
+            className="text-[0.6rem]"
+            options={PLAYER_METRIC_OPTIONS}
+            activeKey={key}
+            open={openPicker === `${sectionKey}-${slot}`}
+            onToggle={() => onTogglePicker(`${sectionKey}-${slot}`)}
+            onSelect={(metricKey) => onSelectColumn(slot, metricKey)}
+          />
         ))}
       </div>
       <ul className="flex flex-col divide-y divide-foreground/5">{children}</ul>
+    </div>
+  );
+}
+
+/**
+ * A dim line saying what the KTC and ADP columns rest on — the board they were
+ * priced against and, for ADP, how many crawled drafts stood behind it — shown
+ * only while one of those columns is selected. The same "say what the number
+ * rests on" habit the standings footer and the outlook caveat keep, and the
+ * reminder that KTC is a dynasty board and ADP a market consensus, not points.
+ */
+function ValueFootnote({
+  columns,
+  values,
+}: {
+  columns: string[];
+  values: LeagueRosterValues;
+}) {
+  const showKtc = columns.includes("ktc");
+  const showAdp = columns.includes("adp");
+  if (!showKtc && !showAdp) return null;
+
+  const board = values.superflex ? "superflex" : "1QB";
+
+  return (
+    <div className="mt-2 space-y-0.5 text-[0.65rem] leading-relaxed text-foreground/35">
+      {showKtc && (
+        <p>
+          KTC · KeepTradeCut dynasty {board} value
+          {values.ktc_updated_at &&
+            ` · scraped ${new Date(values.ktc_updated_at).toLocaleDateString()}`}
+        </p>
+      )}
+      {showAdp && (
+        <p>
+          ADP · draft-capital value off {board} {values.adp_league_type} drafts
+          {values.adp_draft_count > 0 &&
+            ` · over ${values.adp_draft_count} crawled draft${
+              values.adp_draft_count === 1 ? "" : "s"
+            }`}
+        </p>
+      )}
     </div>
   );
 }

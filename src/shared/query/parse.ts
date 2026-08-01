@@ -97,3 +97,33 @@ export function integer(
 
 /** A Sleeper season string: a 4-digit year. */
 export const isSeason = (value: string): boolean => /^\d{4}$/.test(value);
+
+/**
+ * A calendar date, `YYYY-MM-DD`. The shape check alone would pass `2026-02-31`,
+ * and so would parsing it — V8 rolls an out-of-range day forward rather than
+ * failing, turning that into March 3. So the parsed date is formatted back and
+ * compared: only a real day survives the round trip.
+ */
+export const isIsoDate = (value: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  return !Number.isNaN(ms) && new Date(ms).toISOString().startsWith(value);
+};
+
+/**
+ * A `YYYY-MM-DD` bound. Absent → null, meaning "don't bound on this side" — a
+ * range is two independent halves, so an open end has to be expressible.
+ *
+ * The date is returned as the string it came in as, not a timestamp: what a bare
+ * date *means* is a zone question, and the caller (SQL, here) is what knows the
+ * zone. Converting to epoch ms here would bake this process's zone into the
+ * answer.
+ */
+export function isoDate(params: URLSearchParams, key: string): Parsed<string | null> {
+  const raw = params.get(key)?.trim();
+  if (!raw) return { ok: true, value: null };
+  if (!isIsoDate(raw)) {
+    return { ok: false, error: `Invalid ${key}: ${raw}. Expected a date as YYYY-MM-DD.` };
+  }
+  return { ok: true, value: raw };
+}

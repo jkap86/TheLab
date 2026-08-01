@@ -5,6 +5,7 @@ import {
   horizonWeeks,
   LAST_REGULAR_WEEK,
   parseWeeks,
+  MAX_REQUESTED_WEEKS,
   targetWeeks,
 } from "./weeks.ts";
 
@@ -94,5 +95,23 @@ describe("parseWeeks", () => {
       const result = parseWeeks([bad]);
       assert.equal(result.ok, false, `expected "${bad}" to be rejected`);
     }
+  });
+
+  test("the whole regular season is requestable, and nothing beyond it", () => {
+    const all = Array.from({ length: MAX_REQUESTED_WEEKS }, (_, i) => String(i + 1));
+    assert.equal(parseWeeks(all).ok, true);
+  });
+
+  test("rejects more weeks than the cap allows", () => {
+    // Each week is a ~5.6MB download held under one advisory lock, so an
+    // over-long list is refused rather than discovered an hour in.
+    const result = parseWeeks(["1,2,3,4"], 3);
+    assert.equal(result.ok, false);
+    assert.match(result.ok === false ? result.error : "", /at most 3 week/);
+  });
+
+  test("the cap is counted after deduplication", () => {
+    // `?week=1,1,1,1` names one week's work however long the string is.
+    assert.deepEqual(parseWeeks(["1,1,1,1"], 1), { ok: true, weeks: [1] });
   });
 });

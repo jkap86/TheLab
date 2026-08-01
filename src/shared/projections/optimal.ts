@@ -60,6 +60,20 @@ export function startingSlots(rosterPositions: readonly string[]): string[] {
 }
 
 /**
+ * The starting slots this solver knows how to fill.
+ *
+ * A slot with no entry in {@link SLOT_POSITIONS} is eligible for nobody, so
+ * leaving it in a lineup contributes an empty seat scoring zero and quietly
+ * drags a team's total down. {@link compareLineup} drops those and names them in
+ * `unknown_slots`; the batch entry points in `./outlook` have no panel to report
+ * them on and simply leave them out. Both go through here, so "startable" means
+ * one thing across the three.
+ */
+export function recognisedSlots(rosterPositions: readonly string[]): string[] {
+  return startingSlots(rosterPositions).filter((slot) => slot in SLOT_POSITIONS);
+}
+
+/**
  * Two decimals — points arrive rounded there and summing reintroduces noise.
  * Exported for `./weekly`, which sums this module's lineups across a horizon
  * and must round on the same convention.
@@ -195,7 +209,7 @@ export function compareLineup({
   players: readonly RosterPlayer[];
 }): LineupComparison {
   const slots = startingSlots(rosterPositions);
-  const known = slots.filter((slot) => slot in SLOT_POSITIONS);
+  const known = recognisedSlots(rosterPositions);
   const unknown = [...new Set(slots.filter((slot) => !(slot in SLOT_POSITIONS)))];
 
   const byId = new Map(players.map((p) => [p.player_id, p]));

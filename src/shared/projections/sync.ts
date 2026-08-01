@@ -7,15 +7,13 @@ import {
   withAdvisoryLock,
   withTransaction,
 } from "@/shared/db";
-import {
-  DEFAULT_SEASON,
-  fetchWeekProjections,
-  getNflState,
-} from "@/shared/sleeper";
+import { getActiveSeason } from "@/shared/season";
+import { fetchWeekProjections, getNflState } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
 import { toProjectionRows } from "./parse";
 import type { ProjectionRow } from "./parse";
+import { validateWeekProjections } from "./validate";
 import { horizonWeeks, targetWeeks } from "./weeks";
 
 /**
@@ -92,11 +90,22 @@ export type ProjectionsSyncSummary = {
   empty: number[];
   /** Weeks whose fetch or write failed. Logged, retried on a later tick. */
   failed: number[];
+  /**
+   * Weeks whose payload was refused as incomplete — nothing written, no
+   * freshness stamp, so the stored week is untouched and the next tick tries
+   * again. Separate from `failed` because the fetch *succeeded*: what was
+   * rejected is the data, and the reason travels with the week. See
+   * `./validate`.
+   */
+  rejected: { week: number; reason: string }[];
 };
 
 /**
  * Which of `weeks` are stale, judged per week on the newest `updated_at` among
- * that week's rows. A week with no rows at all is due.
+ * that week's rows — or, for a week with no rows, on when it was last fetched
+ * (`projection_week_syncs`). Without the second gate an unpublished week is due
+ * on every tick, refetched forever, and — because the horizon budget takes the
+ * earliest stale weeks first — able to starve published weeks out of the cap.
  */
 async function staleWeeks(
   season: string,
@@ -112,10 +121,39 @@ async function staleWeeks(
              WHERE p.season = $2
                AND p.week = w.week
                AND p.updated_at > now() - $3::interval)
+        AND NOT EXISTS (
+            SELECT 1
+              FROM projection_week_syncs s
+             WHERE s.season = $2
+               AND s.week = w.week
+               AND s.synced_at > now() - $3::interval)
       ORDER BY w.week`,
     [weeks, season, msInterval(ttlMs)],
   );
   return rows.map((r) => r.week);
+}
+
+/**
+ * How many rows are stored for a `(season, week)` — the population a fresh
+ * payload's completeness is judged against. Zero is a first sync of that week.
+ */
+async function storedWeekCount(season: string, week: number): Promise<number> {
+  const { rows } = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count
+       FROM projections WHERE season = $1 AND week = $2`,
+    [season, week],
+  );
+  return Number(rows[0].count);
+}
+
+/** Stamp a week as fetched, empty or not — the marker `staleWeeks` reads. */
+function markWeekSynced(season: string, week: number): Promise<unknown> {
+  return pool.query(
+    `INSERT INTO projection_week_syncs (season, week, synced_at)
+     VALUES ($1, $2, now())
+     ON CONFLICT (season, week) DO UPDATE SET synced_at = now()`,
+    [season, week],
+  );
 }
 
 /**
@@ -214,7 +252,11 @@ export async function syncProjections(
       }
     }
 
-    const season = options.season ?? state?.season ?? DEFAULT_SEASON;
+    // The state read above is the same call the resolver makes, so it wins when
+    // it worked; the resolver is the ladder underneath it (cached value, then
+    // the operator override, then the compiled-in fallback).
+    const season =
+      options.season ?? state?.season ?? (await getActiveSeason());
 
     const near = explicitWeeks ?? targetWeeks(state);
     const far = explicitWeeks ? [] : horizonWeeks(state);
@@ -234,6 +276,7 @@ export async function syncProjections(
     const synced: WeekSyncResult[] = [];
     const empty: number[] = [];
     const failed: number[] = [];
+    const rejected: { week: number; reason: string }[] = [];
 
     for (const week of due) {
       try {
@@ -242,13 +285,34 @@ export async function syncProjections(
 
         if (rows.length === 0) {
           // Sleeper answers 200 for a week it has nothing for, so this is a
-          // normal state (a week not published yet), not an error.
+          // normal state (a week not published yet), not an error. Still a
+          // successful fetch: stamp it so the week waits out its TTL instead
+          // of being refetched every tick.
+          await markWeekSynced(season, week);
           empty.push(week);
           continue;
         }
 
-        const removed = await writeWeek(season, week, rows);
-        synced.push({ week, rows: rows.length, removed });
+        // Completeness gate, outside the transaction on purpose: a refusal must
+        // leave the stored week byte-for-byte as it was, and the cheapest way to
+        // guarantee that is never to open the transaction that deletes.
+        const previous = await storedWeekCount(season, week);
+        const validation = validateWeekProjections(rows, previous);
+        if (!validation.ok) {
+          console.error(
+            `[proj] Refused a suspicious payload for ${season} week ${week}: ` +
+              `${validation.reason} (previous=${validation.previous} ` +
+              `valid=${validation.valid} rejected=${validation.rejected} ` +
+              `parsed=${rows.length}). Stored rows left untouched.`,
+          );
+          // No `markWeekSynced`: the week stays stale so the next tick retries.
+          rejected.push({ week, reason: validation.reason });
+          continue;
+        }
+
+        const removed = await writeWeek(season, week, validation.rows);
+        await markWeekSynced(season, week);
+        synced.push({ week, rows: validation.rows.length, removed });
       } catch (error) {
         failed.push(week);
         console.warn(
@@ -258,18 +322,21 @@ export async function syncProjections(
       }
     }
 
-    return { locked: false, season, synced, fresh, deferred, empty, failed };
+    return {
+      locked: false, season, synced, fresh, deferred, empty, failed, rejected,
+    };
   });
 
   return (
     summary ?? {
       locked: true,
-      season: options.season ?? DEFAULT_SEASON,
+      season: options.season ?? (await getActiveSeason()),
       synced: [],
       fresh: [],
       deferred: [],
       empty: [],
       failed: [],
+      rejected: [],
     }
   );
 }

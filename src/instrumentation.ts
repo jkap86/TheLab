@@ -14,15 +14,29 @@
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  const { runMigrations } = await import("@/shared/db");
+  const { runMigrations, resolveDatabaseUrl } = await import("@/shared/db");
 
   try {
     await runMigrations();
   } catch (error) {
-    // DATABASE_URL is configured but migrations failed — fail loudly so the
-    // app doesn't start serving requests against an out-of-date schema.
-    console.error("[db] Failed to apply migrations on boot:", error);
+    // Either the database was never configured (fatal in production — see
+    // `shared/db/config`) or migrations failed. Both throw, and throwing from
+    // `register` is what stops the server before it serves a request against a
+    // schema it can't vouch for. Nothing below this line runs, which is the
+    // point: the three loops must not start on a broken boot.
+    console.error("[db] Failed to initialise the database on boot:", error);
     throw error;
+  }
+
+  // Development with no DATABASE_URL: migrations were skipped rather than
+  // fatal, so the server still renders. The loops would only tick against a
+  // database that isn't there, once a minute, forever — so they stay down and
+  // say so.
+  if (!resolveDatabaseUrl(process.env, false).ok) {
+    console.warn(
+      "[boot] DATABASE_URL is not set; background loops will not start.",
+    );
+    return;
   }
 
   // Schema is up to date; start the background loop that scrapes KeepTradeCut

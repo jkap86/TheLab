@@ -106,8 +106,9 @@ export type WeeklyLineupSplit = {
    * playing. Not a number to minimise: a bye week has to be covered by someone, so
    * zero here would mean a roster with nothing behind its starters.
    *
-   * Counts only lineup candidates, so IR and taxi are out of it for the same
-   * reason they are out of `points` — they were never eligible to start.
+   * Counts every candidate who didn't make the week's lineup — the whole
+   * roster, IR and taxi included, since a stashed player is treated as
+   * startable bench depth (see `lineupCandidates`).
    */
   bench_points: number;
   /**

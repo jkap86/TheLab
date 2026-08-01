@@ -1,0 +1,58 @@
+<!--
+  The tab mark: the FlaskLoader's silhouette held to 64px, on the app's plate.
+
+  Three things differ from the loader on purpose, and each is about surviving a
+  16px tab strip rather than about taste. The glass wall is 3.2 units where the
+  loader's is 2.5 (a hairline rounds away to nothing at tab size); the neck
+  highlight is dropped, since a 22%-opacity streak is sub-pixel there; and the
+  bubbles are two frozen circles rather than four rising ones — they are gone by
+  24px, so they are what the 180px home-screen icon shows and the tab does not.
+
+  The plate is the load-bearing part. Chrome's light tab strip is #dee1e6, and a
+  transparent cyan-glass mark dissolves into it; the tile is what makes the mark
+  read the same in both strips instead of only in the dark one.
+
+  Colours are literal rather than tokens: an icon is fetched as a standalone
+  document, so no stylesheet has registered the `active` custom property by the
+  time it paints. They are the loader's own values (`TONES.magenta` and the
+  `active` cyan), which is the gradient exception the style rules carve out.
+
+  Keep a double hyphen out of this comment. XML forbids one inside a comment, so
+  spelling the custom property with its leading dashes fails the *whole file* to
+  parse — and a browser's only symptom is the default globe icon coming back.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="liquid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff4d84" />
+      <stop offset="1" stop-color="#c81d52" />
+    </linearGradient>
+    <!-- The interior, inset from the glass, so liquid and bubbles stay in the cone. -->
+    <clipPath id="inner">
+      <path d="M29.6 27 H34.4 L50 52.6 Q52 55.6 48.6 55.6 H15.4 Q12 55.6 14 52.6 Z" />
+    </clipPath>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="#0b1220" />
+
+  <path
+    d="M25 8 H39 V12 H36 V26 L52.5 52 Q56.5 58 49.5 58 H14.5 Q7.5 58 11.5 52 L28 26 V12 H25 Z"
+    fill="#22e3ff"
+    fill-opacity="0.12"
+  />
+
+  <g clip-path="url(#inner)">
+    <rect x="6" y="43" width="52" height="30" fill="url(#liquid)" />
+    <ellipse cx="32" cy="43" rx="26" ry="2.2" fill="#ff5f92" />
+    <circle cx="27" cy="36" r="4" fill="#ffd6e4" />
+    <circle cx="37" cy="45" r="2.4" fill="#ffd6e4" fill-opacity="0.8" />
+  </g>
+
+  <path
+    d="M25 8 H39 V12 H36 V26 L52.5 52 Q56.5 58 49.5 58 H14.5 Q7.5 58 11.5 52 L28 26 V12 H25 Z"
+    fill="none"
+    stroke="#22e3ff"
+    stroke-width="3.2"
+    stroke-linejoin="round"
+  />
+</svg>

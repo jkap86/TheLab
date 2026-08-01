@@ -10,18 +10,22 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test \"src/**/*.test.ts\"",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "migrate:up": "node-pg-migrate up -m db/migrations",
     "migrate:down": "node-pg-migrate down -m db/migrations",
     "migrate:redo": "node-pg-migrate redo -m db/migrations",
-    "migrate:create": "node-pg-migrate create -m db/migrations -j sql"
+    "migrate:create": "node-pg-migrate create -m db/migrations -j sql",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-virtual": "^3.14.9",
     "axios": "^1.18.1",
     "axios-retry": "^4.5.0",
     "next": "16.2.10",
     "node-pg-migrate": "^8.0.4",
     "pg": "^8.22.0",
+    "pg-cursor": "^2.21.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -29,11 +33,13 @@
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",
+    "@types/pg-cursor": "^2.7.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }

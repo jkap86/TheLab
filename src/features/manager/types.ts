@@ -1,12 +1,31 @@
 import type {
+  AdpDensityPayload,
+  AdpPayload,
+  AdpPlayerPayload,
+  KickoffPayload,
+  LeagueAdpEntry,
   LeagueDetailPayload,
+  LeagueKtcEntry,
+  LeagueKtcValue,
+  LeaguematePayload,
+  LeagueRankSet,
+  LeagueRosterValues,
   LeaguesProgressMessage,
   LeaguesResultMessage,
   LeagueTeamPayload,
+  ManagerAdpValuePayload,
+  ManagerKtcPayload,
+  ManagerLeaguematesPayload,
   ManagerPlayersPayload,
   ManagerRanksPayload,
 } from "@/shared/contract";
-import type { ManagerLeague, ProjectedRank } from "@/shared/manager";
+import type {
+  DraftDensityMonth,
+  DraftPickAsset,
+  LeagueRank,
+  ManagerLeague,
+  ProjectedRank,
+} from "@/shared/manager";
 import type { PlayerSummary } from "@/shared/players";
 import type {
   LeagueOutlook,
@@ -24,7 +43,17 @@ import type {
  * one import site.
  */
 export type {
+  AdpPayload,
+  AdpPlayerPayload,
+  DraftDensityMonth,
+  DraftPickAsset,
+  LeagueAdpEntry,
+  LeagueKtcEntry,
+  LeagueKtcValue,
   LeagueOutlook,
+  LeagueRank,
+  LeagueRankSet,
+  LeagueRosterValues,
   ManagerLeague,
   PlayerOutlook,
   PlayerSplit,
@@ -32,6 +61,12 @@ export type {
   ProjectedRank,
   TeamOutlook,
 };
+
+/** The `/api/adp/density` response the range scrubber draws its strip from. */
+export type AdpDensityResult = AdpDensityPayload;
+
+/** The `/api/kickoff` response the header's countdown counts to. */
+export type KickoffResult = KickoffPayload;
 
 /** A team as sent to the client (manager avatar id resolved to a URL). */
 export type LeagueTeamView = LeagueTeamPayload;
@@ -48,5 +83,17 @@ export type SyncProgress = LeaguesProgressMessage;
 /** The `/api/user/[username]/players` response the shares view counts over. */
 export type ManagerPlayersResult = ManagerPlayersPayload;
 
+/** A league member as sent to the client (avatar resolved to a URL). */
+export type LeaguemateView = LeaguematePayload;
+
+/** The `/api/user/[username]/leaguemates` response that view counts over. */
+export type ManagerLeaguematesResult = ManagerLeaguematesPayload;
+
 /** The `/api/user/[username]/ranks` response the league cards annotate from. */
 export type ManagerRanksResult = ManagerRanksPayload;
+
+/** The `/api/user/[username]/ktc` response the league cards price from. */
+export type ManagerKtcResult = ManagerKtcPayload;
+
+/** The `/api/user/[username]/adp-value` response the league cards value from. */
+export type ManagerAdpValueResult = ManagerAdpValuePayload;

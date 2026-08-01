@@ -1,13 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 // Both imported directly rather than through their barrels, which would pull
 // `pg`-backed code into the client bundle — see `slots.ts` and `rank.ts`.
 import { orderByProjectedPoints } from "@/shared/manager/rank";
 import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 
 import { useLeagueDetail } from "../hooks/use-league-detail";
+import { DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS } from "../roster-metrics";
+import { DEFAULT_TEAM_COLUMNS, TEAM_METRICS } from "../standings-metrics";
 import type { LeagueDetailResult } from "../types";
 import { RosterDetail } from "./roster-detail";
 import { Standings } from "./standings";
@@ -56,22 +59,88 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   const [selectedId, setSelectedId] = useState<number>(teams[0].roster_id);
   const selected = teams.find((t) => t.roster_id === selectedId) ?? teams[0];
 
-  // Even 50/50 split at every width; the children use @lg container queries to
-  // shed non-essential columns once each half gets tight.
+  // Each table's two value columns are slots the reader points at a metric — the
+  // standings at a team-level one, the roster at a player-level one. Stored on
+  // the device rather than held here, so the choice outlives this panel: it
+  // mounts on expand and unmounts on collapse, which used to reset both tables
+  // every time a different league was opened. One key per grain, not per league —
+  // what a column means is a fact about the catalogue, not about this league.
+  const { columns: teamColumns, setColumn: setTeamColumn } = usePersistedColumns(
+    "standings",
+    DEFAULT_TEAM_COLUMNS,
+    TEAM_METRICS,
+  );
+  const { columns: rosterColumns, setColumn: setRosterColumn } =
+    usePersistedColumns("roster", DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS);
+  const [openPicker, setOpenPicker] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (openPicker === null) return;
+    const onDown = (event: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+        setOpenPicker(null);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenPicker(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openPicker]);
+
+  const togglePicker = (key: string) =>
+    setOpenPicker((current) => (current === key ? null : key));
+  const pickTeamColumn = (slot: number, key: string) => {
+    setTeamColumn(slot, key);
+    setOpenPicker(null);
+  };
+  const pickRosterColumn = (slot: number, key: string) => {
+    setRosterColumn(slot, key);
+    setOpenPicker(null);
+  };
+
+  // The open menu overhangs the rows below it, so the half it opens from lifts its
+  // stacking order over the other while a picker is open.
+  const teamPickerOpen = openPicker?.startsWith("team-") ?? false;
+
+  // Even 50/50 split at every width: the two halves answer different questions —
+  // where the teams stand, and what the selected one is starting — and reading
+  // one against the other is the point of the panel, so neither is folded away
+  // on a phone. What gives instead is the *content* of each half: the children
+  // use @lg container queries to shed non-essential columns once each half gets
+  // tight (see the standings' second value column).
   return (
-    <div className="@container">
+    <div ref={panelRef} className="@container">
       <div className="grid grid-cols-2 gap-2 @lg:gap-4">
         <Standings
           teams={teams}
           outlook={data.outlook}
+          values={data.values}
           selectedId={selected.roster_id}
           onSelect={setSelectedId}
+          columns={teamColumns}
+          openPicker={openPicker}
+          onTogglePicker={togglePicker}
+          onSelectColumn={pickTeamColumn}
+          elevated={teamPickerOpen}
         />
         <RosterDetail
           team={selected}
+          teams={teams}
           players={data.players}
           rosterPositions={data.roster_positions}
           outlook={data.outlook}
+          values={data.values}
+          columns={rosterColumns}
+          openPicker={openPicker}
+          onTogglePicker={togglePicker}
+          onSelectColumn={pickRosterColumn}
+          elevated={openPicker !== null && !teamPickerOpen}
         />
       </div>
       <OutlookCaveat data={data} />

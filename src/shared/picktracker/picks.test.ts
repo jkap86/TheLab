@@ -17,6 +17,7 @@ const draft = (overrides: Partial<SleeperDraft> = {}): SleeperDraft => ({
   status: "drafting",
   type: "snake",
   start_time: null,
+  last_picked: null,
   draft_order: null,
   settings: { teams: 12, slots_k: 1 },
   metadata: null,

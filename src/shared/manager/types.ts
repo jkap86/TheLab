@@ -1,3 +1,5 @@
+import type { DraftPickAsset } from "./draft-picks";
+
 /**
  * A manager's league — the shape read from Postgres by {@link getManagerLeagues}
  * and sent to the client on the leagues stream. Single source of truth for both
@@ -13,8 +15,43 @@ export type ManagerLeague = {
   record: { wins: number; losses: number; ties: number } | null;
   /** League config (roster slots, waivers, etc.), as stored by Sleeper. */
   settings: Record<string, unknown> | null;
+  /**
+   * The lineup slots, in order — `["QB","RB",…,"BN"]` as Sleeper stores them.
+   *
+   * Carried on the wire because it holds what `settings` doesn't: what a league
+   * actually starts. The client's slot rules count groups of these — how many
+   * QB-eligible slots, how many individual defenders, how many flexes — and every
+   * group is read through the shared slot vocabulary rather than by matching slot
+   * names, so a new flex counts the moment the solver learns it.
+   */
+  roster_positions: string[] | null;
   /** Scoring rules keyed by stat, as stored by Sleeper. */
   scoring_settings: Record<string, number> | null;
+};
+
+/**
+ * A league member as read from `league_users` — identity only, no roster.
+ * Read by {@link getManagerLeaguemates}.
+ */
+export type Leaguemate = {
+  user_id: string;
+  display_name: string | null;
+  /** Avatar id (not a URL); null when the user has no avatar. */
+  avatar: string | null;
+};
+
+/**
+ * Every member of each of a manager's leagues for a season — what counting
+ * leaguemates is built from. `members` keeps the manager's own id so a league
+ * they share with nobody still reads as cached rather than missing; `users`
+ * resolves each id once, however many leagues share it. Read by
+ * {@link getManagerLeaguemates}.
+ */
+export type ManagerLeaguemates = {
+  /** League id → the user ids in that league's cached member list. */
+  members: Record<string, string[]>;
+  /** User ids → identity, one entry per user. */
+  users: Record<string, Leaguemate>;
 };
 
 /**
@@ -42,6 +79,13 @@ export type LeagueTeam = {
   starters: string[];
   reserve: string[];
   taxi: string[];
+  /**
+   * The future draft picks this team currently owns, resolved from the league's
+   * traded picks (see {@link ownedDraftPicks}) — its own untraded picks plus any
+   * it acquired, each tagged with the roster it originally belonged to. Empty for
+   * a redraft league or a dynasty whose picks have never been traded.
+   */
+  picks: DraftPickAsset[];
 };
 
 /**
@@ -63,6 +107,15 @@ export type LeagueRosterSet = {
     starters: string[];
     reserve: string[];
     taxi: string[];
+    /**
+     * Standings figures from the Sleeper roster settings — every team's, not
+     * just the manager's, because ranking the manager by record or points for
+     * needs the whole league's. Carried here rather than in a second query since
+     * the rosters read is already fetching these rows.
+     */
+    record: { wins: number; losses: number; ties: number };
+    /** Points for, decimals folded in (e.g. 1234.56). */
+    fpts: number;
   }[];
 };
 

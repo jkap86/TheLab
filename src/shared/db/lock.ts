@@ -17,7 +17,112 @@ export const LOCK_KEYS = {
   ktcHistory: [8675309, 3],
   /** Weekly projections sync (`shared/projections/sync.ts`). */
   projections: [8675309, 4],
+  /** Sleeper players-map refresh (`shared/players/sync.ts`). */
+  players: [8675309, 5],
 } as const satisfies Record<string, AdvisoryLockKey>;
+
+/**
+ * The per-manager league sync's lock key: one lock per manager, in a class of
+ * its own so hashed ids can't collide with the fixed keys above. The hash is
+ * FNV-1a folded to a signed int32 — collisions across managers are possible and
+ * only cost an unnecessary skip, never a correctness failure.
+ */
+/** Thrown by {@link withBlockingAdvisoryLock} when the wait budget runs out. */
+export class AdvisoryLockTimeoutError extends Error {
+  constructor(key: AdvisoryLockKey, waitMs: number) {
+    super(`Timed out after ${waitMs}ms waiting for advisory lock ${key.join(",")}`);
+    this.name = "AdvisoryLockTimeoutError";
+  }
+}
+
+/**
+ * How long a blocking lock waits before giving up.
+ *
+ * The wait is what costs: a queued caller holds one pool connection the whole
+ * time, so an unbounded wait turns a slow upstream into pool exhaustion — one
+ * stuck sync per distinct key, and the keys are per manager. Long enough that
+ * an ordinary league sync ahead of us finishes and we serve its data (the whole
+ * point of blocking rather than skipping), short enough that a wedged one is
+ * bounded.
+ */
+export const ADVISORY_LOCK_WAIT_MS = 30 * 1000;
+
+/** Postgres `lock_not_available` — what `lock_timeout` raises. */
+const LOCK_NOT_AVAILABLE = "55P03";
+
+/**
+ * Run `fn` while holding a Postgres advisory lock, waiting for it rather than
+ * skipping — the counterpart to {@link withAdvisoryLock} for work a caller
+ * needs the *result* of, not just done. Waiting happens server-side in
+ * `pg_advisory_lock`, so a queued caller costs one idle pool connection and no
+ * polling. Use where the contended work is per-key and short-lived (a
+ * manager's league sync), not for the background loops — a loop that queues
+ * behind another instance instead of skipping would stack ticks.
+ *
+ * The wait is bounded by `lock_timeout` (see {@link ADVISORY_LOCK_WAIT_MS}) and
+ * a caller that runs out gets {@link AdvisoryLockTimeoutError} rather than
+ * holding its connection indefinitely. `lock_timeout` applies to advisory locks
+ * exactly as it does to row locks, so this is the server doing the timing — no
+ * polling loop and no timer racing a query.
+ */
+export async function withBlockingAdvisoryLock<T>(
+  [classId, objId]: AdvisoryLockKey,
+  fn: () => Promise<T>,
+  options: { waitMs?: number } = {},
+): Promise<T> {
+  const { waitMs = ADVISORY_LOCK_WAIT_MS } = options;
+  const client = await pool.connect();
+  let unlockFailed = false;
+
+  try {
+    try {
+      // Bounded here rather than around the whole call: only the *acquisition*
+      // should time out. `fn`'s own queries run on other pool connections and
+      // are unaffected either way, but the setting is reset below so this
+      // connection goes back to the pool as it came out.
+      await client.query(`SET lock_timeout = ${Math.max(1, Math.trunc(waitMs))}`);
+      await client.query(`SELECT pg_advisory_lock($1::int, $2::int)`, [
+        classId,
+        objId,
+      ]);
+    } catch (error) {
+      if ((error as { code?: string })?.code === LOCK_NOT_AVAILABLE) {
+        throw new AdvisoryLockTimeoutError([classId, objId], waitMs);
+      }
+      throw error;
+    } finally {
+      // Best-effort: a failure here can only mean the connection is already
+      // unusable, which `release`/`fn` will surface on its own.
+      await client.query(`RESET lock_timeout`).catch(() => {});
+    }
+    try {
+      return await fn();
+    } finally {
+      // Same discipline as above: a session lock outlives release(), so a
+      // failed unlock must drop the connection or hold the key forever.
+      try {
+        await client.query(`SELECT pg_advisory_unlock($1::int, $2::int)`, [
+          classId,
+          objId,
+        ]);
+      } catch (error) {
+        unlockFailed = true;
+        console.error("[db] Advisory unlock failed; dropping connection:", error);
+      }
+    }
+  } finally {
+    client.release(unlockFailed);
+  }
+}
+
+export function managerSyncLockKey(userId: string): AdvisoryLockKey {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < userId.length; i++) {
+    hash ^= userId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return [8675310, hash | 0];
+}
 
 /**
  * Run `fn` while holding a Postgres advisory lock, or return `null` immediately

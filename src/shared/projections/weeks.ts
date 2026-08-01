@@ -68,13 +68,31 @@ export type ParsedWeeks =
   | { ok: false; error: string };
 
 /**
+ * The most weeks one request may name.
+ *
+ * A named week skips both freshness gates and both caps, and each one is a
+ * ~5.6MB download held under the projections advisory lock — so the list is
+ * bounded at the whole regular season, which is every week that exists. Anything
+ * longer is duplicates or junk, and rejecting it beats spending an hour of
+ * upstream budget discovering that.
+ */
+export const MAX_REQUESTED_WEEKS = LAST_REGULAR_WEEK;
+
+/**
  * Validate week numbers from a query string, accepting the repeated-or-comma form
  * the other routes use (`?week=1&week=2` == `?week=1,2`).
  *
  * No values means "not specified" — an empty list, which callers read as "use the
  * current window" rather than "sync nothing".
+ *
+ * The count is checked on the *deduplicated* list: `?week=1,1,1,…` names one
+ * week's work however long the string is, and failing it would be rejecting a
+ * request this can answer cheaply.
  */
-export function parseWeeks(values: string[]): ParsedWeeks {
+export function parseWeeks(
+  values: string[],
+  maxWeeks: number = MAX_REQUESTED_WEEKS,
+): ParsedWeeks {
   const weeks: number[] = [];
 
   for (const raw of values.flatMap((v) => v.split(","))) {
@@ -89,6 +107,13 @@ export function parseWeeks(values: string[]): ParsedWeeks {
       };
     }
     if (!weeks.includes(week)) weeks.push(week);
+  }
+
+  if (weeks.length > maxWeeks) {
+    return {
+      ok: false,
+      error: `at most ${maxWeeks} week(s) may be requested, got ${weeks.length}`,
+    };
   }
 
   return { ok: true, weeks };

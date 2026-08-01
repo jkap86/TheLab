@@ -36,6 +36,8 @@ describe("parseAdpFilters", () => {
 
   test("filters left out are null, i.e. not applied at all", () => {
     const filters = parse("");
+    assert.equal(filters.start_after, null);
+    assert.equal(filters.start_before, null);
     assert.equal(filters.league_ids, null);
     assert.equal(filters.league_types, null);
     assert.equal(filters.scoring, null);
@@ -43,6 +45,40 @@ describe("parseAdpFilters", () => {
     assert.equal(filters.superflex, null);
     assert.equal(filters.rounds_min, null);
     assert.equal(filters.teams_max, null);
+  });
+
+  test("a date range is kept as given, either half open", () => {
+    const both = parse("start_after=2026-06-01&start_before=2026-07-31");
+    assert.deepEqual(
+      { after: both.start_after, before: both.start_before },
+      { after: "2026-06-01", before: "2026-07-31" },
+    );
+    assert.equal(parse("start_after=2026-06-01").start_before, null);
+    assert.equal(parse("start_before=2026-07-31").start_after, null);
+  });
+
+  test("a date range replaces the default season rather than intersecting it", () => {
+    // "Drafts since June" must mean that and not "June drafts of this season" —
+    // a silent intersection would return a range the caller didn't ask for.
+    assert.equal(parse("start_after=2026-06-01").seasons, null);
+    // Asked for explicitly, both still apply.
+    assert.deepEqual(parse("season=2025&start_after=2026-06-01").seasons, ["2025"]);
+  });
+
+  test("rejects a date that isn't a real YYYY-MM-DD", () => {
+    assert.match(errorFor("start_after=06-01-2026"), /Expected a date as YYYY-MM-DD/);
+    assert.match(errorFor("start_after=2026-6-1"), /Expected a date as YYYY-MM-DD/);
+    // Right shape, no such day.
+    assert.match(errorFor("start_before=2026-02-31"), /Expected a date as YYYY-MM-DD/);
+  });
+
+  test("rejects an inverted range instead of matching nothing", () => {
+    assert.match(
+      errorFor("start_after=2026-07-31&start_before=2026-06-01"),
+      /later than start_before/,
+    );
+    // The two ends may meet — a single day is a legitimate range.
+    assert.equal(parse("start_after=2026-06-01&start_before=2026-06-01").start_after, "2026-06-01");
   });
 
   test("season=all drops the season filter rather than emptying it", () => {
@@ -104,6 +140,8 @@ describe("parseAdpFilters", () => {
     );
     assert.deepEqual(filters, {
       seasons: ["2026"],
+      start_after: null,
+      start_before: null,
       draft_types: ["snake"],
       draft_statuses: ["complete"],
       league_ids: null,

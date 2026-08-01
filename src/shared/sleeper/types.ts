@@ -69,6 +69,14 @@ export type SleeperDraft = {
   status: string;
   type: string;
   start_time: number | null;
+  /**
+   * When the most recent pick was made, epoch milliseconds — the draft's end
+   * once `status` is `complete`, and the running edge before that. Sleeper sends
+   * it at the top level rather than inside `metadata`, and omits it for a draft
+   * nobody has picked in, so it is nullable and a reader must treat the null as
+   * "unknown" rather than as a date.
+   */
+  last_picked: number | null;
   draft_order: Record<string, number> | null;
   settings: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
@@ -178,4 +186,28 @@ export type SleeperNflState = {
   season: string;
   season_type: string;
   display_week: number;
+  /**
+   * Kickoff of the regular season, `YYYY-MM-DD`. Undocumented and not promised
+   * present, so consumers must not trust it — `manager/crawl-ttl` falls back to
+   * its freshest tier when it is absent or unparseable.
+   */
+  season_start_date?: string | null;
+};
+
+/**
+ * One game of a season's NFL schedule, from the undocumented data host (the
+ * projections' host, same caveats). Every field is optional because nothing
+ * about this endpoint is promised — read from it defensively and treat an
+ * unrecognisable entry as absent rather than guessing at it.
+ */
+export type SleeperScheduleGame = {
+  game_id?: string | null;
+  week?: number | null;
+  status?: string | null;
+  /** Game day as `YYYY-MM-DD`. */
+  date?: string | null;
+  /** Kickoff as epoch ms — Sleeper's usual clock (drafts, `last_modified`). */
+  start_time?: number | null;
+  home?: string | null;
+  away?: string | null;
 };

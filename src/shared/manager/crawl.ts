@@ -1,18 +1,32 @@
 import { LOCK_KEYS, withAdvisoryLock } from "@/shared/db";
-import { DEFAULT_SEASON, getLeague, getUserLeagues } from "@/shared/sleeper";
+import { getActiveSeason } from "@/shared/season";
+import { getLeague, getNflState, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague } from "@/shared/sleeper";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
 import {
   claimStaleLeagues,
-  countDueLeagues,
   knownLeagueIds,
+  leagueQueueStats,
+  markLeaguesGone,
   pendingManagers,
   stampManagers,
 } from "./crawl-queue";
-import { getCurrentWeek, syncLeagueGraphs } from "./sync";
+import { leagueCrawlTtl, type CrawlTier } from "./crawl-ttl";
+import {
+  remainingDue,
+  selectDiscoveryLeagues,
+  stampableManagers,
+} from "./discovery";
+import { flooredWeek, syncLeagueGraphs } from "./sync";
 
-/** Stored leagues re-synced per tick. */
+/**
+ * Stored leagues re-synced per tick. This is the crawler's refresh throughput —
+ * `batch / interval`, 15 a minute — and with it the corpus each seasonal TTL in
+ * `./crawl-ttl` can actually cover. Raise it only on telemetry showing the
+ * in-season target missed (the scheduler warns), never preemptively: the budget
+ * math on {@link CRAWL_DISCOVERY_CAP} assumes this size.
+ */
 export const CRAWL_LEAGUE_BATCH = 15;
 
 /** League members whose league list is enumerated per tick. */
@@ -26,9 +40,6 @@ export const CRAWL_MANAGER_BATCH = 5;
  * Sleeper's budget while leaving room for real traffic.
  */
 export const CRAWL_DISCOVERY_CAP = 15;
-
-/** How long a stored league stays fresh before the crawler re-fetches it. */
-export const CRAWL_LEAGUE_TTL_MS = 15 * 60 * 1000;
 
 /**
  * How long a member's league list stays fresh before we look for new leagues.
@@ -51,10 +62,27 @@ export type RefreshResult = {
   refreshed: number;
   /** leagues whose refresh failed; rotated to the back of the queue. */
   refreshFailed: number;
-  /** leagues Sleeper no longer serves (deleted). Rows are left in place. */
+  /**
+   * Leagues Sleeper no longer serves (deleted). Rows are left in place — their
+   * drafts still feed ADP — but tombstoned out of the refresh queue.
+   */
   gone: number;
-  /** leagues still past the freshness TTL after this tick. */
+  /** stored, non-gone leagues this season — what the TTL has to cover. */
+  corpus: number;
+  /** leagues past the freshness TTL when the tick started. */
+  dueBefore: number;
+  /**
+   * Leagues still past the TTL after this tick: `dueBefore − refreshed − gone`.
+   * Tombstoned leagues count as retired because `markLeaguesGone` takes them out
+   * of every future claim — leaving them in overstated the backlog the
+   * scheduler's missed-target warning reads. See `./discovery`.
+   */
   due: number;
+  /**
+   * Age of the stalest league at tick start. Past twice the TTL it means the
+   * batch isn't keeping up with the corpus — the scheduler warns on it.
+   */
+  oldestAgeMs: number;
 };
 
 /** What the discovery pass did this tick. */
@@ -69,18 +97,44 @@ export type DiscoveryResult = {
   deferred: number;
 };
 
-export type CrawlSummary = RefreshResult &
+type CrawlTickBase = RefreshResult &
   DiscoveryResult & {
     season: string;
-    /** true when another tick or instance held the lock and this tick did nothing. */
-    locked: boolean;
+    /** Wall-clock cost of the tick, lock attempt included. */
+    tickMs: number;
   };
+
+/**
+ * Discriminated on `locked`, so a tick that lost the lock — and therefore never
+ * read Sleeper's state — carries no tier rather than a made-up one, and the
+ * scheduler's `if (locked)` guard is also the type guard.
+ */
+export type CrawlSummary =
+  | (CrawlTickBase & {
+      locked: false;
+      /** Raw `season_type` the TTL was derived from. */
+      seasonType: string | null;
+      /** Freshness TTL applied to the whole tick — see `./crawl-ttl`. */
+      leagueTtlMs: number;
+      /** Seasonal tier of that TTL. */
+      tier: CrawlTier;
+    })
+  | (CrawlTickBase & {
+      /** Another tick or instance held the lock; this tick did nothing. */
+      locked: true;
+      seasonType: null;
+      leagueTtlMs: null;
+      tier: null;
+    });
 
 const NO_REFRESH: RefreshResult = {
   refreshed: 0,
   refreshFailed: 0,
   gone: 0,
+  corpus: 0,
+  dueBefore: 0,
   due: 0,
+  oldestAgeMs: 0,
 };
 
 const NO_DISCOVERY: DiscoveryResult = {
@@ -103,20 +157,26 @@ async function refreshStaleLeagues(
   season: string,
   currentWeek: number,
   limit: number,
+  ttlMs: number,
 ): Promise<RefreshResult> {
-  const due = await countDueLeagues(season, CRAWL_LEAGUE_TTL_MS);
-  const leagueIds = await claimStaleLeagues(season, CRAWL_LEAGUE_TTL_MS, limit);
-  if (leagueIds.length === 0) return { ...NO_REFRESH, due };
+  const { corpus, due: dueBefore, oldestAgeMs } = await leagueQueueStats(
+    season,
+    ttlMs,
+  );
+  const leagueIds = await claimStaleLeagues(season, ttlMs, limit);
+  if (leagueIds.length === 0) {
+    return { ...NO_REFRESH, corpus, dueBefore, oldestAgeMs, due: dueBefore };
+  }
 
   const leagues: SleeperLeague[] = [];
-  let gone = 0;
+  const goneIds: string[] = [];
   let failed = 0;
 
   await mapWithConcurrency(leagueIds, CRAWL_CONCURRENCY, async (leagueId) => {
     try {
       const league = await getLeague(leagueId);
       if (league) leagues.push(league);
-      else gone += 1;
+      else goneIds.push(leagueId);
     } catch (error) {
       failed += 1;
       console.warn(
@@ -126,6 +186,10 @@ async function refreshStaleLeagues(
     }
   });
 
+  // Tombstoned so the queue stops claiming them — an unmarked deleted league
+  // stays due forever and burns a slot plus a Sleeper request every rotation.
+  await markLeaguesGone(goneIds);
+
   const result = await syncLeagueGraphs(leagues, currentWeek, {
     concurrency: CRAWL_CONCURRENCY,
   });
@@ -133,9 +197,13 @@ async function refreshStaleLeagues(
   return {
     refreshed: result.loaded,
     refreshFailed: failed + result.failed,
-    gone,
-    // The batch we just claimed no longer counts as due unless it failed.
-    due: Math.max(due - result.loaded, 0),
+    gone: goneIds.length,
+    corpus,
+    dueBefore,
+    oldestAgeMs,
+    // The batch we just claimed no longer counts as due unless it failed — and
+    // a tombstoned league leaves the queue for good, so it retires too.
+    due: remainingDue(dueBefore, result.loaded, goneIds.length),
   };
 }
 
@@ -174,41 +242,28 @@ async function discoverMemberLeagues(
     [...byManager.values()].flat().map((l) => l.league_id),
   );
 
-  // Fill up to the per-tick cap in queue order. A manager is only stamped once
-  // every one of their new leagues is in, so whoever doesn't fit comes back next
-  // tick with their leagues intact rather than silently losing them for a whole
-  // TTL cycle. A manager with more new leagues than the cap fits on their own is
-  // taken a capful at a time — the ones stored drop out of `unknown` next tick,
-  // so they still converge instead of deadlocking the queue.
-  const selected = new Map<string, SleeperLeague>();
-  const crawled: string[] = [];
+  // Fill up to the per-tick cap in queue order — see `./discovery` for what
+  // "eligible" means and why a manager is taken whole or not at all.
+  const selection = selectDiscoveryLeagues(userIds, byManager, known, cap);
 
-  for (const userId of userIds) {
-    const leagues = byManager.get(userId);
-    if (!leagues) continue; // enumeration failed — leave unstamped, retry later
-    const unknown = leagues.filter(
-      (l) => !known.has(l.league_id) && !selected.has(l.league_id),
-    );
-    if (selected.size + unknown.length > cap) {
-      for (const league of unknown.slice(0, cap - selected.size)) {
-        selected.set(league.league_id, league);
-      }
-      break;
-    }
-    for (const league of unknown) selected.set(league.league_id, league);
-    crawled.push(userId);
-  }
-
-  const result = await syncLeagueGraphs([...selected.values()], currentWeek, {
+  const result = await syncLeagueGraphs(selection.leagues, currentWeek, {
     concurrency: CRAWL_CONCURRENCY,
   });
-  await stampManagers(season, crawled);
+
+  // The invariant this pass rests on: stamping a manager suppresses them for
+  // the six-hour enumeration TTL, so a manager whose newly discovered league
+  // failed to sync must stay unstamped — otherwise that league stays unknown
+  // and nothing points at it again until some other member of it comes up.
+  const stamped = stampableManagers(selection, new Set(result.failedIds));
+  await stampManagers(season, stamped);
 
   return {
-    managersCrawled: crawled.length,
+    managersCrawled: stamped.length,
     discovered: result.loaded,
     discoverFailed: failed + result.failed,
-    deferred: userIds.length - crawled.length,
+    // Managers this tick did not retire: cap-deferred, enumeration failures, and
+    // those held back by a failed league. All three are unstamped and come back.
+    deferred: userIds.length - stamped.length,
   };
 }
 
@@ -238,25 +293,61 @@ export async function runLeagueCrawl(
   options: CrawlOptions = {},
 ): Promise<CrawlSummary> {
   const {
-    season = DEFAULT_SEASON,
+    // Resolved rather than compiled in, so a league-year rollover doesn't leave
+    // the crawler refreshing last season's leagues until someone redeploys.
+    season = await getActiveSeason(),
     leagueLimit = CRAWL_LEAGUE_BATCH,
     managerLimit = CRAWL_MANAGER_BATCH,
     discoveryCap = CRAWL_DISCOVERY_CAP,
   } = options;
 
+  const startedAt = Date.now();
+
   // The lock is held for the whole tick so overlapping ticks — and extra app
-  // instances, which share one database — don't crawl the same rows twice.
+  // instances, which share one database — don't crawl the same rows twice. The
+  // state read sits inside it too: a tick that loses the lock costs Sleeper
+  // nothing, which is why the tier fields are null on the locked fallback.
   const summary = await withAdvisoryLock(LOCK_KEYS.leagueCrawl, async () => {
-    const currentWeek = await getCurrentWeek();
-    const refresh = await refreshStaleLeagues(season, currentWeek, leagueLimit);
+    const state = await getNflState();
+    const currentWeek = flooredWeek(state);
+    // One TTL for the whole tick — the stats and the claim must agree on what
+    // "due" means, or the numbers reported describe a different queue than the
+    // one crawled.
+    const { ttlMs, tier } = leagueCrawlTtl(state);
+    const refresh = await refreshStaleLeagues(
+      season,
+      currentWeek,
+      leagueLimit,
+      ttlMs,
+    );
     const discovery = await discoverMemberLeagues(
       season,
       currentWeek,
       managerLimit,
       discoveryCap,
     );
-    return { season, locked: false, ...refresh, ...discovery };
+    return {
+      season,
+      locked: false as const,
+      seasonType: state?.season_type ?? null,
+      leagueTtlMs: ttlMs,
+      tier,
+      ...refresh,
+      ...discovery,
+    };
   });
 
-  return summary ?? { season, locked: true, ...NO_REFRESH, ...NO_DISCOVERY };
+  const tickMs = Date.now() - startedAt;
+  return summary
+    ? { ...summary, tickMs }
+    : {
+        season,
+        locked: true,
+        seasonType: null,
+        leagueTtlMs: null,
+        tier: null,
+        tickMs,
+        ...NO_REFRESH,
+        ...NO_DISCOVERY,
+      };
 }

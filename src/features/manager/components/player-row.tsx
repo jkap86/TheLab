@@ -1,5 +1,11 @@
-import { formatPoints } from "../format";
-import type { PlayerOutlook, PlayerSplit, PlayerSummary } from "../types";
+import { weekCount } from "../format";
+import { PLAYER_METRICS, PLAYER_METRICS_BY_KEY } from "../roster-metrics";
+import type {
+  LeagueRosterValues,
+  PlayerOutlook,
+  PlayerSplit,
+  PlayerSummary,
+} from "../types";
 import type { SectionLayout } from "./roster-layout";
 import { PositionBadge } from "./ui";
 
@@ -30,6 +36,8 @@ export function PlayerRow({
   outlook,
   split,
   layout,
+  columns,
+  values,
   horizon = 0,
   promoted,
   benched,
@@ -40,17 +48,22 @@ export function PlayerRow({
   outlook?: PlayerOutlook;
   /**
    * How the projection divides between weeks in and out of the lineup. Undefined
-   * for a player with no projection at all, which is a different thing from the
-   * IR and taxi rows that ask for no split in the first place — hence `variant`
-   * rather than reading this prop's absence as "show one number".
+   * for a player with no projection at all — the metrics read that as an em dash,
+   * a different thing from a real projected 0.00.
    */
   split?: PlayerSplit;
   /**
-   * The section's grid. Its `columns` also decide how many numbers this row
-   * carries — two for a lineup candidate, one for a player who can't start, none
-   * for a league with no projections at all.
+   * The section's grid. Its column count decides how many numbers this row
+   * carries — see `columns` for which metrics they are.
    */
   layout: SectionLayout;
+  /**
+   * The metric key each value column shows — empty for a league with no numbers
+   * at all, which pairs with the `NO_NUMBERS` layout.
+   */
+  columns: string[];
+  /** Per-player KTC and ADP values on this league's board, for the value columns. */
+  values: LeagueRosterValues;
   /** Weeks the projection covers, so a partial one can be marked as such. */
   horizon?: number;
   /** Starting here only in the optimal lineup. */
@@ -61,6 +74,17 @@ export function PlayerRow({
   // Sleeper pads an unfilled starting slot with an empty id or a literal "0".
   const empty = !playerId || playerId === "0";
   const name = empty ? "Empty" : (player?.name ?? playerId);
+
+  const ctx = {
+    outlook,
+    split,
+    horizon,
+    ktc: values.ktc[playerId] ?? null,
+    adp: values.adp[playerId] ?? null,
+    adpPosition: values.adp_position[playerId] ?? null,
+    superflex: values.superflex,
+    draftCount: values.adp_draft_count,
+  };
 
   return (
     <li
@@ -93,46 +117,69 @@ export function PlayerRow({
         )}
       </span>
 
-      {empty ? (
-        // Keep the number columns occupied so an unfilled slot doesn't pull the
-        // next row's cells up into its line.
-        layout.columns.map((label) => <span key={label} />)
-      ) : layout.columns.length > 1 ? (
-        <SplitPoints outlook={outlook} split={split} horizon={horizon} />
-      ) : (
-        <ProjectedPoints outlook={outlook} horizon={horizon} />
-      )}
+      {columns.map((key, i) => {
+        // Paired with the section's grid template and its heading pickers: the
+        // second column exists only once this half is wide enough for it, and a
+        // cell rendered into a track that isn't there would wrap onto a row of
+        // its own.
+        const narrow = i === 0 ? "" : "hidden @lg:block";
+        return empty ? (
+          // Keep the number columns occupied so an unfilled slot doesn't pull the
+          // next row's cells up into its line.
+          <span key={i} className={narrow} />
+        ) : (
+          <PlayerStat
+            key={i}
+            metricKey={key}
+            ctx={ctx}
+            outlook={outlook}
+            horizon={horizon}
+            className={narrow}
+          />
+        );
+      })}
     </li>
   );
 }
 
 /**
- * One number cell. Its width comes from the section's grid column rather than the
- * cell, so a heading and the numbers under it can't disagree about it.
+ * One number cell: the selected metric read off this player. Its width comes from
+ * the section's grid column rather than the cell, so a heading and the numbers
+ * under it can't disagree about it.
+ *
+ * An em dash for a metric with no answer, dimmed for a real-but-empty number (a
+ * projected 0.00, an off-board value), with the short-horizon marker appended when
+ * the metric is a projection covering fewer weeks than the horizon.
  */
-function PointsCell({
-  title,
-  muted,
-  children,
+function PlayerStat({
+  metricKey,
+  ctx,
+  outlook,
+  horizon,
+  className = "",
 }: {
-  title: string;
-  muted?: boolean;
-  children: React.ReactNode;
+  metricKey: string;
+  ctx: Parameters<(typeof PLAYER_METRICS)[number]["cell"]>[0];
+  outlook?: PlayerOutlook;
+  horizon: number;
+  /** The grid-column rules the section applies — which widths this cell exists at. */
+  className?: string;
 }) {
+  const metric = PLAYER_METRICS_BY_KEY[metricKey] ?? PLAYER_METRICS[0];
+  const cell = metric.cell(ctx);
+
   return (
     <span
-      title={title}
-      className={`text-right text-xs tabular-nums ${
-        muted ? "text-foreground/25" : "text-foreground/70"
+      title={cell.title}
+      className={`${className} text-right text-xs tabular-nums ${
+        cell.text === null || cell.muted ? "text-foreground/25" : "text-foreground/70"
       }`}
     >
-      {children}
+      {cell.text ?? "—"}
+      {cell.short && outlook && <ShortHorizon outlook={outlook} horizon={horizon} />}
     </span>
   );
 }
-
-/** `3 weeks`, or `1 week` — used in tooltips, where the count is spelled out. */
-const weekCount = (n: number): string => `${n} week${n === 1 ? "" : "s"}`;
 
 /**
  * The marker on a total covering fewer weeks than the horizon, so one that looks
@@ -159,110 +206,5 @@ function ShortHorizon({
     >
       *
     </span>
-  );
-}
-
-/**
- * A player's projected points over the horizon, as one number.
- *
- * For the rows that can't start — IR and taxi — where the season total is the
- * whole answer, since none of it is going into a lineup either way.
- *
- * An em dash rather than 0.00 when there is no projection at all: a player
- * Sleeper hasn't projected and a player projected to score nothing are different
- * claims, and the roster shouldn't make the stronger one.
- */
-function ProjectedPoints({
-  outlook,
-  horizon,
-}: {
-  outlook?: PlayerOutlook;
-  horizon: number;
-}) {
-  if (horizon === 0) return null;
-
-  if (!outlook) return <PointsCell title="No projection" muted>—</PointsCell>;
-
-  return (
-    <PointsCell
-      title={`${formatPoints(outlook.points)} projected over ${outlook.weeks} of ${weekCount(horizon)}`}
-    >
-      {formatPoints(outlook.points)}
-      <ShortHorizon outlook={outlook} horizon={horizon} />
-    </PointsCell>
-  );
-}
-
-/**
- * A lineup candidate's projection, split into the weeks he is in that week's best
- * lineup and the weeks he isn't.
- *
- * Two numbers because the single total answers the wrong question on both sides of
- * the roster. A bench player's total says nothing about whether any of it is
- * reachable — 60 points behind an every-week starter is worth zero, and 60 points
- * that arrive on the three weeks the starter is on bye is worth all 60. A starter's
- * bench half is the mirror of that: it is what his slot is worth to someone else
- * while he is out.
- *
- * Both halves come from the weekly lineups rather than the season aggregate, so
- * they add up to `weekly_optimal_points` and not to the total in the summary above
- * — those are deliberately different numbers (see `TeamOutlook`), which is why the
- * tooltips name what each half covers instead of implying a single total.
- *
- * The em dash convention is the one used everywhere else: no projection at all is
- * a dash in both columns, while a real 0.00 — a player the lineup never starts —
- * is a claim worth making.
- */
-function SplitPoints({
-  outlook,
-  split,
-  horizon,
-}: {
-  outlook?: PlayerOutlook;
-  split?: PlayerSplit;
-  horizon: number;
-}) {
-  if (horizon === 0) return null;
-
-  if (!outlook) {
-    return (
-      <>
-        <PointsCell title="No projection" muted>—</PointsCell>
-        <PointsCell title="No projection" muted>—</PointsCell>
-      </>
-    );
-  }
-
-  // A projected player with no split was never a candidate for a lineup solve,
-  // which today means the horizon holds no week he is projected for. Zero is the
-  // honest reading: none of his projection reaches a starting slot.
-  const starting = split?.starting_points ?? 0;
-  const bench = split?.bench_points ?? 0;
-  const startingWeeks = split?.starting_weeks ?? 0;
-  const benchWeeks = split?.bench_weeks ?? 0;
-
-  return (
-    <>
-      <PointsCell
-        title={
-          startingWeeks === 0
-            ? "Never in a week's best lineup"
-            : `${formatPoints(starting)} over ${weekCount(startingWeeks)} in the best lineup`
-        }
-      >
-        {formatPoints(starting)}
-        <ShortHorizon outlook={outlook} horizon={horizon} />
-      </PointsCell>
-      <PointsCell
-        muted={bench === 0}
-        title={
-          benchWeeks === 0
-            ? "In the best lineup every week he is projected for"
-            : `${formatPoints(bench)} over ${weekCount(benchWeeks)} out of the lineup`
-        }
-      >
-        {formatPoints(bench)}
-      </PointsCell>
-    </>
   );
 }

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import type { ApiErrorPayload } from "@/shared/contract";
-import { resolveManagerUser, toUserInfo } from "@/shared/manager";
+import { toUserInfo } from "@/shared/manager";
+
+import { resolveManagerRequest } from "./manager-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,16 +13,11 @@ export const dynamic = "force-dynamic";
  * Sleeper is unreachable.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {
-  const { username } = await params;
-
-  const resolved = await resolveManagerUser(username);
-  if (!resolved.ok) {
-    const error: ApiErrorPayload = { error: resolved.error };
-    return NextResponse.json(error, { status: resolved.status });
-  }
+  const resolved = await resolveManagerRequest(request, params);
+  if (!resolved.ok) return resolved.response;
 
   return NextResponse.json(toUserInfo(resolved.user));
 }

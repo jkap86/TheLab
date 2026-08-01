@@ -36,7 +36,7 @@ export function PicktrackerBoard({ leagueId }: { leagueId: string }) {
       <BackLink />
 
       <header className="mb-8 flex items-center gap-4">
-        <Avatar url={data.league.avatar_url} name={data.league.name} size="lg" />
+        <Avatar url={data.league.avatar_url} name={data.league.name} size="xl" />
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
             {data.league.name}

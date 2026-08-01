@@ -18,12 +18,19 @@ import { syncProjections } from "./sync";
 export const PROJECTIONS_INTERVAL_MS = 15 * 60 * 1000;
 
 async function tick(): Promise<void> {
-  const { locked, season, synced, deferred, empty, failed } =
+  const { locked, season, synced, deferred, empty, failed, rejected } =
     await syncProjections();
   if (locked) return;
 
   // Silent when everything was fresh — the common case, every 15 minutes.
-  if (synced.length === 0 && empty.length === 0 && failed.length === 0) return;
+  if (
+    synced.length === 0 &&
+    empty.length === 0 &&
+    failed.length === 0 &&
+    rejected.length === 0
+  ) {
+    return;
+  }
 
   const parts = synced.map(
     ({ week, rows, removed }) =>
@@ -31,6 +38,11 @@ async function tick(): Promise<void> {
   );
   if (empty.length) parts.push(`no projections yet for wk${empty.join(", wk")}`);
   if (failed.length) parts.push(`failed wk${failed.join(", wk")}`);
+  // The reason is already logged in full by the sync; naming the weeks here
+  // keeps a refusal from reading as a quiet tick.
+  if (rejected.length) {
+    parts.push(`rejected wk${rejected.map((r) => r.week).join(", wk")}`);
+  }
   // Says how much backfill is left, so a horizon that stops advancing is visible
   // in the log rather than only in the data.
   if (deferred.length) parts.push(`${deferred.length} horizon week(s) still due`);

@@ -28,7 +28,10 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
         avatar = EXCLUDED.avatar, previous_league_id = EXCLUDED.previous_league_id,
         draft_id = EXCLUDED.draft_id, roster_positions = EXCLUDED.roster_positions,
         settings = EXCLUDED.settings, scoring_settings = EXCLUDED.scoring_settings,
-        metadata = EXCLUDED.metadata, updated_at = now()`,
+        metadata = EXCLUDED.metadata, updated_at = now(),
+        -- Sleeper just answered for this league, so any crawler tombstone is
+        -- stale — clearing it puts the league back in the refresh queue.
+        gone_at = NULL`,
   });
 
   // Child collections are replaced wholesale so the DB mirrors Sleeper.
@@ -74,11 +77,16 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
     table: "drafts",
     columns: [
       "draft_id", "league_id", "season", "status", "type", "start_time",
-      "draft_order", "settings", "metadata",
+      "last_picked", "draft_order", "settings", "metadata",
     ],
     rows: g.drafts,
     values: (d) => [
       d.draft_id, l.league_id, d.season, d.status, d.type, d.start_time,
+      // Coalesced because Sleeper's draft shape is not versioned: a build that
+      // stopped sending `last_picked` must store null (no cutoff, every trade
+      // kept) rather than `undefined`, which bulkInsert would bind as a
+      // parameter the column can't take.
+      d.last_picked ?? null,
       j(d.draft_order), j(d.settings), j(d.metadata),
     ],
   });
@@ -114,6 +122,45 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
 /** Persist one league graph in its own transaction (atomic per league). */
 export function persistLeagueGraph(g: LeagueGraph): Promise<void> {
   return withTransaction((client) => writeLeagueGraph(client, g));
+}
+
+/**
+ * Store the order Sleeper listed a manager's leagues in, replacing what was
+ * stored for that (manager, season).
+ *
+ * Only the manager's own sync calls this, because it is the only place that
+ * enumeration happens for a known manager — the crawler reaches a league from
+ * whichever member came up in its queue, which says nothing about where that
+ * league sits in anyone's list.
+ *
+ * The wipe is guarded on a non-empty fetch, the same rule the projections
+ * refresh follows: Sleeper answers 200-with-null (→ `[]`) for a user it can't
+ * resolve, and an ordering dropped on that hiccup would silently re-sort every
+ * league on screen. Leaving a stale row costs nothing — it only orders a league
+ * the manager still belongs to.
+ */
+export function replaceManagerLeagueOrder(
+  userId: string,
+  season: string,
+  leagueIds: readonly string[],
+): Promise<void> {
+  if (leagueIds.length === 0) return Promise.resolve();
+  // Deduplicated by first mention: the primary key is (manager, season, league),
+  // so a league Sleeper listed twice would fail the whole sync over a position
+  // nobody can tell apart.
+  const ordered = [...new Set(leagueIds)];
+  return withTransaction(async (client) => {
+    await client.query(
+      `DELETE FROM manager_league_order WHERE user_id = $1 AND season = $2`,
+      [userId, season],
+    );
+    await bulkInsert(client, {
+      table: "manager_league_order",
+      columns: ["user_id", "season", "league_id", "position"],
+      rows: ordered.map((leagueId, position) => ({ leagueId, position })),
+      values: (r) => [userId, season, r.leagueId, r.position],
+    });
+  });
 }
 
 /**

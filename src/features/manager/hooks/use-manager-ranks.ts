@@ -1,64 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 
-import { errorMessage } from "@/shared/util";
-
-import { apiFetch, isAbortError } from "@/features/shared";
+import { STALE_TIMES } from "../query-config";
+import { managerQueryKeys } from "../query-keys";
 import type { ManagerLeague, ManagerRanksResult } from "../types";
+import { useManagerResource } from "./use-manager-resource";
+import type { ManagerResourceState } from "./use-manager-resource";
 
-export type ManagerRanksState = {
-  data: ManagerRanksResult | null;
-  error: string | null;
-};
+export type ManagerRanksState = ManagerResourceState<ManagerRanksResult>;
 
 /**
- * Reads the manager's projected-points rank per league from
- * `/api/user/[username]/ranks`.
+ * The manager's projected-points rank in each of their leagues — the collapsed
+ * card's rank chip. One batch route rather than a request per card, because
+ * ranking a roster needs every *other* team's total, which a card can't derive
+ * from anything it already holds; see {@link useManagerResource} for why it takes
+ * the leagues and reads only whether there are any.
  *
- * Takes the leagues for the reason `useManagerPlayers` does: the ranks follow
- * them. That route ranks over the rosters the leagues stream writes, so each
- * `result` — including the second one a background refresh sends — is exactly
- * when they are worth re-reading, and the new array identity is what re-runs
- * the fetch. Ranks already showing stay put across a refetch rather than
- * blanking a page of cards to redraw them nearly unchanged.
+ * The shortest stale time of the five: the projections behind it move on their
+ * own schedule (an injury designation reprices this week), where the leagues the
+ * rank is computed over barely move at all.
  */
 export function useManagerRanks(
   searched: string,
   leagues: ManagerLeague[] | null,
 ): ManagerRanksState {
-  const [data, setData] = useState<ManagerRanksResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!leagues || leagues.length === 0) return;
-
-    let active = true;
-    const controller = new AbortController();
-
-    (async () => {
-      try {
-        const res = await apiFetch(
-          `/api/user/${encodeURIComponent(searched)}/ranks`,
-          { signal: controller.signal, fallbackError: "Failed to load ranks" },
-        );
-        const json = (await res.json()) as ManagerRanksResult;
-        if (active) {
-          setData(json);
-          setError(null);
-        }
-      } catch (err: unknown) {
-        if (active && !isAbortError(err)) {
-          setError(errorMessage(err, "Something went wrong"));
-        }
-      }
-    })();
-
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [searched, leagues]);
-
-  return { data, error };
+  const queryKey = useMemo(() => managerQueryKeys.ranks(searched), [searched]);
+  return useManagerResource<ManagerRanksResult>(
+    queryKey,
+    searched,
+    leagues,
+    "ranks",
+    "Failed to load ranks",
+    STALE_TIMES.ranks,
+  );
 }

@@ -1,10 +1,19 @@
-import { pool } from "@/shared/db";
+import {
+  AdvisoryLockTimeoutError,
+  managerSyncLockKey,
+  pool,
+  withBlockingAdvisoryLock,
+} from "@/shared/db";
 import { getNflState, getUserLeagues } from "@/shared/sleeper";
-import type { SleeperLeague } from "@/shared/sleeper";
+import type { SleeperLeague, SleeperNflState } from "@/shared/sleeper";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
 import { fetchLeagueGraph, type WeekRange } from "./graph";
-import { getStoredMaxWeekByLeague, persistLeagueGraph } from "./persist";
+import {
+  getStoredMaxWeekByLeague,
+  persistLeagueGraph,
+  replaceManagerLeagueOrder,
+} from "./persist";
 import { getManagerSyncedAt } from "./queries";
 
 /** Child rows persisted across a set of league graphs. */
@@ -43,6 +52,14 @@ export type LeagueSyncResult = {
   loaded: number;
   failed: number;
   counts: LeagueCounts;
+  /**
+   * Which leagues were persisted and which failed, not just how many. The
+   * crawler stamps a manager only when every league it discovered for them is
+   * in, and with leagues shared between managers a count can't answer that —
+   * see `./discovery`.
+   */
+  loadedIds: string[];
+  failedIds: string[];
 };
 
 /** How long a manager's league sync stays fresh before we re-fetch Sleeper. */
@@ -67,11 +84,17 @@ const emptyCounts = (): LeagueCounts => ({
 /**
  * The current NFL week, floored to 1: offseason moves are logged at week 1 while
  * Sleeper's state reports week 0. Nothing exists past it, so it bounds every
- * transaction fetch.
+ * transaction fetch. Split from {@link getCurrentWeek} for callers that already
+ * hold the state — the crawler derives this and its freshness tier from one
+ * fetch.
  */
+export function flooredWeek(state: SleeperNflState | null): number {
+  return Math.max(state?.week ?? 1, 1);
+}
+
+/** {@link flooredWeek} of a fresh `state/nfl` read. */
 export async function getCurrentWeek(): Promise<number> {
-  const nflState = await getNflState();
-  return Math.max(nflState?.week ?? 1, 1);
+  return flooredWeek(await getNflState());
 }
 
 /**
@@ -110,6 +133,8 @@ export async function syncLeagueGraphs(
 
   let loaded = 0;
   let failed = 0;
+  const loadedIds: string[] = [];
+  const failedIds: string[] = [];
   const counts = emptyCounts();
 
   onProgress?.({ loaded, total, failed });
@@ -125,8 +150,10 @@ export async function syncLeagueGraphs(
       counts.draftPicks += graph.draftPicks.length;
       counts.transactions += graph.transactions.length;
       loaded += 1;
+      loadedIds.push(league.league_id);
     } catch (error) {
       failed += 1;
+      failedIds.push(league.league_id);
       console.error(
         `[leagues] failed to sync league ${league.league_id}:`,
         errorMessage(error),
@@ -136,23 +163,61 @@ export async function syncLeagueGraphs(
     }
   });
 
-  return { loaded, failed, counts };
+  return { loaded, failed, counts, loadedIds, failedIds };
 }
 
 /**
  * Fetch a manager's leagues (and rosters, members, traded picks, drafts, and
  * draft picks) from Sleeper for a season and persist them to Postgres.
+ *
+ * Held under a per-manager advisory lock so concurrent callers — two tabs, or
+ * two app instances sharing one database — don't each run the full ~9-requests-
+ * per-league fan-out against Sleeper. The lock *waits* rather than skipping,
+ * because callers want the data, not just the work done: a loser that skipped
+ * would answer from a cache the winner is mid-way through writing. The
+ * freshness decision lives inside the lock (the "take it around the freshness
+ * check too" rule), and a sync that completed while we queued counts as this
+ * request's sync even when `force` is set — force means "the caller decided a
+ * refresh is due", and the winner just did that refresh.
  */
 export async function syncManagerLeagues(
   userId: string,
   season: string,
   options: SyncOptions = {},
 ): Promise<SyncSummary> {
+  const requestedAt = new Date();
+  try {
+    return await withBlockingAdvisoryLock(managerSyncLockKey(userId), () =>
+      syncManagerLeaguesLocked(userId, season, requestedAt, options),
+    );
+  } catch (error) {
+    if (!(error instanceof AdvisoryLockTimeoutError)) throw error;
+    // The wait is bounded now (see ADVISORY_LOCK_WAIT_MS), so a holder that
+    // outruns it turns into a skip rather than a connection held for as long as
+    // they take. Reported as skipped, which is what it is: someone else is
+    // running this manager's sync, and the caller serves what is stored.
+    console.warn(
+      `[leagues] sync for ${userId} (${season}) is already running elsewhere; skipped.`,
+    );
+    return {
+      season, skipped: true, total: 0, leagues: 0, failed: 0, ...emptyCounts(),
+    };
+  }
+}
+
+async function syncManagerLeaguesLocked(
+  userId: string,
+  season: string,
+  requestedAt: Date,
+  options: SyncOptions,
+): Promise<SyncSummary> {
   const { force = false, concurrency, onProgress } = options;
 
-  if (!force) {
-    const syncedAt = await getManagerSyncedAt(userId, season);
-    if (syncedAt && Date.now() - syncedAt.getTime() < SYNC_TTL_MS) {
+  const syncedAt = await getManagerSyncedAt(userId, season);
+  if (syncedAt) {
+    const fresh = Date.now() - syncedAt.getTime() < SYNC_TTL_MS;
+    const finishedWhileWaiting = syncedAt >= requestedAt;
+    if (finishedWhileWaiting || (!force && fresh)) {
       return {
         season, skipped: true, total: 0, leagues: 0, failed: 0, ...emptyCounts(),
       };
@@ -161,6 +226,18 @@ export async function syncManagerLeagues(
 
   const currentWeek = await getCurrentWeek();
   const leagues = await getUserLeagues(userId, season);
+
+  // Recorded before the graphs are fetched, and over *every* league Sleeper
+  // listed rather than the ones that synced: the order is what the enumeration
+  // said, and a league whose graph fails this pass is still stored from an
+  // earlier one — dropping it from the ordering would move it to the end of the
+  // list until the next successful sync.
+  await replaceManagerLeagueOrder(
+    userId,
+    season,
+    leagues.map((l) => l.league_id),
+  );
+
   const { loaded, failed, counts } = await syncLeagueGraphs(
     leagues,
     currentWeek,

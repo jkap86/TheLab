@@ -9,14 +9,12 @@
  */
 
 import { booleanFlag, integer, isSeason, list } from "../query/parse.ts";
+import { LAST_REGULAR_WEEK } from "./weeks.ts";
 
 const SCORINGS = ["std", "half_ppr", "ppr"] as const;
 
 /** Which of Sleeper's three scorings to rank and report by. */
 export type ProjectionScoring = (typeof SCORINGS)[number];
-
-/** Last week Sleeper publishes regular-season projections for. */
-const MAX_WEEK = 18;
 
 export const PROJECTIONS_LIMIT_MAX = 1000;
 
@@ -69,7 +67,11 @@ export function parseProjectionFilters(
     return { ok: false, error: `Invalid season: ${season}. Expected a 4-digit year.` };
   }
 
-  const week = integer(params, "week", { min: 1, max: MAX_WEEK, fallback: null });
+  const week = integer(params, "week", {
+    min: 1,
+    max: LAST_REGULAR_WEEK,
+    fallback: null,
+  });
   if (!week.ok) return week;
 
   const rawScoring = params.get("scoring")?.trim().toLowerCase();
@@ -99,7 +101,10 @@ export function parseProjectionFilters(
   // Positions are matched against the players cache, so they are upper-cased to
   // match how Sleeper stores them ("WR", "DEF") rather than validated against a
   // fixed list — Sleeper's position vocabulary is wide (IDP, OL, K/P) and grows.
-  const positions = list(params, "position").map((p) => p.toUpperCase());
+  // Deduped after the fold: `list` dedupes raw tokens, so `wr,WR` survives it.
+  const positions = [
+    ...new Set(list(params, "position").map((p) => p.toUpperCase())),
+  ];
   const playerIds = list(params, "player_id");
 
   return {
