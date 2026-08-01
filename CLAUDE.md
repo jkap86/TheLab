@@ -825,6 +825,21 @@ stops holding, a comment saying it does would not have caught it.
   column existed, keeps every trade rather than being hidden behind a boundary
   invented from `start_time`, which is what makes this inert until the crawler
   has re-visited a league instead of wrong in the meantime.
+  **That bound only means anything once the startup is over, so the draft's
+  `status` is read beside it.** On a running draft `last_picked` is the running
+  edge, and a trade made in the draft room lands *after* the pick before it — so
+  the comparison kept essentially every in-draft trade, which is the entire
+  population it exists to drop, and in August that is most of the board. A
+  startup that hasn't reached its first pick is the same hole spelled
+  differently: no `last_picked`, so nothing excluded. An unfinished startup
+  therefore drops the league's trades outright — until it ends there is no
+  post-startup market to be reading — and the comparison applies only to a draft
+  that says `complete`. This is why "the running edge is the same question asked
+  of a moving target" was wrong: a moving boundary lets everything through as it
+  moves. Both columns stay inert when they say nothing, though — an absent
+  `last_picked` is no cutoff, and a status Sleeper didn't send reads as finished
+  rather than as evidence a draft is running, since hiding a whole league on a
+  missing field is the louder failure.
   Doing it in the read is the point rather than an implementation detail: the
   query is newest-first under `TRADES_READ_LIMIT`, so trades filtered downstream
   would still spend that budget and push real ones off the end of the season.
@@ -1859,9 +1874,13 @@ stops holding, a comment saying it does would not have caught it.
   top level of Sleeper's draft object (not inside `metadata` or `settings`), and
   `draft_picks` carries no timestamp of its own, so nothing else in the graph can
   close the window `start_time` opens. On a complete draft it is the end; on one
-  still running it is the running edge, which is the same question asked of a
-  moving target and is why the trades board needs no `status` test. It is absent
-  for a draft nobody has picked in — read the null as "unknown", never as a date.
+  still running it is only the running edge, **which is not the same question and
+  is why it is read with `status` and never alone.** A boundary that advances with
+  the draft admits everything that happens inside the draft: each trade in the
+  room lands after the pick before it, so it clears the edge as it stands. The
+  cutoff is a fact about a *finished* draft; on an unfinished one the honest
+  answer is "the startup hasn't ended", not a date. It is absent for a draft
+  nobody has picked in — read the null as "unknown", never as a date.
 - **A placeholder pick's number is its place in the kicker sequence, not its
   draft slot.** Leagues trading next year's rookie picks during a startup draft
   can't draft players who aren't in Sleeper's pool yet, so they draft kickers as
