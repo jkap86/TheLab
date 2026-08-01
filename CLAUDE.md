@@ -1410,6 +1410,24 @@ stops holding, a comment saying it does would not have caught it.
   opposite ways on purpose — which leagues count is this predicate, who counts
   within one is bare membership, so the guillotine leaguemate the page exists for
   survives.
+- **That list is in Sleeper's order, and preserving it takes its own table.** The
+  order `/user/:id/leagues/nfl/:season` answers in is the order a manager already
+  reads their leagues in on Sleeper, so it is the one ordering carrying any of
+  their own arrangement — alphabetical threw it away. It is a fact about a
+  *manager's enumeration*, not about a league, which is why it can't ride on
+  `leagues` or `league_users`: both are replaced wholesale by any sync of that
+  league, including the crawler's, which arrives from whichever member came up in
+  its queue and knows nothing about whose list the league sits in.
+  `manager_league_order` is written by `syncManagerLeagues` (the only place a
+  known manager is enumerated) and joined by `getManagerLeagues`, which orders
+  `position NULLS LAST, name` — a league the crawler stored before any
+  manager-driven sync has no position, and sorting those to the end by name keeps
+  the page stable rather than leaving it to Postgres. Two details: the ordering
+  is written over **every** league Sleeper listed, before the graphs are fetched,
+  so a league whose graph fails this pass keeps its place instead of falling to
+  the end of the list; and the wipe is guarded on a non-empty response, the same
+  rule the projections refresh follows, since Sleeper's 200-with-null for an
+  unresolvable user arrives as `[]` and would silently re-sort the whole page.
 - **A player share is out of the leagues that hold a roster of yours, not the
   leagues listed.** They are different numbers — 121 leagues, 113 rosters for the
   account this was built against — because Sleeper keeps you in `league_users`

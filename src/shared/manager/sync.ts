@@ -9,7 +9,11 @@ import type { SleeperLeague, SleeperNflState } from "@/shared/sleeper";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
 import { fetchLeagueGraph, type WeekRange } from "./graph";
-import { getStoredMaxWeekByLeague, persistLeagueGraph } from "./persist";
+import {
+  getStoredMaxWeekByLeague,
+  persistLeagueGraph,
+  replaceManagerLeagueOrder,
+} from "./persist";
 import { getManagerSyncedAt } from "./queries";
 
 /** Child rows persisted across a set of league graphs. */
@@ -222,6 +226,18 @@ async function syncManagerLeaguesLocked(
 
   const currentWeek = await getCurrentWeek();
   const leagues = await getUserLeagues(userId, season);
+
+  // Recorded before the graphs are fetched, and over *every* league Sleeper
+  // listed rather than the ones that synced: the order is what the enumeration
+  // said, and a league whose graph fails this pass is still stored from an
+  // earlier one — dropping it from the ordering would move it to the end of the
+  // list until the next successful sync.
+  await replaceManagerLeagueOrder(
+    userId,
+    season,
+    leagues.map((l) => l.league_id),
+  );
+
   const { loaded, failed, counts } = await syncLeagueGraphs(
     leagues,
     currentWeek,
