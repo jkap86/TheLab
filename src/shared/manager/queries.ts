@@ -184,6 +184,45 @@ export async function getManagerLeagues(
 }
 
 /**
+ * The same league shape by id, for a caller holding league ids and no manager —
+ * the trades page, which reads the whole crawled market and still has to narrow
+ * it with the league filters (what a league starts, what it pays for).
+ *
+ * `record` is null on every row and that is not a gap to fill: a record is a
+ * *manager's* in a league, and there is no manager in this question. Nothing
+ * reading these leagues shows one; the league filters narrow on settings and
+ * slots, which is what a league is rather than how someone is doing in it.
+ */
+export async function getLeaguesByIds(
+  leagueIds: readonly string[],
+): Promise<ManagerLeague[]> {
+  if (leagueIds.length === 0) return [];
+
+  const { rows } = await pool.query<Row>(
+    `SELECT
+        l.league_id, l.name, l.season, l.status, l.total_rosters, l.avatar,
+        l.settings, l.roster_positions, l.scoring_settings
+     FROM leagues l
+     WHERE l.league_id = ANY($1::varchar[])
+     ORDER BY l.name`,
+    [[...leagueIds]],
+  );
+
+  return rows.map((r) => ({
+    league_id: r.league_id,
+    name: r.name,
+    season: r.season,
+    status: r.status,
+    total_rosters: r.total_rosters,
+    avatar: r.avatar,
+    record: null,
+    settings: r.settings,
+    roster_positions: r.roster_positions,
+    scoring_settings: r.scoring_settings,
+  }));
+}
+
+/**
  * The manager's own roster in each of their leagues for a season, keyed by
  * league id — every player they hold there, IR and taxi included.
  *

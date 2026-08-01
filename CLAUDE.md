@@ -45,7 +45,8 @@ src/shared/    Domain logic, one folder per concern.
   to *that* module and call it — don't write SQL against a table your module
   doesn't own. (`ktc/match` used to query `players` directly; it doesn't now.)
 - **A cache-backed route reads and nothing else.** `/api/projections`,
-  `/api/league/[leagueId]`, `/api/adp` and `/api/adp/density` answer from what the
+  `/api/league/[leagueId]`, `/api/adp`, `/api/adp/density` and `/api/trades`
+  answer from what the
   background syncs have stored; a slice that hasn't been synced comes back empty
   rather than fetched on demand. (`/api/user/[username]`, `…/leagues` and
   `/api/picktracker/[leagueId]` are the deliberate exceptions — resolving a
@@ -53,13 +54,15 @@ src/shared/    Domain logic, one folder per concern.
   why the leagues one streams progress, and the pick tracker follows a draft
   *while it happens*, for any league id whether a sync has seen it or not; a
   cached copy would be behind the room. **Every other route under that prefix is
-  *not* an exception** — `…/players`, `…/leaguemates`, `…/ranks`, `…/ktc`,
-  `…/adp-value` and `…/trades` today: they read the rosters, membership and
-  transactions that stream writes,
+  *not* an exception** — `…/players`, `…/leaguemates`, `…/ranks`, `…/ktc` and
+  `…/adp-value` today: they read the rosters and membership that stream writes,
   so a manager it has never run for gets an empty answer rather than a second
   sync of their own. That is the rule for a new sibling too, so this list has
   gone stale twice; the prefix is not what makes a route an exception, being
-  *the thing that resolves or follows* is.) `/api/kickoff` is the one route
+  *the thing that resolves or follows* is.) The traffic runs the other way too:
+  `/api/trades` used to sit under that prefix and doesn't now, because it stopped
+  asking about a manager at all — a route belongs there when a username is the
+  *question*, not when a page that happens to know one is what reads it. `/api/kickoff` is the one route
   that is neither cache-backed nor a resolver: it reads Sleeper's schedule call
   through an in-memory read-through cache (`shared/schedule`) — one small
   request per process per half-day for a value that barely moves, too light to
@@ -582,9 +585,10 @@ stops holding, a comment saying it does would not have caught it.
   `features/shared/ndjson.ts` — two copies of it was the same drift the
   `shared/query` primitives were consolidated to stop. Keeping two hooks does not
   mean keeping two of everything in them. It lives in `features/shared` rather
-  than in the pick tracker that first wrote it, because the trades page reads the
-  same list for the same reason — an account's leagues, off the stream that syncs
-  them.
+  than in the pick tracker that first wrote it, because `takeLines` is protocol
+  and belongs to neither. (The trades page was the second reader of the hook
+  itself for a while; it reads every crawled league now and asks about no
+  account, so the pick tracker is again the only one.)
 - **A piece read by a second tool moves to `features/shared`; it does not get
   imported across features.** The trades page needed the league-filter
   vocabulary, the modal that drives it, the date primitives and `ordinal`, and
@@ -605,17 +609,28 @@ stops holding, a comment saying it does would not have caught it.
   they stay two triggers rather than two tabs of one dialog. Both are applied on
   the client over one read of the season's trades, and that is the shape the
   filters demand rather than a shortcut: the league filters run against the
-  league list the page already streams (the same `settings` quirks
-  `matchesFilters` reads), and the trade filters' own menus are read *off the
+  leagues that read names (the same `settings` quirks `matchesFilters` reads,
+  which is why `/api/trades` sends the leagues *with* the trades — there is no
+  leagues stream on this page to join against), and the trade filters' own menus
+  are read *off the
   trades* — which players moved, who deals most, which pick seasons are on the
   table. The unnarrowed set has to be in hand either way, which is why the route
   takes no query string beyond the season. Two details in the menus: each option
   carries how many trades it would leave, counted over everything *except* the
   selection itself — counting over the narrowed list collapses a menu to its own
   selection the moment you make one, and it can't be widened again without being
-  cleared — and the whole page is every trade in those leagues, not only the ones
-  the account was party to. What the leaguemates are doing is most of what is
-  worth reading; the managers filter is what narrows it back.
+  cleared — and the whole page is **every crawled league's trades, not one
+  account's**. It was scoped to the stored account's leagues and isn't now: the
+  leagues someone plays in are a fraction of the trades worth reading, and what a
+  league shaped like theirs gave up for a rookie first is most of the value. The
+  managers filter is what narrows it back to their own, which is why nothing is
+  lost by opening the default — and why the page needs no stored account at all,
+  making it the one tool the grid doesn't grey out without one (`accountless` on
+  its catalogue entry, so the grid and the app bar's menu can't disagree about
+  whether the card is live). The one cost of reading a whole database instead of
+  one portfolio is volume, so the read is capped at `TRADES_READ_LIMIT`, newest
+  first, and the payload carries the season's real `total` beside it — a
+  truncated board says how much it is showing rather than passing as the market.
 - **The three manager tabs are one scaffold, `LeaguesViewLayout`, over one hook,
   `useFilteredLeagues`.** Leagues, players and leaguemates were line-for-line
   copies of the same chrome — wide shell, cold-load state, header and count line,

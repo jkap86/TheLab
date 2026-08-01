@@ -6,7 +6,9 @@ import { ToolLinkCard } from "./tool-link-card";
 
 /**
  * Every card stays disabled until an account is resolved — each tool reads it,
- * so `user` gates the whole grid. Once resolved, a tool with an `hrefFor` skips
+ * so `user` gates the grid — except a tool marked `accountless`, which answers
+ * without one and would otherwise be a dead card here and a live entry in the
+ * app bar's menu. Once resolved, a tool with an `hrefFor` skips
  * the username search it would otherwise land you on (the three manager views
  * each link straight to that account's tab).
  *
@@ -28,7 +30,7 @@ export function ToolGrid({ user }: { user: UserInfo | null }) {
           <ToolLinkCard
             tool={tool}
             href={toolHref(tool, user?.username ?? null)}
-            disabled={!user}
+            disabled={!user && !tool.accountless}
           />
         </li>
       ))}
