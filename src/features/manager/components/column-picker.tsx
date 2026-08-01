@@ -24,7 +24,7 @@ export function ColumnPicker({
   onToggle,
   onSelect,
   className = "",
-  wrapperClassName = "",
+  wrapperClassName = "inline-flex",
 }: {
   options: ColumnOption[];
   /** The selected metric's key; falls back to the first option if unknown. */
@@ -39,16 +39,24 @@ export function ColumnPicker({
   className?: string;
   /**
    * Applied to the heading *cell* rather than the trigger, for the display and
-   * placement rules a grid column needs — the standings hides its second column
+   * placement rules a grid column needs — both tables hide their second column
    * below @lg with `hidden @lg:inline-flex`, which has to reach this element
    * because it is the grid item.
+   *
+   * It carries the cell's `display` for that reason, and the default is what a
+   * caller with nothing to hide passes back. Owning `inline-flex` here instead
+   * would silently defeat every one of those callers: Tailwind v4 emits the
+   * display utilities in *alphabetical* order, so `.hidden` is written before
+   * `.inline-flex` and loses to it — the second standings heading was never
+   * hidden at all, and wrapped onto a row of its own where `justify-self-end`
+   * in the rank gutter pushed it off the left edge of the panel.
    */
   wrapperClassName?: string;
 }) {
   const active = options.find((o) => o.key === activeKey) ?? options[0];
 
   return (
-    <span className={`relative inline-flex justify-self-end ${wrapperClassName}`}>
+    <span className={`relative justify-self-end ${wrapperClassName}`}>
       <button
         type="button"
         onClick={onToggle}

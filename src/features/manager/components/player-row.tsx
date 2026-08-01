@@ -117,11 +117,16 @@ export function PlayerRow({
         )}
       </span>
 
-      {columns.map((key, i) =>
-        empty ? (
+      {columns.map((key, i) => {
+        // Paired with the section's grid template and its heading pickers: the
+        // second column exists only once this half is wide enough for it, and a
+        // cell rendered into a track that isn't there would wrap onto a row of
+        // its own.
+        const narrow = i === 0 ? "" : "hidden @lg:block";
+        return empty ? (
           // Keep the number columns occupied so an unfilled slot doesn't pull the
           // next row's cells up into its line.
-          <span key={i} />
+          <span key={i} className={narrow} />
         ) : (
           <PlayerStat
             key={i}
@@ -129,9 +134,10 @@ export function PlayerRow({
             ctx={ctx}
             outlook={outlook}
             horizon={horizon}
+            className={narrow}
           />
-        ),
-      )}
+        );
+      })}
     </li>
   );
 }
@@ -150,11 +156,14 @@ function PlayerStat({
   ctx,
   outlook,
   horizon,
+  className = "",
 }: {
   metricKey: string;
   ctx: Parameters<(typeof PLAYER_METRICS)[number]["cell"]>[0];
   outlook?: PlayerOutlook;
   horizon: number;
+  /** The grid-column rules the section applies — which widths this cell exists at. */
+  className?: string;
 }) {
   const metric = PLAYER_METRICS_BY_KEY[metricKey] ?? PLAYER_METRICS[0];
   const cell = metric.cell(ctx);
@@ -162,7 +171,7 @@ function PlayerStat({
   return (
     <span
       title={cell.title}
-      className={`text-right text-xs tabular-nums ${
+      className={`${className} text-right text-xs tabular-nums ${
         cell.text === null || cell.muted ? "text-foreground/25" : "text-foreground/70"
       }`}
     >

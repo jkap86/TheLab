@@ -342,6 +342,11 @@ function RosterSection({
         {valueColumns.map((key, slot) => (
           <ColumnPicker
             key={slot}
+            // Paired with the layout's grid template and the rows' own cells:
+            // the second column appears only once this half is wide enough.
+            wrapperClassName={
+              slot === 0 ? "inline-flex" : "hidden @lg:inline-flex"
+            }
             className="text-[0.6rem]"
             options={PLAYER_METRIC_OPTIONS}
             activeKey={key}
