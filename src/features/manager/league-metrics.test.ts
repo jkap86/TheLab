@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import {
   DEFAULT_COLUMNS,
+  LEAGUE_COLUMN_PRESETS,
   LEAGUE_METRICS,
   LEAGUE_METRICS_BY_KEY,
   type MetricContext,
@@ -75,6 +76,17 @@ describe("league metric catalogue", () => {
     }
   });
 
+  test("every preset column names a real metric", () => {
+    for (const preset of LEAGUE_COLUMN_PRESETS) {
+      for (const key of preset.columns) {
+        assert.ok(
+          LEAGUE_METRICS_BY_KEY[key],
+          `unknown column ${key} in preset ${preset.name}`,
+        );
+      }
+    }
+  });
+
   test("keys are unique", () => {
     const keys = LEAGUE_METRICS.map((m) => m.key);
     assert.equal(new Set(keys).size, keys.length);
@@ -83,18 +95,25 @@ describe("league metric catalogue", () => {
 
 describe("rank metrics", () => {
   test("read the rank and place it", () => {
-    const standing = cell("standing");
-    assert.equal(standing.kind, "rank");
-    assert.deepEqual(standing.kind === "rank" && standing.rank, {
-      rank: 3,
+    const points = cell("points");
+    assert.equal(points.kind, "rank");
+    assert.deepEqual(points.kind === "rank" && points.rank, {
+      rank: 5,
       of: 12,
+      pointsFor: 1234.56,
     });
   });
 
   test("are null, not a rank of nothing, before the data lands", () => {
-    const standing = cell("standing", { ranks: null });
-    assert.equal(standing.kind === "rank" && standing.rank, null);
-    assert.equal(metricPreview(standing), "—");
+    const points = cell("points", { ranks: null });
+    assert.equal(points.kind === "rank" && points.rank, null);
+    assert.equal(metricPreview(points), "—");
+  });
+
+  // The standing is the card's record line, not a column — a slot pointed at it
+  // would restate the line above the columns.
+  test("the standing is not offered as a column", () => {
+    assert.equal(LEAGUE_METRICS_BY_KEY["standing"], undefined);
   });
 
   test("projected bench ranks a roster by its depth", () => {
