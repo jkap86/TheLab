@@ -12,7 +12,7 @@ import type {
   SyncProgress,
   SyncSummary,
 } from "@/shared/manager";
-import type { KtcRosterValue } from "@/shared/ktc";
+import type { KtcRosterValue, KtcValue } from "@/shared/ktc";
 import type { PlaceholderPick } from "@/shared/picktracker";
 import type { PlayersSyncSummary, PlayerSummary } from "@/shared/players";
 import type { Trade } from "@/shared/trades";
@@ -251,7 +251,7 @@ export type TradesMetaMessage = {
 /**
  * A slice of the season, plus whatever it is the first chunk to name.
  *
- * The three maps are **deltas, not snapshots** — merge them, never replace. Most
+ * The four maps are **deltas, not snapshots** — merge them, never replace. Most
  * chunks late in a stream carry a handful of entries or none at all, because a
  * season's leagues and the players in it are named early and then repeat.
  */
@@ -269,6 +269,22 @@ export type TradesChunkMessage = {
    * the client falls back to the roster number.
    */
   managers: Record<string, LeaguematePayload>;
+  /**
+   * Player ids → **both** KTC boards, for players no earlier chunk sent — what
+   * the card's value column reads a side's haul off.
+   *
+   * Both numbers rather than one, because the board is a fact about the *league*
+   * a trade happened in and this stream spans every crawled league: a two-QB
+   * room reads the superflex board and a 1QB room the other, and the same player
+   * is worth materially different totals on the two. The client picks per trade
+   * from the league's own lineup ({@link ManagerLeague.roster_positions}), the
+   * same predicate that groups a draft into an ADP board population.
+   *
+   * A player KTC doesn't price is **absent** rather than zeroed — its board is
+   * ~500 dynasty skill players deep, so a kicker or a rookie IDP is off it
+   * entirely, which is a different claim from being worth nothing.
+   */
+  ktc: Record<string, KtcValue>;
 };
 
 /**

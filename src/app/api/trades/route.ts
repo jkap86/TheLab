@@ -2,6 +2,7 @@ import type {
   LeaguematePayload,
   TradesStreamMessage,
 } from "@/shared/contract";
+import { getKtcValuesBySleeperId } from "@/shared/ktc";
 import { getLeaguesByIds } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 import { isSeason } from "@/shared/query";
@@ -93,10 +94,17 @@ export async function GET(request: Request) {
 
           // Independent of each other, and each a no-op on an id set this chunk
           // added nothing to — which is most chunks, late in a season.
-          const [players, managers, leagues] = await Promise.all([
+          const [players, managers, leagues, ktc] = await Promise.all([
             playerIds.length ? getPlayersByIds(playerIds) : {},
             managerIds.length ? getTradeManagers(managerIds) : new Map(),
             leagueIds.length ? getLeaguesByIds(leagueIds) : [],
+            // Keyed on the same new-ids list as the names, so a player priced
+            // once is priced once for the whole stream. Both boards travel,
+            // because which one a trade reads is its *league's* question and one
+            // stream spans every crawled league.
+            playerIds.length
+              ? getKtcValuesBySleeperId(playerIds)
+              : { values: {}, updated_at: null },
           ]);
 
           const resolvedManagers: Record<string, LeaguematePayload> = {};
@@ -114,6 +122,7 @@ export async function GET(request: Request) {
             leagues,
             players,
             managers: resolvedManagers,
+            ktc: ktc.values,
           });
         }
       } catch (error) {

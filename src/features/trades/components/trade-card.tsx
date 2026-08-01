@@ -10,11 +10,22 @@ import {
   RowSheen,
   ordinal,
 } from "@/features/shared";
+// The pure module directly, never the `@/shared/ktc` barrel: this is a client
+// component, and the barrel re-exports the `pg`-backed queries beside it.
+import { isSuperflexLineup } from "@/shared/ktc/roster";
 import type { ManagerLeague } from "@/shared/manager";
 
 import { isEmptyBundle, isPairedExchange, tradeExchange } from "../exchange";
 import type { SideExchange, TradeBundle } from "../exchange";
-import type { PlayerSummary, Trade, TradeManager, TradeSide } from "../types";
+import type { TradeMetric } from "../trade-metrics";
+import type {
+  KtcValue,
+  PlayerSummary,
+  Trade,
+  TradeManager,
+  TradeSide,
+} from "../types";
+import { TradeValueTag } from "./trade-value";
 
 /**
  * One trade: which league it happened in, when, and what each side came away
@@ -39,15 +50,25 @@ export function TradeCard({
   league,
   players,
   managers,
+  metric,
+  ktc,
 }: {
   trade: Trade;
   /** Null where the league list hasn't answered yet; the id stands in. */
   league: ManagerLeague | null;
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
+  /** The value column every side wears, chosen once for the whole list. */
+  metric: TradeMetric;
+  ktc: Record<string, KtcValue>;
 }) {
   const exchange = tradeExchange(trade);
   const paired = isPairedExchange(exchange);
+  // Which KTC board this trade reads, from the league's own lineup — the stream
+  // spans every crawled league, and the two boards move in opposite directions
+  // at quarterback. An unsynced lineup falls to 1QB, which is what
+  // `isSuperflexLineup` answers for an unknown one.
+  const superflex = isSuperflexLineup(league?.roster_positions ?? null);
 
   return (
     // The same lit surface a league or a share row wears: a trade *is* a row in a
@@ -62,7 +83,7 @@ export function TradeCard({
         </h3>
         <span className="ml-auto text-xs tabular-nums text-foreground/50">
           {formatTradeDate(trade.completed_at)}
-          {trade.week ? ` · Wk ${trade.week}` : ""}
+          {formatTradeTime(trade.completed_at)}
         </span>
       </header>
 
@@ -72,6 +93,9 @@ export function TradeCard({
           trade={trade}
           players={players}
           managers={managers}
+          metric={metric}
+          ktc={ktc}
+          superflex={superflex}
         />
       )}
 
@@ -92,6 +116,9 @@ export function TradeCard({
             trade={trade}
             players={players}
             managers={managers}
+            metric={metric}
+            ktc={ktc}
+            superflex={superflex}
           />
         ))}
       </div>
@@ -121,11 +148,17 @@ function ExchangeTable({
   trade,
   players,
   managers,
+  metric,
+  ktc,
+  superflex,
 }: {
   exchange: SideExchange[];
   trade: Trade;
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
+  metric: TradeMetric;
+  ktc: Record<string, KtcValue>;
+  superflex: boolean;
 }) {
   return (
     <div className="relative grid grid-cols-[4.75rem_1fr_1fr] gap-x-2 bg-foreground/[0.02] px-3 py-2 sm:hidden">
@@ -142,11 +175,21 @@ function ExchangeTable({
 
         return (
           <Fragment key={side.roster_id}>
-            <div className={`${cell} flex min-w-0 items-center gap-1.5`}>
-              <Avatar url={manager?.avatar_url} name={name} />
-              <span className="min-w-0 truncate text-xs font-semibold">
-                {name}
+            {/* The value goes under the name rather than in a column of its
+                own: the manager column is 4.75rem here and the two asset columns
+                are what the row is read across, so a fifth track would come out
+                of them. */}
+            <div className={`${cell} flex min-w-0 flex-col gap-1`}>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Avatar url={manager?.avatar_url} name={name} />
+                <span className="min-w-0 truncate text-xs font-semibold">
+                  {name}
+                </span>
               </span>
+              <TradeValueTag
+                metric={metric}
+                ctx={{ received: side.received, ktc, superflex }}
+              />
             </div>
             <BundleList
               bundle={side.received}
@@ -185,14 +228,25 @@ function SideColumn({
   trade,
   players,
   managers,
+  metric,
+  ktc,
+  superflex,
 }: {
   side: TradeSide;
   trade: Trade;
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
+  metric: TradeMetric;
+  ktc: Record<string, KtcValue>;
+  superflex: boolean;
 }) {
   const manager = side.user_id ? managers[side.user_id] : undefined;
   const name = manager?.display_name || `Roster ${side.roster_id}`;
+  const received = {
+    players: side.players,
+    picks: side.picks,
+    faab: side.faab,
+  };
 
   return (
     // Translucent rather than the flat panel it was, so the card's own glass
@@ -205,10 +259,13 @@ function SideColumn({
         <span className="ml-auto shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-foreground/35">
           Receives
         </span>
+        {/* The one number on this side that isn't in the lines below it, so it
+            sits at the end of the row the lines are headed by. */}
+        <TradeValueTag metric={metric} ctx={{ received, ktc, superflex }} />
       </div>
 
       <BundleList
-        bundle={{ players: side.players, picks: side.picks, faab: side.faab }}
+        bundle={received}
         trade={trade}
         players={players}
         managers={managers}
@@ -337,4 +394,30 @@ function formatTradeDate(at: number | null): string {
   if (at === null) return "date unknown";
   const d = new Date(at);
   return `${MONTH_ABBREVIATIONS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+/**
+ * The time of day the trade went through, e.g. ` · 3:07 PM`, or nothing at all
+ * where Sleeper filed no timestamp.
+ *
+ * It holds the slot the scoring week used to. A week is a coarser reading of the
+ * same instant the date beside it already gives — "Aug 1, 2026 · Wk 1" says
+ * twice when, and says it in a unit that means nothing for most of the calendar,
+ * since Sleeper files an offseason trade under no week at all. The clock time is
+ * what the date was missing: trades come in flurries, and which of this
+ * afternoon's five deals landed first is a question the card couldn't answer.
+ *
+ * Read in the **reader's own zone**, unlike the season-shaped dates elsewhere in
+ * the app: `TODAY_ET` is Eastern because it decides what the NFL has played,
+ * where this is a wall-clock reading of a moment for whoever is looking at it.
+ * It is still spelled out by hand rather than through `toLocaleTimeString`, so
+ * the punctuation matches the date it follows in every locale.
+ */
+function formatTradeTime(at: number | null): string {
+  if (at === null) return "";
+  const d = new Date(at);
+  const hours = d.getHours();
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return ` · ${hour12}:${minutes} ${hours < 12 ? "AM" : "PM"}`;
 }

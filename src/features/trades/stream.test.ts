@@ -18,6 +18,7 @@ const chunk = (
     leagues?: string[];
     players?: string[];
     managers?: string[];
+    ktc?: string[];
   } = {},
 ): TradesStreamMessage => ({
   type: "chunk",
@@ -36,6 +37,9 @@ const chunk = (
   ),
   managers: Object.fromEntries(
     (extra.managers ?? []).map((id) => [id, { user_id: id } as never]),
+  ),
+  ktc: Object.fromEntries(
+    (extra.ktc ?? []).map((id) => [id, { sf: 4000, oneqb: 3000 }]),
   ),
 });
 
@@ -69,8 +73,18 @@ test("applyTradesMessage", async (t) => {
   await t.test("the id maps merge across chunks, they do not replace", () => {
     const { data } = fold([
       meta(2),
-      chunk(["a"], { leagues: ["L1"], players: ["p1"], managers: ["m1"] }),
-      chunk(["b"], { leagues: ["L2"], players: ["p2"], managers: ["m2"] }),
+      chunk(["a"], {
+        leagues: ["L1"],
+        players: ["p1"],
+        managers: ["m1"],
+        ktc: ["p1"],
+      }),
+      chunk(["b"], {
+        leagues: ["L2"],
+        players: ["p2"],
+        managers: ["m2"],
+        ktc: ["p2"],
+      }),
     ]);
     assert.deepEqual(
       data?.leagues.map((l) => l.league_id),
@@ -78,6 +92,7 @@ test("applyTradesMessage", async (t) => {
     );
     assert.deepEqual(Object.keys(data?.players ?? {}), ["p1", "p2"]);
     assert.deepEqual(Object.keys(data?.managers ?? {}), ["m1", "m2"]);
+    assert.deepEqual(Object.keys(data?.ktc ?? {}), ["p1", "p2"]);
   });
 
   // What the page's memoisation reads. Most chunks late in a season introduce no
@@ -91,6 +106,7 @@ test("applyTradesMessage", async (t) => {
     assert.equal(second.data?.leagues, first.data?.leagues);
     assert.equal(second.data?.players, first.data?.players);
     assert.equal(second.data?.managers, first.data?.managers);
+    assert.equal(second.data?.ktc, first.data?.ktc);
   });
 
   await t.test("a chunk carrying nothing at all is not a new state", () => {

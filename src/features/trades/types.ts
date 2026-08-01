@@ -3,6 +3,7 @@ import type {
   TradesChunkMessage,
   TradesMetaMessage,
 } from "@/shared/contract";
+import type { KtcValue } from "@/shared/ktc";
 import type { PlayerSummary } from "@/shared/players";
 import type { Trade, TradePickAsset, TradeSide } from "@/shared/trades";
 
@@ -28,4 +29,4 @@ export type TradesResult = Omit<TradesMetaMessage, "type"> &
 /** A manager as a trade names them: id, display name, resolved avatar. */
 export type TradeManager = LeaguematePayload;
 
-export type { PlayerSummary, Trade, TradePickAsset, TradeSide };
+export type { KtcValue, PlayerSummary, Trade, TradePickAsset, TradeSide };
