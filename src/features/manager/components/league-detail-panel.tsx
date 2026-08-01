@@ -111,11 +111,15 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   // stacking order over the other while a picker is open.
   const teamPickerOpen = openPicker?.startsWith("team-") ?? false;
 
-  // Even 50/50 split at every width; the children use @lg container queries to
-  // shed non-essential columns once each half gets tight.
+  // Stacked below @lg, 50/50 above it. The split used to be unconditional, which
+  // on a phone gave each half ~170px — the standings' two totals ran together
+  // (`2,905.73 1,041.16`) and every name sat one character from truncating. The
+  // children's own @lg queries shed non-essential columns once each half gets
+  // tight; they read the same container, so above the breakpoint nothing about
+  // the side-by-side layout changes.
   return (
     <div ref={panelRef} className="@container">
-      <div className="grid grid-cols-2 gap-2 @lg:gap-4">
+      <div className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @lg:gap-4">
         <Standings
           teams={teams}
           outlook={data.outlook}

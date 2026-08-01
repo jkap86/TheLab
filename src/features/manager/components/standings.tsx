@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 import { formatPoints, formatRecord, formatWeekRange } from "../format";
 import {
   rosterValueTotal,
@@ -21,6 +25,17 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
 }));
 
 /**
+ * How many rows the table shows before asking, while it is stacked above the
+ * roster rather than beside it.
+ *
+ * Only a narrow-width concern: the point of expanding a card is the roster, and
+ * a full twelve-team table between the card and it is a scroll before you reach
+ * what you opened. Side by side there is nothing below the table to push down,
+ * so the cap lifts at @lg and the whole league is listed as before.
+ */
+const LADDER_CAP = 5;
+
+/**
  * The league table, rendered in the order given — the panel passes teams in
  * projected-points order, falling back to standings order where projections
  * run out, so the `#` column numbers the projected ranking the collapsed
@@ -41,6 +56,12 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
  * optimal, points for, or the roster's whole KTC / ADP total from the heading's
  * picker. Which metric each shows is held above this table (in the panel) so both
  * columns line up down the list and one picker moves the whole column.
+ *
+ * Below @lg the table is stacked *above* the roster rather than beside it, so it
+ * lists {@link LADDER_CAP} teams and asks before showing the rest — a full league
+ * between the card and the roster is a scroll before you reach what you expanded
+ * the card for. The cap is a container query, not the state behind the button, so
+ * the side-by-side layout always lists everyone.
  */
 export function Standings({
   teams,
@@ -77,6 +98,12 @@ export function Standings({
   const outlookByRoster = outlook
     ? new Map(outlook.teams.map((t) => [t.roster_id, t]))
     : null;
+
+  const [showAll, setShowAll] = useState(false);
+  // The cap is lifted by a container query rather than by this state, so the
+  // side-by-side layout is never truncated whatever the reader pressed while it
+  // was stacked — one selection can't mean two things at two widths.
+  const capped = !showAll && teams.length > LADDER_CAP;
 
   // Written out rather than assembled, so Tailwind sees both class strings.
   const grid = outlookByRoster
@@ -122,10 +149,23 @@ export function Standings({
             teamOutlook={outlookByRoster?.get(team.roster_id)}
             values={values}
             active={team.roster_id === selectedId}
+            // The selected team is never one of the rows held back: the roster
+            // below belongs to it, so hiding it would leave the panel showing a
+            // team the table doesn't list.
+            hidden={capped && i >= LADDER_CAP && team.roster_id !== selectedId}
             onSelect={() => onSelect(team.roster_id)}
           />
         ))}
       </ul>
+      {teams.length > LADDER_CAP && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="w-full border-t border-foreground/10 px-1.5 py-1.5 text-[0.65rem] uppercase tracking-wide text-foreground/45 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/70 @lg:hidden"
+        >
+          {capped ? `Show all ${teams.length}` : "Show fewer"}
+        </button>
+      )}
       {outlook && (
         // The horizon travels with the number, as it does on the roster panel:
         // "rest of season" is however many weeks are actually stored, and a total
@@ -147,6 +187,7 @@ function StandingsRow({
   teamOutlook,
   values,
   active,
+  hidden,
   onSelect,
 }: {
   team: LeagueTeamView;
@@ -164,6 +205,8 @@ function StandingsRow({
   /** Per-player KTC and ADP values, summed to this roster's totals for those metrics. */
   values: LeagueRosterValues;
   active: boolean;
+  /** Held back by the narrow-width cap — still listed once the table is beside the roster. */
+  hidden: boolean;
   onSelect: () => void;
 }) {
   const record = formatRecord(team.record);
@@ -184,7 +227,7 @@ function StandingsRow({
   const title = teamName && teamName !== manager ? `${manager} · ${teamName}` : manager;
 
   return (
-    <li>
+    <li className={hidden ? "hidden @lg:block" : ""}>
       <button
         type="button"
         onClick={onSelect}
