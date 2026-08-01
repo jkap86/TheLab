@@ -205,7 +205,7 @@ export type ManagerLeaguematesPayload = {
 
 /**
  * `GET /api/trades` — every completed trade in every crawled league for a
- * season, newest first.
+ * season, newest first, streamed as newline-delimited JSON.
  *
  * Not a manager route, and that is the whole shape of it: the trades worth
  * reading are the market's, not one account's, so this reads the leagues this
@@ -214,37 +214,77 @@ export type ManagerLeaguematesPayload = {
  * page to join against, and the client's league filters need what each league
  * starts and pays for.
  *
- * The same side-map shape as {@link ManagerPlayersPayload}: a trade carries ids,
- * and the players and managers those ids name are resolved once each in the maps
- * beside them rather than repeated per trade — a player traded in ten leagues is
- * one entry here.
+ * **It streams because the page filters over everything it is given.** Every
+ * chip on that page is applied on the client, and the filter menus are read off
+ * the trades themselves, so the browser needs the unnarrowed season in hand —
+ * which on a busy one is ~48k trades and ~20MB of JSON. As a single body that is
+ * a spinner until the last byte lands and one blocking parse at the end of it;
+ * in chunks the newest trades are on screen while the rest is still arriving,
+ * and the season is whole rather than capped at its newest slice. (It *was*
+ * capped, at 2,000, which is what this replaced.)
+ *
+ * The chunk shape is the same side-map idea as {@link ManagerPlayersPayload},
+ * carried one step further: a trade names ids, the maps beside it resolve them,
+ * and each chunk carries only what no earlier chunk did — so a player traded in
+ * ten leagues crosses the wire once for the whole stream rather than once per
+ * chunk. The client merges each chunk into what it already holds.
  *
  * Read-only over what the crawl and the manager syncs stored: a league nobody
  * has looked up has no transactions here rather than being fetched on demand,
  * and a league is only as complete as the transaction weeks that sync fetched.
  */
-export type TradesPayload = {
+export type TradesMetaMessage = {
+  type: "meta";
   season: string;
-  /** Newest first, by when each trade completed. Capped — see `total`. */
-  trades: Trade[];
   /**
-   * How many completed trades the season holds, before the read's cap. Equal to
-   * `trades.length` in the ordinary case; larger when the list was truncated,
-   * which the page says rather than passing a partial board off as the whole
-   * market.
+   * How many completed trades the season holds — the length the stream will add
+   * up to, sent before any of them so the page can say what it is loading and
+   * meter the progress rather than counting up from nowhere.
+   *
+   * It is the board's whole population, not a cap on it: trades made before a
+   * league's startup draft finished are outside this count on the same terms
+   * they are outside the stream.
    */
   total: number;
-  /** Every league named by `trades`, for the league filters and each card's title. */
+};
+
+/**
+ * A slice of the season, plus whatever it is the first chunk to name.
+ *
+ * The three maps are **deltas, not snapshots** — merge them, never replace. Most
+ * chunks late in a stream carry a handful of entries or none at all, because a
+ * season's leagues and the players in it are named early and then repeat.
+ */
+export type TradesChunkMessage = {
+  type: "chunk";
+  /** Newest first, continuing where the previous chunk stopped. */
+  trades: Trade[];
+  /** Leagues named by these trades that no earlier chunk sent. */
   leagues: ManagerLeague[];
-  /** Player ids → name/position/team, for every player in `trades` the cache knows. */
+  /** Player ids → name/position/team, for players no earlier chunk sent. */
   players: Record<string, PlayerSummary>;
   /**
-   * User ids → display name and avatar, for every side of every trade whose
-   * roster has a cached owner. A side naming a user id absent here is one whose
-   * member row isn't stored; the client falls back to the roster number.
+   * User ids → display name and avatar, for sides no earlier chunk sent. A side
+   * naming a user id that never arrives is one whose member row isn't stored;
+   * the client falls back to the roster number.
    */
   managers: Record<string, LeaguematePayload>;
 };
+
+/**
+ * A read that failed. It can arrive *after* chunks have already been sent — the
+ * stream is a walk over a cursor, so a failure partway through leaves the client
+ * holding a real prefix of the season. The page keeps what arrived and says the
+ * rest is missing, the same way the leagues stream's `refreshError` keeps cached
+ * leagues on screen.
+ */
+export type TradesErrorMessage = { type: "error"; error: string };
+
+/** One newline-delimited JSON message on the `GET /api/trades` stream. */
+export type TradesStreamMessage =
+  | TradesMetaMessage
+  | TradesChunkMessage
+  | TradesErrorMessage;
 
 /**
  * The manager's place in one league across the metrics a league card ranks it
