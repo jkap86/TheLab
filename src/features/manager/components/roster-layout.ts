@@ -34,7 +34,20 @@ export const NO_NUMBERS: SectionLayout = {
   nameSpan: "col-span-1",
 };
 
+/**
+ * Below @lg only the *first* value column is drawn, the same rule the standings
+ * half keeps and for the same reason: the panel stays a 50/50 split at every
+ * width, which on a phone leaves this half ~155px. Two 3rem tracks left ~19px
+ * for everything else, so the section headings truncated to `S..` and `B..` and
+ * the numbers overflowed their tracks into the position badge beside them. The
+ * surviving track is `auto` rather than a fixed 3rem for that second failure —
+ * a season total is eight characters wide and a fixed track can't say so.
+ *
+ * It is the second slot that goes rather than the first because the reader's
+ * leading choice is the one they aimed first, and both are back the moment
+ * there is width for them.
+ */
 export const SPLIT_LAYOUT: SectionLayout = {
-  grid: "grid-cols-[1.75rem_minmax(0,1fr)_3rem_3rem] @lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem_3.25rem]",
-  nameSpan: "col-span-3",
+  grid: "grid-cols-[1.75rem_minmax(0,1fr)_auto] @lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem_3.25rem]",
+  nameSpan: "col-span-2 @lg:col-span-3",
 };

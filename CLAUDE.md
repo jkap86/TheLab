@@ -1108,7 +1108,21 @@ stops holding, a comment saying it does would not have caught it.
   Players tab passes its query unconditionally, since its ADP column is on screen
   either way.
 - The expanded league panel uses container queries (`@lg:`), not viewport
-  breakpoints, because it renders at half width inside a card.
+  breakpoints, because it renders at half width inside a card. **Both its halves
+  shed their second value column below `@lg`, and both shed it in three places at
+  once** — the grid template, the heading picker, and the row's own cell. A cell
+  rendered into a track that isn't there doesn't overflow, it *wraps* onto an
+  implicit second row, where the column's own `justify-self-end` lands it in the
+  rank gutter and pushes it off the left edge of the panel. That is what the
+  standings heading did on a phone.
+- **`hidden` does not beat a `display` utility that sorts after it.** Tailwind v4
+  emits the display utilities in *alphabetical* order, so `.block` loses to
+  `.hidden` (which is why the standings *cells* hid correctly) while
+  `.inline-flex`, `.inline` and `.table` all win against it. `ColumnPicker`
+  therefore takes its wrapper's `display` from the caller rather than owning
+  `inline-flex` itself — a shared component that hard-codes one is a component
+  no caller can hide, and the failure is silent in both the class list and the
+  compiler. Source order in the `class` attribute never enters into it.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
   being looked at, the season, the sync state and the manager's record are the
   same facts on all of them; only the headline count differs, which is what
