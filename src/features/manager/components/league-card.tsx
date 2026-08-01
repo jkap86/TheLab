@@ -8,7 +8,7 @@ import {
   RowSheen,
 } from "@/features/shared";
 
-import { formatRecord } from "../format";
+import { formatRecord, ordinal } from "../format";
 import { LEAGUE_METRICS, type MetricContext } from "../league-metrics";
 import type {
   LeagueAdpEntry,
@@ -24,10 +24,13 @@ import { Chevron } from "./ui";
  * One league in the leagues list: a dense, glassy row that reads at a glance and
  * opens the full standings-and-rosters panel on click.
  *
+ * The record line names where this manager stands in the league — the one ranking
+ * the card states outright, because it is what the record beside it means.
+ *
  * The four stat columns across it are each a slot the reader points at a metric —
- * where this manager stands by record, by points, by KTC starter value and by
- * projected points to start with, but swappable to the raw number behind a rank
- * or to KTC bench value. Which metric each slot shows is held above this card, in
+ * where this manager stands by points, by KTC starter value and by projected
+ * points to start with, but swappable to the raw number behind a rank or to KTC
+ * bench value. Which metric each slot shows is held above this card, in
  * {@link ManagerLeagues}, so every card shows the same four and the columns line
  * up column to column down the whole list — and the control that moves them is
  * the heading rail up there too, which is why this card renders numbers and no
@@ -72,6 +75,7 @@ export function LeagueCard({
   const [expanded, setExpanded] = useState(false);
 
   const record = league.record;
+  const standing = ranks?.standing ?? null;
   const ctx: MetricContext = { league, ranks, ktc, adp, weeks, valuedAt };
 
   return (
@@ -120,6 +124,22 @@ export function LeagueCard({
           {record && (
             <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground/70">
               {formatRecord(record)}
+            </span>
+          )}
+          {/* The standing rides with the record rather than occupying one of the
+              four stat slots: it is what the record *means* in its league, so
+              reading it anywhere else is reading half the fact. That is why it
+              is no longer in the metric catalogue — a slot pointed at it would
+              be a second copy of what this line already says. Absent, not
+              zeroed, before a game is played, the same rule the rank cells
+              keep. */}
+          {standing && (
+            <span
+              title={`#${standing.rank} of ${standing.of} by record`}
+              className="shrink-0 text-xs font-medium tabular-nums text-foreground/45"
+            >
+              {ordinal(standing.rank)}
+              <span className="text-foreground/30"> of {standing.of}</span>
             </span>
           )}
         </div>

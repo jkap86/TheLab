@@ -1,9 +1,4 @@
-import {
-  formatPoints,
-  formatRecord,
-  formatValue,
-  formatWeekRange,
-} from "./format.ts";
+import { formatPoints, formatValue, formatWeekRange } from "./format.ts";
 import type { ColumnPreset, Metric } from "./metric-cell.ts";
 import type {
   LeagueAdpEntry,
@@ -28,7 +23,12 @@ import type {
  * falls; a *value* metric answers "how much" as a plain number with no league to
  * place it against (KTC bench value, the raw points total behind a rank). The
  * card renders the two differently but picks them from the same menu, so a column
- * showing the standings rank and one showing bench value are one click apart.
+ * showing a points rank and one showing bench value are one click apart.
+ *
+ * The **standing is not in here**, though the card shows it: it sits beside the
+ * record on the row, because a record and where it places in the league are one
+ * fact and reading either without the other is reading half of it. A slot
+ * pointed at it would spend one of four columns restating the line above them.
  *
  * Pure and free of runtime imports beyond {@link formatPoints} and its siblings —
  * everything from {@link ./types} arrives as an erased `import type` — so the
@@ -133,27 +133,14 @@ function adpTitle(adp: LeagueAdpEntry | null): string {
 
 /**
  * Every metric a stat column can show, in the order the picker lists them: the
- * four original rankings, each paired where it makes sense with the raw number
+ * rankings a card can be read on — the standing excepted, which the record line
+ * states — each paired where it makes sense with the raw number
  * behind it, the projected bench beside the projected starters (depth ranked the
  * same way, since two teams level on starters aren't level when one carries twice
  * as much behind them), plus the two KTC totals a starter rank alone can't tell
  * apart.
  */
 export const LEAGUE_METRICS: LeagueMetric[] = [
-  {
-    key: "standing",
-    group: "Record",
-    label: "Standing",
-    cell: ({ ranks, league }) => ({
-      kind: "rank",
-      rank: ranks?.standing ?? null,
-      title: ranks?.standing
-        ? `#${ranks.standing.rank} of ${ranks.standing.of} by record${
-            league.record ? ` · ${formatRecord(league.record)}` : ""
-          }`
-        : "no standing yet",
-    }),
-  },
   {
     key: "points",
     group: "Record",
@@ -301,14 +288,20 @@ export const LEAGUE_METRICS_BY_KEY: Record<string, LeagueMetric> =
   Object.fromEntries(LEAGUE_METRICS.map((metric) => [metric.key, metric]));
 
 /**
- * The four columns a card opens with — the rankings it showed before the slots
- * were made selectable, so the default view is unchanged.
+ * The four columns a card opens with — one ranking from each of the four
+ * questions the catalogue is grouped by, so the opening view is a cross-section
+ * rather than a deep read of any one lens.
+ *
+ * The standing is deliberately not among them and cannot be: it is stated on the
+ * card's record line, and spending a slot restating it is what taking it out of
+ * the catalogue was for. A stored selection naming it falls back per slot, which
+ * is `resolveColumns` doing its job rather than something to migrate.
  */
 export const DEFAULT_COLUMNS: string[] = [
-  "standing",
   "points",
   "ktc_start",
   "proj",
+  "adp_rank",
 ];
 
 /**
@@ -325,11 +318,11 @@ export const DEFAULT_COLUMNS: string[] = [
  * than left showing a rank from another lens.
  */
 export const LEAGUE_COLUMN_PRESETS: ColumnPreset[] = [
-  { name: "Standings", columns: ["standing", "points", "points_for", "proj"] },
+  { name: "Scoring", columns: ["points", "points_for", "proj", "proj_pts"] },
   {
     name: "Projection",
     columns: ["proj", "proj_pts", "proj_bench", "proj_bench_pts"],
   },
   { name: "Value", columns: ["ktc_start", "ktc_total", "ktc_bench", "adp_total"] },
-  { name: "Market", columns: ["adp_rank", "adp_total", "ktc_start", "standing"] },
+  { name: "Market", columns: ["adp_rank", "adp_total", "ktc_start", "points"] },
 ];
