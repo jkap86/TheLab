@@ -53,6 +53,7 @@ export function TradeFiltersModal({
   today: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(filters);
   const active = activeTradeFilterCount(filters);
 
@@ -62,6 +63,10 @@ export function TradeFiltersModal({
   const open = useCallback(() => {
     setDraft(filters);
     ref.current?.showModal();
+    // The panel takes the focus rather than the first control in it — see
+    // `LeagueFiltersModal`, where `showModal`'s autofocus put a focus ring on a
+    // chip nobody had pressed.
+    panelRef.current?.focus();
   }, [filters]);
 
   const apply = useCallback(() => {
@@ -144,7 +149,9 @@ export function TradeFiltersModal({
         className="m-auto w-[min(760px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
       >
         <div
-          className="overflow-hidden rounded-2xl border border-active/20 bg-gradient-to-b from-[#12212e] to-[#0b1621] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(255,255,255,0.06)]"
+          ref={panelRef}
+          tabIndex={-1}
+          className="overflow-hidden outline-none rounded-2xl border border-active/20 bg-gradient-to-b from-[#12212e] to-[#0b1621] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(255,255,255,0.06)]"
           style={{ animation: "dialog-rise 0.18s cubic-bezier(0.2,0.9,0.3,1)" }}
         >
           <div className="flex items-center gap-3 border-b border-foreground/10 px-5 py-4">
