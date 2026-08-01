@@ -24,6 +24,10 @@ import { Avatar, apiFetch, isAbortError } from "@/features/shared";
  *
  * A real `<form>` for the same reason as the other two: Enter submits, and the
  * browser treats input and button as one control.
+ *
+ * The card carries no margin of its own — it is pinned inside `ToolsHome`'s
+ * plate, and spacing around a pinned part belongs to the thing doing the
+ * pinning (the same split `PageHeading` makes).
  */
 export function UserLookup({
   user,
@@ -78,7 +82,7 @@ export function UserLookup({
   };
 
   return (
-    <section className="mb-10 rounded-2xl border border-foreground/12 bg-foreground/[0.04] p-6 shadow-[0_24px_60px_-34px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+    <section className="rounded-2xl border border-foreground/12 bg-foreground/[0.04] p-6 shadow-[0_24px_60px_-34px_rgba(0,0,0,0.7)] backdrop-blur-xl">
       <h2 className="mb-4 font-display text-[11px] font-medium uppercase tracking-[0.28em] text-active/80">
         Your Sleeper account
       </h2>
