@@ -28,12 +28,13 @@ import { UserLookup } from "./user-lookup";
  * `/tools`, so the plate pins at `top-0` rather than offsetting by
  * `--site-header-h`.
  *
- * The `::before` carries that opacity over `PageShell`'s top padding: unpinned,
- * the plate starts 4rem down the page, and a flat edge across the aurora there
- * reads as a seam. It rides *with* the plate, so once pinned it sits above the
- * viewport and costs nothing — which is why it is a pseudo-element rather than
- * more padding, whose 4rem a pinned plate would keep paying out of the list
- * behind it.
+ * The plate cancels `PageShell`'s top padding (`-mt-16`) rather than starting
+ * below it. Unpinned it began 4rem down the page and then jumped up to `top-0`
+ * on the first scroll — a header that moves as you scroll reads as a glitch, and
+ * the plate is the one block on the page that is supposed to be fixed. Starting
+ * it flush means its resting position *is* its pinned position, so nothing
+ * moves. It also retires the `::before` that used to paint that 4rem: with no
+ * gap above the plate there is no seam across the aurora to cover.
  *
  * The `::after` is the *other* end of that opacity, and it is the same seam
  * argument applied where the plate stops. A block of flat `--background` butted
@@ -57,7 +58,7 @@ export function ToolsHome({ heading }: { heading: React.ReactNode }) {
 
   return (
     <>
-      <div className="sticky top-0 z-30 -mx-6 bg-[var(--background)] px-6 pb-5 pt-3 before:absolute before:inset-x-0 before:bottom-full before:h-24 before:bg-[var(--background)] after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent">
+      <div className="sticky top-0 z-30 -mx-6 -mt-16 bg-[var(--background)] px-6 pb-5 pt-3 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent">
         {heading}
         <div className="mt-6">
           <UserLookup user={user} onUserChange={storeAccount} />
