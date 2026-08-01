@@ -189,9 +189,22 @@ export function LeagueFiltersModal({
             >
               Filter leagues
             </h2>
-            <kbd className="ml-auto rounded-[5px] border border-foreground/10 px-1.5 py-1 font-mono text-[10px] text-foreground/40">
-              Esc
-            </kbd>
+            {/*
+              A close button rather than the `Esc` legend that used to sit here:
+              the legend named a key a pointer can't press, on the one control in
+              the panel a reader is most likely to reach for by hand. It wears
+              `.lab-chip` at the quick-adds' half thickness — dismissing is a
+              lesser press than Apply — and closing discards the draft on exactly
+              the terms Escape does, since the draft is reseeded on open.
+            */}
+            <button
+              type="button"
+              onClick={() => ref.current?.close()}
+              aria-label="Close"
+              className="lab-chip lab-chip-sm ml-auto grid size-7 place-items-center rounded-full text-foreground/55 transition-colors hover:text-active"
+            >
+              <CloseIcon />
+            </button>
           </div>
 
           {/*
@@ -904,6 +917,22 @@ function ActiveChip({
 
 function Divider() {
   return <span aria-hidden="true" className="h-px bg-foreground/10" />;
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3 w-3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+    >
+      <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
+    </svg>
+  );
 }
 
 function FilterIcon({ dim }: { dim: boolean }) {
