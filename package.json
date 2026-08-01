@@ -17,6 +17,7 @@
     "migrate:create": "node-pg-migrate create -m db/migrations -j sql"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
     "axios": "^1.18.1",
     "axios-retry": "^4.5.0",
     "next": "16.2.10",

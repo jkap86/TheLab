@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 
-import type { LeaguesStreamMessage } from "@/shared/contract";
 import { errorMessage } from "@/shared/util";
 
-import { apiFetch, isAbortError, takeLines } from "@/features/shared";
+import { STALE_TIMES } from "../query-config";
+import { fetchManagerLeagues, type ManagerLeaguesData } from "../query-fns";
+import { managerQueryKeys } from "../query-keys";
 import type { LeaguesResult, SyncProgress } from "../types";
 
 export type ManagerLeaguesState = {
@@ -13,86 +15,84 @@ export type ManagerLeaguesState = {
   progress: SyncProgress | null;
   refreshing: boolean;
   error: string | null;
+  /** The fingerprint dependent reads follow — see `leaguesRevision`. */
+  revision: string | null;
+  /** Sync again, past the server's own freshness gate. */
+  refresh: () => void;
 };
 
 /**
- * Streams a manager's leagues from `/api/user/[username]/leagues`, decoding the
- * newline-delimited JSON protocol into React state. Message shapes come from
- * `@/shared/contract`'s {@link LeaguesStreamMessage}, the same contract the route
- * sends against.
+ * A manager's leagues, off the stale-while-revalidate stream at
+ * `/api/user/[username]/leagues`.
  *
- * Aborts the in-flight request on unmount. Callers should key the owning
- * component by `searched` so a new manager remounts with fresh state.
+ * The decoding is unchanged and lives in {@link fetchManagerLeagues}; what moved
+ * is where the result goes. It used to be `useState` inside this hook, which
+ * meant the three manager tabs — three routes, so three mounts — each opened
+ * their own stream: Leagues → Players → Leaguemates → Leagues was four reads of
+ * the same account. It is a query now, so the second tab reads what the first
+ * one loaded and only asks again once that has gone stale.
+ *
+ * The streaming survives that move intact, which is the part worth understanding.
+ * A query normally resolves once, at the end — which here would mean sitting on a
+ * loading screen through a refresh whose cached half the server had already sent.
+ * So the fetcher publishes every state it reaches straight into this entry, and
+ * *then* resolves with the last of them: the cached leagues appear at the first
+ * message, the refreshed ones replace them at the last, and the resolution is the
+ * value the cache is already holding.
+ *
+ * `refresh` re-runs the stream with `?refresh=1` rather than appending a
+ * cache-busting parameter. Invalidating alone would not do: it re-asks the same
+ * question, and the server answers a fresh manager from its own cache — forcing
+ * the sync past that TTL is the one thing the client cannot decide for itself.
  */
 export function useManagerLeagues(searched: string): ManagerLeaguesState {
-  const [data, setData] = useState<LeaguesResult | null>(null);
-  const [progress, setProgress] = useState<SyncProgress | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  // Memoised on the manager alone: the key is what the callbacks below depend
+  // on, and a fresh array every render would rebuild all of them for nothing.
+  const queryKey = useMemo(() => managerQueryKeys.leagues(searched), [searched]);
 
-  useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
+  // Both entry points — the query and the manual refresh — run the same stream
+  // into the same entry, differing only in whether they force a sync.
+  const run = useCallback(
+    (refresh: boolean, signal?: AbortSignal) =>
+      fetchManagerLeagues({
+        searched,
+        refresh,
+        signal,
+        // Carried forward so a re-run continues the refresh sequence rather than
+        // restarting it, which would read as a dependent-invalidating change.
+        previousRevision:
+          queryClient.getQueryData<ManagerLeaguesData>(queryKey)?.revision,
+        publish: (data) => queryClient.setQueryData(queryKey, data),
+      }),
+    [searched, queryClient, queryKey],
+  );
 
-    (async () => {
-      try {
-        const res = await apiFetch(
-          `/api/user/${encodeURIComponent(searched)}/leagues`,
-          { signal: controller.signal, fallbackError: "Failed to load leagues" },
-        );
-        if (!res.body) throw new Error("Failed to load leagues");
+  const query = useQuery({
+    queryKey,
+    queryFn: ({ signal }) => run(false, signal),
+    staleTime: STALE_TIMES.leagues,
+  });
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
+  const refresh = useCallback(() => {
+    void queryClient.fetchQuery({
+      queryKey,
+      queryFn: ({ signal }) => run(true, signal),
+      staleTime: 0,
+    });
+  }, [queryClient, queryKey, run]);
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          const { lines, rest } = takeLines(buffer);
-          buffer = rest;
-          if (!active) continue;
-
-          for (const line of lines) {
-            const message = JSON.parse(line) as LeaguesStreamMessage;
-            if (message.type === "progress") {
-              setProgress(message);
-            } else if (message.type === "result") {
-              setData(message);
-              setRefreshing(message.refreshing);
-              if (!message.refreshing) setProgress(null);
-            } else {
-              setRefreshing(false);
-              setProgress(null);
-              // Keep the first error: later ones are usually knock-on effects.
-              setError((prev) => prev ?? message.error);
-            }
-          }
-        }
-      } catch (err: unknown) {
-        if (active && !isAbortError(err)) {
-          setError(errorMessage(err, "Something went wrong"));
-        }
-      } finally {
-        // The stream can die before its final `result`/`error` message — a
-        // dropped connection mid-refresh, a proxy cutting a long sync. Only a
-        // message resets these, so without this backstop the header spins
-        // "Refreshing…" forever. On a clean finish they are already false/null
-        // and the set is a no-op.
-        if (active) {
-          setRefreshing(false);
-          setProgress(null);
-        }
-      }
-    })();
-
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [searched]);
-
-  return { data, progress, refreshing, error };
+  const data = query.data ?? null;
+  return {
+    data: data?.result ?? null,
+    progress: data?.progress ?? null,
+    refreshing: data?.refreshing ?? false,
+    // A refresh that failed behind a payload worth keeping is a field on the
+    // data; only a failure with nothing to show reaches the query's own error.
+    error:
+      data?.refreshError ??
+      (query.error ? errorMessage(query.error, "Something went wrong") : null),
+    revision: data?.revision ?? null,
+    refresh,
+  };
 }

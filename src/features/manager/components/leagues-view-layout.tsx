@@ -65,14 +65,15 @@ export function LeaguesViewLayout({
   const [boardOpen, setBoardOpen] = useState(false);
 
   // Gated on the drawer being open: a tab nobody has opened the board on should
-  // cost no ADP request. On the Players tab that means the same board is fetched
-  // twice while the drawer is up — its own column already reads it — which is a
-  // bounded cost paid only while someone is looking at both.
+  // cost no ADP request. The gate is on the *fetch* and not on the read, which
+  // is what the shared cache buys — on the Players tab, whose own column already
+  // reads this board, opening the drawer now shows it immediately and asks for
+  // nothing. (It used to be two fetches of an identical query, one per hook.)
   const query = useMemo(
     () => adpQueryString(controls, todayIso()),
     [controls],
   );
-  const board = useAdp(boardOpen ? query : null);
+  const board = useAdp(query, { enabled: boardOpen });
 
   // The strip the range scrubber draws, behind the same gate. It takes no query
   // and re-fetches on nothing: it describes the crawled population *before* any
