@@ -716,7 +716,57 @@ stops holding, a comment saying it does would not have caught it.
   **per slot**: a stored selection outlives the build that wrote it, so a metric
   since renamed or dropped falls back on its own rather than resetting three good
   choices with it, and `defaults` fixes the row's length so a table given a third
-  column lays out either way.
+  column lays out either way. Two writes sit beside it in the same pure module,
+  and each closes a hole the per-slot write left. `assignColumn` **swaps**: a
+  metric picked into a slot another slot already holds trades places with it,
+  rather than spending one of four columns — across a hundred-odd cards — on a
+  number already on screen. And **`reset` is what makes the persistence safe to
+  have**: the selection outlives the session, so without a way back a reader who
+  aimed all four somewhere unhelpful is followed by that board to every later
+  visit. It clears the key rather than writing today's defaults into it, since
+  what a table opens with is the catalogue's to change.
+- **The stat columns are named once above the list, not on every card.** The
+  selection has always been list-wide — one pick moves the column on all
+  hundred-odd rows — and drawing the labels per card said the opposite, which is
+  why changing the board read as four unrelated errands. `ColumnsBar` is that
+  heading rail: the labels are the same pickers in one place, laid on the cards'
+  own geometry (`COLUMN_BOX` in `metric-column.tsx`, written once so a heading
+  can't drift a pixel off the number under it, with a transparent `divide-x`
+  because the cards' own divider sits *inside* their box). Four things it
+  taught:
+  - **It rides inside `ManagerHeader`**, as a `columns` node, because that card is
+    pinned: a rail that scrolled away halfway down the list would leave the
+    numbers unlabelled. Sitting there it needs no offset of its own — measuring
+    the header's height to pin a sibling under it is the machinery this avoids.
+  - **The cards keep their labels below `sm`** (`labels={false}` hides them from
+    `sm` up), because that is the width where a card stops being a row and the
+    rail stops sitting over anything. Hiding them takes them out of the
+    accessibility tree too, so an `sr-only` name at exactly those widths keeps a
+    screen reader from announcing "#3 of 12" with no word for what it ranks.
+  - **The column is as wide as the longest label, not the widest number** — 96px
+    from `sm` up, where 80px truncated a third of the catalogue. Below `sm` it
+    stays 80px, since four of anything wider overflows a phone; the two rules are
+    one rule, because the wide column exists to hold a heading and there is no
+    heading down there.
+  - **The share lists' selection moved up to the tab** for the same reason: the
+    rail that edits it is in the header, on the other side of the list, and one
+    selection can't be owned by two places. Both share views share the key
+    `share`, which is the grain rule doing its job — a stored `adp` column simply
+    falls back per slot on the leaguemates list, which has no board price.
+- **`ColumnsEditor` is all four slots at once, and it commits live.** The
+  per-column menus are right for changing one column and wrong for changing the
+  board: four slots are rarely four independent choices, so recomposing them was
+  four menus and four passes over one flat list with nothing to see until the last
+  pick landed. The dialog is the slots across the top, the catalogue in captioned
+  bays (`Metric.group` + `groupMetrics`, so the catalogue stays one ordered array
+  rather than two lists that can disagree), and `ColumnPreset`s as one press each.
+  Where it parts company with `LeagueFiltersModal` is instructive: **that one
+  holds a draft because its options carry counts, and a count can't be read while
+  the list behind it moves.** Nothing here is counted — the slots preview what
+  each column will say — so there is nothing to protect from moving, which is why
+  the footer says `Done` and not `Apply`. A preview is against one arbitrary
+  subject, so the footer names it; the heading menus show no previews at all, for
+  the same reason.
 - **The account is the key to the whole grid: every card is inert until one
   resolves.** Each tool reads that account, so `ToolGrid` passes `disabled={!user}`
   and `ToolLinkCard` renders an `aria-disabled`, dimmed `div` instead of a

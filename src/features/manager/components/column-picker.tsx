@@ -59,10 +59,15 @@ export function ColumnPicker({
         } ${className}`}
       >
         <span>{active.label}</span>
+        {/* Always drawn, dim at rest. On `group-hover` alone it never appeared on
+            a touch device, which left the control that changes the column with
+            nothing at all to say it was one. */}
         <span
           aria-hidden="true"
-          className={`text-[8px] leading-none transition-opacity ${
-            open ? "opacity-100" : "opacity-0 group-hover/pick:opacity-100"
+          className={`text-[8px] leading-none transition-colors ${
+            open
+              ? "text-foreground/80"
+              : "text-foreground/25 group-hover/pick:text-foreground/60"
           }`}
         >
           ▾

@@ -33,6 +33,62 @@ export function resolveColumns(
   });
 }
 
+/**
+ * Point one slot at `key`, and put whatever it held wherever `key` was.
+ *
+ * A plain per-slot write let the same metric land in two columns, which spends
+ * one of four slots on a number already on screen — across a list several
+ * hundred rows long, since the selection is list-wide. The swap is what makes
+ * that unreachable *and* keeps the other three choices: a reader aiming slot 3
+ * at a metric slot 1 already shows plainly wants them traded, not slot 1 blanked.
+ *
+ * A slot outside the row is a no-op rather than a throw: this takes a stored
+ * selection's length, which `resolveColumns` fixes but a stale caller may not.
+ */
+export function assignColumn(
+  columns: readonly string[],
+  slot: number,
+  key: string,
+): string[] {
+  if (slot < 0 || slot >= columns.length || columns[slot] === key) {
+    return [...columns];
+  }
+  const held = columns[slot];
+  const other = columns.indexOf(key);
+  return columns.map((existing, i) => {
+    if (i === slot) return key;
+    return i === other ? held : existing;
+  });
+}
+
+/**
+ * A catalogue split into its captioned families, in the order it lists them.
+ *
+ * The metric menus are flat, which hides the fact that the catalogues are not:
+ * `proj` and `proj_pts` are one number in two shapes, and the twelve league
+ * metrics are really four families. Grouping is a reading of the catalogue
+ * rather than a second list, so it is derived from a `group` on each metric —
+ * a family appears where its first member does, and the whole thing stays one
+ * ordered array to add to.
+ *
+ * Generic in the item and blind to everything but `group`, on the same terms as
+ * {@link resolveColumns} taking the catalogue's keys: the four metric modules
+ * are client display code, and this stays pure.
+ */
+export function groupMetrics<T extends { group?: string }>(
+  metrics: readonly T[],
+  fallback: string,
+): { label: string; metrics: T[] }[] {
+  const groups: { label: string; metrics: T[] }[] = [];
+  for (const metric of metrics) {
+    const label = metric.group ?? fallback;
+    const existing = groups.find((group) => group.label === label);
+    if (existing) existing.metrics.push(metric);
+    else groups.push({ label, metrics: [metric] });
+  }
+  return groups;
+}
+
 function parseStored(stored: string | null): unknown[] | null {
   if (!stored) return null;
   try {

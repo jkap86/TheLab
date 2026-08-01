@@ -3,10 +3,7 @@
 import { Avatar } from "@/features/shared";
 
 import type { LeaguemateShare } from "../leaguemates";
-import {
-  DEFAULT_LEAGUEMATE_COLUMNS,
-  LEAGUEMATE_SHARE_METRICS,
-} from "../share-metrics";
+import { LEAGUEMATE_SHARE_METRICS } from "../share-metrics";
 import { ShareList } from "./share-list";
 
 /**
@@ -26,10 +23,20 @@ import { ShareList } from "./share-list";
 export function LeaguemateShares({
   mates,
   leagueCount,
+  columns,
+  onColumnChange,
+  onReset,
 }: {
   mates: LeaguemateShare[];
   /** Leagues the shares are out of — see `LeaguemateShares.league_count`. */
   leagueCount: number;
+  /**
+   * The stat-column selection, owned by the tab above — the heading rail that
+   * edits it is pinned in the manager header, on the other side of this list.
+   */
+  columns: string[];
+  onColumnChange: (slot: number, key: string) => void;
+  onReset: () => void;
 }) {
   return (
     <ShareList
@@ -40,7 +47,9 @@ export function LeaguemateShares({
         <Avatar url={mate.avatar_url} name={mate.name} size="sm" />
       )}
       metrics={LEAGUEMATE_SHARE_METRICS}
-      defaultColumns={DEFAULT_LEAGUEMATE_COLUMNS}
+      columns={columns}
+      onColumnChange={onColumnChange}
+      onReset={onReset}
     />
   );
 }

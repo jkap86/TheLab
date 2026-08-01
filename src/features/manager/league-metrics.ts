@@ -4,7 +4,7 @@ import {
   formatValue,
   formatWeekRange,
 } from "./format.ts";
-import type { Metric } from "./metric-cell.ts";
+import type { ColumnPreset, Metric } from "./metric-cell.ts";
 import type {
   LeagueAdpEntry,
   LeagueKtcEntry,
@@ -142,6 +142,7 @@ function adpTitle(adp: LeagueAdpEntry | null): string {
 export const LEAGUE_METRICS: LeagueMetric[] = [
   {
     key: "standing",
+    group: "Record",
     label: "Standing",
     cell: ({ ranks, league }) => ({
       kind: "rank",
@@ -155,6 +156,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "points",
+    group: "Record",
     label: "Points",
     cell: ({ ranks }) => {
       const points = ranks?.points ?? null;
@@ -171,6 +173,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "points_for",
+    group: "Record",
     label: "Points for",
     cell: ({ ranks }) => {
       const points = ranks?.points ?? null;
@@ -185,6 +188,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "proj",
+    group: "Projection",
     label: "Proj start",
     cell: ({ ranks, weeks }) => {
       const proj = ranks?.proj ?? null;
@@ -197,6 +201,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "proj_pts",
+    group: "Projection",
     label: "Proj pts",
     cell: ({ ranks, weeks }) => {
       const proj = ranks?.proj ?? null;
@@ -209,6 +214,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "proj_bench",
+    group: "Projection",
     label: "Proj bench",
     cell: ({ ranks, weeks }) => {
       const bench = ranks?.proj_bench ?? null;
@@ -221,6 +227,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "proj_bench_pts",
+    group: "Projection",
     label: "Bench pts",
     cell: ({ ranks, weeks }) => {
       const bench = ranks?.proj_bench ?? null;
@@ -233,6 +240,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "ktc_start",
+    group: "Dynasty value",
     label: "KTC start",
     cell: ({ ktc, valuedAt }) => ({
       kind: "rank",
@@ -242,6 +250,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "ktc_total",
+    group: "Dynasty value",
     label: "KTC total",
     cell: ({ ktc, valuedAt }) => ({
       kind: "value",
@@ -253,6 +262,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "ktc_bench",
+    group: "Dynasty value",
     label: "KTC bench",
     cell: ({ ktc, valuedAt }) => ({
       kind: "value",
@@ -264,6 +274,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "adp_total",
+    group: "Draft market",
     label: "ADP value",
     cell: ({ adp }) => ({
       kind: "value",
@@ -275,6 +286,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
   },
   {
     key: "adp_rank",
+    group: "Draft market",
     label: "ADP rank",
     cell: ({ adp }) => ({
       kind: "rank",
@@ -297,4 +309,27 @@ export const DEFAULT_COLUMNS: string[] = [
   "points",
   "ktc_start",
   "proj",
+];
+
+/**
+ * The boards worth a name, as the columns editor offers them.
+ *
+ * Each is a question rather than a theme: how is this team *doing*, what is it
+ * *going* to do, what is it *worth* to a dynasty trader, what did the *market*
+ * pay for it. The default four are deliberately not among them — they are a
+ * cross-section of all four questions, which is the right opening view and a
+ * poor answer to any one of them, and `reset` is how a reader gets back to it.
+ *
+ * `Value` mixes the KTC trio with the ADP total on purpose: three columns is the
+ * whole KTC catalogue and the fourth slot is better spent on the second opinion
+ * than left showing a rank from another lens.
+ */
+export const LEAGUE_COLUMN_PRESETS: ColumnPreset[] = [
+  { name: "Standings", columns: ["standing", "points", "points_for", "proj"] },
+  {
+    name: "Projection",
+    columns: ["proj", "proj_pts", "proj_bench", "proj_bench_pts"],
+  },
+  { name: "Value", columns: ["ktc_start", "ktc_total", "ktc_bench", "adp_total"] },
+  { name: "Market", columns: ["adp_rank", "adp_total", "ktc_start", "standing"] },
 ];

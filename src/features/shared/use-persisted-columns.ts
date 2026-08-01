@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 
-import { resolveColumns } from "./columns.ts";
+import { assignColumn, resolveColumns } from "./columns.ts";
 import { readLocal, useLocalValue, writeLocal } from "./local-store";
 
 // Namespaced so one key per table can be read at a glance in devtools, and so
@@ -28,12 +28,26 @@ const KEY_PREFIX = "thelab:columns:";
  * `metrics` is the catalogue those keys are checked against, so a stored
  * selection naming a metric this build dropped falls back per slot rather than
  * reaching a column with no cell to draw.
+ *
+ * **`reset` is not a convenience.** Because the selection outlives the session,
+ * a reader who aims all four columns somewhere unhelpful has no way back other
+ * than remembering the four keys the table opened with — the stored row follows
+ * them to every later visit. Handing the defaults back is what makes the
+ * persistence safe to have.
  */
 export function usePersistedColumns(
   name: string,
   defaults: readonly string[],
   metrics: readonly { key: string }[],
-): [string[], (slot: number, key: string) => void] {
+): {
+  columns: string[];
+  /** Point one slot at a metric, swapping with the slot that held it. */
+  setColumn: (slot: number, key: string) => void;
+  /** Replace the whole row — what a preset writes. */
+  setColumns: (keys: readonly string[]) => void;
+  /** Back to the table's opening columns. */
+  reset: () => void;
+} {
   const storageKey = KEY_PREFIX + name;
   const raw = useLocalValue(storageKey);
 
@@ -53,13 +67,29 @@ export function usePersistedColumns(
   const setColumn = useCallback(
     (slot: number, key: string) => {
       const current = resolveColumns(readLocal(storageKey), defaults, known);
+      writeLocal(storageKey, JSON.stringify(assignColumn(current, slot, key)));
+    },
+    [storageKey, defaults, known],
+  );
+
+  // Written through `resolveColumns` too, so a preset naming a metric this
+  // catalogue doesn't hold — the shared share presets, read by the leaguemates
+  // list that has no ADP column — falls back per slot rather than being stored
+  // as a key nothing can draw.
+  const setColumns = useCallback(
+    (keys: readonly string[]) => {
       writeLocal(
         storageKey,
-        JSON.stringify(current.map((existing, i) => (i === slot ? key : existing))),
+        JSON.stringify(resolveColumns(JSON.stringify(keys), defaults, known)),
       );
     },
     [storageKey, defaults, known],
   );
 
-  return [columns, setColumn];
+  // Cleared rather than written back as the defaults: what a table opens with is
+  // the catalogue's to change, and a reader who reset to today's four shouldn't
+  // be pinned to them by a build that later picks better ones.
+  const reset = useCallback(() => writeLocal(storageKey, null), [storageKey]);
+
+  return { columns, setColumn, setColumns, reset };
 }
