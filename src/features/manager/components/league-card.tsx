@@ -78,16 +78,37 @@ export function LeagueCard({
     <li className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER}`}>
       <RowSheen />
 
-      {/* `relative` is what keeps the sheen behind this rather than over it — an
+      {/* The whole row is the toggle, not just the name half. The stat columns
+          have nothing to press of their own — the pickers live in the heading
+          rail above the list — so the right half of every card was inert while
+          looking exactly as pressable as the left, and a click there did
+          nothing.
+
+          It is a `role="button"` div rather than a `<button>` because the row
+          holds the metric columns, which are divs: flow content inside a button
+          is invalid, and this is the way to make the whole row one press target
+          without either rewriting a shared component's markup or dropping the
+          league name's heading. The keyboard half is therefore hand-written —
+          Enter and Space, the two keys a native button answers.
+
+          `relative` is what keeps the sheen behind this rather than over it — an
           absolutely positioned sibling paints above static content whatever the
           source order. */}
-      <div className="relative flex w-full flex-col items-stretch gap-3 px-4 py-3 pl-5 sm:flex-row sm:items-center sm:gap-4">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left"
-        >
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          // Space scrolls the page otherwise, which is what a native button
+          // suppresses for us.
+          event.preventDefault();
+          setExpanded((v) => !v);
+        }}
+        aria-expanded={expanded}
+        className="relative flex w-full cursor-pointer flex-col items-stretch gap-3 px-4 py-3 pl-5 text-left sm:flex-row sm:items-center sm:gap-4"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <Chevron open={expanded} size="md" />
           <StatusDot status={league.status} />
           {/* The display face, as on a tool card — Orbitron is wider than the
@@ -101,7 +122,7 @@ export function LeagueCard({
               {formatRecord(record)}
             </span>
           )}
-        </button>
+        </div>
 
         {/* Numbers only, at every width: the heading rail pinned above the list
             names these columns and is the only thing that moves them, because
