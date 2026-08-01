@@ -1394,10 +1394,19 @@ stops holding, a comment saying it does would not have caught it.
   - **The bar's extruded edge is drawn *inside* the header box** (`--bar-edge-h`,
     counted into `--site-header-h`). As an outside shadow it would be covered by
     the manager card, which pins at exactly that offset.
-  - **The plate is opaque.** The glass-and-blur bar it replaced was legible
-    because of an alpha chosen to survive `backdrop-filter` being unsupported; a
-    surface with visible thickness has no such out — page content showing through
-    an extrusion reads as a rendering bug, so there is no translucency to tune.
+  - **The plate is tinted glass, and the blur is what makes that safe.** It was
+    opaque, on the reasoning that a surface with visible thickness can't have
+    page content showing through its extrusion. What that bought was a flat band
+    cut across the top of the ambient aurora, which is fixed behind every page
+    and is most of what makes the app read as one product. So the two gradient
+    stops carry an alpha and the bar carries `backdrop-blur` — the blur is the
+    load-bearing half, since it diffuses the rows scrolling underneath into
+    colour rather than legible content, which is the failure the opacity was
+    actually preventing. The stops are still dark enough to hold the bar's text
+    on their own where `backdrop-filter` is unsupported, the same out the
+    glass-and-blur bar before it relied on. The extruded bottom edge stays
+    opaque: it is the part that reads as thickness, and a translucent side wall
+    is what would look like a rendering bug.
   - **`.lab-chip` is that grammar off the bar**, for a control that stays a
     rounded pill: nothing clips it, so its side wall can simply *be* a shadow
     (`0 3px 0 var(--edge)`) and the whole part is one element rather than the
