@@ -1,6 +1,7 @@
 import { runner } from "node-pg-migrate";
 import { resolveDatabaseUrl } from "./config";
 import { dbSsl } from "./ssl";
+import { withTlsAdvice } from "./tls-error";
 
 /**
  * Apply any pending migrations in `db/migrations`.
@@ -29,15 +30,24 @@ export async function runMigrations(): Promise<void> {
   }
   const databaseUrl = resolved.url;
 
-  const applied = await runner({
-    // Pass a ClientConfig (not a bare string) so the on-boot migration connects
-    // with the same TLS settings as the runtime pool — Heroku Postgres and other
-    // managed providers require SSL, which a plain connection string omits.
-    databaseUrl: { connectionString: databaseUrl, ssl: dbSsl(databaseUrl) },
-    migrationsTable: "pgmigrations",
-    dir: "db/migrations",
-    direction: "up",
-  });
+  let applied;
+  try {
+    applied = await runner({
+      // Pass a ClientConfig (not a bare string) so the on-boot migration connects
+      // with the same TLS settings as the runtime pool — Heroku Postgres and other
+      // managed providers require SSL, which a plain connection string omits.
+      databaseUrl: { connectionString: databaseUrl, ssl: dbSsl(databaseUrl) },
+      migrationsTable: "pgmigrations",
+      dir: "db/migrations",
+      direction: "up",
+    });
+  } catch (error) {
+    // This is the first connection the process makes, so a TLS misconfiguration
+    // surfaces here — as six words of OpenSSL, through a hook whose failure Next
+    // reports as "an error occurred while loading instrumentation hook". Naming
+    // the variables in the message is the only place they can be seen from.
+    throw withTlsAdvice(error, databaseUrl);
+  }
 
   if (applied.length > 0) {
     const names = applied.map((migration) => migration.name).join(", ");

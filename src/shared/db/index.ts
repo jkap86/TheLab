@@ -2,6 +2,11 @@ export { runMigrations } from "./migrate";
 export { pool } from "./pool";
 export { dbSsl, resolveSslMode, caCertificate, SSL_MODES } from "./ssl";
 export type { SslMode, SslEnv } from "./ssl";
+export {
+  isCertificateVerificationError,
+  tlsAdviceFor,
+  withTlsAdvice,
+} from "./tls-error";
 export { resolveDatabaseUrl, DATABASE_URL_ENV } from "./config";
 export type { DatabaseUrlResolution } from "./config";
 export { jsonb } from "./json";
