@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { useAdpControls } from "../filters-context";
 import { useFilteredLeagues } from "../hooks/use-filtered-leagues";
 import { useManagerAdpValue } from "../hooks/use-manager-adp-value";
 import { useManagerKtc } from "../hooks/use-manager-ktc";
 import { useManagerRanks } from "../hooks/use-manager-ranks";
-import { DEFAULT_COLUMNS } from "../league-metrics";
+import { DEFAULT_COLUMNS, LEAGUE_METRICS } from "../league-metrics";
 import { LeagueCard } from "./league-card";
 import { LeaguesViewLayout } from "./leagues-view-layout";
 
@@ -41,12 +41,13 @@ export function ManagerLeagues({ searched }: { searched: string }) {
 
   // Which metric each of the four stat columns shows, shared by every card so the
   // columns line up down the list — a change on any card's picker moves them all.
-  const [columns, setColumns] = useState<string[]>(DEFAULT_COLUMNS);
-  const setColumn = useCallback((slot: number, key: string) => {
-    setColumns((current) =>
-      current.map((existing, i) => (i === slot ? key : existing)),
-    );
-  }, []);
+  // Kept on the device rather than in state: they are aimed once and then read,
+  // so a reload or a trip out to another tool used to cost re-aiming all four.
+  const [columns, setColumn] = usePersistedColumns(
+    "league",
+    DEFAULT_COLUMNS,
+    LEAGUE_METRICS,
+  );
 
   const total = view.data?.leagues.length ?? 0;
   const showing = view.filtered.length;

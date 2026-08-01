@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 // Both imported directly rather than through their barrels, which would pull
 // `pg`-backed code into the client bundle — see `slots.ts` and `rank.ts`.
 import { orderByProjectedPoints } from "@/shared/manager/rank";
 import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 
 import { useLeagueDetail } from "../hooks/use-league-detail";
-import { DEFAULT_PLAYER_COLUMNS } from "../roster-metrics";
-import { DEFAULT_TEAM_COLUMNS } from "../standings-metrics";
+import { DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS } from "../roster-metrics";
+import { DEFAULT_TEAM_COLUMNS, TEAM_METRICS } from "../standings-metrics";
 import type { LeagueDetailResult } from "../types";
 import { RosterDetail } from "./roster-detail";
 import { Standings } from "./standings";
@@ -59,13 +60,20 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   const selected = teams.find((t) => t.roster_id === selectedId) ?? teams[0];
 
   // Each table's two value columns are slots the reader points at a metric — the
-  // standings at a team-level one, the roster at a player-level one. The
-  // selection is held here rather than in either table so it outlives switching
-  // the selected team, and so one picker-at-a-time and an outside click have a
-  // single owner (as they do on the collapsed card).
-  const [teamColumns, setTeamColumns] = useState<string[]>(DEFAULT_TEAM_COLUMNS);
-  const [rosterColumns, setRosterColumns] = useState<string[]>(
+  // standings at a team-level one, the roster at a player-level one. Stored on
+  // the device rather than held here, so the choice outlives this panel: it
+  // mounts on expand and unmounts on collapse, which used to reset both tables
+  // every time a different league was opened. One key per grain, not per league —
+  // what a column means is a fact about the catalogue, not about this league.
+  const [teamColumns, setTeamColumn] = usePersistedColumns(
+    "standings",
+    DEFAULT_TEAM_COLUMNS,
+    TEAM_METRICS,
+  );
+  const [rosterColumns, setRosterColumn] = usePersistedColumns(
+    "roster",
     DEFAULT_PLAYER_COLUMNS,
+    PLAYER_METRICS,
   );
   const [openPicker, setOpenPicker] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -91,11 +99,11 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   const togglePicker = (key: string) =>
     setOpenPicker((current) => (current === key ? null : key));
   const pickTeamColumn = (slot: number, key: string) => {
-    setTeamColumns((cols) => cols.map((c, i) => (i === slot ? key : c)));
+    setTeamColumn(slot, key);
     setOpenPicker(null);
   };
   const pickRosterColumn = (slot: number, key: string) => {
-    setRosterColumns((cols) => cols.map((c, i) => (i === slot ? key : c)));
+    setRosterColumn(slot, key);
     setOpenPicker(null);
   };
 
