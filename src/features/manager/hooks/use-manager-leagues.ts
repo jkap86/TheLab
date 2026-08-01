@@ -42,8 +42,16 @@ export type ManagerLeaguesState = {
  *
  * `refresh` re-runs the stream with `?refresh=1` rather than appending a
  * cache-busting parameter. Invalidating alone would not do: it re-asks the same
- * question, and the server answers a fresh manager from its own cache — forcing
- * the sync past that TTL is the one thing the client cannot decide for itself.
+ * question, and the server answers a fresh manager from its own cache.
+ *
+ * What that parameter buys depends on who is asking, and the asymmetry is
+ * deliberate. Forcing the sync past the server's TTL means the full
+ * ~9-requests-per-league fan-out at Sleeper, so the route honours `?refresh=1`
+ * only from an internally authorized caller (see `app/api/internal-auth.ts`).
+ * From a browser it is ignored and this is a re-read: the stream still delivers
+ * whatever a background refresh has since written, which is the part a reader
+ * pressing "refresh" actually wants. It is not a way to spend upstream budget on
+ * demand, and it never was one the client could be trusted with.
  */
 export function useManagerLeagues(searched: string): ManagerLeaguesState {
   const queryClient = useQueryClient();

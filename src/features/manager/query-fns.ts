@@ -125,7 +125,12 @@ export function refreshSeqOf(revision: string | undefined): number {
 
 export type LeaguesStreamOptions = {
   searched: string;
-  /** `?refresh=1` — the server syncs even when its own cache is still fresh. */
+  /**
+   * `?refresh=1` — asks the server to sync even when its own cache is still
+   * fresh. Honoured only for an internally authorized caller; from a browser the
+   * parameter is ignored and the stream is simply re-read. See
+   * `useManagerLeagues`.
+   */
   refresh?: boolean;
   signal?: AbortSignal;
   /** The revision the cache already holds, so the sequence continues from it. */
