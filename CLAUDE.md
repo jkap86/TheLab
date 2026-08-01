@@ -1101,19 +1101,40 @@ stops holding, a comment saying it does would not have caught it.
     leagues" is a different question from "how am I doing", and both are one
     click apart. `LeaguesViewLayout` memoises it so the header renders numbers
     rather than deriving them.
-  - **It is counted over leagues that *carry* a record.** Membership without a
-    roster arrives as `record: null` (the same Sleeper quirk that would deflate a
-    player share), so `aggregateRecord` returns the contributing count alongside
-    the totals and the card shows it — a denominator smaller than the list is
-    only honest if it is stated.
+  - **It is counted over leagues that *carry* a record, and the count is stated
+    only where it is a shortfall.** Membership without a roster arrives as
+    `record: null` (the same Sleeper quirk that would deflate a player share), so
+    `aggregateRecord` returns the contributing count alongside the totals — a
+    denominator smaller than the list is only honest if it is stated. But it
+    usually isn't smaller, and "116 of 116 leagues" is a denominator restating
+    its own numerator on a line that has to stay short, so the two agreeing is
+    left unsaid and only `record.leagues < leagueCount` is written out. The rule
+    holds exactly where it means something. What the account holds is a fact
+    about the account, so the leagues count itself is a pill on the identity line
+    beside the season — which is also where each tab's own headline count (`stat`)
+    now sits.
   - **No games and `.000` are different answers**, so `pct` is null rather than
     zero and the dial draws an em dash before kickoff. Preseason every league
     reports `0-0-0`; a win percentage there is a claim about games nobody played,
     while the `0-0` itself is a true count, so the record line shows the digits
     even then. Only filters that leave no records keep their own words — a `0-0`
     counted over nothing would be quoting records that don't exist.
-  - **The record line carries a live countdown to the season's opening kickoff,
-    and the instant is Sleeper's word before it is ours.** `useKickoff` asks
+  - **The state line carries a live countdown to the season's opening kickoff,
+    drawn as a segment readout, and the instant is Sleeper's word before it is
+    ours.** It holds the slot the headline count used to, and that swap is the
+    plate's own trade: before kickoff the count is a constant and the clock is
+    the only moving number on the card, so the moving one gets the instrument
+    and the constant goes up beside the name. The cells are milled wells — the
+    dock's material at a smaller size — one per unit with the unit spelled
+    underneath and the seconds lit, each fixed-width and zero-padded
+    (`countdownSegments`) so the row ticks in place rather than reflowing; the
+    row narrows only when a unit empties for good. `formatCountdown` is the
+    *join* of that primitive rather than a second calculation, which is what
+    lets the group carry the string as its `aria-label` while the cells are
+    `aria-hidden` — split across four elements they would be read as four
+    numbers. Past kickoff the slot says "season underway" instead of emptying,
+    since the state line is fixed-height for the same reason the record bar
+    keeps its empty rail. `useKickoff` asks
     `/api/kickoff` (the schedule call's earliest week-1 `start_time`); the NFL
     calendar table's `firstKickoff` — the regular season's start date at the
     traditional 8:20 PM ET slot, explicitly provisional — stands in only when
@@ -1125,10 +1146,15 @@ stops holding, a comment saying it does would not have caught it.
     rule, applied to a clock), and past kickoff renders nothing rather than a
     zero — the interval retires itself too, so a header left open across
     kickoff stops re-rendering a hidden timer.
-  - **A modal hides its own state, so the state is repeated outside it.** The
-    trigger wears the count of active filters and the readout names the selection
-    in words (`filterSummary`, lower case because it is read mid-sentence). Both
-    come from the same option table the dialog's buttons do. Each option in the
+  - **A modal hides its own state, so the state is repeated outside it — when
+    there is a state to repeat.** The trigger wears the count of active filters
+    and the record line names the selection in words (`filterSummary`, lower case
+    because it is read mid-sentence), beside the number those filters scope.
+    Both come from the same option table the dialog's buttons do. The summary is
+    passed as `null` when `activeFilterCount` is zero rather than falling back to
+    its own "all leagues": that default is the *absence* of a selection
+    describing itself, and it sat permanently on the plate for the sake of the
+    narrowed case. Each option in the
     dialog also carries how many leagues it would leave, which is why the
     selection is edited as a draft and committed on Apply: those counts can't be
     read while the list behind them moves.

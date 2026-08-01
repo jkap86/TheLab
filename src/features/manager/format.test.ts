@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  countdownSegments,
   formatCountdown,
   formatPoints,
   formatRecord,
@@ -59,6 +60,39 @@ describe("formatCountdown", () => {
 
   test("floors a partial second so the last tick reads 0s, not 1s", () => {
     assert.equal(formatCountdown(999), "0s");
+  });
+});
+
+describe("countdownSegments", () => {
+  const digits = (ms: number) =>
+    countdownSegments(ms).map((s) => `${s.value}${s.short}`);
+
+  test("gives each unit its own cell, padded after the leading one", () => {
+    const ms = ((37 * 24 + 4) * 3600 + 12 * 60 + 45) * 1000;
+    assert.deepEqual(digits(ms), ["37d", "04h", "12m", "45s"]);
+  });
+
+  test("drops units the countdown has outgrown, so the row narrows", () => {
+    assert.deepEqual(digits((4 * 3600 + 9 * 60) * 1000), ["4h", "09m", "00s"]);
+    assert.deepEqual(digits((12 * 60 + 3) * 1000), ["12m", "03s"]);
+    assert.deepEqual(digits(41 * 1000), ["41s"]);
+  });
+
+  test("keeps the seconds cell when everything is zero, rather than none", () => {
+    assert.deepEqual(digits(0), ["0s"]);
+    assert.deepEqual(digits(-5000), ["0s"]);
+  });
+
+  test("carries a spelled unit for the label under each cell", () => {
+    assert.deepEqual(
+      countdownSegments(90_000).map((s) => s.unit),
+      ["min", "sec"],
+    );
+  });
+
+  test("is the same reading the accessible string gives", () => {
+    const ms = ((37 * 24 + 4) * 3600 + 12 * 60 + 45) * 1000;
+    assert.equal(digits(ms).join(" "), formatCountdown(ms));
   });
 });
 

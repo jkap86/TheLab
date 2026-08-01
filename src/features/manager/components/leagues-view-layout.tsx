@@ -5,6 +5,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import {
   LeagueFiltersModal,
   PageShell,
+  activeFilterCount,
   filterSummary,
 } from "@/features/shared";
 
@@ -111,7 +112,9 @@ export function LeaguesViewLayout({
         summary={summary}
         refreshError={error}
         record={record}
-        scope={filterSummary(filters)}
+        // Named only when it narrows something: the default summary ("all
+        // leagues") is the absence of a selection describing itself.
+        scope={activeFilterCount(filters) > 0 ? filterSummary(filters) : null}
         leagueCount={filtered.length}
         stat={stat}
         filters={

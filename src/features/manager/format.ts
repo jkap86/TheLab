@@ -36,18 +36,50 @@ export function formatWinPct(pct: number | null): string {
  * generally hide the timer before that.
  */
 export function formatCountdown(msLeft: number): string {
-  const total = Math.max(0, Math.floor(msLeft / 1000));
-  const days = Math.floor(total / 86_400);
-  const hours = Math.floor((total % 86_400) / 3_600);
-  const minutes = Math.floor((total % 3_600) / 60);
-  const seconds = total % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
+  return countdownSegments(msLeft)
+    .map((segment) => `${segment.value}${segment.short}`)
+    .join(" ");
+}
 
-  if (days > 0)
-    return `${days}d ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
-  if (hours > 0) return `${hours}h ${pad(minutes)}m ${pad(seconds)}s`;
-  if (minutes > 0) return `${minutes}m ${pad(seconds)}s`;
-  return `${seconds}s`;
+/** One unit of a countdown, as its own readout cell. */
+export type CountdownSegment = {
+  /** The digits, zero-padded except in the leading cell. */
+  value: string;
+  /** The unit under the digits, e.g. `"days"`. */
+  unit: string;
+  /** The same unit as the single letter {@link formatCountdown} writes. */
+  short: string;
+};
+
+/**
+ * The same countdown split into its units, for a readout that gives each one a
+ * cell of its own rather than a run of text.
+ *
+ * It is the primitive and {@link formatCountdown} is the join of it, so the
+ * segmented display and the string a screen reader is handed can't disagree
+ * about how long is left — the two are one calculation. The dropping and the
+ * padding are that function's rules verbatim: units the countdown has outgrown
+ * fall off the left as they empty, and everything after the leading unit is
+ * padded so the cells tick in place rather than reflowing.
+ */
+export function countdownSegments(msLeft: number): CountdownSegment[] {
+  const total = Math.max(0, Math.floor(msLeft / 1000));
+  const all = [
+    { value: Math.floor(total / 86_400), unit: "days", short: "d" },
+    { value: Math.floor((total % 86_400) / 3_600), unit: "hrs", short: "h" },
+    { value: Math.floor((total % 3_600) / 60), unit: "min", short: "m" },
+    { value: total % 60, unit: "sec", short: "s" },
+  ];
+
+  // Everything from the first non-zero unit onward; seconds alone when the whole
+  // countdown is under a minute.
+  const lead = all.findIndex((segment) => segment.value > 0);
+  const shown = all.slice(lead === -1 ? all.length - 1 : lead);
+
+  return shown.map((segment, index) => ({
+    ...segment,
+    value: index === 0 ? String(segment.value) : String(segment.value).padStart(2, "0"),
+  }));
 }
 
 /**
