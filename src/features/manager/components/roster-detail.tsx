@@ -140,28 +140,29 @@ export function RosterDetail({
         elevated ? "relative z-30" : ""
       }`}
     >
-      {/* A recessed plate rather than a rule: the app bar's grammar says a well is
-          the thing being read, and this names the team every list below it belongs
-          to. It carries no layout of its own (see the `.lab-*` rule in
-          globals.css) — the row comes from the utilities here.
+      {/* A recessed plate rather than a rule underneath: the app bar's grammar
+          says a well is the thing being read, and this names the team every list
+          below it belongs to. It carries no layout of its own (see the `.lab-*`
+          rule in globals.css) — the box comes from the utilities here.
 
-          One horizontal row at every width now. It used to stack the record under
-          the name below @lg, because the panel was half a card wide there; the
-          panel takes the full width when it is stacked, so there is room. */}
-      <div className="lab-well flex items-center gap-2.5 rounded-lg px-3 py-2.5">
-        <TeamAvatar team={team} size="md" />
-        <div className="min-w-0 flex-1">
-          <h4 className="truncate text-sm font-semibold text-foreground/90 @lg:text-base">
-            {teamLabel(team)}
-          </h4>
-          {team.manager?.team_name && team.manager.display_name && (
-            <p className="truncate text-xs text-foreground/45">
-              {team.manager.display_name}
-            </p>
-          )}
+          The record still drops under the name below @lg: this half is ~150px on
+          a phone, which a name and two numbers on one line don't share. */}
+      <div className="lab-well rounded-lg px-2.5 py-2 @lg:flex @lg:items-center @lg:gap-3 @lg:px-3 @lg:py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <TeamAvatar team={team} size="md" />
+          <div className="min-w-0">
+            <h4 className="truncate text-sm font-semibold text-foreground/90 @lg:text-base">
+              {teamLabel(team)}
+            </h4>
+            {team.manager?.team_name && team.manager.display_name && (
+              <p className="truncate text-xs text-foreground/45">
+                {team.manager.display_name}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="shrink-0 text-right">
-          <span className="block text-sm font-medium tabular-nums text-foreground/85">
+        <div className="mt-1.5 flex items-baseline gap-2 text-sm @lg:mt-0 @lg:ml-auto @lg:block @lg:shrink-0 @lg:text-right">
+          <span className="font-medium tabular-nums text-foreground/85">
             {formatRecord(team.record)}
           </span>
           <span className="block text-xs tabular-nums text-foreground/45">

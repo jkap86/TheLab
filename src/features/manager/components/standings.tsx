@@ -1,7 +1,3 @@
-"use client";
-
-import { useState } from "react";
-
 import { formatPoints, formatRecord, formatWeekRange } from "../format";
 import {
   rosterValueTotal,
@@ -25,17 +21,6 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
 }));
 
 /**
- * How many rows the table shows before asking, while it is stacked above the
- * roster rather than beside it.
- *
- * Only a narrow-width concern: the point of expanding a card is the roster, and
- * a full twelve-team table between the card and it is a scroll before you reach
- * what you opened. Side by side there is nothing below the table to push down,
- * so the cap lifts at @lg and the whole league is listed as before.
- */
-const LADDER_CAP = 5;
-
-/**
  * The league table, rendered in the order given — the panel passes teams in
  * projected-points order, falling back to standings order where projections
  * run out, so the `#` column numbers the projected ranking the collapsed
@@ -57,11 +42,13 @@ const LADDER_CAP = 5;
  * picker. Which metric each shows is held above this table (in the panel) so both
  * columns line up down the list and one picker moves the whole column.
  *
- * Below @lg the table is stacked *above* the roster rather than beside it, so it
- * lists {@link LADDER_CAP} teams and asks before showing the rest — a full league
- * between the card and the roster is a scroll before you reach what you expanded
- * the card for. The cap is a container query, not the state behind the button, so
- * the side-by-side layout always lists everyone.
+ * Below @lg only the *first* of those two columns is drawn. The panel stays a
+ * 50/50 split at every width, which on a phone leaves this half ~150px: the rank
+ * and the name have their own line, so what has to fit on the second is the
+ * record, the points-for and the value columns — two of them ran into each other
+ * (`0-0 · 0.00 PF  2,905.73 1,041.16`), one fits with room. It is the second slot
+ * that goes rather than the first because the reader's leading choice is the one
+ * they aimed first, and both are still there the moment there is width for them.
  */
 export function Standings({
   teams,
@@ -99,17 +86,14 @@ export function Standings({
     ? new Map(outlook.teams.map((t) => [t.roster_id, t]))
     : null;
 
-  const [showAll, setShowAll] = useState(false);
-  // The cap is lifted by a container query rather than by this state, so the
-  // side-by-side layout is never truncated whatever the reader pressed while it
-  // was stacked — one selection can't mean two things at two widths.
-  const capped = !showAll && teams.length > LADDER_CAP;
-
-  // Written out rather than assembled, so Tailwind sees both class strings.
+  // Written out rather than assembled, so Tailwind sees both class strings. The
+  // narrow template carries one value track to the wide one's two — the second
+  // column is `hidden @lg:*` on both the heading and the cell, so a track it can't
+  // fill would leave a dead gutter down the table.
   const grid = outlookByRoster
-    ? "grid-cols-[1.25rem_minmax(0,1fr)_auto_auto] @lg:grid-cols-[2rem_minmax(0,1fr)_auto_auto]"
+    ? "grid-cols-[1.25rem_minmax(0,1fr)_auto] @lg:grid-cols-[2rem_minmax(0,1fr)_auto_auto]"
     : "grid-cols-[1.25rem_minmax(0,1fr)] @lg:grid-cols-[2rem_minmax(0,1fr)]";
-  const nameSpan = outlookByRoster ? "col-span-3" : "col-span-1";
+  const nameSpan = outlookByRoster ? "col-span-2 @lg:col-span-3" : "col-span-1";
 
   return (
     <div
@@ -129,6 +113,9 @@ export function Standings({
           columns.map((key, slot) => (
             <ColumnPicker
               key={slot}
+              // The second column only exists once the half is wide enough for
+              // it — see the class strings above.
+              wrapperClassName={slot === 0 ? "" : "hidden @lg:inline-flex"}
               options={TEAM_METRIC_OPTIONS}
               activeKey={key}
               open={openPicker === `team-${slot}`}
@@ -149,23 +136,10 @@ export function Standings({
             teamOutlook={outlookByRoster?.get(team.roster_id)}
             values={values}
             active={team.roster_id === selectedId}
-            // The selected team is never one of the rows held back: the roster
-            // below belongs to it, so hiding it would leave the panel showing a
-            // team the table doesn't list.
-            hidden={capped && i >= LADDER_CAP && team.roster_id !== selectedId}
             onSelect={() => onSelect(team.roster_id)}
           />
         ))}
       </ul>
-      {teams.length > LADDER_CAP && (
-        <button
-          type="button"
-          onClick={() => setShowAll((v) => !v)}
-          className="w-full border-t border-foreground/10 px-1.5 py-1.5 text-[0.65rem] uppercase tracking-wide text-foreground/45 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/70 @lg:hidden"
-        >
-          {capped ? `Show all ${teams.length}` : "Show fewer"}
-        </button>
-      )}
       {outlook && (
         // The horizon travels with the number, as it does on the roster panel:
         // "rest of season" is however many weeks are actually stored, and a total
@@ -187,7 +161,6 @@ function StandingsRow({
   teamOutlook,
   values,
   active,
-  hidden,
   onSelect,
 }: {
   team: LeagueTeamView;
@@ -205,8 +178,6 @@ function StandingsRow({
   /** Per-player KTC and ADP values, summed to this roster's totals for those metrics. */
   values: LeagueRosterValues;
   active: boolean;
-  /** Held back by the narrow-width cap — still listed once the table is beside the roster. */
-  hidden: boolean;
   onSelect: () => void;
 }) {
   const record = formatRecord(team.record);
@@ -227,7 +198,7 @@ function StandingsRow({
   const title = teamName && teamName !== manager ? `${manager} · ${teamName}` : manager;
 
   return (
-    <li className={hidden ? "hidden @lg:block" : ""}>
+    <li>
       <button
         type="button"
         onClick={onSelect}
@@ -270,8 +241,10 @@ function StandingsRow({
               key={slot}
               title={cell.title}
               className={`text-right text-[0.7rem] tabular-nums @lg:text-sm ${
-                cell.text === null ? "text-foreground/25" : "text-foreground/70"
-              }`}
+                // Paired with the heading above and the grid template: the second
+                // column appears only once the half is wide enough to hold it.
+                slot === 0 ? "" : "hidden @lg:block "
+              }${cell.text === null ? "text-foreground/25" : "text-foreground/70"}`}
             >
               {cell.text ?? "—"}
             </span>
