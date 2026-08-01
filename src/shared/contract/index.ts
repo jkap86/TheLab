@@ -204,26 +204,38 @@ export type ManagerLeaguematesPayload = {
 };
 
 /**
- * `GET /api/user/[username]/trades` — every completed trade in the manager's
- * leagues for a season, newest first.
+ * `GET /api/trades` — every completed trade in every crawled league for a
+ * season, newest first.
+ *
+ * Not a manager route, and that is the whole shape of it: the trades worth
+ * reading are the market's, not one account's, so this reads the leagues this
+ * database has crawled rather than the leagues someone plays in. Which is also
+ * why the leagues travel *with* the trades — there is no leagues stream on this
+ * page to join against, and the client's league filters need what each league
+ * starts and pays for.
  *
  * The same side-map shape as {@link ManagerPlayersPayload}: a trade carries ids,
  * and the players and managers those ids name are resolved once each in the maps
  * beside them rather than repeated per trade — a player traded in ten leagues is
- * one entry here. The league is an id for the same reason: the client already
- * holds the league list off the leagues stream, which is also what its league
- * filters read, so a name and a settings blob per trade would be repeated dozens
- * of times over.
+ * one entry here.
  *
- * Read-only over what the leagues stream synced, like its siblings under this
- * prefix — a manager it has never run for gets an empty list rather than a sync
- * of their own, and a league is only as complete as the transaction weeks that
- * sync has fetched.
+ * Read-only over what the crawl and the manager syncs stored: a league nobody
+ * has looked up has no transactions here rather than being fetched on demand,
+ * and a league is only as complete as the transaction weeks that sync fetched.
  */
-export type ManagerTradesPayload = {
+export type TradesPayload = {
   season: string;
-  /** Newest first, by when each trade completed. */
+  /** Newest first, by when each trade completed. Capped — see `total`. */
   trades: Trade[];
+  /**
+   * How many completed trades the season holds, before the read's cap. Equal to
+   * `trades.length` in the ordinary case; larger when the list was truncated,
+   * which the page says rather than passing a partial board off as the whole
+   * market.
+   */
+  total: number;
+  /** Every league named by `trades`, for the league filters and each card's title. */
+  leagues: ManagerLeague[];
   /** Player ids → name/position/team, for every player in `trades` the cache knows. */
   players: Record<string, PlayerSummary>;
   /**

@@ -5,52 +5,71 @@ import type { TradeRow } from "./assemble";
 import type { Trade } from "./types";
 
 /**
- * Every completed trade in the manager's leagues for a season, newest first.
+ * How many trades one read will return. The page filters on the client over the
+ * whole set it is given, so this is the honest bound on that set rather than a
+ * page size — and {@link TradesRead.total} travels with it so a truncated board
+ * says so instead of passing as the season's whole market.
  *
- * Read-only over what the leagues sync stored, like the other manager reads: a
- * manager the leagues stream has never run for gets an empty list rather than a
- * sync of their own. The sync mirrors transactions week by week, so a league's
+ * Newest first is what makes truncating coherent: what falls off the end is the
+ * oldest part of the season, which is also the part the date filters reach for
+ * last.
+ */
+export const TRADES_READ_LIMIT = 2000;
+
+export type TradesRead = {
+  /** Newest first, at most {@link TRADES_READ_LIMIT} of them. */
+  trades: Trade[];
+  /** How many the season actually holds, before the limit. */
+  total: number;
+};
+
+/**
+ * Every completed trade in every crawled league for a season, newest first.
+ *
+ * Read-only over what the league crawl and the manager syncs stored: this is the
+ * whole market this database has seen, not one account's corner of it — which is
+ * the point of the page, since the leagues a reader plays in are a fraction of
+ * the trades worth reading and the "managers involved" filter is what narrows it
+ * back to their own. The sync mirrors transactions week by week, so a league's
  * trade history is only as complete as the weeks it has fetched.
- *
- * Every trade in every one of the manager's leagues, not only the ones they were
- * party to: the page is a window on the market they play in — what their
- * leaguemates are doing is most of what is worth reading — and the "managers
- * involved" filter is what narrows it back to their own.
  *
  * Pending and vetoed trades are left out. `status = 'complete'` is Sleeper's
  * marker for one that actually went through, and a proposal that never happened
  * would read on the page as a move that did.
  */
-export async function getManagerTrades(
-  userId: string,
-  season: string,
-): Promise<Trade[]> {
-  const { rows } = await pool.query<TradeRow>(
+export async function getAllTrades(season: string): Promise<TradesRead> {
+  const { rows } = await pool.query<TradeRow & { total: string }>(
     // The epoch columns are BIGINT, which `pg` hands back as strings; cast here
     // rather than converting downstream so they leave the query layer as
     // numbers. float8 is exact well past any millisecond timestamp.
+    //
+    // The window count is computed over the whole match before LIMIT applies, so
+    // the total the caller reports costs no second query.
     `SELECT
         t.transaction_id, t.league_id, t.week,
         t.created::float8         AS created,
         t.status_updated::float8  AS status_updated,
-        t.roster_ids, t.adds, t.draft_picks, t.waiver_budget
+        t.roster_ids, t.adds, t.draft_picks, t.waiver_budget,
+        count(*) OVER ()          AS total
        FROM transactions t
        JOIN leagues l ON l.league_id = t.league_id
-       JOIN league_users lu
-         ON lu.league_id = t.league_id AND lu.user_id = $1
-      WHERE l.season = $2 AND t.type = 'trade' AND t.status = 'complete'
-      ORDER BY coalesce(t.status_updated, t.created) DESC NULLS LAST`,
-    [userId, season],
+      WHERE l.season = $1 AND t.type = 'trade' AND t.status = 'complete'
+      ORDER BY coalesce(t.status_updated, t.created) DESC NULLS LAST
+      LIMIT $2`,
+    [season, TRADES_READ_LIMIT],
   );
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return { trades: [], total: 0 };
 
   const owners = await rosterOwners([
     ...new Set(rows.map((r) => r.league_id)),
   ]);
 
-  return rows.map((row) =>
-    assembleTrade(row, owners.get(row.league_id) ?? EMPTY_OWNERS),
-  );
+  return {
+    trades: rows.map((row) =>
+      assembleTrade(row, owners.get(row.league_id) ?? EMPTY_OWNERS),
+    ),
+    total: Number(rows[0].total),
+  };
 }
 
 const EMPTY_OWNERS: ReadonlyMap<number, string> = new Map();

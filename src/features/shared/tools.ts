@@ -54,6 +54,15 @@ export type Tool = {
    * {@link toolHref}, which owns the URL-encoding.
    */
   hrefFor?: (username: string) => string;
+  /**
+   * Whether the tool answers anything with no account resolved. False for all
+   * but one, which is why the grid gates on the account at all: there is nothing
+   * behind "your leagues" without knowing whose. Trades is the exception — it
+   * reads every crawled league, so a username is a filter it offers rather than
+   * the question it asks — and a card the bar links to but the grid greys out is
+   * the drift this flag prevents.
+   */
+  accountless?: true;
 };
 
 export const tools: Tool[] = [
@@ -103,10 +112,11 @@ export const tools: Tool[] = [
     href: "/trades",
     text: "Trades",
     description:
-      "Read every trade in your leagues, by date, players, picks or manager.",
+      "Read every trade in every crawled league, by date, players, picks or manager.",
     group: "League tools",
     icon: "trades",
     pattern: "/trades",
+    accountless: true,
   },
   {
     href: "/lineupchecker",

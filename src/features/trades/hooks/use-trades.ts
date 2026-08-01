@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import type { ManagerLeague } from "@/shared/manager";
 import { errorMessage } from "@/shared/util";
 
 import { apiFetch, isAbortError } from "@/features/shared";
@@ -10,68 +9,51 @@ import type { TradesResult } from "../types";
 
 export type TradesState = {
   data: TradesResult | null;
-  /** True until the first answer for this account arrives. */
+  /** True until the first answer arrives. */
   loading: boolean;
   error: string | null;
 };
 
-/** An account with no leagues has no trades to ask about — a real answer. */
-const NO_TRADES: TradesResult = {
-  season: "",
-  trades: [],
-  players: {},
-  managers: {},
-};
-
 /**
- * Every completed trade in the account's leagues, from
- * `/api/user/[username]/trades`.
+ * Every completed trade in every crawled league, from `/api/trades`.
  *
- * Takes the leagues rather than a ready flag, for the reason the manager tool's
- * sub-resource hooks do: this route reads what the *leagues stream* wrote, so
- * each `result` that stream produces — including the second one a background
- * refresh sends — is exactly when the trades are worth re-reading, and the new
- * array identity is what re-runs the fetch. Null means the stream hasn't
- * answered yet; an empty list is an account with no leagues, and neither is
- * something to ask the route about.
+ * It takes a season and nothing else — unlike the manager tool's sub-resource
+ * hooks, which take the leagues array because they read what that stream wrote.
+ * This route is not scoped to an account at all, so there is nothing to wait for
+ * and the leagues it names come back with it.
  *
- * Loaded data is not blanked on a refetch — it is the same cache the page is
- * showing, and clearing several hundred trades to redraw them nearly unchanged
- * is worse than a moment of staleness. A changed *account* is the exception, and
- * it is handled by stamping the fetched result with the account it belongs to
- * rather than by clearing state in an effect: a result for someone else is
- * simply not this account's answer, so it reads as "not loaded yet" the render
- * the account changes, with no cascading state update to get there.
+ * Loaded data is not blanked on a refetch, the same rule those hooks keep: it is
+ * the list the page is showing, and clearing several hundred trades to redraw
+ * them nearly unchanged is worse than a moment of staleness. A changed *season*
+ * is the exception, and it is handled by stamping the result with the season it
+ * belongs to rather than by clearing state in an effect — a result for another
+ * season is simply not this one's answer, so it reads as "not loaded yet" the
+ * render the season changes, with no cascading state update to get there.
  */
-export function useTrades(
-  userId: string | null,
-  leagues: ManagerLeague[] | null,
-): TradesState {
+export function useTrades(season: string): TradesState {
   const [state, setState] = useState<{
-    userId: string;
+    season: string;
     data: TradesResult | null;
     error: string | null;
   } | null>(null);
 
   useEffect(() => {
-    if (!userId || !leagues || leagues.length === 0) return;
-
     let active = true;
     const controller = new AbortController();
 
     (async () => {
       try {
         const res = await apiFetch(
-          `/api/user/${encodeURIComponent(userId)}/trades`,
+          `/api/trades?season=${encodeURIComponent(season)}`,
           { signal: controller.signal, fallbackError: "Failed to load trades" },
         );
         const json = (await res.json()) as TradesResult;
-        if (active) setState({ userId, data: json, error: null });
+        if (active) setState({ season, data: json, error: null });
       } catch (err: unknown) {
         if (active && !isAbortError(err)) {
           setState((prev) => ({
-            userId,
-            data: prev?.userId === userId ? prev.data : null,
+            season,
+            data: prev?.season === season ? prev.data : null,
             error: errorMessage(err, "Something went wrong"),
           }));
         }
@@ -82,14 +64,9 @@ export function useTrades(
       active = false;
       controller.abort();
     };
-  }, [userId, leagues]);
+  }, [season]);
 
-  if (!userId) return { data: null, loading: false, error: null };
-  if (leagues?.length === 0) {
-    return { data: NO_TRADES, loading: false, error: null };
-  }
-
-  const mine = state?.userId === userId ? state : null;
+  const mine = state?.season === season ? state : null;
   return {
     data: mine?.data ?? null,
     loading: !mine,

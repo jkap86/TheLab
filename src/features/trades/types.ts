@@ -1,4 +1,4 @@
-import type { LeaguematePayload, ManagerTradesPayload } from "@/shared/contract";
+import type { LeaguematePayload, TradesPayload } from "@/shared/contract";
 import type { PlayerSummary } from "@/shared/players";
 import type { Trade, TradePickAsset, TradeSide } from "@/shared/trades";
 
@@ -7,7 +7,7 @@ import type { Trade, TradePickAsset, TradeSide } from "@/shared/trades";
  * types behind it, never a parallel declaration, so a route that changes what it
  * sends is a type error here rather than a runtime surprise.
  */
-export type TradesResult = ManagerTradesPayload;
+export type TradesResult = TradesPayload;
 
 /** A manager as a trade names them: id, display name, resolved avatar. */
 export type TradeManager = LeaguematePayload;

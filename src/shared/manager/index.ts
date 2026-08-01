@@ -17,6 +17,7 @@ export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
   getLeagueDetail,
   getLeagueTypes,
+  getLeaguesByIds,
   getManagerLeagueRosters,
   getManagerLeaguemates,
   getManagerLeagues,
