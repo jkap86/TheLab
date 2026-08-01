@@ -5,7 +5,8 @@ import { useWindowVirtualizer } from "@tanstack/react-virtual";
 
 import type { ManagerLeague } from "@/shared/manager";
 
-import type { PlayerSummary, Trade, TradeManager } from "../types";
+import type { TradeMetric } from "../trade-metrics";
+import type { KtcValue, PlayerSummary, Trade, TradeManager } from "../types";
 import { TradeCard } from "./trade-card";
 
 /** The gap between cards, in px — `gap-3`, which absolute layout can't apply. */
@@ -59,11 +60,16 @@ export function TradesList({
   leaguesById,
   players,
   managers,
+  metric,
+  ktc,
 }: {
   trades: readonly Trade[];
   leaguesById: ReadonlyMap<string, ManagerLeague>;
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
+  /** The metric every card's value column shows — one selection for the list. */
+  metric: TradeMetric;
+  ktc: Record<string, KtcValue>;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -147,6 +153,8 @@ export function TradesList({
               league={leaguesById.get(trade.league_id) ?? null}
               players={players}
               managers={managers}
+              metric={metric}
+              ktc={ktc}
             />
           </li>
         );

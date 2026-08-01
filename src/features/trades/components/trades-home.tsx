@@ -12,6 +12,7 @@ import {
   todayIso,
 } from "@/features/shared";
 import type { LeagueFilters } from "@/features/shared";
+import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import {
   DEFAULT_TRADE_FILTERS,
@@ -21,7 +22,9 @@ import {
 } from "../filters";
 import type { TradeFilters } from "../filters";
 import { useTrades } from "../hooks/use-trades";
+import { DEFAULT_TRADE_COLUMNS, TRADE_METRICS } from "../trade-metrics";
 import { TradeFiltersModal } from "./trade-filters-modal";
+import { TradeValuePicker } from "./trade-value";
 import { TradesList } from "./trades-list";
 
 /**
@@ -62,6 +65,18 @@ export function TradesHome({ season }: { season: string }) {
   const [tradeFilters, setTradeFilters] = useState<TradeFilters>(
     DEFAULT_TRADE_FILTERS,
   );
+
+  // The cards' value column, chosen once for the whole list and remembered on
+  // the device — the same mechanism the league and share lists use, at the grain
+  // of one side of one trade. One slot rather than their four: a trade card is
+  // already a table of the assets that make the number up.
+  const { columns, setColumn, reset } = usePersistedColumns(
+    "trade-side",
+    DEFAULT_TRADE_COLUMNS,
+    TRADE_METRICS,
+  );
+  const metric =
+    TRADE_METRICS.find((m) => m.key === columns[0]) ?? TRADE_METRICS[0];
 
   const leagues = useMemo(() => data?.leagues ?? [], [data]);
   const leaguesById = useMemo(
@@ -125,6 +140,12 @@ export function TradesHome({ season }: { season: string }) {
               ? "trades"
               : `of ${inLeagues.length} trades`}
           </p>
+          <TradeValuePicker
+            metrics={TRADE_METRICS}
+            metricKey={metric.key}
+            onChange={(key) => setColumn(0, key)}
+            onReset={reset}
+          />
           <LeagueFiltersModal
             filters={leagueFilters}
             onChange={setLeagueFilters}
@@ -181,6 +202,8 @@ export function TradesHome({ season }: { season: string }) {
             leaguesById={leaguesById}
             players={data?.players ?? {}}
             managers={data?.managers ?? {}}
+            metric={metric}
+            ktc={data?.ktc ?? {}}
           />
         </>
       )}

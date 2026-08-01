@@ -880,9 +880,9 @@ stops holding, a comment saying it does would not have caught it.
     while the rest is still arriving instead of holding a spinner until the last
     byte, and it says so while it is true (a count-up line that retires itself,
     where the old truncation note was permanent).
-  - **A chunk's three id maps are deltas, not snapshots.** Each carries only the
-    leagues, players and managers no earlier chunk did, so a player traded in ten
-    leagues crosses once for the whole stream. `features/trades/stream.ts` is that
+  - **A chunk's four id maps are deltas, not snapshots.** Each carries only the
+    leagues, players, managers and KTC prices no earlier chunk did, so a player
+    traded in ten leagues crosses once for the whole stream. `features/trades/stream.ts` is that
     merge, pure and tested; the hook is left with decoding and React state.
     Merging is the load-bearing half — replacing would leave every card from an
     earlier chunk unable to name its players, and worse the further you scroll.
@@ -904,6 +904,37 @@ stops holding, a comment saying it does would not have caught it.
   a streamed response, and the `no-transform` that keeps a proxy from buffering
   the stream also stops one compressing it. That header is right *once the body is
   encoded* and was silently costing 12MB when it wasn't.
+- **A trade card's header states the instant, and its sides each state one
+  value.** Two changes to what a card says, and each replaced something that read
+  as information and wasn't:
+  - **The clock time holds the slot the scoring week used to.** "Aug 1, 2026 ·
+    Wk 1" said *when* twice, the second time in a unit that is null for most of
+    the calendar — Sleeper files an offseason trade under no week at all. Trades
+    come in flurries, so which of an afternoon's five deals landed first is the
+    question the date alone couldn't answer, and that is what the time is for.
+    It is read in the **reader's own zone** — the `todayIso` side of the
+    two-todays rule, since this is a wall-clock reading of a moment rather than
+    a claim about what the NFL has played — and still spelled by hand rather
+    than through `toLocaleTimeString`, so the punctuation matches the date it
+    follows.
+  - **The value column is the league cards' pickable stat column at this page's
+    grain** (`trade-metrics`, and `usePersistedColumns("trade-side", …)`). It is
+    **one** slot rather than their four: a trade card is already a table of the
+    assets the number sums, so more columns would be reading the card twice. The
+    selection is list-wide, so the control is a chip in the header beside the
+    two filter triggers and never on a card — forty thousand cards each holding
+    a menu is that mistake at its most literal. What it deliberately isn't is
+    the manager tool's heading rail: that works because every card puts its
+    numbers at one x, where a trade's value belongs to a *side* and the sides
+    stack or split by width and count, so the number wears its own label.
+  - **KTC's two boards both travel on the stream, and the card picks one.** The
+    board is a fact about the *league* a trade happened in and this stream spans
+    every crawled league, so a chunk sends `{sf, oneqb}` per player and the card
+    reads `isSuperflexLineup(league.roster_positions)` — the same predicate
+    `/api/adp` groups a draft with. An unpriced haul is an em dash and never a
+    zero (KTC's board is ~500 dynasty skill players deep and carries no picks at
+    all), and a partly-priced one says how much of itself it priced, the same
+    habit as `priced` of `rostered`.
 - **Trades made before a league's startup draft ended are not on that board, and
   they are excluded in SQL rather than hidden on the client.** A startup fills
   empty rosters from the whole pool, so everything traded up to its last pick is
@@ -1653,16 +1684,25 @@ stops holding, a comment saying it does would not have caught it.
   the module keeps the pure-and-tested bar its neighbours `shares` and `filters`
   hold: everything from `./types` arrives as an erased `import type`, so the
   accessors test without a fetch (`league-metrics.test.ts`).
-- **There are four metric catalogues, one per grain, and that is the axis they
+- **There are five metric catalogues, one per grain, and that is the axis they
   divide on — not the screen they appear on.** `ColumnPicker` and `MetricColumn`
   are the shared controls; what differs is what a row *is*:
 
   | Module | Grain | Where |
   | --- | --- | --- |
-  | `league-metrics` | one league | collapsed card |
-  | `standings-metrics` | one team | expanded panel's standings |
-  | `roster-metrics` | one player | expanded panel's roster list |
-  | `share-metrics` | one subject held across several leagues | players and leaguemates cards |
+  | `manager/league-metrics` | one league | collapsed card |
+  | `manager/standings-metrics` | one team | expanded panel's standings |
+  | `manager/roster-metrics` | one player | expanded panel's roster list |
+  | `manager/share-metrics` | one subject held across several leagues | players and leaguemates cards |
+  | `trades/trade-metrics` | one side of one trade | trade card |
+
+  The fifth is the first outside the manager tool, which is what moved the
+  vocabulary they all speak — `Metric<C>`, `MetricCell`, `metricPreview` — to
+  `features/shared/metric-cell.ts`, with `features/manager/metric-cell.ts`
+  re-exporting it under the usual mover's rule. A trade's grain is a **side**
+  and nothing coarser: the sides are the same assets counted twice, so a trade
+  as a whole has no value worth printing, while "which side got more" is one
+  number per side.
 
   Put a metric where its subject lives, not where you happen to want to see it.
   KTC and ADP appear in most of them and mean something different each time — a
@@ -1673,7 +1713,7 @@ stops holding, a comment saying it does would not have caught it.
   cells, because only the collapsed card places a league against its peers; the
   standings and roster panels are already ranked lists, so their columns are plain
   values and a rank in them would be a second ordering competing with the rows.
-  All four hold the same pure-and-tested bar, and all four are *client* modules
+  All five hold the same pure-and-tested bar, and all are *client* modules
   under `features/` — they format for display, so they belong beside the
   components, and their `./format.ts` import is relative with an explicit
   extension for the usual test-runner reason.

@@ -16,10 +16,11 @@ import type { TradesResult } from "./types";
  *
  * - The trades **append**. They arrive newest-first and stay in that order, so a
  *   chunk goes on the end.
- * - The three id maps **merge**. Each chunk carries only the leagues, players and
- *   managers no earlier chunk did, so replacing them would leave every card from
- *   an earlier chunk unable to name its own players — and the effect grows the
- *   further you scroll, which is exactly where it wouldn't be noticed.
+ * - The four id maps **merge**. Each chunk carries only the leagues, players,
+ *   managers and KTC prices no earlier chunk did, so replacing them would leave
+ *   every card from an earlier chunk unable to name its own players — and the
+ *   effect grows the further you scroll, which is exactly where it wouldn't be
+ *   noticed.
  * - A half that gained nothing keeps its **identity**. Most chunks late in a
  *   season name no new league or player at all, and the page memoises on these,
  *   so rebuilding them anyway would re-run every filter pass for no change.
@@ -56,6 +57,7 @@ export function applyTradesMessage(
           leagues: [],
           players: {},
           managers: {},
+          ktc: {},
         },
       };
 
@@ -66,7 +68,8 @@ export function applyTradesMessage(
         message.trades.length === 0 &&
         message.leagues.length === 0 &&
         Object.keys(message.players).length === 0 &&
-        Object.keys(message.managers).length === 0
+        Object.keys(message.managers).length === 0 &&
+        Object.keys(message.ktc).length === 0
       ) {
         return state;
       }
@@ -86,6 +89,9 @@ export function applyTradesMessage(
           managers: Object.keys(message.managers).length
             ? { ...data.managers, ...message.managers }
             : data.managers,
+          ktc: Object.keys(message.ktc).length
+            ? { ...data.ktc, ...message.ktc }
+            : data.ktc,
         },
       };
     }
