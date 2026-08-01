@@ -327,12 +327,17 @@ function HeaderReadout({ season, pct }: { season: string; pct: number | null }) 
  * A live countdown to the season's opening kickoff, drawn as a segment readout:
  * one milled well per unit, seconds lit, units labelled under their digits.
  *
- * It is laid out as a block of cells rather than a row of them because it sits
- * in the dial's square slot — four cells in a line would be half the plate's
- * width, where two rows of two occupy exactly the footprint the dial gives back.
- * A cell is a fixed share of that block and its digits are padded
- * ({@link countdownSegments}), so the readout ticks in place; the block reflows
- * only when a unit empties for good.
+ * The cells are one row, never two. Wrapped into a 2×2 block they read as four
+ * separate numbers rather than as one clock — the units run largest to smallest,
+ * which is a left-to-right sentence, and breaking it after the hours puts the
+ * minutes under the days. So the row sizes to its own contents (`w-fit`) and the
+ * name beside it truncates instead, the same trade the plate already makes for
+ * its corner tabs. It keeps the dial's *height* rather than its square, since the
+ * two share the slot and the plate must not change height when the season turns
+ * over.
+ *
+ * A cell's digits are padded ({@link countdownSegments}), so the readout ticks in
+ * place; the row narrows only when a unit empties for good.
  *
  * The cells are decoration to a screen reader — the digits are split across four
  * elements and would be read as four numbers — so the group carries
@@ -344,17 +349,17 @@ function KickoffCountdown({ msLeft }: { msLeft: number }) {
 
   return (
     <div
-      className="grid h-[68px] w-[78px] flex-none content-center gap-1 sm:h-[78px] sm:w-[88px]"
+      className="grid h-[68px] w-fit flex-none content-center gap-1 sm:h-[78px]"
       aria-label={`Kickoff in ${formatCountdown(msLeft)}`}
     >
       <span className="text-center text-[8px] font-bold uppercase leading-none tracking-[0.12em] text-active/55 sm:text-[9px]">
         Kickoff in
       </span>
-      <span aria-hidden="true" className="grid grid-cols-2 gap-0.5">
+      <span aria-hidden="true" className="flex gap-0.5">
         {segments.map((segment, index) => (
           <span
             key={segment.unit}
-            className="lab-well rounded-[4px] px-0.5 pb-0.5 pt-[2px] text-center"
+            className="lab-well flex-none rounded-[4px] px-1 pb-0.5 pt-[2px] text-center"
           >
             <span
               className={`block font-mono text-[12px] font-bold leading-[1.05] tabular-nums sm:text-[13px] ${
