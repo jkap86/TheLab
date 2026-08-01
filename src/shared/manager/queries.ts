@@ -139,6 +139,14 @@ const FIELDED_A_TEAM_SQL = `(
  * record and each league's settings/scoring. Assumes {@link syncManagerLeagues}
  * has run. The `league_users` join also scopes results to the manager's leagues,
  * and {@link FIELDED_A_TEAM_SQL} narrows that to the ones they actually played.
+ *
+ * **Ordered as Sleeper listed them**, from `manager_league_order` — the order a
+ * manager already reads their leagues in on Sleeper itself, and the only one
+ * that carries any of their own arrangement. Alphabetical is the fallback rather
+ * than the rule: a league discovered by the crawler and never yet enumerated for
+ * *this* manager has no position, and sorting those to the end by name keeps a
+ * page rendered before the first manager-driven sync in a stable order instead
+ * of Postgres' own.
  */
 export async function getManagerLeagues(
   userId: string,
@@ -156,9 +164,11 @@ export async function getManagerLeagues(
        ON lu.league_id = l.league_id AND lu.user_id = $1
      LEFT JOIN rosters mr
        ON mr.league_id = l.league_id AND mr.owner_id = $1
+     LEFT JOIN manager_league_order mo
+       ON mo.league_id = l.league_id AND mo.user_id = $1 AND mo.season = $2
      WHERE l.season = $2
        AND ${FIELDED_A_TEAM_SQL}
-     ORDER BY l.name`,
+     ORDER BY mo.position ASC NULLS LAST, l.name`,
     [userId, season],
   );
 

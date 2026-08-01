@@ -125,6 +125,45 @@ export function persistLeagueGraph(g: LeagueGraph): Promise<void> {
 }
 
 /**
+ * Store the order Sleeper listed a manager's leagues in, replacing what was
+ * stored for that (manager, season).
+ *
+ * Only the manager's own sync calls this, because it is the only place that
+ * enumeration happens for a known manager — the crawler reaches a league from
+ * whichever member came up in its queue, which says nothing about where that
+ * league sits in anyone's list.
+ *
+ * The wipe is guarded on a non-empty fetch, the same rule the projections
+ * refresh follows: Sleeper answers 200-with-null (→ `[]`) for a user it can't
+ * resolve, and an ordering dropped on that hiccup would silently re-sort every
+ * league on screen. Leaving a stale row costs nothing — it only orders a league
+ * the manager still belongs to.
+ */
+export function replaceManagerLeagueOrder(
+  userId: string,
+  season: string,
+  leagueIds: readonly string[],
+): Promise<void> {
+  if (leagueIds.length === 0) return Promise.resolve();
+  // Deduplicated by first mention: the primary key is (manager, season, league),
+  // so a league Sleeper listed twice would fail the whole sync over a position
+  // nobody can tell apart.
+  const ordered = [...new Set(leagueIds)];
+  return withTransaction(async (client) => {
+    await client.query(
+      `DELETE FROM manager_league_order WHERE user_id = $1 AND season = $2`,
+      [userId, season],
+    );
+    await bulkInsert(client, {
+      table: "manager_league_order",
+      columns: ["user_id", "season", "league_id", "position"],
+      rows: ordered.map((leagueId, position) => ({ leagueId, position })),
+      values: (r) => [userId, season, r.leagueId, r.position],
+    });
+  });
+}
+
+/**
  * Highest transaction week already stored per league, for the given league ids.
  * Leagues with no transactions yet are absent from the map (→ full backfill).
  */
