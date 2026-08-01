@@ -19,9 +19,46 @@ export const TRADES_READ_LIMIT = 2000;
 export type TradesRead = {
   /** Newest first, at most {@link TRADES_READ_LIMIT} of them. */
   trades: Trade[];
-  /** How many the season actually holds, before the limit. */
+  /**
+   * How many the season actually holds, before the limit — counted over the
+   * same population the rows come from, so startup-draft trades are outside it
+   * on both sides. This is the board's population, not a truncation of a bigger
+   * one: {@link TRADES_READ_LIMIT} is what truncates, and what it truncates is
+   * already this.
+   */
   total: number;
 };
+
+/**
+ * The instant a league's *first* draft last picked, for leagues that have no
+ * previous season — the end of the startup, and the boundary
+ * {@link getAllTrades} drops trades before.
+ *
+ * Three decisions are packed into this, and each one is a way of getting it
+ * wrong:
+ *
+ * - **The first draft, not the latest.** An inaugural dynasty league can run a
+ *   rookie draft after its startup in the same league year, and taking the later
+ *   draft's last pick would hide months of real trades between the two. Ordering
+ *   by `start_time` with nulls last picks the startup and leaves an undated stray
+ *   draft as the fallback rather than the answer.
+ * - **No previous league is what makes a draft a startup.** A continuing dynasty
+ *   league's draft is a rookie draft — additive to rosters that already exist —
+ *   so it bounds nothing and the league is simply absent here. Sleeper spells the
+ *   empty case as null, `''` and `'0'` depending on vintage, so all three read as
+ *   "no previous season".
+ * - **Null `last_picked` yields no row, so it excludes nothing.** A draft nobody
+ *   has picked in, or one stored before the column existed, leaves the league
+ *   with every trade it had. Inventing a boundary from `start_time` alone would
+ *   hide trades on the strength of a draft that may never have happened.
+ */
+const STARTUP_END_SQL = `
+  SELECT DISTINCT ON (d.league_id) d.league_id, d.last_picked
+    FROM drafts d
+    JOIN leagues l ON l.league_id = d.league_id
+   WHERE l.season = $1
+     AND coalesce(l.previous_league_id, '') IN ('', '0')
+   ORDER BY d.league_id, d.start_time ASC NULLS LAST, d.draft_id`;
 
 /**
  * Every completed trade in every crawled league for a season, newest first.
@@ -36,6 +73,19 @@ export type TradesRead = {
  * Pending and vetoed trades are left out. `status = 'complete'` is Sleeper's
  * marker for one that actually went through, and a proposal that never happened
  * would read on the page as a move that did.
+ *
+ * **Trades made before a league's startup draft finished are left out too**, on
+ * the boundary {@link STARTUP_END_SQL} resolves. A startup fills empty rosters
+ * from the whole player pool, so everything traded up to its last pick is draft
+ * position changing hands — a room full of pick swaps, dozens in a day in one
+ * league — and none of it is the market this board is about. Excluding them here
+ * rather than on the client is what makes {@link TRADES_READ_LIMIT} worth having:
+ * the read is newest-first, so hiding them downstream would still let them spend
+ * the budget and push real trades off the end of the season.
+ *
+ * A league whose first draft has no stored `last_picked` keeps every trade, so
+ * this is inert until the crawler has re-visited a league since the column was
+ * added rather than wrong in the meantime.
  */
 export async function getAllTrades(season: string): Promise<TradesRead> {
   const { rows } = await pool.query<TradeRow & { total: string }>(
@@ -45,7 +95,8 @@ export async function getAllTrades(season: string): Promise<TradesRead> {
     //
     // The window count is computed over the whole match before LIMIT applies, so
     // the total the caller reports costs no second query.
-    `SELECT
+    `WITH startup_end AS (${STARTUP_END_SQL})
+      SELECT
         t.transaction_id, t.league_id, t.week,
         t.created::float8         AS created,
         t.status_updated::float8  AS status_updated,
@@ -53,7 +104,21 @@ export async function getAllTrades(season: string): Promise<TradesRead> {
         count(*) OVER ()          AS total
        FROM transactions t
        JOIN leagues l ON l.league_id = t.league_id
+       -- Gated on the join rather than in the WHERE so a league with no startup
+       -- boundary — a continuing dynasty, or a first draft Sleeper never dated —
+       -- simply fails to match and keeps all of its trades. Comparing above zero
+       -- reads a zero as the absent value Sleeper means by it, not as 1970.
+       LEFT JOIN startup_end se
+              ON se.league_id = t.league_id AND se.last_picked > 0
       WHERE l.season = $1 AND t.type = 'trade' AND t.status = 'complete'
+        AND (se.league_id IS NULL
+             -- Spelled out rather than left to NULL propagation, because the
+             -- undated case is a decision and not a side effect: a trade Sleeper
+             -- filed with no timestamp has no honest side of this boundary, so a
+             -- league that has one drops it — the same rule the date filters and
+             -- /api/adp follow for an undated draft.
+             OR (coalesce(t.status_updated, t.created) IS NOT NULL
+                 AND coalesce(t.status_updated, t.created) > se.last_picked))
       ORDER BY coalesce(t.status_updated, t.created) DESC NULLS LAST
       LIMIT $2`,
     [season, TRADES_READ_LIMIT],

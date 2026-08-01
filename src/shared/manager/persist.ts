@@ -77,11 +77,16 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
     table: "drafts",
     columns: [
       "draft_id", "league_id", "season", "status", "type", "start_time",
-      "draft_order", "settings", "metadata",
+      "last_picked", "draft_order", "settings", "metadata",
     ],
     rows: g.drafts,
     values: (d) => [
       d.draft_id, l.league_id, d.season, d.status, d.type, d.start_time,
+      // Coalesced because Sleeper's draft shape is not versioned: a build that
+      // stopped sending `last_picked` must store null (no cutoff, every trade
+      // kept) rather than `undefined`, which bulkInsert would bind as a
+      // parameter the column can't take.
+      d.last_picked ?? null,
       j(d.draft_order), j(d.settings), j(d.metadata),
     ],
   });

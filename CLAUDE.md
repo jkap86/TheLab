@@ -653,6 +653,29 @@ stops holding, a comment saying it does would not have caught it.
   one portfolio is volume, so the read is capped at `TRADES_READ_LIMIT`, newest
   first, and the payload carries the season's real `total` beside it — a
   truncated board says how much it is showing rather than passing as the market.
+- **Trades made before a league's startup draft ended are not on that board, and
+  they are excluded in SQL rather than hidden on the client.** A startup fills
+  empty rosters from the whole pool, so everything traded up to its last pick is
+  draft position changing hands — dozens in a day in one room — and that is not
+  the market the page is about. The boundary is the league's *first* draft's
+  `last_picked`, for a league with no `previous_league_id`; each half of that is
+  load-bearing. An inaugural league can run a rookie draft after its startup in
+  the same year, so the bound comes from the earlier draft or months of real
+  trades between the two vanish. A continuing dynasty's draft is additive to
+  rosters that already exist, so it bounds nothing. And **a null `last_picked`
+  excludes nothing** — a draft nobody has picked in, or one stored before the
+  column existed, keeps every trade rather than being hidden behind a boundary
+  invented from `start_time`, which is what makes this inert until the crawler
+  has re-visited a league instead of wrong in the meantime.
+  Doing it in the read is the point rather than an implementation detail: the
+  query is newest-first under `TRADES_READ_LIMIT`, so trades filtered downstream
+  would still spend that budget and push real ones off the end of the season.
+  `total` is counted over the same population, so the board's stated size means
+  "trades worth reading" — this redefines the population, where the limit above
+  truncates it. The one trade that goes with that: a trade Sleeper filed with no
+  timestamp is dropped *in a league that has a boundary*, since there is no
+  honest side of it to put the trade on — the same rule the date filters and
+  `/api/adp` follow for an undated draft.
 - **The three manager tabs are one scaffold, `LeaguesViewLayout`, over one hook,
   `useFilteredLeagues`.** Leagues, players and leaguemates were line-for-line
   copies of the same chrome — wide shell, cold-load state, header and count line,
@@ -1624,6 +1647,13 @@ stops holding, a comment saying it does would not have caught it.
     midnight so the named day is included whole.
 - **A draft's `pick_no` is not always a draft position.** In auction drafts it
   is nomination order, which is why `/api/adp` excludes them by default.
+- **When a draft *ended* is only knowable from `last_picked`.** It rides at the
+  top level of Sleeper's draft object (not inside `metadata` or `settings`), and
+  `draft_picks` carries no timestamp of its own, so nothing else in the graph can
+  close the window `start_time` opens. On a complete draft it is the end; on one
+  still running it is the running edge, which is the same question asked of a
+  moving target and is why the trades board needs no `status` test. It is absent
+  for a draft nobody has picked in — read the null as "unknown", never as a date.
 - **A placeholder pick's number is its place in the kicker sequence, not its
   draft slot.** Leagues trading next year's rookie picks during a startup draft
   can't draft players who aren't in Sleeper's pool yet, so they draft kickers as

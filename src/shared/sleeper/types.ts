@@ -69,6 +69,14 @@ export type SleeperDraft = {
   status: string;
   type: string;
   start_time: number | null;
+  /**
+   * When the most recent pick was made, epoch milliseconds — the draft's end
+   * once `status` is `complete`, and the running edge before that. Sleeper sends
+   * it at the top level rather than inside `metadata`, and omits it for a draft
+   * nobody has picked in, so it is nullable and a reader must treat the null as
+   * "unknown" rather than as a date.
+   */
+  last_picked: number | null;
   draft_order: Record<string, number> | null;
   settings: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
