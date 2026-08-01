@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   type ActiveFilter,
@@ -71,8 +71,23 @@ export function LeagueFiltersModal({
   leagues: readonly ManagerLeague[];
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const troughRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(filters);
   const active = activeFilterCount(filters);
+
+  /**
+   * Which segment row has its options open, if any — one at a time.
+   *
+   * The options float over the panel rather than expanding into it: pushing the
+   * rule bays down as a row opens is what made them hard to find in the first
+   * place, so a row that opens must not move the thing underneath it.
+   */
+  const [openGroup, setOpenGroup] = useState<SegmentKey | null>(null);
+  const closeGroup = useCallback(() => setOpenGroup(null), []);
+  const toggleGroup = useCallback(
+    (key: SegmentKey) => setOpenGroup((current) => (current === key ? null : key)),
+    [],
+  );
 
   // Seeding on open rather than syncing the applied filters into the draft with
   // an effect: while the dialog is up it holds the focus and the page behind it
@@ -80,8 +95,21 @@ export function LeagueFiltersModal({
   // two can disagree is the moment it opens.
   const open = useCallback(() => {
     setDraft(filters);
+    setOpenGroup(null);
     ref.current?.showModal();
   }, [filters]);
+
+  // A press anywhere outside the trough dismisses an open row. Pointer-down
+  // rather than click, so dragging out of the popover doesn't leave it up, and
+  // on the dialog itself rather than the document — the page behind is inert.
+  useEffect(() => {
+    if (!openGroup) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!troughRef.current?.contains(event.target as Node)) setOpenGroup(null);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [openGroup]);
 
   const apply = useCallback(() => {
     onChange(draft);
@@ -130,6 +158,14 @@ export function LeagueFiltersModal({
         onClick={(event) => {
           if (event.target === ref.current) ref.current?.close();
         }}
+        // Escape closes the innermost thing that is up: an open segment row
+        // first, the dialog only once nothing is floating over it. The platform
+        // fires `cancel` before it closes, which is the one hook for that.
+        onCancel={(event) => {
+          if (!openGroup) return;
+          event.preventDefault();
+          setOpenGroup(null);
+        }}
         className="m-auto w-[min(1040px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
       >
         <div
@@ -168,36 +204,47 @@ export function LeagueFiltersModal({
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_15rem]">
               <div className="flex min-w-0 flex-col gap-4">
                 {/*
-                  One trough for the three fixed segments, laid out as a
-                  label-and-keys grid so all three labels sit in one column. Each
-                  option is a raised key in a recessed slot — the app bar's
-                  material, and the reason the selected one can simply be the
-                  cyan face rather than needing a border to say so.
+                  One trough for the three fixed segments, as three collapsed
+                  rows. `relative z-10` is what lets an open row's options paint
+                  over the rule bays below it — a later sibling would otherwise
+                  win, whatever the popover's own z-index.
                 */}
-                <div className="lab-well grid grid-cols-1 gap-x-3 gap-y-2 rounded-xl px-4 py-3.5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
-                  <SegmentGroup
+                <div
+                  ref={troughRef}
+                  className="lab-well relative z-10 flex flex-col gap-0.5 rounded-xl p-1.5"
+                >
+                  <SegmentRow
                     label="Status"
                     options={STATUS_OPTIONS}
                     value={draft.status}
                     leagues={leagues}
                     probe={(value) => ({ ...draft, status: value })}
                     onPick={(status) => setDraft({ ...draft, status })}
+                    open={openGroup === "status"}
+                    onToggle={() => toggleGroup("status")}
+                    onClose={closeGroup}
                   />
-                  <SegmentGroup
+                  <SegmentRow
                     label="Type"
                     options={TYPE_OPTIONS}
                     value={draft.type}
                     leagues={leagues}
                     probe={(value) => ({ ...draft, type: value })}
                     onPick={(type) => setDraft({ ...draft, type })}
+                    open={openGroup === "type"}
+                    onToggle={() => toggleGroup("type")}
+                    onClose={closeGroup}
                   />
-                  <SegmentGroup
+                  <SegmentRow
                     label="Format"
                     options={BEST_BALL_OPTIONS}
                     value={draft.bestBall}
                     leagues={leagues}
                     probe={(value) => ({ ...draft, bestBall: value })}
                     onPick={(bestBall) => setDraft({ ...draft, bestBall })}
+                    open={openGroup === "format"}
+                    onToggle={() => toggleGroup("format")}
+                    onClose={closeGroup}
                   />
                 </div>
 
@@ -293,28 +340,44 @@ export function LeagueFiltersModal({
 const CAPTION =
   "font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40";
 
+/** Which of the three fixed filters a row edits — the open-state's identity. */
+type SegmentKey = "status" | "type" | "format";
+
 /**
- * One fixed filter's options, each labelled with how many leagues it would leave.
+ * One fixed filter, as a collapsed row whose options open over the panel.
+ *
+ * The three groups used to be three captions and thirteen keys, permanently on
+ * screen. At the width that matters — a phone, where the trough's grid drops to
+ * one column and every caption takes a row of its own — that was ~290px of a
+ * 700px screen spent on what is usually one selection, and the rule bays, which
+ * are the part of the dialog that can't be asked any other way, fell below the
+ * fold. Collapsed, the same three filters are three lines: the caption, the
+ * selection stated in the words the trigger and the header already use, and the
+ * count behind it.
+ *
+ * **The options float; they do not expand into the layout.** A row that pushed
+ * the rule bays further down as it opened would be reintroducing the problem one
+ * group at a time — and the reader who opens Status is looking at Status, so the
+ * panel is free to cover what is underneath it. It is a raised face over the
+ * recessed trough, which is the same material grammar as everything else here:
+ * the thing you are working in sits above the thing you are working on.
  *
  * The count is what makes the dialog worth the click over the old bar: it is the
  * answer to "is it worth narrowing to this" before the list moves. It's probed
  * against the rest of the *draft*, so the numbers describe the selection being
- * built rather than each filter in isolation.
- *
- * It renders a fragment of two cells rather than a box of its own, so the three
- * groups share the trough's grid and their labels line up in one column — the
- * label-above-keys stack this replaced spent a row per group on a caption. Below
- * `sm` the grid is one column and the labels *do* sit above their keys: in a
- * gutter beside three wrapped rows of chips, a centred caption floats halfway
- * down the block it names.
+ * built rather than each filter in isolation — which is why the collapsed row
+ * can carry the current option's count without computing anything of its own.
  */
-function SegmentGroup<T extends string>({
+function SegmentRow<T extends string>({
   label,
   options,
   value,
   leagues,
   probe,
   onPick,
+  open,
+  onToggle,
+  onClose,
 }: {
   label: string;
   options: { value: T; label: string }[];
@@ -322,6 +385,9 @@ function SegmentGroup<T extends string>({
   leagues: readonly ManagerLeague[];
   probe: (value: T) => LeagueFilters;
   onPick: (value: T) => void;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
 }) {
   const counts = useMemo(
     () =>
@@ -334,37 +400,112 @@ function SegmentGroup<T extends string>({
     [options, leagues, probe],
   );
 
+  const selectedIndex = Math.max(
+    0,
+    options.findIndex((option) => option.value === value),
+  );
+  const selected = options[selectedIndex];
+  // The unnarrowed option is the first in every one of these tables, and it is
+  // the default the reset returns to — so "is this row narrowing anything" is
+  // the same question as "is this not the first option".
+  const narrowed = value !== options[0]?.value;
+
   return (
-    <>
-      <span className={CAPTION}>{label}</span>
-      <div className="flex flex-wrap gap-1.5">
-        {options.map((option, i) => {
-          const selected = option.value === value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onPick(option.value)}
-              className={`inline-flex items-baseline gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-bold ${
-                selected
-                  ? "lab-chip-on"
-                  : "lab-chip text-foreground/70 hover:text-foreground"
-              }`}
-            >
-              {option.label}
-              <span
-                className={`font-mono text-[10px] tabular-nums ${
-                  selected ? "text-[#052029]/60" : "text-foreground/35"
-                }`}
-              >
-                {counts[i]}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </>
+    <div className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={onToggle}
+        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+          open ? "bg-foreground/[0.07]" : "hover:bg-foreground/5"
+        }`}
+      >
+        <span className={CAPTION}>{label}</span>
+        <span
+          className={`ml-auto truncate text-[13px] font-bold ${
+            narrowed ? "text-active" : "text-foreground/80"
+          }`}
+        >
+          {selected?.label}
+        </span>
+        <span className="font-mono text-[10px] tabular-nums text-foreground/35">
+          {counts[selectedIndex]}
+        </span>
+        <Caret open={open} />
+      </button>
+
+      {open && (
+        <div
+          // `top-full` rather than a computed offset: the panel hangs off the
+          // row it belongs to, and the trough is at the top of a scroll box tall
+          // enough to hold it.
+          className="filters-segment-pop absolute inset-x-0 top-full z-20 mt-1 rounded-xl border border-active/25 bg-gradient-to-b from-[#1b3040] to-[#0d1c27] p-2 shadow-[0_24px_50px_-20px_rgba(0,0,0,0.95),0_0_36px_-16px_rgba(0,255,229,0.35)]"
+          style={{ animation: "dialog-rise 0.14s cubic-bezier(0.2,0.9,0.3,1)" }}
+        >
+          <div className="flex flex-wrap gap-1.5">
+            {options.map((option, i) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={isSelected}
+                  // Picking is the row's whole job, so it closes behind you —
+                  // one selection per group means there is nothing left to do
+                  // in an open panel.
+                  onClick={() => {
+                    onPick(option.value);
+                    onClose();
+                  }}
+                  className={`inline-flex items-baseline gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-bold ${
+                    isSelected
+                      ? "lab-chip-on"
+                      : "lab-chip text-foreground/70 hover:text-foreground"
+                  }`}
+                >
+                  {option.label}
+                  <span
+                    className={`font-mono text-[10px] tabular-nums ${
+                      isSelected ? "text-[#052029]/60" : "text-foreground/35"
+                    }`}
+                  >
+                    {counts[i]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The row's disclosure mark, pointing down closed and up open.
+ *
+ * A rotation rather than two glyphs, so the mark a reader is looking at is the
+ * one that moves.
+ */
+function Caret({ open }: { open: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 12 12"
+      className={`h-3 w-3 shrink-0 text-foreground/40 transition-transform duration-150 ${
+        open ? "-rotate-180" : ""
+      }`}
+    >
+      <path
+        d="M3 4.5 6 8l3-3.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

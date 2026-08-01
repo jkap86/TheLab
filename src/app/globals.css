@@ -436,6 +436,7 @@ body {
   .flask-loader *,
   .lab-anim,
   .filters-dialog-panel,
+  .filters-segment-pop,
   .tools-menu-panel {
     animation: none !important;
   }

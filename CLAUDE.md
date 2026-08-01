@@ -1178,7 +1178,24 @@ stops holding, a comment saying it does would not have caught it.
   want to reach the control that asks it, and the feature read as missing. The
   segments are facts about a league and compress into one trough; the rule lists
   sit side by side under it as equal bays, which on a laptop puts every rule and
-  both quick-add trays on screen at once. Four things worth keeping:
+  both quick-add trays on screen at once. Five things worth keeping:
+  - **A segment group is a collapsed row, and its options float over the panel
+    rather than expanding into it.** Three captions and thirteen keys on screen
+    at all times was ~290px of a 700px phone spent on what is usually one
+    selection — the same crowding the bay layout was fixing, one layer in — so a
+    row now states its own selection (in the words the trigger and the header
+    already use, cyan when it narrows) with the count behind it, and opens on
+    press. The float is the load-bearing half: a row that pushed the rule bays
+    down as it opened would reintroduce the original problem one group at a time.
+    It is a raised face over the recessed trough, which is the material grammar
+    everywhere else here — the thing you are working *in* sits above the thing
+    you are working *on* — and the trough carries `relative z-10` for it, since a
+    later sibling would otherwise paint over the panel whatever its own z-index.
+    Three behaviours go with a floating control and all three are the platform's
+    everywhere else: one row open at a time, a press outside dismisses it, and
+    **Escape closes the innermost thing that is up** — the dialog's own `cancel`
+    is preventDefaulted while a row is open, or one keypress would take the whole
+    dialog with it.
   - **The rail is beside the controls, not under them.** The match count was a
     line of footer text next to Apply, and it is the number the whole dialog
     exists to move — it changes while you edit, and a number you have to scroll
