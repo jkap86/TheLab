@@ -1862,8 +1862,16 @@ stops holding, a comment saying it does would not have caught it.
   `standings` is a Manager column, so it uses the username: a team name is a
   nickname someone picked for one league and changes at will, so labelling by it
   makes the same opponent read as a different person in every league they're in.
-  The team name isn't dropped, it's demoted — it stays on the row's hover and the
-  roster panel beside it still leads with it. Pass the same string to
+  The team name isn't dropped, it's demoted — it stays on the row's hover, which
+  is now the only place it is written. The roster panel beside it used to lead
+  with a plate naming the selected team (avatar, team name, record, points for),
+  and that plate said what the highlighted row a few pixels to its left already
+  says — at the cost of ~64px of a half that is ~155px wide on a phone, before a
+  single player was listed. **A panel driven by a selection should not restate the
+  selection**; the same reasoning took the `Optimal <total>` chip under it, which
+  is the number the standings are ranked on and states in the column beside it.
+  What is left in that summary is what the table can't say: the points on the
+  bench and who to move. Pass the same string to
   `TeamAvatar`'s `label` so its fallback initial matches the name shown next to it.
 - **Rows in that panel give the name its own line.** Both lists inside it —
   `standings` and `roster-detail` — put the team or player name alone on the first

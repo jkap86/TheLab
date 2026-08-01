@@ -50,6 +50,12 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
  * that goes rather than the first because the reader's leading choice is the one
  * they aimed first, and both are still there the moment there is width for them.
  *
+ * Both halves of the panel carry the same inset and the same column gutter at each
+ * tier (8px / 12px), so the table and the roster beside it read as one instrument
+ * rather than two that happen to be adjacent. The gutter is what was actually
+ * short on a phone: at 4px the record and the value beside it (`0-0 · 0.00 PF`
+ * against `2,399.87`) touched, which reads as one run of digits.
+ *
  * That still left the second line over-subscribed once a season is under way, so
  * the points-for sheds too — and it sheds *twice*, which is the part worth
  * reading before simplifying it to one breakpoint. Preseason hid the problem:
@@ -124,7 +130,7 @@ export function Standings({
       } ${elevated ? "z-30" : ""}`}
     >
       <div
-        className={`grid ${grid} items-center gap-x-1 rounded-t-lg border-b border-foreground/10 bg-foreground/[0.03] px-1.5 py-2 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:gap-x-2 @lg:px-3 @lg:text-xs`}
+        className={`grid ${grid} items-center gap-x-2 rounded-t-lg border-b border-foreground/10 bg-foreground/[0.03] px-2 py-2 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:px-3 @lg:text-xs`}
       >
         <span className="text-center">#</span>
         <span className="truncate">Manager</span>
@@ -166,7 +172,7 @@ export function Standings({
         // The horizon travels with the number, as it does on the roster panel:
         // "rest of season" is however many weeks are actually stored, and a total
         // over three weeks next to one over eighteen is a different claim.
-        <p className="rounded-b-lg border-t border-foreground/10 px-1.5 py-1.5 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-3">
+        <p className="rounded-b-lg border-t border-foreground/10 px-2 py-1.5 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-3">
           Projected over the rest of the season · {formatWeekRange(outlook.weeks)}
         </p>
       )}
@@ -213,8 +219,10 @@ function StandingsRow({
 
   // The username identifies the person; the team name is a per-league nickname
   // that changes at will. Showing the username means the same opponent reads the
-  // same across every league, and the team name isn't lost — it moves to the
-  // hover, and the roster panel beside this one still leads with it.
+  // same across every league, and the team name isn't lost — it moves to this
+  // row's hover, which is now the only place it is written: the roster panel
+  // beside this one used to head itself with a plate naming the selected team,
+  // and that plate restated this row.
   const manager = managerLabel(team);
   const teamName = team.manager?.team_name;
   const title = teamName && teamName !== manager ? `${manager} · ${teamName}` : manager;
@@ -226,7 +234,7 @@ function StandingsRow({
         onClick={onSelect}
         title={title}
         aria-current={active ? "true" : undefined}
-        className={`grid w-full ${grid} items-center gap-x-1 gap-y-0.5 border-l-2 px-1.5 py-1.5 text-left transition-colors @lg:gap-x-2 @lg:px-3 @lg:py-2 ${
+        className={`grid w-full ${grid} items-center gap-x-2 gap-y-0.5 border-l-2 px-2 py-1.5 text-left transition-colors @lg:px-3 @lg:py-2 ${
           active
             ? "border-active bg-active/10"
             : "border-transparent hover:bg-foreground/[0.04]"
