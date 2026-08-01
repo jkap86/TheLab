@@ -131,6 +131,62 @@ parses `season` for all six including the base route that ignores it — one str
 read is cheaper than a second entry point, and the routes that want more of the
 query string get `searchParams` itself (`leagues` reads `?refresh=1` off it).
 
+## The client cache
+
+**There are two caches and they protect different things.** Postgres protects
+Sleeper, KTC and the projections host — a route reads what a background sync
+stored and never fetches upstream on demand. TanStack Query protects *that* from
+the browser: the three manager tabs are three routes, so every navigation
+unmounted the hooks holding the answers and re-asked for all of them. One
+`QueryClient`, created in `app/providers/query-provider` and mounted at the root
+layout (not around the manager subtree — a trip out to another tool and back
+would take the cache with it), is the only browser-side cache of these routes.
+Nothing is stored on the device: a reload starts empty, which is the difference
+between this and the `local-store` preferences.
+
+Four rules hold it up, and each replaced a specific failure:
+
+- **A key is built in `query-keys`, never at the call site.** Everything
+  manager-scoped hangs off `manager(searched)`, lower-cased (Sleeper resolves
+  `Jkap` and `jkap` to one account, and two entries for one manager is the
+  duplicate request this exists to remove), and the season is always a segment
+  with `"default"` spelled out rather than dropped. The **ADP board is
+  deliberately outside that prefix**: it describes every crawled draft, so it is
+  the same answer whoever is being looked at, and a manager-wide invalidation has
+  no business throwing it away. Its key is the query string *normalised* to
+  sorted pairs, which is what makes the Players tab's column and the drawer's own
+  board one request instead of two.
+- **Staleness is per query (`query-config`), retention is global
+  (`features/shared/query-client`, 30 minutes).** A slice's TTL matches how fast
+  that slice moves — the background loops' own rule — so ranks are five minutes
+  and a KTC scrape refreshed daily is fifteen. They are all shorter than the
+  server's TTLs on purpose: a stale client read costs a request the server
+  answers from its cache, where a stale server read costs a fetch to somebody
+  else.
+- **A refetch follows a revision, never an array identity.** The five manager
+  sub-resources read what the leagues sync writes, and they used to re-fetch on
+  the identity of the leagues array — five requests per rebuild of a list that
+  may not have changed. `leaguesRevision` is the honest signal, and it is two
+  halves because one alone is wrong: a content digest (ids, status, records) for
+  what the payload carries, plus a **refresh sequence** for what it doesn't —
+  rosters are not on this payload at all, so a sync that persisted a waiver claim
+  changes nothing visible while making every dependent read stale. A new revision
+  invalidates `dependentManagerQueryKeys` and nothing else.
+- **A stream is published into the cache, not resolved at the end.** The leagues
+  route sends cached leagues and then refreshed ones over one connection; a query
+  that resolved once would sit on a loading screen through a refresh the server
+  had already half-answered. `fetchManagerLeagues` writes every state it reaches
+  into its own entry and *then* resolves with the last. Its error handling
+  follows from that: a failure with a payload already sent is a `refreshError`
+  **field**, so the cached leagues stay on screen; only a failure with nothing to
+  show throws.
+
+The fetchers and the keys are pure modules with relative `.ts` imports, so the
+cache's behaviour is tested by driving `QueryObserver`s directly
+(`query-cache.test.ts`) — the assertions are request *counts*, which is what the
+work was for. `query-test-support.ts` is the `fetch` mock and the test client;
+it is not a `.test.ts` because the runner globs those.
+
 ## Database
 
 Use the helpers in `@/shared/db` rather than hand-rolling:

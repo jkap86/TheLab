@@ -1,6 +1,7 @@
 export { apiFetch, isAbortError } from "./api";
 export { useStoredAccount, storeAccount } from "./account";
 export { takeLines } from "./ndjson";
+export { GC_TIME, createQueryClient } from "./query-client";
 export { useUserLeagues } from "./use-user-leagues";
 export type { UserLeaguesState } from "./use-user-leagues";
 export {

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { errorMessage } from "@/shared/util";
 
-import { apiFetch, isAbortError } from "@/features/shared";
+import { fetchJson } from "../query-fns";
+import { STALE_TIMES } from "../query-config";
+import { leagueQueryKeys } from "../query-keys";
 import type { LeagueDetailResult } from "../types";
 
 export type LeagueDetailState = {
@@ -14,47 +16,32 @@ export type LeagueDetailState = {
 };
 
 /**
- * Fetches a league's standings + rosters from `/api/league/[leagueId]`. Loading
- * is lazy because the panel that calls this only mounts when its card is
- * expanded — a collapsed league costs no request. The fetch is aborted on
- * unmount and re-issued when the league id changes.
+ * A league's standings and rosters, off `/api/league/[leagueId]`. The panel that
+ * calls this mounts only when its card is expanded, so a collapsed league still
+ * costs no request — and a league expanded, collapsed and expanded again now
+ * costs one rather than three, which is the whole reason it is a query.
+ *
+ * It is the one read here that **does** clear on change, and deliberately: the
+ * key is the league id, with no `keepPreviousData` behind it, so a new id shows
+ * nothing rather than leaving the last league's rosters on screen under the new
+ * name. Everything else on these pages keeps its previous answer; this is the
+ * case where the previous answer is about something else.
  */
 export function useLeagueDetail(leagueId: string): LeagueDetailState {
-  const [data, setData] = useState<LeagueDetailResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const detail = useQuery({
+    queryKey: leagueQueryKeys.detail(leagueId),
+    queryFn: ({ signal }) =>
+      fetchJson<LeagueDetailResult>(
+        `/api/league/${encodeURIComponent(leagueId)}`,
+        "Failed to load league",
+        signal,
+      ),
+    staleTime: STALE_TIMES.leagueDetail,
+  });
 
-  useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-
-    (async () => {
-      // Clear the previous league up front: a slow fetch must never leave the
-      // last league's rosters on screen underneath the new id.
-      setData(null);
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await apiFetch(`/api/league/${encodeURIComponent(leagueId)}`, {
-          signal: controller.signal,
-          fallbackError: "Failed to load league",
-        });
-        const json = (await res.json()) as LeagueDetailResult;
-        if (active) setData(json);
-      } catch (err: unknown) {
-        if (active && !isAbortError(err)) {
-          setError(errorMessage(err, "Something went wrong"));
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [leagueId]);
-
-  return { data, loading, error };
+  return {
+    data: detail.data ?? null,
+    loading: detail.isPending,
+    error: detail.error ? errorMessage(detail.error, "Something went wrong") : null,
+  };
 }
