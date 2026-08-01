@@ -807,10 +807,46 @@ stops holding, a comment saying it does would not have caught it.
   lost by opening the default — and why the page needs no stored account at all,
   making it the one tool the grid doesn't grey out without one (`accountless` on
   its catalogue entry, so the grid and the app bar's menu can't disagree about
-  whether the card is live). The one cost of reading a whole database instead of
-  one portfolio is volume, so the read is capped at `TRADES_READ_LIMIT`, newest
-  first, and the payload carries the season's real `total` beside it — a
-  truncated board says how much it is showing rather than passing as the market.
+  whether the card is live).
+- **The one cost of reading a whole database instead of one portfolio is volume,
+  and it is paid rather than avoided: the season is whole, and it streams.** It
+  used to be capped at the 2,000 most recent trades, which on a busy season is
+  most of a day — the filters could only ever reach inside that slice, and a page
+  built to answer "what did a league like mine give up for a rookie first" could
+  not see back far enough to answer it. Nothing about the client filtering can be
+  designed away (the menus are read *off* the trades, so the unnarrowed set has
+  to be in hand), so what changed is how it arrives and how it is drawn. Four
+  parts, and each fixes a different one of the reasons the cap existed:
+  - **`/api/trades` is an NDJSON stream**, the leagues route's protocol and the
+    same `takeLines` decoding it — `meta` with the season's `total` first, then a
+    chunk per `TRADES_CHUNK_SIZE` trades. The page draws the newest trades
+    while the rest is still arriving instead of holding a spinner until the last
+    byte, and it says so while it is true (a count-up line that retires itself,
+    where the old truncation note was permanent).
+  - **A chunk's three id maps are deltas, not snapshots.** Each carries only the
+    leagues, players and managers no earlier chunk did, so a player traded in ten
+    leagues crosses once for the whole stream. `features/trades/stream.ts` is that
+    merge, pure and tested; the hook is left with decoding and React state.
+    Merging is the load-bearing half — replacing would leave every card from an
+    earlier chunk unable to name its players, and worse the further you scroll.
+  - **The read is one query through a cursor**, not a chunk per round trip. The
+    ordering is newest-first over the whole season so the sort is unavoidable, but
+    it is paid once — and a keyset walk would need a tiebreaker the old `ORDER BY`
+    never had, since it ordered on the timestamp alone. `count(*) OVER ()` rides
+    on it, so `total` costs no second query and can't disagree with the rows.
+  - **The list is windowed** (`TradesList`, `@tanstack/react-virtual`). 48k cards
+    is a few million nodes; virtualising makes the count irrelevant to everything
+    but the scrollbar. It virtualises the **window**, not a box of its own, so the
+    document keeps its own scrolling — an inner scroller on a phone is a scroll
+    trap — which is why it measures `scrollMargin` rather than assuming it. Card
+    heights are measured, not computed, and the gap between cards is padding
+    *inside* each measured item, since a gap the virtualizer doesn't know about
+    drifts down the list.
+  The route also **gzips its own body** (`CompressionStream`): a season is ~13MB
+  of the most repetitive JSON in the app and ~0.6MB encoded, Next doesn't compress
+  a streamed response, and the `no-transform` that keeps a proxy from buffering
+  the stream also stops one compressing it. That header is right *once the body is
+  encoded* and was silently costing 12MB when it wasn't.
 - **Trades made before a league's startup draft ended are not on that board, and
   they are excluded in SQL rather than hidden on the client.** A startup fills
   empty rosters from the whole pool, so everything traded up to its last pick is
@@ -840,12 +876,11 @@ stops holding, a comment saying it does would not have caught it.
   `last_picked` is no cutoff, and a status Sleeper didn't send reads as finished
   rather than as evidence a draft is running, since hiding a whole league on a
   missing field is the louder failure.
-  Doing it in the read is the point rather than an implementation detail: the
-  query is newest-first under `TRADES_READ_LIMIT`, so trades filtered downstream
-  would still spend that budget and push real ones off the end of the season.
-  `total` is counted over the same population, so the board's stated size means
-  "trades worth reading" — this redefines the population, where the limit above
-  truncates it. The one trade that goes with that: a trade Sleeper filed with no
+  Doing it in the read stays the point now that nothing is capped, for a plainer
+  reason than the budget it used to protect: `total` is counted over the same
+  population the rows come from, so the board's stated size means "trades worth
+  reading", where hiding the same rows on the client would leave the count
+  quoting trades nobody can see. The one trade that goes with that: a trade Sleeper filed with no
   timestamp is dropped *in a league that has a boundary*, since there is no
   honest side of it to put the trade on — the same rule the date filters and
   `/api/adp` follow for an undated draft.
