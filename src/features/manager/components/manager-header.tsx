@@ -95,7 +95,7 @@ export function ManagerHeader({
    * denominator restating its own numerator.
    */
   leagueCount: number;
-  /** The view's own headline count, on the identity line beside the season. */
+  /** The view's own headline count, worn as the plate's top-right corner tab. */
   stat: HeaderStat;
   /**
    * The filters' trigger. Omitted where a view has nothing to filter (e.g. a
@@ -157,7 +157,28 @@ export function ManagerHeader({
           className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_30%,rgba(255,255,255,0.06)_48%,transparent_62%)]"
         />
 
-        <div className="relative flex items-center gap-3 py-3 pl-5 pr-4 sm:gap-4 sm:py-4 sm:pl-6 sm:pr-5">
+        {/* The two corner tabs, cut into the plate's top edge. They sit above the
+            rail (`z-[3]` against its `z-[2]`), so the accent passes behind the
+            left tab and resumes below it rather than stopping at the chip. */}
+        <CornerTab side="left">
+          <span className="font-mono text-[12px] font-bold leading-none tabular-nums text-active drop-shadow-[0_0_12px_rgba(0,255,229,0.35)]">
+            {season}
+          </span>
+        </CornerTab>
+        <CornerTab side="right">
+          <span className="font-bold uppercase tracking-[0.12em] text-foreground/40">
+            {stat.label}
+          </span>
+          <span className="font-mono text-[12px] font-bold leading-none tabular-nums text-foreground/85">
+            {stat.value}
+          </span>
+          {stat.sub && <span className="text-foreground/35">{stat.sub}</span>}
+        </CornerTab>
+
+        {/* `pt` clears the tabs rather than the row being pushed below them: the
+            avatar is the row's height either way, so the plate is exactly as tall
+            as it was with both pills on the name line. */}
+        <div className="relative flex items-center gap-3 pb-3 pl-5 pr-4 pt-[26px] sm:gap-4 sm:pb-4 sm:pl-6 sm:pr-5 sm:pt-7">
           <Avatar
             url={user.avatar_url}
             name={user.display_name || user.username}
@@ -165,15 +186,12 @@ export function ManagerHeader({
           />
 
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <h1 className="min-w-0 truncate font-display text-base font-semibold tracking-tight sm:text-xl">
-                {user.display_name || user.username}
-              </h1>
-              <span className="flex-none rounded-[5px] bg-active/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-active/80">
-                {season}
-              </span>
-              <StatPill {...stat} />
-            </div>
+            {/* The name has the line to itself now, so it truncates against the
+                gauge rather than against two pills — which is what moving them
+                to the corners was for. */}
+            <h1 className="min-w-0 truncate font-display text-base font-semibold tracking-tight sm:text-xl">
+              {user.display_name || user.username}
+            </h1>
             <RecordLine
               record={record}
               scope={scope}
@@ -234,9 +252,9 @@ export function ManagerHeader({
  * is only honest beside the number it divides. But it usually *isn't* smaller,
  * and "116 of 116 leagues" is a denominator restating its numerator on a line
  * that has to stay short. So the shortfall is stated and the agreement is not:
- * the rule holds exactly where it means something. The count itself is up on
- * the identity line, where it is a fact about the account rather than about
- * this record.
+ * the rule holds exactly where it means something. The count itself is up in the
+ * plate's right corner tab, where it is a fact about the account rather than
+ * about this record.
  */
 function RecordLine({
   record,
@@ -495,25 +513,44 @@ function WinPctGauge({ pct }: { pct: number | null }) {
 }
 
 /**
- * The view's own headline count, as a pill on the identity line beside the
- * season.
+ * A tab cut into one of the plate's top corners: what season is being read on
+ * the left, the view's own headline count on the right.
  *
- * It reads as a fact about the account — *this* manager, *this* season, *this*
- * many leagues — which is what the line it now sits on already says, and it
- * frees the state line below for the one number that moves. The `sub` stays
- * with it: "of 121 total" is what the count is out of, and a denominator
- * separated from its numerator is the thing this card keeps having to relearn.
+ * Both were pills on the identity line, where three things — the manager's name
+ * and two constants — competed for one row's width and the *name* was what gave
+ * way. They are facts about the whole card rather than about that line (which
+ * season, how many leagues), so they read as well from its corners, and moving
+ * them there costs the plate no height: the tabs sit in top padding the avatar's
+ * own height already paid for.
+ *
+ * "Flush" is the whole of the styling. The outer corner takes the card's radius
+ * one pixel in (`15px` against a `rounded-2xl` border), the two inner corners
+ * are square but for a small return, and the fill is `lab-well` — the recessed
+ * material the countdown cells wear — so a tab reads as machined out of the
+ * plate's edge rather than as a chip parked near it. The left one pads past the
+ * accent rail it covers.
+ *
+ * The right tab is a *slot*, not the league count: it renders whatever `stat`
+ * each view passes, `sub` included ("of 121 total" is what the count is out of,
+ * and a denominator separated from its numerator is the thing this card keeps
+ * having to relearn).
  */
-function StatPill({ label, value, sub }: HeaderStat) {
+function CornerTab({
+  side,
+  children,
+}: {
+  side: "left" | "right";
+  children: ReactNode;
+}) {
   return (
-    <span className="inline-flex flex-none items-baseline gap-1.5 rounded-[5px] border border-foreground/10 bg-foreground/[0.04] px-1.5 py-0.5 text-[10px]">
-      <span className="font-bold uppercase tracking-[0.12em] text-foreground/40">
-        {label}
-      </span>
-      <span className="font-mono text-[12px] font-semibold leading-none tabular-nums text-foreground/85">
-        {value}
-      </span>
-      {sub && <span className="text-foreground/35">{sub}</span>}
+    <span
+      className={`lab-well absolute top-0 z-[3] inline-flex items-baseline gap-1.5 px-2.5 py-1 text-[10px] leading-none ${
+        side === "left"
+          ? "left-0 rounded-br-lg rounded-tl-[15px] pl-3.5"
+          : "right-0 rounded-bl-lg rounded-tr-[15px]"
+      }`}
+    >
+      {children}
     </span>
   );
 }
