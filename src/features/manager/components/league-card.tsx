@@ -27,13 +27,11 @@ import { Chevron } from "./ui";
  * The four stat columns across it are each a slot the reader points at a metric —
  * where this manager stands by record, by points, by KTC starter value and by
  * projected points to start with, but swappable to the raw number behind a rank
- * or to KTC bench value from the label's picker. Which metric each slot shows is
- * held above this card, in {@link ManagerLeagues}, so every card shows the same
- * four and the columns line up column to column down the whole list.
- *
- * The name and chevron are the expand target; the stat columns are their own
- * pickers, so the card is no longer one button — clicking a column opens its
- * menu rather than the panel.
+ * or to KTC bench value. Which metric each slot shows is held above this card, in
+ * {@link ManagerLeagues}, so every card shows the same four and the columns line
+ * up column to column down the whole list — and the control that moves them is
+ * the heading rail up there too, which is why this card renders numbers and no
+ * pickers of its own.
  */
 export function LeagueCard({
   league,
@@ -43,8 +41,6 @@ export function LeagueCard({
   valuedAt,
   adp,
   columns,
-  onColumnChange,
-  onReset,
 }: {
   league: ManagerLeague;
   /**
@@ -72,26 +68,14 @@ export function LeagueCard({
   adp: LeagueAdpEntry | null;
   /** The metric key each of the four stat columns shows, shared by every card. */
   columns: string[];
-  /** Point a column at another metric (applies to every card at once). */
-  onColumnChange: (slot: number, key: string) => void;
-  /** Hand the list its opening columns back, from the foot of a card's menu. */
-  onReset?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  // Whether one of the stat columns has its picker open — the columns own which,
-  // but the row is what has to lift its stacking order while a menu overhangs the
-  // card below it.
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const record = league.record;
   const ctx: MetricContext = { league, ranks, ktc, adp, weeks, valuedAt };
 
   return (
-    <li
-      className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER} ${
-        menuOpen ? "z-30" : ""
-      }`}
-    >
+    <li className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER}`}>
       <RowSheen />
 
       {/* `relative` is what keeps the sheen behind this rather than over it — an
@@ -119,19 +103,11 @@ export function LeagueCard({
           )}
         </button>
 
-        {/* `labels={false}`: the heading rail pinned above the list names these
-            columns from `sm` up, and the same four words repeated down a hundred
-            rows is what made a list-wide selection read as a per-card one. Below
-            that width the rail is gone and the labels come back. */}
-        <MetricColumns
-          metrics={LEAGUE_METRICS}
-          ctx={ctx}
-          columns={columns}
-          onColumnChange={onColumnChange}
-          onOpenChange={setMenuOpen}
-          onReset={onReset}
-          labels={false}
-        />
+        {/* Numbers only, at every width: the heading rail pinned above the list
+            names these columns and is the only thing that moves them, because
+            the same four words repeated down a hundred rows is what made a
+            list-wide selection read as a per-card one. */}
+        <MetricColumns metrics={LEAGUE_METRICS} ctx={ctx} columns={columns} />
       </div>
 
       {expanded && (

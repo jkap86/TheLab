@@ -24,8 +24,6 @@ export function LeaguemateShares({
   mates,
   leagueCount,
   columns,
-  onColumnChange,
-  onReset,
 }: {
   mates: LeaguemateShare[];
   /** Leagues the shares are out of — see `LeaguemateShares.league_count`. */
@@ -35,8 +33,6 @@ export function LeaguemateShares({
    * edits it is pinned in the manager header, on the other side of this list.
    */
   columns: string[];
-  onColumnChange: (slot: number, key: string) => void;
-  onReset: () => void;
 }) {
   return (
     <ShareList
@@ -48,8 +44,6 @@ export function LeaguemateShares({
       )}
       metrics={LEAGUEMATE_SHARE_METRICS}
       columns={columns}
-      onColumnChange={onColumnChange}
-      onReset={onReset}
     />
   );
 }

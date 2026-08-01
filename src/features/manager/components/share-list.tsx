@@ -38,8 +38,6 @@ export function ShareList<T extends ShareRow>({
   note,
   metrics,
   columns,
-  onColumnChange,
-  onReset,
   adpFor,
 }: {
   rows: T[];
@@ -54,10 +52,6 @@ export function ShareList<T extends ShareRow>({
   metrics: ShareMetric[];
   /** The metric key each of the four stat columns shows. */
   columns: string[];
-  /** Point a column at another metric (applies to every card at once). */
-  onColumnChange: (slot: number, key: string) => void;
-  /** Hand the list its opening columns back, from the foot of a card's menu. */
-  onReset?: () => void;
   /**
    * This row's entry on the selected ADP board, for the player metrics. Omitted
    * by the leaguemates view, whose menu holds nothing that reads it.
@@ -82,8 +76,6 @@ export function ShareList<T extends ShareRow>({
             metrics={metrics}
             ctx={ctx}
             columns={columns}
-            onColumnChange={onColumnChange}
-            onReset={onReset}
           />
         );
       })}

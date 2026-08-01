@@ -114,8 +114,6 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
               mates={shares.mates}
               leagueCount={shares.league_count}
               columns={columns}
-              onColumnChange={setColumn}
-              onReset={reset}
             />
           )}
         </>

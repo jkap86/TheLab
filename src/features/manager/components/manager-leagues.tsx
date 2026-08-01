@@ -105,8 +105,6 @@ export function ManagerLeagues({ searched }: { searched: string }) {
             valuedAt={ktc.data?.updated_at ?? null}
             adp={adp.data?.leagues[league.league_id] ?? null}
             columns={columns}
-            onColumnChange={setColumn}
-            onReset={reset}
           />
         ))}
       </ul>
