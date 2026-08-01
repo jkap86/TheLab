@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { groupMetrics } from "@/features/shared/columns";
 
@@ -34,6 +34,12 @@ import {
  * backdrop; closing on a backdrop *click* is the one gesture the platform leaves
  * to the page.
  *
+ * **It carries no trigger of its own — the column headings are the trigger.** A
+ * chip beside them was a second way to reach the same board, and the one that
+ * knew least: it could only ever open on slot 1, so a reader who wanted the
+ * fourth column pressed the chip and then aimed again. `openSlot` is which
+ * heading was pressed, and it is the slot the dialog opens armed on.
+ *
  * Generic in the metrics' context on the same terms as {@link MetricColumn}: a
  * league card previews against a league, a share card against one player's or
  * person's leagues, and neither catalogue is imported here.
@@ -44,6 +50,8 @@ export function ColumnsEditor<C>({
   presets,
   ctx,
   previewLabel,
+  openSlot,
+  onClose,
   onColumnChange,
   onColumns,
   onReset,
@@ -62,6 +70,10 @@ export function ColumnsEditor<C>({
   ctx: C | null;
   /** What `ctx` is, for the footer — "Previewing against …". */
   previewLabel: string | null;
+  /** The heading that was pressed, or null while the dialog is closed. */
+  openSlot: number | null;
+  /** Escape, the backdrop, the close mark and Done all report through this. */
+  onClose: () => void;
   /** Point one slot at a metric; the list swaps it with the slot that held it. */
   onColumnChange: (slot: number, key: string) => void;
   /** Replace all four — what a preset writes. */
@@ -78,13 +90,32 @@ export function ColumnsEditor<C>({
    * a drag is a gesture that can miss. It does not advance on its own — the
    * reader who came to change one column would find the next press landing
    * somewhere they never chose.
+   *
+   * It opens on the heading that was pressed rather than on slot 1, and then it
+   * is the dialog's own: re-arming inside must survive, so `openSlot` seeds it
+   * on the way in and never again. That seeding is done during render against
+   * the previous `openSlot` — the pattern an effect would only reach a frame
+   * late, which here is one frame of the dialog pointing at the wrong column.
    */
-  const [slot, setSlot] = useState(0);
+  const [slot, setSlot] = useState(openSlot ?? 0);
+  const [openedAt, setOpenedAt] = useState(openSlot);
+  if (openSlot !== openedAt) {
+    setOpenedAt(openSlot);
+    if (openSlot !== null) setSlot(openSlot);
+  }
 
-  const open = useCallback(() => {
-    setSlot(0);
-    ref.current?.showModal();
-  }, []);
+  // The one thing a `<dialog>` can't be told declaratively. `close` fires for
+  // Escape and the backdrop alike, so the parent hears every way out through
+  // the element's own event rather than through each of them separately.
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (openSlot === null) {
+      if (dialog.open) dialog.close();
+    } else if (!dialog.open) {
+      dialog.showModal();
+    }
+  }, [openSlot]);
 
   const groups = groupMetrics(metrics, "Metrics");
   const preview = (metric: Metric<C>) =>
@@ -98,30 +129,17 @@ export function ColumnsEditor<C>({
     preset.columns.every((key, i) => key === columns[i]);
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={open}
-        aria-haspopup="dialog"
-        // A raised pill, the app bar's grammar: it is pressable, and unlike the
-        // filters' trigger it has no "narrowing something" state to signal — a
-        // board is always showing four columns — so it never takes the cyan face.
-        className="lab-chip lab-chip-sm inline-flex items-center gap-1.5 rounded-full py-1 pl-2.5 pr-3 text-[11px] font-semibold uppercase tracking-wide text-foreground/60 transition-colors hover:text-foreground"
-      >
-        <ColumnsIcon />
-        Columns
-      </button>
-
-      <dialog
-        ref={ref}
-        aria-labelledby="columns-editor-title"
-        // The backdrop is the dialog's own pseudo-element, so a click landing on
-        // the dialog box itself is a click outside the panel.
-        onClick={(event) => {
-          if (event.target === ref.current) ref.current?.close();
-        }}
-        className="m-auto w-[min(760px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
-      >
+    <dialog
+      ref={ref}
+      aria-labelledby="columns-editor-title"
+      onClose={onClose}
+      // The backdrop is the dialog's own pseudo-element, so a click landing on
+      // the dialog box itself is a click outside the panel.
+      onClick={(event) => {
+        if (event.target === ref.current) ref.current?.close();
+      }}
+      className="m-auto w-[min(760px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
+    >
         <div
           className="relative overflow-hidden rounded-2xl border border-active/20 bg-gradient-to-b from-[#14242f] to-[#0a1520] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),0_0_60px_-20px_rgba(0,255,229,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]"
           style={{ animation: "dialog-rise 0.18s cubic-bezier(0.2,0.9,0.3,1)" }}
@@ -307,32 +325,15 @@ export function ColumnsEditor<C>({
             >
               Done
             </button>
-          </div>
         </div>
-      </dialog>
-    </>
+      </div>
+    </dialog>
   );
 }
 
 /** The uppercase caption over every group and slot, as in the filters dialog. */
 const CAPTION =
   "font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40";
-
-function ColumnsIcon() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      className="h-3.5 w-3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-    >
-      <path d="M2.5 3h11v10h-11z" />
-      <path d="M6.2 3v10M9.8 3v10" />
-    </svg>
-  );
-}
 
 function CloseIcon() {
   return (

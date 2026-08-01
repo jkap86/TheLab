@@ -1,7 +1,5 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-
 import type { Metric, MetricCell } from "../metric-cell";
 
 /**
@@ -42,46 +40,6 @@ const COLUMN_BOX = "min-w-0 flex-1 px-2.5 sm:w-24 sm:flex-none sm:shrink-0";
  * breakpoint, and a retyped `w-full` is exactly how one end stops.
  */
 const COLUMN_ROW = "flex w-full items-stretch sm:w-auto sm:shrink-0";
-
-/**
- * One-menu-at-a-time, closing on an outside press or Escape.
- *
- * It belongs to the heading rail alone now: the pickers were on the cards too
- * while the cards carried labels below `sm`, and a hundred rows each holding
- * four menus was the per-card reading of a list-wide selection in its most
- * literal form.
- */
-function useOneOpen() {
-  const [openSlot, setOpenSlot] = useState<number | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (openSlot === null) return;
-    const onDown = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpenSlot(null);
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpenSlot(null);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [openSlot]);
-
-  const toggle = useCallback(
-    (slot: number) =>
-      setOpenSlot((current) => (current === slot ? null : slot)),
-    [],
-  );
-  const close = useCallback(() => setOpenSlot(null), []);
-
-  return { ref, openSlot, toggle, close };
-}
 
 /**
  * The cluster of stat columns across a card — the league cards' four rankings,
@@ -175,21 +133,27 @@ export function MetricColumn<C>({
  * whole list, and a preview here would be one arbitrary row's numbers offered as
  * if they described the column. The editor is where previews belong, because it
  * says out loud which subject it is previewing against.
+ *
+ * **A heading opens the editor at its own slot; it carries no menu of its own.**
+ * The rail used to hang a flat list of the whole catalogue under whichever label
+ * was pressed, which is the four-menus-four-passes shape the editor was built to
+ * replace — and having both left the board editable two ways, one of which
+ * couldn't show a preview, name a preset or say which other slot already held the
+ * metric being picked. So the label *is* the trigger, and the slot it names is
+ * the slot the dialog opens armed on: pressing "Proj bench" is a press on the
+ * column you meant, not a press on a dialog you then have to aim.
  */
 export function MetricHeadings({
   metrics,
   columns,
-  onColumnChange,
-  onReset,
+  onOpen,
 }: {
-  /** The catalogue, for the menus — only the key and label are read. */
+  /** The catalogue — only the label of each column's own metric is read. */
   metrics: readonly { key: string; label: string }[];
   columns: string[];
-  onColumnChange: (slot: number, key: string) => void;
-  onReset?: () => void;
+  /** Open the editor armed on this slot. */
+  onOpen: (slot: number) => void;
 }) {
-  const { ref, openSlot, toggle, close } = useOneOpen();
-
   return (
     // `divide-x divide-transparent` draws nothing and is not decoration: the
     // cards' own columns carry a 1px divider *inside* their box, so without the
@@ -197,55 +161,26 @@ export function MetricHeadings({
     // the number it names. It matters more below `sm`, where the columns divide
     // the row rather than taking a fixed width — a missing border there is four
     // pixels shared out unevenly, not one.
-    <div ref={ref} className={`${COLUMN_ROW} divide-x divide-transparent`}>
+    <div className={`${COLUMN_ROW} divide-x divide-transparent`}>
       {columns.map((key, slot) => {
         const metric = metrics.find((m) => m.key === key) ?? metrics[0];
-        const open = openSlot === slot;
         return (
           <div key={slot} className={`group/col relative ${COLUMN_BOX}`}>
             <button
               type="button"
-              onClick={() => toggle(slot)}
-              aria-haspopup="menu"
-              aria-expanded={open}
+              onClick={() => onOpen(slot)}
+              aria-haspopup="dialog"
               // The full label, in case a catalogue ever grows one past the
               // column's width — a truncated heading is the only name its
               // column has.
               title={metric?.label}
               className="flex w-full items-center text-left"
             >
-              <span
-                className={`min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wide transition-colors ${
-                  open
-                    ? "text-active"
-                    : "text-foreground/50 group-hover/col:text-foreground/80"
-                }`}
-              >
+              <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wide text-foreground/50 transition-colors group-hover/col:text-foreground/80">
                 {metric?.label}
               </span>
             </button>
-            <Caret open={open} />
-
-            {open && (
-              <ColumnMenu
-                options={metrics.map((option) => ({
-                  key: option.key,
-                  label: option.label,
-                }))}
-                activeKey={metric?.key ?? ""}
-                onSelect={(metricKey) => {
-                  onColumnChange(slot, metricKey);
-                  close();
-                }}
-                onReset={
-                  onReset &&
-                  (() => {
-                    onReset();
-                    close();
-                  })
-                }
-              />
-            )}
+            <Caret />
           </div>
         );
       })}
@@ -254,90 +189,17 @@ export function MetricHeadings({
 }
 
 /**
- * The picker menu itself, hung under whichever label opened it.
- *
- * It shows no preview values, and that is the same rule as the rail it hangs
- * from: a heading belongs to the whole list, so a preview here would be one
- * arbitrary row's numbers offered as if they described the column. The editor is
- * where previews belong, because it names the subject it previews against.
- *
- * The reset sits at the foot rather than in the list: it is not a metric, and a
- * thirteenth row among twelve metrics is how it would be picked by accident. It
- * is only rendered where the list offered one, since a table with no stored
- * selection has nothing to hand back.
- */
-function ColumnMenu({
-  options,
-  activeKey,
-  onSelect,
-  onReset,
-}: {
-  options: { key: string; label: string }[];
-  activeKey: string;
-  onSelect: (key: string) => void;
-  onReset?: () => void;
-}) {
-  return (
-    <div
-      role="menu"
-      className="absolute right-0 top-full z-30 mt-1.5 min-w-[9.5rem] rounded-lg border border-foreground/15 bg-[var(--background)] p-1 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.9)]"
-    >
-      {options.map((option) => {
-        const active = option.key === activeKey;
-        return (
-          <button
-            key={option.key}
-            type="button"
-            role="menuitemradio"
-            aria-checked={active}
-            onClick={() => onSelect(option.key)}
-            className={`flex w-full items-center rounded px-2 py-1.5 text-left text-xs transition-colors ${
-              active
-                ? "bg-active/15 text-active"
-                : "text-foreground/75 hover:bg-foreground/10 hover:text-foreground"
-            }`}
-          >
-            <span className="truncate">{option.label}</span>
-          </button>
-        );
-      })}
-
-      {onReset && (
-        <>
-          <span
-            aria-hidden="true"
-            className="my-1 block h-px bg-foreground/10"
-          />
-          <button
-            type="button"
-            role="menuitem"
-            onClick={onReset}
-            className="flex w-full items-center rounded px-2 py-1.5 text-left text-xs text-foreground/45 transition-colors hover:bg-foreground/10 hover:text-foreground"
-          >
-            Reset all columns
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-/**
- * The picker's disclosure mark: dim at rest, lit on hover or while open.
+ * The heading's disclosure mark: dim at rest, lit on hover.
  *
  * Absolutely placed over the column's right gutter rather than laid in the row
  * beside the label — a 10px mark and its gap is two characters out of a label
  * that already has to fit in 76px, and the gutter is empty.
  */
-function Caret({ open }: { open: boolean }) {
+function Caret() {
   return (
     <span
       aria-hidden="true"
-      className={`pointer-events-none absolute right-0.5 top-0 text-[8px] leading-none transition-colors ${
-        open
-          ? "text-active"
-          : "text-foreground/25 group-hover/col:text-foreground/60"
-      }`}
+      className="pointer-events-none absolute right-0.5 top-0 text-[8px] leading-none text-foreground/25 transition-colors group-hover/col:text-foreground/60"
     >
       ▾
     </span>

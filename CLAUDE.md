@@ -729,7 +729,7 @@ stops holding, a comment saying it does would not have caught it.
   selection has always been list-wide — one pick moves the column on all
   hundred-odd rows — and drawing the labels per card said the opposite, which is
   why changing the board read as four unrelated errands. `ColumnsBar` is that
-  heading rail: the labels are the same pickers in one place, laid on the cards'
+  heading rail: the labels are the editor's triggers in one place, laid on the cards'
   own geometry (`COLUMN_BOX` in `metric-column.tsx`, written once so a heading
   can't drift a pixel off the number under it, with a transparent `divide-x`
   because the cards' own divider sits *inside* their box). Four things it
@@ -761,7 +761,7 @@ stops holding, a comment saying it does would not have caught it.
     `share`, which is the grain rule doing its job — a stored `adp` column simply
     falls back per slot on the leaguemates list, which has no board price.
 - **`ColumnsEditor` is all four slots at once, and it commits live.** The
-  per-column menus are right for changing one column and wrong for changing the
+  per-column menus were right for changing one column and wrong for changing the
   board: four slots are rarely four independent choices, so recomposing them was
   four menus and four passes over one flat list with nothing to see until the last
   pick landed. The dialog is the slots across the top, the catalogue in captioned
@@ -772,8 +772,22 @@ stops holding, a comment saying it does would not have caught it.
   the list behind it moves.** Nothing here is counted — the slots preview what
   each column will say — so there is nothing to protect from moving, which is why
   the footer says `Done` and not `Apply`. A preview is against one arbitrary
-  subject, so the footer names it; the heading menus show no previews at all, for
-  the same reason.
+  subject, so the footer names it.
+- **It is the *only* way to aim a column, and a heading is what opens it.** The
+  rail's per-slot menus and a `Columns` chip beside them were two controls over
+  one board, and each was worse than the dialog at the job the other did: the
+  menu was a flat catalogue with no preview, no preset and no word about which
+  other slot already held the metric being picked, and the chip always opened on
+  slot 1, so changing the fourth column was a press to open and a second press to
+  aim at the column already named on screen. Both are gone. `MetricHeadings`
+  takes an `onOpen(slot)` and holds no state at all; `ColumnsBar` owns which
+  heading was pressed; `ColumnsEditor` takes it as `openSlot` — non-null *is*
+  open — and reports every way out (Escape, backdrop, `Done`) through the
+  `<dialog>`'s own `close` event, so the parent hears one signal rather than
+  three. `openSlot` **seeds** the armed slot rather than being it: re-arming
+  inside the dialog has to survive, and the seeding is done during render against
+  the previous `openSlot`, since an effect would point the panel at the wrong
+  column for a frame.
 - **The account is the key to the whole grid: every card is inert until one
   resolves.** Each tool reads that account, so `ToolGrid` passes `disabled={!user}`
   and `ToolLinkCard` renders an `aria-disabled`, dimmed `div` instead of a
