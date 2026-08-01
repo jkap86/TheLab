@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { errorMessage } from "@/shared/util";
 
-import { apiFetch, isAbortError } from "@/features/shared";
+import { fetchJson } from "../query-fns";
+import { STALE_TIMES } from "../query-config";
+import { boardQueryKeys } from "../query-keys";
 import type { AdpDensityResult, DraftDensityMonth } from "../types";
 
 export type AdpDensityState = {
@@ -19,14 +21,14 @@ export type AdpDensityState = {
  * range scrubber draws under the ADP board's window, and the list of seasons the
  * drawer offers.
  *
- * Unlike {@link useAdp}, which re-fetches on the board's query string, this
- * takes no query and re-fetches on nothing: the histogram describes the whole
- * crawled population *before* any board filter, deliberately, so that it holds
- * still while a window is dragged across it. The season rides on every row
- * rather than being asked for, which is what lets the drawer slice to the season
- * it is showing — and switch seasons — without a second request. `enabled` is
- * the drawer being open, which is the same gate the board itself is behind — a
- * tab nobody opened the drawer on costs no request.
+ * Unlike {@link useAdp}, which is keyed by the board's query, this takes no query
+ * and is one cache entry: the histogram describes the whole crawled population
+ * *before* any board filter, deliberately, so it holds still while a window is
+ * dragged across it. The season rides on every row rather than being asked for,
+ * which is what lets the drawer slice to the season it is showing — and switch
+ * seasons — without a second request. `enabled` is the drawer being open, the
+ * same gate the board is behind; a tab nobody opened it on costs no request, and
+ * a tab that opens it a second time costs none either.
  *
  * A failure leaves `months` empty rather than throwing the control away. The
  * scrubber still works without bars: the presets, the NFL calendar markers and
@@ -34,42 +36,23 @@ export type AdpDensityState = {
  * caption says the activity is unavailable.
  */
 export function useAdpDensity(enabled: boolean): AdpDensityState {
-  const [months, setMonths] = useState<DraftDensityMonth[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const density = useQuery({
+    queryKey: boardQueryKeys.density(),
+    queryFn: ({ signal }) =>
+      fetchJson<AdpDensityResult>(
+        "/api/adp/density",
+        "Failed to load draft activity",
+        signal,
+      ),
+    enabled,
+    staleTime: STALE_TIMES.adpDensity,
+  });
 
-  useEffect(() => {
-    if (!enabled) return;
-
-    let active = true;
-    const controller = new AbortController();
-
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await apiFetch("/api/adp/density", {
-          signal: controller.signal,
-          fallbackError: "Failed to load draft activity",
-        });
-        const json = (await res.json()) as AdpDensityResult;
-        if (active) {
-          setMonths(json.months);
-          setError(null);
-        }
-      } catch (err: unknown) {
-        if (active && !isAbortError(err)) {
-          setError(errorMessage(err, "Something went wrong"));
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [enabled]);
-
-  return { months, error, loading };
+  return {
+    months: density.data?.months ?? [],
+    error: density.error
+      ? errorMessage(density.error, "Something went wrong")
+      : null,
+    loading: density.isFetching,
+  };
 }
