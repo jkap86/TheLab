@@ -49,6 +49,25 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
  * (`0-0 · 0.00 PF  2,905.73 1,041.16`), one fits with room. It is the second slot
  * that goes rather than the first because the reader's leading choice is the one
  * they aimed first, and both are still there the moment there is width for them.
+ *
+ * That still left the second line over-subscribed once a season is under way, so
+ * the points-for sheds too — and it sheds *twice*, which is the part worth
+ * reading before simplifying it to one breakpoint. Preseason hid the problem:
+ * `0-0 · 0.00 PF` is short, where a played `12-5-1 · 1,842.36 PF` wants ~96px and
+ * a 375px screen leaves this cell ~80, so it truncated inside its own number
+ * (`12-5-1 · 1,84…`). A shortened name is still a name; a shortened total reads
+ * as bad data, so what gives is a whole fact rather than half of one — and the
+ * points-for is the fact to drop, since `PF` is a metric the value column beside
+ * it can be pointed at.
+ *
+ * Twice, because the space it competes for doesn't grow monotonically: the second
+ * value column arrives at @lg and takes back more width than the tier gained, so
+ * the same line truncates again just above that breakpoint. Hence
+ * `@sm:inline @lg:hidden @2xl:inline` — visible once one column leaves room for
+ * it, gone again while two columns don't, back for good once they do. The upper
+ * tier is a step past where the line measures as fitting (~39rem of container
+ * against @2xl's 42), because what it competes with is a *pickable* column and
+ * the widest metric shouldn't be the one that reintroduces the clipping.
  */
 export function Standings({
   teams,
@@ -226,7 +245,14 @@ function StandingsRow({
         </span>
 
         <span className="col-start-2 truncate text-[0.65rem] tabular-nums text-foreground/40 @lg:text-xs">
-          {record} · {points} PF
+          {record}
+          {/* The record keeps this line at every width; the points-for sheds
+              wherever the value columns beside it don't leave room — see the
+              two-tier rule above, which is not the monotonic one it looks like. */}
+          <span className="hidden @sm:inline @lg:hidden @2xl:inline">
+            {" "}
+            · {points} PF
+          </span>
         </span>
 
         {columns?.map((key, slot) => {
