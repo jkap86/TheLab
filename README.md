@@ -285,6 +285,12 @@ Two settings need a decision before a production deploy:
   doesn't hold, so supply theirs as `DATABASE_CA_CERT`. If you need the previous
   behaviour — encrypted but *unverified* — set
   `DATABASE_SSL_MODE=insecure-require` and know that it accepts any certificate.
+  **Heroku Postgres needs that second option**: it presents a self-signed
+  certificate and publishes no CA to verify it against, so a dyno left on the
+  default fails its on-boot migration with
+  `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` and the app never serves a request. The
+  failure names both variables (`shared/db/tls-error`), because Next reports a
+  throwing instrumentation hook as nothing but the error's own message.
 - **`INTERNAL_SYNC_SECRET`.** Without it the two sync endpoints answer `503` in
   production. That is deliberate: they are unauthenticated otherwise.
 `node-pg-migrate` and `pg` are kept as native Node modules via
