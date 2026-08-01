@@ -35,6 +35,16 @@ import { UserLookup } from "./user-lookup";
  * more padding, whose 4rem a pinned plate would keep paying out of the list
  * behind it.
  *
+ * The `::after` is the *other* end of that opacity, and it is the same seam
+ * argument applied where the plate stops. A block of flat `--background` butted
+ * straight against the aurora draws a hard horizontal line across the page —
+ * the glows appear to switch on an inch below the account card, which reads as
+ * the backdrop being clipped rather than as a pinned surface. So the paint fades
+ * out over the 4rem below the plate instead of ending: the aurora comes up
+ * through it gradually, and a card scrolling under the plate dims into it rather
+ * than being cut off mid-row. It is `pointer-events-none` because it overhangs
+ * the grid, which is made of links.
+ *
  * The lede sits *below* the card and only once an account is resolved: "pick a
  * tool to get started" is an instruction the grid can't carry out until then —
  * every card but the accountless one is inert without one — so before that it
@@ -47,7 +57,7 @@ export function ToolsHome({ heading }: { heading: React.ReactNode }) {
 
   return (
     <>
-      <div className="sticky top-0 z-30 -mx-6 bg-[var(--background)] px-6 pb-5 pt-3 before:absolute before:inset-x-0 before:bottom-full before:h-24 before:bg-[var(--background)]">
+      <div className="sticky top-0 z-30 -mx-6 bg-[var(--background)] px-6 pb-5 pt-3 before:absolute before:inset-x-0 before:bottom-full before:h-24 before:bg-[var(--background)] after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent">
         {heading}
         <div className="mt-6">
           <UserLookup user={user} onUserChange={storeAccount} />
