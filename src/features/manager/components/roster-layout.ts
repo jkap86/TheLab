@@ -35,7 +35,7 @@ export const NO_NUMBERS: SectionLayout = {
 };
 
 /**
- * Below @lg only the *first* value column is drawn, the same rule the standings
+ * Below @xl only the *first* value column is drawn, the same rule the standings
  * half keeps and for the same reason: the panel stays a 50/50 split at every
  * width, which on a phone leaves this half ~155px. Two 3rem tracks left ~19px
  * for everything else, so the section headings truncated to `S..` and `B..` and
@@ -46,8 +46,21 @@ export const NO_NUMBERS: SectionLayout = {
  * It is the second slot that goes rather than the first because the reader's
  * leading choice is the one they aimed first, and both are back the moment
  * there is width for them.
+ *
+ * **@xl and not @lg, which is three tiers rather than two, and the middle one is
+ * the whole point.** A container tier describes the *panel*, and each half is
+ * barely half of it: at @lg (32rem) a half is ~230px, and once its own `p-4` and
+ * two fixed 3.25rem tracks come out of that, the name track is left with **32px**
+ * — so `Starters` clipped to `S…` and the NFL team beside the badge was squeezed
+ * to nothing, while the *name* looked fine because it spans all three columns and
+ * never touches that track. A column added at the tier where the gutters widen
+ * looks like one decision and is two; the middle tier is what separates them, so
+ * @lg buys the roomier gutter and @xl buys the second number.
  */
 export const SPLIT_LAYOUT: SectionLayout = {
-  grid: "grid-cols-[1.75rem_minmax(0,1fr)_auto] @lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem_3.25rem]",
-  nameSpan: "col-span-2 @lg:col-span-3",
+  grid:
+    "grid-cols-[1.75rem_minmax(0,1fr)_auto] " +
+    "@lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem] " +
+    "@xl:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem_3.25rem]",
+  nameSpan: "col-span-2 @xl:col-span-3",
 };

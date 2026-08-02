@@ -140,7 +140,7 @@ export function RosterDetail({
     // at half the thickness — two surfaces at equal thickness read as two
     // instruments that happen to be adjacent rather than as a part seated in one.
     <div
-      className={`lab-plate lab-plate-sm rounded-lg p-2 @lg:p-4 ${
+      className={`lab-plate lab-plate-sm rounded-lg p-1.5 @lg:p-4 ${
         elevated ? "relative z-30" : ""
       }`}
     >
@@ -302,7 +302,12 @@ function RosterSection({
     <div className="mt-3 first:mt-0">
       <div className={`mb-1.5 grid ${layout.grid} items-baseline gap-x-2`}>
         <span />
-        <h5 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-foreground/35">
+        {/* 0.65rem below @lg, the size the standings' own heading row uses at that
+            tier and for the same reason: this heading shares the name's track, so
+            at 12px "Starters" was wider than the track and truncated to "STARTE…"
+            — a heading clipped inside its own word reads as broken where a
+            clipped *name* only reads as long. */}
+        <h5 className="min-w-0 truncate text-[0.65rem] font-medium uppercase tracking-wide text-foreground/35 @lg:text-xs">
           {title}
         </h5>
         {valueColumns.map((key, slot) => (
@@ -311,7 +316,7 @@ function RosterSection({
             // Paired with the layout's grid template and the rows' own cells:
             // the second column appears only once this half is wide enough.
             wrapperClassName={
-              slot === 0 ? "inline-flex" : "hidden @lg:inline-flex"
+              slot === 0 ? "inline-flex" : "hidden @xl:inline-flex"
             }
             className="text-[0.6rem]"
             options={PLAYER_METRIC_OPTIONS}

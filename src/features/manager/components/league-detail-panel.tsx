@@ -122,42 +122,63 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   // on a phone. What gives instead is the *content* of each half: the children
   // use @lg container queries to shed non-essential columns once each half gets
   // tight (see the standings' second value column).
+  //
+  // The inset and the split's gutter are both a step tighter below @lg, and that
+  // is the cheapest width in the whole panel: four boxes nest horizontally here
+  // (this plate, each half's own face, then a standings row's own padding), so a
+  // pixel of chrome is spent twice over on the way down and comes out of the one
+  // track that has nowhere else to go — the name. Nothing on screen is *made of*
+  // this padding, which is what separates trimming it from trimming a column.
+  //
+  // **The container is a bare wrapper, not the plate itself.** An element is
+  // never its own query container, so `@container` and `@lg:p-4` on one div made
+  // that padding resolve against an ancestor container that doesn't exist: it
+  // silently never applied, and the panel wore its narrow inset at every width.
+  // Splitting them is also what makes the query *stable* — a container whose own
+  // padding is set by a query on itself changes the content box that query is
+  // measured against, so the threshold moves as it is crossed. The wrapper holds
+  // no box of its own, which is what leaves one honest width for the children's
+  // own @lg rules to read.
   return (
-    <div ref={panelRef} className="lab-plate @container rounded-xl p-2.5 @lg:p-4">
-      {data.outlook && (
-        <PanelTelemetry
-          outlook={data.outlook}
-          team={data.outlook.teams.find((t) => t.roster_id === selected.roster_id)}
-        />
-      )}
-      <div className="grid grid-cols-2 gap-2 @lg:gap-4">
-        <Standings
-          teams={teams}
-          outlook={data.outlook}
-          values={data.values}
-          selectedId={selected.roster_id}
-          onSelect={setSelectedId}
-          columns={teamColumns}
-          openPicker={openPicker}
-          onTogglePicker={togglePicker}
-          onSelectColumn={pickTeamColumn}
-          elevated={teamPickerOpen}
-        />
-        <RosterDetail
-          team={selected}
-          teams={teams}
-          players={data.players}
-          rosterPositions={data.roster_positions}
-          outlook={data.outlook}
-          values={data.values}
-          columns={rosterColumns}
-          openPicker={openPicker}
-          onTogglePicker={togglePicker}
-          onSelectColumn={pickRosterColumn}
-          elevated={openPicker !== null && !teamPickerOpen}
-        />
+    <div ref={panelRef} className="@container">
+      <div className="lab-plate rounded-xl p-2 @lg:p-4">
+        {data.outlook && (
+          <PanelTelemetry
+            outlook={data.outlook}
+            team={data.outlook.teams.find(
+              (t) => t.roster_id === selected.roster_id,
+            )}
+          />
+        )}
+        <div className="grid grid-cols-2 gap-1.5 @lg:gap-4">
+          <Standings
+            teams={teams}
+            outlook={data.outlook}
+            values={data.values}
+            selectedId={selected.roster_id}
+            onSelect={setSelectedId}
+            columns={teamColumns}
+            openPicker={openPicker}
+            onTogglePicker={togglePicker}
+            onSelectColumn={pickTeamColumn}
+            elevated={teamPickerOpen}
+          />
+          <RosterDetail
+            team={selected}
+            teams={teams}
+            players={data.players}
+            rosterPositions={data.roster_positions}
+            outlook={data.outlook}
+            values={data.values}
+            columns={rosterColumns}
+            openPicker={openPicker}
+            onTogglePicker={togglePicker}
+            onSelectColumn={pickRosterColumn}
+            elevated={openPicker !== null && !teamPickerOpen}
+          />
+        </div>
+        <OutlookCaveat data={data} />
       </div>
-      <OutlookCaveat data={data} />
     </div>
   );
 }

@@ -42,7 +42,7 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
  * picker. Which metric each shows is held above this table (in the panel) so both
  * columns line up down the list and one picker moves the whole column.
  *
- * Below @lg only the *first* of those two columns is drawn. The panel stays a
+ * Below @xl only the *first* of those two columns is drawn. The panel stays a
  * 50/50 split at every width, which on a phone leaves this half ~150px: the rank
  * and the name have their own line, so what has to fit on the second is the
  * record, the points-for and the value columns — two of them ran into each other
@@ -50,11 +50,26 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
  * that goes rather than the first because the reader's leading choice is the one
  * they aimed first, and both are still there the moment there is width for them.
  *
- * Both halves of the panel carry the same inset and the same column gutter at each
- * tier (8px / 12px), so the table and the roster beside it read as one instrument
- * rather than two that happen to be adjacent. The gutter is what was actually
- * short on a phone: at 4px the record and the value beside it (`0-0 · 0.00 PF`
- * against `2,399.87`) touched, which reads as one run of digits.
+ * **@xl, though the gutters widen at @lg — three tiers, not two.** A container
+ * tier measures the *panel* and each half is barely half of it, so at @lg a half
+ * is ~230px and two value columns left the record-and-name track at ~48px: the
+ * `Manager` heading clipped inside its own word. Widening the gutters and adding
+ * a column look like one decision at one breakpoint and are two; @lg buys the
+ * first, @xl the second. `roster-layout` splits on exactly the same reasoning.
+ *
+ * Both halves of the panel carry the same column gutter, so the table and the
+ * roster beside it read as one instrument rather than two that happen to be
+ * adjacent. That gutter is what was actually short on a phone: at 4px the record
+ * and the value beside it (`0-0 · 0.00 PF` against `2,399.87`) touched, which
+ * reads as one run of digits — so it stays at 8px below @lg even though the
+ * insets around it were trimmed, because a gutter is what separates two columns
+ * where an inset only holds them off an edge nothing is written on.
+ *
+ * The insets themselves are *not* the same on the two halves, and that is
+ * arithmetic rather than a lapse: a row here carries its own `px` (it is a lit
+ * key, and text hard against a key's edge reads as clipped) where a roster row
+ * carries none, so this half's plate is a step tighter to land both lists on a
+ * comparable left edge.
  *
  * That still left the second line over-subscribed once a season is under way, so
  * the points-for sheds too — and it sheds *twice*, which is the part worth
@@ -67,10 +82,11 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
  * it can be pointed at.
  *
  * Twice, because the space it competes for doesn't grow monotonically: the second
- * value column arrives at @lg and takes back more width than the tier gained, so
+ * value column arrives at @xl and takes back more width than the tier gained, so
  * the same line truncates again just above that breakpoint. Hence
- * `@sm:inline @lg:hidden @2xl:inline` — visible once one column leaves room for
- * it, gone again while two columns don't, back for good once they do. The upper
+ * `@sm:inline @xl:hidden @2xl:inline` — visible once one column leaves room for
+ * it, gone again while two columns don't, back for good once they do. It tracks
+ * whichever tier the second column arrives at, so moving one moves the other. The upper
  * tier is a step past where the line measures as fitting (~39rem of container
  * against @2xl's 42), because what it competes with is a *pickable* column and
  * the widest metric shouldn't be the one that reintroduces the clipping.
@@ -115,10 +131,16 @@ export function Standings({
   // narrow template carries one value track to the wide one's two — the second
   // column is `hidden @lg:*` on both the heading and the cell, so a track it can't
   // fill would leave a dead gutter down the table.
+  //
+  // The rank gutter is `1rem` below @lg rather than the wide tier's `2rem`: it
+  // holds at most two digits at 0.65rem, so 20px was a track sized for the tier
+  // above it, and the 4px it gave back go to the name — the only track here
+  // whose content can't be shortened without losing information.
   const grid = outlookByRoster
-    ? "grid-cols-[1.25rem_minmax(0,1fr)_auto] @lg:grid-cols-[2rem_minmax(0,1fr)_auto_auto]"
-    : "grid-cols-[1.25rem_minmax(0,1fr)] @lg:grid-cols-[2rem_minmax(0,1fr)]";
-  const nameSpan = outlookByRoster ? "col-span-2 @lg:col-span-3" : "col-span-1";
+    ? "grid-cols-[1rem_minmax(0,1fr)_auto] @lg:grid-cols-[2rem_minmax(0,1fr)_auto] " +
+      "@xl:grid-cols-[2rem_minmax(0,1fr)_auto_auto]"
+    : "grid-cols-[1rem_minmax(0,1fr)] @lg:grid-cols-[2rem_minmax(0,1fr)]";
+  const nameSpan = outlookByRoster ? "col-span-2 @xl:col-span-3" : "col-span-1";
 
   return (
     // A recessed field: this half is the one being *read*, and the roster plate
@@ -127,9 +149,9 @@ export function Standings({
     // clip, because a column picker's menu overhangs the rows under it, which is
     // why the sink is inset shadow (`.lab-trough`) rather than a bordered box
     // that would want `overflow-hidden` to round its corners.
-    <div className={`lab-trough relative rounded-lg p-1.5 @lg:p-2 ${elevated ? "z-30" : ""}`}>
+    <div className={`lab-trough relative rounded-lg p-1 @lg:p-2 ${elevated ? "z-30" : ""}`}>
       <div
-        className={`grid ${grid} items-center gap-x-2 px-1.5 pb-2 pt-1 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:px-2 @lg:text-xs`}
+        className={`grid ${grid} items-center gap-x-2 px-1 pb-2 pt-1 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:px-2 @lg:text-xs`}
       >
         <span className="text-center">#</span>
         <span className="truncate">Manager</span>
@@ -141,7 +163,7 @@ export function Standings({
               // it — see the class strings above. The first passes its display
               // back explicitly, because this prop owns the cell's `display`.
               wrapperClassName={
-                slot === 0 ? "inline-flex" : "hidden @lg:inline-flex"
+                slot === 0 ? "inline-flex" : "hidden @xl:inline-flex"
               }
               options={TEAM_METRIC_OPTIONS}
               activeKey={key}
@@ -171,7 +193,7 @@ export function Standings({
         // The horizon travels with the number, as it does on the roster panel:
         // "rest of season" is however many weeks are actually stored, and a total
         // over three weeks next to one over eighteen is a different claim.
-        <p className="px-1.5 pb-0.5 pt-2 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-2">
+        <p className="px-1 pb-0.5 pt-2 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-2">
           Projected over the rest of the season · {formatWeekRange(outlook.weeks)}
         </p>
       )}
@@ -243,7 +265,7 @@ function StandingsRow({
         // A raised key rather than a tinted row: pressing it drives the roster
         // half beside it, and the selected one is the part that is currently on
         // — the app bar's grammar, at row scale (see `.lab-row`).
-        className={`grid w-full ${grid} items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-left @lg:px-3 @lg:py-2 ${
+        className={`grid w-full ${grid} items-center gap-x-2 gap-y-0.5 rounded-md px-1.5 py-1.5 text-left @lg:px-3 @lg:py-2 ${
           active ? "lab-row-on" : "lab-row"
         }`}
       >
@@ -272,7 +294,7 @@ function StandingsRow({
           {/* The record keeps this line at every width; the points-for sheds
               wherever the value columns beside it don't leave room — see the
               two-tier rule above, which is not the monotonic one it looks like. */}
-          <span className="hidden @sm:inline @lg:hidden @2xl:inline">
+          <span className="hidden @sm:inline @xl:hidden @2xl:inline">
             {" "}
             · {points} PF
           </span>
@@ -295,7 +317,7 @@ function StandingsRow({
               className={`text-right text-[0.7rem] tabular-nums @lg:text-sm ${
                 // Paired with the heading above and the grid template: the second
                 // column appears only once the half is wide enough to hold it.
-                slot === 0 ? "" : "hidden @lg:block "
+                slot === 0 ? "" : "hidden @xl:block "
               }${
                 // Same reason as `dim` above: on the lit face a shade of the
                 // foreground token is a shade of the wrong colour.

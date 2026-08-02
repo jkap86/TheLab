@@ -1376,14 +1376,62 @@ stops holding, a comment saying it does would not have caught it.
   which is how the layout keeps a closed drawer from costing a request — the
   Players tab passes its query unconditionally, since its ADP column is on screen
   either way.
-- The expanded league panel uses container queries (`@lg:`), not viewport
-  breakpoints, because it renders at half width inside a card. **Both its halves
-  shed their second value column below `@lg`, and both shed it in three places at
-  once** — the grid template, the heading picker, and the row's own cell. A cell
-  rendered into a track that isn't there doesn't overflow, it *wraps* onto an
-  implicit second row, where the column's own `justify-self-end` lands it in the
-  rank gutter and pushes it off the left edge of the panel. That is what the
-  standings heading did on a phone.
+- The expanded league panel uses container queries, not viewport breakpoints,
+  because it renders at half width inside a card. **Both its halves shed their
+  second value column below `@xl`, and both shed it in three places at once** —
+  the grid template, the heading picker, and the row's own cell. A cell rendered
+  into a track that isn't there doesn't overflow, it *wraps* onto an implicit
+  second row, where the column's own `justify-self-end` lands it in the rank
+  gutter and pushes it off the left edge of the panel. That is what the standings
+  heading did on a phone.
+- **`@xl` for that column though the gutters widen at `@lg` — three tiers, not
+  two, and collapsing them back to one breakpoint is the regression to watch
+  for.** A container tier measures the *panel*, and each half is barely half of
+  it: at `@lg` a half is ~230px, and once its own `p-4` and two fixed 3.25rem
+  tracks come out of that, the name track is left with **32px**. The failure did
+  not look like crowding, which is why it survived — the *name* spans all three
+  columns and rendered fine, so what broke was everything confined to the track
+  itself: `Starters` clipped to `S…`, `Manager` clipped inside its own word, and
+  the NFL team beside the position badge squeezed to zero width and simply
+  vanished. Widening a gutter and adding a column look like one decision at one
+  breakpoint and are two. When moving either tier, sweep the *band just above*
+  it — the panel's width is not monotonic in what it can hold, since a tier that
+  adds a column takes back more than it gained (the points-for's
+  `@sm:inline @xl:hidden @2xl:inline` is the same non-monotonicity, and it tracks
+  whichever tier the second column arrives at).
+- **The panel's `@container` is a bare wrapper, never the plate that carries the
+  padding.** An element is never its own query container, so `@container` and
+  `@lg:p-4` on one div made that padding resolve against an ancestor container
+  that doesn't exist: it silently never applied and the panel wore its narrow
+  inset at every width — no error, no warning, just a rule that does nothing.
+  Splitting them is also what makes the query *stable*, since a container whose
+  own padding is set by a query on itself changes the content box that query is
+  measured against, so the threshold moves as it is crossed. Any `@container`
+  element whose own classes carry a `@`-prefixed variant is this bug.
+- **In that panel, horizontal chrome is spent twice and comes out of the names.**
+  Four boxes nest across it — the plate's inset, the split's gutter, each half's
+  own face, then a standings row's own `px` — so a pixel of padding at the top is
+  a pixel taken from *both* halves, and the only track with nowhere else to go is
+  the name (`minmax(0,1fr)`, between a fixed gutter and an `auto` number column
+  sized by `3,249.98`). Below `@lg` every one of those insets is therefore a step
+  tighter than it is above, and the rank gutter is `1rem` rather than the wide
+  tier's `2rem` — two digits at 0.65rem is all it ever holds. Measured at a 390px
+  viewport that is 108px → 123px of manager name and 112px → 119px of player
+  name, which is `David Montgo…` becoming `David Montgomery`. **What does *not*
+  give is the column gutter**: it went from 4px to 8px to stop the record and the
+  value beside it reading as one run of digits, and an inset holds content off an
+  edge nothing is written on where a gutter is the only thing separating two
+  columns. Trim the padding, never the gap. The two halves' insets are also
+  deliberately unequal — a standings row is a lit key and carries its own `px`,
+  a roster row carries none — so the plates differ by a step to land both lists
+  on a comparable left edge.
+- **A heading that shares the name's track is sized against the track, not
+  against its sibling headings.** `Starters` at `text-xs` exactly filled that
+  track and clipped to `STARTE…`; it takes 0.65rem below `@lg`, the size the
+  standings' own heading row already uses at that tier. A clipped *name* still
+  reads as a long name, where a heading clipped inside its own word reads as
+  broken — so where something has to truncate, it should be the field whose
+  content varies, never the fixed label above it.
 - **`hidden` does not beat a `display` utility that sorts after it.** Tailwind v4
   emits the display utilities in *alphabetical* order, so `.block` loses to
   `.hidden` (which is why the standings *cells* hid correctly) while

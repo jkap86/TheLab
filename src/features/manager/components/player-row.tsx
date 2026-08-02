@@ -122,7 +122,7 @@ export function PlayerRow({
         // second column exists only once this half is wide enough for it, and a
         // cell rendered into a track that isn't there would wrap onto a row of
         // its own.
-        const narrow = i === 0 ? "" : "hidden @lg:block";
+        const narrow = i === 0 ? "" : "hidden @xl:block";
         return empty ? (
           // Keep the number columns occupied so an unfilled slot doesn't pull the
           // next row's cells up into its line.
