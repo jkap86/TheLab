@@ -12,6 +12,7 @@ import {
   monthExtent,
   panWindow,
   scrubDomain,
+  scrubTargetAt,
 } from "./range-domain.ts";
 
 const TODAY = "2026-07-31";
@@ -262,6 +263,58 @@ describe("monthExtent", () => {
     const domain = { from: "2026-01-01", to: "2026-03-31" };
     const mar = monthExtent("2026-03", domain);
     assert.equal(round(mar.left + mar.width), 1);
+  });
+});
+
+describe("scrubTargetAt", () => {
+  // A 400px track — roughly the strip inside the drawer on a phone.
+  const W = 400;
+  const at = (x: number, from: number, to: number, radius = 24) =>
+    scrubTargetAt(x, W, { from, to }, radius);
+
+  test("a handle parked on the domain's edge is grabbable from the edge", () => {
+    // The default board is unbounded, so this is the state the control opens in
+    // — and the state where half of any drawn target hangs off the panel.
+    assert.equal(at(0, 0, 1), "from");
+    assert.equal(at(W, 0, 1), "to");
+  });
+
+  test("a near miss resizes rather than sweeping a new window", () => {
+    // Falling through to a sweep is what made the handles unusable with a
+    // finger: reaching for one collapsed the window to the day under it.
+    assert.equal(at(18, 0, 1), "from");
+    assert.equal(at(W - 18, 0, 1), "to");
+  });
+
+  test("a finger reaches further than a mouse", () => {
+    assert.equal(at(18, 0, 1, 24), "from");
+    assert.equal(at(18, 0, 1, 10), "pan");
+  });
+
+  test("the middle of a wide window pans", () => {
+    assert.equal(at(200, 0, 1), "pan");
+  });
+
+  test("outside the window, past the radius, sweeps", () => {
+    assert.equal(at(60, 0.25, 0.75), "sweep");
+    assert.equal(at(340, 0.25, 0.75), "sweep");
+  });
+
+  test("a window narrower than two radii keeps a pan target", () => {
+    // Uncapped, the inner reaches would meet and a short span could be resized
+    // but never dragged — one unreachable gesture traded for another.
+    assert.equal(at(100, 0.25, 0.325), "from"); // 100px – 130px
+    assert.equal(at(130, 0.25, 0.325), "to");
+    assert.equal(at(115, 0.25, 0.325), "pan");
+  });
+
+  test("both handles in reach goes to the nearer one", () => {
+    assert.equal(at(104, 0.25, 0.325), "from");
+    assert.equal(at(126, 0.25, 0.325), "to");
+  });
+
+  test("a track with no width can only sweep", () => {
+    assert.equal(scrubTargetAt(0, 0, { from: 0, to: 1 }, 24), "sweep");
   });
 });
 

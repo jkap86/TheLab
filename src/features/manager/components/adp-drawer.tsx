@@ -31,41 +31,88 @@ import { PositionBadge } from "./ui";
  */
 const BOARD_COLUMNS = "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.5rem_3.25rem]";
 
-const LEAGUE_TYPE_OPTS = [
-  { value: "all", label: "All types" },
-  { value: "0", label: "Redraft" },
-  { value: "1", label: "Keeper" },
-  { value: "2", label: "Dynasty" },
-] as const;
-
-const SCORING_OPTS = [
-  { value: "all", label: "All scoring" },
-  { value: "std", label: "Standard" },
-  { value: "half_ppr", label: "Half PPR" },
-  { value: "ppr", label: "PPR" },
-] as const;
-
-const SUPERFLEX_OPTS = [
-  { value: "all", label: "SF & 1QB" },
-  { value: "yes", label: "Superflex" },
-  { value: "no", label: "1QB" },
-] as const;
-
-const BEST_BALL_OPTS = [
-  { value: "all", label: "BB & lineup" },
-  { value: "no", label: "Lineup" },
-  { value: "yes", label: "Best ball" },
-] as const;
+/**
+ * The board's filters, as a table rather than six hand-written controls.
+ *
+ * They are read as a list now — only the ones actually narrowing the board are
+ * on screen, and the rest are behind one key — so the row has to be able to say
+ * *which* those are. `get` and `set` are what keeps that type-safe without a
+ * computed key: each entry names its own field, so a value can only be written
+ * back to the field it was read from.
+ */
+type FilterSpec = {
+  key: string;
+  ariaLabel: string;
+  options: readonly { value: string; label: string }[];
+  get: (c: AdpControls) => string;
+  set: (c: AdpControls, value: string) => AdpControls;
+};
 
 // What *kind* of draft, which is a round count underneath: a startup fills a
 // roster, a rookie draft is a handful of rounds. It replaced a snake/linear/auction
 // chip in this slot — the room's picking order is not a fact about the market it
 // priced, where a startup's 1.01 and a rookie draft's 1.01 are different players.
-const ROUNDS_OPTS = [
-  { value: "all", label: "All drafts" },
-  { value: "full", label: "Startup (12+ rds)" },
-  { value: "rookie", label: "Rookie (≤5 rds)" },
-] as const;
+const ROUNDS_FILTER: FilterSpec = {
+  key: "rounds",
+  ariaLabel: "Kind of draft",
+  options: [
+    { value: "all", label: "All drafts" },
+    { value: "full", label: "Startup (12+ rds)" },
+    { value: "rookie", label: "Rookie (≤5 rds)" },
+  ],
+  get: (c) => c.rounds,
+  set: (c, v) => ({ ...c, rounds: v as AdpControls["rounds"] }),
+};
+
+const FIXED_FILTERS: readonly FilterSpec[] = [
+  ROUNDS_FILTER,
+  {
+    key: "leagueType",
+    ariaLabel: "League type",
+    options: [
+      { value: "all", label: "All types" },
+      { value: "0", label: "Redraft" },
+      { value: "1", label: "Keeper" },
+      { value: "2", label: "Dynasty" },
+    ],
+    get: (c) => c.leagueType,
+    set: (c, v) => ({ ...c, leagueType: v as AdpControls["leagueType"] }),
+  },
+  {
+    key: "scoring",
+    ariaLabel: "Scoring",
+    options: [
+      { value: "all", label: "All scoring" },
+      { value: "std", label: "Standard" },
+      { value: "half_ppr", label: "Half PPR" },
+      { value: "ppr", label: "PPR" },
+    ],
+    get: (c) => c.scoring,
+    set: (c, v) => ({ ...c, scoring: v as AdpControls["scoring"] }),
+  },
+  {
+    key: "superflex",
+    ariaLabel: "Quarterbacks started",
+    options: [
+      { value: "all", label: "SF & 1QB" },
+      { value: "yes", label: "Superflex" },
+      { value: "no", label: "1QB" },
+    ],
+    get: (c) => c.superflex,
+    set: (c, v) => ({ ...c, superflex: v as AdpControls["superflex"] }),
+  },
+  {
+    key: "bestBall",
+    ariaLabel: "Format",
+    options: [
+      { value: "all", label: "BB & lineup" },
+      { value: "no", label: "Lineup" },
+      { value: "yes", label: "Best ball" },
+    ],
+    get: (c) => c.bestBall,
+    set: (c, v) => ({ ...c, bestBall: v as AdpControls["bestBall"] }),
+  },
+];
 
 /**
  * The button that opens the board, seated in the manager header's control dock
@@ -169,6 +216,11 @@ export function AdpDrawer({
   const [dragging, setDragging] = useState<number | null>(null);
   const steepness = dragging ?? controls.steepness;
 
+  // Whether the filters nobody has set are on screen. Closed, the row shows only
+  // what is narrowing the board — which is usually nothing, and is never seven
+  // controls' worth of height reporting "All".
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   // Held in a ref so the effect below can depend on `open` alone. Callers pass a
   // fresh arrow every render, so depending on `onClose` re-ran the whole effect
   // on every keystroke — which meant `panel.focus()` fired again and took focus
@@ -206,6 +258,30 @@ export function AdpDrawer({
     () => seasonOptions(density.months, controls.season, defaultSeason),
     [density.months, controls.season, defaultSeason],
   );
+  // The size filter is the one whose options are data, so the table is completed
+  // here rather than at module scope. Memoised because `FilterRow` walks it on
+  // every render to decide what is narrowing the board.
+  const filters = useMemo<readonly FilterSpec[]>(
+    () => [
+      ...FIXED_FILTERS,
+      {
+        key: "teams",
+        ariaLabel: "League size",
+        options: [
+          { value: "all", label: "All sizes" },
+          // The sizes this manager actually plays, so seeding from a league
+          // always lands on a listed option.
+          ...Array.from(new Set(leagues.map((l) => l.total_rosters)))
+            .sort((a, b) => a - b)
+            .map((size) => ({ value: String(size), label: `${size} teams` })),
+        ],
+        get: (c) => c.teams,
+        set: (c, v) => ({ ...c, teams: v }),
+      },
+    ],
+    [leagues],
+  );
+
   const seasonMonths = useMemo(
     () =>
       controls.season === "all"
@@ -239,51 +315,56 @@ export function AdpDrawer({
         tabIndex={-1}
         className="relative ml-auto flex h-full w-full max-w-[32rem] flex-col border-l border-active/20 bg-[rgb(12,23,33)] shadow-[-24px_0_60px_rgba(0,0,0,0.5)] outline-none"
       >
-        <header className="flex items-center gap-3 border-b border-foreground/10 px-4 py-3">
-          <div className="min-w-0">
-            <h2 className="text-sm font-bold tracking-tight">ADP board</h2>
-            <p className="truncate text-xs text-foreground/45">
-              {draft_count === null
-                ? "Loading…"
-                : `${draft_count.toLocaleString()} draft${draft_count === 1 ? "" : "s"}`}{" "}
-              · {boardLabel(controls.range, controls.season)}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="ml-auto grid h-7 w-7 place-items-center rounded-md border border-foreground/10 text-foreground/50 transition-colors hover:border-foreground/25 hover:text-foreground"
-          >
-            ✕
-          </button>
-        </header>
-
         {/* Pinned: everything that changes the board stays on screen while the
-            board itself scrolls under it. */}
-        <div className="flex flex-col gap-3 border-b border-foreground/10 bg-foreground/[0.02] px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
-              Season
-            </span>
-            <div className="flex flex-1 gap-1">
-              {seasons.map((season) => (
-                <Segment
-                  key={season}
-                  active={controls.season === season}
+            board itself scrolls under it.
+
+            It is three rows rather than six. The identity, the season and the
+            draft count are one line — a header stating a count the trigger
+            already carried, over a labelled row of two season keys, was two
+            lines saying what fits on one. The `DRAFTED` label and its segment
+            strip are gone into the strip's own caption, which was already
+            reporting the window. And the filter row shows only what is actually
+            narrowing the board: seven chips permanently reading "All" are seven
+            controls' worth of height reporting that nothing is set. */}
+        <div className="flex flex-col gap-2 border-b border-foreground/10 bg-foreground/[0.02] px-4 py-2">
+          <div className="flex items-center gap-2.5">
+            <h2 className="font-display text-[0.8rem] font-bold tracking-[0.14em] text-active/85">
+              ADP
+            </h2>
+            <div className="flex gap-1">
+              {seasons.map((s) => (
+                <KeyChip
+                  key={s}
+                  on={controls.season === s}
                   onClick={() =>
                     // The window is dropped with the season, not carried across
                     // it: a date range is a cut *inside* one, so the same dates
                     // against a different season are a window that mostly isn't
                     // there — and silently returning an empty board is worse
                     // than starting the new season whole.
-                    onChange({ ...controls, season, range: DEFAULT_ADP_RANGE })
+                    onChange({ ...controls, season: s, range: DEFAULT_ADP_RANGE })
                   }
                 >
-                  {season === "all" ? "All" : season}
-                </Segment>
+                  {s === "all" ? "All" : s}
+                </KeyChip>
               ))}
             </div>
+            <span className="lab-readout ml-auto flex items-baseline gap-1.5 rounded-[5px] px-2.5 py-[3px]">
+              <span className="font-display text-[0.8rem] font-bold tabular-nums text-active">
+                {draft_count === null ? "—" : draft_count.toLocaleString()}
+              </span>
+              <span className="text-[0.55rem] font-semibold uppercase tracking-[0.16em] text-foreground/40">
+                {draft_count === 1 ? "draft" : "drafts"}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-foreground/10 text-foreground/50 transition-colors hover:border-foreground/25 hover:text-foreground"
+            >
+              ✕
+            </button>
           </div>
 
           <RangeControl
@@ -296,70 +377,14 @@ export function AdpDrawer({
             onChange={(range) => onChange({ ...controls, range })}
           />
 
-          <div className="flex flex-wrap gap-1.5">
-            {/* An action, not a selection: the value stays "" so it re-arms after use. */}
-            <ChipSelect
-              value=""
-              placeholder="Match a league…"
-              ariaLabel="Match one of this manager's leagues"
-              options={leagues.map((league) => ({
-                value: league.league_id,
-                label: league.name,
-              }))}
-              onChange={(leagueId) => {
-                const league = leagues.find((l) => l.league_id === leagueId);
-                if (league) onChange(seedFromLeague(controls, league));
-              }}
-            />
-            <ChipSelect
-              value={controls.rounds}
-              options={ROUNDS_OPTS}
-              ariaLabel="Kind of draft"
-              narrowed={controls.rounds !== "all"}
-              onChange={(rounds) => onChange({ ...controls, rounds })}
-            />
-            <ChipSelect
-              value={controls.leagueType}
-              options={LEAGUE_TYPE_OPTS}
-              ariaLabel="League type"
-              narrowed={controls.leagueType !== "all"}
-              onChange={(leagueType) => onChange({ ...controls, leagueType })}
-            />
-            <ChipSelect
-              value={controls.scoring}
-              options={SCORING_OPTS}
-              ariaLabel="Scoring"
-              narrowed={controls.scoring !== "all"}
-              onChange={(scoring) => onChange({ ...controls, scoring })}
-            />
-            <ChipSelect
-              value={controls.superflex}
-              options={SUPERFLEX_OPTS}
-              ariaLabel="Quarterbacks started"
-              narrowed={controls.superflex !== "all"}
-              onChange={(superflex) => onChange({ ...controls, superflex })}
-            />
-            <ChipSelect
-              value={controls.bestBall}
-              options={BEST_BALL_OPTS}
-              ariaLabel="Format"
-              narrowed={controls.bestBall !== "all"}
-              onChange={(bestBall) => onChange({ ...controls, bestBall })}
-            />
-            <ChipSelect
-              value={controls.teams}
-              ariaLabel="League size"
-              narrowed={controls.teams !== "all"}
-              options={[
-                { value: "all", label: "All sizes" },
-                ...teamSizes(leagues).map((size) => ({
-                  value: String(size),
-                  label: `${size} teams`,
-                })),
-              ]}
-              onChange={(teams) => onChange({ ...controls, teams })}
-            />
-          </div>
+          <FilterRow
+            controls={controls}
+            filters={filters}
+            leagues={leagues}
+            open={filtersOpen}
+            onToggle={() => setFiltersOpen((o) => !o)}
+            onChange={onChange}
+          />
 
           <SteepnessSlider
             value={steepness}
@@ -389,7 +414,11 @@ export function AdpDrawer({
             </p>
           ) : (
             <>
-              <div className={`mb-1.5 grid ${BOARD_COLUMNS} items-center gap-2 px-1 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/35`}>
+              {/* Sticky, because the board is the one part of the drawer that scrolls and
+                  a column of bare numbers three hundred rows down says nothing. It
+                  paints the panel's own ground rather than a translucent one — the
+                  rows have to pass *behind* it, not through it. */}
+              <div className={`sticky top-0 z-10 -mx-1 mb-1.5 grid ${BOARD_COLUMNS} items-center gap-2 bg-[rgb(12,23,33)] px-2 pb-1.5 pt-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/35`}>
                 <span className="text-right">#</span>
                 <span>Player</span>
                 <span />
@@ -522,48 +551,40 @@ function RangeControl({
 }) {
   const presets = adpRangePresets(season, defaultSeason);
   return (
-    <div className="flex flex-col gap-2">
-      {/* The same label-and-segments row as the season above and the value curve
-          below, rather than the loose pills this was: rows of controls that
-          behave identically shouldn't look like different kinds of control. A
-          custom window lights none of them, which is the honest state — the
-          caption under the strip is where its dates are read.
-
-          A finished season leaves one preset, and a row of one is no choice at
-          all, so it isn't drawn: the strip and its calendar markers are the
-          control there, which is what they were for. */}
-      {presets.length > 1 && (
-        <div className="flex items-center gap-2">
-          <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
-            Drafted
-          </span>
-          <div className="flex flex-1 gap-1">
-            {presets.map((preset) => (
-              <Segment
+    <RangeScrubber
+      range={range}
+      season={season}
+      bounds={rangeBounds(range, today)}
+      months={months}
+      // Only a board that can contain today gets an axis running to it.
+      live={season === "all" || season === defaultSeason}
+      error={density.error}
+      loading={density.loading}
+      today={today}
+      // The presets go on the strip's own caption rather than in a labelled row
+      // above it. They fly the handles, so the line reporting where the handles
+      // are is where they belong — and the row they used to have was a label
+      // column and a full-height segment strip for at most three chips.
+      //
+      // A finished season leaves one preset, and a row of one is no choice at
+      // all, so nothing is drawn: the strip and its calendar markers are the
+      // control there, which is what they were for.
+      presets={
+        presets.length > 1
+          ? presets.map((preset) => (
+              <KeyChip
                 key={preset.value}
-                active={range.preset === preset.value}
+                small
+                on={range.preset === preset.value}
                 onClick={() => onChange({ preset: preset.value, from: null, to: null })}
               >
                 {preset.chip}
-              </Segment>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <RangeScrubber
-        range={range}
-        season={season}
-        bounds={rangeBounds(range, today)}
-        months={months}
-        // Only a board that can contain today gets an axis running to it.
-        live={season === "all" || season === defaultSeason}
-        error={density.error}
-        loading={density.loading}
-        today={today}
-        onChange={onChange}
-      />
-    </div>
+              </KeyChip>
+            ))
+          : undefined
+      }
+      onChange={onChange}
+    />
   );
 }
 
@@ -599,35 +620,35 @@ function SteepnessSlider({
     onCommit(Number(e.currentTarget.value));
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-baseline gap-2">
-        <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
-          Value curve
-        </span>
-        {/* The halving count is the honest parameter and an unreadable label, so
-            the readout says what it does to a board instead. */}
-        <span className="ml-auto text-[0.7rem] tabular-nums text-foreground/45">
-          {steepnessSummary(value)}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[0.65rem] text-foreground/30">Flat</span>
-        <input
-          type="range"
-          className="lab-slider min-w-0 flex-1"
-          min={STEEPNESS_RANGE.min}
-          max={STEEPNESS_RANGE.max}
-          step={STEEPNESS_RANGE.step}
-          value={value}
-          aria-label="Value curve steepness"
-          aria-valuetext={steepnessSummary(value)}
-          onChange={(e) => onPreview(Number(e.target.value))}
-          onPointerUp={commit}
-          onKeyUp={commit}
-          onBlur={commit}
-        />
-        <span className="text-[0.65rem] text-foreground/30">Top-heavy</span>
-      </div>
+    <div className="flex items-center gap-2">
+      <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
+        Curve
+      </span>
+      <span aria-hidden className="text-[0.6rem] text-foreground/25">
+        Flat
+      </span>
+      <input
+        type="range"
+        className="lab-slider min-w-0 flex-1"
+        min={STEEPNESS_RANGE.min}
+        max={STEEPNESS_RANGE.max}
+        step={STEEPNESS_RANGE.step}
+        value={value}
+        aria-label="Value curve steepness"
+        aria-valuetext={steepnessSummary(value)}
+        onChange={(e) => onPreview(Number(e.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
+      />
+      <span aria-hidden className="text-[0.6rem] text-foreground/25">
+        Top-heavy
+      </span>
+      {/* The halving count is the honest parameter and an unreadable label, so
+          the readout says what it does to a board instead. */}
+      <span className="shrink-0 text-[0.62rem] tabular-nums text-foreground/40">
+        {steepnessSummary(value)}
+      </span>
     </div>
   );
 }
@@ -647,6 +668,7 @@ function ChipSelect<T extends string>({
   ariaLabel,
   placeholder,
   narrowed = false,
+  className = "",
 }: {
   value: T | "";
   options: readonly { value: T; label: string }[];
@@ -655,13 +677,15 @@ function ChipSelect<T extends string>({
   /** Shown as a disabled first option — for a chip that acts rather than selects. */
   placeholder?: string;
   narrowed?: boolean;
+  /** Layout from the caller — this component owns the chip, not where it sits. */
+  className?: string;
 }) {
   return (
     <select
       value={value}
       aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value as T)}
-      className={`max-w-[12rem] truncate rounded-full border px-2.5 py-1 text-xs transition-colors [color-scheme:dark] focus:outline-none ${
+      className={`max-w-[12rem] truncate rounded-full border px-2.5 py-1 text-xs transition-colors [color-scheme:dark] focus:outline-none ${className} ${
         narrowed
           ? "border-active/32 bg-active/10 text-active hover:border-active/50"
           : "border-foreground/10 bg-foreground/5 text-foreground/60 hover:border-foreground/25 hover:text-foreground/85"
@@ -681,12 +705,28 @@ function ChipSelect<T extends string>({
   );
 }
 
-function Segment({
-  active,
+/**
+ * A raised key, in the app bar's own material grammar (`.lab-chip`) rather than
+ * the flat bordered `Segment` this replaced.
+ *
+ * The whole drawer is now keys instead of segments — the season, the window
+ * presets, the filter tray's trigger — and that is the point: a part you press
+ * should look pressable everywhere, and the drawer was the one place in the app
+ * still drawing its own outlined buttons. `.lab-chip-on` is the lit state, the
+ * same one the filter triggers wear when they are narrowing something.
+ *
+ * `small` is `.lab-chip-sm`, the half-thickness spelling — worn by the window
+ * presets, which sit on the strip's caption where full-thickness keys would
+ * outweigh the dates they are next to.
+ */
+function KeyChip({
+  on,
+  small = false,
   onClick,
   children,
 }: {
-  active: boolean;
+  on: boolean;
+  small?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -694,19 +734,123 @@ function Segment({
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={active}
-      className={`flex-1 rounded-md border px-2 py-1 text-xs transition-colors ${
-        active
-          ? "border-active/35 bg-active/10 text-active"
-          : "border-foreground/10 bg-foreground/5 text-foreground/50 hover:border-foreground/25 hover:text-foreground/80"
-      }`}
+      aria-pressed={on}
+      className={`lab-chip rounded-full font-semibold transition-colors ${
+        small ? "lab-chip-sm px-2 py-[1px] text-[0.62rem]" : "px-2.5 py-[3px] text-[0.7rem]"
+      } ${on ? "lab-chip-on" : "text-foreground/70"}`}
     >
       {children}
     </button>
   );
 }
 
-/** The sizes this manager actually plays, so seeding from a league always lands on a listed option. */
-function teamSizes(leagues: ManagerLeague[]): number[] {
-  return Array.from(new Set(leagues.map((l) => l.total_rosters))).sort((a, b) => a - b);
+/**
+ * The filters, showing only what is actually narrowing the board.
+ *
+ * All seven sat on screen permanently, wrapping to three rows on a laptop and
+ * four on a phone — and six of the seven usually read "All", which is a control
+ * spending a row to report that it is doing nothing. Closed, this is one key and
+ * whatever is set; open, it is the full set. A filter that *is* narrowing stays
+ * a live `<select>`, so changing one is the single press it always was — what
+ * costs a second press is reaching for a filter that was off, which is the case
+ * where the drawer was previously spending the height.
+ *
+ * The open tray holds **every** filter rather than only the unset ones, so the
+ * set doesn't reshuffle as it is used; the summary chips step aside while it is
+ * up, since two controls for one filter is a worse answer than either.
+ */
+function FilterRow({
+  controls,
+  filters,
+  leagues,
+  open,
+  onToggle,
+  onChange,
+}: {
+  controls: AdpControls;
+  filters: readonly FilterSpec[];
+  leagues: ManagerLeague[];
+  open: boolean;
+  onToggle: () => void;
+  onChange: (controls: AdpControls) => void;
+}) {
+  const narrowing = filters.filter((f) => f.get(controls) !== "all");
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className={`lab-chip lab-chip-sm inline-flex items-center gap-1.5 rounded-full px-3 py-[3px] text-xs font-semibold transition-colors ${
+            narrowing.length > 0 && !open ? "lab-chip-on" : "text-foreground/70"
+          }`}
+        >
+          Filters
+          {narrowing.length > 0 ? (
+            <span
+              className={`rounded-full px-1.5 text-[0.6rem] font-bold tabular-nums ${
+                open ? "bg-active text-[#052029]" : "bg-[#052029]/25"
+              }`}
+            >
+              {narrowing.length}
+            </span>
+          ) : (
+            <span aria-hidden className="text-[0.6rem] text-foreground/40">
+              {open ? "▴" : "▾"}
+            </span>
+          )}
+        </button>
+
+        {/* Open, the tray below holds these — two controls for one filter would
+            be a worse answer than either of them alone. */}
+        {!open &&
+          narrowing.map((f) => (
+            <ChipSelect
+              key={f.key}
+              value={f.get(controls)}
+              options={f.options}
+              ariaLabel={f.ariaLabel}
+              narrowed
+              onChange={(value) => onChange(f.set(controls, value))}
+            />
+          ))}
+
+        {/* An action, not a selection: the value stays "" so it re-arms after use. */}
+        <ChipSelect
+          value=""
+          placeholder="Match a league…"
+          ariaLabel="Match one of this manager's leagues"
+          // Right-aligned where the row has room to spare, and simply next in
+          // line where it wraps — `ml-auto` on a wrapped item strands it alone
+          // on its own line with a hole to its left.
+          className="sm:ml-auto"
+          options={leagues.map((league) => ({
+            value: league.league_id,
+            label: league.name,
+          }))}
+          onChange={(leagueId) => {
+            const league = leagues.find((l) => l.league_id === leagueId);
+            if (league) onChange(seedFromLeague(controls, league));
+          }}
+        />
+      </div>
+
+      {open && (
+        <div className="flex flex-wrap gap-1.5 border-t border-foreground/[0.07] pt-2">
+          {filters.map((f) => (
+            <ChipSelect
+              key={f.key}
+              value={f.get(controls)}
+              options={f.options}
+              ariaLabel={f.ariaLabel}
+              narrowed={f.get(controls) !== "all"}
+              onChange={(value) => onChange(f.set(controls, value))}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

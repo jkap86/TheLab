@@ -1190,7 +1190,43 @@ stops holding, a comment saying it does would not have caught it.
   what kind of draft it was is what a reader wants — it replaced a
   snake/linear/auction chip in that slot, which named how a room picked rather
   than what market it priced, and left the startup-against-rookie cut spelled out
-  as `≤5 rds` in a second chip. `draft_type` is a constant now (`snake,linear`)
+  as `≤5 rds` in a second chip.
+
+  **The pinned block is three rows, and each one it lost was a row reporting
+  that nothing was set.** It was six — a header, a labelled season row, a
+  labelled window row, three wrapped rows of filter chips and a two-line curve —
+  at ~337px on a laptop and ~369px on a phone, against ~225 and ~257 now. What
+  went, and why each was safe to take:
+  - **The header stated the draft count the trigger already carried**, over a
+    labelled row holding two season keys. Both fit on one line with the count as
+    a `.lab-readout` cell, which is the material the kickoff timer's digits
+    already use (plain, not `-live`: the count isn't ticking, and spending the
+    live face on a constant is the same mistake as tinting this trigger).
+  - **The window presets moved onto the strip's own caption** (`presets`, a slot
+    on `RangeScrubber`). They fly the handles, so the line reporting where the
+    handles are is where they belong; the labelled segment row above the strip
+    was a label column and a full-height strip for at most three chips.
+  - **The filter row shows only what is narrowing the board.** Seven chips
+    permanently reading "All" is seven controls' worth of height reporting that
+    nothing is set. `FilterRow` renders the narrowing ones plus one `Filters`
+    key badged with their count; the tray behind it holds **all** seven so the
+    set doesn't reshuffle as it is used, and the summary chips step aside while
+    it is up rather than appearing twice. A filter already set stays a live
+    `<select>`, so changing one is the single press it always was — the second
+    press is only for reaching a filter that was off, which is the case the
+    drawer was previously spending the height on.
+  - **The keys are `.lab-chip`, not the drawer's own outlined `Segment`.** This
+    was the last place in the app still drawing flat bordered buttons for
+    something you press; the season keys, the window presets and the filters
+    trigger all wear the raised pill and `.lab-chip-on` for lit, the same
+    grammar as the trigger that opened the drawer.
+  - **The board's column headings are `sticky`** inside the one region that
+    scrolls, painting the panel's own ground rather than a translucent one. It
+    is a free consequence of the block above shrinking: the headings are what a
+    column of bare numbers three hundred rows down needs, and there was no
+    pinned surface to hang them under before.
+
+  `draft_type` is a constant now (`snake,linear`)
   for the reason it always defaulted that way: an auction's `pick_no` is
   nomination order, so its "ADP" is not one. The board is fetched by
   the layout and gated on `open`, so a tab nobody opened it on costs no request;
@@ -1271,11 +1307,42 @@ stops holding, a comment saying it does would not have caught it.
     to the single day under the finger — which on a phone is what "I meant to
     scroll" looks like. `SWEEP_SLOP` is that: a few pixels of travel before a
     press counts as drawing.
+  - **The gesture is decided by proximity, not by which element was hit, and the
+    track is the only thing listening.** Letting each drawn part catch its own
+    presses made **the mark the target**, and a 7px thumb is not a target a
+    finger hits. Worse, a near miss didn't do nothing: it fell through to the
+    track and *swept a new window*, so on a phone reaching for a handle usually
+    destroyed the selection. `scrubTargetAt` (pure and tested, in `range-domain`)
+    answers `from` / `to` / `pan` / `sweep` from one pixel position, and the
+    handles and the window block are `pointer-events-none` — paint, not hit
+    areas. Four things follow that are easy to undo by "simplifying" the routing
+    back into the parts:
+    - **The radius is asymmetric.** Full width *outside* the window, capped to a
+      third of the window's width *inside* it — an uncapped radius makes a short
+      window entirely handle, trading an unreachable resize for an unreachable
+      pan. On a wide window the cap never binds.
+    - **It is measured from the handle, not around it.** The default board is
+      unbounded, so both handles sit on the domain's edges where half of any
+      *box* hangs off the panel. A distance has no half to lose, which is what
+      makes the opening state grabbable at all.
+    - **The radius comes off `e.pointerType`, not a `(pointer: coarse)` query.**
+      A laptop with a touchscreen is both, and the event already knows which one
+      this press is; it also needs no state, so it can't differ between the
+      server and the first client render. A finger gets 22px, a mouse 9 — a
+      generous radius for a cursor only makes a narrow window hard to pan.
+    - **`hover` is a state, because there is no `:hover` left.** With nothing
+      catching its own events, the cursor and the lit handle have to be driven
+      from the same hit test; a control that doesn't answer the pointer reads as
+      decoration. It clears on a touch release rather than persisting, since a
+      finger leaves nothing hovering behind it.
+    Only the *grip* is nudged inward on the domain's edges (`GRIP_INSET_PX`) —
+    the hairline stays on the date, because it is the one part here making a
+    claim about the data rather than being something to hold.
   - **A date the control is about is a date the control says.** Three readouts,
     none of them decoration: a bubble follows the pointer over the strip (the
     answer to "what is this bar" used to require dragging a handle onto it), the
-    handles are a thumb rather than a hairline (a 12px target over a 2px mark is
-    one you miss on a phone, and missing it *swept a new window*), and the
+    handles are a thumb rather than a hairline (a hairline is where the date is,
+    not something you can pick up), and the
     caption spells out the dates behind a preset's name — `rangeSummary`, which
     is what `rangeLabel` deliberately doesn't say. The label stays "Last 90 days"
     everywhere it stands alone, because the name survives the passage of time;
