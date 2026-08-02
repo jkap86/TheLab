@@ -12,6 +12,7 @@ import { useLeagueDetail } from "../hooks/use-league-detail";
 import { DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS } from "../roster-metrics";
 import { DEFAULT_TEAM_COLUMNS, TEAM_METRICS } from "../standings-metrics";
 import type { LeagueDetailResult } from "../types";
+import { PanelTelemetry } from "./panel-telemetry";
 import { RosterDetail } from "./roster-detail";
 import { Standings } from "./standings";
 import { PanelLoading, PanelMessage } from "./ui";
@@ -108,6 +109,13 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   // stacking order over the other while a picker is open.
   const teamPickerOpen = openPicker?.startsWith("team-") ?? false;
 
+  // The panel is one milled instrument rather than two adjacent boxes: a plate
+  // holding a recessed field (the standings, which is read) beside a raised one
+  // (the roster, which is acted on) — the app bar's grammar at panel scale, so
+  // the selected team can be a lit key rather than a tinted row. `.lab-plate`
+  // carries the material and nothing else; the inset and the split below are
+  // utilities, as they are everywhere that grammar is used.
+  //
   // Even 50/50 split at every width: the two halves answer different questions —
   // where the teams stand, and what the selected one is starting — and reading
   // one against the other is the point of the panel, so neither is folded away
@@ -115,7 +123,13 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   // use @lg container queries to shed non-essential columns once each half gets
   // tight (see the standings' second value column).
   return (
-    <div ref={panelRef} className="@container">
+    <div ref={panelRef} className="lab-plate @container rounded-xl p-2.5 @lg:p-4">
+      {data.outlook && (
+        <PanelTelemetry
+          outlook={data.outlook}
+          team={data.outlook.teams.find((t) => t.roster_id === selected.roster_id)}
+        />
+      )}
       <div className="grid grid-cols-2 gap-2 @lg:gap-4">
         <Standings
           teams={teams}

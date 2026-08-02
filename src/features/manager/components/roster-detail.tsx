@@ -6,7 +6,6 @@ import { useMemo } from "react";
 // pull `pg`-backed code into the client bundle — see `slots.ts`.
 import { NON_STARTING_SLOTS } from "@/shared/projections/slots";
 
-import { formatPoints } from "../format";
 import { PLAYER_METRICS } from "../roster-metrics";
 import type {
   LeagueOutlook,
@@ -136,8 +135,12 @@ export function RosterDetail({
   const valueColumns = hasNumbers ? columns : [];
 
   return (
+    // The raised half: this is the one being acted on, against the recessed
+    // field of standings beside it. `.lab-plate-sm` is the panel body's own face
+    // at half the thickness — two surfaces at equal thickness read as two
+    // instruments that happen to be adjacent rather than as a part seated in one.
     <div
-      className={`rounded-lg border border-foreground/10 bg-foreground/[0.02] p-2 @lg:p-4 ${
+      className={`lab-plate lab-plate-sm rounded-lg p-2 @lg:p-4 ${
         elevated ? "relative z-30" : ""
       }`}
     >
@@ -208,15 +211,19 @@ export function RosterDetail({
 }
 
 /**
- * What it would take to reach the optimal lineup, and what the lineup misses.
+ * Which players to move to reach the optimal lineup, and what the lineup misses.
  *
- * The optimal *total* is deliberately not here. It is the number the standings
+ * Two totals are deliberately not here. The optimal one is what the standings
  * beside this panel are ranked on — the selected row states it under whichever
- * projection column is aimed at it, with the horizon the whole panel is read over
- * spelled out once in that table's footer — so a chip repeating it here, above the
- * lineup it belongs to, was the same claim twice and the second one had to carry
- * its own week range to be honest. What is left is what the standings can't say:
- * the points sitting on the bench, and who to move.
+ * projection column is aimed at it, with the horizon spelled out once in that
+ * table's footer — so a chip repeating it above the lineup it belongs to was the
+ * same claim twice, and the second one had to carry its own week range to be
+ * honest. The *gap* has now left for the same reason: it is a headline about this
+ * team rather than a note on its bench, so it is a cell in the panel's readout
+ * strip, where it sits beside the two totals it is the difference between. Two
+ * places for one number is one edit away from them disagreeing.
+ *
+ * What is left is the part neither the table nor the readout can say: the names.
  */
 function LineupSummary({
   teamOutlook,
@@ -226,23 +233,25 @@ function LineupSummary({
   players: Record<string, PlayerSummary>;
 }) {
   const name = (id: string) => players[id]?.name ?? id;
-  if (teamOutlook.points_left <= 0 && teamOutlook.unknown_slots.length === 0) {
-    return null;
-  }
+  const moves = teamOutlook.start.length > 0 || teamOutlook.sit.length > 0;
+  if (!moves && teamOutlook.unknown_slots.length === 0) return null;
 
   return (
     <div className="space-y-1.5">
-      {teamOutlook.points_left > 0 && (
+      {moves && (
         <p className="text-[0.7rem] leading-relaxed text-foreground/50">
-          <span className="font-semibold text-active">
-            +{formatPoints(teamOutlook.points_left)}
-          </span>{" "}
-          on the bench
           {teamOutlook.start.length > 0 && (
-            <> · start {teamOutlook.start.map(name).join(", ")}</>
+            <>
+              <span className="font-semibold text-active">start</span>{" "}
+              {teamOutlook.start.map(name).join(", ")}
+            </>
           )}
+          {teamOutlook.start.length > 0 && teamOutlook.sit.length > 0 && " · "}
           {teamOutlook.sit.length > 0 && (
-            <> · sit {teamOutlook.sit.map(name).join(", ")}</>
+            <>
+              <span className="font-semibold text-foreground/70">sit</span>{" "}
+              {teamOutlook.sit.map(name).join(", ")}
+            </>
           )}
         </p>
       )}

@@ -204,6 +204,114 @@ body {
       0 2px 5px -3px rgba(0, 0, 0, 0.7);
   }
 
+  /* `.lab-well` at panel scale — the expanded league panel's standings field.
+
+     Not the same class, and the difference is the one thing a shadow can't
+     scale: `.lab-well`'s 2px/5px inset reads as a slot on a chip and as flat
+     paint across a 400px table, where the sink is exactly what says "this is
+     the field you are reading, not a part you are pressing". Deeper inset, and
+     the cyan hairline kept, since that is the token doing the work in both.
+
+     Nothing inside it may be clipped — the standings' column pickers overhang
+     the rows below them — which is why the sink is inset shadow and never
+     `overflow-hidden`. */
+  .lab-trough {
+    background: #06111b;
+    box-shadow:
+      inset 0 6px 14px -4px rgba(0, 0, 0, 0.9),
+      inset 0 -2px 6px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+
+  /* The raised counterpart at the same scale: the panel body both halves sit
+     in, and the roster half itself. A face, a specular top edge and a side
+     wall, like every other raised part — the wall is a plain `box-shadow`
+     rather than a stacked layer for `.lab-chip`'s reason, that nothing here is
+     clipped.
+
+     `.lab-plate-sm` is the seated version, worn *with* `.lab-plate` — the
+     `.lab-chip-sm` precedent, and needed for the same reason: the roster half
+     sits inside the panel body, and two surfaces at equal thickness read as two
+     instruments that happen to be adjacent rather than as a part seated in one.
+
+     It lifts the face as well as thinning the wall, which is where it parts
+     company with `.lab-chip-sm`. A chip sits on a *page*, so dropping its
+     thickness is enough to rank it below its neighbours; this one sits on the
+     same face it is made of, and a thinner wall alone left the two reading as
+     one continuous surface with a seam in it. A part seated in another has to
+     catch more light than what it is seated in, or there is nothing to see. */
+  .lab-plate {
+    background: linear-gradient(168deg, #16293a, #0a1622 62%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -24px 44px -26px rgba(0, 0, 0, 0.9),
+      0 4px 0 var(--edge),
+      0 20px 34px -16px rgba(0, 0, 0, 0.85);
+  }
+  .lab-plate-sm {
+    background: linear-gradient(165deg, #1c3547, #0d1e2b 66%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -18px 34px -24px rgba(0, 0, 0, 0.85),
+      0 2px 0 var(--edge),
+      0 10px 20px -12px rgba(0, 0, 0, 0.8);
+  }
+
+  /* The key grammar at row scale, for a list of parts rather than one control.
+
+     A standings row *is* a key: pressing it drives the roster panel beside it,
+     and the selected one is the thing that is currently on — which is what
+     `.lab-chip` / `.lab-chip-on` already say for a filter trigger. What a row
+     can't borrow from them is the *thickness*: a chip is one part on a page,
+     where a table is a dozen of them stacked 4px apart, and twelve 6px walls
+     each casting an 11px bloom reads as mud rather than as twelve parts. So the
+     wall is 2px and the outer shadow is gone. The lit row keeps its glow,
+     because there is only ever one of it and it is what the surface is for.
+
+     The lit row does not travel when pressed, and that is the one deliberate
+     break from the rest of the family: pressing the selected team selects it
+     again, and a part that does nothing when pressed must not move under the
+     finger. It is the raised spelling of the app bar's current-page well.
+
+     Declared after `.lab-row:active` so the lit face wins over the pressed
+     one. Material only — the grid template, the padding and the radius all come
+     from utilities at the call site. */
+  .lab-row {
+    background: linear-gradient(
+      170deg,
+      rgba(255, 255, 255, 0.05),
+      rgba(255, 255, 255, 0.012)
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 2px 0 rgba(0, 0, 0, 0.5);
+  }
+  .lab-row:hover {
+    background: linear-gradient(
+      170deg,
+      rgba(255, 255, 255, 0.09),
+      rgba(255, 255, 255, 0.03)
+    );
+  }
+  .lab-row:active {
+    transform: translateY(1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 1px 0 rgba(0, 0, 0, 0.5);
+  }
+  .lab-row-on {
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    color: #052029;
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9),
+      0 2px 0 var(--edge-active),
+      0 6px 14px -6px rgba(0, 255, 229, 0.45);
+  }
+  .lab-row-on:hover {
+    background: linear-gradient(180deg, #c2fff8, #14e8d1);
+  }
+
   /* The cyan key, for a control that is currently narrowing something. */
   .lab-chip-on {
     background: linear-gradient(180deg, #a8fff4, #00ddc6);
@@ -535,7 +643,8 @@ body {
     padding-top: 0;
   }
   .lab-chip:active,
-  .lab-chip-on:active {
+  .lab-chip-on:active,
+  .lab-row:active {
     transform: none;
   }
 }

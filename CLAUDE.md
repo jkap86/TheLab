@@ -1619,6 +1619,28 @@ stops holding, a comment saying it does would not have caught it.
     And `appearance: none` is what unhooks the native widget while carrying no box
     of its own, so the material-only rule still holds: the width and the layout
     come from utilities at the call site.
+  - **`.lab-trough` / `.lab-plate` / `.lab-row` are that grammar at *panel*
+    scale** — the expanded league detail. The panel is one milled instrument: a
+    plate holding a recessed field (the standings, which is read) beside a raised
+    one (the roster, which is acted on), with the selected team a lit key rather
+    than a tinted row. Three things it teaches that the chip-scale classes don't.
+    **A shadow doesn't scale**, which is why the trough is not `.lab-well`:
+    2px/5px of inset reads as a slot on a chip and as flat paint across a 400px
+    table, and the sink is the whole signal. **A part seated in another has to
+    catch more light than what it is seated in** — `.lab-plate-sm` lifts the
+    face as well as thinning the wall, where `.lab-chip-sm` only thins, because a
+    chip is ranked against a page and this one against the same face it is made
+    of; a thinner wall alone left the two reading as one surface with a seam.
+    And **thickness has to fall with count**: `.lab-row` runs a 2px wall and no
+    outer bloom, since a dozen chip-thickness parts stacked 4px apart read as mud
+    rather than as a dozen parts. The lit row is the one part in the family that
+    does *not* travel on press — pressing the selected team selects it again, so
+    it is the raised spelling of the app bar's current-page well.
+    The knock-on inside the components is that **a dimmed cell on the lit face
+    can't ask for a shade of `foreground`**: on cyan that is a shade of the wrong
+    colour, so the rows switch to plain `opacity-*` rather than carrying a second
+    palette of on-cyan text tokens that would have to be kept in step with the
+    face above them.
   - **`.lab-ledge` is that grammar carrying a heading rail**, and it is the one
     place the bar's material left the bar: the stat columns' headings are a
     machined billet the list scrolls *under*. It is `.lab-key`'s construction
@@ -1783,6 +1805,30 @@ stops holding, a comment saying it does would not have caught it.
   stable over the standings order the server sends, so ties, unprojected teams
   and a league with no outlook at all degrade to the standings rather than to a
   shuffle.
+- **The panel leads with a readout, and it is the selected team's, not the
+  league's.** `PanelTelemetry` is a rank dial and three milled cells — projected,
+  on bench, lineup gap — above both halves, because a panel that opens onto two
+  dense tables otherwise asks the reader to derive its own headline. Three rules
+  in it, and the first is the one worth arguing with:
+  - **The overlap with the `proj` / `bench` columns is paid on purpose.** Those
+    columns exist to compare teams *against each other* and the readout states
+    one team, which are different questions off the same number — and the columns
+    are pickable, so neither is reliably on screen anyway. Restating a number at a
+    different grain is not the sin the roster panel's dropped team plate was;
+    restating it at the *same* grain is.
+  - **A number still lives in exactly one place.** The gap moved here out of the
+    roster half's prose, which used to carry `+41.72 on the bench` above the list
+    it belongs to. It sits beside the two totals it is the difference between, and
+    what is left in the prose is the part neither the table nor the readout can
+    say — the names to start and sit. It takes amber, the app's existing
+    needs-attention tone, because it is the one figure here that is a verdict
+    rather than a count.
+  - **The dial's arc is the rank, not the points.** A full ring is the best roster
+    in the league and an empty one the worst, so it reads as "how far up this
+    field am I" — the points are in the cell beside it and have no field to be
+    placed against. It goes through the same `rankOf` the collapsed card's rank
+    metrics use, so a chip on the card and the dial in the panel it opens can't
+    disagree, all-zero guard included: an undrafted league has no leader.
 - **The collapsed card's stat columns are four slots the reader aims, not four
   fixed rankings.** `league-metrics.ts` is the catalogue of what a slot can hold
   and how to read it off the cached ranks and KTC value — the card hard-coded
