@@ -1,143 +1,117 @@
-import type { TradesStreamMessage } from "@/shared/contract";
+import type {
+  TradeCountPayload,
+  TradeFacetsPayload,
+  TradeLeaguesPayload,
+  TradesPagePayload,
+} from "@/shared/contract";
 
 import { apiFetch } from "../shared/api.ts";
-import { takeLines } from "../shared/ndjson.ts";
-import { applyTradesMessage, EMPTY_TRADES_STREAM } from "./stream.ts";
-import type { TradesStreamState } from "./stream.ts";
+import { tradeQueryParams } from "./trade-query.ts";
+import type { TradeRequest } from "./trade-query.ts";
 
 /**
- * The function behind the trades query: the `/api/trades` stream decoded, folded
- * and published into the cache as it arrives.
+ * The three fetches the trades board is built from.
  *
- * It lives apart from the hook for the reason `fetchManagerLeagues` does — a
+ * They live apart from the hooks for the reason `fetchManagerLeagues` does — a
  * function taking its inputs as arguments is one a test can call, where the same
- * logic inside a `useEffect` is only reachable through a renderer. The imports
- * are relative with a `.ts` extension for the same reason, and the fold itself
- * is next door in `./stream`, so what is here is the decoding, the cadence and
- * nothing else.
+ * logic inside a hook is only reachable through a renderer. The imports are
+ * relative with a `.ts` extension for the same reason.
+ *
+ * **All three are ordinary JSON now.** The board used to be one NDJSON stream of
+ * a whole season, decoded and folded here and published into the cache as it
+ * arrived — a lot of machinery (`./stream`, a publish cadence, a trailing timer)
+ * whose entire job was making ~20MB tolerable. Filtering and paginating on the
+ * server removed the 20MB, and with it the reason for any of that: a page is
+ * ~80KB and lands in one response, so `fetch` and `res.json()` is the whole of
+ * it. What replaced the progressive feel is `useInfiniteQuery` — the first page
+ * is on screen in the time the stream's first chunk used to take, and the rest
+ * follow the scroll rather than the connection.
  */
 
-/**
- * How often a partially-loaded season is handed to React.
- *
- * **The cadence is deliberate and it used to be the network's.** Publishing once
- * per network chunk sounds conservative and isn't: a gzipped NDJSON stream
- * delivers dozens of reads a second, each one re-rendering a page that re-runs
- * two filter passes and re-measures a virtualized list. The season is drawn
- * progressively either way — the reader cannot perceive the difference between
- * a list growing 40 times a second and one growing 3 times a second, and the
- * second one leaves the main thread free to scroll.
- *
- * A third of a second is the slowest cadence that still reads as *live*. Slower
- * and the count line visibly ticks; faster and the renders start costing more
- * than they show.
- */
-export const TRADES_PUBLISH_INTERVAL_MS = 300;
-
-export type TradesStreamOptions = {
-  season: string;
+/** One page of the board. `cursor` is null for the first. */
+export async function fetchTradesPage({
+  request,
+  cursor,
+  limit,
+  signal,
+}: {
+  request: TradeRequest;
+  cursor: string | null;
+  limit?: number;
   signal?: AbortSignal;
-  /** Called with each state worth rendering — see the cadence above. */
-  publish?: (state: TradesStreamState) => void;
-};
+}): Promise<TradesPagePayload> {
+  const params = tradeQueryParams(request);
+  if (cursor) params.set("cursor", cursor);
+  if (limit) params.set("limit", String(limit));
+
+  const res = await apiFetch(`/api/trades?${params}`, {
+    signal,
+    fallbackError: "Failed to load trades",
+  });
+  return (await res.json()) as TradesPagePayload;
+}
 
 /**
- * Read the whole season, publishing what has arrived as it arrives and resolving
- * with the last of it.
+ * Every league with a trade this season — the league rules' input, and the name
+ * every card puts on its league.
  *
- * **It publishes every state it reaches rather than resolving at the end**, the
- * rule `fetchManagerLeagues` follows one tool over: a season is tens of
- * thousands of trades, and a query that resolved once would sit on a loading
- * screen through a response the page could already be drawing. The value it
- * finally resolves with is the one the cache is already holding.
- *
- * Three publishes are **immediate**, and they are the three where a delay would
- * be felt rather than smoothed:
- *
- * - the **first state carrying trades**, because that is the loading spinner
- *   coming off and every millisecond of it is the number this work is about;
- * - **completion**, because the page says "still loading" until it lands and a
- *   third of a second of lying is a third of a second too many;
- * - an **error**, for the same reason.
- *
- * Everything between them is coalesced onto {@link TRADES_PUBLISH_INTERVAL_MS}.
- * A trailing timer covers the case the interval alone can't: a stream that goes
- * quiet with an unpublished change — a slow tail, a paused connection — would
- * otherwise hold that change until the next read, however long that takes.
+ * One request per season rather than a slice of every page, which is what its
+ * being a separate route buys: a few hundred leagues' worth of settings blobs
+ * would otherwise ride along with every scroll for the sake of the handful a
+ * page happens to name.
  */
-export async function fetchTrades({
+export async function fetchTradeLeagues({
   season,
   signal,
-  publish,
-}: TradesStreamOptions): Promise<TradesStreamState> {
-  let state: TradesStreamState = EMPTY_TRADES_STREAM;
-  // Accumulated here rather than read back out of the cache: chunks arrive
-  // faster than React commits, so deriving the next value from the last
-  // rendered one would drop whatever landed in between.
-  let publishedAt = 0;
-  let published: TradesStreamState | null = null;
-  let trailing: ReturnType<typeof setTimeout> | undefined;
+}: {
+  season: string;
+  signal?: AbortSignal;
+}): Promise<TradeLeaguesPayload> {
+  const res = await apiFetch(
+    `/api/trades/leagues?season=${encodeURIComponent(season)}`,
+    { signal, fallbackError: "Failed to load leagues" },
+  );
+  return (await res.json()) as TradeLeaguesPayload;
+}
 
-  const flush = () => {
-    if (trailing !== undefined) {
-      clearTimeout(trailing);
-      trailing = undefined;
-    }
-    if (published === state) return;
-    published = state;
-    publishedAt = Date.now();
-    publish?.(state);
-  };
+/**
+ * The filter dialog's menus.
+ *
+ * `request` should carry the league scope and the window but *not* the draft
+ * selection — the route lifts the selection out either way, and sending it would
+ * only make the cache key change on every checkbox for an answer that cannot.
+ */
+export async function fetchTradeFacets({
+  request,
+  signal,
+}: {
+  request: TradeRequest;
+  signal?: AbortSignal;
+}): Promise<TradeFacetsPayload> {
+  const res = await apiFetch(`/api/trades/facets?${tradeQueryParams(request)}`, {
+    signal,
+    fallbackError: "Failed to load filter options",
+  });
+  return (await res.json()) as TradeFacetsPayload;
+}
 
-  const offer = (immediate: boolean) => {
-    if (published === state) return;
-    if (immediate || Date.now() - publishedAt >= TRADES_PUBLISH_INTERVAL_MS) {
-      flush();
-      return;
-    }
-    // Scheduled once and left alone: re-arming it on every message is how a
-    // steady stream starves its own trailing edge forever.
-    trailing ??= setTimeout(flush, TRADES_PUBLISH_INTERVAL_MS);
-  };
-
-  try {
-    const res = await apiFetch(`/api/trades?season=${encodeURIComponent(season)}`, {
-      signal,
-      fallbackError: "Failed to load trades",
-    });
-    const reader = res.body?.getReader();
-    if (!reader) throw new Error("Failed to load trades");
-
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    for (;;) {
-      const { value, done } = await reader.read();
-      // `stream: true` until the end, so a network chunk that splits a
-      // multi-byte character doesn't corrupt a manager's name.
-      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
-
-      const { lines, rest } = takeLines(buffer);
-      buffer = rest;
-
-      let urgent = done;
-      const hadTrades = (state.data?.trades.length ?? 0) > 0;
-      for (const line of lines) {
-        const message = JSON.parse(line) as TradesStreamMessage;
-        state = applyTradesMessage(state, message);
-        if (message.type === "error") urgent = true;
-      }
-      // The spinner coming off — see above.
-      if (!hadTrades && (state.data?.trades.length ?? 0) > 0) urgent = true;
-
-      offer(urgent);
-      if (done) break;
-    }
-  } finally {
-    // Runs on an abort too, which is what keeps a pending trailing timer from
-    // firing into a cache entry the caller has already moved on from.
-    if (trailing !== undefined) clearTimeout(trailing);
-  }
-
-  return state;
+/**
+ * How many trades a request matches — the dialog footer's number.
+ *
+ * Separate from the facets for the reason the routes are separate: this is what
+ * a checkbox costs, and it is a `count(*)` rather than a grouped aggregate over
+ * the season.
+ */
+export async function fetchTradeCount({
+  request,
+  signal,
+}: {
+  request: TradeRequest;
+  signal?: AbortSignal;
+}): Promise<TradeCountPayload> {
+  const res = await apiFetch(`/api/trades/count?${tradeQueryParams(request)}`, {
+    signal,
+    fallbackError: "Failed to count trades",
+  });
+  return (await res.json()) as TradeCountPayload;
 }

@@ -1,5 +1,5 @@
 /**
- * The key the trades stream is cached under.
+ * The keys the trades board is cached under.
  *
  * **Deliberately outside the manager prefix**, for the reason the ADP board is:
  * this route asks nothing about an account. It describes every crawled league's
@@ -9,14 +9,31 @@
  * Built here rather than at the call site, the rule `managerQueryKeys` exists
  * for: a key that differs by a stray segment is not a shared cache entry, it is
  * a second request that looks like a hit in the code and a miss in the network
- * panel. That matters more here than anywhere else in the app — a miss is the
- * whole season read again.
+ * panel.
  *
- * The season is always a segment and never dropped: the page resolves it
- * server-side and passes it down, so there is no "default" case to spell out the
- * way the manager keys have.
+ * The board's key carries the **normalised query string** rather than the filter
+ * objects, which is what `tradeQueryKey` is for. React Query hashes keys
+ * structurally, so two objects describing the same request would be two entries;
+ * two query strings describing it are one. That matters more here than anywhere
+ * else in the app — a miss is a fresh first page, a fresh count and a lost
+ * scroll position.
  */
 export const tradesQueryKeys = {
   all: ["trades"] as const,
-  season: (season: string) => ["trades", season] as const,
+  /** One paginated board: season and filters, as a normalised query string. */
+  board: (query: string) => ["trades", "board", query] as const,
+  /** The season's leagues — the league rules' input, and every card's name. */
+  leagues: (season: string) => ["trades", "leagues", season] as const,
+  /**
+   * The filter dialog's menus, keyed on the league scope and window *without*
+   * the draft selection — pressing a checkbox cannot change them, so a key that
+   * moved with the selection would re-run a season-wide aggregate for an
+   * unchanged answer.
+   */
+  facets: (query: string) => ["trades", "facets", query] as const,
+  /**
+   * The dialog footer's count, keyed on the whole draft — the one thing in the
+   * dialog a checkbox does move, and a `count(*)` rather than an aggregate.
+   */
+  count: (query: string) => ["trades", "count", query] as const,
 };

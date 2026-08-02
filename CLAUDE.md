@@ -45,8 +45,8 @@ src/shared/    Domain logic, one folder per concern.
   to *that* module and call it — don't write SQL against a table your module
   doesn't own. (`ktc/match` used to query `players` directly; it doesn't now.)
 - **A cache-backed route reads and nothing else.** `/api/projections`,
-  `/api/league/[leagueId]`, `/api/adp`, `/api/adp/density` and `/api/trades`
-  answer from what the
+  `/api/league/[leagueId]`, `/api/adp`, `/api/adp/density` and the four
+  `/api/trades*` routes answer from what the
   background syncs have stored; a slice that hasn't been synced comes back empty
   rather than fetched on demand. (`/api/user/[username]`, `…/leagues` and
   `/api/picktracker/[leagueId]` are the deliberate exceptions — resolving a
@@ -505,20 +505,24 @@ A fourth module of this kind should be checked against both before it is written
 pair. `shared/trades/assemble` turns Sleeper's flat maps — `adds` is player →
 roster, `draft_picks` carries its own owners, `waiver_budget` its own sender and
 receiver — into one *side* per participating roster holding what that roster
-received; `features/trades/filters` decides which of those trades a reader is
-looking at. Both are pure and tested, and the thin I/O around them
-(`shared/trades/queries`, the route, the page) has no rules of its own. Three
-decisions live in the pair rather than in the components:
+received; `shared/trades/params` and `features/trades/trade-query` are the two
+ends of the vocabulary that decides which of those trades a reader is looking at,
+and `features/trades/filters` is what is left on the client once the *matching*
+moved into SQL — the shape of a selection, the pick token's spelling, and how a
+window resolves against today. All are pure and tested, and the thin I/O around
+them (`shared/trades/queries`, the routes, the page) has no rules of its own.
+Three decisions live in the pair rather than in the components:
 
 - **A side is what was received, never both halves.** What a roster gave up is
   exactly what the other sides received, and storing both is one edit away from
   them disagreeing. Sides come from `roster_ids` rather than from the assets, so
   a roster that only gave things up — a real case in the three-way trades some
   leagues run — still appears.
-- **The filters ask what *moved*, not who ended up with it.** `tradeAssets`
-  pools the sides, so looking a player up finds his trade without knowing which
-  way he went. A filter that only answers when you already know the answer is
-  the trap; which side each asset landed on is the trade's own display.
+- **The filters ask what *moved*, not who ended up with it.** The predicate
+  pools the sides — `adds`'s keys are every player who moved whichever way — so
+  looking a player up finds his trade without knowing which way he went. A filter
+  that only answers when you already know the answer is the trap; which side each
+  asset landed on is the trade's own display.
 - **`all` and `any` are both real questions** — "did these two managers trade
   with each other" against "anything involving any of these three players" — so
   the selection carries one mode over the whole of it. The date window is not
@@ -844,7 +848,7 @@ stops holding, a comment saying it does would not have caught it.
   imported across features.** The trades page needed the league-filter
   vocabulary, the modal that drives it, the date primitives and `ordinal`, and
   all four were sitting in `features/manager`. They are
-  `features/shared/league-filters.ts`, `ui/league-filters-modal.tsx`,
+  `features/shared/league-filters/`, `ui/league-filters-modal.tsx`,
   `date-range.ts` and `format.ts` now. Two habits keep that cheap. The mover
   **re-exports from where its old consumers already import it** —
   `adp-controls` still hands out `todayIso` and `shiftDays`, `manager/format`
@@ -857,150 +861,178 @@ stops holding, a comment saying it does would not have caught it.
   same reason.** The league filters say *which leagues' trades are in the list at
   all*; the trade filters say *which of those trades* — window, players, picks,
   managers. One is about where you play, the other about what happened there, so
-  they stay two triggers rather than two tabs of one dialog. Both are applied on
-  the client over one read of the season's trades, and that is the shape the
-  filters demand rather than a shortcut: the league filters run against the
-  leagues that read names (the same `settings` quirks `matchesFilters` reads,
-  which is why `/api/trades` sends the leagues *with* the trades — there is no
-  leagues stream on this page to join against), and the trade filters' own menus
-  are read *off the
-  trades* — which players moved, who deals most, which pick seasons are on the
-  table. The unnarrowed set has to be in hand either way, which is why the route
-  takes no query string beyond the season. Two details in the menus: each option
-  carries how many trades it would leave, counted over everything *except* the
-  selection itself — counting over the narrowed list collapses a menu to its own
-  selection the moment you make one, and it can't be widened again without being
-  cleared — and the whole page is **every crawled league's trades, not one
-  account's**. It was scoped to the stored account's leagues and isn't now: the
-  leagues someone plays in are a fraction of the trades worth reading, and what a
-  league shaped like theirs gave up for a rookie first is most of the value. The
-  managers filter is what narrows it back to their own, which is why nothing is
-  lost by opening the default — and why the page needs no stored account at all,
-  making it the one tool the grid doesn't grey out without one (`accountless` on
-  its catalogue entry, so the grid and the app bar's menu can't disagree about
-  whether the card is live).
-- **The one cost of reading a whole database instead of one portfolio is volume,
-  and it is paid rather than avoided: the season is whole, and it streams.** It
-  used to be capped at the 2,000 most recent trades, which on a busy season is
-  most of a day — the filters could only ever reach inside that slice, and a page
-  built to answer "what did a league like mine give up for a rookie first" could
-  not see back far enough to answer it. Nothing about the client filtering can be
-  designed away (the menus are read *off* the trades, so the unnarrowed set has
-  to be in hand), so what changed is how it arrives and how it is drawn. Four
-  parts, and each fixes a different one of the reasons the cap existed:
-  - **`/api/trades` is an NDJSON stream**, the leagues route's protocol and the
-    same `takeLines` decoding it — `meta` naming the season, then a `chunk` per
-    `TRADES_CHUNK_SIZE` trades. The page draws the newest trades
-    while the rest is still arriving instead of holding a spinner until the last
-    byte, and it says so while it is true (a count-up line that retires itself,
-    where the old truncation note was permanent).
-  - **Three things travel separately, because the first card should wait for the
-    fewest of them.** The `trades` go out the moment a cursor read returns; the
-    `names` that resolve their ids — leagues, players, managers, KTC — follow as
-    their own message once four parallel lookups answer; the `total` is its own
-    query and its own message whenever it lands. They were one message, so the
-    first card waited for the slowest of the three. What makes the split free is
-    that `TradeCard` already drew unresolved ids (a league falls back to its id,
-    a player to his, a side to its roster number) — so the placeholder path this
-    needs was the one already written for a league the sync hadn't reached.
-    The knock-on is on the page: an *unnarrowed* league filter must not filter
-    at all, or the newest trades vanish until their leagues are named.
-  - **A `names` message's four id maps are deltas, not snapshots.** Each carries
-    only the leagues, players, managers and KTC prices no earlier one did, so a
-    player traded in ten leagues crosses once for the whole stream.
-    `features/trades/stream.ts` is that merge, pure and tested; the fetcher is
-    left with decoding and cadence. Merging is the load-bearing half — replacing
-    would leave every card from an earlier chunk unable to name its players, and
-    worse the further you scroll.
-  - **The read is one query through a cursor, and keyset pagination was measured
-    against it and lost.** The ordering is newest-first over the whole season so
-    the sort is unavoidable, but it is paid once. Resuming on
-    `(coalesce(status_updated, created), transaction_id)` instead wins the first
-    page hands down (8ms against 117ms — a `LIMIT` lets the planner take a
-    fast-start ordered index walk) and loses the season badly (529ms against
-    232ms), because the resume predicate stops being selective as it goes and
-    the plan flips to a bitmap scan and a top-N heapsort that re-reads
-    everything still ahead of it. Its other selling point — no long-held
-    server-side state — is answered rather than traded away, since the walk is
-    now aborted the moment the client disconnects. `count(*) OVER ()` is gone
-    from it: the direct saving is ~4%, but a count that rides on the rows is a
-    count the first row cannot arrive without, which is what pinned the trades
-    behind it. It is `countAllTrades` now, over `TRADES_POPULATION_SQL` — the
-    predicate written once so the two queries cannot disagree about what the
-    season holds, which is the guarantee the window aggregate used to give.
-  - **`transactions_trade_recency_idx` is what the walk reads**, partial on
-    `type = 'trade' AND status = 'complete'` and ordered on the same
-    `coalesce(status_updated, created) DESC NULLS LAST` the route sorts by.
-    Trades are a few percent of a `transactions` table that is otherwise waivers
-    and free-agent claims, and both pre-existing indexes are `league_id`-leading
-    — right for the sync, useless to a read that wants the whole database by
-    time. The gain is real and modest (walk 319ms → 286ms, first chunk 190ms →
-    175ms), because what the index removes is the *filtering* and not the heap
-    access: the sync writes a league's week at a time, so a season's trades are
-    scattered across the same pages as its waivers. Worth having anyway — it
-    grows with every season the crawler adds, since trades stay a fixed small
-    share of roster moves.
-  - **An abandoned request stops the work rather than finishing it into a closed
-    socket**, which is the difference between a reader who bounces off this page
-    costing 4,000 trades and costing 50,000. `request.signal` reaches the
-    generator, which checks it at both ends of every cursor read; the route
-    checks it at every loop boundary and again after the four lookups (the
-    longest a chunk waits, so the likeliest moment to be left); and the
-    `finally` `return()`s the iterator whichever way the loop ended, which runs
-    the generator's own `finally` and hands the connection back. Measured
-    against a live server: while draining, 12 of 12 samples of `pg_stat_activity`
-    show a trades query running; after an abort, 0 of 36. Before this the loop
-    ran to the end of the season with every byte thrown away, because a
-    `ReadableStream`'s `start` is already running and nothing cancels it — the
-    old code noticed the disconnect only as an `enqueue` that threw, which
-    silenced the output and not the work.
-  - **The list is windowed** (`TradesList`, `@tanstack/react-virtual`). 48k cards
-    is a few million nodes; virtualising makes the count irrelevant to everything
-    but the scrollbar. It virtualises the **window**, not a box of its own, so the
-    document keeps its own scrolling — an inner scroller on a phone is a scroll
-    trap — which is why it measures `scrollMargin` rather than assuming it. Card
-    heights are measured, not computed, and the gap between cards is padding
-    *inside* each measured item, since a gap the virtualizer doesn't know about
-    drifts down the list.
-  - **The client's own two costs are the cadence and the filter passes, and both
-    scale with the stream rather than with the season.** Publishing once per
-    network read meant dozens of React renders a second, each re-running two
-    filter passes over everything held and re-measuring the windowed list, so
-    `fetchTrades` coalesces onto `TRADES_PUBLISH_INTERVAL_MS` (300ms) — with
-    three exceptions that are immediate because a delay in them would be felt
-    rather than smoothed: the first state carrying trades (the spinner coming
-    off), completion, and an error. And the filtering is incremental
-    (`features/trades/incremental.ts`, pure and tested): the trades only ever
-    *append*, so a verdict already reached is still correct and a chunk costs
-    its own length — one pass over a 50k season instead of the ~1.27M predicate
-    evaluations fifty re-filters of a growing list add up to. What makes that
-    safe is `generation`: the caller hands over a string naming everything the
-    predicates close over, and a change to it throws the accumulated answer away
-    rather than appending to one computed under different rules. Two details
-    worth keeping — a chunk that contributes nothing hands the *previous* arrays
-    back rather than fresh equal ones, since the page memoises on their identity
-    and the virtualizer's measurement cache rides on it; and the accumulator is
-    `useState` adjusted during render (`useFilteredTrades`), never a ref, because
-    a ref written during render survives a concurrent render that was thrown
-    away, while React re-runs a self-adjusting component before committing
-    anything under it.
-  - **The stream is a React Query entry, so leaving `/trades` and coming back is
-    a cache hit.** It was `useState` inside the hook, which meant the most
-    expensive read in the app ran again on every visit and twice if two
-    components mounted the hook. `fetchTrades` publishes each state it reaches
-    into the entry and *then* resolves with the last of them — `fetchManagerLeagues`'s
-    rule, for the same reason: a query that resolved once would sit on a loading
-    screen through a response the page could already be drawing. The key is
-    `["trades", season]` and deliberately outside the manager prefix (this route
-    asks about no account, so a manager-wide invalidation has no business
-    throwing it away), and `TRADES_STALE_TIME` is the app's longest at 15
-    minutes — everywhere else a stale client read costs a request the server
-    answers from cache, and here it costs the whole season.
-  The route also **gzips its own body** (`CompressionStream`): a season is ~13MB
-  of the most repetitive JSON in the app and ~0.6MB encoded, Next doesn't compress
-  a streamed response, and the `no-transform` that keeps a proxy from buffering
-  the stream also stops one compressing it. That header is right *once the body is
-  encoded* and was silently costing 12MB when it wasn't.
+  they stay two triggers rather than two tabs of one dialog. Both are applied by
+  the **database** now, which is the change the whole page is arranged around
+  (see the next bullet); what stays on the client is the league *rules*, because
+  they are a slot-group and scoring-key engine over Sleeper's JSONB and a second
+  implementation in SQL would drift silently — the symptom being a filter that
+  quietly returns the wrong leagues rather than an error. So the rules run over
+  `/api/trades/leagues` and their **answer** — a list of league ids — is what
+  crosses the wire. The trade filters' own menus are still read *off the trades*
+  — which players moved, who deals most, which pick seasons are on the table —
+  because a fixed list would offer players nobody traded while hiding the one
+  someone wants; they are `/api/trades/facets`, a grouped aggregate over the same
+  population, asked for only while the dialog is open. Two details in the menus:
+  each option carries how many trades it would leave, counted over everything
+  *except* the selection itself — counting over the narrowed list collapses a menu
+  to its own selection the moment you make one, and it can't be widened again
+  without being cleared — and the whole page is **every crawled league's trades,
+  not one account's**. It was scoped to the stored account's leagues and isn't
+  now: the leagues someone plays in are a fraction of the trades worth reading,
+  and what a league shaped like theirs gave up for a rookie first is most of the
+  value. The managers filter is what narrows it back to their own, which is why
+  nothing is lost by opening the default — and why the page needs no stored
+  account at all, making it the one tool the grid doesn't grey out without one
+  (`accountless` on its catalogue entry, so the grid and the app bar's menu can't
+  disagree about whether the card is live).
+- **The board is filtered in SQL and paginated, and it used to stream the whole
+  season — this is the largest performance decision in the app, and it is worth
+  reading as a correction of the one before it.** The old design was a sound
+  answer to a constraint it never questioned: every filter ran in the browser and
+  the menus were read off the trades, *therefore* the browser needed the
+  unnarrowed season, *therefore* the only lever left was making ~20MB arrive
+  progressively. Streaming made that cost incremental rather than removing it —
+  a season read, sorted, serialised, gzipped, transferred, parsed and held live
+  in a browser to render twenty cards, per reader, per visit. Moving the filters
+  to the server dissolves the constraint, and everything below follows from that
+  one move. Measured against 1.35M transactions holding 50k trades for the
+  season, on a single scratch instance:
+
+  | | old (stream) | new (paged) |
+  | --- | --- | --- |
+  | first cards on screen | 368ms of DB | **13ms** |
+  | DB work for the whole read | 455ms | 13ms, then ~5ms a page |
+  | page 21 (4,000 deep) | — | **4ms**, flat with depth |
+  | unfiltered `count(*)` per request | 49ms | **0** (a stored row) |
+  | bytes before the first card | ~0.6MB gz | ~25KB gz |
+
+  - **The read is keyset, not a cursor, and the earlier measurement that argued
+    the other way is still true and no longer applies.** Keyset loses badly when
+    you walk a whole season through it (529ms against 232ms — the resume
+    predicate stops being selective and the plan flips to a bitmap scan and a
+    top-N heapsort) and wins the first page hands down. The board reads a page and
+    stops, so the case it wins is the only one that happens. `shared/trades/cursor`
+    is the opaque `(at, transaction_id)` token, where `at` is
+    `coalesce(status_updated, created, 0)` — the zero standing in for Sleeper's
+    undated rows, because a row comparison against a null propagates null and
+    would drop the undated tail without a word.
+  - **The population is written as correlated `EXISTS` subqueries, not joins, and
+    that is what makes a page an index walk.** With a `JOIN leagues` and a
+    `LEFT JOIN startup_draft` above it the `ORDER BY` sits over a join tree, the
+    planner cannot satisfy it from `transactions_trade_keyset_idx`, and it
+    collects the whole population and top-N heapsorts it — the same cost on page
+    40 as on page 1. As `EXISTS` filters the ordering is over `transactions`
+    alone: **23.2ms and 518 buffers as joins, 0.33ms and 21 buffers as `EXISTS`**
+    for one page. The rewrite is exact rather than approximate — a trade was kept
+    when there was no startup row *or* the row permitted it, so it is dropped
+    exactly when a row exists and rejects it — and the counting queries lose
+    nothing by sharing it (9.0ms against 9.8ms), so there is still exactly one
+    definition of what is on this board.
+  - **No Postgres cursor is held while anything is enriched.** The old handler
+    interleaved cursor reads with four id lookups per chunk, so a pooled
+    connection sat idle-in-transaction across every one of them — at a handful of
+    concurrent readers, that was the pool. `listTrades` is one `LIMIT`-bounded
+    query that finishes and releases before a single name is resolved. It reads
+    one row past the limit and drops it, so "is there another page" costs no
+    second query.
+  - **The enrichment lookups are cached in-process, bounded and TTL'd**
+    (`shared/trades/cache`, `shared/trades/enrich`). A season's vocabulary is a
+    fixed few thousand players and managers named in its first pages and repeated
+    forever after, so without a cache pagination would re-resolve them per page
+    per reader. **Misses are cached too**, deliberately: an id nothing is stored
+    for is the one most likely to be asked about repeatedly (KTC prices ~500
+    players, so an unpriced kicker appears all season), and not caching the miss
+    is how a cache with a 95% hit rate still issues a query per page. Bounded
+    because a plain map of every id a process has been asked about is a leak with
+    a slow fuse.
+  - **A page names its own ids rather than sending a delta.** The stream held a
+    set of what it had already sent, so a player crossed the wire once per season;
+    the equivalent across separate requests is the client listing everything it
+    holds on each one — a few thousand ids in a query string, which is a 414
+    waiting for the reader who scrolls furthest. Self-contained, a page re-sends
+    ~8KB of names it shares with earlier pages, bounded by the page size rather
+    than by the season. The client still *merges* rather than replaces.
+  - **The season's size is precomputed** (`trade_market_stats`, refreshed on the
+    league crawler's own tick — the loop that writes the trades it counts, so no
+    second timer for one query). It was a `count(*)` over the population on every
+    request, which pagination would have turned into one per *page*. Narrowed
+    counts still can't be stored — the space is unbounded — so they run once per
+    filter set, on a first page only. The freshness gate stamps the *attempt*,
+    the `projection_week_syncs` rule: a season with no trades counts zero, and a
+    gate reading the count itself would find it unsynced and recount every tick
+    forever. The client clamps a stored total up to what it has loaded, since a
+    denominator under its own numerator is the one way the lag is visible.
+  - **`transactions_trade_keyset_idx`** is what the walk resumes on: partial on
+    `type = 'trade' AND status = 'complete'`, ordered on
+    `(coalesce(status_updated, created, 0) DESC, transaction_id DESC)` — both keys
+    descending so a `LIMIT` is a fast-start ordered walk with no sort, and the
+    tiebreaker present so the order is *total* and therefore resumable (without
+    it a page boundary inside a group sharing a timestamp drops and duplicates
+    rows across the seam). `transactions_trade_adds_idx` is the GIN index behind
+    the player filter, partial on the same predicate for the same reason —
+    `adds` on a waiver is as big as on a trade and there are twenty times as
+    many. The older `transactions_trade_recency_idx` is left in place; it is what
+    a `NULLS LAST` ordering would still use.
+  - **The filter menus are their own route and their own aggregate**, and the
+    dialog's footer count is a *third* route. That split is not fussiness: the
+    menus are counted **without** the selection (a menu counted over its own
+    selection collapses to it) so a checkbox cannot change them, while the footer
+    is counted **with** it and changes on every press. Together, one checkbox
+    re-ran a season-wide grouped aggregate (~1.5s) to move a number `count(*)`
+    answers in ten milliseconds. The facets query runs its three branches as
+    three parallel statements rather than one `UNION ALL` — 2,090ms as one
+    statement, ~850ms as three — which costs reading the population three times
+    (~50ms a piece) against branches costing 270ms, 270ms and 830ms, and is worth
+    it precisely because the branches are so unequal.
+  - **The list is windowed** (`TradesList`, `@tanstack/react-virtual`), which is
+    what lets the board be the whole season however deep a reader scrolls. It
+    virtualises the **window**, not a box of its own, so the document keeps its
+    own scrolling — an inner scroller on a phone is a scroll trap — which is why
+    it measures `scrollMargin` rather than assuming it. It observes the **page
+    header** for that measurement and not `document.body`: the body's box grows
+    and shrinks with the list's *own* height, so observing it fired on every card
+    measured and every page appended, each firing doing a
+    `getBoundingClientRect` that forces a synchronous reflow, and none of that
+    traffic could say anything — what moves the list down the page is what is
+    above it. Card heights are measured, not computed, and the gap between cards
+    is padding *inside* each measured item, since a gap the virtualizer doesn't
+    know about drifts down the list. `TradeCard` is `memo`'d, because the list
+    re-renders on every scroll frame and without it ~26 cards re-ran their
+    exchange assembly and whole subtree at 60Hz.
+  - **`useInfiniteQuery`, with a bounded page count.** The cursor is the query's
+    own state, so it survives a remount and a navigation away and back; a filter
+    change is a *different key* rather than an invalidation, so widening back
+    finds the old board still loaded with its scroll position. `maxPages` (20,
+    or 4,000 trades) is the memory half of the same argument — an unbounded
+    infinite query is the season download arriving one scroll at a time — and
+    the board carries its own `gcTime` of five minutes against the client-wide
+    thirty, because a scrolled board plus every name it resolved is a different
+    order of thing from a manager's leagues.
+  - **The client's residual filter is three-state** (`features/trades/incremental`,
+    pure and tested). With the narrowing in SQL there is usually nothing to
+    decide, and two cases keep it: a page that arrives before the league list
+    does, and a league set too large to put in a query string. Two states forced
+    an undecidable trade to count as *out*, and the only way to correct that later
+    was to discard the whole answer and re-walk — which is exactly what the old
+    page's `n${allowedLeagues.size}` generation segment did, once per league that
+    arrived, over a list that grew. A third state puts it in a pending bucket, and
+    league metadata arriving re-judges *that bucket alone*. Two properties are
+    load-bearing: resolved indices are **merged** into the allowed list rather
+    than appended, since the board reads newest-first and a trade whose league
+    landed late belongs where it arrived; and a page that admits nothing hands the
+    **previous arrays** back, since the page memoises on their identity and the
+    virtualizer's measurement cache rides on it. The accumulator is `useState`
+    adjusted during render (`useFilteredTrades`), never a ref, because a ref
+    written during render survives a concurrent render that was thrown away,
+    while React re-runs a self-adjusting component before committing anything
+    under it.
+  - **Both filter dialogs are dynamically imported.** Neither is on screen at
+    first paint — each is a trigger and a `<dialog>` opened by a press — and
+    between them they were the largest client modules the page pulled. The
+    trigger stays static (it carries the badge that says what is set); only the
+    part nobody has opened is split. The ADP drawer and the columns editor are
+    split the same way in the manager tool, each latched so closing doesn't
+    unmount the dialog inside its own `close` handler.
 - **A trade card's header states the instant, and its sides each state one
   value.** Two changes to what a card says, and each replaced something that read
   as information and wasn't:
@@ -1414,9 +1446,9 @@ stops holding, a comment saying it does would not have caught it.
     slots that take neither a QB nor a defender (so `WRRB_FLEX` and `REC_FLEX`
     count as flexes without being named), and `Starters` is "not a bench slot",
     which has to keep counting a slot spelling this build has never seen. A new
-    flex therefore counts the moment the solver learns it. `league-filters.ts` is
-    tested, so both slot modules come in relatively with an explicit `.ts`
-    extension.
+    flex therefore counts the moment the solver learns it. The slot tables live
+    in `league-filters/defaults.ts` and come in relatively with an explicit `.ts`
+    extension, since the package is tested.
   - **Null and zero are different answers, per rule.** `k = 0` means "leagues
     without a kicker", and a league whose `roster_positions` were never synced is
     not evidence of one — an unknown lineup fails a slot rule rather than reading
@@ -1443,9 +1475,24 @@ stops holding, a comment saying it does would not have caught it.
   is still not `DEFENSIVE_SLOTS`: nearly every league starts a team defence, so
   that set says nothing about what game a league is playing while starting a
   linebacker does, and the wider set still gates the projections caveat.
-  `deriveScoring` stays in this file — the filters no longer bucket anything, but
-  it is the bucket `/api/adp` groups by and `adp-controls` re-exports it, since
-  `features/shared` can't import a feature.
+  `deriveScoring` stays in this package — the filters no longer bucket anything,
+  but it is the bucket `/api/adp` groups by and `adp-controls` re-exports it,
+  since `features/shared` can't import a feature.
+
+  **It is six modules and not one file** (`types`, `defaults`, `predicates`,
+  `summaries`, `options`, `breakdown`, behind a barrel). It was one, at 640 lines
+  mixing the types, the option tables, the matching rules, the summary strings,
+  the menu builders and the breakdown counts — six audiences for one import. The
+  arrows all point at `types`, which depends on nothing, so a component that only
+  threads the state around imports an erased module; `trade-query` takes
+  `predicates` and no option tables; and the dialog — which is dynamically
+  imported and off the first-paint bundle — is the only thing that pulls in all
+  of it. Two things went with the split: `activeFilterCount` counts without
+  building the labels it never reads (it is on every render of two headers, and
+  on the trades page it decides whether a request is narrowed at all), and
+  `leagueBreakdown` counts its four rows in **one** pass rather than four, which
+  matters because the trades page counts them over a whole season's leagues and
+  re-counts on every keystroke in the rules editor.
 - **The filters dialog is a bay layout with a readout rail, and the two halves
   fix different failures.** Stacked — three segment groups, then the two rule
   lists — the rules fell below a 60vh scroll box, so a reader who wanted

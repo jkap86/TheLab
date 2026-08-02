@@ -1,4 +1,4 @@
-import { leagueType } from "../shared/league-filters.ts";
+import { leagueType } from "../shared/league-filters/predicates.ts";
 import { formatRecord, formatWinPct } from "./format.ts";
 import type { ColumnPreset, Metric } from "./metric-cell.ts";
 import { aggregateRecord } from "./record.ts";

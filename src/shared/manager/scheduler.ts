@@ -1,3 +1,4 @@
+import { refreshStaleTradeStats } from "@/shared/trades";
 import { startBackgroundLoop } from "@/shared/util";
 
 import { CRAWL_LEAGUE_BATCH, runLeagueCrawl } from "./crawl";
@@ -59,6 +60,18 @@ export function startLeagueCrawler(): void {
   async function tick(): Promise<void> {
     const s = await runLeagueCrawl();
     const now = Date.now();
+
+    // The trades board's precomputed size rides on this tick rather than on a
+    // loop of its own, because this is the loop that *writes* the trades it
+    // counts and it already runs on a cadence matched to how fast they arrive.
+    // It takes its own advisory lock and gates on its own TTL, so on most ticks
+    // it is one indexed lookup; a failure is logged and never reaches the crawl
+    // summary, since a stale denominator on a progress line is not a crawl
+    // problem. Awaited rather than fired off: an unawaited promise inside a
+    // non-overlapping loop is how work starts stacking invisibly.
+    await refreshStaleTradeStats().catch((error) => {
+      console.error("[trades] stats refresh failed:", error);
+    });
 
     if (s.locked) {
       lockSkips += 1;

@@ -1,10 +1,35 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 
 import type { ColumnPreset, Metric } from "../metric-cell";
-import { ColumnsEditor } from "./columns-editor";
+import type { ColumnsEditor as ColumnsEditorComponent } from "./columns-editor";
 import { MetricHeadings } from "./metric-column";
+
+/**
+ * The editor, loaded the first time a heading is pressed.
+ *
+ * It is a `<dialog>` nobody has opened, so nothing of it is on screen at first
+ * paint — but it was in the bundle, and it is not small: four slot previews, the
+ * catalogue laid out in captioned bays and the preset row, plus the metric
+ * vocabulary behind all of it. Split out, a reader who never re-aims a column
+ * never downloads it, and the manager tabs' first paint is the list.
+ *
+ * `ssr: false` because a dialog that opens on a press has no server-rendered
+ * state worth having, and rendering it would put the markup back in the document
+ * that this removes.
+ */
+/**
+ * `dynamic` erases the generic — it types its result against `unknown` props —
+ * so the loaded component is cast back to what it is. The cast is safe because
+ * it names the very module being imported: a prop that changed shape is a type
+ * error at the import, not something this hides.
+ */
+const ColumnsEditor = dynamic(
+  () => import("./columns-editor").then((m) => m.ColumnsEditor),
+  { ssr: false },
+) as typeof ColumnsEditorComponent;
 
 /**
  * The list's stat columns, stated once above it: what each slot holds, and the
@@ -63,6 +88,12 @@ export function ColumnsBar<C>({
   const [openSlot, setOpenSlot] = useState<number | null>(null);
   const close = useCallback(() => setOpenSlot(null), []);
 
+  // Latched rather than `openSlot !== null`, so closing doesn't unmount the
+  // dialog inside its own `close` handler — and so the second press is instant,
+  // the chunk already being in memory.
+  const [everOpened, setEverOpened] = useState(false);
+  if (openSlot !== null && !everOpened) setEverOpened(true);
+
   return (
     // Below `sm` the headings take a line of their own, as the cards' columns do
     // — so the rail sits over the numbers it names at both widths. From `sm` up
@@ -75,6 +106,7 @@ export function ColumnsBar<C>({
         onOpen={setOpenSlot}
       />
 
+      {everOpened && (
       <ColumnsEditor
         metrics={metrics}
         columns={columns}
@@ -87,6 +119,7 @@ export function ColumnsBar<C>({
         onColumns={onColumns}
         onReset={onReset}
       />
+      )}
     </div>
   );
 }

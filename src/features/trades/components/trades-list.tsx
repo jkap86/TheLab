@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 
 import type { ManagerLeague } from "@/shared/manager";
@@ -26,15 +26,24 @@ const CARD_GAP = 12;
 const ESTIMATED_CARD_HEIGHT = 168;
 
 /**
+ * How many cards from the end the next page is asked for.
+ *
+ * Deep enough that an ordinary flick lands inside the buffer rather than on the
+ * spinner, shallow enough that a reader who stops after two screens has not
+ * pulled a third page they will never look at. A page is 200 cards, so this asks
+ * at 90% of the way down.
+ */
+const PREFETCH_MARGIN = 20;
+
+/**
  * The trades, windowed — only the cards near the viewport are in the DOM.
  *
- * **This is what lets the season be whole.** The list used to be capped at the
- * 2,000 most recent trades, and rendering the real number as ordinary elements
- * is not an option: a busy season is ~48k cards, each with a header, two or
- * three side columns and a row per asset, which is a few million nodes and a
- * layout pass no phone finishes. Virtualising makes the count irrelevant to
- * everything but the scrollbar — the ~20 cards on screen cost what 20 cards cost
- * whether the list behind them is two thousand or fifty.
+ * **This is what lets the board be the whole season.** Rendering the real number
+ * as ordinary elements is not an option: a busy season is ~48k cards, each with
+ * a header, two or three side columns and a row per asset, which is a few
+ * million nodes and a layout pass no phone finishes. Virtualising makes the count
+ * irrelevant to everything but the scrollbar — the ~20 cards on screen cost what
+ * 20 cards cost whether the list behind them is two thousand or fifty.
  *
  * It virtualises the **window**, not a scroll box of its own, and that is the
  * decision worth keeping. A fixed-height inner scroller would be easier to
@@ -62,6 +71,10 @@ export function TradesList({
   managers,
   metric,
   ktc,
+  headerRef,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }: {
   trades: readonly Trade[];
   leaguesById: ReadonlyMap<string, ManagerLeague>;
@@ -70,16 +83,33 @@ export function TradesList({
   /** The metric every card's value column shows — one selection for the list. */
   metric: TradeMetric;
   ktc: Record<string, KtcValue>;
+  /**
+   * Everything laid out above the list. Watched for size changes, because how
+   * far down the page the list starts is exactly what `scrollMargin` is — see
+   * the effect below for why it is this element and not the body.
+   */
+  headerRef: React.RefObject<HTMLElement | null>;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
   // Where the list starts down the page, which is what translates a window
   // scroll offset into an index. A stale value offsets every card by however
-  // much the header above moved, so it is re-read whenever that can happen: on
-  // resize, and on any change to the body's own box — which is what the header
-  // wrapping to a second line, or the progress note appearing and later
-  // disappearing, actually looks like from here.
+  // much the header above moved, so it is re-read whenever that can happen.
+  //
+  // **Observing the header rather than `document.body`**, which is what this
+  // used to do and is the wrong target twice over. The body's box grows and
+  // shrinks with *this list's own* height — every measured card, every page
+  // appended, every filter change — so the observer fired constantly, and each
+  // firing did a `getBoundingClientRect` that forces a synchronous reflow. It
+  // was self-triggering (which is why the `setState` below has to be guarded
+  // against a loop at all) and none of that traffic could tell it anything: the
+  // list moving down the page is caused by what is *above* it, and nothing else.
+  // The header is that thing, so this now fires when the header actually
+  // rewraps — a handful of times in a session instead of once per card measured.
   //
   // Deliberately not re-measured every render. This component re-renders on
   // every scroll frame, and `getBoundingClientRect` in a layout effect forces a
@@ -89,34 +119,51 @@ export function TradesList({
       const el = listRef.current;
       if (!el) return;
       const next = el.getBoundingClientRect().top + window.scrollY;
-      // Guarded because the observer below fires on the body growth that this
-      // list's own measurements cause; without it that is a render loop.
+      // Still guarded: a header whose own height didn't change can still report
+      // a resize, and an unguarded set is a render loop.
       setScrollMargin((prev) => (prev === next ? prev : next));
     };
 
     measure();
     window.addEventListener("resize", measure);
     const observer = new ResizeObserver(measure);
-    observer.observe(document.body);
+    const header = headerRef.current;
+    if (header) observer.observe(header);
     return () => {
       window.removeEventListener("resize", measure);
       observer.disconnect();
     };
-  }, []);
+  }, [headerRef]);
 
   const virtualizer = useWindowVirtualizer({
     count: trades.length,
     estimateSize: () => ESTIMATED_CARD_HEIGHT + CARD_GAP,
     // Keyed by the trade rather than the index, so measurements survive the list
-    // growing underneath them. It grows at the *end* while the stream runs, but
-    // a filter change reshuffles it entirely, and an index-keyed cache would
-    // hand every card the height of whatever used to sit at its position.
+    // growing underneath them. It grows at the *end* as pages arrive, but a
+    // filter change reshuffles it entirely, and an index-keyed cache would hand
+    // every card the height of whatever used to sit at its position.
     getItemKey: (index) => trades[index].transaction_id,
     overscan: 6,
     scrollMargin,
   });
 
   const items = virtualizer.getVirtualItems();
+
+  // The scroll-driven half of pagination: when the window reaches within
+  // `PREFETCH_MARGIN` cards of the end, ask for the next page. Reading the last
+  // rendered index rather than hanging an IntersectionObserver off a sentinel
+  // costs no extra DOM and no second observer, and the virtualizer has already
+  // computed the number.
+  //
+  // The effect is the right place despite this component re-rendering per scroll
+  // frame: `lastIndex` only changes when the window moves past a card boundary,
+  // so the dependency array is what throttles it. `onLoadMore` no-ops while a
+  // page is in flight, so a fast scroll asks repeatedly and fetches once.
+  const lastIndex = items.length ? items[items.length - 1].index : -1;
+  useEffect(() => {
+    if (!hasMore || loadingMore) return;
+    if (lastIndex >= trades.length - PREFETCH_MARGIN) onLoadMore();
+  }, [lastIndex, trades.length, hasMore, loadingMore, onLoadMore]);
 
   return (
     <ul

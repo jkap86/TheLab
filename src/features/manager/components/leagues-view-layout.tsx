@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { type ReactNode, useMemo, useState } from "react";
 
 import {
@@ -15,7 +16,27 @@ import { useAdp } from "../hooks/use-adp";
 import { useAdpDensity } from "../hooks/use-adp-density";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
 import { aggregateRecord } from "../record";
-import { AdpDrawer, AdpTrigger } from "./adp-drawer";
+import { AdpTrigger } from "./adp-drawer";
+
+/**
+ * The board drawer, loaded the first time it is opened.
+ *
+ * It is the largest hidden component in the manager tool — the pinned filter
+ * block, the value-curve slider, the NFL-calendar layer and the range scrubber's
+ * whole brush-over-a-histogram (another ~560 lines on its own) — and none of it
+ * is on screen until the trigger is pressed. Statically imported it was parsed
+ * and evaluated before the first league card could be drawn, on all three tabs.
+ *
+ * The **trigger** stays statically imported: it is in the header at first paint,
+ * it carries the badge that says what the board is set to, and it is small.
+ * Splitting the part that is visible from the part that isn't is the whole point
+ * of the exercise — see `TradesHome` for the same split, and `ColumnsBar` for a
+ * third.
+ */
+const AdpDrawer = dynamic(
+  () => import("./adp-drawer").then((m) => m.AdpDrawer),
+  { ssr: false },
+);
 import { ManagerHeader, type HeaderStat } from "./manager-header";
 import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
 import { PanelMessage } from "./ui";
@@ -72,6 +93,8 @@ export function LeaguesViewLayout({
     view;
   const { controls, setControls, resetControls, defaultSeason } = useAdpControls();
   const [boardOpen, setBoardOpen] = useState(false);
+  const [everOpened, setEverOpened] = useState(false);
+  if (boardOpen && !everOpened) setEverOpened(true);
 
   // Gated on the drawer being open: a tab nobody has opened the board on should
   // cost no ADP request. The gate is on the *fetch* and not on the read, which
@@ -162,6 +185,9 @@ export function LeaguesViewLayout({
         </div>
       )}
 
+      {/* Latched rather than gated on `boardOpen`, so the drawer isn't
+          unmounted by its own close and a second press is instant. */}
+      {everOpened && (
       <AdpDrawer
         open={boardOpen}
         onClose={() => setBoardOpen(false)}
@@ -173,6 +199,7 @@ export function LeaguesViewLayout({
         board={board}
         density={density}
       />
+      )}
     </PageShell>
   );
 }

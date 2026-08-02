@@ -204,112 +204,102 @@ export type ManagerLeaguematesPayload = {
 };
 
 /**
- * `GET /api/trades` — every completed trade in every crawled league for a
- * season, newest first, streamed as newline-delimited JSON.
+ * `GET /api/trades` — one page of the trades board, newest first.
  *
  * Not a manager route, and that is the whole shape of it: the trades worth
  * reading are the market's, not one account's, so this reads the leagues this
- * database has crawled rather than the leagues someone plays in. Which is also
- * why the leagues travel *with* the trades — there is no leagues stream on this
- * page to join against, and the client's league filters need what each league
- * starts and pays for.
+ * database has crawled rather than the leagues someone plays in.
  *
- * **It streams because the page filters over everything it is given.** Every
- * chip on that page is applied on the client, and the filter menus are read off
- * the trades themselves, so the browser needs the unnarrowed season in hand —
- * which on a busy one is ~48k trades and ~20MB of JSON. As a single body that is
- * a spinner until the last byte lands and one blocking parse at the end of it;
- * in chunks the newest trades are on screen while the rest is still arriving,
- * and the season is whole rather than capped at its newest slice. (It *was*
- * capped, at 2,000, which is what this replaced.)
+ * **It used to stream the whole season and it is now filtered and paginated,
+ * which is the largest performance change in the app.** The old shape followed
+ * from one constraint: every chip on the page was applied in the browser and the
+ * filter menus were read off the trades themselves, so the browser needed the
+ * unnarrowed season — ~48k trades and ~20MB of JSON on a busy one. Streaming it
+ * in chunks made that cost progressive rather than removing it, and it stayed a
+ * cost the reader paid before seeing anything useful: a season read, serialised,
+ * gzipped, parsed and held live to render twenty cards.
  *
- * The chunk shape is the same side-map idea as {@link ManagerPlayersPayload},
- * carried one step further: a trade names ids, the maps beside it resolve them,
- * and each chunk carries only what no earlier chunk did — so a player traded in
- * ten leagues crosses the wire once for the whole stream rather than once per
- * chunk. The client merges each chunk into what it already holds.
+ * Three things had to move for pagination to preserve the page rather than
+ * cripple it, and each has its own route or field:
+ *
+ * - **The filters moved to SQL.** Season, window, players, picks, managers and
+ *   the match mode are query parameters now (`shared/trades/params`), so a
+ *   narrowed board is narrowed by the database and the reader downloads matches
+ *   rather than candidates.
+ * - **The league rules stayed on the client**, because they are a slot-group and
+ *   scoring-key engine over Sleeper's JSONB blobs and a second copy in SQL would
+ *   drift invisibly. {@link TradeLeaguesPayload} hands the page every league of
+ *   the season once; it evaluates the rules and sends back ids.
+ * - **The filter menus moved to their own route.** {@link TradeFacetsPayload} is
+ *   the option lists and their counts, computed over the same population, asked
+ *   for only when the dialog opens.
+ *
+ * What is unchanged is the payload's own idea, carried over from the stream: a
+ * trade names ids and the maps beside it resolve them, and the client merges
+ * each page's maps into what it already holds rather than replacing them.
+ *
+ * What is *not* carried over is the stream's delta. It held a set of what it had
+ * already sent, so a player crossed the wire once per season; pages are separate
+ * requests, and the equivalent would be the client listing every id it holds on
+ * each one — a few thousand of them in a query string, which is a 414 waiting
+ * for the reader who scrolls furthest. A page is self-contained instead: it
+ * re-sends the names its own ~400 distinct players share with earlier pages,
+ * which is ~8KB compressed and bounded by the page size rather than the season.
  *
  * Read-only over what the crawl and the manager syncs stored: a league nobody
- * has looked up has no transactions here rather than being fetched on demand,
- * and a league is only as complete as the transaction weeks that sync fetched.
+ * has looked up has no transactions here rather than being fetched on demand.
  */
-export type TradesMetaMessage = {
-  type: "meta";
+export type TradesPagePayload = {
   season: string;
-};
-
-/**
- * How many completed trades the season holds — the length the stream will add
- * up to, so the page can meter its progress rather than counting up from
- * nowhere.
- *
- * **Its own message because it is its own query.** It used to ride on `meta` off
- * a `count(*) OVER ()` on the streaming query, and the direct saving from
- * dropping that is small — the `ORDER BY` materialises the whole result either
- * way, so the window was only a counting pass over rows Postgres was already
- * holding, worth ~4% of the walk at ~50k trades. What it actually buys is the
- * decoupling: a number carried by the *rows* is a number the first row cannot
- * arrive without, which pinned the whole protocol to sending nothing until the
- * count existed. Off the rows, it is one 56ms query running beside the walk, and
- * the trades stop waiting on it at all.
- *
- * It is counted over exactly the population the rows come from, which is what
- * keeps two queries from disagreeing: both build on the same `season` predicate
- * and the same startup-draft boundary, spelled once in `shared/trades/queries`.
- * So it remains the board's whole population and not a cap on it — trades made
- * before a league's startup draft finished are outside this count on the same
- * terms they are outside the stream.
- *
- * A consumer that never sees one still works: it is a denominator for a progress
- * line, not a thing the list is built out of.
- */
-export type TradesTotalMessage = { type: "total"; total: number };
-
-/**
- * A slice of the season — the trade rows alone, and nothing that resolves the
- * ids in them.
- *
- * **The names travel separately ({@link TradesNamesMessage}) so this doesn't
- * wait for them.** A chunk's trades are in hand the moment the cursor read
- * returns; the four lookups that turn their ids into names are four more round
- * trips, and sending them together meant the first card on screen waited for all
- * of it. The card already draws an unresolved id — a league falls back to its
- * id, a player to his, a side to its roster number — so the trades can be drawn
- * and then named.
- */
-export type TradesChunkMessage = {
-  type: "chunk";
-  /** Newest first, continuing where the previous chunk stopped. */
+  /** Newest first, continuing after the cursor the request carried. */
   trades: Trade[];
-};
-
-/**
- * What the ids in the chunk before this one mean.
- *
- * The four maps are **deltas, not snapshots** — merge them, never replace. Most
- * chunks late in a stream carry a handful of entries or none at all, because a
- * season's leagues and the players in it are named early and then repeat.
- */
-export type TradesNamesMessage = {
-  type: "names";
-  /** Leagues named by these trades that no earlier chunk sent. */
-  leagues: ManagerLeague[];
-  /** Player ids → name/position/team, for players no earlier chunk sent. */
+  /**
+   * The token for the next page, or null at the end of the board.
+   *
+   * Opaque, and null is the *only* end-of-board signal — a page shorter than the
+   * limit is one too, but a page that happened to end exactly on the limit is
+   * not, so the two are collapsed into this one field rather than left to the
+   * client to infer from a length.
+   */
+  nextCursor: string | null;
+  /**
+   * How many trades match this query in full, or null when it wasn't counted.
+   *
+   * **Counted on a first page and never on a later one**, which is what makes
+   * pagination cheaper than the stream rather than more expensive: a count is a
+   * scan of the population, and a scan per page would be fifty of them. The
+   * client carries the first page's answer across the rest of the set.
+   *
+   * The unnarrowed count — the state the page opens in — is not counted at all;
+   * it is read out of `trade_market_stats`, refreshed by the crawler that writes
+   * the trades behind it.
+   */
+  total: number | null;
+  /**
+   * How many trades the **league filters alone** leave, or null when it wasn't
+   * counted (a later page, or a query where it equals `total`).
+   *
+   * This is the `M` in the page's "N of M trades": the league filters say which
+   * leagues' trades are on the board at all, and the trade filters say which of
+   * those are worth looking at. Two numbers because they are two questions, the
+   * same distinction the two filter dialogs draw.
+   */
+  scopeTotal: number | null;
+  /** Player ids → name/position/team, for players the client said it lacks. */
   players: Record<string, PlayerSummary>;
   /**
-   * User ids → display name and avatar, for sides no earlier chunk sent. A side
-   * naming a user id that never arrives is one whose member row isn't stored;
-   * the client falls back to the roster number.
+   * User ids → display name and avatar, for sides the client said it lacks. A
+   * side naming a user id that never arrives is one whose member row isn't
+   * stored; the client falls back to the roster number.
    */
   managers: Record<string, LeaguematePayload>;
   /**
-   * Player ids → **both** KTC boards, for players no earlier chunk sent — what
-   * the card's value column reads a side's haul off.
+   * Player ids → **both** KTC boards, for players the client said it lacks.
    *
    * Both numbers rather than one, because the board is a fact about the *league*
-   * a trade happened in and this stream spans every crawled league: a two-QB
-   * room reads the superflex board and a 1QB room the other, and the same player
-   * is worth materially different totals on the two. The client picks per trade
+   * a trade happened in and this route spans every crawled league: a two-QB room
+   * reads the superflex board and a 1QB room the other, and the same player is
+   * worth materially different totals on the two. The client picks per trade
    * from the league's own lineup ({@link ManagerLeague.roster_positions}), the
    * same predicate that groups a draft into an ADP board population.
    *
@@ -321,21 +311,76 @@ export type TradesNamesMessage = {
 };
 
 /**
- * A read that failed. It can arrive *after* chunks have already been sent — the
- * stream is a walk over a cursor, so a failure partway through leaves the client
- * holding a real prefix of the season. The page keeps what arrived and says the
- * rest is missing, the same way the leagues stream's `refreshError` keeps cached
- * leagues on screen.
+ * `GET /api/trades/leagues` — every league with a trade on a season's board.
+ *
+ * The league filters' whole input. It is a separate route rather than a field on
+ * the page above because it is asked for **once per season** and the pages are
+ * asked for many times: bundling it would re-send a few hundred leagues' worth
+ * of `settings`, `roster_positions` and `scoring_settings` blobs with every
+ * scroll. Separated, it is one request the client caches for fifteen minutes,
+ * and it serves three readers at once — the filter dialog's option counts and
+ * breakdown rows, the ids the trades query is narrowed by, and the name every
+ * trade card puts on its league.
+ *
+ * Restricted to leagues that actually traded, which is what the old stream's
+ * league list converged on (it accumulated them as their trades arrived), so the
+ * dialog's counts mean what they meant.
  */
-export type TradesErrorMessage = { type: "error"; error: string };
+export type TradeLeaguesPayload = {
+  season: string;
+  leagues: ManagerLeague[];
+};
 
-/** One newline-delimited JSON message on the `GET /api/trades` stream. */
-export type TradesStreamMessage =
-  | TradesMetaMessage
-  | TradesTotalMessage
-  | TradesChunkMessage
-  | TradesNamesMessage
-  | TradesErrorMessage;
+/** One selectable value in a trade filter menu, and how many trades name it. */
+export type TradeFacet = {
+  value: string;
+  count: number;
+};
+
+/**
+ * `GET /api/trades/facets` — the trade filter dialog's three menus, and how many
+ * trades the draft selection would leave.
+ *
+ * **The menus are read off the trades and always were**; what changed is only
+ * where the counting happens. A fixed list would offer players nobody traded
+ * while hiding the one someone wants, so the options are whatever the season
+ * actually moved — which was free while the browser held the season and is a
+ * grouped aggregate now that it doesn't.
+ *
+ * The counts are over the population narrowed by everything **except the
+ * selection itself** — the league filters and the window, not the picked players
+ * — because a menu counted over its own selection collapses to that selection
+ * the moment you make one and can't be widened without being cleared first.
+ *
+ * **Which is why the footer's own number is not here.** It is counted *with* the
+ * selection, so it changes on every checkbox, while nothing in this payload can.
+ * Together they made one checkbox re-run a grouped aggregate over the season for
+ * a number a `count(*)` answers in ten milliseconds; apart, this is fetched once
+ * per league scope and window and {@link TradeCountPayload} is what a press
+ * costs.
+ *
+ * **The values are ids and the labels are not here**, with one exception. A
+ * pick's label is a pure formatting of its own token (`"2026-1"` → `"2026 1st"`)
+ * and the client already owns that function, so sending it would be sending a
+ * string derivable from the one beside it. Player and manager labels are not
+ * derivable — they are rows in other tables — so those arrive in `names`, which
+ * is the same shape and the same merge as a page's own maps. A facet can name a
+ * player no loaded page does, which is exactly why they travel together.
+ *
+ * Asked for only while the dialog is open, which is what makes the cost
+ * acceptable: a reader who never opens it never pays for it.
+ */
+export type TradeFacetsPayload = {
+  season: string;
+  managers: TradeFacet[];
+  players: TradeFacet[];
+  picks: TradeFacet[];
+  /** Names for the ids above, for the ones the page's own maps may not hold. */
+  names: {
+    players: Record<string, PlayerSummary>;
+    managers: Record<string, LeaguematePayload>;
+  };
+};
 
 /**
  * The manager's place in one league across the metrics a league card ranks it
@@ -670,3 +715,20 @@ export type KickoffPayload = {
 
 /** The error body every league API route returns on a non-2xx. */
 export type ApiErrorPayload = { error: string };
+
+/**
+ * `GET /api/trades/count` — how many trades a query matches.
+ *
+ * The filter dialog's footer, and nothing else. Its own route rather than a
+ * field on {@link TradeFacetsPayload} because the two are read at different
+ * rates — see the note there — and because it is the one number in the dialog
+ * that a checkbox can move.
+ *
+ * Counted over exactly the population `/api/trades` pages through, so the
+ * dialog's promise and the board it opens cannot disagree; unnarrowed it is the
+ * stored `trade_market_stats` row rather than a scan.
+ */
+export type TradeCountPayload = {
+  season: string;
+  total: number;
+};

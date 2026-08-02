@@ -1,4 +1,3 @@
-import type { Trade } from "@/shared/trades";
 
 import { shiftDays } from "../shared/date-range.ts";
 import { ordinal } from "../shared/format.ts";
@@ -10,6 +9,16 @@ import { ordinal } from "../shared/format.ts";
  * Kept apart from the modal that renders it, and pure, for the same reason the
  * league filters are: these are the rules, and they are worth reading and
  * testing without a fetch or a dialog behind them.
+ *
+ * **What is left here is the vocabulary, not the matching.** `tradeAssets`,
+ * `tradeMatches` and `tradeOptions` used to live beside these — the predicate a
+ * trade was judged by and the menu counted off the season — and both now happen
+ * in SQL, because the browser no longer holds a season to run them over. Their
+ * definitions did not move so much as change language: `tradeMatches` is the
+ * selection half of `shared/trades/sql`, and `tradeOptions` is
+ * `getTradeFacets`. What stays is what both ends still have to agree on — the
+ * shape of a selection, the pick token\u2019s spelling, and how a window resolves
+ * against today.
  *
  * They are a *different* set from the league filters the page also carries, and
  * the two stay independent on purpose — the same distinction the manager tool
@@ -153,68 +162,6 @@ export function pickLabel(token: string): string {
   return `${season} ${ordinal(Number(round))}`;
 }
 
-/** Every player, pick token and manager a trade names, on either side. */
-export type TradeAssets = {
-  players: Set<string>;
-  picks: Set<string>;
-  managers: Set<string>;
-};
-
-/**
- * What a trade contains, pooled across its sides.
- *
- * Pooled on purpose: the filters ask what *moved*, not who ended up with it.
- * Someone looking up a player wants the trade he was in, and having to know
- * which way he went before it will show is a filter that only answers when you
- * already know the answer. Which side each asset landed on is the trade's own
- * display, and it says so there.
- */
-export function tradeAssets(trade: Trade): TradeAssets {
-  const assets: TradeAssets = {
-    players: new Set(),
-    picks: new Set(),
-    managers: new Set(),
-  };
-  for (const side of trade.sides) {
-    side.players.forEach((id) => assets.players.add(id));
-    side.picks.forEach((pick) => assets.picks.add(pickToken(pick)));
-    if (side.user_id) assets.managers.add(side.user_id);
-  }
-  return assets;
-}
-
-/**
- * Whether a trade passes the filters, given the window already resolved by
- * {@link tradeRangeBounds} (once per render, rather than per trade).
- *
- * The window always narrows — it is a bound on when, not a selection — so it is
- * applied before `match` is consulted and is never one of the "any" alternatives.
- * A trade Sleeper filed with no timestamp at all is dropped by *any* bound, for
- * the reason `/api/adp` drops an undated draft: there is no honest side of the
- * boundary to put it on. An unbounded range still counts it.
- */
-export function tradeMatches(
-  trade: Trade,
-  filters: TradeFilters,
-  bounds: TradeBounds,
-): boolean {
-  const at = trade.completed_at;
-  if (bounds.from !== null && (at === null || at < bounds.from)) return false;
-  if (bounds.to !== null && (at === null || at >= bounds.to)) return false;
-
-  const selections = [
-    ...filters.players.map((id) => ["players", id] as const),
-    ...filters.picks.map((token) => ["picks", token] as const),
-    ...filters.managers.map((id) => ["managers", id] as const),
-  ];
-  if (selections.length === 0) return true;
-
-  const assets = tradeAssets(trade);
-  const has = ([kind, value]: readonly [keyof TradeAssets, string]) =>
-    assets[kind].has(value);
-  return filters.match === "all" ? selections.every(has) : selections.some(has);
-}
-
 /** How many filters are narrowing the list — the count on the modal's trigger. */
 export function activeTradeFilterCount(filters: TradeFilters): number {
   return (
@@ -283,35 +230,3 @@ export type TradeOption = {
   /** Trades in the list that name it. */
   count: number;
 };
-
-type Labeller = (value: string) => { label: string; note?: string };
-
-/**
- * The options one filter offers, counted over the trades handed in.
- *
- * The caller passes the trades narrowed by *everything except these filters* —
- * the league filters and the date window, but not the selection itself. Counting
- * over the fully filtered list instead would collapse the menu to whatever is
- * already selected the moment you selected it, which is a filter you can't widen
- * without clearing it first.
- *
- * Ordered by count and then by label: the busiest player, the manager who deals
- * most, the pick season everyone is trading. That is the order this list is
- * scanned in, and alphabetical would bury it.
- */
-export function tradeOptions(
-  trades: readonly Trade[],
-  kind: keyof TradeAssets,
-  label: Labeller,
-): TradeOption[] {
-  const counts = new Map<string, number>();
-  for (const trade of trades) {
-    for (const value of tradeAssets(trade)[kind]) {
-      counts.set(value, (counts.get(value) ?? 0) + 1);
-    }
-  }
-
-  return [...counts]
-    .map(([value, count]) => ({ ...label(value), value, count }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-}

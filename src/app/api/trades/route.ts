@@ -1,312 +1,203 @@
-import type {
-  LeaguematePayload,
-  TradesStreamMessage,
-} from "@/shared/contract";
-import { getKtcValuesBySleeperId } from "@/shared/ktc";
-import { getLeaguesByIds } from "@/shared/manager";
-import { getPlayersByIds } from "@/shared/players";
+import { NextResponse } from "next/server";
+
+import type { LeaguematePayload, TradesPagePayload } from "@/shared/contract";
 import { isSeason } from "@/shared/query";
 import { getActiveSeason } from "@/shared/season";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
-import { countAllTrades, getTradeManagers, streamAllTrades } from "@/shared/trades";
-
-import { startTradesTiming } from "./timing";
+import {
+  countTrades,
+  getStoredTradeCount,
+  getTradeManagers,
+  hasTradeNarrowing,
+  isUnnarrowed,
+  leagueScopeQuery,
+  listTrades,
+  lookupKtc,
+  lookupPlayers,
+  parseTradeQuery,
+  refreshTradeStats,
+} from "@/shared/trades";
+import type { Trade, TradeQuery } from "@/shared/trades";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Every completed trade in every crawled league for a season, streamed as
- * newline-delimited JSON — see {@link TradesStreamMessage}.
+ * One page of the trades board — see {@link TradesPagePayload} for the payload
+ * and what each half of it is for.
  *
- * It sits at the top level rather than under `/api/user/[username]` because it
- * asks nothing about a manager: the page it serves is a window on the whole
- * market this database has seen, and narrowing to one account's leagues is what
- * its managers filter does afterwards. That also makes it the plainest kind of
- * cache-backed route — no username to resolve, so a season nothing has been
- * crawled for comes back empty rather than syncing anything.
+ * **This route replaced a whole-season NDJSON stream, and the shape of it is the
+ * point.** The stream was a good answer to a constraint that no longer holds:
+ * the page filtered in the browser, so the browser needed everything, so the
+ * only lever left was making ~20MB arrive progressively. With the filters here,
+ * a reader downloads the two hundred trades they are looking at.
  *
- * Every filter the trades page offers is applied on the client, which is why
- * this takes no query string beyond the season. The narrowing is a filter *set*
- * whose options are read off the trades themselves (which players moved, which
- * managers dealt) and off the leagues they happened in, so the client needs the
- * unnarrowed list in hand either way; filtering here would cost a round trip per
- * chip and hand back an option list that had shrunk to the selection.
+ * Four costs went with the stream, and the handler is arranged around not paying
+ * them again:
  *
- * **Which is why it streams rather than answering once.** Needing the whole
- * season client-side is a fact about the filters and not something to design
- * away, but a busy season is ~20MB of JSON — as one body, a spinner until the
- * last byte and one blocking parse at the end of it. This is the same read paid
- * for progressively: the first chunk is on screen in the time the old route was
- * still counting rows, and nothing is capped. It follows the leagues stream's
- * protocol for that reason — one JSON object per line, discriminated by `type` —
- * so the client decodes it with the same `takeLines`.
+ * - **No cursor is held.** `listTrades` is one `LIMIT`-bounded keyset query that
+ *   finishes and hands its connection back *before* the enrichment below runs.
+ *   The old handler interleaved cursor reads with four id lookups per chunk, so
+ *   a pooled connection sat idle-in-transaction across every one of them — at a
+ *   handful of concurrent readers, that was the pool.
+ * - **No count per request.** The unnarrowed total comes off `trade_market_stats`
+ *   (a stored row, refreshed by the crawler that writes the trades); a narrowed
+ *   one is counted, but only on a **first page**, so a filter set costs one scan
+ *   rather than one per page.
+ * - **No repeated lookups.** The names are resolved through the process-level
+ *   caches in `shared/trades/enrich`, so a season's few thousand players are
+ *   read from Postgres once per TTL rather than once per page per reader.
  *
- * **Three things travel independently, and that is the shape of this handler.**
- * The trades, the count, and the names the trades' ids stand for used to be one
- * message, which meant the first card on screen waited for the slowest of the
- * three. They are separated now, each on its own message:
+ * **A page names its own ids and does not try to send a delta**, which is the
+ * one thing the stream did that this deliberately drops. The stream held a `Set`
+ * of what it had already sent, so a player crossed the wire once per season;
+ * pages are separate requests, so the equivalent would be the client listing
+ * everything it holds on each one — a few thousand ids in a query string, which
+ * is a 414 waiting for the reader who scrolls furthest. A self-contained page
+ * re-sends the names its ~400 distinct players share with earlier pages, which
+ * is ~8KB compressed and bounded by the page size rather than by the season. The
+ * client still merges rather than replaces, so the maps only ever grow.
  *
- * - the **trades** go out the moment a cursor read returns, before anything is
- *   resolved about them;
- * - the **names** — leagues, players, managers, KTC prices — follow as four
- *   parallel lookups, and the card draws unresolved ids in the meantime, which
- *   it already knew how to do (a league falls back to its id, a player to his, a
- *   side to its roster number);
- * - the **total** is a separate query started alongside the walk and sent
- *   whenever it lands.
- *
- * **An abandoned request stops the work rather than finishing it into a closed
- * socket.** The reader who opens this page and navigates away two seconds later
- * is the common case, not the edge one — a season is tens of thousands of trades
- * and several seconds of walking. `request.signal` is watched throughout: the
- * generator is aborted through the same signal, the loop is checked at every
- * boundary, and `return()`ing the iterator runs its `finally`, which closes the
- * cursor and hands the connection back. Before this, navigating away left this
- * handler reading the rest of the season and pricing players for it, holding a
- * pooled connection the whole time, with every byte it produced thrown away.
+ * The season is the only parameter with a default (the active one), and nothing
+ * else can fail the request: every filter is a narrowing, and the neutral form
+ * of a narrowing is not narrowing, so an unreadable value is ignored rather than
+ * turning a stale bookmark into a 400.
  */
 export async function GET(request: Request) {
-  const requested = new URL(request.url).searchParams.get("season");
+  const url = new URL(request.url);
+  const requested = url.searchParams.get("season");
   const season =
     requested && isSeason(requested) ? requested : await getActiveSeason();
 
-  const timing = startTradesTiming(season);
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      let closed = false;
-      const send = (message: TradesStreamMessage) => {
-        if (closed) return;
-        try {
-          const bytes = encoder.encode(JSON.stringify(message) + "\n");
-          controller.enqueue(bytes);
-          timing.count("bytes", bytes.byteLength);
-        } catch {
-          closed = true; // client disconnected
-        }
-      };
+  const query = parseTradeQuery(url.searchParams, season);
 
-      // The walk is driven by hand rather than by `for await`, because the two
-      // ways out of it need different treatment: draining runs the generator's
-      // own `finally`, and abandoning it needs `return()` called explicitly.
-      const trades = streamAllTrades(season, { signal: request.signal });
+  try {
+    const page = await listTrades(query);
 
-      // Fired once, and the handler is removed in the `finally` below — a
-      // listener left on a long-lived signal is the leak this shape is for.
-      // It only sets the flag and closes the walk; nothing in here writes to
-      // the controller, since the reason it is running is that nobody is
-      // reading.
-      const onAbort = () => {
-        closed = true;
-        // Not awaited — an abort handler is not a place to hold a promise, and
-        // the generator's own `finally` releases the connection either way —
-        // but caught, since an unawaited rejection here would take the process
-        // down over a connection that was being discarded anyway.
-        void trades.return(undefined).catch(() => {});
-      };
-      request.signal.addEventListener("abort", onAbort, { once: true });
+    // Both counts run only on a first page, and both are skipped when they are
+    // free or knowable without a scan. Started together with the enrichment
+    // rather than before it: they are independent queries and the page waits on
+    // the slowest, not on the sum.
+    const first = query.cursor === null;
+    const [totals, names] = await Promise.all([
+      first ? resolveTotals(query) : Promise.resolve(EMPTY_TOTALS),
+      resolveNames(page.trades),
+    ]);
 
-      // What has already crossed the wire, so each chunk carries only what is
-      // new. Held per request rather than per chunk: a season names a few
-      // hundred leagues and a few thousand players in its first chunks and then
-      // repeats them for the rest of the stream, which is the difference between
-      // resolving each once and resolving each forty-nine times.
-      const sentLeagues = new Set<string>();
-      const sentPlayers = new Set<string>();
-      const sentManagers = new Set<string>();
+    const payload: TradesPagePayload = {
+      season,
+      trades: page.trades,
+      nextCursor: page.nextCursor,
+      ...totals,
+      ...names,
+    };
 
-      // Started before the walk and never awaited inline: the page meters
-      // against this number and is not built out of it, so the trades must not
-      // queue behind it. A failure costs the progress line its denominator and
-      // nothing else, which is why it is caught here rather than left to reject
-      // an unhandled promise once the request is gone.
-      const counted = timing
-        .phase("count", () => countAllTrades(season))
-        .then((total) => {
-          timing.mark("total-known");
-          timing.count("trades-total", total);
-          send({ type: "total", total });
-        })
-        .catch((error) => {
-          console.error("[trades] count failed:", error);
-        });
+    return NextResponse.json(payload, {
+      headers: {
+        // Private and short: the board moves at the crawler's pace, and the
+        // client's own React Query entry is the cache that matters. What this
+        // buys is the back button and a double-mount in development.
+        "Cache-Control": "private, max-age=30",
+      },
+    });
+  } catch (error) {
+    console.error("[trades] page query failed:", error);
+    return NextResponse.json(
+      { error: "Failed to load trades" },
+      { status: 500 },
+    );
+  }
+}
 
-      let outcome: "complete" | "aborted" | "failed" = "complete";
+const EMPTY_TOTALS = { total: null, scopeTotal: null } as const;
 
-      try {
-        // Sent before anything is read, so the page has a container to fill and
-        // can draw its own loading state against a season it knows.
-        send({ type: "meta", season });
+/**
+ * The two denominators the page states, each computed the cheapest way that is
+ * still exact.
+ *
+ * - Unnarrowed, `total` is the stored count and no scan happens at all. A season
+ *   the refresh has never reached counts once and stores it, so the first reader
+ *   after a deploy pays what every reader used to.
+ * - `scopeTotal` is the league-filtered population, and it is only its own query
+ *   when something beyond the league filters is narrowing — otherwise it is the
+ *   same number as `total`, and counting it twice would be a scan for a value
+ *   already in hand.
+ */
+async function resolveTotals(
+  query: TradeQuery,
+): Promise<{ total: number | null; scopeTotal: number | null }> {
+  try {
+    if (isUnnarrowed(query)) {
+      const stored = await getStoredTradeCount(query.season);
+      const total = stored ?? (await refreshTradeStats(query.season));
+      return { total, scopeTotal: total };
+    }
 
-        for (;;) {
-          if (request.signal.aborted) break;
+    if (!hasTradeNarrowing(query)) {
+      const total = await countTrades(query);
+      return { total, scopeTotal: total };
+    }
 
-          const next = await timing.phase("db-read", () => trades.next());
-          timing.mark("first-row");
-          if (next.done || request.signal.aborted) break;
+    const [total, scopeTotal] = await Promise.all([
+      countTrades(query),
+      countTrades(leagueScopeQuery(query)),
+    ]);
+    return { total, scopeTotal };
+  } catch (error) {
+    // A denominator, not the list. The page draws a count without a total the
+    // same way it drew one mid-stream, so a failed count costs a percentage and
+    // never the trades.
+    console.error("[trades] count failed:", error);
+    return EMPTY_TOTALS;
+  }
+}
 
-          const chunk = next.value.trades;
-          if (chunk.length === 0) continue;
+/**
+ * The names the ids on this page stand for.
+ *
+ * The three lookups are independent and run together; each is a no-op on an
+ * empty id list, which is the common case for every page after the first few.
+ * Leagues are deliberately **not** among them — they arrive whole from
+ * `/api/trades/leagues`, once per season, which is what removed the stream's
+ * per-chunk league resolution entirely.
+ */
+async function resolveNames(trades: readonly Trade[]) {
+  const playerIds: string[] = [];
+  const managerIds: string[] = [];
+  const seen = new Set<string>();
+  const take = (id: string, out: string[]) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push(id);
+  };
 
-          // The trades, before anything is known about the ids in them. This is
-          // the message the page's first paint waits on and the whole reason
-          // the names are a message of their own.
-          timing.phase("serialize", async () => send({ type: "chunk", trades: chunk }));
-          timing.mark("first-chunk");
-          timing.count("trades", chunk.length);
+  for (const trade of trades) {
+    for (const side of trade.sides) {
+      for (const id of side.players) take(id, playerIds);
+      if (side.user_id) take(side.user_id, managerIds);
+    }
+  }
 
-          const leagueIds: string[] = [];
-          const playerIds: string[] = [];
-          const managerIds: string[] = [];
-          const take = (id: string, seen: Set<string>, out: string[]) => {
-            if (seen.has(id)) return;
-            seen.add(id);
-            out.push(id);
-          };
+  const [players, managers, ktc] = await Promise.all([
+    lookupPlayers(playerIds),
+    getTradeManagers(managerIds),
+    // Keyed on the same new-ids list as the names, so a player priced once is
+    // priced once for the whole board.
+    lookupKtc(playerIds),
+  ]);
 
-          for (const trade of chunk) {
-            take(trade.league_id, sentLeagues, leagueIds);
-            for (const side of trade.sides) {
-              side.players.forEach((id) => take(id, sentPlayers, playerIds));
-              if (side.user_id) take(side.user_id, sentManagers, managerIds);
-            }
-          }
+  const resolvedManagers: Record<string, LeaguematePayload> = {};
+  for (const [id, m] of managers) {
+    resolvedManagers[id] = {
+      user_id: id,
+      display_name: m.display_name,
+      avatar_url: sleeperAvatarUrl(m.avatar, "thumb"),
+    };
+  }
 
-          timing.count("players", playerIds.length);
-          timing.count("leagues", leagueIds.length);
-          timing.count("managers", managerIds.length);
-
-          // Nothing new to name is the common case late in a season, and it is
-          // worth skipping rather than sending an empty message the client has
-          // to decode to learn it was empty.
-          if (!playerIds.length && !managerIds.length && !leagueIds.length) {
-            continue;
-          }
-
-          // Independent of each other, and each a no-op on an id set this chunk
-          // added nothing to. Timed individually as well as together: they run
-          // concurrently, so the four phase totals are what says which of them
-          // the request was actually waiting on.
-          const [players, managers, leagues, ktc] = await Promise.all([
-            playerIds.length
-              ? timing.phase("lookup-players", () => getPlayersByIds(playerIds))
-              : {},
-            managerIds.length
-              ? timing.phase("lookup-managers", () =>
-                  getTradeManagers(managerIds),
-                )
-              : new Map(),
-            leagueIds.length
-              ? timing.phase("lookup-leagues", () => getLeaguesByIds(leagueIds))
-              : [],
-            // Keyed on the same new-ids list as the names, so a player priced
-            // once is priced once for the whole stream. Both boards travel,
-            // because which one a trade reads is its *league's* question and one
-            // stream spans every crawled league.
-            playerIds.length
-              ? timing.phase("lookup-ktc", () =>
-                  getKtcValuesBySleeperId(playerIds),
-                )
-              : { values: {}, updated_at: null },
-          ]);
-
-          // Checked again on the far side of four round trips: they are the
-          // longest a chunk waits, so this is the likeliest place for a reader
-          // to have left, and there is no point serialising ~1MB of names into
-          // a socket nobody is holding.
-          if (request.signal.aborted) break;
-
-          const resolvedManagers: Record<string, LeaguematePayload> = {};
-          for (const [id, m] of managers) {
-            resolvedManagers[id] = {
-              user_id: id,
-              display_name: m.display_name,
-              avatar_url: sleeperAvatarUrl(m.avatar, "thumb"),
-            };
-          }
-
-          timing.phase("serialize", async () =>
-            send({
-              type: "names",
-              leagues,
-              players,
-              managers: resolvedManagers,
-              ktc: ktc.values,
-            }),
-          );
-          timing.mark("first-names");
-        }
-
-        if (request.signal.aborted) outcome = "aborted";
-      } catch (error) {
-        outcome = "failed";
-        console.error("[trades] query failed:", error);
-        // Sent down the stream rather than raised as a status, because by now
-        // the response is a 200 with chunks already in it: a failure partway
-        // through leaves the client holding a real prefix of the season, and
-        // saying so beats discarding what arrived.
-        send({ type: "error", error: "Failed to load trades" });
-      } finally {
-        request.signal.removeEventListener("abort", onAbort);
-        // Unconditional, and not only on the abort path: a `break` out of the
-        // loop above leaves the generator suspended mid-walk, holding the
-        // cursor and its connection until it is collected. `return()` runs its
-        // `finally` now.
-        await trades.return(undefined).catch(() => {});
-        // Awaited so the count's own connection is accounted for before the
-        // request is called done; it is already caught, so this cannot throw.
-        await counted;
-        if (!closed) {
-          try {
-            controller.close();
-          } catch {
-            // already closed
-          }
-        }
-        timing.report(outcome);
-      }
-    },
-  });
-
-  // **Compressed here rather than left to the platform.** A season is ~13MB of
-  // NDJSON and ~0.6MB gzipped — a 20x ratio, because this is the most repetitive
-  // JSON in the app: the same dozen keys and the same league and roster ids, tens
-  // of thousands of times. Nothing else was going to apply it. Next does not
-  // compress a streamed response, and `no-transform` below tells any proxy that
-  // might have not to bother — which is the right instruction *once the body is
-  // already encoded*, and was silently costing 12MB when it wasn't.
-  //
-  // It does not undo the streaming: a gzip stream emits as it goes, so the first
-  // chunk still leaves before the last row is read. Brotli would compress better
-  // and `CompressionStream` doesn't offer it, which is the whole reason this is
-  // gzip.
-  const encode = (request.headers.get("accept-encoding") ?? "").includes("gzip");
-  const body = encode
-    ? stream.pipeThrough(
-        // `CompressionStream.writable` is typed `WritableStream<BufferSource>`,
-        // which is the wider — and correct — parameter type, and which
-        // `pipeThrough` rejects anyway against a `ReadableStream<Uint8Array>`.
-        // A variance wart in the lib types rather than a mismatch: every byte
-        // enqueued above is a `Uint8Array`.
-        new CompressionStream("gzip") as unknown as ReadableWritablePair<
-          Uint8Array,
-          Uint8Array
-        >,
-      )
-    : stream;
-
-  return new Response(body, {
-    headers: {
-      "Content-Type": "application/x-ndjson; charset=utf-8",
-      ...(encode ? { "Content-Encoding": "gzip" } : {}),
-      // Sent whether or not this response is encoded: a cache keyed without it
-      // would serve a gzipped body to the next client that couldn't read one.
-      Vary: "Accept-Encoding",
-      // `no-transform` matters more here than on the leagues stream: a proxy
-      // that buffers to re-encode would hold the whole season back and undo the
-      // streaming entirely.
-      "Cache-Control": "no-cache, no-transform",
-    },
-  });
+  return {
+    players: Object.fromEntries(players),
+    managers: resolvedManagers,
+    ktc: Object.fromEntries(ktc),
+  };
 }
