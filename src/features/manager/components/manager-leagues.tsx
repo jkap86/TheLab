@@ -85,6 +85,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
         <ColumnsBar
           metrics={LEAGUE_METRICS}
           columns={columns}
+          subject="League"
           presets={LEAGUE_COLUMN_PRESETS}
           ctx={previewCtx}
           previewLabel={first?.name ?? null}

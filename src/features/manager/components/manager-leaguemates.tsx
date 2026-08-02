@@ -82,6 +82,7 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
           <ColumnsBar
             metrics={LEAGUEMATE_SHARE_METRICS}
             columns={columns}
+            subject="Leaguemate"
             presets={SHARE_COLUMN_PRESETS}
             ctx={previewCtx}
             previewLabel={first?.name ?? null}
