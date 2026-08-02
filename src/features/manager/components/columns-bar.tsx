@@ -22,6 +22,13 @@ import { MetricHeadings } from "./metric-column";
  * The 1px transparent border is not a rounding error: the cards carry a border,
  * and without one here every heading would be a pixel out.
  *
+ * **It runs the full width of the cards, and `subject` is what makes that
+ * legible.** Alignment alone was not enough to say these labels belong to the
+ * list: shrink-wrapped to its four columns the rail was a raised island floating
+ * over the right of the page, which reads as a control that happens to sit above
+ * a list rather than as its header. Spanning the rows with the name column named
+ * too, it is the shape a table header has — see {@link MetricHeadings}.
+ *
  * **A heading is the only control here — there is no `Columns` chip beside it.**
  * The chip and the menus were two ways to the same board and the chip knew less
  * than the label: it always opened on slot 1, so changing the fourth column was
@@ -42,6 +49,7 @@ import { MetricHeadings } from "./metric-column";
 export function ColumnsBar<C>({
   metrics,
   columns,
+  subject,
   presets,
   ctx,
   previewLabel,
@@ -51,6 +59,8 @@ export function ColumnsBar<C>({
 }: {
   metrics: Metric<C>[];
   columns: string[];
+  /** What one row of this list is — the heading over the name column. */
+  subject: string;
   presets: ColumnPreset[];
   /** The subject the editor previews against — the list's first row, or null. */
   ctx: C | null;
@@ -66,12 +76,12 @@ export function ColumnsBar<C>({
   return (
     // Below `sm` the headings take a line of their own, as the cards' columns do
     // — so the rail sits over the numbers it names at both widths. From `sm` up
-    // it rides at the end of the row, which with nothing to its left is what
-    // `justify-end` is for.
-    <div className="flex flex-col gap-2 border border-transparent px-4 pl-5 sm:flex-row sm:items-end sm:justify-end sm:gap-4">
+    // it spans the row, as the cards do.
+    <div className="border border-transparent px-4 pl-5">
       <MetricHeadings
         metrics={metrics}
         columns={columns}
+        subject={subject}
         onOpen={setOpenSlot}
       />
 

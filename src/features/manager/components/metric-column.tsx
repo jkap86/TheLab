@@ -38,6 +38,11 @@ const COLUMN_BOX = "min-w-0 flex-1 px-2.5 sm:w-24 sm:flex-none sm:shrink-0";
  * It is written beside {@link COLUMN_BOX} for the same reason: the rail only
  * names the numbers under it if both ends resolve to the same width at the same
  * breakpoint, and a retyped `w-full` is exactly how one end stops.
+ *
+ * **The heading rail does not wear this** — see {@link MetricHeadings}. A card's
+ * columns shrink-wrap because the name beside them is what takes the rest of the
+ * row; the rail spans the row instead, and reaches this geometry through the
+ * cells it holds at the end of it.
  */
 const COLUMN_ROW = "flex w-full items-stretch sm:w-auto sm:shrink-0";
 
@@ -151,22 +156,44 @@ export function MetricColumn<C>({
  * rather than past a line of text. The shading is all in `.lab-ledge` in
  * `globals.css`; what stays here is the layout, per the rule those classes hold
  * to.
+ *
+ * **The billet spans the row, and its first cell names the row's subject.** It
+ * used to shrink-wrap the four columns, which put a raised island over the right
+ * two-fifths of the list with a hundred card-widths of nothing to its left — at
+ * that size it reads as a toolbar that happens to sit above a list rather than as
+ * the list's own header, and the alignment that ties it to the numbers is a
+ * pixel-level fact a reader has to go looking for. Run to the cards' full width
+ * with `League` / `Player` / `Leaguemate` over the name column, it is the shape
+ * every table header has: the labelled band covers the rows it labels, and the
+ * four stat headings are cells in it rather than a floating cluster. Only the
+ * subject cell is new geometry — the stat columns keep {@link COLUMN_BOX} to the
+ * pixel, so what lines them up with the numbers is unchanged.
+ *
+ * The subject cell is not a trigger and takes no lit hover: there is no column
+ * behind it to aim, and a heading that lights under the cursor and then does
+ * nothing is the promise this app's raised/recessed grammar exists to keep. It is
+ * drawn from `sm` up only, where the card's name and its columns share a line;
+ * below that the card stacks and the rail stacks with it, so the columns take the
+ * whole width and a subject label would be naming a line that isn't there.
  */
 export function MetricHeadings({
   metrics,
   columns,
+  subject,
   onOpen,
 }: {
   /** The catalogue — only the label of each column's own metric is read. */
   metrics: readonly { key: string; label: string }[];
   columns: string[];
+  /** What one row of this list *is* — the heading over the name column. */
+  subject: string;
   /** Open the editor armed on this slot. */
   onOpen: (slot: number) => void;
 }) {
   return (
-    // The wall. `COLUMN_ROW` sizes it — full width below `sm` where the headings
-    // take a line of their own, shrink-wrapped to the four columns above it.
-    <div className={`lab-ledge lab-notch-lg ${COLUMN_ROW}`}>
+    // The wall, run to the width of the cards below it — the rail is the list's
+    // header, so it covers the list.
+    <div className="lab-ledge lab-notch-lg flex w-full items-stretch">
       {/*
         The face. `relative` is what the cyan seam (`::before`) and the dimples
         hang off; the material classes deliberately carry no `position`.
@@ -191,6 +218,19 @@ export function MetricHeadings({
           aria-hidden="true"
           className="lab-ledge-dimple pointer-events-none absolute right-1 top-1 h-1 w-1 rounded-full"
         />
+
+        {/*
+          The name column's own heading, and the half of this rail that makes it
+          read as one. It takes the space the four cells don't (`flex-1`), which
+          is exactly the space a card's name half takes, and it is inert — no
+          `.lab-ledge-col`, so it neither lights under the cursor nor cuts a
+          groove of its own against the first stat heading (the `divide-x` above
+          draws that one, which is the line between what a row *is* and what is
+          measured about it).
+        */}
+        <span className="hidden min-w-0 flex-1 items-center truncate py-[9px] pl-1 pr-2.5 text-[10px] font-semibold uppercase tracking-wider text-foreground/45 sm:flex">
+          {subject}
+        </span>
 
         {columns.map((key, slot) => {
           const metric = metrics.find((m) => m.key === key) ?? metrics[0];

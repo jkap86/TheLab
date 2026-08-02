@@ -143,7 +143,16 @@ export function ManagerHeader({
     // edge instead of passing behind a pinned surface. Fading also lets a league
     // card dim into the plate as it scrolls under rather than being cut mid-row.
     // `pointer-events-none` because it overhangs the list.
-    <header className="sticky top-[var(--site-header-h)] z-40 -mx-4 -mt-10 mb-6 flex flex-col gap-2 bg-[var(--background)] px-4 pb-4 pt-2 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent">
+    //
+    // The gap under it closes when the heading rail is riding here: the rail is
+    // the list's own header, and 40px of background between a heading and the
+    // first row it heads is what makes the two read as separate things. With the
+    // rail absent the header is a card above a list and keeps the fuller gap.
+    <header
+      className={`sticky top-[var(--site-header-h)] z-40 -mx-4 -mt-10 flex flex-col gap-2 bg-[var(--background)] px-4 pt-2 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent ${
+        columns ? "mb-3 pb-2" : "mb-6 pb-4"
+      }`}
+    >
       <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.075),rgba(255,255,255,0.02)_60%,rgba(255,255,255,0.008))] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.12),inset_0_-2px_8px_rgba(0,0,0,0.5),0_18px_40px_-22px_rgba(0,0,0,0.9)]">
         {/* The cyan rail down the plate, echoing the league rows' accent. */}
         <span

@@ -108,6 +108,7 @@ export function ManagerPlayers({ searched }: { searched: string }) {
           <ColumnsBar
             metrics={PLAYER_SHARE_METRICS}
             columns={columns}
+            subject="Player"
             presets={PLAYER_SHARE_COLUMN_PRESETS}
             ctx={previewCtx}
             previewLabel={first?.name ?? null}
