@@ -1641,6 +1641,23 @@ stops holding, a comment saying it does would not have caught it.
     colour, so the rows switch to plain `opacity-*` rather than carrying a second
     palette of on-cyan text tokens that would have to be kept in step with the
     face above them.
+  - **`.lab-ledge` is that grammar carrying a heading rail**, and it is the one
+    place the bar's material left the bar: the stat columns' headings are a
+    machined billet the list scrolls *under*. It is `.lab-key`'s construction
+    (wall wrapper, lit face, `.lab-notch-lg` on both) at a rail's width, for the
+    plain reason that a heading here is a **trigger** — pressing one opens the
+    columns editor armed on that slot — and four flat labels over a list read as
+    a caption instead. Three details it teaches beyond what a key already
+    teaches. **A chamfer is three stops, not an inset line**: a hard specular
+    pixel, a bright band, then the face falling away — one `inset 0 1px` reads as
+    a border, which is what the labels used to be. **A groove is a dark cut with
+    a lit far wall**, and the two halves live in different places on purpose: the
+    cut is the call site's `divide-x`, because a border changes the box and the
+    cards' own columns spend the same pixel (drop it and every heading after the
+    first sits one pixel left of the number it names, four unevenly shared
+    below `sm`), while the lit wall is an inset highlight in the class. And the
+    **hover lights the whole cell, not the label** — a column that answers the
+    cursor with a colour change alone is text, where a lit face is a part.
   The notch is kept for the small parts and the panel stays rounded (the `H3`
   mockup of three): six rows of 11px text want a calm surface, and nothing else
   in the app has to change its corners to match.
