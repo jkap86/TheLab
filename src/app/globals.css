@@ -148,6 +148,39 @@ body {
       inset 0 0 0 1px rgba(0, 255, 229, 0.14);
   }
 
+  /* `.lab-well` at *instrument* scale — the kickoff countdown's digit cells.
+
+     Not the same class, for the reason `.lab-trough` isn't either: a shadow
+     doesn't scale. `.lab-well`'s flat fill and 2px sink read as a slot behind a
+     10px chip label and as a grey box behind a 28px digit, where what a digit
+     wants is a lens — a face that falls away from the light so the number sits
+     *in* it. So the fill is a gradient rather than a flat colour, the sink is
+     deeper, and there is a lit bottom lip (`inset 0 -1px`) the small well has no
+     room for: light entering the top of a cut and catching its far wall is what
+     says the glass has thickness.
+
+     `.lab-readout-live` is that cell for the one unit that is always moving.
+     The accent is spent on the *housing* — the hairline lifted and a glow
+     bloomed inside the cut — rather than only on the digit, because a lit number
+     in an unlit well reads as a colour choice while a lit well reads as the cell
+     that is running. Material only, per the rule the rest of this layer keeps:
+     the box, the padding and the type all come from utilities at the call site. */
+  .lab-readout {
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.85),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .lab-readout-live {
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.8),
+      inset 0 -1px 0 rgba(0, 255, 229, 0.22),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.34),
+      inset 0 0 16px -5px rgba(0, 255, 229, 0.55),
+      0 0 14px -4px rgba(0, 255, 229, 0.35);
+  }
+
   /* The same extrusion as `.lab-key`, for a control that stays a rounded pill.
 
      A key builds its thickness out of a stacked layer because `clip-path` cuts a
