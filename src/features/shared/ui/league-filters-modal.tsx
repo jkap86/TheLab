@@ -71,6 +71,7 @@ export function LeagueFiltersModal({
   leagues: readonly ManagerLeague[];
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const troughRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(filters);
   const active = activeFilterCount(filters);
@@ -97,6 +98,13 @@ export function LeagueFiltersModal({
     setDraft(filters);
     setOpenGroup(null);
     ref.current?.showModal();
+    // `showModal` autofocuses the first focusable descendant, which here is the
+    // close button — so the dialog opened with an X wearing a focus ring, which
+    // reads as a pressed or selected control rather than as the way out (and on
+    // iOS the ring is a blue square around a round button). The panel takes the
+    // focus instead: the trap and Escape still belong to the dialog, and the
+    // first Tab still lands on the close button. Same shape as `AdpDrawer`.
+    panelRef.current?.focus();
   }, [filters]);
 
   // A press anywhere outside the trough dismisses an open row. Pointer-down
@@ -169,7 +177,9 @@ export function LeagueFiltersModal({
         className="m-auto w-[min(1040px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
       >
         <div
-          className="filters-dialog-panel relative overflow-hidden rounded-2xl border border-active/20 bg-gradient-to-b from-[#14242f] to-[#0a1520] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),0_0_60px_-20px_rgba(0,255,229,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]"
+          ref={panelRef}
+          tabIndex={-1}
+          className="filters-dialog-panel relative overflow-hidden outline-none rounded-2xl border border-active/20 bg-gradient-to-b from-[#14242f] to-[#0a1520] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),0_0_60px_-20px_rgba(0,255,229,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]"
           style={{ animation: "dialog-rise 0.18s cubic-bezier(0.2,0.9,0.3,1)" }}
         >
           {/*

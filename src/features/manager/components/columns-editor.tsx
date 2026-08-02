@@ -82,6 +82,7 @@ export function ColumnsEditor<C>({
   onReset: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   /**
    * Which slot the next pick fills.
    *
@@ -114,6 +115,9 @@ export function ColumnsEditor<C>({
       if (dialog.open) dialog.close();
     } else if (!dialog.open) {
       dialog.showModal();
+      // The panel takes the focus rather than the close button `showModal`
+      // would autofocus — see `LeagueFiltersModal`.
+      panelRef.current?.focus();
     }
   }, [openSlot]);
 
@@ -141,7 +145,9 @@ export function ColumnsEditor<C>({
       className="m-auto w-[min(760px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
     >
         <div
-          className="relative overflow-hidden rounded-2xl border border-active/20 bg-gradient-to-b from-[#14242f] to-[#0a1520] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),0_0_60px_-20px_rgba(0,255,229,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]"
+          ref={panelRef}
+          tabIndex={-1}
+          className="relative overflow-hidden outline-none rounded-2xl border border-active/20 bg-gradient-to-b from-[#14242f] to-[#0a1520] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),0_0_60px_-20px_rgba(0,255,229,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]"
           style={{ animation: "dialog-rise 0.18s cubic-bezier(0.2,0.9,0.3,1)" }}
         >
           {/* The specular rail every milled face in the app carries. */}
