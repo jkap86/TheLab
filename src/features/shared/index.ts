@@ -29,7 +29,7 @@ export {
   scoringValue,
   slotCount,
   slotGroupLabel,
-} from "./league-filters";
+} from "./league-filters/index";
 export type {
   ActiveFilter,
   CompareOp,
@@ -37,7 +37,7 @@ export type {
   LeagueBreakdownRow,
   LeagueFilters,
   SlotGroup,
-} from "./league-filters";
+} from "./league-filters/index";
 export {
   MONTH_ABBREVIATIONS,
   formatRangeDate,

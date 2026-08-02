@@ -1,0 +1,259 @@
+import type { TradeQuery } from "./params.ts";
+
+/**
+ * The SQL the trades board is read through, as fragments rather than as
+ * finished statements.
+ *
+ * It is a module of its own because five reads share one definition of "the
+ * trades on this board" — the page, the total, the league-scope total, the
+ * league list and the filter facets — and the guarantee that matters is that
+ * they cannot come to different views of it. That used to be enforced by a
+ * single `TRADES_POPULATION_SQL` constant two queries interpolated; with server
+ * side filtering there are more consumers and a *builder*, so the constant grew
+ * into this.
+ *
+ * Every value still arrives as a bound parameter. The builder pushes onto a
+ * params array and binds the index it returns (`` `$${params.push(value)}` ``),
+ * the same habit `shared/manager/adp` follows: the validated query decides which
+ * fragments exist, and nothing a caller sent is ever spliced into a string.
+ */
+
+/**
+ * A league's *first* draft, for leagues that have no previous season — the
+ * startup, whose status and last pick are the boundary trades are dropped
+ * before.
+ *
+ * Three decisions are packed into this, and each one is a way of getting it
+ * wrong:
+ *
+ * - **The first draft, not the latest.** An inaugural dynasty league can run a
+ *   rookie draft after its startup in the same league year, and taking the later
+ *   draft's last pick would hide months of real trades between the two. Ordering
+ *   by `start_time` with nulls last picks the startup and leaves an undated stray
+ *   draft as the fallback rather than the answer.
+ * - **No previous league is what makes a draft a startup.** A continuing dynasty
+ *   league's draft is a rookie draft — additive to rosters that already exist —
+ *   so it bounds nothing and the league is simply absent here. Sleeper spells the
+ *   empty case as null, `''` and `'0'` depending on vintage, so all three read as
+ *   "no previous season".
+ * - **The row is selected whatever it holds, and the reading happens in the
+ *   `WHERE`.** `last_picked` alone can't say whether the startup is over, so the
+ *   status has to travel with it; filtering the unusable rows out here is what
+ *   left an unfinished startup looking like a league with no boundary at all.
+ *
+ * `$1` is the season.
+ */
+export const STARTUP_DRAFT_SQL = `
+  SELECT DISTINCT ON (d.league_id) d.league_id, d.last_picked, d.status
+    FROM drafts d
+    JOIN leagues l ON l.league_id = d.league_id
+   WHERE l.season = $1
+     AND coalesce(l.previous_league_id, '') IN ('', '0')
+   ORDER BY d.league_id, d.start_time ASC NULLS LAST, d.draft_id`;
+
+/**
+ * The season/status/startup half of the `WHERE` — what is on this board before
+ * a reader narrows anything.
+ *
+ * `$1` is the season. See {@link STARTUP_DRAFT_SQL} for what each half of the
+ * boundary is doing and why both columns stay inert when they say nothing.
+ *
+ * **Written as correlated `EXISTS` subqueries rather than as joins, and that is
+ * the difference between a page being an index walk and being a scan of the
+ * season.** With a `JOIN leagues` and a `LEFT JOIN startup_draft` above it, the
+ * `ORDER BY` sits over a join tree and the planner cannot satisfy it from
+ * `transactions_trade_keyset_idx` — it hash-joins, collects the whole
+ * population and takes a top-N heapsort, which costs the same on page 40 as on
+ * page 1. As `EXISTS` filters the ordering is over `transactions` alone, so the
+ * plan is an ordered index scan with the filters applied per row and a `LIMIT`
+ * that stops it. Measured on 320k transactions holding 20k trades for the
+ * season: **23.2ms and 518 buffers as joins, 0.33ms and 21 buffers as `EXISTS`**
+ * for the first page — and the join form's cost grows with the season while the
+ * `EXISTS` form's does not.
+ *
+ * The rewrite is exact rather than approximate, which is worth checking against
+ * the join form it replaced: a trade was kept when there was no startup row *or*
+ * the row permitted it, so it is dropped exactly when a startup row exists and
+ * rejects it — which is what the `NOT EXISTS` says. Both halves keep their
+ * null-inertness, spelled the other way up.
+ *
+ * The counting queries lose nothing by sharing it (measured at 9.0ms against
+ * 9.8ms for the join form over the same data), so there is one population and
+ * not two — which is the guarantee this constant exists for.
+ */
+export const TRADES_POPULATION_SQL = `
+   FROM transactions t
+  WHERE t.type = 'trade' AND t.status = 'complete'
+    AND EXISTS (SELECT 1 FROM leagues l
+                 WHERE l.league_id = t.league_id AND l.season = $1)
+    -- The startup boundary, written as "no startup row *rejects* this trade".
+    -- A continuing dynasty has no startup row, so nothing can reject it.
+    AND NOT EXISTS (
+      SELECT 1 FROM startup_draft sd
+       WHERE sd.league_id = t.league_id
+         -- An unfinished startup rejects the lot; a status Sleeper didn't send
+         -- is unknown, and unknown stays inert rather than hiding a league.
+         AND ((sd.status IS NOT NULL AND sd.status <> 'complete')
+              -- Inert on an absent bound: no last pick stored is no cutoff.
+              -- Comparing above zero reads a zero as the absent value Sleeper
+              -- means by it, not as 1970.
+              OR (sd.last_picked IS NOT NULL AND sd.last_picked > 0
+                  -- The undated case is a decision and not a side effect: a
+                  -- trade Sleeper filed with no timestamp has no honest side
+                  -- of this boundary, so a league that has one drops it — the
+                  -- same rule the date filters and /api/adp follow for an
+                  -- undated draft.
+                  AND (coalesce(t.status_updated, t.created) IS NULL
+                       OR coalesce(t.status_updated, t.created) <= sd.last_picked))))`;
+
+/**
+ * The board's sort key, folded so that it is never null.
+ *
+ * Sleeper stamps a completed trade with `status_updated` and leaves `created` as
+ * the only timestamp on some older rows, and files a few with neither. The old
+ * route sorted `DESC NULLS LAST`; folding the null to zero puts those rows in
+ * exactly the same place while making the ordering a total order on a `bigint`,
+ * which is what a keyset resume predicate needs — a row comparison against a
+ * null propagates null and silently skips the undated tail.
+ *
+ * `transactions_trade_keyset_idx` is ordered on this expression, so a page is an
+ * ordered index walk rather than a sort.
+ */
+export const TRADE_SORT_SQL = `coalesce(t.status_updated, t.created, 0)`;
+
+/** The columns `assembleTrade` reads, cast out of `BIGINT`'s string form. */
+export const TRADE_COLUMNS_SQL = `
+  t.transaction_id, t.league_id, t.week,
+  t.created::float8         AS created,
+  t.status_updated::float8  AS status_updated,
+  t.roster_ids, t.adds, t.draft_picks, t.waiver_budget`;
+
+/** A jsonb column read as an array, or an empty one where it is anything else. */
+const asArray = (column: string) =>
+  `CASE WHEN jsonb_typeof(${column}) = 'array' THEN ${column} ELSE '[]'::jsonb END`;
+
+/** `{season, round}` as the `"2026-1"` token a pick filter holds. */
+const PICK_TOKEN_SQL = `((p->>'season') || '-' || (p->>'round'))`;
+
+/**
+ * The reader's narrowing, as `AND`-joined SQL, pushing its values onto `params`.
+ *
+ * Every fragment is a *narrowing*, so an absent one contributes nothing — which
+ * is what makes the unnarrowed board (the state the page opens in) exactly the
+ * old query with a `LIMIT` on it.
+ *
+ * The three selection categories are joined by the query's own `match` mode,
+ * which is the one place the fragments are not simply `AND`ed: `all` and `any`
+ * are both real questions ("did these two managers trade with each other" against
+ * "anything involving any of these three players"), and the mode covers the whole
+ * selection rather than one category each. The **window is not one of the
+ * alternatives** — it always narrows, because it is a bound rather than a
+ * selection — which is the same rule the client-side predicate has always
+ * followed.
+ */
+export function tradeFilterSql(query: TradeQuery, params: unknown[]): string {
+  const clauses: string[] = [];
+  const bind = (value: unknown) => `$${params.push(value)}`;
+
+  if (query.leagues !== null) {
+    clauses.push(`t.league_id = ANY(${bind(query.leagues)}::varchar[])`);
+  }
+  if (query.excludeLeagues !== null) {
+    clauses.push(`NOT (t.league_id = ANY(${bind(query.excludeLeagues)}::varchar[]))`);
+  }
+
+  // Spelled with the `IS NOT NULL` rather than left to comparison semantics,
+  // because an undated trade being dropped by *any* bound is a decision — the
+  // same one `/api/adp` makes about an undated draft, and the one the client's
+  // `tradeMatches` makes. `coalesce(…, 0)` would put it in 1970 and let a
+  // `to` bound keep it.
+  const at = `coalesce(t.status_updated, t.created)`;
+  if (query.from !== null) {
+    clauses.push(`(${at} IS NOT NULL AND ${at} >= ${bind(query.from)})`);
+  }
+  if (query.to !== null) {
+    clauses.push(`(${at} IS NOT NULL AND ${at} < ${bind(query.to)})`);
+  }
+
+  const selections: string[] = [];
+  const all = query.match === "all";
+
+  if (query.players.length > 0) {
+    // jsonb key existence: `adds` is player id → the roster that received them,
+    // so the keys *are* the players who moved, pooled across the sides the way
+    // `tradeAssets` pools them. `transactions_trade_adds_idx` answers both.
+    const op = all ? "?&" : "?|";
+    selections.push(`t.adds ${op} ${bind(query.players)}::text[]`);
+  }
+
+  if (query.picks.length > 0) {
+    const tokens = bind(query.picks);
+    const matched = `
+      SELECT count(DISTINCT ${PICK_TOKEN_SQL})
+        FROM jsonb_array_elements(${asArray("t.draft_picks")}) p
+       WHERE ${PICK_TOKEN_SQL} = ANY(${tokens}::text[])`;
+    selections.push(
+      all
+        ? // Every token present, counted distinctly so a trade carrying two
+          // 2026 firsts doesn't satisfy a two-token selection on its own.
+          `(${matched}) = ${bind(query.picks.length)}`
+        : `EXISTS (SELECT 1 FROM jsonb_array_elements(${asArray("t.draft_picks")}) p
+                    WHERE ${PICK_TOKEN_SQL} = ANY(${tokens}::text[]))`,
+    );
+  }
+
+  if (query.managers.length > 0) {
+    const owners = bind(query.managers);
+    // Driven from `rosters` rather than from the trade's own `roster_ids`: a
+    // trade names rosters and a reader names people, and the join is the only
+    // place that mapping exists. Containment is checked against both a number
+    // and a string because Sleeper has been seen to send roster ids either way
+    // — the same defensiveness `assembleTrade` carries.
+    const rosterMatch = `
+      FROM rosters r
+       WHERE r.owner_id = ANY(${owners}::varchar[])
+         AND r.league_id = t.league_id
+         AND (t.roster_ids @> to_jsonb(r.roster_id)
+              OR t.roster_ids @> to_jsonb(r.roster_id::text))`;
+    selections.push(
+      all
+        ? `(SELECT count(DISTINCT r.owner_id) ${rosterMatch}) = ${bind(query.managers.length)}`
+        : `EXISTS (SELECT 1 ${rosterMatch})`,
+    );
+  }
+
+  if (selections.length > 0) {
+    clauses.push(
+      selections.length === 1
+        ? selections[0]
+        : `(${selections.join(all ? " AND " : " OR ")})`,
+    );
+  }
+
+  return clauses.length ? ` AND ${clauses.join(" AND ")}` : "";
+}
+
+/**
+ * The keyset resume predicate: everything strictly after `(at, transaction_id)`
+ * in the board's descending order.
+ *
+ * Written as a **row comparison** rather than as the expanded
+ * `a < x OR (a = x AND b < y)`, because that is the form the planner recognises
+ * as an index-ordered start position — the expanded version costs a filter over
+ * the whole index range instead. It is safe here precisely because
+ * {@link TRADE_SORT_SQL} folds the null away: a row comparison against a null
+ * propagates null, and would drop the undated tail without a word.
+ */
+export function tradeCursorSql(
+  cursor: { at: number; transaction_id: string },
+  params: unknown[],
+): string {
+  const at = `$${params.push(cursor.at)}`;
+  const id = `$${params.push(cursor.transaction_id)}`;
+  return ` AND (${TRADE_SORT_SQL}, t.transaction_id) < (${at}::bigint, ${id}::varchar)`;
+}
+
+/** `ORDER BY` for the board — the ordering the keyset index is built on. */
+export const TRADE_ORDER_SQL = `ORDER BY ${TRADE_SORT_SQL} DESC, t.transaction_id DESC`;
+
+export { asArray as jsonbArraySql, PICK_TOKEN_SQL };

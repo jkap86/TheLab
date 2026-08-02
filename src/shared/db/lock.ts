@@ -19,6 +19,8 @@ export const LOCK_KEYS = {
   projections: [8675309, 4],
   /** Sleeper players-map refresh (`shared/players/sync.ts`). */
   players: [8675309, 5],
+  /** Precomputed trade-board counts (`shared/trades/stats.ts`). */
+  tradeStats: [8675309, 6],
 } as const satisfies Record<string, AdvisoryLockKey>;
 
 /**

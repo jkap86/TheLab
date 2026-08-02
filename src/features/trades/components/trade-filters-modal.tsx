@@ -7,12 +7,12 @@ import {
   TRADE_RANGE_PRESETS,
   activeTradeFilterCount,
   pickLabel,
-  tradeMatches,
-  tradeOptions,
   tradeRangeBounds,
 } from "../filters";
-import type { TradeFilters, TradeRangePreset } from "../filters";
-import type { PlayerSummary, Trade, TradeManager } from "../types";
+import type { TradeFilters, TradeOption, TradeRangePreset } from "../filters";
+import { useTradeCount, useTradeFacets } from "../hooks/use-trade-facets";
+import type { LeagueScope } from "../trade-query";
+import type { PlayerSummary, TradeManager } from "../types";
 import { OptionPicker } from "./option-picker";
 
 /**
@@ -26,27 +26,41 @@ import { OptionPicker } from "./option-picker";
  * state — is bought back the same way: the trigger wears the count of active
  * filters, and the page names the window in words beside the trade count.
  *
- * Edited as a draft and committed on Apply, because every option carries how many
- * trades it would leave and those counts can't be read while the list behind the
- * dialog moves.
+ * Edited as a draft and committed on Apply, because every option carries how
+ * many trades it would leave and those counts can't be read while the list
+ * behind the dialog moves.
+ *
+ * **The options are counted by the database now, and the dialog is what asks.**
+ * They used to be counted here, off the season the browser was holding; with the
+ * board paginated there is no season in the browser to count, so `useTradeFacets`
+ * asks `/api/trades/facets` for the same three menus over the same population.
+ * The lists and their numbers are unchanged — what changed is that a reader who
+ * never opens this dialog never pays for them, which is most readers. That is
+ * also why this component is dynamically imported: its markup, its option picker
+ * and the query behind it are all off the first-paint bundle.
+ *
+ * The request is `null` while the dialog is closed, which is the mechanism —
+ * `useAdp`'s, for the same reason — that keeps a closed dialog from costing a
+ * request.
  */
 export function TradeFiltersModal({
   filters,
   onChange,
-  trades,
+  season,
+  scope,
   players,
   managers,
   today,
 }: {
   filters: TradeFilters;
   onChange: (filters: TradeFilters) => void;
+  season: string;
   /**
-   * The trades the *league* filters leave — what the options and their counts
-   * are taken over. Narrowed by the league filters but not by these ones: a menu
-   * counted over its own selection collapses to that selection the moment you
-   * make it, and can't be widened without being cleared first.
+   * The league narrowing in force — the options are counted over the leagues the
+   * *league* filters leave, since that is the list this dialog narrows further.
    */
-  trades: readonly Trade[];
+  scope: LeagueScope;
+  /** Names the board has already resolved; the facets bring their own for the rest. */
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
   /** `YYYY-MM-DD`, so the relative presets resolve without a clock in here. */
@@ -55,19 +69,26 @@ export function TradeFiltersModal({
   const ref = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(filters);
+  const [open, setOpen] = useState(false);
   const active = activeTradeFilterCount(filters);
 
   // Seeded on open rather than synced with an effect: while the dialog is up it
   // holds focus and the page behind it is inert, so the only moment the two can
   // disagree is the moment it opens.
-  const open = useCallback(() => {
+  const show = useCallback(() => {
     setDraft(filters);
+    setOpen(true);
     ref.current?.showModal();
     // The panel takes the focus rather than the first control in it — see
     // `LeagueFiltersModal`, where `showModal`'s autofocus put a focus ring on a
     // chip nobody had pressed.
     panelRef.current?.focus();
   }, [filters]);
+
+  // Every way out reports through the dialog's own `close` event, so the parent
+  // hears one signal rather than three — and the facets query is disabled the
+  // moment it does, rather than on the next render of whoever closed it.
+  const close = useCallback(() => setOpen(false), []);
 
   const apply = useCallback(() => {
     onChange(draft);
@@ -79,41 +100,52 @@ export function TradeFiltersModal({
     [draft.range, today],
   );
 
-  // The options are counted over the window the draft describes — narrowing the
-  // dates should narrow the menu — but never over the selection itself.
-  const windowed = useMemo(
+  // Two requests, because they move at different rates. The **menus** are
+  // counted over the league scope and the window the draft describes — so they
+  // re-ask when a date chip is pressed and cannot when a checkbox is — and the
+  // selection is stripped from their key so a checkbox doesn't re-run a
+  // season-wide aggregate for an answer that can't have changed. The **count**
+  // is the whole draft, and is a `count(*)`.
+  const menuRequest = useMemo(
     () =>
-      trades.filter((trade) =>
-        tradeMatches(trade, DEFAULT_TRADE_FILTERS, bounds),
-      ),
-    [trades, bounds],
+      open
+        ? { season, scope, filters: DEFAULT_TRADE_FILTERS, bounds }
+        : null,
+    [open, season, scope, bounds],
+  );
+  const countRequest = useMemo(
+    () => (open ? { season, scope, filters: draft, bounds } : null),
+    [open, season, scope, draft, bounds],
   );
 
+  const { data: facets, loading: facetsLoading } = useTradeFacets(menuRequest);
+  const matching = useTradeCount(countRequest);
+
+  const names = facets?.names;
   const managerOptions = useMemo(
     () =>
-      tradeOptions(windowed, "managers", (id) => ({
-        label: managers[id]?.display_name || id,
+      toOptions(facets?.managers, (id) => ({
+        label: names?.managers[id]?.display_name || managers[id]?.display_name || id,
       })),
-    [windowed, managers],
+    [facets?.managers, names, managers],
   );
   const playerOptions = useMemo(
     () =>
-      tradeOptions(windowed, "players", (id) => ({
-        label: players[id]?.name ?? id,
-        note: [players[id]?.position, players[id]?.team]
-          .filter(Boolean)
-          .join(" · "),
-      })),
-    [windowed, players],
+      toOptions(facets?.players, (id) => {
+        const player = names?.players[id] ?? players[id];
+        return {
+          label: player?.name ?? id,
+          note: [player?.position, player?.team].filter(Boolean).join(" · "),
+        };
+      }),
+    [facets?.players, names, players],
   );
   const pickOptions = useMemo(
-    () => tradeOptions(windowed, "picks", (token) => ({ label: pickLabel(token) })),
-    [windowed],
-  );
-
-  const matching = useMemo(
-    () => windowed.filter((trade) => tradeMatches(trade, draft, bounds)).length,
-    [windowed, draft, bounds],
+    // A pick's label is a pure formatting of its own token, which is why the
+    // route doesn't send one — it would be a string derivable from the one
+    // beside it.
+    () => toOptions(facets?.picks, (token) => ({ label: pickLabel(token) })),
+    [facets?.picks],
   );
 
   const setRange = (preset: TradeRangePreset) =>
@@ -123,7 +155,7 @@ export function TradeFiltersModal({
     <>
       <button
         type="button"
-        onClick={open}
+        onClick={show}
         aria-haspopup="dialog"
         // Same raised pill as its neighbour — see `LeagueFiltersModal`.
         className={`inline-flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm font-semibold ${
@@ -141,6 +173,7 @@ export function TradeFiltersModal({
       <dialog
         ref={ref}
         aria-labelledby="trade-filters-title"
+        onClose={close}
         // The backdrop is the dialog's own pseudo-element, so a click landing on
         // the dialog box itself is a click outside the panel.
         onClick={(event) => {
@@ -235,6 +268,7 @@ export function TradeFiltersModal({
                 options={managerOptions}
                 selected={draft.managers}
                 onChange={(managers) => setDraft({ ...draft, managers })}
+                loading={facetsLoading}
               />
               <OptionPicker
                 label="Players"
@@ -242,6 +276,7 @@ export function TradeFiltersModal({
                 options={playerOptions}
                 selected={draft.players}
                 onChange={(players) => setDraft({ ...draft, players })}
+                loading={facetsLoading}
               />
               <OptionPicker
                 label="Picks"
@@ -249,6 +284,7 @@ export function TradeFiltersModal({
                 options={pickOptions}
                 selected={draft.picks}
                 onChange={(picks) => setDraft({ ...draft, picks })}
+                loading={facetsLoading}
               />
             </div>
           </div>
@@ -262,9 +298,16 @@ export function TradeFiltersModal({
               Reset
             </button>
             <span className="text-sm text-foreground/60">
-              <b className="font-semibold tabular-nums text-foreground">
-                {matching}
-              </b>{" "}
+              {matching === null ? (
+                // The count is a round trip now, so there is a moment before it
+                // exists. An em dash rather than a stale or invented number —
+                // the same reading an unprojected week gets.
+                <b className="font-semibold tabular-nums text-foreground">—</b>
+              ) : (
+                <b className="font-semibold tabular-nums text-foreground">
+                  {matching.toLocaleString()}
+                </b>
+              )}{" "}
               {matching === 1 ? "trade matches" : "trades match"}
             </span>
             <button
@@ -279,6 +322,23 @@ export function TradeFiltersModal({
       </dialog>
     </>
   );
+}
+
+/**
+ * A facet list as the picker's options, labelled.
+ *
+ * The counts arrive ordered by count already; the tiebreak on label is applied
+ * here because only this side knows what a value is called — a player's name is
+ * a row in another table and a pick's is a formatting of its own token.
+ */
+function toOptions(
+  facets: readonly { value: string; count: number }[] | undefined,
+  label: (value: string) => { label: string; note?: string },
+): TradeOption[] {
+  if (!facets) return [];
+  return facets
+    .map((facet) => ({ ...label(facet.value), ...facet }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
 function Group({

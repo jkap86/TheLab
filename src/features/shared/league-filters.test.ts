@@ -15,7 +15,7 @@ import {
   scoringKeyOptions,
   scoringValue,
   slotCount,
-} from "./league-filters.ts";
+} from "./league-filters/index.ts";
 import type { ManagerLeague } from "@/shared/manager";
 
 /**

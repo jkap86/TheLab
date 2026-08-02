@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import {
   Avatar,
   LIST_ROW_HOVER,
@@ -43,7 +44,7 @@ import { TradeValueTag } from "./trade-value";
  * sides keeps the stacked columns at every width, since there is no honest way
  * to say who gave what in one.
  */
-export function TradeCard({
+export const TradeCard = memo(function TradeCard({
   trade,
   league,
   players,
@@ -122,7 +123,7 @@ export function TradeCard({
       </div>
     </article>
   );
-}
+});
 
 /**
  * The narrow layout: a block per manager — who they are on a line of their own,

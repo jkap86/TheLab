@@ -14,7 +14,7 @@ import {
   shiftMonths,
   todayIso,
 } from "../shared/date-range.ts";
-import { deriveScoring } from "../shared/league-filters.ts";
+import { deriveScoring } from "../shared/league-filters/predicates.ts";
 import type { ManagerLeague } from "./types";
 
 // The date primitives moved to `features/shared` once the trades page needed the

@@ -17,39 +17,64 @@ import type { TradeOption } from "../filters";
  * The count beside each option is what makes the list worth reading rather than
  * just searching: it says which of your leaguemates actually deal, and which
  * player has moved more than once, before you narrow to them.
+ *
+ * **The list is capped at {@link MAX_SHOWN} rendered rows**, which it did not
+ * need to be when the options were counted off whatever the browser held and does
+ * now that they are counted off the whole season: a busy one moves a few thousand
+ * distinct players, and every one of them was a button in the DOM behind a
+ * 176px-tall scroller. The cap is applied *after* the search and after the
+ * selected rows are hoisted, so nothing becomes unreachable — the way to a player
+ * past the two hundredth busiest is to type his name, which is what the search
+ * box is for and what anyone was going to do anyway.
  */
+/** How many rows are rendered at once — see the note above. */
+const MAX_SHOWN = 200;
+
 export function OptionPicker({
   label,
   options,
   selected,
   onChange,
   placeholder,
+  loading = false,
 }: {
   label: string;
   options: readonly TradeOption[];
   selected: readonly string[];
   onChange: (selected: string[]) => void;
   placeholder: string;
+  /** True while the counts behind these options are being fetched. */
+  loading?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const inputId = useId();
 
-  const shown = useMemo(() => {
+  // A `Set` rather than `selected.includes` per option: this is read once per
+  // option in the filter *and* once per rendered row, and the list is now the
+  // season's whole vocabulary rather than a page of it.
+  const chosen = useMemo(() => new Set(selected), [selected]);
+
+  const { shown, hidden } = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const chosen = new Set(selected);
-    const matches = options.filter(
-      (o) => chosen.has(o.value) || !q || o.label.toLowerCase().includes(q),
-    );
-    // Selected first, then the ordering `tradeOptions` produced (busiest first).
-    return [
-      ...matches.filter((o) => chosen.has(o.value)),
-      ...matches.filter((o) => !chosen.has(o.value)),
-    ];
-  }, [options, query, selected]);
+    // One pass into two buckets rather than three passes with two intermediate
+    // arrays — the selected rows are hoisted, so the partition is the sort.
+    const picked: TradeOption[] = [];
+    const rest: TradeOption[] = [];
+    for (const option of options) {
+      if (chosen.has(option.value)) picked.push(option);
+      else if (!q || option.label.toLowerCase().includes(q)) rest.push(option);
+    }
+    const matched = picked.length + rest.length;
+    return {
+      // Selected first, then the ordering the facets produced (busiest first).
+      shown: picked.concat(rest.slice(0, Math.max(0, MAX_SHOWN - picked.length))),
+      hidden: Math.max(0, matched - MAX_SHOWN),
+    };
+  }, [options, query, chosen]);
 
   const toggle = (value: string) =>
     onChange(
-      selected.includes(value)
+      chosen.has(value)
         ? selected.filter((v) => v !== value)
         : [...selected, value],
     );
@@ -86,11 +111,15 @@ export function OptionPicker({
       <ul className="flex max-h-44 flex-col gap-0.5 overflow-y-auto pr-1">
         {shown.length === 0 && (
           <li className="px-1 py-2 text-sm text-foreground/40">
-            {options.length === 0 ? "Nothing to filter on" : "No matches"}
+            {loading
+              ? "Counting…"
+              : options.length === 0
+                ? "Nothing to filter on"
+                : "No matches"}
           </li>
         )}
         {shown.map((option) => {
-          const isSelected = selected.includes(option.value);
+          const isSelected = chosen.has(option.value);
           return (
             <li key={option.value}>
               <button
@@ -128,6 +157,13 @@ export function OptionPicker({
             </li>
           );
         })}
+        {hidden > 0 && (
+          // Said rather than left to be discovered: a truncated list that
+          // doesn't say so reads as a player simply not having been traded.
+          <li className="px-2 py-1.5 text-xs text-foreground/35">
+            {hidden.toLocaleString()} more — search to narrow
+          </li>
+        )}
       </ul>
     </div>
   );
