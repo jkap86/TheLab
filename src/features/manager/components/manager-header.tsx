@@ -325,7 +325,8 @@ function HeaderReadout({ season, pct }: { season: string; pct: number | null }) 
 
 /**
  * A live countdown to the season's opening kickoff, drawn as a segment readout:
- * one milled well per unit, seconds lit, units labelled under their digits.
+ * one milled cell per unit, the running unit lit, units labelled under their
+ * digits.
  *
  * The cells are one row, never two. Wrapped into a 2×2 block they read as four
  * separate numbers rather than as one clock — the units run largest to smallest,
@@ -336,8 +337,25 @@ function HeaderReadout({ season, pct }: { season: string; pct: number | null }) 
  * two share the slot and the plate must not change height when the season turns
  * over.
  *
+ * **The digits grew into that height rather than past it.** The readout was
+ * ~40px of type inside a 68px box — the plate's one moving number set smaller
+ * than the manager's name beside it — so the cells take the slack the box
+ * already had: the whole group is still exactly the dial's height, and the plate
+ * pinned over a several-hundred-row list covers the same amount of it as before.
+ * Growing the *box* is the one move not available here, which is why the sizing
+ * is written as type and padding inside a fixed height and not as a height of
+ * its own.
+ *
+ * What the extra size buys is the material: at 12px a cell could only be a tinted
+ * box, where at 26px it can be a machined lens (`.lab-readout`) with the running
+ * unit's own housing lit rather than just its digit. The header rail is a
+ * hairline and a tick rather than a bare caption, for the same reason — the
+ * label of an instrument is part of the instrument.
+ *
  * A cell's digits are padded ({@link countdownSegments}), so the readout ticks in
- * place; the row narrows only when a unit empties for good.
+ * place; a cell is also floored at the width of two digits, so the days cell
+ * doesn't narrow the row the day it drops from three digits to two. The row
+ * narrows only when a unit empties for good.
  *
  * The cells are decoration to a screen reader — the digits are split across four
  * elements and would be read as four numbers — so the group carries
@@ -349,35 +367,58 @@ function KickoffCountdown({ msLeft }: { msLeft: number }) {
 
   return (
     <div
-      className="grid h-[68px] w-fit flex-none content-center gap-1 sm:h-[78px]"
+      className="grid h-[68px] w-fit flex-none content-center gap-1.5 sm:h-[78px]"
       aria-label={`Kickoff in ${formatCountdown(msLeft)}`}
     >
-      <span className="text-center text-[8px] font-bold uppercase leading-none tracking-[0.12em] text-active/55 sm:text-[9px]">
+      {/* The label as a rail: a lit tick, the words, then a hairline running out
+          to the right edge of the cells under it. A caption centred over the row
+          floated; ruled across it, it reads as the instrument's own header. */}
+      <span
+        aria-hidden="true"
+        className="flex items-center gap-1.5 text-[8px] font-bold uppercase leading-none tracking-[0.16em] text-active/70 sm:text-[9px]"
+      >
+        <span className="h-2 w-[2px] flex-none rounded-full bg-active shadow-[0_0_8px_rgba(0,255,229,0.7)]" />
         Kickoff in
+        <span className="h-px flex-1 bg-gradient-to-r from-active/25 to-transparent" />
       </span>
-      <span aria-hidden="true" className="flex gap-0.5">
-        {segments.map((segment, index) => (
-          <span
-            key={segment.unit}
-            className="lab-well flex-none rounded-[4px] px-1 pb-0.5 pt-[2px] text-center"
-          >
+
+      {/* The cells are tighter and a size down below `sm` for the one reason the
+          plate keeps running into: the row shares a line with the manager's
+          name, and this control growing is the name's width being spent. A
+          phone gets the material and most of the size; a laptop gets all of
+          it. */}
+      <span aria-hidden="true" className="flex gap-[3px] sm:gap-1">
+        {segments.map((segment, index) => {
+          // The last cell is the one that is always moving, so it is the one
+          // that is lit — housing included. Four lit cells read as a sign; one
+          // reads as a clock that is running.
+          const live = index === segments.length - 1;
+          return (
             <span
-              className={`block font-mono text-[12px] font-bold leading-[1.05] tabular-nums sm:text-[13px] ${
-                // The seconds are the cell that is always moving, so they are
-                // the one carrying the accent — a lit digit reads as live where
-                // four of them read as a sign.
-                index === segments.length - 1
-                  ? "text-active drop-shadow-[0_0_12px_rgba(0,255,229,0.5)]"
-                  : "text-foreground/90"
+              key={segment.unit}
+              className={`flex-none rounded-[5px] px-1 pb-[3px] pt-[3px] text-center sm:px-1.5 ${
+                live ? "lab-readout lab-readout-live" : "lab-readout"
               }`}
             >
-              {segment.value}
+              <span
+                className={`block min-w-[1.35em] font-mono text-[19px] font-bold leading-[1.02] tabular-nums tracking-tight sm:text-[26px] ${
+                  live
+                    ? "text-active drop-shadow-[0_0_14px_rgba(0,255,229,0.55)]"
+                    : "text-foreground/90 drop-shadow-[0_1px_0_rgba(0,0,0,0.6)]"
+                }`}
+              >
+                {segment.value}
+              </span>
+              <span
+                className={`mt-[1px] block text-[7px] font-bold uppercase leading-none tracking-[0.12em] ${
+                  live ? "text-active/55" : "text-foreground/30"
+                }`}
+              >
+                {segment.unit}
+              </span>
             </span>
-            <span className="block text-[7px] font-bold uppercase tracking-[0.08em] text-foreground/30">
-              {segment.unit}
-            </span>
-          </span>
-        ))}
+          );
+        })}
       </span>
     </div>
   );
