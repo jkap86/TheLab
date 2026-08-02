@@ -142,6 +142,15 @@ export function MetricColumn<C>({
  * metric being picked. So the label *is* the trigger, and the slot it names is
  * the slot the dialog opens armed on: pressing "Proj bench" is a press on the
  * column you meant, not a press on a dialog you then have to aim.
+ *
+ * **The rail is a raised billet, and that is the material saying what it is.**
+ * Four flat labels over a list read as a caption on the page; these are triggers,
+ * and a part you press is raised everywhere else in this app. It is `.lab-key`'s
+ * construction — wall, lit face, the app bar's notch — held to the columns' own
+ * geometry, so the list visibly scrolls *under* the thing naming its columns
+ * rather than past a line of text. The shading is all in `.lab-ledge` in
+ * `globals.css`; what stays here is the layout, per the rule those classes hold
+ * to.
  */
 export function MetricHeadings({
   metrics,
@@ -155,35 +164,60 @@ export function MetricHeadings({
   onOpen: (slot: number) => void;
 }) {
   return (
-    // `divide-x divide-transparent` draws nothing and is not decoration: the
-    // cards' own columns carry a 1px divider *inside* their box, so without the
-    // same border here every heading after the first would sit a pixel left of
-    // the number it names. It matters more below `sm`, where the columns divide
-    // the row rather than taking a fixed width — a missing border there is four
-    // pixels shared out unevenly, not one.
-    <div className={`${COLUMN_ROW} divide-x divide-transparent`}>
-      {columns.map((key, slot) => {
-        const metric = metrics.find((m) => m.key === key) ?? metrics[0];
-        return (
-          <div key={slot} className={`group/col relative ${COLUMN_BOX}`}>
-            <button
-              type="button"
-              onClick={() => onOpen(slot)}
-              aria-haspopup="dialog"
-              // The full label, in case a catalogue ever grows one past the
-              // column's width — a truncated heading is the only name its
-              // column has.
-              title={metric?.label}
-              className="flex w-full items-center text-left"
+    // The wall. `COLUMN_ROW` sizes it — full width below `sm` where the headings
+    // take a line of their own, shrink-wrapped to the four columns above it.
+    <div className={`lab-ledge lab-notch-lg ${COLUMN_ROW}`}>
+      {/*
+        The face. `relative` is what the cyan seam (`::before`) and the dimples
+        hang off; the material classes deliberately carry no `position`.
+
+        `divide-x` is the groove's dark cut, and it is spelled here rather than
+        in the material class because a border changes the box: the cards' own
+        columns carry the same 1px *inside* their box, so without it every
+        heading after the first would sit a pixel left of the number it names —
+        four pixels shared out unevenly below `sm`, where the columns divide the
+        row rather than taking a fixed width. The lit far wall that turns that
+        cut into machining is `.lab-ledge-col`'s inset highlight.
+      */}
+      <div className="lab-ledge-face lab-notch-lg relative flex w-full items-stretch divide-x divide-[rgba(0,0,0,0.5)]">
+        {/* The two corners the notch leaves intact — top-right and bottom-left.
+            They precede the columns, which is why `.lab-ledge-col + .lab-ledge-col`
+            names the class rather than using a bare sibling selector. */}
+        <span
+          aria-hidden="true"
+          className="lab-ledge-dimple pointer-events-none absolute bottom-1 left-1 h-1 w-1 rounded-full"
+        />
+        <span
+          aria-hidden="true"
+          className="lab-ledge-dimple pointer-events-none absolute right-1 top-1 h-1 w-1 rounded-full"
+        />
+
+        {columns.map((key, slot) => {
+          const metric = metrics.find((m) => m.key === key) ?? metrics[0];
+          return (
+            <div
+              key={slot}
+              className={`lab-ledge-col group/col relative py-[9px] ${COLUMN_BOX}`}
             >
-              <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wide text-foreground/50 transition-colors group-hover/col:text-foreground/80">
-                {metric?.label}
-              </span>
-            </button>
-            <Caret />
-          </div>
-        );
-      })}
+              <button
+                type="button"
+                onClick={() => onOpen(slot)}
+                aria-haspopup="dialog"
+                // The full label, in case a catalogue ever grows one past the
+                // column's width — a truncated heading is the only name its
+                // column has.
+                title={metric?.label}
+                className="flex w-full items-center text-left"
+              >
+                <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wider text-foreground/70 transition-[color,text-shadow] group-hover/col:text-active group-hover/col:[text-shadow:0_0_12px_rgba(0,255,229,0.55)]">
+                  {metric?.label}
+                </span>
+              </button>
+              <Caret />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -193,13 +227,15 @@ export function MetricHeadings({
  *
  * Absolutely placed over the column's right gutter rather than laid in the row
  * beside the label — a 10px mark and its gap is two characters out of a label
- * that already has to fit in 76px, and the gutter is empty.
+ * that already has to fit in 76px, and the gutter is empty. It centres on the
+ * label's line rather than sitting at the column's top, since the column is a
+ * cell of the rail now and has padding of its own above the text.
  */
 function Caret() {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute right-0.5 top-0 text-[8px] leading-none text-foreground/25 transition-colors group-hover/col:text-foreground/60"
+      className="pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 text-[8px] leading-none text-foreground/30 transition-colors group-hover/col:text-active"
     >
       ▾
     </span>
