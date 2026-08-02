@@ -121,16 +121,15 @@ export function Standings({
   const nameSpan = outlookByRoster ? "col-span-2 @lg:col-span-3" : "col-span-1";
 
   return (
-    <div
-      className={`relative rounded-lg border border-foreground/10 ${
-        // Only clip when there are no pickers: a picker's menu overhangs the rows,
-        // which `overflow-hidden` would cut off. With columns, the header and
-        // footer round the corners the clip otherwise would.
-        outlookByRoster ? "" : "overflow-hidden"
-      } ${elevated ? "z-30" : ""}`}
-    >
+    // A recessed field: this half is the one being *read*, and the roster plate
+    // beside it is the one being acted on — the same raised/recessed pairing the
+    // app bar draws between its tools key and its current-page chip. Nothing may
+    // clip, because a column picker's menu overhangs the rows under it, which is
+    // why the sink is inset shadow (`.lab-trough`) rather than a bordered box
+    // that would want `overflow-hidden` to round its corners.
+    <div className={`lab-trough relative rounded-lg p-1.5 @lg:p-2 ${elevated ? "z-30" : ""}`}>
       <div
-        className={`grid ${grid} items-center gap-x-2 rounded-t-lg border-b border-foreground/10 bg-foreground/[0.03] px-2 py-2 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:px-3 @lg:text-xs`}
+        className={`grid ${grid} items-center gap-x-2 px-1.5 pb-2 pt-1 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:px-2 @lg:text-xs`}
       >
         <span className="text-center">#</span>
         <span className="truncate">Manager</span>
@@ -152,7 +151,7 @@ export function Standings({
             />
           ))}
       </div>
-      <ul>
+      <ul className="flex flex-col gap-1">
         {teams.map((team, i) => (
           <StandingsRow
             key={team.roster_id}
@@ -172,7 +171,7 @@ export function Standings({
         // The horizon travels with the number, as it does on the roster panel:
         // "rest of season" is however many weeks are actually stored, and a total
         // over three weeks next to one over eighteen is a different claim.
-        <p className="rounded-b-lg border-t border-foreground/10 px-2 py-1.5 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-3">
+        <p className="px-1.5 pb-0.5 pt-2 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-2">
           Projected over the rest of the season · {formatWeekRange(outlook.weeks)}
         </p>
       )}
@@ -227,6 +226,13 @@ function StandingsRow({
   const teamName = team.manager?.team_name;
   const title = teamName && teamName !== manager ? `${manager} · ${teamName}` : manager;
 
+  // The lit face is cyan, so every dimmed cell on the row has to stop asking for
+  // a shade of the *foreground* token and start asking for a shade of whatever
+  // the row is painted in. Opacity does that in one step and keeps the two
+  // states one class list; a second palette of on-cyan text colours would be
+  // four more literals to keep in step with the face above them.
+  const dim = active ? "opacity-70" : "text-foreground/40";
+
   return (
     <li>
       <button
@@ -234,25 +240,34 @@ function StandingsRow({
         onClick={onSelect}
         title={title}
         aria-current={active ? "true" : undefined}
-        className={`grid w-full ${grid} items-center gap-x-2 gap-y-0.5 border-l-2 px-2 py-1.5 text-left transition-colors @lg:px-3 @lg:py-2 ${
-          active
-            ? "border-active bg-active/10"
-            : "border-transparent hover:bg-foreground/[0.04]"
+        // A raised key rather than a tinted row: pressing it drives the roster
+        // half beside it, and the selected one is the part that is currently on
+        // — the app bar's grammar, at row scale (see `.lab-row`).
+        className={`grid w-full ${grid} items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-left @lg:px-3 @lg:py-2 ${
+          active ? "lab-row-on" : "lab-row"
         }`}
       >
         {/* Spans both lines, so the rank numbers a team rather than a line. */}
-        <span className="row-span-2 self-center text-center text-[0.65rem] tabular-nums text-foreground/40 @lg:text-sm">
+        <span
+          className={`row-span-2 self-center text-center text-[0.65rem] tabular-nums @lg:text-sm ${dim}`}
+        >
           {rank}
         </span>
 
         <span className={`${nameSpan} flex min-w-0 items-center gap-1 @lg:gap-2`}>
           <TeamAvatar team={team} label={manager} />
-          <span className="min-w-0 truncate text-xs font-medium text-foreground/90 @lg:text-sm">
+          <span
+            className={`min-w-0 truncate text-xs font-medium @lg:text-sm ${
+              active ? "font-semibold" : "text-foreground/90"
+            }`}
+          >
             {manager}
           </span>
         </span>
 
-        <span className="col-start-2 truncate text-[0.65rem] tabular-nums text-foreground/40 @lg:text-xs">
+        <span
+          className={`col-start-2 truncate text-[0.65rem] tabular-nums @lg:text-xs ${dim}`}
+        >
           {record}
           {/* The record keeps this line at every width; the points-for sheds
               wherever the value columns beside it don't leave room — see the
@@ -281,7 +296,17 @@ function StandingsRow({
                 // Paired with the heading above and the grid template: the second
                 // column appears only once the half is wide enough to hold it.
                 slot === 0 ? "" : "hidden @lg:block "
-              }${cell.text === null ? "text-foreground/25" : "text-foreground/70"}`}
+              }${
+                // Same reason as `dim` above: on the lit face a shade of the
+                // foreground token is a shade of the wrong colour.
+                active
+                  ? cell.text === null
+                    ? "opacity-40"
+                    : "opacity-85"
+                  : cell.text === null
+                    ? "text-foreground/25"
+                    : "text-foreground/70"
+              }`}
             >
               {cell.text ?? "—"}
             </span>
