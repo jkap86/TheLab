@@ -157,6 +157,64 @@ export function panWindow(
   return { from: shiftDays(window.from, shift), to: shiftDays(window.to, shift) };
 }
 
+/** What a press on the strip is about to do. */
+export type ScrubTarget = "from" | "to" | "pan" | "sweep";
+
+/**
+ * What a press `x` pixels across the track means.
+ *
+ * The strip used to let each drawn part catch its own pointer events, which made
+ * **the mark the target**: a 7px thumb is not something a finger hits, and a
+ * near miss didn't do nothing — it fell through to the track and *swept a new
+ * window*, which is the one destructive thing this control can do. On a phone
+ * that is what reaching for a handle usually did. So the track catches every
+ * press and this decides by proximity: the radius is the target, and the thumb
+ * is only where it is.
+ *
+ * Two rules make that safe rather than merely generous.
+ *
+ * **The radius reaches full width *outside* the window and only a third of the
+ * window's width *inside* it.** An uncapped radius makes a window narrower than
+ * two radii entirely handle, so a short span could be resized and never panned —
+ * trading one unreachable gesture for another. Capping the inner side leaves a
+ * pan target at every width, and it costs nothing on a wide window, where a
+ * third is far more than the radius anyway.
+ *
+ * **A handle on the domain's edge is still grabbable from the edge itself.**
+ * The default board is unbounded, so both handles sit exactly on the ends where
+ * half of any drawn target hangs off the panel. Measuring from the handle's
+ * position rather than from a box means the outer half is simply never needed.
+ *
+ * `window` is the two handles as fractions of the track; `grabRadius` is in the
+ * same pixels as `x`, so the caller can hand a finger a wider one than a mouse.
+ */
+export function scrubTargetAt(
+  x: number,
+  width: number,
+  window: { from: number; to: number },
+  grabRadius: number,
+): ScrubTarget {
+  if (width <= 0) return "sweep";
+
+  const from = window.from * width;
+  const to = window.to * width;
+  const inner = Math.min(grabRadius, (to - from) / 3);
+
+  // Signed, and both measured *away* from the window's interior, so one
+  // comparison covers each handle's asymmetric reach.
+  const fromReach = x - from;
+  const toReach = to - x;
+  const onFrom = fromReach >= -grabRadius && fromReach <= inner;
+  const onTo = toReach >= -grabRadius && toReach <= inner;
+
+  // Both in reach only happens on a window narrower than the radii; the nearer
+  // handle is the one being aimed at.
+  if (onFrom && onTo) return Math.abs(fromReach) < Math.abs(toReach) ? "from" : "to";
+  if (onFrom) return "from";
+  if (onTo) return "to";
+  return x > from && x < to ? "pan" : "sweep";
+}
+
 /** A label on the month axis, with the extent it is centred over. */
 export type AxisTick = {
   month: string;

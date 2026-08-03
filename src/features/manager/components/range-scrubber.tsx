@@ -2,6 +2,7 @@
 
 import {
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
   useMemo,
   useRef,
   useState,
@@ -19,6 +20,7 @@ import { type NflMarker, nflMarkersIn } from "../nfl-calendar";
 import {
   type MonthBar,
   type ScrubDomain,
+  type ScrubTarget,
   axisTicks,
   dateAtFraction,
   daysBetween,
@@ -30,6 +32,7 @@ import {
   monthExtent,
   panWindow,
   scrubDomain,
+  scrubTargetAt,
 } from "../range-domain";
 
 /**
@@ -74,6 +77,7 @@ export function RangeScrubber({
   error,
   loading,
   today,
+  presets,
   onChange,
 }: {
   range: AdpRange;
@@ -90,6 +94,13 @@ export function RangeScrubber({
   loading: boolean;
   /** `YYYY-MM-DD`. */
   today: string;
+  /**
+   * The window presets, rendered at the end of the caption rather than in a
+   * labelled row of their own. They fly the handles, so they belong on the line
+   * that reports where the handles are — and the row they used to occupy was a
+   * label column and a full-height segment strip for three chips.
+   */
+  presets?: ReactNode;
   onChange: (range: AdpRange) => void;
 }) {
   const track = useRef<HTMLDivElement>(null);
@@ -103,6 +114,11 @@ export function RangeScrubber({
   // own data lives in: it decides how the window and the bubble are drawn, and
   // a ref read during render is a frame behind whatever set it.
   const [gesture, setGesture] = useState<Drag["mode"] | null>(null);
+  // What a press *would* do where the pointer is now. It drives the cursor and
+  // lights the handle under it — with the parts no longer catching their own
+  // events (see `onPointerDown`), `:hover` can't answer this and the reader
+  // would otherwise have no warning of which gesture they are about to start.
+  const [hover, setHover] = useState<ScrubTarget | null>(null);
 
   const domain = useMemo(
     () => scrubDomain(months, densityThrough(months, today, live)),
@@ -150,27 +166,59 @@ export function RangeScrubber({
     e.stopPropagation();
     drag.current = next;
     setGesture(next.mode);
-    // Captured on the track, not on the handle or the window, so the move and up
-    // events below keep arriving once the pointer leaves a 20px grab target.
+    // Captured on the track, which is also the only thing listening — the move
+    // and up events keep arriving once the pointer has left the strip entirely,
+    // which a drag toward either end does within a few pixels.
     track.current?.setPointerCapture(e.pointerId);
   };
 
-  // A press on the bars starts a fresh window rather than nudging whichever
-  // handle is nearer: it is an intent to reselect, and "nearest handle wins"
-  // makes a short window impossible to draw from scratch.
-  const startSweep = (e: ReactPointerEvent) => {
-    const fraction = fractionAt(e.clientX);
-    if (fraction === null) return;
-    start(e, {
-      mode: "sweep",
-      anchor: dateAtFraction(domain, fraction),
-      startX: e.clientX,
-      moved: false,
-    });
+  /**
+   * What a pointer at this position would do — the whole gesture split, decided
+   * in one place.
+   *
+   * It used to be decided by *which element was hit*: the handles and the window
+   * caught their own presses and everything else fell through to the track as a
+   * sweep. That made the drawn mark the target, and a 7px mark is not a target a
+   * finger can hit — so on a phone, reaching for a handle collapsed the window
+   * to the day under the finger instead. `scrubTargetAt` decides by proximity
+   * instead, which is why the parts below are `pointer-events-none`.
+   *
+   * The radius is read off **the pointer that is actually being used** rather
+   * than a `(pointer: coarse)` query: a laptop with a touchscreen is both, and
+   * the event already knows which one this press is. It also needs no state, so
+   * nothing about it can differ between the server and the first client render.
+   */
+  const targetAt = (e: ReactPointerEvent): ScrubTarget | null => {
+    const rect = track.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return null;
+    return scrubTargetAt(
+      e.clientX - rect.left,
+      rect.width,
+      { from: left / 100, to: right / 100 },
+      e.pointerType === "mouse" ? MOUSE_GRAB_PX : TOUCH_GRAB_PX,
+    );
   };
 
-  const startPan = (e: ReactPointerEvent) =>
-    start(e, { mode: "pan", startX: e.clientX, origin: drawn });
+  const onPointerDown = (e: ReactPointerEvent) => {
+    const target = targetAt(e);
+    const fraction = fractionAt(e.clientX);
+    if (target === null || fraction === null) return;
+    if (target === "pan") {
+      start(e, { mode: "pan", startX: e.clientX, origin: drawn });
+    } else if (target === "sweep") {
+      // Far from both handles is an intent to reselect, not to nudge the nearer
+      // end: "nearest handle always wins" makes a short window impossible to
+      // draw from scratch.
+      start(e, {
+        mode: "sweep",
+        anchor: dateAtFraction(domain, fraction),
+        startX: e.clientX,
+        moved: false,
+      });
+    } else {
+      start(e, { mode: target });
+    }
+  };
 
   const onPointerMove = (e: ReactPointerEvent) => {
     const fraction = fractionAt(e.clientX);
@@ -179,7 +227,10 @@ export function RangeScrubber({
     setCursor({ date, fraction });
 
     const active = drag.current;
-    if (!active) return;
+    if (!active) {
+      setHover(targetAt(e));
+      return;
+    }
     if (active.mode === "pan") {
       const moved = panWindow(active.origin, daysAcross(e.clientX - active.startX), domain);
       onChange(edgeBounds(moved.from, moved.to, domain));
@@ -200,6 +251,9 @@ export function RangeScrubber({
   const endDrag = (e: ReactPointerEvent) => {
     drag.current = null;
     setGesture(null);
+    // A finger leaves nothing hovering behind it, so lighting a handle after it
+    // lifts would be a control reporting a pointer that isn't there.
+    setHover(e.pointerType === "mouse" ? targetAt(e) : null);
     // A finger leaves no cursor behind it; a mouse does, and the bubble under it
     // is still the answer to "what date is this bar".
     if (e.pointerType !== "mouse") setCursor(null);
@@ -225,14 +279,18 @@ export function RangeScrubber({
     <div className="flex flex-col gap-1">
       <div
         ref={track}
-        onPointerDown={startSweep}
+        onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onPointerLeave={() => {
-          if (!drag.current) setCursor(null);
+          if (drag.current) return;
+          setCursor(null);
+          setHover(null);
         }}
-        className="relative h-16 cursor-crosshair touch-none select-none rounded-sm border-b border-foreground/10"
+        className={`relative h-14 touch-none select-none rounded-sm border-b border-foreground/10 ${
+          CURSORS[gesture ?? hover ?? "sweep"]
+        }`}
       >
         {bars.map((bar) => {
           const { left: barLeft, width } = monthExtent(bar.month, domain);
@@ -294,13 +352,18 @@ export function RangeScrubber({
           />
         )}
 
-        {/* The window itself is the pan target — dragging it is the half of a
-            brush that used to take two measured handle drags. */}
+        {/* The window is still the pan target, but the *track* routes the press
+            to it — so this is paint, not a hit area, and it must not swallow a
+            press aimed at a handle a few pixels inside it. */}
         <div
-          onPointerDown={startPan}
+          aria-hidden
           style={{ left: `${left}%`, width: `${right - left}%` }}
-          className={`absolute inset-y-0 touch-none border-y border-active/40 bg-active/[0.07] transition-colors hover:bg-active/[0.12] ${
-            gesture === "pan" ? "cursor-grabbing bg-active/[0.14]" : "cursor-grab"
+          className={`pointer-events-none absolute inset-y-0 border-y border-active/40 transition-colors ${
+            gesture === "pan"
+              ? "bg-active/[0.14]"
+              : hover === "pan"
+                ? "bg-active/[0.12]"
+                : "bg-active/[0.07]"
           }`}
         />
 
@@ -311,7 +374,7 @@ export function RangeScrubber({
           value={drawn.from}
           open={bounds.from === null}
           domain={domain}
-          onGrab={(e) => start(e, { mode: "from" })}
+          lit={gesture === "from" || (!gesture && hover === "from")}
           onNudge={(days) => nudge("from", days)}
         />
         <Handle
@@ -321,7 +384,7 @@ export function RangeScrubber({
           value={drawn.to}
           open={bounds.to === null}
           domain={domain}
-          onGrab={(e) => start(e, { mode: "to" })}
+          lit={gesture === "to" || (!gesture && hover === "to")}
           onNudge={(days) => nudge("to", days)}
         />
 
@@ -401,6 +464,9 @@ export function RangeScrubber({
             · no crawled drafts {season === "all" ? "to chart" : `for ${season}`}
           </span>
         ) : null}
+        {presets !== undefined && (
+          <span className="ml-auto flex shrink-0 items-center gap-1">{presets}</span>
+        )}
       </p>
     </div>
   );
@@ -408,6 +474,33 @@ export function RangeScrubber({
 
 /** How far a press has to travel before it counts as drawing a window. */
 const SWEEP_SLOP = 4;
+
+/**
+ * How near a handle a press has to land to grab it, in pixels.
+ *
+ * The touch figure is half of the ~44px target the platforms ask for, measured
+ * from the handle rather than around it — which is the same thing, and it works
+ * on the domain's edge where a 44px *box* would be half off the panel. The mouse
+ * figure is deliberately much smaller: a cursor is precise, and a generous
+ * radius there only makes a narrow window hard to pan.
+ */
+const TOUCH_GRAB_PX = 22;
+const MOUSE_GRAB_PX = 9;
+
+/** Say what the press is about to do before it happens. */
+const CURSORS: Record<ScrubTarget, string> = {
+  from: "cursor-ew-resize",
+  to: "cursor-ew-resize",
+  pan: "cursor-grab active:cursor-grabbing",
+  sweep: "cursor-crosshair",
+};
+
+/**
+ * Half the grip's width, so a handle sitting on an edge of the domain keeps its
+ * whole thumb on the panel. The hairline stays on the date — what moves is the
+ * part you hold, which has no business claiming to be a date in the first place.
+ */
+const GRIP_INSET_PX = 5;
 
 /** Narrower than this and a season band is a rendering artefact, not a marker. */
 const MIN_BAND_FRACTION = 0.02;
@@ -423,9 +516,16 @@ type Drag =
  * from the keyboard — the strip is a pointer control first, and a date range
  * that can only be set by dragging isn't a date range everyone can set.
  *
- * The grip is a thumb rather than the hairline it was: the line is where the
- * date is, but a 12px-wide invisible target over a 2px mark is a control you
- * miss on a phone, and missing it used to mean sweeping a new window.
+ * **It catches no pointer events.** The track routes every press through
+ * `scrubTargetAt`, so this is the mark and the focus target and nothing else —
+ * which is exactly what lets the grab area be bigger than the thing drawn, and
+ * lets a handle parked on the domain's edge be grabbed from the edge rather than
+ * from a box half of which is off the panel. `pointer-events-none` does not stop
+ * it being focused, so the keyboard half is untouched.
+ *
+ * `lit` therefore comes in as a prop: with no pointer events there is no
+ * `:hover` to style from, and a handle that doesn't answer the cursor reads as
+ * decoration.
  */
 function Handle({
   position,
@@ -434,7 +534,7 @@ function Handle({
   value,
   open,
   domain,
-  onGrab,
+  lit,
   onNudge,
 }: {
   /** Percent across the track. */
@@ -445,9 +545,16 @@ function Handle({
   /** This end is unbounded — the handle is parked on the domain's edge. */
   open: boolean;
   domain: ScrubDomain;
-  onGrab: (e: ReactPointerEvent) => void;
+  /** The pointer is on this handle, or dragging it. */
+  lit: boolean;
   onNudge: (days: number) => void;
 }) {
+  // Nudged inward on the domain's edges so the whole grip stays on the panel.
+  // Only the grip moves — the hairline keeps the date, which is the one thing
+  // here that is a claim about the data rather than something to hold.
+  const inset =
+    position <= 0 ? GRIP_INSET_PX : position >= 100 ? -GRIP_INSET_PX : 0;
+
   return (
     <button
       type="button"
@@ -461,7 +568,6 @@ function Handle({
       // told which it is rather than being read the edge date.
       aria-valuetext={open ? `${formatRangeDate(value)}, open` : formatRangeDate(value)}
       style={{ left: `${position}%` }}
-      onPointerDown={onGrab}
       onKeyDown={(e) => {
         const step = e.shiftKey ? 7 : 1;
         if (e.key === "ArrowLeft") onNudge(-step);
@@ -471,11 +577,16 @@ function Handle({
         else return;
         e.preventDefault();
       }}
-      className="group absolute -top-2 -bottom-2 -ml-2.5 w-5 cursor-ew-resize touch-none focus:outline-none"
+      className="group pointer-events-none absolute -top-2 -bottom-2 -ml-3 w-6 focus:outline-none"
     >
       <span className="absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-active/70" />
       <span
-        className={`absolute top-1/2 left-1/2 h-6 w-[7px] -translate-x-1/2 -translate-y-1/2 bg-active shadow-[0_0_8px_rgba(0,255,229,0.45)] transition-shadow group-hover:shadow-[0_0_12px_rgba(0,255,229,0.9)] group-focus-visible:ring-2 group-focus-visible:ring-active/60 group-focus-visible:ring-offset-1 group-focus-visible:ring-offset-[rgb(12,23,33)] ${
+        style={{ transform: `translate(calc(-50% + ${inset}px), -50%)` }}
+        className={`absolute top-1/2 left-1/2 h-7 w-[9px] bg-active transition-shadow group-focus-visible:ring-2 group-focus-visible:ring-active/60 group-focus-visible:ring-offset-1 group-focus-visible:ring-offset-[rgb(12,23,33)] ${
+          lit
+            ? "shadow-[0_0_12px_rgba(0,255,229,0.9)]"
+            : "shadow-[0_0_8px_rgba(0,255,229,0.45)]"
+        } ${
           // Rounded away from the window on the outside edge only, so the pair
           // reads as brackets around the selection rather than two pills.
           side === "from" ? "rounded-l-full rounded-r-[1px]" : "rounded-r-full rounded-l-[1px]"
