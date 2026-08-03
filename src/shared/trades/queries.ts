@@ -380,6 +380,101 @@ async function rosterOwners(
   });
 }
 
+/**
+ * How long a league's draft order is reused.
+ *
+ * A draft order is set once and then holds for the season — the slowest-moving
+ * thing this route resolves — so the TTL is about a commissioner setting or
+ * re-rolling one, not about a value drifting. Fifteen minutes is the same bound
+ * the managers cache takes, and the cost of being stale is a pick named by its
+ * round for a few minutes rather than by a slot.
+ */
+const DRAFT_ORDER_TTL_MS = 15 * 60 * 1000;
+
+/**
+ * Roster → draft slot per `(league, season)`. A season's board names a few
+ * hundred leagues and a pick two or three seasons out for each, so this is sized
+ * well past what one board can ask for.
+ */
+const draftOrderCache = new BoundedCache<ReadonlyMap<number, number> | null>(
+  4000,
+  DRAFT_ORDER_TTL_MS,
+);
+
+/**
+ * Where each roster picks in a league's draft for a season, for the
+ * `(league, season)` pairs the page's picks name — see `./pick-slots` for the
+ * key and for why this rides beside a page rather than on the picks themselves.
+ *
+ * Four decisions are packed into the query:
+ *
+ * - **The order is read through `draft_order`, which is user → slot**, joined
+ *   back to rosters by owner. Sleeper's own `slot_to_roster_id` would be one
+ *   hop shorter and is not stored; the join gives the same answer off columns
+ *   the sync already writes, and a roster whose owner has left the league simply
+ *   resolves to nothing, which is the honest answer rather than a guessed slot.
+ * - **A null `draft_order` is a draft whose order isn't set**, which is exactly
+ *   the case the card falls back to naming a round for. It is left out here
+ *   rather than sent as a null, so an absent key means "no order" everywhere.
+ * - **An auction has no slots at all** — its `pick_no` is nomination order, the
+ *   same quirk that keeps auctions off the ADP board — so its `draft_order` is
+ *   not a pick order and is excluded rather than formatted as one.
+ * - **The latest draft in a season wins.** An inaugural dynasty league runs a
+ *   startup and a rookie draft under one season label, and a traded "2026 1st"
+ *   is a pick in the later of the two. `DISTINCT ON` with `start_time DESC`
+ *   picks it and leaves an undated stray draft as the fallback.
+ */
+export async function getDraftSlots(
+  keys: readonly string[],
+): Promise<Map<string, ReadonlyMap<number, number>>> {
+  return cachedLookup(draftOrderCache, keys, async (misses) => {
+    const { rows } = await pool.query<{
+      key: string;
+      roster_id: number;
+      slot: number;
+    }>(
+      `WITH want AS (
+         SELECT k AS key,
+                split_part(k, '|', 1) AS league_id,
+                split_part(k, '|', 2) AS season
+           FROM unnest($1::text[]) AS k
+       ),
+       -- The season's draft is chosen **before** its order is looked at, so a
+       -- rookie draft that hasn't been ordered yet reports nothing rather than
+       -- falling through to the startup above it and handing back that draft's
+       -- slots for a pick in this one.
+       chosen AS (
+         SELECT DISTINCT ON (w.key)
+                w.key, d.league_id, d.type, d.draft_order
+           FROM want w
+           JOIN drafts d
+             ON d.league_id = w.league_id AND d.season = w.season
+          ORDER BY w.key, d.start_time DESC NULLS LAST, d.draft_id
+       )
+       SELECT c.key, r.roster_id, (c.draft_order ->> r.owner_id)::int AS slot
+         FROM chosen c
+         JOIN rosters r ON r.league_id = c.league_id
+        WHERE jsonb_typeof(c.draft_order) = 'object'
+          AND coalesce(c.type, '') <> 'auction'
+          AND r.owner_id IS NOT NULL
+          AND c.draft_order ? r.owner_id
+          -- Regex-guarded before the cast, like every other numeric read off a
+          -- Sleeper blob: one league holding a junk slot would otherwise fail
+          -- the whole query.
+          AND (c.draft_order ->> r.owner_id) ~ '^[0-9]+$'`,
+      [misses],
+    );
+
+    const byDraft = new Map<string, ReadonlyMap<number, number>>();
+    for (const r of rows) {
+      let slots = byDraft.get(r.key) as Map<number, number> | undefined;
+      if (!slots) byDraft.set(r.key, (slots = new Map()));
+      slots.set(r.roster_id, r.slot);
+    }
+    return byDraft;
+  });
+}
+
 /** Identity as `league_users` stores it — the shape a trade side is labelled from. */
 export type TradeManagerRow = {
   display_name: string | null;

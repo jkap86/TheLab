@@ -52,10 +52,32 @@ describe("assembleTrade", () => {
     // The 2026 first is roster 2's own pick, now held by roster 1 — the origin
     // is what names the asset, not who is trading it.
     assert.deepEqual(trade.sides[0].picks, [
-      { season: "2026", round: 1, roster_id: 2 },
+      { season: "2026", round: 1, roster_id: 2, user_id: "userB" },
     ]);
     assert.deepEqual(trade.sides[1].picks, [
-      { season: "2027", round: 3, roster_id: 1 },
+      { season: "2027", round: 3, roster_id: 1, user_id: "userA" },
+    ]);
+  });
+
+  // The case the owner is carried for: a pick from a roster that isn't in the
+  // trade, which is the one a card names an origin for — and which the sides
+  // alone could never resolve.
+  test("a pick names its owner even from outside the trade", () => {
+    const trade = assembleTrade(
+      row({
+        draft_picks: [
+          { season: "2027", round: 1, roster_id: 9, previous_owner_id: 2, owner_id: 1 },
+          { season: "2028", round: 1, roster_id: 7, previous_owner_id: 2, owner_id: 1 },
+        ],
+      }),
+      new Map([...owners, [9, "userI"]]),
+    );
+
+    assert.deepEqual(trade.sides[0].picks, [
+      { season: "2027", round: 1, roster_id: 9, user_id: "userI" },
+      // Roster 7 is in no cached map at all: null rather than a guess, the same
+      // rule an unnamed side follows.
+      { season: "2028", round: 1, roster_id: 7, user_id: null },
     ]);
   });
 

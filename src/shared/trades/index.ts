@@ -13,8 +13,10 @@ export {
   parseTradeQuery,
 } from "./params";
 export type { TradeMatchMode, TradeQuery } from "./params";
+export { draftOrderKey, pickSlotKey } from "./pick-slots";
 export {
   countTrades,
+  getDraftSlots,
   getSeasonTradeLeagues,
   getTradeFacets,
   getTradeManagers,
