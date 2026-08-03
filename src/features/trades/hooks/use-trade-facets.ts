@@ -4,21 +4,25 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import type { TradeFacetsPayload } from "@/shared/contract";
 
-import { fetchTradeCount, fetchTradeFacets } from "../query-fns";
+import { fetchTradeFacets } from "../query-fns";
 import { tradesQueryKeys } from "../query-keys";
 import { tradeQueryKey } from "../trade-query";
 import type { TradeRequest } from "../trade-query";
 
 /**
- * The two things the trade filter dialog asks for, and they are two hooks
- * because they move at different rates.
+ * The option lists the trade filter ledge is built on.
  *
- * **Both are gated on the dialog being open**, which is what makes a
- * season-wide aggregate affordable at all: a reader who never opens the dialog
- * never asks for it, and that is most visits. `enabled` is the mechanism — a
- * null request means don't ask, the same shape `useAdp` uses to keep a closed
- * drawer from costing a request — and it is also why the dialog is dynamically
- * imported, so the same reader doesn't download it either.
+ * **It is gated on the ledge being open**, which is what makes a season-wide
+ * grouped aggregate affordable at all: a reader who never opens it never asks
+ * for it, and that is most visits. The gate used to be `enabled` against a null
+ * request, because the dialog existed whether or not it was showing; the panel
+ * is unmounted while the ledge is closed, so **mounting is the gate** and the
+ * request is unconditional. `enabled` is kept anyway, since a hook that cannot
+ * express "don't ask" is one a second caller has to work around.
+ *
+ * There was a second hook here, `useTradeCount`, for the dialog footer's "N
+ * trades match". The ledge commits live, so the board's own `total` *is* that
+ * number — one route fewer, and no way for the two to disagree.
  */
 
 /**
@@ -64,28 +68,4 @@ export function useTradeFacets(request: TradeRequest | null): TradeFacetsState {
     loading: query.isFetching && !query.data,
     error: query.error instanceof Error ? query.error.message : null,
   };
-}
-
-/**
- * How many trades the draft selection leaves — the footer's number.
- *
- * A short stale time relative to the menus, because this is the number a reader
- * is watching move; it is a `count(*)` over an indexed population, so re-asking
- * is cheap in a way the menus are not.
- */
-export const TRADE_COUNT_STALE_TIME = 5 * 60 * 1000;
-
-export function useTradeCount(request: TradeRequest | null): number | null {
-  const query = useQuery({
-    queryKey: tradesQueryKeys.count(request ? tradeQueryKey(request) : ""),
-    queryFn: ({ signal }) => fetchTradeCount({ request: request!, signal }),
-    enabled: request !== null,
-    staleTime: TRADE_COUNT_STALE_TIME,
-    // The count is what a checkbox moves, so it is re-asked on nearly every
-    // press; holding the last one keeps the footer from flashing an em dash
-    // between two numbers that differ by a few dozen.
-    placeholderData: keepPreviousData,
-  });
-
-  return query.data?.total ?? null;
 }

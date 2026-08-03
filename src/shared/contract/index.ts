@@ -365,12 +365,12 @@ export type TradeFacet = {
  * — because a menu counted over its own selection collapses to that selection
  * the moment you make one and can't be widened without being cleared first.
  *
- * **Which is why the footer's own number is not here.** It is counted *with* the
+ * **Which is why the board's own total is not here.** It is counted *with* the
  * selection, so it changes on every checkbox, while nothing in this payload can.
- * Together they made one checkbox re-run a grouped aggregate over the season for
- * a number a `count(*)` answers in ten milliseconds; apart, this is fetched once
- * per league scope and window and {@link TradeCountPayload} is what a press
- * costs.
+ * Together they would make one checkbox re-run a grouped aggregate over the
+ * season for a number the page already has: the filters commit live, so the
+ * narrowed total arrives on the first page of {@link TradesPagePayload} and this
+ * is fetched once per league scope and window.
  *
  * **The values are ids and the labels are not here**, with one exception. A
  * pick's label is a pure formatting of its own token (`"2026-1"` → `"2026 1st"`)
@@ -380,7 +380,7 @@ export type TradeFacet = {
  * is the same shape and the same merge as a page's own maps. A facet can name a
  * player no loaded page does, which is exactly why they travel together.
  *
- * Asked for only while the dialog is open, which is what makes the cost
+ * Asked for only while the filter ledge is open, which is what makes the cost
  * acceptable: a reader who never opens it never pays for it.
  */
 export type TradeFacetsPayload = {
@@ -728,20 +728,3 @@ export type KickoffPayload = {
 
 /** The error body every league API route returns on a non-2xx. */
 export type ApiErrorPayload = { error: string };
-
-/**
- * `GET /api/trades/count` — how many trades a query matches.
- *
- * The filter dialog's footer, and nothing else. Its own route rather than a
- * field on {@link TradeFacetsPayload} because the two are read at different
- * rates — see the note there — and because it is the one number in the dialog
- * that a checkbox can move.
- *
- * Counted over exactly the population `/api/trades` pages through, so the
- * dialog's promise and the board it opens cannot disagree; unnarrowed it is the
- * stored `trade_market_stats` row rather than a scan.
- */
-export type TradeCountPayload = {
-  season: string;
-  total: number;
-};

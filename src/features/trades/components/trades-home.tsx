@@ -6,19 +6,13 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_LEAGUE_FILTERS,
   FlaskLoader,
-  PageHeading,
   activeFilterCount,
-  filterSummary,
   todayIso,
 } from "@/features/shared";
 import type { LeagueFilters } from "@/features/shared";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
-import {
-  DEFAULT_TRADE_FILTERS,
-  tradeFilterSummary,
-  tradeRangeBounds,
-} from "../filters";
+import { DEFAULT_TRADE_FILTERS, tradeRangeBounds } from "../filters";
 import type { TradeFilters } from "../filters";
 import { useFilteredTrades } from "../hooks/use-filtered-trades";
 import { useTradeLeagues } from "../hooks/use-trade-leagues";
@@ -26,43 +20,39 @@ import { useTrades } from "../hooks/use-trades";
 import type { Verdict } from "../incremental";
 import { DEFAULT_TRADE_COLUMNS, TRADE_METRICS } from "../trade-metrics";
 import { resolveLeagueScope, tradeQueryKey } from "../trade-query";
+import { TradeFiltersLedge } from "./trade-filters-ledge";
 import { TradeValuePicker } from "./trade-value";
 import { TradesList } from "./trades-list";
 
 /**
- * The two filter dialogs, loaded on demand.
+ * The league filters dialog, loaded on demand.
  *
- * Neither is on screen at first paint — each is a trigger button and a `<dialog>`
- * that is only ever shown by a press — and between them they are the largest
- * client modules this page pulls: the league filters dialog is ~970 lines with
- * the whole slot-group and scoring-rule editor, its option tables and its
- * breakdown counts behind it, and the trade filters dialog brings the option
- * picker and the facets query. Statically imported, all of it was parsed and
- * evaluated before the first card could be drawn.
+ * It is not on screen at first paint — a trigger and a `<dialog>` only ever
+ * shown by a press — and it is the largest client module this page pulls: ~970
+ * lines with the whole slot-group and scoring-rule editor, its option tables and
+ * its breakdown counts behind it. Statically imported, all of that was parsed
+ * and evaluated before the first card could be drawn. The trade filters are
+ * split the same way one layer in, at the ledge's panel rather than here, since
+ * the ledge's own trigger and summary are not behind a press.
  *
  * `ssr: false` because there is nothing to prerender: a `<dialog>` that opens on
  * a press has no server-rendered state worth having, and rendering it would put
  * the markup back in the document that the split is removing.
  *
- * The triggers *are* the components, so the fallback is what holds their place
- * in the header row while the chunk loads — a plain pill of the same size, so
- * the row doesn't reflow when it arrives (which would move the list under it and
- * make the virtualizer re-measure its own offset).
+ * The trigger *is* the component, so the fallback is what holds its place in the
+ * ledge's row while the chunk loads — a plain pill of the same size, so the row
+ * doesn't reflow when it arrives (which would move the list under it and make
+ * the virtualizer re-measure its own offset).
  */
 const LeagueFiltersModal = dynamic(
   () =>
     import("@/features/shared/ui/league-filters-modal").then(
       (m) => m.LeagueFiltersModal,
     ),
-  // "Filters" rather than "Leagues": the placeholder is standing in for the
-  // real trigger's box, so it has to wear the real trigger's word or the row is
-  // a different width for the moment the chunk is loading.
-  { ssr: false, loading: () => <TriggerPlaceholder label="Filters" /> },
-);
-
-const TradeFiltersModal = dynamic(
-  () => import("./trade-filters-modal").then((m) => m.TradeFiltersModal),
-  { ssr: false, loading: () => <TriggerPlaceholder label="Trades" /> },
+  // "Leagues" is the trigger's own word — the placeholder is standing in for its
+  // box, so it has to wear the same label or the row is a different width for
+  // the moment the chunk is loading.
+  { ssr: false, loading: () => <TriggerPlaceholder label="Leagues" /> },
 );
 
 /**
@@ -81,10 +71,17 @@ const TradeFiltersModal = dynamic(
  * were read off the trades, so the browser needed the unnarrowed season, so the
  * only lever was making ~20MB arrive progressively — and the constraint is what
  * moved. The filters are SQL, the menus are their own aggregate behind the
- * dialog that shows them, and what arrives here is a page of two hundred cards
+ * control that shows them, and what arrives here is a page of two hundred cards
  * with the next one following the scroll.
  *
- * Three things are arranged around keeping the page identical while that
+ * **The page leads with its controls rather than with its name.** There was a
+ * `Trades` heading and a scope line above all of this; the app bar already names
+ * the tool, so the title said what was said a few pixels above it, and the scope
+ * line said what the ledge's own summary now says beside the control that sets
+ * it. What replaced ~96px of masthead is one line carrying the count, the
+ * selection in words and every trigger on the page.
+ *
+ * Three things are arranged around keeping the page identical while the read
  * changed:
  *
  * - **The league rules still run here**, over `useTradeLeagues`'s list, because
@@ -147,7 +144,7 @@ export function TradesHome({ season }: { season: string }) {
     [season, scope, tradeFilters, bounds],
   );
 
-  const { data, loading, loadingMore, hasMore, loadMore, error } =
+  const { data, loading, loadingMore, stale, hasMore, loadMore, error } =
     useTrades(request);
 
   const trades = data?.trades ?? EMPTY_TRADES;
@@ -193,54 +190,64 @@ export function TradesHome({ season }: { season: string }) {
 
   return (
     <>
+      {/* Everything above the list, watched by the virtualizer — which is what
+          makes the ledge safe to expand in place: opening it moves the board
+          down, and the observer on this element is how the list is told. */}
       <div ref={headerRef}>
-        <header className="mb-6 flex flex-wrap items-end gap-x-4 gap-y-3">
-          {/* The scope line is the lede here: what the count beside it is over,
-              in words — the two modals hide their own state, so it is stated
-              outside them. It truncates rather than wrapping, since the count
-              and both triggers share the row. */}
-          <PageHeading
-            title="Trades"
-            lede={
-              <span className="block min-w-0 truncate text-sm">
-                {season} · every crawled league · {filterSummary(leagueFilters)}{" "}
-                · {tradeFilterSummary(tradeFilters)}
-              </span>
-            }
-            className="min-w-0"
-          />
-
-          <div className="ml-auto flex items-center gap-4">
-            <p className="text-right text-sm text-foreground/60">
-              <b className="text-lg font-semibold tabular-nums text-foreground">
-                {(total ?? visible.length).toLocaleString()}
-              </b>{" "}
-              {scopeTotal !== null && total !== null && scopeTotal !== total
-                ? `of ${scopeTotal.toLocaleString()} trades`
-                : "trades"}
-            </p>
-            <TradeValuePicker
-              metrics={TRADE_METRICS}
-              metricKey={metric.key}
-              onChange={(key) => setColumn(0, key)}
-              onReset={reset}
-            />
-            <LeagueFiltersModal
-              filters={leagueFilters}
-              onChange={setLeagueFilters}
-              leagues={leagues}
-            />
-            <TradeFiltersModal
-              filters={tradeFilters}
-              onChange={setTradeFilters}
-              season={season}
-              scope={scope}
-              players={players}
-              managers={managers}
-              today={today}
-            />
-          </div>
-        </header>
+        <TradeFiltersLedge
+          filters={tradeFilters}
+          onChange={setTradeFilters}
+          leagueFilters={leagueFilters}
+          season={season}
+          scope={scope}
+          players={players}
+          managers={managers}
+          today={today}
+          trailing={
+            <>
+              {/* The board's size, which is what the deleted heading's slot is
+                  now spent on: a constant nobody re-reads, replaced by the one
+                  number on the page that answers "did that filter do anything".
+                  It leads the trailing group because the two triggers beside it
+                  are what move it. */}
+              <p
+                className={`flex shrink-0 items-baseline gap-1.5 text-sm text-foreground/55 transition-opacity ${
+                  // Dimmed while a narrowed board is on its way, so the number
+                  // reads as the one being replaced rather than the answer to
+                  // the filter just pressed. One small element rather than the
+                  // list, which is the flash `keepPreviousData` exists to avoid.
+                  stale ? "opacity-40" : ""
+                }`}
+              >
+                {/* The body face, not `font-display`, which is the app's rule
+                    for a number rather than a name — and load-bearing at this
+                    one: Orbitron's zero is a slashed box, so a narrowing that
+                    matches nothing rendered as a checkbox glyph beside the
+                    word "of". */}
+                <b className="text-lg font-semibold tabular-nums text-foreground">
+                  {(total ?? visible.length).toLocaleString()}
+                </b>
+                <span className="text-xs">
+                  {scopeTotal !== null && total !== null && scopeTotal !== total
+                    ? `of ${scopeTotal.toLocaleString()} trades`
+                    : "trades"}
+                </span>
+              </p>
+              <TradeValuePicker
+                metrics={TRADE_METRICS}
+                metricKey={metric.key}
+                onChange={(key) => setColumn(0, key)}
+                onReset={reset}
+              />
+              <LeagueFiltersModal
+                filters={leagueFilters}
+                onChange={setLeagueFilters}
+                leagues={leagues}
+                label="Leagues"
+              />
+            </>
+          }
+        />
 
         {error && <Note tone="error">{error}</Note>}
       </div>
@@ -287,7 +294,7 @@ export function TradesHome({ season }: { season: string }) {
   );
 }
 
-/** Whether anything in the trade dialog is narrowing — for the empty state's wording. */
+/** Whether anything in the trade ledge is narrowing — for the empty state's wording. */
 function activeTradeSelection(filters: TradeFilters): boolean {
   return (
     filters.range.preset !== "all" ||
@@ -300,7 +307,7 @@ function activeTradeSelection(filters: TradeFilters): boolean {
 /**
  * The size and shape of a filter trigger, held while its chunk loads.
  *
- * Sized to match rather than left empty, because the header row wrapping when
+ * Sized to match rather than left empty, because the ledge's row wrapping when
  * the real button arrives would move the list down the page — which the
  * virtualizer would then have to re-measure and re-lay-out from.
  */
