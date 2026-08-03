@@ -15,8 +15,8 @@
  * objects, which is what `tradeQueryKey` is for. React Query hashes keys
  * structurally, so two objects describing the same request would be two entries;
  * two query strings describing it are one. That matters more here than anywhere
- * else in the app — a miss is a fresh first page, a fresh count and a lost
- * scroll position.
+ * else in the app — a miss is a fresh first page and a lost scroll
+ * position.
  */
 export const tradesQueryKeys = {
   all: ["trades"] as const,
@@ -25,15 +25,9 @@ export const tradesQueryKeys = {
   /** The season's leagues — the league rules' input, and every card's name. */
   leagues: (season: string) => ["trades", "leagues", season] as const,
   /**
-   * The filter dialog's menus, keyed on the league scope and window *without*
-   * the draft selection — pressing a checkbox cannot change them, so a key that
-   * moved with the selection would re-run a season-wide aggregate for an
-   * unchanged answer.
+   * The filter ledge's menus, keyed on the league scope and window *without* the
+   * selection — pressing a checkbox cannot change them, so a key that moved with
+   * the selection would re-run a season-wide aggregate for an unchanged answer.
    */
   facets: (query: string) => ["trades", "facets", query] as const,
-  /**
-   * The dialog footer's count, keyed on the whole draft — the one thing in the
-   * dialog a checkbox does move, and a `count(*)` rather than an aggregate.
-   */
-  count: (query: string) => ["trades", "count", query] as const,
 };

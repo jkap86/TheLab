@@ -26,14 +26,16 @@ export const dynamic = "force-dynamic";
  *
  * Two things keep it affordable:
  *
- * - **It is only asked for while the dialog is open.** A reader who never opens
- *   it never pays, which is most readers on most visits — and that is what makes
- *   the dialog's dynamic import (it is lazy-loaded too) pay off twice.
+ * - **It is only asked for while the filter ledge is open.** A reader who never
+ *   opens it never pays, which is most readers on most visits — and that is what
+ *   makes the panel's dynamic import (it is lazy-loaded too) pay off twice.
  * - **The selection's own total is not computed here.** These counts cannot
  *   change when a checkbox is pressed — they are taken without the selection on
- *   purpose — so pairing them with the footer's number, which changes on every
- *   press, made a checkbox cost this whole aggregate. `/api/trades/count` is
- *   that number, and it is a `count(*)`.
+ *   purpose — so pairing them with a number that *does* move on every press
+ *   would make a checkbox cost this whole aggregate. That number is the board's
+ *   own `total`, which the ledge reads off `/api/trades` rather than asking for
+ *   separately: the filters commit live, so the count on the page is already
+ *   counted over the selection.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);

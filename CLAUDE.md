@@ -45,9 +45,8 @@ src/shared/    Domain logic, one folder per concern.
   to *that* module and call it — don't write SQL against a table your module
   doesn't own. (`ktc/match` used to query `players` directly; it doesn't now.)
 - **A cache-backed route reads and nothing else.** `/api/projections`,
-  `/api/league/[leagueId]`, `/api/adp`, `/api/adp/density` and the four
-  `/api/trades*` routes answer from what the
-  background syncs have stored; a slice that hasn't been synced comes back empty
+  `/api/league/[leagueId]`, `/api/adp`, `/api/adp/density` and the three
+  `/api/trades*` routes answer from what the background syncs have stored; a slice that hasn't been synced comes back empty
   rather than fetched on demand. (`/api/user/[username]`, `…/leagues` and
   `/api/picktracker/[leagueId]` are the deliberate exceptions — resolving a
   manager and syncing their leagues is what the user routes are *for*, which is
@@ -645,7 +644,14 @@ stops holding, a comment saying it does would not have caught it.
   - `PageHeading` is the eyebrow, the gradient display title and the lede, used
     by every page that leads with a title. `size` is the only thing that varies —
     `hero` for `/tools`, where the wordmark *is* the page, and `page` everywhere
-    else, where the app bar has already named the tool.
+    else, where the app bar has already named the tool. **`/trades` leads with
+    its controls instead and has none**, which is the honest end of that
+    "the app bar has already named the tool" clause: a board that is a filter
+    ledge over a list several thousand rows long was spending ~96px on a word the
+    bar says a few pixels above it and a scope line the ledge's own summary says
+    beside the control that sets it. Reach for the heading when a page has
+    something to say before its content; skip it when the first control *is* the
+    content's own description.
   - `LIST_ROW_SURFACE` / `LIST_ROW_HOVER` / `RowSheen` are the tool cards' glass
     held to a row's height, worn by league cards, share cards and trade cards.
     What they deliberately don't take is the **corner brackets** — those are a
@@ -861,7 +867,15 @@ stops holding, a comment saying it does would not have caught it.
   same reason.** The league filters say *which leagues' trades are in the list at
   all*; the trade filters say *which of those trades* — window, players, picks,
   managers. One is about where you play, the other about what happened there, so
-  they stay two triggers rather than two tabs of one dialog. Both are applied by
+  they stay two controls rather than two tabs of one dialog. **They are no longer
+  the same *kind* of control, and that asymmetry is the point**: the trade
+  filters are a ledge seated on the page — one line that expands in place — while
+  the league filters stay a modal, because that dialog is shared with the manager
+  tabs and a control rendered on two pages with two shapes is the drift a shared
+  component exists to stop. Which also settles what each trigger says: the ledge
+  is `Filters` and the modal is `Leagues` here (`label`, defaulting to `Filters`
+  where it is the page's only one), since two parts wearing the same word are two
+  answers to the same question. Both are applied by
   the **database** now, which is the change the whole page is arranged around
   (see the next bullet); what stays on the client is the league *rules*, because
   they are a slot-group and scoring-key engine over Sleeper's JSONB and a second
@@ -973,13 +987,17 @@ stops holding, a comment saying it does would not have caught it.
     `adds` on a waiver is as big as on a trade and there are twenty times as
     many. The older `transactions_trade_recency_idx` is left in place; it is what
     a `NULLS LAST` ordering would still use.
-  - **The filter menus are their own route and their own aggregate**, and the
-    dialog's footer count is a *third* route. That split is not fussiness: the
-    menus are counted **without** the selection (a menu counted over its own
-    selection collapses to it) so a checkbox cannot change them, while the footer
-    is counted **with** it and changes on every press. Together, one checkbox
-    re-ran a season-wide grouped aggregate (~1.5s) to move a number `count(*)`
-    answers in ten milliseconds. The facets query runs its three branches as
+  - **The filter menus are their own route and their own aggregate**, kept apart
+    from any number counted *with* the selection. That split is not fussiness:
+    the menus are counted **without** it (a menu counted over its own selection
+    collapses to it) so a checkbox cannot change them, while the board's own
+    total changes on every press. Together, one checkbox re-ran a season-wide
+    grouped aggregate (~1.5s) to move a number `count(*)` answers in ten
+    milliseconds. There was a third route for that number, `/api/trades/count`,
+    and the ledge retired it: the filters commit live, so the narrowed total
+    arrives on the first page of the board itself — one route fewer, and no way
+    for the promise and the list to disagree. The facets query runs its three
+    branches as
     three parallel statements rather than one `UNION ALL` — 2,090ms as one
     statement, ~850ms as three — which costs reading the population three times
     (~50ms a piece) against branches costing 270ms, 270ms and 830ms, and is worth
@@ -1026,13 +1044,27 @@ stops holding, a comment saying it does would not have caught it.
     written during render survives a concurrent render that was thrown away,
     while React re-runs a self-adjusting component before committing anything
     under it.
-  - **Both filter dialogs are dynamically imported.** Neither is on screen at
-    first paint — each is a trigger and a `<dialog>` opened by a press — and
-    between them they were the largest client modules the page pulled. The
-    trigger stays static (it carries the badge that says what is set); only the
-    part nobody has opened is split. The ADP drawer and the columns editor are
-    split the same way in the manager tool, each latched so closing doesn't
-    unmount the dialog inside its own `close` handler.
+  - **Both filter controls are split at the press, not at the component.**
+    Neither's contents are on screen at first paint, and between them they were
+    the largest client modules the page pulled. For the league filters the seam
+    is the whole dialog, which is nothing but a trigger and a `<dialog>`; for the
+    ledge it is one layer in — `TradeFiltersPanel`, since the ledge's own trigger
+    and summary line *are* on screen and are what a reader who never opens it
+    reads. Either way the rule is the same: the part that carries the badge stays
+    static, the part nobody has opened is split. The ADP drawer and the columns
+    editor are split the same way in the manager tool, each latched so closing
+    doesn't unmount the dialog inside its own `close` handler.
+  - **The board holds its previous pages while a new filter set lands**
+    (`keepPreviousData`). It is what makes committing live affordable: a filter
+    change is a *different key* with nothing in it, so without this every press
+    replaces the whole list with the loading flask and back — the flash `useAdp`
+    and the four manager hooks refuse for the same reason. Two things ride on the
+    `stale` flag it produces. Pagination is held back, because the cursor belongs
+    to the board on its way out and `fetchNextPage` would resume the *new* key
+    from it. And the headline count dims — one small element rather than the
+    list, since the count is the number the filter was pressed to move and
+    showing the old one undimmed is the one place the lag would read as an
+    answer.
 - **A trade card's header states the instant, and its sides each state one
   value.** Two changes to what a card says, and each replaced something that read
   as information and wasn't:
