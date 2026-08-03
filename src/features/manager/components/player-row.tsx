@@ -1,4 +1,4 @@
-import { weekCount } from "../format";
+import { shortPlayerName, weekCount } from "../format";
 import { PLAYER_METRICS, PLAYER_METRICS_BY_KEY } from "../roster-metrics";
 import type {
   LeagueRosterValues,
@@ -28,6 +28,32 @@ const SLOT_LABEL: Record<string, string> = {
   SUPER_FLEX: "SFLX",
   IDP_FLEX: "IDP",
 };
+
+/**
+ * The spellings that only fit the narrow tier's gutter, which is 20px wide at
+ * `text-[0.6rem]` (see `roster-layout`).
+ *
+ * Two labels don't fit it and both are four characters: `FLEX` and `SFLX` measure
+ * 24.5px there, against 19.2 for the widest three — so this table is the two of
+ * them and nothing else, and it is an override of {@link SLOT_LABEL} rather than
+ * a replacement for it. Above `@lg` the track is 2.5rem and the fuller spellings
+ * are the ones drawn, which is why this is a second map and not an edit to the
+ * first: `FLEX` is a word a reader knows and `FLX` is a concession to a width, so
+ * the concession is made only where the width demands it.
+ *
+ * Adding an entry means checking it against that 20px — this table and the track
+ * in `roster-layout` are a matched pair with no compiler link between them.
+ */
+const NARROW_SLOT_LABEL: Record<string, string> = {
+  FLEX: "FLX",
+  SUPER_FLEX: "SFX",
+};
+
+/** What the slot gutter draws at each tier — the same slot, spelled to fit. */
+function slotLabels(slot: string): { narrow: string; wide: string } {
+  const wide = SLOT_LABEL[slot] ?? slot;
+  return { narrow: NARROW_SLOT_LABEL[slot] ?? wide, wide };
+}
 
 export function PlayerRow({
   player,
@@ -74,6 +100,12 @@ export function PlayerRow({
   // Sleeper pads an unfilled starting slot with an empty id or a literal "0".
   const empty = !playerId || playerId === "0";
   const name = empty ? "Empty" : (player?.name ?? playerId);
+  // Contracted below @lg, whole above it — see `shortPlayerName` for why the
+  // narrow tier can't simply hold the full one. Most names differ between the
+  // two, so the pair is rendered rather than branched on at runtime; where they
+  // agree, one span is drawn.
+  const short = empty ? name : shortPlayerName(name, player?.position ?? null);
+  const labels = slot ? slotLabels(slot) : null;
 
   const ctx = {
     outlook,
@@ -93,17 +125,38 @@ export function PlayerRow({
       }`}
     >
       {/* Spans both lines so the slot reads as labelling the whole row, and holds
-          the gutter open on bench rows that have no slot to show. */}
-      <span className="row-span-2 self-center truncate text-center text-[0.65rem] font-semibold uppercase text-foreground/35 @lg:text-[0.7rem]">
-        {slot ? (SLOT_LABEL[slot] ?? slot) : ""}
+          the gutter open on bench rows that have no slot to show. Two spellings
+          rather than one: the gutter is 20px below @lg and the fuller labels
+          don't fit it (see `NARROW_SLOT_LABEL`). `hidden` is paired with
+          `@lg:inline` rather than a bare `inline` on the other, since Tailwind
+          emits the display utilities alphabetically and `.inline` would beat
+          `.hidden` at every width. */}
+      <span className="row-span-2 self-center truncate text-center text-[0.6rem] font-semibold uppercase text-foreground/35 @lg:text-[0.7rem]">
+        {labels && (
+          <>
+            <span className="@lg:hidden">{labels.narrow}</span>
+            <span className="hidden @lg:inline">{labels.wide}</span>
+          </>
+        )}
       </span>
 
+      {/* `title` is the desktop backstop and deliberately not the plan: it does
+          nothing on a touch screen, which is the width where the name is short
+          of room in the first place. */}
       <span
+        title={empty ? undefined : name}
         className={`${layout.nameSpan} min-w-0 truncate text-sm ${
           empty ? "text-foreground/25" : "text-foreground/85"
         }`}
       >
-        {name}
+        {short === name ? (
+          name
+        ) : (
+          <>
+            <span className="@lg:hidden">{short}</span>
+            <span className="hidden @lg:inline">{name}</span>
+          </>
+        )}
       </span>
 
       {/* Second line: what the name used to be competing with. The badge no longer

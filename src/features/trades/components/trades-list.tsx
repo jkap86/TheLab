@@ -71,6 +71,7 @@ export function TradesList({
   managers,
   metric,
   ktc,
+  pickSlots,
   headerRef,
   hasMore,
   loadingMore,
@@ -83,6 +84,8 @@ export function TradesList({
   /** The metric every card's value column shows — one selection for the list. */
   metric: TradeMetric;
   ktc: Record<string, KtcValue>;
+  /** Draft slots for the picks whose league has set an order, keyed per pick. */
+  pickSlots: Record<string, number>;
   /**
    * Everything laid out above the list. Watched for size changes, because how
    * far down the page the list starts is exactly what `scrollMargin` is — see
@@ -202,6 +205,7 @@ export function TradesList({
               managers={managers}
               metric={metric}
               ktc={ktc}
+              pickSlots={pickSlots}
             />
           </li>
         );

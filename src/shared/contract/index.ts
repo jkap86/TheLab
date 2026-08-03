@@ -308,6 +308,19 @@ export type TradesPagePayload = {
    * entirely, which is a different claim from being worth nothing.
    */
   ktc: Record<string, KtcValue>;
+  /**
+   * Where a traded pick falls, for the picks on this page whose league has set
+   * the order — keyed by {@link pickSlotKey}, so a card names a pick the way
+   * Sleeper does ("2026 1.05") where the order is known and by its round
+   * ("2026 1st") where it isn't.
+   *
+   * **Absent means unordered**, never zero: most picks on a board are two or
+   * three seasons out, and a draft that doesn't exist yet has no slots to give.
+   * It rides beside the trades rather than on each pick because a slot is a fact
+   * about a league's draft — one entry serves every trade that names that
+   * roster's pick, of which a busy league has many.
+   */
+  pickSlots: Record<string, number>;
 };
 
 /**

@@ -77,6 +77,10 @@ export function assembleTrade(
       season: String(raw.season ?? ""),
       round,
       roster_id: original,
+      // Resolved from the league's whole map rather than from the trade's own
+      // sides: the pick worth naming an owner for is the one that came from a
+      // roster that isn't in this trade — see {@link TradePickAsset.user_id}.
+      user_id: owners.get(original) ?? null,
     };
     side(owner).picks.push(pick);
   }
