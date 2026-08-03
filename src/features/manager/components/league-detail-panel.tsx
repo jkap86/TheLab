@@ -171,15 +171,19 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   // the ref the pickers' outside-click test reads.
   return (
     <div ref={panelRef}>
-      <div className="pb-3 pl-3 pr-2 pt-1 @lg:pb-5 @lg:pl-5 @lg:pr-4 @lg:pt-2">
-        {data.outlook && (
-          <PanelTelemetry
-            outlook={data.outlook}
-            team={data.outlook.teams.find(
-              (t) => t.roster_id === selected.roster_id,
-            )}
-          />
-        )}
+      {/* Outside the inset on purpose: the readout is the card's head
+          continuing, so it runs the full width under its own seam rather than
+          sitting in the body as a third object between the name and the
+          detail. */}
+      {data.outlook && (
+        <PanelTelemetry
+          outlook={data.outlook}
+          team={data.outlook.teams.find(
+            (t) => t.roster_id === selected.roster_id,
+          )}
+        />
+      )}
+      <div className="pb-3 pl-3 pr-2 pt-2 @lg:pb-5 @lg:pl-5 @lg:pr-4 @lg:pt-3">
         <div className="grid grid-cols-2 gap-1.5 @lg:gap-4">
           <Standings
             teams={teams}

@@ -9,12 +9,24 @@ import { formatPoints } from "../format";
 import type { LeagueOutlook, TeamOutlook } from "../types";
 
 /**
- * The panel's readout: where the selected team stands in the projected field,
- * and the three totals that say what kind of team it is.
+ * The card's second head line while it is open: where the selected team stands
+ * in the projected field, and the three totals that say what kind of team it is.
  *
  * It sits above both halves because a panel that opens onto two dense tables
  * asks the reader to derive its headline — the summary belongs before the
- * detail, not inside it. What it states is deliberately the *selected* team's,
+ * detail, not inside it.
+ *
+ * **It is a rail on the card's head, not a strip floating in the body.** As an
+ * inset block above the two halves it was a third object between the league's
+ * name and its detail, restating at a second grain what the head's four stat
+ * columns say a line above — one league with two headlines a few pixels apart.
+ * Full-bleed under a machined seam (a dark cut with a lit far wall, the groove
+ * the heading rail uses) it reads as the head continuing, which is what it is.
+ * The stat columns stay on the first line and are not a duplicate of this: they
+ * place this league against the other hundred in the list, and that question
+ * stays answerable while the panel is open.
+ *
+ * What it states is deliberately the *selected* team's,
  * where the standings' own columns are for comparing teams against each other;
  * the same numbers answer different questions at the two grains, which is why
  * the overlap with the default `proj` / `bench` columns is worth paying. The
@@ -52,7 +64,9 @@ export function PanelTelemetry({
     : null;
 
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2 @lg:gap-3">
+    // The left inset clears the same cyan rail the card's name line clears, so
+    // the dial starts under the league's name rather than under its chevron.
+    <div className="flex flex-wrap items-center gap-2 border-t border-black/40 py-2 pl-5 pr-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] @lg:gap-3 @lg:py-2.5 @lg:pr-4">
       <RankDial rank={rank} />
       <Readout
         label="Projected"
