@@ -3,7 +3,11 @@ import { describe, test } from "node:test";
 
 import type { Trade, TradeSide } from "@/shared/trades";
 
-import { isEmptyBundle, isPairedExchange, tradeExchange } from "./exchange.ts";
+import {
+  counterpartyRoster,
+  isEmptyBundle,
+  receivedBundle,
+} from "./exchange.ts";
 
 const side = (roster_id: number, over: Partial<TradeSide> = {}): TradeSide => ({
   roster_id,
@@ -22,42 +26,54 @@ const trade = (sides: TradeSide[]): Trade => ({
   sides,
 });
 
-describe("tradeExchange", () => {
-  test("a two-sided trade's giving half is the other side's take", () => {
-    const pick = { season: "2027", round: 3, roster_id: 2 };
-    const exchange = tradeExchange(
-      trade([
-        side(1, { players: ["p1"] }),
-        side(2, { picks: [pick], faab: 25 }),
-      ]),
+describe("receivedBundle", () => {
+  test("is the side's own haul", () => {
+    const pick = { season: "2027", round: 3, roster_id: 2, user_id: "user2" };
+    const bundle = receivedBundle(
+      side(1, { players: ["p1"], picks: [pick], faab: 25 }),
     );
 
-    assert.equal(exchange.length, 2);
-    assert.deepEqual(exchange[0].received.players, ["p1"]);
-    assert.deepEqual(exchange[0].given?.picks, [pick]);
-    assert.equal(exchange[0].given?.faab, 25);
-    assert.deepEqual(exchange[1].given?.players, ["p1"]);
-    assert.deepEqual(exchange[1].received.picks, [pick]);
-    assert.ok(isPairedExchange(exchange));
+    assert.deepEqual(bundle.players, ["p1"]);
+    assert.deepEqual(bundle.picks, [pick]);
+    assert.equal(bundle.faab, 25);
+    assert.equal(isEmptyBundle(bundle), false);
   });
 
-  test("a side that only gave things up still has an empty take", () => {
-    const exchange = tradeExchange(
-      trade([side(1, { players: ["p1"] }), side(2)]),
-    );
-
-    assert.ok(isEmptyBundle(exchange[1].received));
-    assert.deepEqual(exchange[1].given?.players, ["p1"]);
-    assert.ok(exchange[0].given && isEmptyBundle(exchange[0].given));
+  // A three-way can leave a participant taking nothing at all, and the card says
+  // so rather than drawing a blank block.
+  test("a side that only gave things up came away empty", () => {
+    assert.ok(isEmptyBundle(receivedBundle(side(2))));
   });
 
-  test("a three-way trade has no attributable giving half", () => {
-    const exchange = tradeExchange(
-      trade([side(1, { players: ["p1"] }), side(2), side(3, { faab: 5 })]),
-    );
+  test("FAAB alone is not empty", () => {
+    assert.equal(isEmptyBundle(receivedBundle(side(2, { faab: 5 }))), false);
+  });
+});
 
-    assert.equal(exchange.length, 3);
-    assert.ok(exchange.every((e) => e.given === null));
-    assert.equal(isPairedExchange(exchange), false);
+describe("counterpartyRoster", () => {
+  test("a two-sided trade's other side is who handed everything over", () => {
+    const t = trade([side(1, { players: ["p1"] }), side(2, { faab: 25 })]);
+
+    assert.equal(counterpartyRoster(t, t.sides[0]), 2);
+    assert.equal(counterpartyRoster(t, t.sides[1]), 1);
+  });
+
+  // Nothing Sleeper stores says which participant an asset came through, so the
+  // card declines to name one rather than guessing — see the module note.
+  test("a three-way trade has no attributable giver", () => {
+    const t = trade([
+      side(1, { players: ["p1"] }),
+      side(2),
+      side(3, { faab: 5 }),
+    ]);
+
+    assert.equal(counterpartyRoster(t, t.sides[0]), null);
+    assert.equal(counterpartyRoster(t, t.sides[2]), null);
+  });
+
+  test("a lone side has no counterparty", () => {
+    const t = trade([side(1, { players: ["p1"] })]);
+
+    assert.equal(counterpartyRoster(t, t.sides[0]), null);
   });
 });

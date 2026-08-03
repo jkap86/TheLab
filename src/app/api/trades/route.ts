@@ -6,6 +6,8 @@ import { getActiveSeason } from "@/shared/season";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 import {
   countTrades,
+  draftOrderKey,
+  getDraftSlots,
   getStoredTradeCount,
   getTradeManagers,
   hasTradeNarrowing,
@@ -15,6 +17,7 @@ import {
   lookupKtc,
   lookupPlayers,
   parseTradeQuery,
+  pickSlotKey,
   refreshTradeStats,
 } from "@/shared/trades";
 import type { Trade, TradeQuery } from "@/shared/trades";
@@ -155,7 +158,7 @@ async function resolveTotals(
 /**
  * The names the ids on this page stand for.
  *
- * The three lookups are independent and run together; each is a no-op on an
+ * The four lookups are independent and run together; each is a no-op on an
  * empty id list, which is the common case for every page after the first few.
  * Leagues are deliberately **not** among them — they arrive whole from
  * `/api/trades/leagues`, once per season, which is what removed the stream's
@@ -164,6 +167,10 @@ async function resolveTotals(
 async function resolveNames(trades: readonly Trade[]) {
   const playerIds: string[] = [];
   const managerIds: string[] = [];
+  // The `(league, season)` pairs whose draft order would name a pick on this
+  // page. Deduplicated like the ids: a busy league's page carries dozens of
+  // picks out of the same two drafts.
+  const draftKeys: string[] = [];
   const seen = new Set<string>();
   const take = (id: string, out: string[]) => {
     if (seen.has(id)) return;
@@ -175,15 +182,23 @@ async function resolveNames(trades: readonly Trade[]) {
     for (const side of trade.sides) {
       for (const id of side.players) take(id, playerIds);
       if (side.user_id) take(side.user_id, managerIds);
+      for (const pick of side.picks) {
+        take(draftOrderKey(trade.league_id, pick.season), draftKeys);
+        // A pick's original owner need not be a participant, so this is not
+        // covered by the side ids above — and it is exactly the case the card
+        // names an owner for.
+        if (pick.user_id) take(pick.user_id, managerIds);
+      }
     }
   }
 
-  const [players, managers, ktc] = await Promise.all([
+  const [players, managers, ktc, draftSlots] = await Promise.all([
     lookupPlayers(playerIds),
     getTradeManagers(managerIds),
     // Keyed on the same new-ids list as the names, so a player priced once is
     // priced once for the whole board.
     lookupKtc(playerIds),
+    getDraftSlots(draftKeys),
   ]);
 
   const resolvedManagers: Record<string, LeaguematePayload> = {};
@@ -199,5 +214,33 @@ async function resolveNames(trades: readonly Trade[]) {
     players: Object.fromEntries(players),
     managers: resolvedManagers,
     ktc: Object.fromEntries(ktc),
+    // Narrowed to the picks the page actually holds: a league's order covers
+    // every roster in it, and a page names two or three of them.
+    pickSlots: resolvePickSlots(trades, draftSlots),
   };
+}
+
+/**
+ * The slot for each pick on the page, where its league's order is known.
+ *
+ * A whole league's order is what the query returns (one row per roster, since
+ * that is one index walk rather than one per pick), and what crosses the wire is
+ * only the cells the picks here land on — the same rule the id lookups follow.
+ */
+function resolvePickSlots(
+  trades: readonly Trade[],
+  orders: ReadonlyMap<string, ReadonlyMap<number, number>>,
+): Record<string, number> {
+  const slots: Record<string, number> = {};
+  for (const trade of trades) {
+    for (const side of trade.sides) {
+      for (const pick of side.picks) {
+        const order = orders.get(draftOrderKey(trade.league_id, pick.season));
+        const slot = order?.get(pick.roster_id);
+        if (slot === undefined) continue;
+        slots[pickSlotKey(trade.league_id, pick.season, pick.roster_id)] = slot;
+      }
+    }
+  }
+  return slots;
 }

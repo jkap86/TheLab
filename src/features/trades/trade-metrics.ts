@@ -1,7 +1,7 @@
 import { ktcBoardValue } from "../../shared/ktc/roster.ts";
 import type { Metric } from "../shared/metric-cell.ts";
 import type { TradeBundle } from "./exchange.ts";
-import type { KtcValue } from "./types";
+import type { KtcValue, TradePickAsset } from "./types";
 
 /**
  * The metrics a trade card's value column can show, and how to read one off one
@@ -18,6 +18,14 @@ import type { KtcValue } from "./types";
  * already a table of assets, and four columns of aggregates beside them would be
  * reading the card twice; one column is a summary of the haul the rows spell
  * out.
+ *
+ * **A metric may also read one asset at a time**, which is the half that makes
+ * the total worth trusting: a side total says which haul was bigger and nothing
+ * about which piece of it carried the weight, and "three players for a first" is
+ * a different trade depending on whether the three are 8,000 apiece or 800.
+ * {@link TradeMetric.asset} is that reading, and it is optional because most of
+ * this catalogue has no per-asset form — a count of players is 1 on every line,
+ * which is a column of ones.
  *
  * Pure and free of runtime imports beyond {@link ktcBoardValue} — which arrives
  * relatively with an explicit `.ts` extension, the way the league filters reach
@@ -45,7 +53,52 @@ export type TradeSideContext = {
   superflex: boolean;
 };
 
-export type TradeMetric = Metric<TradeSideContext>;
+/**
+ * One line of a haul, as the card lists it and a metric reads it.
+ *
+ * A discriminated union rather than three parallel readers, so a metric that has
+ * something to say about only one kind of asset says so by returning null for
+ * the others — and so the card walks one list in one order instead of three.
+ */
+export type TradeAsset =
+  | { kind: "player"; id: string }
+  | { kind: "pick"; pick: TradePickAsset }
+  | { kind: "faab"; amount: number };
+
+/**
+ * What a metric says about one asset, or null where it has nothing to say about
+ * that *kind* of asset at all.
+ *
+ * The two ways of saying nothing are deliberately different, and it is the same
+ * distinction the side total's hover already draws. A null cell means the metric
+ * does not cover this line — KTC's board carries no draft picks, so a dash
+ * against a pick would read as a hole in the board rather than as a category it
+ * was never in. A cell with a null `text` means the metric *does* cover it and
+ * has no number: an unpriced player, which is a genuine gap and reads as an em
+ * dash.
+ */
+export type TradeAssetCell = { text: string | null; title: string };
+
+export type TradeMetric = Metric<TradeSideContext> & {
+  /** See {@link TradeAssetCell}; absent where the metric has no per-asset form. */
+  asset?: (ctx: TradeSideContext, asset: TradeAsset) => TradeAssetCell | null;
+};
+
+/**
+ * A haul as the lines a card draws for it: players, then picks, then FAAB.
+ *
+ * One ordering in one place, so the value column beside the names cannot fall
+ * out of step with them and so both are read off the same list.
+ */
+export function bundleAssets(bundle: TradeBundle): TradeAsset[] {
+  const assets: TradeAsset[] = bundle.players.map((id) => ({
+    kind: "player" as const,
+    id,
+  }));
+  for (const pick of bundle.picks) assets.push({ kind: "pick", pick });
+  if (bundle.faab > 0) assets.push({ kind: "faab", amount: bundle.faab });
+  return assets;
+}
 
 /** Which board a number was read on, for the hovers that have to say. */
 function boardName(superflex: boolean): string {
@@ -95,6 +148,22 @@ export const TRADE_METRICS: TradeMetric[] = [
               picks > 0 && of === 0
               ? "Draft picks aren't on KTC's board"
               : `Nothing in this haul is priced on the ${boardName(superflex)}`,
+      };
+    },
+    // Per line, the same board the total above was summed on. Picks and FAAB
+    // return null rather than an em dash: KTC's board is ~500 dynasty skill
+    // players and carries no picks at all, so a dash on every pick line would
+    // report a gap in a board those assets were never on — and on a card whose
+    // whole point can be a first-round pick, that is a column of dashes.
+    asset: ({ ktc, superflex }, asset) => {
+      if (asset.kind !== "player") return null;
+      const value = ktcBoardValue(superflex, ktc[asset.id]);
+      return {
+        text: value === null ? null : value.toLocaleString(),
+        title:
+          value === null
+            ? `Not priced on the ${boardName(superflex)}`
+            : `Dynasty KTC, ${boardName(superflex)}`,
       };
     },
   },

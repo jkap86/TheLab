@@ -509,8 +509,13 @@ received; `shared/trades/params` and `features/trades/trade-query` are the two
 ends of the vocabulary that decides which of those trades a reader is looking at,
 and `features/trades/filters` is what is left on the client once the *matching*
 moved into SQL — the shape of a selection, the pick token's spelling, and how a
-window resolves against today. All are pure and tested, and the thin I/O around
-them (`shared/trades/queries`, the routes, the page) has no rules of its own.
+window resolves against today. `features/trades/pick-display` is the third of
+that shape and the smallest: what a pick is *called* and when its origin is worth
+printing, two rules the card had neither of. All are pure and tested, and the thin
+I/O around them (`shared/trades/queries`, the routes, the page) has no rules of
+its own. `shared/trades/pick-slots` is pure for a second reason — it holds the key
+the slots are stored under, and the client deep-imports it the way it reaches
+`@/shared/ktc/roster`, so both ends of that map read one definition.
 Three decisions live in the pair rather than in the components:
 
 - **A side is what was received, never both halves.** What a roster gave up is
@@ -1064,6 +1069,68 @@ stops holding, a comment saying it does would not have caught it.
     zero (KTC's board is ~500 dynasty skill players deep and carries no picks at
     all), and a partly-priced one says how much of itself it priced, the same
     habit as `priced` of `rostered`.
+  - **A side lists what it received, at every width.** Below `sm` the card used
+    to draw a give-and-take table — each manager's take beside what they sent —
+    on the reasoning that a stack loses what columns are for. What it produced on
+    a two-sided trade, which is nearly all of them, was **every asset printed
+    twice**: once as a `+` on the side that took it and once as a `−` on the side
+    that sent it, four columns of names on a phone saying what two say. There is
+    one layout now, columns from `sm` up and stacked below it. The `+` survives
+    as the line's bullet rather than as a sign in opposition to anything, and the
+    odd side of a three-way spans the row rather than leaving a cell beside it
+    empty — an empty cell in a grid of sides reads as a participant who came away
+    with nothing, which is a state this card draws in words. `features/trades/exchange`
+    kept only the part of the give-derivation that was load-bearing:
+    `counterpartyRoster`, which the pick rule below needs and which is knowable
+    in a two-sided trade and not in a three-way, for the reason `given` never was.
+  - **The value column reads one asset at a time as well as the side total, and
+    only where that says something the total doesn't** (`TradeMetric.asset`,
+    `bundleAssets`). A total says which haul was bigger and nothing about which
+    piece carried the weight — "three players for a first" is a different trade
+    depending on whether the three are 8,000 apiece or 800 — so a line wears its
+    own number, right-aligned on the same edge the total sits on. Two rules keep
+    it from becoming noise. **A breakdown of one is the total**, so a side is
+    counted over the lines the metric actually *covers* and draws none where that
+    is a single line — otherwise the most common trade there is prints one
+    player's price against his name and the identical figure a line above. And
+    **not covered and not priced are different answers**, the distinction the
+    total's hover already draws: a pick gets no cell at all, since KTC's board
+    carries no picks and a dash there would report a hole in a board they were
+    never on, while an unpriced *player* is a genuine gap and gets the em dash.
+    Only `ktc` has a per-asset form; a count of players is 1 on every line, which
+    is a column of ones.
+  - **A pick is named the way Sleeper names it: its slot where the order is set,
+    its round where it isn't, and its origin only when that is a surprise**
+    (`features/trades/pick-display`). Once a league has set that draft's order the
+    pick has a *place* — 1.05 rather than "a 1st" — which is the difference
+    between the pick that takes the best rookie and the pick that takes the fifth;
+    most picks on this board are seasons out, so the round is usually all there
+    is. The origin is drawn exactly when the pick did **not** come from the roster
+    handing it over: printing "from DarksideEmperors" beside a pick
+    DarksideEmperors just gave away is a line of noise on most cards carrying a
+    pick at all, and every character earned when the pick came from a third party.
+    A three-way has no knowable giver, so the origin stays — with nothing to
+    compare against, naming the owner is the only honest thing the line can say.
+    Two things make it work. The slot is resolved server-side and rides *beside*
+    the page (`pickSlots`, keyed by `pickSlotKey`) rather than on each pick,
+    because it is a fact about a league's draft and one entry serves every trade
+    naming that roster's pick; **absent means unordered, never zero**. And the
+    origin's *manager* rides **on** the pick (`TradePickAsset.user_id`), resolved
+    by `assembleTrade` from the league's whole roster→owner map — the pick worth
+    naming an owner for usually comes from a roster that isn't in the trade, which
+    a client reading only the sides could never resolve.
+  - **The draft order is read through `draft_order`, and the season's draft is
+    chosen before its order is looked at** (`getDraftSlots`). `draft_order` is
+    user → slot, joined back through `rosters.owner_id`; Sleeper's own
+    `slot_to_roster_id` would be a hop shorter and isn't stored, and a roster
+    whose owner has left resolves to nothing rather than to a guessed slot. An
+    auction is excluded outright — its `pick_no` is nomination order, the same
+    quirk that keeps auctions off the ADP board, so its `draft_order` is not a
+    pick order. The choose-then-check ordering is the subtle half: an inaugural
+    league runs a startup and a rookie draft under one season label, and picking
+    the latest draft *and then* finding it unordered has to report nothing, where
+    filtering unordered drafts out first falls through to the startup and hands
+    back that draft's slots for a pick in this one.
 - **Trades made before a league's startup draft ended are not on that board, and
   they are excluded in SQL rather than hidden on the client.** A startup fills
   empty rosters from the whole pool, so everything traded up to its last pick is
