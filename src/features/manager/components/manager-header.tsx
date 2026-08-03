@@ -149,8 +149,8 @@ export function ManagerHeader({
     // first row it heads is what makes the two read as separate things. With the
     // rail absent the header is a card above a list and keeps the fuller gap.
     <header
-      className={`sticky top-[var(--site-header-h)] z-40 -mx-4 -mt-10 flex flex-col gap-2 bg-[var(--background)] px-4 pt-2 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent ${
-        columns ? "mb-3 pb-2" : "mb-6 pb-4"
+      className={`sticky top-[var(--site-header-h)] z-40 -mx-4 -mt-10 flex flex-col gap-1.5 bg-[var(--background)] px-4 pt-1.5 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent ${
+        columns ? "mb-3 pb-1.5" : "mb-6 pb-3"
       }`}
     >
       <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.075),rgba(255,255,255,0.02)_60%,rgba(255,255,255,0.008))] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.12),inset_0_-2px_8px_rgba(0,0,0,0.5),0_18px_40px_-22px_rgba(0,0,0,0.9)]">
@@ -186,8 +186,10 @@ export function ManagerHeader({
 
         {/* `pt` clears the tabs rather than the row being pushed below them: the
             avatar is the row's height either way, so the plate is exactly as tall
-            as it was with both pills on the name line. */}
-        <div className="relative flex items-center gap-3 pb-3 pl-5 pr-4 pt-[26px] sm:gap-4 sm:pb-4 sm:pl-6 sm:pr-5 sm:pt-7">
+            as it was with both pills on the name line. It is the tab's own height
+            plus a hairline and nothing more — the plate is pinned over the list,
+            so every pixel of padding here is a pixel of the list it covers. */}
+        <div className="relative flex items-center gap-3 pb-2 pl-5 pr-4 pt-[22px] sm:gap-4 sm:pb-3 sm:pl-6 sm:pr-5 sm:pt-6">
           <Avatar
             url={user.avatar_url}
             name={user.display_name || user.username}
@@ -239,7 +241,7 @@ export function ManagerHeader({
           hugs what it holds (`w-fit`): a trough running the width of a desktop
           card with two chips at the left end is mostly empty slot. */}
       {(filters || board) && (
-        <div className="lab-well lab-notch-lg flex w-fit max-w-full flex-wrap items-center gap-2 p-2">
+        <div className="lab-well lab-notch-lg flex w-fit max-w-full flex-wrap items-center gap-2 p-1.5">
           {filters}
           {board}
         </div>
@@ -353,7 +355,10 @@ function HeaderReadout({ season, pct }: { season: string; pct: number | null }) 
  * pinned over a several-hundred-row list covers the same amount of it as before.
  * Growing the *box* is the one move not available here, which is why the sizing
  * is written as type and padding inside a fixed height and not as a height of
- * its own.
+ * its own. The box has since come *down* to 56/66px — it is what sets the
+ * plate's height, so it is the first lever when the pinned card is taking too
+ * much of the list — and the type stayed, which is the same argument run the
+ * other way: what is left is the slack, not the digits.
  *
  * What the extra size buys is the material: at 12px a cell could only be a tinted
  * box, where at 26px it can be a machined lens (`.lab-readout`) with the running
@@ -376,7 +381,7 @@ function KickoffCountdown({ msLeft }: { msLeft: number }) {
 
   return (
     <div
-      className="grid h-[68px] w-fit flex-none content-center gap-1.5 sm:h-[78px]"
+      className="grid h-[56px] w-fit flex-none content-center gap-1 sm:h-[66px] sm:gap-1.5"
       aria-label={`Kickoff in ${formatCountdown(msLeft)}`}
     >
       {/* The label as a rail: a lit tick, the words, then a hairline running out
@@ -490,7 +495,7 @@ function RecordBar({ record }: { record: OverallRecord }) {
     // Capped rather than full-bleed: on a wide card the same three numbers
     // stretched a metre across the plate, which reads as a progress bar for
     // something rather than a proportion between two counts.
-    <div aria-hidden="true" className="mt-2 flex h-[5px] max-w-[420px] gap-0.5">
+    <div aria-hidden="true" className="mt-1.5 flex h-1 max-w-[420px] gap-0.5">
       {record.games === 0 ? (
         <span className="block flex-1 rounded-sm bg-foreground/[0.07]" />
       ) : (
@@ -527,7 +532,7 @@ function WinPctGauge({ pct }: { pct: number | null }) {
   const circumference = 2 * Math.PI * 44;
 
   return (
-    <div className="relative grid h-[68px] w-[68px] flex-none place-items-center sm:h-[78px] sm:w-[78px]">
+    <div className="relative grid h-[56px] w-[56px] flex-none place-items-center sm:h-[66px] sm:w-[66px]">
       <svg viewBox="0 0 100 100" className="absolute inset-0 -rotate-90">
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
