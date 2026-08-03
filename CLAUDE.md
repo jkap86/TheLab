@@ -870,10 +870,11 @@ stops holding, a comment saying it does would not have caught it.
   feature's whole vocabulary is just the feature again under another name.
 - **The trades page carries two filter sets, like the manager tabs, and for the
   same reason.** The league filters say *which leagues' trades are in the list at
-  all*; the trade filters say *which of those trades* — window, players, picks,
-  managers. One is about where you play, the other about what happened there, so
-  they stay two controls rather than two tabs of one dialog. **They are no longer
-  the same *kind* of control, and that asymmetry is the point**: the trade
+  all*; the trade filters say *which of those trades* — circle, window, players,
+  picks, managers. One is about where you play, the other about what happened
+  there, so they stay two controls rather than two tabs of one dialog. **They
+  are no longer the same *kind* of control, and that asymmetry is the point**:
+  the trade
   filters are a ledge seated on the page — one line that expands in place — while
   the league filters stay a modal, because that dialog is shared with the manager
   tabs and a control rendered on two pages with two shapes is the drift a shared
@@ -899,11 +900,55 @@ stops holding, a comment saying it does would not have caught it.
   not one account's**. It was scoped to the stored account's leagues and isn't
   now: the leagues someone plays in are a fraction of the trades worth reading,
   and what a league shaped like theirs gave up for a rookie first is most of the
-  value. The managers filter is what narrows it back to their own, which is why
-  nothing is lost by opening the default — and why the page needs no stored
-  account at all, making it the one tool the grid doesn't grey out without one
+  value. The **circle** is what narrows it back to their own, which is why
+  nothing is lost by opening the default — and the page still needs no stored
+  account, making it the one tool the grid doesn't grey out without one
   (`accountless` on its catalogue entry, so the grid and the app bar's menu can't
-  disagree about whether the card is live).
+  disagree about whether the card is live): an account buys that one filter and
+  changes nothing else on the page.
+- **The circle is one selection with four answers, not three switches, and it is
+  the only filter here the browser cannot resolve for itself.** "My leagues",
+  "trades a leaguemate made" and "any league a leaguemate is in" are the three
+  narrowings a reader asks for by name, and they **nest**: every trade in a league
+  you play in was made by people you play against, and everyone you play against
+  shares a league with you, so `mine ⊆ leaguemates ⊆ leaguemate-leagues` and
+  independent switches would only ever offer the widest one ticked. What varies is
+  how far out the circle is drawn. Five things hold it up:
+  - **It crosses the wire unresolved, where every other filter sends its answer.**
+    The league rules go the other way round — the browser already holds the
+    season's leagues for the dialog's counts, so it evaluates them and sends ids —
+    but *which leagues are yours* and *who shares one* is the database's answer,
+    which a browser would have had to be told first. So `?user=&circle=` travel and
+    `shared/trades/circle` resolves them, cached per reader for ten minutes because
+    a scroll is many requests. Both parameters go or neither: the account store has
+    no server snapshot, so a circle sent alone would key a board the route resolves
+    straight back to the unnarrowed one.
+  - **Two of them narrow leagues and one narrows who was dealing**, which is why
+    the resolver hands back a tagged scope rather than a league list. `mine` is
+    `getManagerLeagueIds` — the manager module's own `FIELDED_A_TEAM_SQL`, so the
+    board and the manager tool cannot disagree about which leagues are yours.
+  - **The reader counts as their own leaguemate for one circle and not the
+    other.** `leaguemates` includes them, which is what makes `mine` a subset by
+    construction rather than by an argument about counterparties (that argument
+    fails on a three-way trade whose other rosters are orphans). `leaguemate-
+    leagues` excludes them, because Sleeper leaves a `league_users` row behind
+    when someone stops holding a team — counting it would pull a league into the
+    widest circle that `mine` deliberately drops, which reads as a bug because it
+    is one. Their real leagues arrive anyway, through the leaguemates still in
+    them.
+  - **The leaguemate-trades predicate is driven by the trade's own roster ids, and
+    that is a planner decision.** Written the way the managers filter is —
+    `FROM rosters WHERE league_id = t.league_id AND owner_id = ANY(…)` — the
+    subquery is decorrelatable, and against a few hundred leaguemates the planner
+    takes it: hash join, whole population, top-N heapsort, the same cost on page 40
+    as on page 1. Unnesting `roster_ids` makes it a function of `t` so it cannot be
+    pulled up. Measured over 150k transactions with 850 leaguemates: **205ms that
+    way, 9ms this way**, and only this way is flat with depth. All four circles are
+    ordered index walks off `transactions_trade_keyset_idx`.
+  - **An empty circle is an empty board, not an unnarrowed one.** An account this
+    database has never synced has no leagues and no leaguemates; folding that back
+    to "not narrowing" would answer a question nobody asked. The page's empty state
+    says so, which is where a reader can act on it.
 - **The board is filtered in SQL and paginated, and it used to stream the whole
   season — this is the largest performance decision in the app, and it is worth
   reading as a correction of the one before it.** The old design was a sound

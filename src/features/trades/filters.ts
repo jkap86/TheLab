@@ -65,8 +65,73 @@ export const DEFAULT_TRADE_RANGE: TradeRange = {
   to: null,
 };
 
+/**
+ * How close to the reader's own account a trade has to be.
+ *
+ * **One selection rather than three switches, because the three nest.** Every
+ * trade in a league you play in was made by people you play against, and
+ * everyone you play against shares a league with you — so
+ * `mine ⊆ leaguemates ⊆ leaguemate-leagues`, and independent switches would only
+ * ever offer the widest one ticked. What varies is how far out the circle is
+ * drawn, which is one question with four answers.
+ *
+ * It is the one filter on this page the browser cannot resolve for itself: which
+ * leagues are yours and who shares them is the database's answer, so the account
+ * id and this word are what cross the wire and `shared/trades/circle` turns them
+ * into ids. Every other filter here is sent as its own answer.
+ *
+ * Spelled identically to `shared/trades/params`' own `TradeCircle`, which the
+ * compiler does not check — the standing arrangement between these two ends, and
+ * the reason both are pure modules with tests.
+ */
+export type TradeCircle = "all" | "mine" | "leaguemates" | "leaguemate-leagues";
+
+/**
+ * The circles, widest last, as the dialog offers them.
+ *
+ * Each carries what it means in a sentence, because the names alone do not
+ * separate the two leaguemate readings: one is about *who was dealing* and the
+ * other about *where the deal happened*, and a reader picking between them is
+ * picking between "what are the people I play against doing" and "what does the
+ * market next to mine look like".
+ */
+export const TRADE_CIRCLES: {
+  value: TradeCircle;
+  label: string;
+  /** Lower case — read mid-sentence in the page's scope line. */
+  summary: string;
+  note: string;
+}[] = [
+  {
+    value: "all",
+    label: "Every league",
+    summary: "every crawled league",
+    note: "The whole crawled market.",
+  },
+  {
+    value: "mine",
+    label: "My leagues",
+    summary: "my leagues",
+    note: "Leagues you field a team in.",
+  },
+  {
+    value: "leaguemates",
+    label: "Leaguemate trades",
+    summary: "leaguemate trades",
+    note: "Trades a leaguemate was party to, in any league of theirs.",
+  },
+  {
+    value: "leaguemate-leagues",
+    label: "Leaguemate leagues",
+    summary: "leaguemate leagues",
+    note: "Any league a leaguemate plays in, whoever made the trade.",
+  },
+];
+
 export type TradeFilters = {
   range: TradeRange;
+  /** How close to the reader's account — see {@link TradeCircle}. */
+  circle: TradeCircle;
   /** Player ids that must have moved — on either side, see {@link tradeMatches}. */
   players: string[];
   /** Pick assets as `season-round` tokens, e.g. `"2026-1"`. */
@@ -88,6 +153,10 @@ export type TradeFilters = {
 
 export const DEFAULT_TRADE_FILTERS: TradeFilters = {
   range: DEFAULT_TRADE_RANGE,
+  // The whole market, which is the page's premise: the leagues a reader plays in
+  // are a fraction of the trades worth reading, and narrowing back to them is
+  // one press away.
+  circle: "all",
   players: [],
   picks: [],
   managers: [],
@@ -166,10 +235,16 @@ export function pickLabel(token: string): string {
 export function activeTradeFilterCount(filters: TradeFilters): number {
   return (
     (filters.range.preset === "all" ? 0 : 1) +
+    (filters.circle === "all" ? 0 : 1) +
     filters.players.length +
     filters.picks.length +
     filters.managers.length
   );
+}
+
+/** A circle in words, lower case — see {@link tradeFilterSummary}. */
+export function tradeCircleSummary(circle: TradeCircle): string {
+  return TRADE_CIRCLES.find((c) => c.value === circle)!.summary;
 }
 
 /**
@@ -203,6 +278,13 @@ export function tradeRangeLabel(range: TradeRange): string {
  * Lower case because it is read mid-sentence, beside `filterSummary`'s account
  * of the league filters — the same rule, so the two halves of the scope line
  * read as one sentence.
+ *
+ * **The circle is deliberately not in here**, though it lives in the same filter
+ * set and is edited in the same dialog. What the scope line says is
+ * `season · circle · league rules · this`, and the circle belongs at that end of
+ * it: it names the *population* the two narrowings then cut down, the same job
+ * the literal "every crawled league" used to do in that slot before a reader
+ * could change it. See {@link tradeCircleSummary}.
  */
 export function tradeFilterSummary(filters: TradeFilters): string {
   const chosen = (

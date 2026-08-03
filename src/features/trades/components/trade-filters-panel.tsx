@@ -2,13 +2,21 @@
 
 import { useMemo } from "react";
 
+import type { UserInfo } from "@/shared/contract";
+
 import {
   DEFAULT_TRADE_FILTERS,
+  TRADE_CIRCLES,
   TRADE_RANGE_PRESETS,
   pickLabel,
   tradeRangeBounds,
 } from "../filters";
-import type { TradeFilters, TradeOption, TradeRangePreset } from "../filters";
+import type {
+  TradeCircle,
+  TradeFilters,
+  TradeOption,
+  TradeRangePreset,
+} from "../filters";
 import { useTradeFacets } from "../hooks/use-trade-facets";
 import type { LeagueScope } from "../trade-query";
 import type { PlayerSummary, TradeManager } from "../types";
@@ -46,6 +54,7 @@ export function TradeFiltersPanel({
   onChange,
   season,
   scope,
+  account,
   players,
   managers,
   today,
@@ -55,6 +64,13 @@ export function TradeFiltersPanel({
   season: string;
   /** The league narrowing in force — these options are counted over it. */
   scope: LeagueScope;
+  /**
+   * The reader's stored account, or null. The circle is the only control here
+   * that needs one, and with none it is offered as disabled keys that say why
+   * rather than being hidden — a filter nobody can see is one nobody knows they
+   * could have.
+   */
+  account: UserInfo | null;
   /** Names the board already resolved; the facets bring their own for the rest. */
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
@@ -69,10 +85,21 @@ export function TradeFiltersPanel({
   // The selection is stripped from the key: these counts are taken without it,
   // so a checkbox that moved the key would re-run a grouped aggregate over the
   // season for an answer that cannot have changed. The window is not stripped,
-  // because it is a fact about the population being counted.
+  // because it is a fact about the population being counted — and neither is the
+  // **circle**, for the same reason: it says which trades are on this board at
+  // all, so menus counted without it would offer managers and players the reader
+  // cannot reach.
+  const user = account?.user_id ?? null;
+  const circle = filters.circle;
   const request = useMemo(
-    () => ({ season, scope, filters: DEFAULT_TRADE_FILTERS, bounds }),
-    [season, scope, bounds],
+    () => ({
+      season,
+      scope,
+      filters: { ...DEFAULT_TRADE_FILTERS, circle },
+      bounds,
+      user,
+    }),
+    [season, scope, bounds, circle, user],
   );
 
   const { data: facets, loading } = useTradeFacets(request);
@@ -110,6 +137,37 @@ export function TradeFiltersPanel({
 
   return (
     <div className="mt-3 flex flex-col gap-4 border-t border-foreground/10 pt-3">
+      {/* The population, on a line of its own above the three groups that cut
+          it down. It leads because that is the order the panel is read in —
+          which trades are on this board at all, then which of those — and it
+          keeps its own line because the caption under it belongs to this group
+          and would break the `items-end` row below. */}
+      <Group label="Scope">
+        <div className="flex flex-wrap gap-1.5">
+          {TRADE_CIRCLES.map((option) => (
+            <Key
+              key={option.value}
+              selected={filters.circle === option.value}
+              // Every circle but the widest is drawn around an account, so
+              // without one there is nothing to draw. Disabled rather than
+              // absent: what it takes to switch it on is a sentence, and hiding
+              // the control hides the sentence too.
+              disabled={option.value !== "all" && account === null}
+              onClick={() => onChange({ ...filters, circle: option.value })}
+            >
+              {option.label}
+            </Key>
+          ))}
+        </div>
+        {/* One caption for the group rather than a note under each key: the
+            labels alone don't separate the two leaguemate readings — one is
+            about who was dealing, the other about where the deal happened — and
+            four notes at this width is a paragraph where the row should be. */}
+        <p className="text-xs text-foreground/45">
+          {circleNote(filters.circle, account)}
+        </p>
+      </Group>
+
       {/* Three groups, and at this panel's width (the page shell caps at
           `max-w-4xl`) they do not fit on one line — so the order decides what
           wraps. The two chip groups lead because they are what gets pressed;
@@ -250,10 +308,12 @@ function Group({
  */
 function Key({
   selected,
+  disabled = false,
   onClick,
   children,
 }: {
   selected: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -261,16 +321,39 @@ function Key({
     <button
       type="button"
       aria-pressed={selected}
+      disabled={disabled}
       onClick={onClick}
       className={`rounded-full px-3 py-1 text-xs font-semibold ${
         selected
           ? "lab-chip-on lab-chip-sm"
-          : "lab-chip lab-chip-sm text-foreground/75"
+          : disabled
+            ? // Flat and unlit, the app bar's rule held to at this size: a part
+              // that does nothing when pressed must not look pressable, so it
+              // loses its wall rather than only dimming its text.
+              "cursor-not-allowed rounded-full text-foreground/25"
+            : "lab-chip lab-chip-sm text-foreground/75"
       }`}
     >
       {children}
     </button>
   );
+}
+
+/**
+ * What the scope keys mean, in one line that follows the selection.
+ *
+ * Two things it says that the keys cannot. Which of the two leaguemate circles
+ * is which — who was *dealing* against where the deal *happened* — and, once one
+ * is chosen, *whose* circle it is: the account is stored on the device and may
+ * not be the one the reader has in mind.
+ */
+function circleNote(circle: TradeCircle, account: UserInfo | null): string {
+  if (account === null) {
+    return "Look your Sleeper account up on the tools page to filter by your own leagues and leaguemates.";
+  }
+  const who = `@${account.display_name || account.username}`;
+  const note = TRADE_CIRCLES.find((c) => c.value === circle)!.note;
+  return circle === "all" ? note : `${note} Drawn around ${who}.`;
 }
 
 /** A native date input — the platform's calendar, keyboard entry included. */

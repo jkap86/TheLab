@@ -37,6 +37,45 @@ import { integer, list } from "../query/parse.ts";
 /** The selection modes a trade filter set can be read under. */
 export type TradeMatchMode = "all" | "any";
 
+/**
+ * How close to the reader a trade has to be — the board's population, read as a
+ * distance from one account rather than as a property of a league.
+ *
+ * **One selection rather than three checkboxes, because they nest.** Every trade
+ * in a reader's own league was made by people they play against, and everyone
+ * they play against is in a league they are in; so
+ * `mine ⊆ leaguemates ⊆ leaguemate-leagues`, and offering them as independent
+ * boxes would be offering unions that are always just the widest one ticked.
+ * What varies is only how far out the circle is drawn.
+ *
+ * - `all` — every crawled league. The default, and the page's whole premise: the
+ *   leagues a reader plays in are a fraction of the trades worth reading.
+ * - `mine` — leagues the account fielded a team in, which is
+ *   `getManagerLeagueIds` and therefore the same list the manager tool shows.
+ * - `leaguemates` — trades a leaguemate was **party to**, in any league at all.
+ *   This is the one that is not a league scope: what it asks about is who was
+ *   dealing, which is why it reads through `rosters` the way the managers filter
+ *   does.
+ * - `leaguemate-leagues` — trades in any league a leaguemate **belongs to**,
+ *   whoever made them. The widest of the three, and the one that answers "what
+ *   does the market I'm adjacent to look like".
+ *
+ * The account itself counts as one of its own leaguemates — see
+ * `getLeaguemateIds`, where the reason the nesting above holds is spelled out.
+ */
+export type TradeCircle =
+  | "all"
+  | "mine"
+  | "leaguemates"
+  | "leaguemate-leagues";
+
+const TRADE_CIRCLES: readonly TradeCircle[] = [
+  "all",
+  "mine",
+  "leaguemates",
+  "leaguemate-leagues",
+];
+
 /** A validated `/api/trades` request. */
 export type TradeQuery = {
   season: string;
@@ -56,6 +95,25 @@ export type TradeQuery = {
   leagues: string[] | null;
   /** League ids to exclude — the complement form of the above. */
   excludeLeagues: string[] | null;
+  /**
+   * The account the circle below is drawn around, or null where the caller has
+   * none. Sent as an id rather than resolved from a session because this app has
+   * no session: the tools page resolves a username to a `UserInfo` and the pages
+   * read it back out of the browser's own storage.
+   */
+  user: string | null;
+  /**
+   * How close to {@link user} a trade has to be. Always `"all"` when there is no
+   * user — see {@link parseTradeQuery}: a circle with nobody at the centre of it
+   * has no honest reading, and the neutral form of a narrowing is not narrowing.
+   *
+   * Unlike the league ids beside it, this crosses the wire **unresolved**: the
+   * sets it stands for are a manager's leagues and their leaguemates, which are
+   * the database's answer and not the browser's — a client that had them in hand
+   * to send would have had to be told them first. `resolveTradeCircle` is what
+   * turns it into ids, once per reader per TTL rather than once per page.
+   */
+  circle: TradeCircle;
   /** Inclusive lower bound on `completed_at`, epoch ms; null for an open end. */
   from: number | null;
   /** Exclusive upper bound on `completed_at`, epoch ms; null for an open end. */
@@ -122,10 +180,22 @@ export function parseTradeQuery(
     fallback: DEFAULT_TRADE_PAGE_SIZE,
   });
 
+  // A blank `?user=` is no user, not a manager whose id is the empty string —
+  // and with no user the circle is forced open, so a client that sends one
+  // without the other gets the unnarrowed board rather than an empty one.
+  const user = params.get("user")?.trim() || null;
+  const requested = params.get("circle");
+  const circle =
+    user !== null && TRADE_CIRCLES.includes(requested as TradeCircle)
+      ? (requested as TradeCircle)
+      : "all";
+
   return {
     season,
     leagues: ids(params, "leagues"),
     excludeLeagues: ids(params, "xleagues"),
+    user,
+    circle,
     from: epoch(params, "from"),
     to: epoch(params, "to"),
     players: list(params, "players"),
@@ -165,6 +235,7 @@ function epoch(params: URLSearchParams, key: string): number | null {
  */
 export function isUnnarrowed(query: TradeQuery): boolean {
   return (
+    query.circle === "all" &&
     query.leagues === null &&
     query.excludeLeagues === null &&
     query.from === null &&
@@ -185,6 +256,12 @@ export function isUnnarrowed(query: TradeQuery): boolean {
  * looking at. The distinction was free when the browser held the season and both
  * passes ran over it; server-side it is a second count, which is why
  * {@link hasTradeNarrowing} exists to skip it when the two numbers are equal.
+ *
+ * **The circle stays**, with the league ids and against the window and the
+ * selection. It is where a reader is standing rather than something they picked
+ * off a list of trades — "8 of 340" over their leaguemates' leagues is the
+ * denominator that means anything there, and counting it against every crawled
+ * league would state a fraction of a board they never asked to see.
  */
 export function leagueScopeQuery(query: TradeQuery): TradeQuery {
   return { ...query, from: null, to: null, players: [], picks: [], managers: [] };

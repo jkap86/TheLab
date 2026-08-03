@@ -5,10 +5,12 @@ import { useId, useState } from "react";
 
 import { filterSummary } from "@/features/shared";
 import type { LeagueFilters } from "@/features/shared";
+import type { UserInfo } from "@/shared/contract";
 
 import {
   DEFAULT_TRADE_FILTERS,
   activeTradeFilterCount,
+  tradeCircleSummary,
   tradeFilterSummary,
 } from "../filters";
 import type { TradeFilters } from "../filters";
@@ -80,6 +82,7 @@ export function TradeFiltersLedge({
   leagueFilters,
   season,
   scope,
+  account,
   players,
   managers,
   today,
@@ -91,6 +94,8 @@ export function TradeFiltersLedge({
   leagueFilters: LeagueFilters;
   season: string;
   scope: LeagueScope;
+  /** The reader's stored account, or null — what the circle is drawn around. */
+  account: UserInfo | null;
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
   today: string;
@@ -139,8 +144,11 @@ export function TradeFiltersLedge({
             `sm` it goes back inline and takes the slack, so the triggers stay
             right-aligned. */}
         <p className="order-last min-w-0 basis-full truncate text-xs text-foreground/50 sm:order-none sm:basis-auto sm:flex-1">
-          {season} · {filterSummary(leagueFilters)} ·{" "}
-          {tradeFilterSummary(filters)}
+          {/* The circle stands where the literal "every crawled league" used to:
+              it names the population, and the two summaries after it are what
+              cut that population down. */}
+          {season} · {tradeCircleSummary(filters.circle)} ·{" "}
+          {filterSummary(leagueFilters)} · {tradeFilterSummary(filters)}
         </p>
 
         {active > 0 && (
@@ -165,6 +173,7 @@ export function TradeFiltersLedge({
             onChange={onChange}
             season={season}
             scope={scope}
+            account={account}
             players={players}
             managers={managers}
             today={today}

@@ -194,6 +194,69 @@ export async function getManagerLeagues(
 }
 
 /**
+ * Just the ids of the leagues {@link getManagerLeagues} would list.
+ *
+ * The same population and the same {@link FIELDED_A_TEAM_SQL} predicate, without
+ * the settings blobs, the record join or the ordering — the caller is the trades
+ * board's "my leagues" scope, which puts these ids into a `WHERE` and never
+ * renders one. Reading the full shape for that would carry a hundred-odd
+ * `scoring_settings` blobs across a request that discards all of them.
+ *
+ * It is a query here rather than a set the trades module derives for itself
+ * because *which leagues are a manager's* is this module's fact: a second
+ * definition would be free to disagree with the leagues route about, say, a
+ * chopped league someone was knocked out of.
+ */
+export async function getManagerLeagueIds(
+  userId: string,
+  season: string,
+): Promise<string[]> {
+  const { rows } = await pool.query<{ league_id: string }>(
+    `SELECT l.league_id
+       FROM leagues l
+       JOIN league_users lu
+         ON lu.league_id = l.league_id AND lu.user_id = $1
+      WHERE l.season = $2
+        AND ${FIELDED_A_TEAM_SQL}`,
+    [userId, season],
+  );
+  return rows.map((r) => r.league_id);
+}
+
+/**
+ * Everyone who shares a league with this manager for the season, as ids.
+ *
+ * The id half of {@link getManagerLeaguemates}, and it keeps that function's two
+ * opposing rules intact: *which leagues* count is {@link FIELDED_A_TEAM_SQL},
+ * and *who counts inside one* is bare membership — someone knocked out of a
+ * guillotine league is still someone you know.
+ *
+ * **The manager themselves is not among them**, which is where this parts
+ * company with {@link getManagerLeaguemates}: that one keeps its own row so its
+ * caller can tell "shared with nobody" from "not cached", and here the id list
+ * *is* the answer, so a manager listed as their own leaguemate would be a claim
+ * rather than a sentinel. A caller that wants the reader in the set says so —
+ * `shared/trades/circle` does, for one of its two circles and not the other.
+ */
+export async function getLeaguemateIds(
+  userId: string,
+  season: string,
+): Promise<string[]> {
+  const { rows } = await pool.query<{ user_id: string }>(
+    `SELECT DISTINCT lm.user_id
+       FROM leagues l
+       JOIN league_users me
+         ON me.league_id = l.league_id AND me.user_id = $1
+       JOIN league_users lm
+         ON lm.league_id = l.league_id AND lm.user_id <> $1
+      WHERE l.season = $2
+        AND ${FIELDED_A_TEAM_SQL}`,
+    [userId, season],
+  );
+  return rows.map((r) => r.user_id);
+}
+
+/**
  * The same league shape by id, for a caller holding league ids and no manager —
  * the trades page, which reads the whole crawled market and still has to narrow
  * it with the league filters (what a league starts, what it pays for).

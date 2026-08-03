@@ -133,6 +133,11 @@ function unnarrowed(season: string): TradeQuery {
     season,
     leagues: null,
     excludeLeagues: null,
+    // No reader, so no circle: this row is the season's own size, the number
+    // every unnarrowed board shares. A circle is one reader's cut of it and has
+    // no business in a table anyone reads.
+    user: null,
+    circle: "all",
     from: null,
     to: null,
     players: [],

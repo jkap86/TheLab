@@ -92,6 +92,17 @@ export type TradeRequest = {
   scope: LeagueScope;
   filters: TradeFilters;
   bounds: TradeBounds;
+  /**
+   * The reader's resolved Sleeper account, or null where none is stored — what
+   * `filters.circle` is drawn around.
+   *
+   * It sits beside the filters rather than inside them because it is not one: it
+   * is *who is asking*, and the page reads it out of the account store the tools
+   * page writes. A circle with nobody at the centre of it is not sent at all
+   * (see {@link tradeQueryParams}), so the board a reader with no account sees is
+   * the unnarrowed one rather than an empty one.
+   */
+  user: string | null;
 };
 
 /**
@@ -111,6 +122,17 @@ export function tradeQueryParams(request: TradeRequest): URLSearchParams {
   const { scope } = request;
   if (scope.kind === "include") params.set("leagues", join(scope.ids));
   else if (scope.kind === "exclude") params.set("xleagues", join(scope.ids));
+
+  // Both or neither. The server forces the circle open when there is no user, so
+  // sending one without the other would only make the key differ between a
+  // request and the identical board it resolves to — and the account arrives a
+  // render *after* the first paint (the store has no server snapshot), so the
+  // pair being absent together is the ordinary opening state rather than a bug.
+  const { circle } = request.filters;
+  if (circle !== "all" && request.user) {
+    params.set("circle", circle);
+    params.set("user", request.user);
+  }
 
   const { from, to } = request.bounds;
   if (from !== null) params.set("from", String(from));

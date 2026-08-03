@@ -1,5 +1,7 @@
 export { assembleTrade } from "./assemble";
 export type { TradeRow } from "./assemble";
+export { clearTradeCircleCache, resolveTradeCircle } from "./circle";
+export type { TradeCircleScope } from "./circle";
 export { decodeTradeCursor, encodeTradeCursor } from "./cursor";
 export type { TradeCursor } from "./cursor";
 export { lookupKtc, lookupPlayers, clearTradeEnrichmentCaches } from "./enrich";
@@ -12,7 +14,7 @@ export {
   leagueScopeQuery,
   parseTradeQuery,
 } from "./params";
-export type { TradeMatchMode, TradeQuery } from "./params";
+export type { TradeCircle, TradeMatchMode, TradeQuery } from "./params";
 export { draftOrderKey, pickSlotKey } from "./pick-slots";
 export {
   countTrades,

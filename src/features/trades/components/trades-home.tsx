@@ -8,6 +8,7 @@ import {
   FlaskLoader,
   activeFilterCount,
   todayIso,
+  useStoredAccount,
 } from "@/features/shared";
 import type { LeagueFilters } from "@/features/shared";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
@@ -63,8 +64,16 @@ const LeagueFiltersModal = dynamic(
  * in are a fraction of the trades worth reading, and what a leaguemate — or a
  * stranger in a league shaped like theirs — gave up for a rookie first is the
  * question this page answers. Narrowing back to their own leagues is what the
- * managers filter does, so nothing is lost by opening the default. That is also
- * why the page needs no stored account: there is no username in the question.
+ * circle filter does, so nothing is lost by opening the default.
+ *
+ * **The account is read here but never required, and the difference is what
+ * keeps this the one tool the grid doesn't grey out.** A stored account buys the
+ * circle — my leagues, my leaguemates' trades, my leaguemates' leagues — and
+ * nothing else on the page changes without one: every other filter is a fact
+ * about leagues or trades and asks nothing about who is reading. That is also
+ * why the circle is the only narrowing sent *unresolved*: which leagues are
+ * yours and who shares them is the database's answer, so the account id and the
+ * word travel and `shared/trades/circle` turns them into ids.
  *
  * **It used to download the season and filter it here; it now asks for what it
  * is showing.** The old shape was honest about its constraint — the filter menus
@@ -125,6 +134,12 @@ export function TradesHome({ season }: { season: string }) {
     loading: leaguesLoading,
   } = useTradeLeagues(season);
 
+  // The one thing on this page that asks who is reading it, and it asks softly:
+  // without an account the circle filter is inert and everything else is exactly
+  // what it was. That is why the tools grid still lists this page as
+  // `accountless` — an account buys a filter here, it doesn't unlock the tool.
+  const account = useStoredAccount();
+
   // Resolved once per render rather than per trade, and against a date rather
   // than the clock, so the list only moves when the day does.
   const today = todayIso();
@@ -140,8 +155,14 @@ export function TradesHome({ season }: { season: string }) {
   );
 
   const request = useMemo(
-    () => ({ season, scope, filters: tradeFilters, bounds }),
-    [season, scope, tradeFilters, bounds],
+    () => ({
+      season,
+      scope,
+      filters: tradeFilters,
+      bounds,
+      user: account?.user_id ?? null,
+    }),
+    [season, scope, tradeFilters, bounds, account],
   );
 
   const { data, loading, loadingMore, stale, hasMore, loadMore, error } =
@@ -200,6 +221,7 @@ export function TradesHome({ season }: { season: string }) {
           leagueFilters={leagueFilters}
           season={season}
           scope={scope}
+          account={account}
           players={players}
           managers={managers}
           today={today}
@@ -259,11 +281,17 @@ export function TradesHome({ season }: { season: string }) {
         </div>
       ) : visible.length === 0 ? (
         <Note>
-          {leagueFiltersActive || activeTradeSelection(tradeFilters)
-            ? "No trades match these filters."
-            : // Transactions arrive with the league syncs, so a season nothing
-              // has been crawled for has none stored rather than none made.
-              "No trades stored for this season yet. They arrive with the league syncs — look an account up on the tools page if this database is cold."}
+          {tradeFilters.circle !== "all"
+            ? // A circle is drawn out of *stored* leagues and membership, so an
+              // account this database has never synced resolves to an empty one
+              // — which is a different problem from a filter set that is merely
+              // narrow, and the only one the reader can do something about.
+              "No trades match these filters. A circle is drawn from the leagues this database has synced for your account — look it up on the tools page if it has never been read."
+            : leagueFiltersActive || activeTradeSelection(tradeFilters)
+              ? "No trades match these filters."
+              : // Transactions arrive with the league syncs, so a season nothing
+                // has been crawled for has none stored rather than none made.
+                "No trades stored for this season yet. They arrive with the league syncs — look an account up on the tools page if this database is cold."}
         </Note>
       ) : (
         <>
@@ -298,6 +326,7 @@ export function TradesHome({ season }: { season: string }) {
 function activeTradeSelection(filters: TradeFilters): boolean {
   return (
     filters.range.preset !== "all" ||
+    filters.circle !== "all" ||
     filters.players.length > 0 ||
     filters.picks.length > 0 ||
     filters.managers.length > 0

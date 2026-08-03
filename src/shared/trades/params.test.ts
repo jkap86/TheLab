@@ -59,6 +59,24 @@ describe("parseTradeQuery", () => {
     assert.equal(parse("match=nonsense").match, "all");
   });
 
+  test("a circle needs an account, and an unknown one is not a circle", () => {
+    assert.equal(parse("circle=mine&user=u1").circle, "mine");
+    assert.equal(parse("circle=mine&user=u1").user, "u1");
+    assert.equal(parse("circle=leaguemate-leagues&user=u1").circle, "leaguemate-leagues");
+
+    // Nobody at the centre of it, so there is no circle to draw — and forcing it
+    // open rather than 400ing follows the rule the rest of this parser does: the
+    // neutral form of a narrowing is not narrowing.
+    for (const bad of ["circle=mine", "circle=mine&user=", "circle=mine&user=%20"]) {
+      assert.equal(parse(bad).circle, "all", bad);
+      assert.equal(parse(bad).user, null, bad);
+    }
+    // A spelling this build doesn't know is the whole market, never an empty
+    // board: a bookmark from a later build should widen, not break.
+    assert.equal(parse("circle=friends&user=u1").circle, "all");
+    assert.equal(parse("user=u1").circle, "all");
+  });
+
   test("the limit is clamped rather than rejected", () => {
     assert.equal(parse("limit=50").limit, 50);
     assert.equal(parse(`limit=${MAX_TRADE_PAGE_SIZE + 1}`).limit, DEFAULT_TRADE_PAGE_SIZE);
@@ -80,17 +98,26 @@ describe("what counts as narrowed", () => {
       "players=p1",
       "picks=2026-1",
       "managers=u1",
+      "circle=mine&user=u1",
     ]) {
       assert.equal(isUnnarrowed(parse(query)), false, query);
     }
+    // A user with no circle narrows nothing, so the stored count still stands.
+    assert.equal(isUnnarrowed(parse("user=u1")), true);
     // Pagination and the match mode are not narrowings.
     assert.equal(isUnnarrowed(parse("limit=10&cursor=x&match=any")), true);
   });
 
   test("the league scope is what the headline's `of M` is counted over", () => {
-    const query = parse("leagues=a,b&from=1&players=p1&managers=u1&picks=2026-1");
+    const query = parse(
+      "leagues=a,b&from=1&players=p1&managers=u1&picks=2026-1&circle=mine&user=u1",
+    );
     const scope = leagueScopeQuery(query);
     assert.deepEqual(scope.leagues, ["a", "b"]);
+    // The circle stays: it is where the reader is standing, so it belongs in
+    // the denominator rather than in what the denominator is being cut down to.
+    assert.equal(scope.circle, "mine");
+    assert.equal(scope.user, "u1");
     assert.equal(scope.from, null);
     assert.deepEqual(scope.players, []);
     assert.deepEqual(scope.picks, []);
@@ -100,6 +127,7 @@ describe("what counts as narrowed", () => {
   test("with only league filters the two counts are the same query", () => {
     // Which is what lets the route skip the second count entirely.
     assert.equal(hasTradeNarrowing(parse("leagues=a")), false);
+    assert.equal(hasTradeNarrowing(parse("circle=mine&user=u1")), false);
     assert.equal(hasTradeNarrowing(parse("leagues=a&from=1")), true);
     assert.equal(hasTradeNarrowing(parse("players=p1")), true);
   });

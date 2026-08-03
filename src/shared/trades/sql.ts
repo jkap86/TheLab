@@ -1,3 +1,4 @@
+import type { TradeCircleScope } from "./circle.ts";
 import type { TradeQuery } from "./params.ts";
 
 /**
@@ -142,6 +143,11 @@ const PICK_TOKEN_SQL = `((p->>'season') || '-' || (p->>'round'))`;
  * is what makes the unnarrowed board (the state the page opens in) exactly the
  * old query with a `LIMIT` on it.
  *
+ * `circle` arrives already resolved (see `./circle`), because it is the one
+ * narrowing whose value is a database answer rather than something the caller
+ * could hold: "my leagues" is a query, not a list a browser has. It is passed
+ * rather than looked up here so this stays a pure function of its arguments.
+ *
  * The three selection categories are joined by the query's own `match` mode,
  * which is the one place the fragments are not simply `AND`ed: `all` and `any`
  * are both real questions ("did these two managers trade with each other" against
@@ -151,7 +157,11 @@ const PICK_TOKEN_SQL = `((p->>'season') || '-' || (p->>'round'))`;
  * selection — which is the same rule the client-side predicate has always
  * followed.
  */
-export function tradeFilterSql(query: TradeQuery, params: unknown[]): string {
+export function tradeFilterSql(
+  query: TradeQuery,
+  params: unknown[],
+  circle: TradeCircleScope | null = null,
+): string {
   const clauses: string[] = [];
   const bind = (value: unknown) => `$${params.push(value)}`;
 
@@ -160,6 +170,14 @@ export function tradeFilterSql(query: TradeQuery, params: unknown[]): string {
   }
   if (query.excludeLeagues !== null) {
     clauses.push(`NOT (t.league_id = ANY(${bind(query.excludeLeagues)}::varchar[]))`);
+  }
+
+  if (circle !== null) {
+    // `AND`ed with everything rather than joined into the selection below, for
+    // the reason the window is: it is where the reader is standing, not one of
+    // the things they picked out of a list. "Any of these two players, in my
+    // leagues" is the only reading of a circle and a selection together.
+    clauses.push(circleSql(circle, bind));
   }
 
   // Spelled with the `IS NOT NULL` rather than left to comparison semantics,
@@ -231,6 +249,70 @@ export function tradeFilterSql(query: TradeQuery, params: unknown[]): string {
   }
 
   return clauses.length ? ` AND ${clauses.join(" AND ")}` : "";
+}
+
+/**
+ * One resolved circle as a `WHERE` fragment.
+ *
+ * The three shapes are three different questions and only the first is a plain
+ * league test, which is the whole reason `resolveTradeCircle` hands back a
+ * tagged value rather than a list of league ids:
+ *
+ * - **`leagues`** — the reader's own leagues, resolved by the manager module, so
+ *   a comparison against `t.league_id` is the whole of it.
+ * - **`members`** — leagues a leaguemate *belongs to*, whoever traded. Left as a
+ *   membership test rather than resolved into league ids upstream because the
+ *   id list would be every league of a few thousand people; `league_users`'
+ *   primary key is `(league_id, user_id)`, so per candidate trade this is an
+ *   index scan over one league's dozen rows.
+ * - **`traders`** — trades a leaguemate was *party to*. A trade names rosters
+ *   and this names people, so it reads through `rosters`; **the trade's own
+ *   roster ids drive it, and that is a planner decision rather than a stylistic
+ *   one.** Written the way the managers filter is — `FROM rosters WHERE
+ *   r.league_id = t.league_id AND r.owner_id = ANY(…)` with the roster id
+ *   checked by `@>` containment — the subquery is decorrelatable, and against an
+ *   id list this size the planner takes it: it hash-joins `rosters`, collects
+ *   the whole population and top-N heapsorts it, at the same cost on page 40 as
+ *   on page 1. Measured over 150k transactions with 850 leaguemates: **205ms
+ *   that way, 9.0ms this way**, and only this way is flat with depth. Unnesting
+ *   `roster_ids` makes the subquery a function of `t`, so it cannot be pulled
+ *   up. It is also the more forgiving read of the column, for free: Sleeper has
+ *   been seen to send roster ids as numbers and as strings, and
+ *   `jsonb_array_elements_text` flattens both — which is why the facets query's
+ *   manager branch already reads it this way. The regex guard before the cast is
+ *   the house rule, and it sits **inside the join condition** rather than in a
+ *   `WHERE` beside it: the cast is what the index lookup is built from, so it is
+ *   evaluated whatever the planner does with a filter one level up, and `CASE`
+ *   short-circuits — a junk roster id yields null and matches nothing rather
+ *   than failing the whole board.
+ *
+ * All three are `EXISTS`/`ANY` filters over `transactions` alone, so the board's
+ * `ORDER BY` is still satisfied straight from `transactions_trade_keyset_idx`
+ * and a page is still an index walk that stops at the limit.
+ */
+function circleSql(
+  circle: TradeCircleScope,
+  bind: (value: unknown) => string,
+): string {
+  const ids = bind(circle.ids);
+
+  switch (circle.kind) {
+    case "leagues":
+      return `t.league_id = ANY(${ids}::varchar[])`;
+    case "members":
+      return `EXISTS (
+        SELECT 1 FROM league_users lu
+         WHERE lu.league_id = t.league_id
+           AND lu.user_id = ANY(${ids}::varchar[]))`;
+    case "traders":
+      return `EXISTS (
+        SELECT 1
+          FROM jsonb_array_elements_text(${asArray("t.roster_ids")}) ri
+          JOIN rosters r
+            ON r.league_id = t.league_id
+           AND r.roster_id = (CASE WHEN ri ~ '^[0-9]+$' THEN ri::int END)
+         WHERE r.owner_id = ANY(${ids}::varchar[]))`;
+  }
 }
 
 /**
