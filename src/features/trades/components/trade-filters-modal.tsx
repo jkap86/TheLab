@@ -2,14 +2,22 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
+import type { UserInfo } from "@/shared/contract";
+
 import {
   DEFAULT_TRADE_FILTERS,
+  TRADE_CIRCLES,
   TRADE_RANGE_PRESETS,
   activeTradeFilterCount,
   pickLabel,
   tradeRangeBounds,
 } from "../filters";
-import type { TradeFilters, TradeOption, TradeRangePreset } from "../filters";
+import type {
+  TradeCircle,
+  TradeFilters,
+  TradeOption,
+  TradeRangePreset,
+} from "../filters";
 import { useTradeCount, useTradeFacets } from "../hooks/use-trade-facets";
 import type { LeagueScope } from "../trade-query";
 import type { PlayerSummary, TradeManager } from "../types";
@@ -48,6 +56,7 @@ export function TradeFiltersModal({
   onChange,
   season,
   scope,
+  account,
   players,
   managers,
   today,
@@ -60,6 +69,13 @@ export function TradeFiltersModal({
    * *league* filters leave, since that is the list this dialog narrows further.
    */
   scope: LeagueScope;
+  /**
+   * The reader's stored account, or null. The circle is the only control here
+   * that needs one, and with none it is offered as a disabled row that says why
+   * rather than being hidden — a filter nobody can see is one nobody knows they
+   * could have.
+   */
+  account: UserInfo | null;
   /** Names the board has already resolved; the facets bring their own for the rest. */
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
@@ -106,16 +122,29 @@ export function TradeFiltersModal({
   // selection is stripped from their key so a checkbox doesn't re-run a
   // season-wide aggregate for an answer that can't have changed. The **count**
   // is the whole draft, and is a `count(*)`.
+  const user = account?.user_id ?? null;
+  const circle = draft.circle;
   const menuRequest = useMemo(
     () =>
       open
-        ? { season, scope, filters: DEFAULT_TRADE_FILTERS, bounds }
+        ? {
+            season,
+            scope,
+            // The selection is stripped and **the circle is not**: it says which
+            // trades are on this board at all, so a menu counted without it
+            // would offer managers and players the reader cannot reach. Only the
+            // three checkbox lists are lifted out, because only they can't
+            // change what these counts say.
+            filters: { ...DEFAULT_TRADE_FILTERS, circle },
+            bounds,
+            user,
+          }
         : null,
-    [open, season, scope, bounds],
+    [open, season, scope, bounds, circle, user],
   );
   const countRequest = useMemo(
-    () => (open ? { season, scope, filters: draft, bounds } : null),
-    [open, season, scope, draft, bounds],
+    () => (open ? { season, scope, filters: draft, bounds, user } : null),
+    [open, season, scope, draft, bounds, user],
   );
 
   const { data: facets, loading: facetsLoading } = useTradeFacets(menuRequest);
@@ -200,6 +229,29 @@ export function TradeFiltersModal({
           </div>
 
           <div className="flex flex-col gap-5 p-5">
+            <Group label="Scope">
+              <div className="flex flex-wrap gap-2">
+                {TRADE_CIRCLES.map((option) => (
+                  <CircleChip
+                    key={option.value}
+                    option={option}
+                    selected={draft.circle === option.value}
+                    // Every circle but the widest is drawn around an account, so
+                    // without one there is nothing to draw. Disabled rather than
+                    // absent: what it takes to switch it on is a sentence, and
+                    // hiding the control hides the sentence too.
+                    disabled={option.value !== "all" && account === null}
+                    onSelect={(value) => setDraft({ ...draft, circle: value })}
+                  />
+                ))}
+              </div>
+              <p className="text-xs text-foreground/45">
+                {account === null
+                  ? "Look your Sleeper account up on the tools page to filter by your own leagues and leaguemates."
+                  : circleNote(draft.circle, account)}
+              </p>
+            </Group>
+
             <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
               <Group label="Completed">
                 <div className="flex flex-wrap gap-2">
@@ -356,6 +408,60 @@ function Group({
       {children}
     </div>
   );
+}
+
+/**
+ * One circle, with what it means under its name.
+ *
+ * A wider key than the chips beside it because the label alone does not separate
+ * the two leaguemate readings — one is about who was dealing, the other about
+ * where the deal happened — and a reader choosing between them is choosing
+ * between two quite different boards.
+ */
+function CircleChip({
+  option,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  option: (typeof TRADE_CIRCLES)[number];
+  selected: boolean;
+  disabled: boolean;
+  onSelect: (value: TradeCircle) => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      disabled={disabled}
+      onClick={() => onSelect(option.value)}
+      className={`flex max-w-[15rem] flex-col items-start gap-0.5 rounded-xl border px-3 py-2 text-left transition-colors ${
+        selected
+          ? "border-active/45 bg-active/10 text-foreground"
+          : disabled
+            ? // Flat and unlit, the app bar's rule at chip scale: a part that
+              // does nothing when pressed must not look pressable.
+              "cursor-not-allowed border-foreground/[0.06] bg-transparent text-foreground/25"
+            : "border-foreground/10 bg-foreground/[0.04] text-foreground/60 hover:border-foreground/25 hover:text-foreground"
+      }`}
+    >
+      <span className="text-sm font-semibold">{option.label}</span>
+      <span className="text-[11px] leading-tight opacity-70">{option.note}</span>
+    </button>
+  );
+}
+
+/**
+ * The one fact the chips cannot carry: *whose* circle this is.
+ *
+ * Each chip already says what its circle means, so restating that here would be
+ * saying it twice; what is worth a line is the account it is drawn around, which
+ * is stored on the device and may not be the one the reader has in mind.
+ */
+function circleNote(circle: TradeCircle, account: UserInfo): string {
+  return circle === "all"
+    ? "Every league this database has crawled."
+    : `Drawn around @${account.display_name || account.username} — the account stored on this device.`;
 }
 
 function Chip({

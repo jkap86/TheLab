@@ -32,11 +32,13 @@ const request = (over: {
   scope?: LeagueScope;
   filters?: Partial<TradeFilters>;
   bounds?: { from: number | null; to: number | null };
+  user?: string | null;
 } = {}) => ({
   season: "2026",
   scope: over.scope ?? ({ kind: "all" } as LeagueScope),
   filters: { ...DEFAULT_TRADE_FILTERS, ...over.filters },
   bounds: over.bounds ?? { from: null, to: null },
+  user: over.user === undefined ? null : over.user,
 });
 
 /**
@@ -151,6 +153,26 @@ describe("tradeQueryParams", () => {
     assert.equal(params.get("xleagues"), null);
   });
 
+  test("the circle and the account travel together or not at all", () => {
+    const both = tradeQueryParams(
+      request({ filters: { circle: "leaguemates" }, user: "u9" }),
+    );
+    assert.equal(both.get("circle"), "leaguemates");
+    assert.equal(both.get("user"), "u9");
+
+    // The account store has no server snapshot, so the first render of the page
+    // has no user — a circle sent alone would be a request for a board the route
+    // resolves back to the unnarrowed one, under a *different* cache key.
+    const noUser = tradeQueryParams(request({ filters: { circle: "mine" } }));
+    assert.equal(noUser.get("circle"), null);
+    assert.equal(noUser.get("user"), null);
+
+    // And a user with no circle narrows nothing, so it is not an id to put in a
+    // query string for every reader who has ever looked an account up.
+    const noCircle = tradeQueryParams(request({ user: "u9" }));
+    assert.equal(noCircle.get("user"), null);
+  });
+
   test("the match mode is only sent when it can change an answer", () => {
     const one = tradeQueryParams(
       request({ filters: { players: ["p1"], match: "any" } }),
@@ -190,6 +212,17 @@ describe("tradeQueryKey", () => {
     assert.notEqual(
       tradeQueryKey(request()),
       tradeQueryKey(request({ bounds: { from: 1, to: null } })),
+    );
+    // Two circles around one account are two boards, and two accounts under one
+    // circle are as well — both have to reach the key or a reader who switches
+    // sees the previous board's cards.
+    assert.notEqual(
+      tradeQueryKey(request({ filters: { circle: "mine" }, user: "u9" })),
+      tradeQueryKey(request({ filters: { circle: "leaguemates" }, user: "u9" })),
+    );
+    assert.notEqual(
+      tradeQueryKey(request({ filters: { circle: "mine" }, user: "u9" })),
+      tradeQueryKey(request({ filters: { circle: "mine" }, user: "u8" })),
     );
   });
 });

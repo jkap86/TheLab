@@ -18,6 +18,8 @@ export {
   getLeagueDetail,
   getLeagueTypes,
   getLeaguesByIds,
+  getLeaguemateIds,
+  getManagerLeagueIds,
   getManagerLeagueRosters,
   getManagerLeaguemates,
   getManagerLeagues,

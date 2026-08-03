@@ -4,6 +4,8 @@ import type { ManagerLeague } from "@/shared/manager";
 import { assembleTrade } from "./assemble";
 import type { TradeRow } from "./assemble";
 import { BoundedCache, cachedLookup } from "./cache";
+import { resolveTradeCircle } from "./circle";
+import type { TradeCircleScope } from "./circle";
 import { decodeTradeCursor, encodeTradeCursor } from "./cursor";
 import type { TradeQuery } from "./params";
 import {
@@ -88,8 +90,14 @@ export type TradesPage = {
  * next page) is a round trip per page.
  */
 export async function listTrades(query: TradeQuery): Promise<TradesPage> {
+  // Resolved here rather than in the route, so the five reads that share one
+  // definition of "the trades on this board" cannot come to different views of
+  // it — the same guarantee `./sql` exists for, extended to the one narrowing
+  // that needs a query of its own to become SQL. It is cached per reader, so
+  // this is a map lookup on every page after the first.
+  const circle = await resolveTradeCircle(query);
   const params: unknown[] = [query.season];
-  const filters = tradeFilterSql(query, params);
+  const filters = tradeFilterSql(query, params, circle);
   const cursor = decodeTradeCursor(query.cursor);
   const resume = cursor ? tradeCursorSql(cursor, params) : "";
   const limit = `$${params.push(query.limit + 1)}`;
@@ -133,8 +141,9 @@ export async function listTrades(query: TradeQuery): Promise<TradesPage> {
  * the request.
  */
 export async function countTrades(query: TradeQuery): Promise<number> {
+  const circle = await resolveTradeCircle(query);
   const params: unknown[] = [query.season];
-  const filters = tradeFilterSql(query, params);
+  const filters = tradeFilterSql(query, params, circle);
 
   const { rows } = await pool.query<{ total: string }>(
     `WITH startup_draft AS (${STARTUP_DRAFT_SQL})
@@ -245,6 +254,11 @@ export type TradeFacets = {
  * name it".
  */
 export async function getTradeFacets(query: TradeQuery): Promise<TradeFacets> {
+  // Resolved once and handed to all three branches: they count over one
+  // population, and three resolutions of the same circle would be three chances
+  // for the menus to disagree with each other about who is on this board.
+  const circle = await resolveTradeCircle(query);
+
   // **Three queries in parallel rather than one three-branch `UNION ALL`.**
   // As one statement the branches run in sequence and the request waits on
   // their sum; run together it waits on the slowest. Measured over a 50k-trade
@@ -255,6 +269,7 @@ export async function getTradeFacets(query: TradeQuery): Promise<TradeFacets> {
   const [players, picks, managers] = await Promise.all([
     facetQuery(
       query,
+      circle,
       // `adds` is player id → the roster that received them, so its keys *are*
       // the players who moved, pooled across the sides the way `tradeAssets`
       // used to pool them. Keys are unique within an object, so a plain
@@ -268,6 +283,7 @@ export async function getTradeFacets(query: TradeQuery): Promise<TradeFacets> {
     ),
     facetQuery(
       query,
+      circle,
       // Distinctly, because a trade can carry two 2027 firsts and the menu's
       // number is "trades that name it".
       `SELECT ${PICK_TOKEN_SQL} AS value,
@@ -278,6 +294,7 @@ export async function getTradeFacets(query: TradeQuery): Promise<TradeFacets> {
     ),
     facetQuery(
       query,
+      circle,
       // A trade names rosters and a reader names people, so this is the only
       // branch that has to join. Distinctly again: a manager can hold two
       // rosters in one league, and a three-way trade can name both.
@@ -306,10 +323,11 @@ export async function getTradeFacets(query: TradeQuery): Promise<TradeFacets> {
  */
 async function facetQuery(
   query: TradeQuery,
+  circle: TradeCircleScope | null,
   aggregate: string,
 ): Promise<TradeFacet[]> {
   const params: unknown[] = [query.season];
-  const filters = tradeFilterSql(query, params);
+  const filters = tradeFilterSql(query, params, circle);
 
   const { rows } = await pool.query<{ value: string; count: string }>(
     `WITH startup_draft AS (${STARTUP_DRAFT_SQL}),

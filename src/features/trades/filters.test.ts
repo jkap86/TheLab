@@ -3,9 +3,11 @@ import { describe, test } from "node:test";
 
 import {
   DEFAULT_TRADE_FILTERS,
+  TRADE_CIRCLES,
   activeTradeFilterCount,
   pickLabel,
   pickToken,
+  tradeCircleSummary,
   tradeFilterSummary,
   tradeRangeBounds,
 } from "./filters.ts";
@@ -89,6 +91,40 @@ describe("activeTradeFilterCount", () => {
       ),
       4,
     );
+  });
+
+  test("a circle is one narrowing, and the widest one is none", () => {
+    // The trigger's badge is the only thing outside the dialog that says a
+    // circle is on, so a circle that didn't reach this count would be a board
+    // narrowed to one account with nothing on screen admitting it.
+    assert.equal(activeTradeFilterCount(filters({ circle: "all" })), 0);
+    assert.equal(activeTradeFilterCount(filters({ circle: "mine" })), 1);
+    assert.equal(
+      activeTradeFilterCount(
+        filters({ circle: "leaguemate-leagues", players: ["a"] }),
+      ),
+      2,
+    );
+  });
+});
+
+describe("the circles", () => {
+  test("every circle is named, in words that read mid-sentence", () => {
+    // The page's scope line is `season · circle · league rules · trade
+    // filters`, so a missing summary would read as a stray separator rather
+    // than as a filter with no name.
+    for (const circle of TRADE_CIRCLES) {
+      const summary = tradeCircleSummary(circle.value);
+      assert.ok(summary.length > 0, circle.value);
+      assert.equal(summary, summary.toLowerCase(), circle.value);
+    }
+  });
+
+  test("the default is the whole market", () => {
+    // The page's premise: the leagues a reader plays in are a fraction of the
+    // trades worth reading, and this page opens on all of them.
+    assert.equal(DEFAULT_TRADE_FILTERS.circle, "all");
+    assert.equal(TRADE_CIRCLES[0].value, "all");
   });
 });
 
