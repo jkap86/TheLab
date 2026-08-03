@@ -105,6 +105,42 @@ export function formatValue(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
+/**
+ * A player's name with the first name contracted to an initial, for the roster
+ * panel's narrow tier: `"Christian McCaffrey"` → `"C. McCaffrey"`.
+ *
+ * The panel is a 50/50 split at every width, so on a phone a roster row's name
+ * track is ~126px — and at 14px that is roughly where real player names *start*.
+ * Measured over the pool: `Michael Pittman Jr.` is 118px, `Christian McCaffrey`
+ * 123, `Chigoziem Okonkwo` 128, `JuJu Smith-Schuster` 129, and an IDP league's
+ * `Jeremiah Owusu-Koramoah` is 174. Truncation there is not recoverable either —
+ * `title` is a hover affordance and there is no hover on a phone — so what is cut
+ * has simply left the panel.
+ *
+ * **Unconditional rather than past a length threshold, which is the part worth
+ * not "fixing" back.** A character count is a poor proxy for a width: the two
+ * names above at 17 and 19 characters are 128px and 118px respectively, so no
+ * threshold separates the names that fit from the ones that don't — every
+ * setting either contracts names that had room or clips names that didn't. It is
+ * also what keeps the column uniform, which is how a box score has written this
+ * for a century; the full name is back at `@lg`, where the track can hold it.
+ *
+ * Two things it must not do. A team defence is not a person — `Pittsburgh
+ * Steelers` is the team's name, and `P. Steelers` is nothing — so `DEF` is
+ * returned whole. And a name with no space (an unresolved player id, the `Empty`
+ * placeholder) has no first name to contract, so it is returned as it came.
+ *
+ * It does not promise the result fits: `J. Owusu-Koramoah` is 128px against that
+ * ~126px track and still loses a character. It takes that row from losing a third
+ * of the name to losing the last letter of it, which is the whole of the claim.
+ */
+export function shortPlayerName(name: string, position: string | null): string {
+  if (position === "DEF") return name;
+  const space = name.indexOf(" ");
+  if (space < 1) return name;
+  return `${name[0]}. ${name.slice(space + 1)}`;
+}
+
 // `ordinal` moved to `features/shared/format.ts` when the trades page needed the
 // same words for a pick's round; it is re-exported here so this module's own
 // consumers keep reading it from where they always have.

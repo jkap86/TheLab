@@ -2196,6 +2196,56 @@ stops holding, a comment saying it does would not have caught it.
   `player-row` lays the cells, and the template they share is the contract
   between them. Every template is written out as a whole class string so
   Tailwind can see it.
+- **Below `@lg` a roster row contracts the first name to an initial, and the
+  reason it isn't conditional is worth keeping.** Giving the name its own line
+  bought it ~126px on a phone, and at 14px that is roughly where real player
+  names *start*: `Michael Pittman Jr.` measures 118px, `Christian McCaffrey`
+  123, `Chigoziem Okonkwo` 128, and an IDP league's `Jeremiah Owusu-Koramoah`
+  174. So `shortPlayerName` (in `manager/format`, pure and tested) is what the
+  narrow tier draws, with the whole name back at `@lg` — the usual two spans,
+  `@lg:hidden` against `hidden @lg:inline`, since `.inline` outranks `.hidden`
+  at every width otherwise. **A length threshold cannot express this**: the two
+  names above are 17 and 19 characters at 128px and 118px, so a character count
+  is a poor proxy for a width and every setting of it either contracts names
+  that had room or clips names that didn't. Contracting all of them is also what
+  keeps the column uniform, which is how a box score has written this for a
+  century. Two exclusions, both load-bearing: a team defence is returned whole
+  (`Pittsburgh Steelers` is the team's name, and `P. Steelers` is nothing), and
+  so is a name with no space (the `Empty` placeholder, an unresolved player id).
+  It does not promise a fit — `J. Owusu-Koramoah` is 128px and still loses its
+  last letter — but it takes that row from losing a third of the name to losing
+  one character, which is the whole of the claim. The `title` beside it is the
+  desktop backstop and deliberately not the plan: there is no hover on a phone,
+  which is the width where the name is short of room in the first place.
+- **The slot gutter is `1.25rem` below `@lg`, and it is measured rather than
+  picked** — `DEF` is the widest label the column can be asked to hold at
+  `text-[0.6rem]`, at 19.2px. It was `1.75rem`, a track sized for `SFLX` at the
+  *wider* tier's type, spending 28px on a two-letter `RB` out of the one column
+  whose contents can't be shortened. `NARROW_SLOT_LABEL` in `player-row` is the
+  two labels that don't fit that width (`FLEX` and `SUPER_FLEX`, 24.5px each),
+  overriding `SLOT_LABEL` rather than replacing it — above `@lg` the fuller
+  spellings are drawn, because `FLEX` is a word a reader knows and `FLX` is a
+  concession to a width, so the concession is made only where the width demands
+  it. The table and the track are a matched pair with no compiler link between
+  them: a label added there wants a width check here, or the *marker* truncates,
+  and a clipped label reads as broken where a clipped name only reads as long.
+  **Neither gutter may be `auto`**, which is the tempting simplification and the
+  one that breaks: every row and every section heading is its own grid
+  container, so an intrinsic track is measured per row — the starters section
+  would size to `FLEX` and the bench section, whose rows carry no slot, to zero,
+  putting the two lists' names and number columns at different x. Same trap in
+  the standings one row over, where `1` and `12` would not agree.
+- **The standings' rank gutter is where this ran out, and it was left alone.**
+  It was already dieted once, from `2rem` to `1rem`, for exactly this reason,
+  and a 12-team league needs two digits — `12` is 11.6px against that 16px
+  track. Trimming further is worth ~4px, which moves no name across any
+  boundary, and the 8px column gutter that would have to give with it is a
+  decision this panel already made deliberately (see the gutter rule above:
+  trim the padding, never the gap). A long username therefore still truncates,
+  and it has no lossless treatment available — it is one token, so there is no
+  first name to contract and no break point but a mid-word one. Spending the
+  avatar for the rank is the only real lever left there; it is a trade rather
+  than a free win, so it stays unmade.
 - **`roster-detail` shows the optimal lineup only** — there is no current/optimal
   toggle. The current lineup is a click away in Sleeper; what this tool adds is
   the best lineup available, so the starters list *is* that lineup and the bench
