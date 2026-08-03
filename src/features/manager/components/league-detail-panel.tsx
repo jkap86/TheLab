@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 // Both imported directly rather than through their barrels, which would pull
@@ -25,17 +25,36 @@ import { PanelLoading, PanelMessage } from "./ui";
 export function LeagueDetailPanel({ leagueId }: { leagueId: string }) {
   const { data, loading, error } = useLeagueDetail(leagueId);
 
-  if (loading && !data) {
-    return <PanelLoading>Loading rosters…</PanelLoading>;
-  }
-  if (error) {
-    return <PanelMessage tone="error">{error}</PanelMessage>;
-  }
-  if (!data || data.teams.length === 0) {
-    return <PanelMessage>No roster data yet.</PanelMessage>;
-  }
+  // The query container is here rather than around the loaded panel alone, so
+  // every state this can be in is measured against one width — including the
+  // three below, which carry the inset themselves now that the card wraps this
+  // in nothing (the padding belongs to what is drawn on the card's face, not to
+  // the act of expanding). It holds no box of its own, per the rule an
+  // `@container` has to keep: an element is never its own query container.
+  return (
+    <div className="@container">
+      {loading && !data ? (
+        <PanelState>
+          <PanelLoading>Loading rosters…</PanelLoading>
+        </PanelState>
+      ) : error ? (
+        <PanelState>
+          <PanelMessage tone="error">{error}</PanelMessage>
+        </PanelState>
+      ) : !data || data.teams.length === 0 ? (
+        <PanelState>
+          <PanelMessage>No roster data yet.</PanelMessage>
+        </PanelState>
+      ) : (
+        <Panel data={data} />
+      )}
+    </div>
+  );
+}
 
-  return <Panel data={data} />;
+/** The panel's inset around a state that isn't the panel. */
+function PanelState({ children }: { children: ReactNode }) {
+  return <div className="px-3 pb-3 pt-1 @lg:px-5 @lg:pb-5">{children}</div>;
 }
 
 function Panel({ data }: { data: LeagueDetailResult }) {
@@ -112,9 +131,14 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   // The panel is one milled instrument rather than two adjacent boxes: a plate
   // holding a recessed field (the standings, which is read) beside a raised one
   // (the roster, which is acted on) — the app bar's grammar at panel scale, so
-  // the selected team can be a lit key rather than a tinted row. `.lab-plate`
-  // carries the material and nothing else; the inset and the split below are
-  // utilities, as they are everywhere that grammar is used.
+  // the selected team can be a lit key rather than a tinted row.
+  //
+  // **That plate is the card, not a box inside it.** This used to wear
+  // `.lab-plate` itself, which put a machined instrument inside the list's glass
+  // row — two materials nested, and two insets spent on the same horizontal
+  // pixel. The card takes the material on expand (see `LeagueCard`), so what is
+  // left here is the inset, which lives on a child of the query container rather
+  // than on the container itself.
   //
   // Even 50/50 split at every width: the two halves answer different questions —
   // where the teams stand, and what the selected one is starting — and reading
@@ -124,11 +148,17 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   // tight (see the standings' second value column).
   //
   // The inset and the split's gutter are both a step tighter below @lg, and that
-  // is the cheapest width in the whole panel: four boxes nest horizontally here
-  // (this plate, each half's own face, then a standings row's own padding), so a
+  // is the cheapest width in the whole panel: the boxes nest horizontally here
+  // (this inset, each half's own face, then a standings row's own padding), so a
   // pixel of chrome is spent twice over on the way down and comes out of the one
   // track that has nowhere else to go — the name. Nothing on screen is *made of*
   // this padding, which is what separates trimming it from trimming a column.
+  //
+  // It is asymmetric on the left because the card's head is: the name line clears
+  // the cyan rail with `pl-5`, and a panel that started a step further in would
+  // read as a second column of content rather than as the same card continuing.
+  // The top is tight for the same reason — the head's own `py-3` is already the
+  // gap between the league's name and its detail.
   //
   // **The container is a bare wrapper, not the plate itself.** An element is
   // never its own query container, so `@container` and `@lg:p-4` on one div made
@@ -136,12 +166,12 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   // silently never applied, and the panel wore its narrow inset at every width.
   // Splitting them is also what makes the query *stable* — a container whose own
   // padding is set by a query on itself changes the content box that query is
-  // measured against, so the threshold moves as it is crossed. The wrapper holds
-  // no box of its own, which is what leaves one honest width for the children's
-  // own @lg rules to read.
+  // measured against, so the threshold moves as it is crossed. The container is
+  // one level up, around every state this panel can be in; this div holds only
+  // the ref the pickers' outside-click test reads.
   return (
-    <div ref={panelRef} className="@container">
-      <div className="lab-plate rounded-xl p-2 @lg:p-4">
+    <div ref={panelRef}>
+      <div className="pb-3 pl-3 pr-2 pt-1 @lg:pb-5 @lg:pl-5 @lg:pr-4 @lg:pt-2">
         {data.outlook && (
           <PanelTelemetry
             outlook={data.outlook}

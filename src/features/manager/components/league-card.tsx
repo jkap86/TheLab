@@ -35,6 +35,18 @@ import { Chevron } from "./ui";
  * up column to column down the whole list — and the control that moves them is
  * the heading rail up there too, which is why this card renders numbers and no
  * pickers of its own.
+ *
+ * **An expanded card does not *hold* the detail panel, it *becomes* it.** The
+ * row wore the list's glass while the panel inside it was a machined plate, so
+ * one league was two materials nested four surfaces deep — glass, plate, trough,
+ * row — before a player name was drawn, with the plate's own inset sitting
+ * inside the card's and both coming out of the one track that has nowhere else
+ * to go (the name). So expanding swaps this row's surface for `.lab-plate` and
+ * the panel renders straight onto that face: one instrument, one inset, and the
+ * app bar's grammar at card scale — the raised part is the one being worked in,
+ * which is also why the rail lights and the hover lift goes away (a several-
+ * hundred-pixel panel that rises under the pointer is a card pretending to still
+ * be a row).
  */
 export function LeagueCard({
   league,
@@ -79,8 +91,8 @@ export function LeagueCard({
   const ctx: MetricContext = { league, ranks, ktc, adp, weeks, valuedAt };
 
   return (
-    <li className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER}`}>
-      <RowSheen />
+    <li className={expanded ? OPEN_SURFACE : `${LIST_ROW_SURFACE} ${LIST_ROW_HOVER}`}>
+      <RowSheen lit={expanded} />
 
       {/* The whole row is the toggle, not just the name half. The stat columns
           have nothing to press of their own — the pickers live in the heading
@@ -151,14 +163,27 @@ export function LeagueCard({
         <MetricColumns metrics={LEAGUE_METRICS} ctx={ctx} columns={columns} />
       </div>
 
+      {/* No seam and no inset of its own: the panel is on this card's face, so
+          what used to be a border between two surfaces would now be a line drawn
+          across one. The padding under it belongs to the panel, which is where
+          the container query that sizes it can see a width. */}
       {expanded && (
-        <div className="relative border-t border-foreground/10 py-4">
+        <div className="relative">
           <LeagueDetailPanel leagueId={league.league_id} />
         </div>
       )}
     </li>
   );
 }
+
+/**
+ * The surface an expanded card wears: the detail panel's own plate, at row
+ * width. The border is the one part not in `.lab-plate` — the class carries
+ * material and never a box — and it takes the accent rather than the list's
+ * hairline, since a lit edge is what says which league is open when the card
+ * above it is scrolled past.
+ */
+const OPEN_SURFACE = "lab-plate group relative rounded-xl border border-active/25";
 
 /**
  * A small state dot standing in for the old text badge: the accent for a league

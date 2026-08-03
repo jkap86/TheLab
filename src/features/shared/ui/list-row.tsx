@@ -42,13 +42,20 @@ export const LIST_ROW_HOVER =
  * It must be rendered *before* the row's content, and that content must be
  * positioned (`relative`), or these paint over it: an absolutely positioned
  * sibling sits above static content regardless of source order.
+ *
+ * `lit` holds the rail at full brightness rather than at rest. A row that has
+ * opened into a panel is the one part of the list currently being worked in, and
+ * the rail is what the pinned manager plate uses to say the same thing — so the
+ * open league reads as lit whether or not the pointer happens to be over it.
  */
-export function RowSheen() {
+export function RowSheen({ lit = false }: { lit?: boolean }) {
   return (
     <>
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-2 left-0 w-0.5 rounded-r-sm bg-gradient-to-b from-active/55 to-active/5 opacity-60 transition-opacity duration-300 group-hover:opacity-100 motion-reduce:transition-none"
+        className={`pointer-events-none absolute inset-y-2 left-0 w-0.5 rounded-r-sm bg-gradient-to-b from-active/55 to-active/5 transition-opacity duration-300 group-hover:opacity-100 motion-reduce:transition-none ${
+          lit ? "opacity-100" : "opacity-60"
+        }`}
       />
       <span
         aria-hidden="true"
