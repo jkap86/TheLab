@@ -64,11 +64,21 @@ export function LeagueFiltersModal({
   filters,
   onChange,
   leagues,
+  label = "Filters",
 }: {
   filters: LeagueFilters;
   onChange: (filters: LeagueFilters) => void;
   /** The unfiltered list, which the per-option counts are taken over. */
   leagues: readonly ManagerLeague[];
+  /**
+   * What the trigger says. `Filters` on the manager tabs, where these are the
+   * page's only filters and the leagues are what the page is *about*; `Leagues`
+   * on the trades board, where the trade ledge beside it is the control called
+   * Filters and two parts wearing that word would be two answers to the same
+   * question. The dialog behind it is identical either way — what varies is only
+   * which of two filter sets a reader is being pointed at.
+   */
+  label?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -149,7 +159,7 @@ export function LeagueFiltersModal({
         }`}
       >
         <FilterIcon dim={active === 0} />
-        Filters
+        {label}
         {active > 0 && (
           <span className="rounded-[5px] bg-[#052029] px-1.5 py-0.5 text-[11px] font-bold leading-none text-active">
             {active}

@@ -9,6 +9,7 @@ import {
   formatValue,
   formatWeekRange,
   formatWinPct,
+  shortPlayerName,
 } from "./format.ts";
 
 describe("formatRecord", () => {
@@ -135,5 +136,43 @@ describe("formatWeekRange", () => {
 
   test("says so when there are no weeks at all", () => {
     assert.equal(formatWeekRange([]), "no weeks");
+  });
+});
+
+describe("shortPlayerName", () => {
+  test("contracts the first name to an initial", () => {
+    assert.equal(shortPlayerName("Christian McCaffrey", "RB"), "C. McCaffrey");
+    assert.equal(shortPlayerName("Bijan Robinson", "RB"), "B. Robinson");
+  });
+
+  test("keeps everything after the first name, suffixes included", () => {
+    // The identifying part is the surname and whatever qualifies it — dropping
+    // the `Jr.` would merge a father and son who are both in the player pool.
+    assert.equal(shortPlayerName("Michael Pittman Jr.", "WR"), "M. Pittman Jr.");
+    assert.equal(shortPlayerName("Amon-Ra St. Brown", "WR"), "A. St. Brown");
+    assert.equal(
+      shortPlayerName("Jeremiah Owusu-Koramoah", "LB"),
+      "J. Owusu-Koramoah",
+    );
+  });
+
+  test("leaves a team defence whole", () => {
+    // `Pittsburgh Steelers` is the team's name, not a person's — `P. Steelers`
+    // is nothing.
+    assert.equal(
+      shortPlayerName("Pittsburgh Steelers", "DEF"),
+      "Pittsburgh Steelers",
+    );
+  });
+
+  test("returns a name with no first name as it came", () => {
+    // The unfilled-slot placeholder and an unresolved player id both land here.
+    assert.equal(shortPlayerName("Empty", null), "Empty");
+    assert.equal(shortPlayerName("4034", null), "4034");
+    assert.equal(shortPlayerName("", "RB"), "");
+  });
+
+  test("does not treat a leading space as a first name", () => {
+    assert.equal(shortPlayerName(" McCaffrey", "RB"), " McCaffrey");
   });
 });

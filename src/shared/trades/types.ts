@@ -21,6 +21,19 @@ export type TradePickAsset = {
    * a pick can change hands several times before it is used.
    */
   roster_id: number;
+  /**
+   * The manager holding that roster, so a card can name the pick's origin as a
+   * person rather than as a roster number.
+   *
+   * **It is resolved here rather than by the reader**, because a pick can come
+   * from a roster that isn't in the trade at all — the interesting case, since
+   * a third party's first is exactly the pick worth naming an owner for — and
+   * the trade itself names only its participants. The assembler holds the whole
+   * league's roster→owner map, so this costs nothing; a client left to work it
+   * out could only ever resolve the sides. Null on an uncached or orphaned
+   * roster, the same rule {@link TradeSide.user_id} follows.
+   */
+  user_id: string | null;
 };
 
 /** One roster's half of a trade: what it came away with. */

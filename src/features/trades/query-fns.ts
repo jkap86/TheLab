@@ -1,5 +1,4 @@
 import type {
-  TradeCountPayload,
   TradeFacetsPayload,
   TradeLeaguesPayload,
   TradesPagePayload,
@@ -93,25 +92,4 @@ export async function fetchTradeFacets({
     fallbackError: "Failed to load filter options",
   });
   return (await res.json()) as TradeFacetsPayload;
-}
-
-/**
- * How many trades a request matches — the dialog footer's number.
- *
- * Separate from the facets for the reason the routes are separate: this is what
- * a checkbox costs, and it is a `count(*)` rather than a grouped aggregate over
- * the season.
- */
-export async function fetchTradeCount({
-  request,
-  signal,
-}: {
-  request: TradeRequest;
-  signal?: AbortSignal;
-}): Promise<TradeCountPayload> {
-  const res = await apiFetch(`/api/trades/count?${tradeQueryParams(request)}`, {
-    signal,
-    fallbackError: "Failed to count trades",
-  });
-  return (await res.json()) as TradeCountPayload;
 }

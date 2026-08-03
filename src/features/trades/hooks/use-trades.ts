@@ -1,6 +1,6 @@
 "use client";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import type { Trade } from "@/shared/trades";
@@ -62,6 +62,8 @@ export type TradesData = {
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
   ktc: Record<string, KtcValue>;
+  /** Pick key → draft slot, for the picks whose league has set an order. */
+  pickSlots: Record<string, number>;
 };
 
 export type TradesState = {
@@ -70,6 +72,13 @@ export type TradesState = {
   loading: boolean;
   /** True while another page is on its way. */
   loadingMore: boolean;
+  /**
+   * True while what `data` holds is the *previous* filter set's board, kept on
+   * screen until the new one's first page lands. Nothing about the list changes
+   * — the point is that it doesn't — but the headline count says so, since it is
+   * the number the filter was pressed to move.
+   */
+  stale: boolean;
   /** Whether the board has more to give. */
   hasMore: boolean;
   /** Ask for the next page. A no-op while one is already in flight. */
@@ -98,6 +107,13 @@ export type TradesState = {
  *   position intact.
  * - **`maxPages` bounds it.** See {@link TRADES_MAX_PAGES}: an unbounded
  *   infinite query is the season download with extra steps.
+ * - **`keepPreviousData` holds the last board while the next one lands.** That
+ *   is what makes the filters committing live affordable: without it every press
+ *   in the ledge is a new key with nothing in it, so the whole list is replaced
+ *   by the loading flask and back again — which is exactly the flash `useAdp`
+ *   and the four manager hooks refuse for the same reason. Pagination is gated
+ *   on it below, since asking a board that is on its way out for another page
+ *   would append the old filters' next page to the new filters' first.
  *
  * The folded value is memoised on the raw pages, so the concat-and-merge below
  * runs once per page arriving rather than once per render — this component's
@@ -116,11 +132,17 @@ export function useTrades(request: TradeRequest): TradesState {
     maxPages: TRADES_MAX_PAGES,
     staleTime: TRADES_STALE_TIME,
     gcTime: TRADES_GC_TIME,
+    placeholderData: keepPreviousData,
     // A failed board read fails the same way twice — a database that is down, a
     // season nothing has been crawled for — so the client-wide single retry only
     // doubles the wait before the error appears.
     retry: false,
   });
+
+  // What is on screen belongs to the filter set that has just been left. The
+  // list is unchanged by design; what it gates is pagination and what it tells
+  // the header is that the count beside it is about to move.
+  const stale = query.isPlaceholderData;
 
   const data = useMemo((): TradesData | null => {
     const pages = query.data?.pages;
@@ -130,6 +152,7 @@ export function useTrades(request: TradeRequest): TradesState {
     const players: Record<string, PlayerSummary> = {};
     const managers: Record<string, TradeManager> = {};
     const ktc: Record<string, KtcValue> = {};
+    const pickSlots: Record<string, number> = {};
 
     for (const page of pages) {
       // `push(...page.trades)` would spread thousands of arguments onto the
@@ -139,6 +162,7 @@ export function useTrades(request: TradeRequest): TradesState {
       Object.assign(players, page.players);
       Object.assign(managers, page.managers);
       Object.assign(ktc, page.ktc);
+      Object.assign(pickSlots, page.pickSlots);
     }
 
     // Only a first page carries them, and `maxPages` can evict it — so the last
@@ -172,6 +196,7 @@ export function useTrades(request: TradeRequest): TradesState {
       players,
       managers,
       ktc,
+      pickSlots,
     };
   }, [query.data]);
 
@@ -181,14 +206,20 @@ export function useTrades(request: TradeRequest): TradesState {
   // there is no guard to add here.
   const { fetchNextPage } = query;
   const loadMore = useCallback(() => {
+    // Held back while the board on screen is the previous filter set's: the
+    // cursor belongs to that board, and `fetchNextPage` would resume the *new*
+    // key from it. A scroll deep enough to ask again lands the moment the first
+    // page arrives, so nothing is lost by declining now.
+    if (stale) return;
     void fetchNextPage();
-  }, [fetchNextPage]);
+  }, [fetchNextPage, stale]);
 
   return {
     data,
     loading: query.isPending,
     loadingMore: query.isFetchingNextPage,
-    hasMore: query.hasNextPage,
+    stale,
+    hasMore: query.hasNextPage && !stale,
     loadMore,
     error: query.error instanceof Error ? query.error.message : null,
   };

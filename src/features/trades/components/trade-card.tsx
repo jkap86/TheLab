@@ -7,21 +7,30 @@ import {
   LIST_ROW_SURFACE,
   MONTH_ABBREVIATIONS,
   RowSheen,
-  ordinal,
 } from "@/features/shared";
 // The pure module directly, never the `@/shared/ktc` barrel: this is a client
 // component, and the barrel re-exports the `pg`-backed queries beside it.
 import { isSuperflexLineup } from "@/shared/ktc/roster";
+// Same rule, and the same key the route wrote the slots under — one definition
+// read from both ends of the wire.
+import { pickSlotKey } from "@/shared/trades/pick-slots";
 import type { ManagerLeague } from "@/shared/manager";
 
-import { isEmptyBundle, isPairedExchange, tradeExchange } from "../exchange";
-import type { SideExchange, TradeBundle } from "../exchange";
-import type { TradeMetric } from "../trade-metrics";
+import { counterpartyRoster, isEmptyBundle, receivedBundle } from "../exchange";
+import { pickLabel, pickOriginRoster } from "../pick-display";
+import { bundleAssets } from "../trade-metrics";
+import type {
+  TradeAsset,
+  TradeAssetCell,
+  TradeMetric,
+  TradeSideContext,
+} from "../trade-metrics";
 import type {
   KtcValue,
   PlayerSummary,
   Trade,
   TradeManager,
+  TradePickAsset,
   TradeSide,
 } from "../types";
 import { TradeValueTag } from "./trade-value";
@@ -30,19 +39,21 @@ import { TradeValueTag } from "./trade-value";
  * One trade: which league it happened in, when, and what each side came away
  * with.
  *
- * On a wide screen the sides are columns rather than a "gave / got" sentence,
- * because a trade has no privileged direction — three-way trades happen, and
- * even in a two-way one the reader is as likely to be reading it from either
- * end. Each column is headed by the manager and lists what *they received*,
- * which is the only framing that scales past two participants.
+ * **A side lists what it received, at every width — the card used to draw a
+ * give-and-take table below `sm` and no longer does.** The narrow layout paired
+ * each manager's take with what they sent, on the reasoning that a stack loses
+ * what columns are for. What it actually produced on a two-sided trade — which
+ * is nearly all of them — was every asset printed twice: once as a `+` on the
+ * side that took it and once as a `−` on the side that sent it. That is the
+ * densest thing on the card and it carries no information, since the second
+ * listing is a rearrangement of the first, and it is what left a phone-width
+ * card with four columns of names to read. Dropping it is what makes room for
+ * the per-asset values, which are new information rather than a re-listing.
  *
- * On a phone those columns stack, and a stack loses the thing the columns were
- * for: what one side received sits above what the other did, with nothing to
- * read across. So the narrow layout turns the card ninety degrees — a row per
- * manager, with what they give beside what they receive — which fits because a
- * two-sided trade's giving half is derivable (`../exchange`). A trade with more
- * sides keeps the stacked columns at every width, since there is no honest way
- * to say who gave what in one.
+ * So there is one layout: a block per manager, headed by who they are and what
+ * their haul is worth, listing what they received with a value against each
+ * line. The blocks are columns from `sm` up and stack below it, which is the
+ * only thing that changes with width.
  */
 export const TradeCard = memo(function TradeCard({
   trade,
@@ -51,6 +62,7 @@ export const TradeCard = memo(function TradeCard({
   managers,
   metric,
   ktc,
+  pickSlots,
 }: {
   trade: Trade;
   /** Null where the league list hasn't answered yet; the id stands in. */
@@ -60,9 +72,9 @@ export const TradeCard = memo(function TradeCard({
   /** The value column every side wears, chosen once for the whole list. */
   metric: TradeMetric;
   ktc: Record<string, KtcValue>;
+  /** Draft slots for the picks whose league has set an order — see `../pick-display`. */
+  pickSlots: Record<string, number>;
 }) {
-  const exchange = tradeExchange(trade);
-  const paired = isPairedExchange(exchange);
   // Which KTC board this trade reads, from the league's own lineup — the stream
   // spans every crawled league, and the two boards move in opposite directions
   // at quarterback. An unsynced lineup falls to 1QB, which is what
@@ -76,48 +88,35 @@ export const TradeCard = memo(function TradeCard({
     <article className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER} overflow-hidden`}>
       <RowSheen />
 
-      <header className="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-foreground/10 px-4 py-2.5 pl-5">
+      {/* `pl-5` on this and on every side below: the card's leading edge carries
+          the cyan rail, and content flush against it reads as touching. */}
+      <header className="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-foreground/10 py-3 pl-5 pr-4">
         <h3 className="min-w-0 truncate font-display text-[13px] font-semibold tracking-tight">
           {league?.name ?? trade.league_id}
         </h3>
-        <span className="ml-auto text-xs tabular-nums text-foreground/50">
+        <span className="ml-auto shrink-0 text-xs tabular-nums text-foreground/45">
           {formatTradeDate(trade.completed_at)}
           {formatTradeTime(trade.completed_at)}
         </span>
       </header>
 
-      {paired && (
-        <ExchangeTable
-          exchange={exchange}
-          trade={trade}
-          players={players}
-          managers={managers}
-          metric={metric}
-          ktc={ktc}
-          superflex={superflex}
-        />
-      )}
-
-      <div
-        className={`relative gap-px bg-foreground/10 sm:grid-cols-2 ${
-          // Where the give/take table is drawn, these columns are the wide
-          // layout only; a three-way trade has no table and keeps them at every
-          // width. The display utility is written once per branch rather than a
-          // base `grid` with `hidden` layered over it — two display utilities on
-          // one element resolve by stylesheet order, not by class order.
-          paired ? "hidden sm:grid" : "grid"
-        }`}
-      >
-        {trade.sides.map((side) => (
+      <div className="relative grid gap-px bg-foreground/10 sm:grid-cols-2">
+        {trade.sides.map((side, i) => (
           <SideColumn
             key={side.roster_id}
             side={side}
+            // The odd side of a three-way takes the whole row rather than
+            // leaving the cell beside it empty: an empty cell in a grid of
+            // sides reads as a participant who came away with nothing, which
+            // is a real state this card draws in words.
+            wide={trade.sides.length % 2 === 1 && i === trade.sides.length - 1}
             trade={trade}
             players={players}
             managers={managers}
             metric={metric}
             ktc={ktc}
             superflex={superflex}
+            pickSlots={pickSlots}
           />
         ))}
       </div>
@@ -126,101 +125,18 @@ export const TradeCard = memo(function TradeCard({
 });
 
 /**
- * The narrow layout: a block per manager — who they are on a line of their own,
- * then what they received beside what they sent.
+ * One manager's half of the trade: who they are, what the haul is worth, and the
+ * lines it is made of.
  *
- * The manager used to be a third grid track, 4.75rem wide, which is where two
- * separate failures came from: every name past six characters truncated
- * (`cowpo…`, `BigDa…` — and recognising the person is the whole point of the
- * line), and the value under it had ~76px to hold `KTC 14,315`, so it wrapped.
- * Both are the same mistake — a label competing with the columns for width when
- * it is not read across them. On its own line it has the card's whole width, so
- * the name states itself and the value sits at the far end of the same line with
- * room to spare, while the two asset columns go from ~41% of the card each to a
- * half each.
- *
- * Assets wrap rather than truncate: a truncated "Christian McCa…" beside a
- * truncated pick is a card that has to be opened elsewhere to read.
- *
- * What each column holds is said by the assets themselves — `+` on what a
- * manager came away with, `−` on what they sent — rather than by a pair of
- * headings over the table. The headings cost a line of chrome on every card to
- * label two columns whose rows already read as a ledger, and they were the only
- * thing tying the sign of a line to a position on screen: a signed line still
- * says which way it went when the row is read on its own.
+ * **Per-asset values are drawn only where there is more than one line to break
+ * down.** A side that took a single player would otherwise print that player's
+ * price against his name and the identical number as the side total a line
+ * above — the same figure twice, on the most common trade there is. A breakdown
+ * of one *is* the total, so the column appears exactly when it says something
+ * the total doesn't. Counted over the lines the metric actually covers rather
+ * than over the assets, since a player-and-a-pick haul is one priced line as far
+ * as KTC is concerned.
  */
-function ExchangeTable({
-  exchange,
-  trade,
-  players,
-  managers,
-  metric,
-  ktc,
-  superflex,
-}: {
-  exchange: SideExchange[];
-  trade: Trade;
-  players: Record<string, PlayerSummary>;
-  managers: Record<string, TradeManager>;
-  metric: TradeMetric;
-  ktc: Record<string, KtcValue>;
-  superflex: boolean;
-}) {
-  return (
-    <div className="relative bg-foreground/[0.02] px-3 sm:hidden">
-      {exchange.map((side, i) => {
-        const manager = side.user_id ? managers[side.user_id] : undefined;
-        const name = manager?.display_name || `Roster ${side.roster_id}`;
-        // Guarded by `isPairedExchange` at the call site; a null here would be a
-        // three-way trade, which never reaches this layout.
-        const given = side.given ?? { players: [], picks: [], faab: 0 };
-
-        return (
-          // The rule separates managers, so the first block doesn't wear one —
-          // with the headings gone it would sit a few pixels under the card
-          // header's own border and read as a doubled line.
-          <div
-            key={side.roster_id}
-            className={i === 0 ? "py-2" : "border-t border-foreground/10 py-2"}
-          >
-            <div className="mb-1.5 flex items-center gap-1.5">
-              <Avatar url={manager?.avatar_url} name={name} />
-              <span className="min-w-0 truncate text-xs font-semibold">
-                {name}
-              </span>
-              {/* Pushed to the far end of the manager's own line, which is the
-                  width that keeps a five-figure total on one line. */}
-              <span className="ml-auto shrink-0 pl-2">
-                <TradeValueTag
-                  metric={metric}
-                  ctx={{ received: side.received, ktc, superflex }}
-                />
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-x-3">
-              <BundleList
-                bundle={side.received}
-                trade={trade}
-                players={players}
-                managers={managers}
-                sign="+"
-              />
-              <BundleList
-                bundle={given}
-                trade={trade}
-                players={players}
-                managers={managers}
-                sign="−"
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function SideColumn({
   side,
   trade,
@@ -229,6 +145,8 @@ function SideColumn({
   metric,
   ktc,
   superflex,
+  pickSlots,
+  wide,
 }: {
   side: TradeSide;
   trade: Trade;
@@ -237,148 +155,233 @@ function SideColumn({
   metric: TradeMetric;
   ktc: Record<string, KtcValue>;
   superflex: boolean;
+  pickSlots: Record<string, number>;
+  /** Whether this side takes the whole row — see the grid at the call site. */
+  wide: boolean;
 }) {
   const manager = side.user_id ? managers[side.user_id] : undefined;
   const name = manager?.display_name || `Roster ${side.roster_id}`;
-  const received = {
-    players: side.players,
-    picks: side.picks,
-    faab: side.faab,
-  };
+  const received = receivedBundle(side);
+  const ctx: TradeSideContext = { received, ktc, superflex };
+
+  const assets = bundleAssets(received);
+  // Who handed this side its haul, resolved once for the side rather than per
+  // pick line — it is the same answer for every asset a side received.
+  const giver = counterpartyRoster(trade, side);
+  const read = metric.asset;
+  const cells = read ? assets.map((asset) => read(ctx, asset)) : [];
+  const showValues = cells.filter((cell) => cell !== null).length > 1;
 
   return (
-    // Translucent rather than the flat panel it was, so the card's own glass
-    // reads through it — the hairline between two sides is the grid's `gap-px`
-    // showing where the cells don't reach, which a translucent cell still leaves.
-    <div className="bg-foreground/[0.02] px-4 py-3">
+    // Translucent rather than a flat panel, so the card's own glass reads through
+    // it — the hairline between two sides is the grid's `gap-px` showing where
+    // the cells don't reach, which a translucent cell still leaves.
+    <div
+      className={`bg-foreground/[0.02] py-3.5 pl-5 pr-4 ${
+        wide ? "sm:col-span-2" : ""
+      }`}
+    >
       {/* No "Receives" eyebrow: at half a card's width it spent ~70px of the
-          manager's line restating what every `+` under it already says — the
-          same reasoning that took the give/take headings off the narrow layout —
-          and the name is what was giving way for it. */}
-      <div className="mb-2 flex items-center gap-2">
+          manager's line restating what every `+` under it already says, and the
+          name is what was giving way for it. */}
+      <div className="mb-2.5 flex items-center gap-2">
         <Avatar url={manager?.avatar_url} name={name} />
         <span className="min-w-0 truncate text-sm font-semibold">{name}</span>
-        {/* The one number on this side that isn't in the lines below it, so it
-            sits at the end of the row the lines are headed by. */}
+        {/* Flush right, which is the same edge the per-line values below sit on —
+            so the column reads as the lines summing to the figure above them. */}
         <span className="ml-auto shrink-0 pl-2">
-          <TradeValueTag metric={metric} ctx={{ received, ktc, superflex }} />
+          <TradeValueTag metric={metric} ctx={ctx} />
         </span>
       </div>
 
-      <BundleList
-        bundle={received}
-        trade={trade}
-        players={players}
-        managers={managers}
-        sign="+"
-      />
+      {isEmptyBundle(received) ? (
+        // A side of a three-way can take nothing from the others; saying so is
+        // clearer than a blank block that reads as a rendering gap.
+        <p className="text-[13px] text-foreground/40">Nothing</p>
+      ) : (
+        <ul className="flex flex-col gap-y-1.5">
+          {assets.map((asset, i) => (
+            <AssetRow
+              key={assetKey(asset, i)}
+              asset={asset}
+              leagueId={trade.league_id}
+              giver={giver}
+              players={players}
+              managers={managers}
+              pickSlots={pickSlots}
+              cell={showValues ? (cells[i] ?? null) : null}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
 /**
- * What one bundle holds, as lines. Shared by both layouts so the two can't drift
- * about how a pick or a FAAB line reads.
+ * One line of a haul: what it is on the left, what the chosen metric makes of it
+ * on the right.
  *
- * `sign` is the direction, and it is drawn per line rather than per column
- * because a line is what gets read: `+` on an asset the manager came away with,
- * `−` on one they sent. It is a real minus rather than a hyphen — beside a `+`
- * at the same size a hyphen reads as a dash in the name behind it.
+ * A two-track grid rather than a flex row, so every value in a side lands on the
+ * same x whatever the names beside them do — the structure a column of numbers
+ * is worth having at all. The name track is `minmax(0,1fr)` so a long name wraps
+ * inside it rather than pushing the value off the card: assets wrap rather than
+ * truncate here, because a truncated "Christian McCa…" is a card that has to be
+ * opened somewhere else to read.
  */
-function BundleList({
-  bundle,
-  trade,
+function AssetRow({
+  asset,
+  leagueId,
+  giver,
   players,
   managers,
-  sign,
+  pickSlots,
+  cell,
 }: {
-  bundle: TradeBundle;
-  trade: Trade;
+  asset: TradeAsset;
+  /** Whose draft order a pick on this line is looked up in. */
+  leagueId: string;
+  /** The roster that handed this side its haul; null in a three-way. */
+  giver: number | null;
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
-  sign: "+" | "−";
+  pickSlots: Record<string, number>;
+  /** Null where the metric doesn't cover this line, or where the side has one. */
+  cell: TradeAssetCell | null;
 }) {
-  if (isEmptyBundle(bundle)) {
-    // A side of a three-way can take nothing from this participant, and in the
-    // give/take layout a giving column can be empty too; saying so is clearer
-    // than a blank cell that reads as a rendering gap.
-    return (
-      <p className="text-[13px] text-foreground/40 sm:text-sm">Nothing</p>
-    );
-  }
-
   return (
-    <ul className="flex flex-col gap-1.5">
-      {bundle.players.map((id) => (
-        <li
-          key={id}
-          className="flex flex-wrap items-baseline gap-x-2 text-[13px] sm:text-sm"
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 leading-snug">
+      <span className="min-w-0 break-words text-[13px] text-foreground/85 sm:text-sm">
+        <AssetLabel
+          asset={asset}
+          leagueId={leagueId}
+          giver={giver}
+          players={players}
+          managers={managers}
+          pickSlots={pickSlots}
+        />
+      </span>
+      {cell && (
+        <span
+          title={cell.title}
+          className="shrink-0 text-xs font-medium tabular-nums text-foreground/60"
         >
-          {/* The sign sits inside the name's span rather than beside it, so a
-              wrapping line can't leave it stranded on a line of its own. */}
-          <span className="min-w-0 break-words">
-            <Sign sign={sign} />
-            {players[id]?.name ?? id}
-          </span>
-          <span className="shrink-0 text-xs text-foreground/45">
-            {[players[id]?.position, players[id]?.team]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        </li>
-      ))}
-      {bundle.picks.map((pick) => (
-        <li
-          key={`${pick.season}-${pick.round}-${pick.roster_id}`}
-          className="text-[13px] text-foreground/80 sm:text-sm"
-        >
-          <Sign sign={sign} />
-          {pick.season} {ordinal(pick.round)}
-          {/* Whose pick it originally is, where the trade names that roster
-              — a 2026 1st is a different asset depending on who it's from. */}
-          <span className="text-xs text-foreground/45">
-            {" "}
-            {pickOrigin(pick.roster_id, trade, managers)}
-          </span>
-        </li>
-      ))}
-      {bundle.faab > 0 && (
-        <li className="text-[13px] text-foreground/80 sm:text-sm">
-          <Sign sign={sign} />${bundle.faab} FAAB
-        </li>
+          {/* The em dash the whole catalogue rests on: covered by this metric and
+              not priced is not the same as worth nothing. */}
+          {cell.text ?? <span className="text-foreground/25">—</span>}
+        </span>
       )}
-    </ul>
+    </li>
   );
 }
 
 /**
- * The direction mark on one line. Dimmer than the asset it marks — it is a
- * qualifier on the line, not part of the name — and a hair wider than its glyph
- * so `+` and `−` lines start at the same x whichever way an asset went.
+ * What one asset is called.
+ *
+ * The `+` marks the line as something this manager came away with. It is the
+ * only direction mark left on the card — with the give column gone every line is
+ * a `+`, so it earns its place as the bullet that starts each row rather than as
+ * a sign in opposition to a `−`, and it is a real plus at a hair over its own
+ * width so names start at one x.
  */
-function Sign({ sign }: { sign: "+" | "−" }) {
+function AssetLabel({
+  asset,
+  leagueId,
+  giver,
+  players,
+  managers,
+  pickSlots,
+}: {
+  asset: TradeAsset;
+  leagueId: string;
+  giver: number | null;
+  players: Record<string, PlayerSummary>;
+  managers: Record<string, TradeManager>;
+  pickSlots: Record<string, number>;
+}) {
+  if (asset.kind === "player") {
+    const player = players[asset.id];
+    const meta = [player?.position, player?.team].filter(Boolean).join(" · ");
+    return (
+      <>
+        <Bullet />
+        {player?.name ?? asset.id}
+        {meta && (
+          <span className="ml-1.5 whitespace-nowrap text-[11px] text-foreground/45">
+            {meta}
+          </span>
+        )}
+      </>
+    );
+  }
+
+  if (asset.kind === "pick") {
+    const { pick } = asset;
+    const slot =
+      pickSlots[pickSlotKey(leagueId, pick.season, pick.roster_id)] ?? null;
+    // Whose pick it originally is, drawn only where that isn't the roster
+    // handing it over — see `../pick-display` for the rule and Sleeper's.
+    const origin = pickOriginRoster(pick, giver);
+    return (
+      <>
+        <Bullet />
+        {pickLabel(pick, slot)}
+        {origin !== null && (
+          <span className="ml-1.5 text-[11px] text-foreground/45">
+            from {pickOwnerLabel(pick, managers)}
+          </span>
+        )}
+      </>
+    );
+  }
+
   return (
-    <span className="mr-1 inline-block w-[0.7em] tabular-nums text-foreground/45">
-      {sign}
+    <>
+      <Bullet />${asset.amount.toLocaleString()} FAAB
+    </>
+  );
+}
+
+/** See {@link AssetLabel} — the line's leading mark, dimmer than what it marks. */
+function Bullet() {
+  return (
+    <span
+      aria-hidden="true"
+      className="mr-1 inline-block w-[0.7em] tabular-nums text-foreground/40"
+    >
+      +
     </span>
   );
 }
 
 /**
- * Whose pick this is, named where the trade itself names that roster.
- *
- * Only the participating rosters are resolvable from a trade — a pick can come
- * from a team that isn't in it, and chasing that name would mean loading every
- * league's rosters to decorate a line. The roster number is the honest fallback.
+ * React's key for one line. The index is in it because a haul can hold the same
+ * asset twice — two 2027 firsts from different rosters share a season and a
+ * round, and a three-way can move two of them — so nothing about an asset is
+ * unique within a side.
  */
-function pickOrigin(
-  rosterId: number,
-  trade: Trade,
+function assetKey(asset: TradeAsset, index: number): string {
+  if (asset.kind === "player") return `p${index}-${asset.id}`;
+  if (asset.kind === "pick") {
+    return `d${index}-${asset.pick.season}-${asset.pick.round}-${asset.pick.roster_id}`;
+  }
+  return `f${index}`;
+}
+
+/**
+ * Whose pick this originally is, as a person.
+ *
+ * The owner rides on the pick rather than being looked up among the sides,
+ * because the pick worth naming an owner for is usually one that came from a
+ * roster that *isn't* in this trade — see {@link TradePickAsset.user_id}. The
+ * roster number stays the fallback for a team whose owner isn't cached.
+ */
+function pickOwnerLabel(
+  pick: TradePickAsset,
   managers: Record<string, TradeManager>,
 ): string {
-  const owner = trade.sides.find((s) => s.roster_id === rosterId)?.user_id;
-  const name = owner ? managers[owner]?.display_name : null;
-  return `from ${name || `roster ${rosterId}`}`;
+  const name = pick.user_id ? managers[pick.user_id]?.display_name : null;
+  return name || `roster ${pick.roster_id}`;
 }
 
 /**

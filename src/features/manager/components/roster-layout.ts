@@ -29,8 +29,28 @@ export type SectionLayout = {
 };
 
 // Written out rather than assembled, so Tailwind sees every class string whole.
+/**
+ * The slot gutter is `1.25rem` below `@lg` and `2.5rem` above it, and the narrow
+ * figure is derived rather than picked: at `text-[0.6rem]` the widest label the
+ * column can be asked to hold is `DEF` at 19.2px, so 20px is that measurement
+ * plus nothing. It used to be `1.75rem`, which was sized for `SFLX` at the wider
+ * tier's type — 28px of track for a two-letter `RB`, spent out of the one column
+ * that can't shorten its own contents.
+ *
+ * **A fixed track and not `auto`, which is the trap here.** Each row and each
+ * section heading is its own grid container, so an intrinsic track is measured
+ * per row: the starters section would size to `FLEX` and the bench section — whose
+ * rows carry no slot at all — would size to zero, putting the two lists' names and
+ * value columns at different x. Same reason the standings can't use one either,
+ * one row down: `1` and `12` would not agree.
+ *
+ * That fixed width is what `NARROW_SLOT_LABEL` in `player-row` exists to respect —
+ * the two are a matched pair, and a label added there without a width check here
+ * truncates the one thing on the row that must never truncate, since a clipped
+ * label reads as broken where a clipped name only reads as long.
+ */
 export const NO_NUMBERS: SectionLayout = {
-  grid: "grid-cols-[1.75rem_minmax(0,1fr)] @lg:grid-cols-[2.5rem_minmax(0,1fr)]",
+  grid: "grid-cols-[1.25rem_minmax(0,1fr)] @lg:grid-cols-[2.5rem_minmax(0,1fr)]",
   nameSpan: "col-span-1",
 };
 
@@ -59,7 +79,7 @@ export const NO_NUMBERS: SectionLayout = {
  */
 export const SPLIT_LAYOUT: SectionLayout = {
   grid:
-    "grid-cols-[1.75rem_minmax(0,1fr)_auto] " +
+    "grid-cols-[1.25rem_minmax(0,1fr)_auto] " +
     "@lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem] " +
     "@xl:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem_3.25rem]",
   nameSpan: "col-span-2 @xl:col-span-3",
