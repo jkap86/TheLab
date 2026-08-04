@@ -1360,14 +1360,21 @@ stops holding, a comment saying it does would not have caught it.
     press away. It is still named on hover — the desktop backstop the contracted
     player names already use, not the plan, since the phone is the width the
     change was made for.
+  - **It wears its own subject.** An accent rail down the leading face — the
+    manager plate's mark for "a readout follows" — and three descending bars,
+    which is what an ADP curve looks like at 13px. The bars stand in a milled
+    channel rather than being painted on the face, and that is the detail
+    carrying the depth: at this size the eye reads the *inside* of a part before
+    its outline, so three cyan rectangles are a texture where three solids with a
+    lit top edge and a dark side standing in a cut are objects.
   - **The trigger takes a state it deliberately refused before.** It never wore
     the accent, on the grounds that a board is always chosen so tinting it spends
     a signal on a constant — an argument that held *because the trigger named the
-    board*. It doesn't now, so `adpNarrowingCount` lights a diamond when the
+    board*. It doesn't now, so `adpNarrowingCount` lights the **bars** when the
     board is narrowed away from the default (the season counts, being a different
-    market; the value curve doesn't, narrowing nothing). A dot and a rim glow
-    rather than a lit face: the bar keeps exactly one fully lit key, and that is
-    Tools.
+    market; the value curve doesn't, narrowing nothing) and raises the block's own
+    glow. The signal rides on the part that already means "board", and never on
+    the face: the bar keeps exactly one fully lit key, and that is Tools.
 
   They stay **two controls** rather than two tabs of one dialog for the reason
   the two filter sets stay independent: one narrows this manager's leagues, the
@@ -1991,19 +1998,29 @@ stops holding, a comment saying it does would not have caught it.
     wall, child is the lit face, the wrapper's `padding-bottom` is how thick the
     part is. That is also what makes the press animation free: swap the padding
     to the top and the face meets the wall.
-  - **`.lab-module` is a block rather than a face — the one part with a wall on
-    two sides.** Every other part extrudes straight down, which reads as a row
+  - **`.lab-billet` is a block rather than a face — the one part with a wall on
+    two sides.** Every other part extrudes 3px straight down, which reads as a row
     lit from directly above and is what keeps them from competing; the ADP
-    trigger is the bar's one control belonging to the *page*, and carrying the
-    wall down and right makes it a solid seen slightly from the left. Three
-    details are load-bearing and each is a way of getting it wrong. The chamfer
-    is `.lab-notch-all` on **both** layers — a wall that turns two corners shows
-    a square one wherever the clip doesn't follow it. The press is a `transform`
-    and not the padding swap, since the part travels along both walls at once and
-    there is no padding on the side that would say so (which is why the
-    reduced-motion block cancels it beside `.lab-chip`'s). And the narrowed state
-    lights the **rim**, never the face: the bar keeps exactly one fully lit key,
-    and that is Tools.
+    trigger is the bar's one control belonging to the *page*, so its wall runs
+    6px down **and** right, graded from a lit near corner to a dark far one with a
+    hairline contact shadow under it. The thickness is the whole point and the
+    thing to resist trimming: at 3px a wall is a line and its colour is
+    decoration, at 6px it is a face you read the shading of, which is the
+    difference between an object sitting on the bar and a rectangle drawn in it.
+    Four details are load-bearing and each is a way of getting it wrong. The
+    chamfer is `.lab-notch-all` on **both** layers — a wall that turns two corners
+    shows a square one wherever the clip doesn't follow it. The press is a
+    `transform` and not the padding swap, since the part travels along both walls
+    at once and there is no padding on the side that would say so (which is why
+    the reduced-motion block cancels it beside `.lab-chip`'s). The face carries a
+    specular sweep, the manager plate's device held to a 34px part, which is what
+    makes it read as metal rather than as a gradient. And the narrowed state
+    lights the bars in `.lab-channel`, never the face: the bar keeps exactly one
+    fully lit key, and that is Tools. **`.lab-channel` is where the depth
+    actually lives** — a slot cut into the face with the light catching its far
+    wall, the bars raised in it with their dark sides falling the same way as the
+    block's own. Its bars' three heights stay at the call site, since they are
+    data (the shape of a board) and a class cannot carry three of anything.
   - **The bar's extruded edge is drawn *inside* the header box** (`--bar-edge-h`,
     counted into `--site-header-h`). As an outside shadow it would be covered by
     the manager card, which pins at exactly that offset.

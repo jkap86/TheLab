@@ -104,7 +104,7 @@ body {
     );
   }
   /* Chamfered on all four corners rather than two, for the one part in the bar
-     that is a block instead of a face — see `.lab-module`. A wall that runs down
+     that is a block instead of a face — see `.lab-billet`. A wall that runs down
      *and* right has to be cut the same way on every corner it turns, or the
      face is chamfered and the wall behind it shows a square. */
   .lab-notch-all {
@@ -155,47 +155,119 @@ body {
     padding-top: 3px;
   }
 
-  /* A *block*, not a face: the one part in the bar with a wall on two sides.
+  /* A *billet*, not a face: the one part in the bar extruded far enough that
+     its wall is a surface rather than an edge.
 
-     `.lab-key` extrudes straight down, which reads as a face lit from directly
-     above — right for parts that sit in a row and must not compete with each
-     other. The board trigger is the bar's one control belonging to the page
-     rather than to the chrome, and carrying the wall down *and* right makes it a
-     solid seen slightly from the left: unmistakable at a glance, still cut from
-     the same steel. The wall is tinted toward `--edge-active` along the top of
-     its run so the block reads as milled out of a lit billet rather than as a
-     dark box behind a face.
+     `.lab-key` runs a 3px wall straight down, which reads as a face lit from
+     directly above — right for parts that sit in a row and must not compete with
+     each other. The board trigger is the bar's one control belonging to the page
+     rather than to the chrome, so it is a solid instead: the wall runs 6px down
+     *and* right, graded from a lit near corner to a dark far one, with a
+     hairline contact shadow under it. That grading is the whole difference
+     between an object sitting on the bar and a rectangle drawn in it — at 3px a
+     wall is a line and its colour is decoration, at 6px it is a face you read the
+     shading of.
 
-     Two things it can't borrow from `.lab-key`. The chamfer has to be
+     Three things it can't borrow from `.lab-key`. The chamfer has to be
      `.lab-notch-all` on *both* layers — a wall that turns two corners shows a
-     square one wherever the clip doesn't follow it. And the press is a
-     `transform`, not the padding swap: the part travels along both walls at
-     once, and there is no padding on the side that would have to say so.
+     square one wherever the clip doesn't follow it. The press is a `transform`,
+     not the padding swap: the part travels along both walls at once, and there is
+     no padding on the side that would have to say so. And the face carries a
+     specular sweep (`.lab-billet-face::after`), which is what makes it read as
+     metal at 11px rather than as a gradient — the same device the manager plate
+     uses at card scale, held to a 34px part.
 
-     `.lab-module-lit` is the narrowed board — the rim glowing rather than the
-     face lighting, because the bar keeps exactly one fully lit key and that is
-     Tools. Material only, per the layer's rule: the height, the padding and the
-     type all come from utilities at the call site. */
-  .lab-module {
-    background: linear-gradient(118deg, var(--edge-active), var(--edge) 62%);
-    filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.75))
-      drop-shadow(0 0 12px rgba(0, 255, 229, 0.16));
+     `.lab-billet-lit` is the narrowed board: the block's own glow rising, never
+     the face lighting, because the bar keeps exactly one fully lit key and that
+     is Tools. Material only, per the layer's rule — the height, the padding and
+     the type all come from utilities at the call site. */
+  .lab-billet {
+    background: linear-gradient(
+      128deg,
+      #12545a 0%,
+      #0a2b33 42%,
+      var(--edge) 78%
+    );
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 8px 12px rgba(0, 0, 0, 0.85))
+      drop-shadow(0 0 14px rgba(0, 255, 229, 0.2));
     transition: filter 200ms;
   }
-  .lab-module-face {
-    background: linear-gradient(150deg, #2f5570, #0d1e2c 70%);
+  .lab-billet-face {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(152deg, #3d6884 0%, #1d3a4d 46%, #0c1f2d 100%);
     box-shadow:
-      inset 0 1.5px 0 rgba(255, 255, 255, 0.32),
-      inset 1.5px 0 0 rgba(255, 255, 255, 0.1),
-      inset 0 -4px 8px rgba(0, 0, 0, 0.6);
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 3px 0 -1px rgba(255, 255, 255, 0.16),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.16),
+      inset 0 -6px 11px rgba(0, 0, 0, 0.66),
+      inset -6px 0 12px -6px rgba(0, 0, 0, 0.8);
   }
-  .lab-module-lit {
-    filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.75))
-      drop-shadow(0 0 16px rgba(0, 255, 229, 0.5));
+  .lab-billet-face::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      108deg,
+      transparent 22%,
+      rgba(255, 255, 255, 0.1) 46%,
+      transparent 60%
+    );
   }
-  .lab-module:active {
-    transform: translate(1px, 2px);
-    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.75));
+  .lab-billet-lit {
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 8px 12px rgba(0, 0, 0, 0.85))
+      drop-shadow(0 0 20px rgba(0, 255, 229, 0.55));
+  }
+  .lab-billet:active {
+    transform: translate(3px, 3px);
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.85));
+  }
+
+  /* The channel the signal bars stand in: a slot milled into the face, with the
+     light catching its far wall the way `.lab-readout`'s does.
+
+     The bars were painted ticks — three cyan rectangles on the face, which at
+     this size is a texture rather than an object. Sunk in a cut, each with a lit
+     top edge and a dark side falling the same way as the block's own wall, they
+     are solids standing in a slot. That is what carries the depth at 11px, where
+     the block's silhouette alone cannot: the eye reads the *inside* of a part
+     before it reads its outline. The bars' own dimensions are data and stay at
+     the call site — three descending heights are what an ADP curve looks like at
+     13px, and a class can't carry three of anything. */
+  .lab-channel {
+    background: #040e17;
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.9),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .lab-channel-bar {
+    background: linear-gradient(180deg, #1f4256, #12293a);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      1px 1px 0 rgba(0, 0, 0, 0.75);
+  }
+  .lab-channel-bar-lit {
+    background: linear-gradient(180deg, #b9fff7, #00d6c0);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      1px 1px 0 rgba(0, 60, 55, 0.9),
+      0 0 8px rgba(0, 255, 229, 0.75);
+  }
+
+  /* The lit edge on the block's leading face — the manager plate's accent rail
+     at part scale, and the one place in the bar the accent is a *surface* rather
+     than a tint. It is beside the channel for the same reason it is on the
+     plate: what follows it is a readout. */
+  .lab-billet-rail {
+    background: linear-gradient(180deg, #c8fff9, #00b0a0);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+      inset -1.5px 0 3px rgba(0, 60, 55, 0.75),
+      3px 0 14px rgba(0, 255, 229, 0.5);
   }
 
   /* The inverse: a recessed well. Used for the bar's current-page chip and as
@@ -737,7 +809,7 @@ body {
   .lab-chip:active,
   .lab-chip-on:active,
   .lab-row:active,
-  .lab-module:active {
+  .lab-billet:active {
     transform: none;
   }
 }
