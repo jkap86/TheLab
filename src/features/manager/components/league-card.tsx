@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   LIST_ROW_HOVER,
@@ -55,6 +55,15 @@ import { Chevron } from "./ui";
  * page several screens long. Every one of those is a claim only one card can
  * make at a time, so which league is open is held in {@link ManagerLeagues} and
  * arrives here as a prop.
+ *
+ * **It opens and closes as a movement, which is why the panel outlives the press
+ * that closed it.** A card appearing and vanishing at full height moved the rows
+ * under it by a screen with nothing to say where they went — worst on the close,
+ * where the list snaps back around a card the reader is looking at. So the panel
+ * grows and collapses through `grid-template-rows`, and the card holds it in the
+ * tree for the length of the collapse: an unmounted element cannot play an exit,
+ * so a state that is *only* `expanded` can animate one direction and never the
+ * other.
  */
 export function LeagueCard({
   league,
@@ -100,6 +109,53 @@ export function LeagueCard({
 }) {
   const ref = useRef<HTMLLIElement>(null);
 
+  // Opening and closing are two states of one gesture, so the panel is animated
+  // in *and* out — which takes two flags rather than one, because an unmounted
+  // element cannot play an exit. `closing` keeps a panel in the tree past the
+  // press that closed it; `open` is whether the wrapper is at its full height.
+  // The panel is mounted while either says so, and that gate is what keeps a
+  // collapsed card from mounting a panel that would fetch the league detail.
+  //
+  // Both are adjusted **during render** against the previous `expanded` rather
+  // than in an effect: a card is closed by the press that opens another one, so
+  // an effect would collapse it a render late — and setting state in an effect
+  // body is the cascading render the lint rule objects to. Only the flip *to*
+  // open is deferred, because it is the one thing that genuinely needs a frame
+  // to have passed (see below).
+  const [wasExpanded, setWasExpanded] = useState(expanded);
+  const [closing, setClosing] = useState(false);
+  const [open, setOpen] = useState(expanded);
+  if (wasExpanded !== expanded) {
+    setWasExpanded(expanded);
+    setClosing(!expanded);
+    if (!expanded) setOpen(false);
+  }
+  const mounted = expanded || closing;
+
+  useEffect(() => {
+    if (expanded) {
+      // Two frames, not one: the first is where React's commit lands the panel
+      // at 0fr, and a class flipped in the same frame would be coalesced into
+      // that first layout and transition from nothing.
+      let inner = 0;
+      const outer = requestAnimationFrame(() => {
+        inner = requestAnimationFrame(() => setOpen(true));
+      });
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(inner);
+      };
+    }
+    // A timer rather than `transitionend`, because the event doesn't fire at
+    // all when the transition is suppressed — a reader on reduced motion, or a
+    // browser that won't interpolate `grid-template-rows` — and a panel that
+    // never unmounts is a card holding a detail fetch for a league nobody has
+    // open. Overshooting by a frame costs nothing; the panel is already
+    // collapsed and invisible by then.
+    const id = setTimeout(() => setClosing(false), PANEL_MS);
+    return () => clearTimeout(id);
+  }, [expanded]);
+
   // Opening pulls the card to the top of the screen, because that is what makes
   // the cap below a whole panel rather than the top of one: a card opened
   // halfway down the viewport would have half a screen to draw a panel that is
@@ -109,15 +165,26 @@ export function LeagueCard({
   // Closing scrolls nothing. The reader is looking at the card they just closed,
   // and moving the page under them to reverse a scroll they didn't ask for is
   // how a list loses its place.
+  //
+  // It scrolls twice, and the second one is a correction rather than a repeat:
+  // opening a league closes the one before it, so while this card is travelling
+  // to the top the card above it may be collapsing several hundred pixels out
+  // of the page — which moves this one up past the offset it was just aimed at.
+  // A second call once the collapse has finished lands it where it was asked to
+  // be, and is a no-op when nothing moved.
   useEffect(() => {
     if (!expanded) return;
     const reduced =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    ref.current?.scrollIntoView({
-      block: "start",
-      behavior: reduced ? "auto" : "smooth",
-    });
+    const scroll = () =>
+      ref.current?.scrollIntoView({
+        block: "start",
+        behavior: reduced ? "auto" : "smooth",
+      });
+    scroll();
+    const id = setTimeout(scroll, PANEL_MS);
+    return () => clearTimeout(id);
   }, [expanded]);
 
   const record = league.record;
@@ -127,8 +194,13 @@ export function LeagueCard({
   return (
     <li
       ref={ref}
+      // The surface and the ceiling follow `mounted`, not `expanded`: a card
+      // that snapped back to the list's glass while its panel was still
+      // collapsing would be two halves of one gesture running at different
+      // speeds — and the hover lift returning under the pointer mid-collapse
+      // reads as the row jumping. It is the plate until the panel is gone.
       className={
-        expanded
+        mounted
           ? `${OPEN_SURFACE} ${OPEN_BOX}`
           : `${LIST_ROW_SURFACE} ${LIST_ROW_HOVER}`
       }
@@ -226,14 +298,43 @@ export function LeagueCard({
           from carrying on into the page behind it — the card is the thing being
           read, and scroll chaining out of it is the list moving under a reader
           who was pulling on a roster. */}
-      {expanded && (
-        <div className="relative min-h-0 overflow-y-auto overscroll-contain rounded-b-xl">
-          <LeagueDetailPanel leagueId={league.league_id} />
+      {/* The height is animated through `grid-template-rows`, 0fr to 1fr, which
+          is the one way to transition to a height nobody knows: the panel's is
+          whatever the league's standings and rosters come to, and it changes
+          again when the detail read resolves — so a measured pixel height would
+          be measured at the wrong moment. The grid row resolves against the
+          content on every frame instead, which also means the cap above wins
+          without arithmetic: once the card is at its ceiling, 1fr *is* the
+          space left, and the transition simply runs to that.
+
+          Opacity rides along so a panel that has barely opened isn't a sliver
+          of legible text, and the whole thing is `motion-reduce:transition-none`
+          — a reader who asked for less motion gets the panel where it always
+          was, immediately, which is the same call the flask's animations make. */}
+      {mounted && (
+        <div
+          className={`grid min-h-0 transition-[grid-template-rows,opacity] duration-[280ms] ease-out motion-reduce:transition-none ${
+            open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          }`}
+        >
+          <div className="relative min-h-0 overflow-y-auto overscroll-contain rounded-b-xl">
+            <LeagueDetailPanel leagueId={league.league_id} />
+          </div>
         </div>
       )}
     </li>
   );
 }
+
+/**
+ * How long the panel takes to open or close, in milliseconds — the same number
+ * as the `duration-[280ms]` on the wrapper, and it has to stay that way: this
+ * is what decides when a closing panel leaves the tree, so a shorter value
+ * truncates the collapse and a longer one holds a fetched panel past the end of
+ * it. Long enough to read as a movement, short enough that a reader closing a
+ * card and opening the next one isn't waiting on it.
+ */
+const PANEL_MS = 280;
 
 /**
  * The surface an expanded card wears: the detail panel's own plate, at row
