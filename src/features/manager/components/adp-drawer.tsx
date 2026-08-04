@@ -115,52 +115,88 @@ const FIXED_FILTERS: readonly FilterSpec[] = [
 ];
 
 /**
- * The button that opens the board, seated in the manager header's control dock
- * beside the league filters' own trigger.
+ * The button that opens the board, seated in the app bar.
  *
- * It carries the two facts worth having without opening anything: the window the
- * board covers and how many crawled drafts that matched. The ten selects this
- * replaced cost ~110px above every tab's first row for controls that are read
- * once and then ignored.
+ * **It says one word.** It used to carry the window and the matched draft count
+ * — `All of 2026 · 1,204 drafts` — which was right in the manager header's
+ * control dock, where a line of chrome could afford a sentence. The bar is a row
+ * of *names* (the mark, the tool you are in, Tools), it is the width a phone has
+ * for all of them at once, and the drawer states the board and the count in its
+ * own header one press away. So the label is the tool's name and the sentence is
+ * inside. The board is still named on hover, which is the desktop backstop the
+ * roster panel's contracted names already use — not the plan, since a phone has
+ * no hover and is the width the change was made for.
  *
- * It wears the same raised pill (`.lab-chip`) as the filters trigger but never
- * its accent face (`.lab-chip-on`): that
- * button tints when a filter is *active*, a state this one doesn't have — a
- * board is always chosen — so borrowing the tint would spend the header's one
- * "something is narrowed" signal on a constant. The cyan is kept to the `ADP`
- * tag, which says which of the two neighbouring buttons this is.
+ * **It is a block, not a face** (`.lab-module`). The bar's other parts extrude
+ * straight down; this one carries its wall down and to the right, which is the
+ * one geometry up there that reads as a solid rather than a lit surface. That is
+ * what lets it be recognisable at three characters — and what keeps it from
+ * being the Tools key in a second colour, which is the failure mode of drawing it
+ * in the bar's existing material.
+ *
+ * **The diamond is the one fact the label gave up.** The old trigger never took
+ * an accent state, on the grounds that a board is always chosen and tinting a
+ * constant spends a signal; that argument held *because the trigger named the
+ * board*. It doesn't now, so whether this reader's board is narrowed away from
+ * everybody else's is worth one lit dot ({@link adpNarrowingCount}). A dot and a
+ * rim glow rather than a lit face: the bar keeps exactly one fully lit key, and
+ * that is Tools.
  */
 export function AdpTrigger({
   range,
   season,
   draftCount,
-  loading,
+  narrowed,
   onClick,
 }: {
   range: AdpRange;
   season: string;
   /** Drafts the current board matched; null before the first board lands. */
   draftCount: number | null;
-  loading: boolean;
+  /** Settings narrowing the board away from the default — 0 is everyone's board. */
+  narrowed: number;
   onClick: () => void;
 }) {
+  const board = boardLabel(range, season);
+
   return (
     <button
       type="button"
       onClick={onClick}
       aria-haspopup="dialog"
-      className="lab-chip inline-flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm font-semibold text-foreground/85"
+      // The board and its size, for a pointer that rests on the part. Everything
+      // it says is stated again inside the drawer, so nothing here is the only
+      // place a fact lives.
+      title={
+        draftCount === null
+          ? `ADP board — ${board}`
+          : `ADP board — ${board}, ${draftCount.toLocaleString()} draft${
+              draftCount === 1 ? "" : "s"
+            }`
+      }
+      className={`lab-module lab-notch-all inline-flex h-[37px] flex-none pb-[3px] pr-[3px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/70 ${
+        narrowed > 0 ? "lab-module-lit" : ""
+      }`}
     >
-      <span className="text-[11px] font-bold uppercase tracking-wider text-active/80">
+      <span className="lab-module-face lab-notch-all flex h-[34px] items-center gap-2 whitespace-nowrap px-3 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-active [text-shadow:0_0_12px_rgba(0,255,229,0.5)]">
+        {/* A cut diamond rather than a round LED: the part is chamfered and a
+            circle in it reads as a sticker. Dark is the board everybody sees. */}
+        <span
+          aria-hidden
+          className={`h-[5px] w-[5px] flex-none rotate-45 ${
+            narrowed > 0
+              ? "bg-active shadow-[0_0_9px_rgba(0,255,229,0.9)]"
+              : "bg-active/25"
+          }`}
+        />
         ADP
-      </span>
-      {boardLabel(range, season)}
-      <span className="font-normal text-foreground/40">
-        {draftCount === null
-          ? loading
-            ? "loading…"
-            : "—"
-          : `${draftCount.toLocaleString()} draft${draftCount === 1 ? "" : "s"}`}
+        {/* Nothing visible says what the diamond means, and there is no room to
+            write it. */}
+        {narrowed > 0 && (
+          <span className="sr-only">
+            — board narrowed by {narrowed} setting{narrowed === 1 ? "" : "s"}
+          </span>
+        )}
       </span>
     </button>
   );

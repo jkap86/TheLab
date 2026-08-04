@@ -103,6 +103,22 @@ body {
       0 11px
     );
   }
+  /* Chamfered on all four corners rather than two, for the one part in the bar
+     that is a block instead of a face — see `.lab-module`. A wall that runs down
+     *and* right has to be cut the same way on every corner it turns, or the
+     face is chamfered and the wall behind it shows a square. */
+  .lab-notch-all {
+    clip-path: polygon(
+      9px 0,
+      calc(100% - 9px) 0,
+      100% 9px,
+      100% calc(100% - 9px),
+      calc(100% - 9px) 100%,
+      9px 100%,
+      0 calc(100% - 9px),
+      0 9px
+    );
+  }
 
   /* Wrapper: the side wall. `padding-bottom` is the part's thickness — the one
      box property here, and it changes the face's position rather than its
@@ -137,6 +153,49 @@ body {
   .lab-key-press:active {
     padding-bottom: 0;
     padding-top: 3px;
+  }
+
+  /* A *block*, not a face: the one part in the bar with a wall on two sides.
+
+     `.lab-key` extrudes straight down, which reads as a face lit from directly
+     above — right for parts that sit in a row and must not compete with each
+     other. The board trigger is the bar's one control belonging to the page
+     rather than to the chrome, and carrying the wall down *and* right makes it a
+     solid seen slightly from the left: unmistakable at a glance, still cut from
+     the same steel. The wall is tinted toward `--edge-active` along the top of
+     its run so the block reads as milled out of a lit billet rather than as a
+     dark box behind a face.
+
+     Two things it can't borrow from `.lab-key`. The chamfer has to be
+     `.lab-notch-all` on *both* layers — a wall that turns two corners shows a
+     square one wherever the clip doesn't follow it. And the press is a
+     `transform`, not the padding swap: the part travels along both walls at
+     once, and there is no padding on the side that would have to say so.
+
+     `.lab-module-lit` is the narrowed board — the rim glowing rather than the
+     face lighting, because the bar keeps exactly one fully lit key and that is
+     Tools. Material only, per the layer's rule: the height, the padding and the
+     type all come from utilities at the call site. */
+  .lab-module {
+    background: linear-gradient(118deg, var(--edge-active), var(--edge) 62%);
+    filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.75))
+      drop-shadow(0 0 12px rgba(0, 255, 229, 0.16));
+    transition: filter 200ms;
+  }
+  .lab-module-face {
+    background: linear-gradient(150deg, #2f5570, #0d1e2c 70%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.32),
+      inset 1.5px 0 0 rgba(255, 255, 255, 0.1),
+      inset 0 -4px 8px rgba(0, 0, 0, 0.6);
+  }
+  .lab-module-lit {
+    filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.75))
+      drop-shadow(0 0 16px rgba(0, 255, 229, 0.5));
+  }
+  .lab-module:active {
+    transform: translate(1px, 2px);
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.75));
   }
 
   /* The inverse: a recessed well. Used for the bar's current-page chip and as
@@ -677,7 +736,8 @@ body {
   }
   .lab-chip:active,
   .lab-chip-on:active,
-  .lab-row:active {
+  .lab-row:active,
+  .lab-module:active {
     transform: none;
   }
 }
