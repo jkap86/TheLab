@@ -36,6 +36,35 @@ const BOARD_COLUMNS = "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.5rem_3.25rem]";
 const EMPTY_LEAGUES: readonly ManagerLeague[] = [];
 
 /**
+ * The drawer's entrance and its exit, in milliseconds.
+ *
+ * They differ because the two are not one gesture run backwards: arriving is
+ * eased out over a longer beat so the panel settles where it lands, leaving is
+ * eased in and shorter, since a dismissed control's job is to get out of the
+ * way. The keyframes are in `globals.css` (Tailwind v4 has no per-component
+ * mechanism) and the timing is here with the rest of the app's — the same split
+ * `dialog-rise` and its call sites use.
+ *
+ * **They are roughly twice the app's other animations, which is deliberate.**
+ * `dialog-rise` runs 140–180ms because it is a fade and 10px of travel: it is
+ * over before it registers, and that is right for a panel that simply appears.
+ * This one crosses the whole width of the drawer, and at those durations it read
+ * as an instant swap — the movement was there and nobody saw it. A slide only
+ * says where a panel came from if the eye can follow it, so the distance sets
+ * the duration.
+ *
+ * The exit is the number the component itself needs: it is how long the drawer
+ * stays mounted after `open` goes false, so there is something for the exit to
+ * play on. That is a **timer** rather than an `animationend` listener because
+ * under `prefers-reduced-motion` there is no animation, so no event would ever
+ * fire and a drawer closed once would stay mounted forever; the reduced-motion
+ * block hides it outright instead, which is what makes waiting out a beat there
+ * cost nothing.
+ */
+const ADP_DRAWER_ENTER_MS = 460;
+const ADP_DRAWER_EXIT_MS = 340;
+
+/**
  * The board's filters, as a table rather than six hand-written controls.
  *
  * They are read as a list now — only the ones actually narrowing the board are
@@ -197,6 +226,10 @@ export function AdpDrawer({
   const toggle = (which: "range" | "filters") =>
     setOpenPanel((current) => (current === which ? null : which));
 
+  // The drawer is on its way out: closed as far as everything else is
+  // concerned, still mounted so `adp-drawer-out` has something to play on.
+  const [closing, setClosing] = useState(false);
+
   // A drawer reopened is a drawer at rest: the window's panel floats over the
   // board, so one left hanging open covers the thing the drawer was opened to
   // show. Adjusted during render against the previous `open` rather than in an
@@ -206,7 +239,18 @@ export function AdpDrawer({
   if (wasOpen !== open) {
     setWasOpen(open);
     if (openPanel !== null) setOpenPanel(null);
+    // Reopening cancels an exit still in flight, so a second press lands on the
+    // panel sliding back in rather than on one finishing its way off screen.
+    setClosing(!open);
   }
+
+  // Retire it once the exit has played. Keyed on `closing` alone, so reopening
+  // — which clears the flag above — tears the timer down with it.
+  useEffect(() => {
+    if (!closing) return;
+    const timer = setTimeout(() => setClosing(false), ADP_DRAWER_EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [closing]);
 
   // Read by the Escape handler below, which depends on `open` alone.
   const latestPanel = useRef(openPanel);
@@ -226,9 +270,22 @@ export function AdpDrawer({
     latestClose.current = onClose;
   }, [onClose]);
 
-  // Escape closes, and the page behind stops scrolling while it's open — a
-  // full-height panel over a scrolling page reads as a rendering bug. Focus
-  // moves to the panel once, on open.
+  // The page behind stops scrolling while the drawer is on screen — a
+  // full-height panel over a scrolling page reads as a rendering bug. It holds
+  // through the exit as well as the open state: released a beat early, the
+  // scrollbar comes back and the page jumps sideways under a panel that is
+  // still sliding off it.
+  const onScreen = open || closing;
+  useEffect(() => {
+    if (!onScreen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [onScreen]);
+
+  // Escape closes. Focus moves to the panel once, on open.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -242,13 +299,8 @@ export function AdpDrawer({
       latestClose.current();
     };
     document.addEventListener("keydown", onKey);
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     panel.current?.focus();
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = previous;
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
   // The seasons on offer and the strip behind the window are both slices of the
@@ -290,7 +342,7 @@ export function AdpDrawer({
     [density.months, controls.season],
   );
 
-  if (!open) return null;
+  if (!onScreen) return null;
 
   const { draft_count, player_count, players } = board.data ?? {
     draft_count: null,
@@ -304,7 +356,16 @@ export function AdpDrawer({
         type="button"
         aria-label="Close ADP board"
         onClick={onClose}
-        className="absolute inset-0 bg-[rgb(4,10,16)]/70 backdrop-blur-[1px]"
+        // The marker class is what the reduced-motion block and the
+        // pointer-events rule address; `data-closing` is the state those rules
+        // read, absent rather than `false` since CSS matches on presence.
+        data-closing={closing ? "" : undefined}
+        className="adp-drawer-scrim absolute inset-0 bg-[rgb(4,10,16)]/70 backdrop-blur-[1px]"
+        style={{
+          animation: closing
+            ? `adp-scrim-out ${ADP_DRAWER_EXIT_MS}ms ease-in forwards`
+            : `adp-scrim-in ${ADP_DRAWER_ENTER_MS}ms ease-out`,
+        }}
       />
 
       <div
@@ -313,7 +374,21 @@ export function AdpDrawer({
         aria-modal="true"
         aria-label="ADP board"
         tabIndex={-1}
-        className="relative ml-auto flex h-full w-full max-w-[32rem] flex-col border-l border-active/20 bg-[rgb(12,23,33)] shadow-[-24px_0_60px_rgba(0,0,0,0.5)] outline-none"
+        data-closing={closing ? "" : undefined}
+        className="adp-drawer-panel relative ml-auto flex h-full w-full max-w-[32rem] flex-col border-l border-active/20 bg-[rgb(12,23,33)] shadow-[-24px_0_60px_rgba(0,0,0,0.5)] outline-none"
+        // `forwards` on the way out, so the panel holds off screen for the beat
+        // between the animation ending and the unmount rather than snapping
+        // back into view for a frame.
+        style={{
+          animation: closing
+            ? `adp-drawer-out ${ADP_DRAWER_EXIT_MS}ms cubic-bezier(0.4, 0, 1, 1) forwards`
+            // A gentler decelerate than the entrance curves elsewhere in the
+            // app, because it is running over twice their duration: an
+            // out-quint spends four fifths of its travel in the first third,
+            // which at this length reads as a panel that snaps in and then
+            // creeps the last few pixels rather than as a slower slide.
+            : `adp-drawer-in ${ADP_DRAWER_ENTER_MS}ms cubic-bezier(0.32, 0.72, 0, 1)`,
+        }}
       >
         {/* Pinned: everything that changes the board stays on screen while the
             board itself scrolls under it.
