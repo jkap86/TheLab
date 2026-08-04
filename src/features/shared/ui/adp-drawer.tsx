@@ -32,6 +32,9 @@ import { RangeScrubber, RangeSparkline } from "./range-scrubber";
  */
 const BOARD_COLUMNS = "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.5rem_3.25rem]";
 
+/** One frozen empty, so the default `seedLeagues` keeps a stable identity. */
+const EMPTY_LEAGUES: readonly ManagerLeague[] = [];
+
 /**
  * The board's filters, as a table rather than six hand-written controls.
  *
@@ -138,6 +141,7 @@ export function AdpDrawer({
   onReset,
   defaultSeason,
   leagues,
+  seedLeagues = EMPTY_LEAGUES,
   board,
   density,
 }: {
@@ -149,7 +153,26 @@ export function AdpDrawer({
   onReset: () => void;
   /** The season a board opens on; decides which relative presets can mean anything. */
   defaultSeason: string;
+  /**
+   * The population the **size filter's** options are read off — the sizes that
+   * actually occur, so a chosen size always matches something.
+   */
   leagues: readonly ManagerLeague[];
+  /**
+   * Leagues offered to "Match a league…", which seeds the board's settings from
+   * one of them. **Only leagues the reader plays in belong here**, which is why
+   * it is separate from `leagues` above rather than the same list twice.
+   *
+   * The manager tabs pass their manager's leagues; the trades board passes
+   * nothing, and the control is not drawn there. It reads as a list that is
+   * merely longer and is a different control: seeding is a *shortcut* — you pick
+   * the league by name because you know it and know its settings — and the
+   * trades board's population is every crawled league in the season, alphabetised
+   * strangers you cannot recognise, let alone have an opinion about the settings
+   * of. Every other filter in this drawer describes the market and works there
+   * unchanged; this one describes the reader, and there is no reader on that page.
+   */
+  seedLeagues?: readonly ManagerLeague[];
   /** The board these controls produce; `data` is null until the first load lands. */
   board: AdpState;
   /** Crawled drafts per month and season, for the range scrubber's strip. */
@@ -360,7 +383,7 @@ export function AdpDrawer({
           <FilterRow
             controls={controls}
             filters={filters}
-            leagues={leagues}
+            seedLeagues={seedLeagues}
             open={openPanel === "filters"}
             onToggle={() => toggle("filters")}
             onChange={onChange}
@@ -860,14 +883,15 @@ function KeyChip({
 function FilterRow({
   controls,
   filters,
-  leagues,
+  seedLeagues,
   open,
   onToggle,
   onChange,
 }: {
   controls: AdpControls;
   filters: readonly FilterSpec[];
-  leagues: readonly ManagerLeague[];
+  /** See {@link AdpDrawer}'s own prop — empty means no seed control at all. */
+  seedLeagues: readonly ManagerLeague[];
   open: boolean;
   onToggle: () => void;
   onChange: (controls: AdpControls) => void;
@@ -915,24 +939,29 @@ function FilterRow({
             />
           ))}
 
-        {/* An action, not a selection: the value stays "" so it re-arms after use. */}
-        <ChipSelect
-          value=""
-          placeholder="Match a league…"
-          ariaLabel="Match one of this manager's leagues"
-          // Right-aligned where the row has room to spare, and simply next in
-          // line where it wraps — `ml-auto` on a wrapped item strands it alone
-          // on its own line with a hole to its left.
-          className="sm:ml-auto"
-          options={leagues.map((league) => ({
-            value: league.league_id,
-            label: league.name,
-          }))}
-          onChange={(leagueId) => {
-            const league = leagues.find((l) => l.league_id === leagueId);
-            if (league) onChange(seedFromLeague(controls, league));
-          }}
-        />
+        {/* An action, not a selection: the value stays "" so it re-arms after
+            use. Drawn only where the caller has leagues the reader *plays in* —
+            see the prop's own note for why an unfamiliar corpus is not a
+            shorter list but a different control. */}
+        {seedLeagues.length > 0 && (
+          <ChipSelect
+            value=""
+            placeholder="Match a league…"
+            ariaLabel="Match one of this manager's leagues"
+            // Right-aligned where the row has room to spare, and simply next in
+            // line where it wraps — `ml-auto` on a wrapped item strands it alone
+            // on its own line with a hole to its left.
+            className="sm:ml-auto"
+            options={seedLeagues.map((league) => ({
+              value: league.league_id,
+              label: league.name,
+            }))}
+            onChange={(leagueId) => {
+              const league = seedLeagues.find((l) => l.league_id === leagueId);
+              if (league) onChange(seedFromLeague(controls, league));
+            }}
+          />
+        )}
       </div>
 
       {open && (
