@@ -421,6 +421,151 @@ body {
       0 10px 20px -12px rgba(0, 0, 0, 0.8);
   }
 
+  /* `.lab-billet`'s corner-lit block at *card* scale — the trade card.
+
+     It is the app bar's construction rather than `.lab-plate`'s, and the reason
+     is what the two walls say. A plate extrudes 4px straight down, which reads
+     as a surface lit from directly above; this one runs 5px down **and** right,
+     so two faces of the wall are visible and the card is an object standing on
+     the page. That is the whole of the difference between a card with a shadow
+     under it and a card you could pick up, and it is why the trade card no
+     longer wears `LIST_ROW_SURFACE`'s glass with the league and share rows.
+
+     Four things are load-bearing, each a way of getting it wrong:
+
+     - **The chamfer is on both layers.** A wall that turns two corners shows a
+       square one wherever the clip doesn't follow it, so `.lab-notch-lg` goes on
+       the wall and the face alike.
+     - **The shadow is a `filter`, not a `box-shadow`.** `clip-path` cuts a
+       box-shadow off entirely; `drop-shadow()` applies after clipping and
+       follows the notched silhouette. Three of them: a hairline contact shadow,
+       a broad soft one, and a faint cyan bloom that is the row's hover payoff at
+       rest.
+     - **The bevel is three stops.** A hard specular pixel, a bright band, then
+       the face falling away — a single `inset 0 1px` reads as a border, which is
+       what the card had before.
+     - **The grain runs with the light.** The repeating stops are at 101°, a few
+       degrees off the 168° fill and the 106° sweep, which is what makes the face
+       read as brushed metal rather than as a gradient. Perpendicular grain reads
+       as corduroy.
+
+     Hover lifts the card and raises the bloom, the same payoff `LIST_ROW_HOVER`
+     gives the other two lists — spelled here as a filter because of the clip. */
+  .lab-slab {
+    padding: 0 5px 5px 0;
+    background: linear-gradient(128deg, #14545c 0%, #0a2b33 38%, var(--edge) 76%);
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 10px 16px rgba(0, 0, 0, 0.75))
+      drop-shadow(0 0 20px rgba(0, 255, 229, 0.1));
+    transition:
+      filter 260ms ease,
+      transform 260ms ease;
+  }
+  .lab-slab:hover {
+    transform: translateY(-2px);
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 16px 24px rgba(0, 0, 0, 0.8))
+      drop-shadow(0 0 26px rgba(0, 255, 229, 0.22));
+  }
+  .lab-slab-face {
+    position: relative;
+    background:
+      repeating-linear-gradient(
+        101deg,
+        rgba(255, 255, 255, 0.016) 0 1px,
+        transparent 1px 3px
+      ),
+      linear-gradient(168deg, #1b3245 0%, #122534 46%, #0a1723 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 2.5px 0 -1px rgba(255, 255, 255, 0.14),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
+      inset 0 -20px 38px -22px rgba(0, 0, 0, 0.9),
+      inset -8px 0 16px -10px rgba(0, 0, 0, 0.75);
+  }
+  /* The specular sweep. Static, unlike `RowSheen`'s travelling band: this face
+     is metal being lit rather than glass catching a highlight, and a sweep that
+     moves on hover would be the one part of the card claiming to be liquid. */
+  .lab-slab-face::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      106deg,
+      transparent 20%,
+      rgba(255, 255, 255, 0.055) 44%,
+      transparent 60%
+    );
+  }
+  /* The seated plate's own grain, worn *with* `.lab-plate-sm` — the modifier
+     precedent `.lab-plate-sm` itself follows. It only lifts the fill enough to
+     hold the brushing; everything else about the part stays that class's. */
+  .lab-plate-brushed {
+    background:
+      repeating-linear-gradient(
+        101deg,
+        rgba(255, 255, 255, 0.012) 0 1px,
+        transparent 1px 3px
+      ),
+      linear-gradient(165deg, #224054 0%, #14293a 58%, #0c1d29 100%);
+  }
+
+  /* `.lab-channel` at list scale: the cut a trade card's give column sits in.
+
+     Not that class, for the reason `.lab-trough` is not `.lab-well` — a shadow
+     doesn't scale. `.lab-channel`'s flat fill and 1px cyan ring read as a slot
+     behind three 4px bars and as a painted black box behind five lines of names;
+     what a column of text wants is a fill that falls away and a lit far lip, so
+     the sink has somewhere to be read against. The ring is dropped to almost
+     nothing for the same reason: a cyan outline around a block of dim text
+     claims the block is a control.
+
+     Recessed is the right side of the grammar here. What a side received is
+     acted on — those are the players you look up — and what it gave is context
+     for them, so the take sits on the lit face and the give sits in a cut. */
+  .lab-groove {
+    background: linear-gradient(180deg, #050e17, #081722);
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.95),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.05);
+  }
+
+  /* Worn *with* `.lab-readout`: the glass over the cut, and nothing else.
+
+     A readout is a face that falls away from the light; a lens is that face with
+     something over it, which is one diagonal gloss and a hairline of cyan around
+     the rim. It is finish rather than state — deliberately **not**
+     `.lab-readout-live`, which is the housing lighting up because the number
+     inside it is running. A KTC total is a constant, and spending the live face
+     on a constant is the same mistake as tinting a trigger that is always set.
+
+     It carries `position`/`overflow` for the same reason `.lab-billet-face`
+     does: the gloss is a pseudo-element and has to be clipped by the part it
+     lies on. Everything with a size still comes from utilities at the call
+     site. */
+  .lab-lens {
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.9),
+      inset 0 -1px 0 rgba(0, 255, 229, 0.18),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.24),
+      inset 0 0 14px -4px rgba(0, 255, 229, 0.42);
+  }
+  .lab-lens::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      112deg,
+      rgba(255, 255, 255, 0.1) 0 32%,
+      transparent 52%
+    );
+  }
+
   /* The key grammar at row scale, for a list of parts rather than one control.
 
      A standings row *is* a key: pressing it drives the roster panel beside it,
@@ -850,6 +995,14 @@ body {
   .lab-chip-on:active,
   .lab-row:active,
   .lab-billet:active {
+    transform: none;
+  }
+  /* The trade card's lift, on the same terms `LIST_ROW_HOVER` drops its own:
+     the bloom still rises, the card just doesn't move. */
+  .lab-slab {
+    transition: none;
+  }
+  .lab-slab:hover {
     transform: none;
   }
 }

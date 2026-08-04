@@ -1244,20 +1244,53 @@ stops holding, a comment saying it does would not have caught it.
       pick it might not be is worse than one left unpriced — and the read warns
       once per TTL when rows are stored and *none* parse, which is what a KTC
       rename looks like from here and is otherwise silent.
-  - **A side lists what it received, at every width.** Below `sm` the card used
-    to draw a give-and-take table — each manager's take beside what they sent —
-    on the reasoning that a stack loses what columns are for. What it produced on
-    a two-sided trade, which is nearly all of them, was **every asset printed
-    twice**: once as a `+` on the side that took it and once as a `−` on the side
-    that sent it, four columns of names on a phone saying what two say. There is
-    one layout now, columns from `sm` up and stacked below it. The `+` survives
-    as the line's bullet rather than as a sign in opposition to anything, and the
-    odd side of a three-way spans the row rather than leaving a cell beside it
-    empty — an empty cell in a grid of sides reads as a participant who came away
-    with nothing, which is a state this card draws in words. `features/trades/exchange`
-    kept only the part of the give-derivation that was load-bearing:
-    `counterpartyRoster`, which the pick rule below needs and which is knowable
-    in a two-sided trade and not in a three-way, for the reason `given` never was.
+  - **A side lists what it received *and* what it gave, and the second half is
+    drawn only where it is honest.** The give column was dropped once, on the
+    grounds that a two-sided card printed every asset twice — once as a `+` on
+    the side that took it and once as a `−` on the side that sent it — and the
+    redundancy is real and unchanged. What was re-weighed is what it buys: a
+    manager's block can be read *on its own*, which is how a card in a windowed
+    list of forty thousand is actually read, rather than by finding the
+    counterparty's column and inverting it. Four things keep the cost paid:
+    - **It is paid in material, not in height.** The gives sit in a groove
+      milled into the side plate (`.lab-groove`), dimmer and a step smaller,
+      where the takes sit on the plate's lit face — recessed is what a card
+      already says for "read this, don't act on it". So the card still reads
+      take-first at a glance.
+    - **`givenBundle` answers exactly where `counterpartyRoster` does.** With
+      two participants a side's give *is* the other side's take, so there is one
+      stored fact read from two directions and the halves cannot disagree. At
+      three it declines, for the same reason the pick origin declines — nothing
+      Sleeper stores says which participant an asset came through — and the
+      column simply isn't drawn, which is better than a column of guessed `−`
+      lines.
+    - **A give line names the player and nothing else.** Position and team are
+      already printed against him on the side that took him (the column exists
+      only on a two-sided trade, so that listing is always there), and in a
+      track this narrow those eight characters were the difference between one
+      line and two. A *pick's* origin is not available anywhere else on the
+      card, so that stays on both tracks.
+    - **The tracks are columns from `sm` up and stacked below it**, which is what
+      happens to the sides themselves one level out and for the same reason: a
+      track is ~120px on a phone, and every name in it wrapped to two lines.
+      What breaks down there is geometry, not the idea.
+
+    The odd side of a three-way still spans the row rather than leaving a cell
+    beside it empty — an empty cell in a grid of sides reads as a participant who
+    came away with nothing, which is a state this card draws in words.
+  - **The card is machined rather than glass, and it is the one list row that
+    is.** League cards and share cards wear `LIST_ROW_SURFACE`, and the point of
+    sharing it is that three lists read as one material; this one wears
+    `.lab-slab` — the app bar's corner-lit block at card scale. What buys the
+    divergence is that a trade card is not a row that opens into something: it is
+    the whole of what it has to say, four columns deep, and the depth is what
+    sorts those columns into an order. Four countable z-levels and no more —
+    plate (`.lab-slab`), side plate (`.lab-plate-sm` + `.lab-plate-brushed`),
+    groove, lens — since a fifth flattens the other four, the same arithmetic
+    `.lab-row`'s 2px wall already answers. The cyan rail, the hover lift and the
+    bloom all survive, so the card still answers the pointer the way its
+    neighbours do; the lift is spelled as a `filter` because `clip-path` cuts a
+    `box-shadow` off.
   - **The value column reads one asset at a time as well as the side total, and
     only where that says something the total doesn't** (`TradeMetric.asset`,
     `bundleAssets`). A total says which haul was bigger and nothing about which

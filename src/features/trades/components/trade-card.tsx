@@ -1,13 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import {
-  Avatar,
-  LIST_ROW_HOVER,
-  LIST_ROW_SURFACE,
-  MONTH_ABBREVIATIONS,
-  RowSheen,
-} from "@/features/shared";
+import { Avatar, MONTH_ABBREVIATIONS } from "@/features/shared";
 // The pure module directly, never the `@/shared/ktc` barrel: this is a client
 // component, and the barrel re-exports the `pg`-backed queries beside it.
 import { isSuperflexLineup } from "@/shared/ktc/roster";
@@ -16,7 +10,12 @@ import { isSuperflexLineup } from "@/shared/ktc/roster";
 import { pickSlotKey } from "@/shared/trades/pick-slots";
 import type { ManagerLeague } from "@/shared/manager";
 
-import { counterpartyRoster, isEmptyBundle, receivedBundle } from "../exchange";
+import {
+  counterpartyRoster,
+  givenBundle,
+  isEmptyBundle,
+  receivedBundle,
+} from "../exchange";
 import { pickLabel, pickOriginRoster } from "../pick-display";
 import { bundleAssets } from "../trade-metrics";
 import type {
@@ -37,23 +36,29 @@ import { TradeValueTag } from "./trade-value";
 
 /**
  * One trade: which league it happened in, when, and what each side came away
- * with.
+ * with — beside what it handed over.
  *
- * **A side lists what it received, at every width — the card used to draw a
- * give-and-take table below `sm` and no longer does.** The narrow layout paired
- * each manager's take with what they sent, on the reasoning that a stack loses
- * what columns are for. What it actually produced on a two-sided trade — which
- * is nearly all of them — was every asset printed twice: once as a `+` on the
- * side that took it and once as a `−` on the side that sent it. That is the
- * densest thing on the card and it carries no information, since the second
- * listing is a rearrangement of the first, and it is what left a phone-width
- * card with four columns of names to read. Dropping it is what makes room for
- * the per-asset values, which are new information rather than a re-listing.
+ * **The card is machined rather than glass, and that is a deliberate break from
+ * the other two lists.** League cards and share cards wear `LIST_ROW_SURFACE`,
+ * and the point of sharing it is that three lists read as one material; this one
+ * wears `.lab-slab` instead — the app bar's corner-lit block at card scale, with
+ * a wall running down *and* right, a chamfered leading and trailing corner, a
+ * brushed face and a static specular sweep. What buys the divergence is that a
+ * trade card is not a row that opens into something: it is the whole of what it
+ * has to say, four columns deep, and the depth is what sorts those columns into
+ * an order. The cyan rail, the hover lift and the bloom all survive, so the card
+ * still answers the pointer the way its neighbours do.
  *
- * So there is one layout: a block per manager, headed by who they are and what
- * their haul is worth, listing what they received with a value against each
- * line. The blocks are columns from `sm` up and stack below it, which is the
- * only thing that changes with width.
+ * **A side lists what it received *and* what it gave.** The give half was
+ * dropped once, for a narrow layout that printed every asset twice — once as a
+ * `+` on the side that took it and once as a `−` on the side that sent it — and
+ * the redundancy is real and unchanged. What changed is what it buys: a manager's
+ * block can now be read on its own, which is how a card in a windowed list of
+ * forty thousand is actually read, rather than by finding the counterparty's
+ * column and inverting it. It is paid for in *material* rather than in height —
+ * the gives sit in a groove milled into the side plate, dimmer and a step
+ * smaller, so the card still reads take-first — and it is drawn only where it is
+ * honest, which is a two-sided trade (see `../exchange`).
  */
 export const TradeCard = memo(function TradeCard({
   trade,
@@ -89,62 +94,75 @@ export const TradeCard = memo(function TradeCard({
   const superflex = isSuperflexLineup(league?.roster_positions ?? null);
 
   return (
-    // The same lit surface a league or a share row wears: a trade *is* a row in a
-    // long list, and the three lists reading as one material is the point of
-    // sharing it. The side columns keep their own opaque ground below.
-    <article className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER} overflow-hidden`}>
-      <RowSheen />
-
-      {/* `pl-5` on this and on every side below: the card's leading edge carries
-          the cyan rail, and content flush against it reads as touching. */}
-      <header className="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-foreground/10 py-3 pl-5 pr-4">
-        <h3 className="min-w-0 truncate font-display text-[13px] font-semibold tracking-tight">
-          {league?.name ?? trade.league_id}
-        </h3>
-        <span className="ml-auto shrink-0 text-xs tabular-nums text-foreground/45">
-          {formatTradeDate(trade.completed_at)}
-          {formatTradeTime(trade.completed_at)}
-        </span>
-      </header>
-
-      <div className="relative grid gap-px bg-foreground/10 sm:grid-cols-2">
-        {trade.sides.map((side, i) => (
-          <SideColumn
-            key={side.roster_id}
-            side={side}
-            // The odd side of a three-way takes the whole row rather than
-            // leaving the cell beside it empty: an empty cell in a grid of
-            // sides reads as a participant who came away with nothing, which
-            // is a real state this card draws in words.
-            wide={trade.sides.length % 2 === 1 && i === trade.sides.length - 1}
-            trade={trade}
-            players={players}
-            managers={managers}
-            metric={metric}
-            ktc={ktc}
-            pickKtc={pickKtc}
-            superflex={superflex}
-            pickSlots={pickSlots}
-            teams={league?.total_rosters ?? null}
+    // The wall, and the face standing on it. Both carry the chamfer: a wall that
+    // turns two corners shows a square one wherever the clip doesn't follow it.
+    <div className="lab-slab lab-notch-lg">
+      <article className="lab-slab-face lab-notch-lg p-2.5 sm:p-3">
+        {/* The card's leading edge carries the accent rail — the same mark the
+            pinned manager plate wears, so a trade card and the header above it
+            are visibly the same material. It is a flex item rather than an
+            absolute box, since the chamfer is what a leading edge has instead of
+            a corner and the rail has to sit clear of it. */}
+        <header className="flex items-center gap-2.5 px-1 pb-2.5">
+          <span
+            aria-hidden="true"
+            className="lab-billet-rail h-4 w-0.5 shrink-0 rounded-sm"
           />
-        ))}
-      </div>
-    </article>
+          <h3 className="min-w-0 truncate font-display text-[13px] font-bold uppercase tracking-[0.13em] text-foreground/85 [text-shadow:0_1px_0_rgba(255,255,255,0.12),0_-1px_1px_rgba(0,0,0,0.9)]">
+            {league?.name ?? trade.league_id}
+          </h3>
+          <span className="lab-readout ml-auto shrink-0 rounded px-2 py-0.5 text-[11px] tabular-nums text-foreground/60">
+            {formatTradeDate(trade.completed_at)}
+            {formatTradeTime(trade.completed_at)}
+          </span>
+        </header>
+
+        {/* Gaps rather than the old `gap-px` hairline: the sides are seated
+            plates now, so what separates them is the ground showing between two
+            objects and there is no rule to draw. */}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {trade.sides.map((side, i) => (
+            <SideColumn
+              key={side.roster_id}
+              side={side}
+              // The odd side of a three-way takes the whole row rather than
+              // leaving the cell beside it empty: an empty cell in a grid of
+              // sides reads as a participant who came away with nothing, which
+              // is a real state this card draws in words.
+              wide={trade.sides.length % 2 === 1 && i === trade.sides.length - 1}
+              trade={trade}
+              players={players}
+              managers={managers}
+              metric={metric}
+              ktc={ktc}
+              pickKtc={pickKtc}
+              superflex={superflex}
+              pickSlots={pickSlots}
+              teams={league?.total_rosters ?? null}
+            />
+          ))}
+        </div>
+      </article>
+    </div>
   );
 });
 
 /**
- * One manager's half of the trade: who they are, what the haul is worth, and the
- * lines it is made of.
+ * One manager's half of the trade: who they are, what the haul is worth, what
+ * they took and what they sent.
  *
  * **Per-asset values are drawn only where there is more than one line to break
- * down.** A side that took a single player would otherwise print that player's
- * price against his name and the identical number as the side total a line
- * above — the same figure twice, on the most common trade there is. A breakdown
- * of one *is* the total, so the column appears exactly when it says something
- * the total doesn't. Counted over the lines the metric actually covers rather
- * than over the assets, since a player-and-a-pick haul is one priced line as far
- * as KTC is concerned.
+ * down**, and each track answers that question for itself. A side that took a
+ * single player would otherwise print that player's price against his name and
+ * the identical number as the side total a line above — the same figure twice,
+ * on the most common trade there is. A breakdown of one *is* the total, so the
+ * column appears exactly when it says something the total doesn't. Counted over
+ * the lines the metric actually covers rather than over the assets, since a
+ * player-and-a-pick haul is one priced line as far as KTC is concerned.
+ *
+ * The give track carries values on the same terms, and they are worth their
+ * width for the reason the track is: they say which piece of what left carried
+ * the weight, without making the reader find the other column and add it up.
  */
 function SideColumn({
   side,
@@ -190,57 +208,149 @@ function SideColumn({
     teams,
   };
 
-  const assets = bundleAssets(received);
   // Who handed this side its haul, resolved once for the side rather than per
   // pick line — it is the same answer for every asset a side received.
   const giver = counterpartyRoster(trade, side);
-  const read = metric.asset;
-  const cells = read ? assets.map((asset) => read(ctx, asset)) : [];
-  const showValues = cells.filter((cell) => cell !== null).length > 1;
+  // Null in a three-way, where nothing Sleeper stores says which participant an
+  // asset came through; empty where a two-sided counterparty took nothing.
+  const given = givenBundle(trade, side);
+  const showGiven = given !== null && !isEmptyBundle(given);
 
   return (
-    // Translucent rather than a flat panel, so the card's own glass reads through
-    // it — the hairline between two sides is the grid's `gap-px` showing where
-    // the cells don't reach, which a translucent cell still leaves.
+    // Seated in the card's own face, which is why it wears both the thinner wall
+    // and the lifted fill: a part seated in another has to catch more light than
+    // what it is seated in, or the two read as one surface with a seam.
     <div
-      className={`bg-foreground/[0.02] py-3.5 pl-5 pr-4 ${
+      className={`lab-plate-sm lab-plate-brushed rounded-lg px-2.5 py-2.5 ${
         wide ? "sm:col-span-2" : ""
       }`}
     >
       {/* No "Receives" eyebrow: at half a card's width it spent ~70px of the
           manager's line restating what every `+` under it already says, and the
-          name is what was giving way for it. */}
-      <div className="mb-2.5 flex items-center gap-2">
+          name is what was giving way for it. The parting line under the row is a
+          milled one — a dark cut with a lit far lip — rather than a border. */}
+      <div className="mb-2 flex items-center gap-2 pb-2 shadow-[0_1px_0_rgba(0,0,0,0.6),0_2px_0_rgba(255,255,255,0.06)]">
         <Avatar url={manager?.avatar_url} name={name} />
-        <span className="min-w-0 truncate text-sm font-semibold">{name}</span>
-        {/* Flush right, which is the same edge the per-line values below sit on —
-            so the column reads as the lines summing to the figure above them. */}
-        <span className="ml-auto shrink-0 pl-2">
+        <span className="min-w-0 truncate text-[13px] font-bold">{name}</span>
+        {/* Under glass, and flush right — the same edge the per-line values
+            below sit on, so the column reads as the lines summing to the figure
+            above them. */}
+        <span className="lab-readout lab-lens ml-auto shrink-0 rounded px-2 py-0.5">
           <TradeValueTag metric={metric} ctx={ctx} />
         </span>
       </div>
 
-      {isEmptyBundle(received) ? (
+      {isEmptyBundle(received) && !showGiven ? (
         // A side of a three-way can take nothing from the others; saying so is
         // clearer than a blank block that reads as a rendering gap.
         <p className="text-[13px] text-foreground/40">Nothing</p>
       ) : (
-        <ul className="flex flex-col gap-y-1.5">
-          {assets.map((asset, i) => (
-            <AssetRow
-              key={assetKey(asset, i)}
-              asset={asset}
-              leagueId={trade.league_id}
-              giver={giver}
+        // Two tracks side by side from `sm` up and stacked below it, which is
+        // the same thing that happens to the sides themselves one level out —
+        // and for the same reason. What breaks down at 390px is geometry, not
+        // the idea: a track is ~120px there, and a column that narrow turns
+        // every name into two lines. The give track takes the smaller share of
+        // the pair, because its lines carry no position and team.
+        <div
+          className={`grid gap-x-2 gap-y-2 ${
+            showGiven ? "sm:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]" : ""
+          }`}
+        >
+          <AssetTrack
+            bundle={received}
+            tone="in"
+            trade={trade}
+            ctx={ctx}
+            metric={metric}
+            giver={giver}
+            players={players}
+            managers={managers}
+            pickSlots={pickSlots}
+          />
+          {showGiven && (
+            <AssetTrack
+              bundle={given}
+              tone="out"
+              trade={trade}
+              ctx={ctx}
+              metric={metric}
+              // A pick this side is handing over needs no "from" line when it
+              // was this side's own — the same rule as the take half, with the
+              // roster on the other end of it.
+              giver={side.roster_id}
               players={players}
               managers={managers}
               pickSlots={pickSlots}
-              cell={showValues ? (cells[i] ?? null) : null}
             />
-          ))}
-        </ul>
+          )}
+        </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One track of a side: everything that moved in one direction, with the metric's
+ * reading of each line.
+ *
+ * The two tracks are the same component because they are the same list of the
+ * same kind of thing — what separates them is the surface they sit on and the
+ * sign that starts each line, which is exactly the amount of difference there
+ * is. The give track is a groove milled into the plate; the take track sits on
+ * the plate's own face.
+ */
+function AssetTrack({
+  bundle,
+  tone,
+  trade,
+  ctx,
+  metric,
+  giver,
+  players,
+  managers,
+  pickSlots,
+}: {
+  bundle: Parameters<typeof bundleAssets>[0];
+  tone: "in" | "out";
+  trade: Trade;
+  /** The side's own context; only the board and the pick lookups are read here. */
+  ctx: TradeSideContext;
+  metric: TradeMetric;
+  giver: number | null;
+  players: Record<string, PlayerSummary>;
+  managers: Record<string, TradeManager>;
+  pickSlots: Record<string, number>;
+}) {
+  const assets = bundleAssets(bundle);
+  const read = metric.asset;
+  // The metric reads this track's own haul, so a give line is priced against the
+  // bundle it belongs to rather than against the side's take.
+  const trackCtx: TradeSideContext = { ...ctx, received: bundle };
+  const cells = read ? assets.map((asset) => read(trackCtx, asset)) : [];
+  const showValues = cells.filter((cell) => cell !== null).length > 1;
+
+  return (
+    <ul
+      className={
+        tone === "out"
+          ? "lab-groove flex min-w-0 flex-col gap-y-1 rounded-md px-1.5 py-1.5"
+          : "flex min-w-0 flex-col gap-y-1.5"
+      }
+    >
+      {assets.map((asset, i) => (
+        <AssetRow
+          key={assetKey(asset, i)}
+          asset={asset}
+          tone={tone}
+          leagueId={trade.league_id}
+          giver={giver}
+          players={players}
+          managers={managers}
+          pickSlots={pickSlots}
+          cell={showValues ? (cells[i] ?? null) : null}
+        />
+      ))}
+    </ul>
   );
 }
 
@@ -248,7 +358,7 @@ function SideColumn({
  * One line of a haul: what it is on the left, what the chosen metric makes of it
  * on the right.
  *
- * A two-track grid rather than a flex row, so every value in a side lands on the
+ * A two-track grid rather than a flex row, so every value in a track lands on the
  * same x whatever the names beside them do — the structure a column of numbers
  * is worth having at all. The name track is `minmax(0,1fr)` so a long name wraps
  * inside it rather than pushing the value off the card: assets wrap rather than
@@ -257,6 +367,7 @@ function SideColumn({
  */
 function AssetRow({
   asset,
+  tone,
   leagueId,
   giver,
   players,
@@ -265,21 +376,35 @@ function AssetRow({
   cell,
 }: {
   asset: TradeAsset;
+  /** Which track this line is in — see {@link AssetTrack}. */
+  tone: "in" | "out";
   /** Whose draft order a pick on this line is looked up in. */
   leagueId: string;
-  /** The roster that handed this side its haul; null in a three-way. */
+  /** The roster on the other end of this line; null in a three-way. */
   giver: number | null;
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
   pickSlots: Record<string, number>;
-  /** Null where the metric doesn't cover this line, or where the side has one. */
+  /** Null where the metric doesn't cover this line, or where the track has one. */
   cell: TradeAssetCell | null;
 }) {
+  const out = tone === "out";
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 leading-snug">
-      <span className="min-w-0 break-words text-[13px] text-foreground/85 sm:text-sm">
+    <li
+      className={`grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2.5 leading-snug ${
+        out ? "text-xs" : "text-[13px]"
+      }`}
+    >
+      <span
+        className={`min-w-0 break-words ${
+          out
+            ? "text-foreground/50 [text-shadow:0_1px_1px_rgba(0,0,0,0.9)]"
+            : "text-foreground/85"
+        }`}
+      >
         <AssetLabel
           asset={asset}
+          tone={tone}
           leagueId={leagueId}
           giver={giver}
           players={players}
@@ -290,11 +415,17 @@ function AssetRow({
       {cell && (
         <span
           title={cell.title}
-          className="shrink-0 text-xs font-medium tabular-nums text-foreground/60"
+          className={`shrink-0 text-[11px] font-medium tabular-nums ${
+            out ? "text-foreground/30" : "text-foreground/60"
+          }`}
         >
           {/* The em dash the whole catalogue rests on: covered by this metric and
               not priced is not the same as worth nothing. */}
-          {cell.text ?? <span className="text-foreground/25">—</span>}
+          {cell.text ?? (
+            <span className={out ? "text-foreground/20" : "text-foreground/25"}>
+              —
+            </span>
+          )}
         </span>
       )}
     </li>
@@ -304,14 +435,15 @@ function AssetRow({
 /**
  * What one asset is called.
  *
- * The `+` marks the line as something this manager came away with. It is the
- * only direction mark left on the card — with the give column gone every line is
- * a `+`, so it earns its place as the bullet that starts each row rather than as
- * a sign in opposition to a `−`, and it is a real plus at a hair over its own
- * width so names start at one x.
+ * The sign says which way the line moved, and it is the only direction mark on
+ * the card — a real `+` or `−` at a hair over its own width, so names in both
+ * tracks start at one x. The two are not equally lit: the take is the thing
+ * being read and its sign carries the accent, where the give's is the dimmest
+ * mark in the block.
  */
 function AssetLabel({
   asset,
+  tone,
   leagueId,
   giver,
   players,
@@ -319,22 +451,34 @@ function AssetLabel({
   pickSlots,
 }: {
   asset: TradeAsset;
+  tone: "in" | "out";
   leagueId: string;
   giver: number | null;
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
   pickSlots: Record<string, number>;
 }) {
+  const dim = tone === "out";
+  const meta = dim ? "text-foreground/25" : "text-foreground/45";
+
   if (asset.kind === "player") {
     const player = players[asset.id];
-    const meta = [player?.position, player?.team].filter(Boolean).join(" · ");
+    // **A give line names the player and nothing else.** His position and team
+    // are already printed against him on the side that took him — the give
+    // column exists on a two-sided trade, so that listing is always there — and
+    // in a track this narrow the eight characters were the difference between
+    // one line and two. What the origin of a *pick* says is not available
+    // anywhere else on the card, so that one stays on both tracks.
+    const detail = dim
+      ? null
+      : [player?.position, player?.team].filter(Boolean).join(" · ");
     return (
       <>
-        <Bullet />
+        <Bullet tone={tone} />
         {player?.name ?? asset.id}
-        {meta && (
-          <span className="ml-1.5 whitespace-nowrap text-[11px] text-foreground/45">
-            {meta}
+        {detail && (
+          <span className={`ml-1.5 whitespace-nowrap text-[11px] ${meta}`}>
+            {detail}
           </span>
         )}
       </>
@@ -345,15 +489,15 @@ function AssetLabel({
     const { pick } = asset;
     const slot =
       pickSlots[pickSlotKey(leagueId, pick.season, pick.roster_id)] ?? null;
-    // Whose pick it originally is, drawn only where that isn't the roster
-    // handing it over — see `../pick-display` for the rule and Sleeper's.
+    // Whose pick it originally is, drawn only where that isn't the roster on the
+    // other end of this line — see `../pick-display` for the rule and Sleeper's.
     const origin = pickOriginRoster(pick, giver);
     return (
       <>
-        <Bullet />
+        <Bullet tone={tone} />
         {pickLabel(pick, slot)}
         {origin !== null && (
-          <span className="ml-1.5 text-[11px] text-foreground/45">
+          <span className={`ml-1.5 text-[11px] ${meta}`}>
             from {pickOwnerLabel(pick, managers)}
           </span>
         )}
@@ -363,19 +507,21 @@ function AssetLabel({
 
   return (
     <>
-      <Bullet />${asset.amount.toLocaleString()} FAAB
+      <Bullet tone={tone} />${asset.amount.toLocaleString()} FAAB
     </>
   );
 }
 
 /** See {@link AssetLabel} — the line's leading mark, dimmer than what it marks. */
-function Bullet() {
+function Bullet({ tone }: { tone: "in" | "out" }) {
   return (
     <span
       aria-hidden="true"
-      className="mr-1 inline-block w-[0.7em] tabular-nums text-foreground/40"
+      className={`mr-1 inline-block w-[0.7em] tabular-nums ${
+        tone === "out" ? "text-foreground/25" : "text-active/50"
+      }`}
     >
-      +
+      {tone === "out" ? "−" : "+"}
     </span>
   );
 }

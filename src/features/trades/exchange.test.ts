@@ -5,6 +5,7 @@ import type { Trade, TradeSide } from "@/shared/trades";
 
 import {
   counterpartyRoster,
+  givenBundle,
   isEmptyBundle,
   receivedBundle,
 } from "./exchange.ts";
@@ -75,5 +76,57 @@ describe("counterpartyRoster", () => {
     const t = trade([side(1, { players: ["p1"] })]);
 
     assert.equal(counterpartyRoster(t, t.sides[0]), null);
+  });
+});
+
+describe("givenBundle", () => {
+  // One stored fact read from two directions: what a side gave is what the other
+  // side is recorded as receiving, so the two halves of a card cannot disagree.
+  test("a side's give is the other side's take", () => {
+    const pick = { season: "2027", round: 1, roster_id: 2, user_id: "user2" };
+    const t = trade([
+      side(1, { players: ["p1"] }),
+      side(2, { players: ["p2", "p3"], picks: [pick], faab: 25 }),
+    ]);
+
+    assert.deepEqual(givenBundle(t, t.sides[0]), {
+      players: ["p2", "p3"],
+      picks: [pick],
+      faab: 25,
+    });
+    assert.deepEqual(givenBundle(t, t.sides[1]), {
+      players: ["p1"],
+      picks: [],
+      faab: 0,
+    });
+  });
+
+  // The same limit `counterpartyRoster` holds to, and for the same reason: an
+  // asset that moved in a three-way could have come from either of the others,
+  // so there is no honest `−` line to draw.
+  test("a three-way trade has no attributable give", () => {
+    const t = trade([
+      side(1, { players: ["p1"] }),
+      side(2, { players: ["p2"] }),
+      side(3, { faab: 5 }),
+    ]);
+
+    assert.equal(givenBundle(t, t.sides[0]), null);
+    assert.equal(givenBundle(t, t.sides[2]), null);
+  });
+
+  test("a lone side gave nothing knowable", () => {
+    const t = trade([side(1, { players: ["p1"] })]);
+
+    assert.equal(givenBundle(t, t.sides[0]), null);
+  });
+
+  // A two-sided trade where one roster only gave things up: the give half is a
+  // real, non-empty answer and the take half is the empty one.
+  test("an empty counterparty haul is an empty give", () => {
+    const t = trade([side(1, { players: ["p1"] }), side(2)]);
+
+    assert.ok(isEmptyBundle(givenBundle(t, t.sides[0])!));
+    assert.equal(isEmptyBundle(givenBundle(t, t.sides[1])!), false);
   });
 });

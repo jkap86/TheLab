@@ -19,11 +19,19 @@ import type { Trade, TradeSide } from "@/shared/trades";
  * false claim about who dealt what, so {@link counterpartyRoster} answers null
  * there and the pick keeps its origin, which is honest at any number of sides.
  *
- * This module used to derive the whole giving half, for a narrow layout that
- * drew each side's take beside its give. That layout said everything twice — on
- * a two-sided trade every asset appeared once as a `+` and once as a `−` — which
- * is what the card was decluttered by dropping. What survives is the one part of
- * the derivation that was load-bearing rather than decorative.
+ * **The giving half is derived again, and it is bounded by the same limit.**
+ * {@link givenBundle} answers only where {@link counterpartyRoster} does — with
+ * two participants, where a side's give *is* the other side's take and the two
+ * can't disagree because only one of them is stored. At three it declines, for
+ * exactly the reason the pick origin declines: an asset that moved in a
+ * three-way could have come from either of the other rosters, and a column of
+ * confident `−` lines that were guessed is worse than a column that isn't there.
+ *
+ * That it says everything twice on a two-sided card is the point rather than an
+ * oversight — the redundancy is what lets one manager's half be read on its own,
+ * which is how a card in a windowed list of forty thousand is actually read. It
+ * is paid for by drawing the give lines as the dimmer half of the pair, so the
+ * card still reads take-first.
  */
 
 /** What moved to one roster in a trade. */
@@ -55,4 +63,22 @@ export function counterpartyRoster(
   if (trade.sides.length !== 2) return null;
   const other = trade.sides.find((s) => s.roster_id !== side.roster_id);
   return other ? other.roster_id : null;
+}
+
+/**
+ * What `side` handed over, or null where that isn't knowable — see the module
+ * note.
+ *
+ * It is the counterparty's *received* bundle rather than a bundle assembled from
+ * anything of its own, which is what keeps the two halves of a card from ever
+ * disagreeing: there is one stored fact here, read from two directions.
+ */
+export function givenBundle(
+  trade: Trade,
+  side: TradeSide,
+): TradeBundle | null {
+  const roster = counterpartyRoster(trade, side);
+  if (roster === null) return null;
+  const other = trade.sides.find((s) => s.roster_id === roster);
+  return other ? receivedBundle(other) : null;
 }
