@@ -2,7 +2,6 @@
 
 import {
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
   useMemo,
   useRef,
   useState,
@@ -34,6 +33,78 @@ import {
   scrubDomain,
   scrubTargetAt,
 } from "../range-domain";
+
+/**
+ * The window at rest: the same strip, at a glance and with nothing to grab.
+ *
+ * It exists because the full scrubber is behind a press now, and the argument
+ * for the strip in the first place was that it answers *where the drafts are*
+ * before you choose a window — an answer given only after a press is an answer
+ * given too late. So the resting line carries a hint of it: the same bars, the
+ * same domain, lit inside the window and dim outside it.
+ *
+ * It is drawn by calling the same functions the scrubber calls rather than by
+ * being handed the scrubber's own measurements, so the two cannot disagree
+ * about where a month sits — and it takes no props the scrubber doesn't.
+ *
+ * `aria-hidden`, because it is a picture of what the row beside it already says
+ * in words, and the control it previews is one press away and reachable.
+ */
+export function RangeSparkline({
+  months,
+  live,
+  today,
+  bounds,
+  className = "",
+}: {
+  months: readonly MonthBar[];
+  live: boolean;
+  today: string;
+  bounds: { from: string | null; to: string | null };
+  className?: string;
+}) {
+  const domain = useMemo(
+    () => scrubDomain(months, densityThrough(months, today, live)),
+    [months, today, live],
+  );
+  const bars = useMemo(() => monthBars(months, domain), [months, domain]);
+  const peak = bars.reduce((max, b) => Math.max(max, b.drafts), 0);
+
+  const drawn = drawnBounds(bounds, domain);
+  const left = fractionOf(domain, drawn.from) * 100;
+  const right = fractionOf(domain, drawn.to) * 100;
+
+  return (
+    <span aria-hidden className={`relative block overflow-hidden ${className}`}>
+      {bars.map((bar) => {
+        if (bar.drafts === 0) return null;
+        const { left: barLeft, width } = monthExtent(bar.month, domain);
+        const touched =
+          bar.month >= drawn.from.slice(0, 7) && bar.month <= drawn.to.slice(0, 7);
+        return (
+          <span
+            key={bar.month}
+            style={{
+              left: `${barLeft * 100}%`,
+              width: `calc(${width * 100}% - 1px)`,
+              height: `${Math.max(12, (bar.drafts / peak) * 100)}%`,
+            }}
+            className={`absolute bottom-0 rounded-t-[1px] ${
+              touched ? "bg-active/45" : "bg-foreground/15"
+            }`}
+          />
+        );
+      })}
+      {/* The window itself, in case the bars can't say it — a narrow window over
+          a quiet stretch lights nothing, and "no bars lit" and "nothing selected"
+          must not look the same. */}
+      <span
+        style={{ left: `${left}%`, width: `${right - left}%` }}
+        className="absolute bottom-0 h-px bg-active/70"
+      />
+    </span>
+  );
+}
 
 /**
  * The ADP board's window, as a brush over the drafts this app has actually
@@ -77,7 +148,6 @@ export function RangeScrubber({
   error,
   loading,
   today,
-  presets,
   onChange,
 }: {
   range: AdpRange;
@@ -94,13 +164,6 @@ export function RangeScrubber({
   loading: boolean;
   /** `YYYY-MM-DD`. */
   today: string;
-  /**
-   * The window presets, rendered at the end of the caption rather than in a
-   * labelled row of their own. They fly the handles, so they belong on the line
-   * that reports where the handles are — and the row they used to occupy was a
-   * label column and a full-height segment strip for three chips.
-   */
-  presets?: ReactNode;
   onChange: (range: AdpRange) => void;
 }) {
   const track = useRef<HTMLDivElement>(null);
@@ -464,9 +527,6 @@ export function RangeScrubber({
             · no crawled drafts {season === "all" ? "to chart" : `for ${season}`}
           </span>
         ) : null}
-        {presets !== undefined && (
-          <span className="ml-auto flex shrink-0 items-center gap-1">{presets}</span>
-        )}
       </p>
     </div>
   );
