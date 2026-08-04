@@ -1,8 +1,46 @@
 import type { PoolClient } from "pg";
 
 import { bulkInsert, jsonb as j, pool, withTransaction } from "@/shared/db";
+import type { SleeperLeague } from "@/shared/sleeper";
 
 import type { LeagueGraph } from "./graph";
+
+/**
+ * Store leagues Sleeper no longer serves, tombstoned on arrival.
+ *
+ * `markLeaguesGone` is this marker for a league we already store; this is the
+ * same marker for one we never did — a league that appears in some member's
+ * league list and then 404s the moment the crawler fetches its graph. Writing
+ * the row is what retires it: the id counts as known from then on, so discovery
+ * stops selecting it, and `gone_at` keeps it out of the refresh queue. Without a
+ * row there is nowhere to record the answer, so every member of that league
+ * rediscovers it forever.
+ *
+ * No children are written — there was never a graph to store — and the conflict
+ * clause stamps only the marker: a row already here came from a sync that
+ * actually saw the league, and that data is better than the enumeration payload
+ * this holds. `persistLeagueGraph` clears the marker if it comes back.
+ */
+export async function persistGoneLeagues(
+  leagues: readonly SleeperLeague[],
+): Promise<void> {
+  await bulkInsert(pool, {
+    table: "leagues",
+    columns: [
+      "league_id", "name", "season", "sport", "status", "total_rosters", "avatar",
+      "previous_league_id", "draft_id", "roster_positions", "settings",
+      "scoring_settings", "metadata",
+    ],
+    rows: leagues,
+    values: (x) => [
+      x.league_id, x.name, x.season, x.sport, x.status, x.total_rosters, x.avatar,
+      x.previous_league_id, x.draft_id, j(x.roster_positions), j(x.settings),
+      j(x.scoring_settings), j(x.metadata),
+    ],
+    trailing: { column: "gone_at", sql: "now()" },
+    onConflict: `(league_id) DO UPDATE SET gone_at = now()`,
+  });
+}
 
 /** Persist one league graph inside an open transaction. */
 async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<void> {

@@ -102,8 +102,12 @@ export function startLeagueCrawler(): void {
       );
     }
 
+    // Both passes tombstone, and a tick that only did that is work — reported as
+    // idle it would read as a drained queue while the crawler was retiring dead
+    // leagues by the batch.
+    const gone = s.gone + s.discoverGone;
     const touched =
-      s.refreshed + s.discovered + s.refreshFailed + s.discoverFailed + s.gone;
+      s.refreshed + s.discovered + s.refreshFailed + s.discoverFailed + gone;
     const skipNote = lockSkips ? `; ${lockSkips} tick(s) lock-skipped` : "";
 
     if (touched === 0) {
@@ -133,7 +137,7 @@ export function startLeagueCrawler(): void {
         (s.refreshFailed || s.discoverFailed
           ? `; ${s.refreshFailed + s.discoverFailed} failed`
           : "") +
-        (s.gone ? `; ${s.gone} gone from Sleeper` : "") +
+        (gone ? `; ${gone} gone from Sleeper` : "") +
         (s.deferred ? `; ${s.deferred} member(s) deferred` : "") +
         skipNote +
         `; ${fmtMs(s.tickMs)}.`,
