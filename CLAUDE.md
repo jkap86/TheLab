@@ -1376,9 +1376,9 @@ stops holding, a comment saying it does would not have caught it.
 - **The ADP controls are a drawer behind one button, not a bar on the page.** Ten
   selects and a caption sat above the first row of every manager tab — ~110px of
   chrome, wrapping to three lines on a laptop — for settings that are chosen once
-  and then read. `AdpTrigger` was seated in the header's control dock instead,
-  beside the league filters' own trigger, badged with the range and the draft
-  count. **It is in the app bar now, and it says one word.** Three things moved
+  and then read. `AdpTrigger` was seated in the header's control dock instead
+  (a recessed trough under the plate, since retired), beside the league filters'
+  own trigger, badged with the range and the draft count. **It is in the app bar now, and it says one word.** Three things moved
   with it, and each is a consequence of the last:
   - **The seat is a portal, not a prop** (`features/shared/ui/header-slot.tsx`).
     The bar is mounted at the root layout and this trigger reads the manager
@@ -1415,9 +1415,9 @@ stops holding, a comment saying it does would not have caught it.
   They stay **two controls** rather than two tabs of one dialog for the reason
   the two filter sets stay independent: one narrows this manager's leagues, the
   other the whole crawled database, and one dialog over both would suggest a
-  single selection. The split is spatial now as well — the filters stay in the
-  dock over the list they narrow, and the board sits up in the chrome with the
-  population it describes, which belongs to no manager at all.
+  single selection. The split is spatial now as well — the filters stay on the
+  header plate, over the list they narrow, and the board sits up in the chrome
+  with the population it describes, which belongs to no manager at all.
   Two things inside the
   drawer are load-bearing. The controls are **pinned** and only the board scrolls:
   the point of the shape is that changing a filter and watching the ADP move is one
@@ -1727,29 +1727,48 @@ stops holding, a comment saying it does would not have caught it.
   `PageShell`'s `wide` gutter and paints `--background`, because a transparent
   pinned card lets the rows scroll through the gaps around its rounded corners.
   Its `z-40` sits above the cards' `z-30` menus and below the drawer's `z-50`.
-- **The header is a plate and a dock, and the split is by what a thing *is*.**
-  Identity, the season and the record live on the plate; the two triggers are
-  seated in a recessed trough under it. It was one card stacking all of that plus
-  both controls, which on a phone was ~590px of a 700px screen — the controls
-  wrapping onto their own lines because they shared a flex row with the season —
-  against ~225px now, in either season state. Three things hold it up:
+- **The header is one plate with the filters' key seated in its bottom edge, and
+  it got there in two moves worth reading together.** It was one card stacking
+  identity, the season, the record and both control pills, which on a phone was
+  ~590px of a 700px screen — the controls wrapping onto their own lines because
+  they shared a flex row with the season. The first move split it by what a thing
+  *is*: a milled identity plate, and a recessed dock under it holding the
+  triggers. The second retired the dock, because once the board's trigger went up
+  into the app bar it was a ~50px trough seating a single control — and this card
+  is *pinned*, so that was 50px of league rows covered on all three tabs for a
+  part pressed once a session. Four things hold up what is left:
   - **The material says which part is which**, the same raised/recessed grammar
     as the app bar: the plate is a milled face (a specular sweep, the cyan rail),
-    the dock a well, the triggers raised keys in it. A control that looks like
-    content is one nobody presses.
+    its corner tabs are wells because they are readouts, and the filters' key is
+    raised because it is pressed. A control that looks like content is one nobody
+    presses — which is the whole argument against the obvious simplification
+    here, a third tab cut into the edge. A tab is a well, and a well saying
+    "Filters" is the card telling you to read its filter.
+  - **The key straddles the border rather than sitting inside it.** Half in, half
+    out: the inner half rides in bottom padding the avatar's row already paid
+    for, the outer half hangs below with its wall and its bloom. Fully inside it
+    would need the whole 32px as padding — more height than straddling, and it
+    would read as a chip parked in the card rather than a part rising out of its
+    edge.
+  - **The plate keeps `overflow-hidden` and the key lives outside it.** The clip
+    is load-bearing (the rail and the sweep are square boxes drawn against
+    rounded corners), and `.lab-chip`'s wall is a `box-shadow` the clip would
+    cut — leaving a part with no thickness, which is exactly what a pressable
+    part must not be. So the two are siblings in a bare `relative` wrapper, and
+    that wrapper carries the overhang's margin: no filters, no margin, and the
+    header is exactly as tall as its plate.
   - **The plate's height is the same in September as in December.** The record
     bar keeps its empty rail when nothing has been played, because a card pinned
     under the app bar can't change how much of the list it covers as the season
-    turns over.
-  - **The dock hugs what it holds** (`w-fit`). Run to the card's width, a trough
-    with a chip at its left end is mostly empty slot on a desktop. It holds one
-    control since the board's trigger went up into the app bar, and it *stays*
-    rather than being dropped: what a trough says is that the part in it operates
-    on the list below, not that there are two of them.
+    turns over. The transient state line is the one thing allowed to grow, which
+    is why *it* buys the key's clearance below its pills rather than reserving a
+    gutter beside them: a right-hand reserve wide enough for the key left ~190px
+    of a 390px screen for two pills that fit on one line before it.
 - **The plate's record readout is where the filter bar used to be.** The two rows
   of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger is
-  down in the dock — where `AdpTrigger` sat beside it until the board moved into
-  the app bar — and the space they freed carries the manager's season across the
+  the key in the plate's bottom edge — it sat in the dock, beside `AdpTrigger`,
+  until the board moved into the app bar and the dock followed it out — and the
+  space they freed carries the manager's season across the
   filtered leagues: a dial for the win percentage, a proportion bar for the wins
   and losses behind it. The `Rostered` cell that used to stand in a rail of its
   own is folded onto the record's line, since how many of the leagues on screen

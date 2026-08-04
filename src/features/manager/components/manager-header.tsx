@@ -27,17 +27,31 @@ export type HeaderStat = {
 };
 
 /**
- * Who is being looked at, how their season is going, and the two controls that
- * narrow it.
+ * Who is being looked at, how their season is going, and the control that
+ * narrows it.
  *
- * **Two parts, not one card.** It was one block stacking identity, season, both
- * control pills, a 108px dial, the record and two stat cells — about 470px of a
- * 700px phone before the first row of the list, with the controls wrapping onto
- * their own lines because they shared a flex row with the season. So the parts
- * are separated by what they *are*: an identity plate carrying the account and
- * its record, and a control dock under it. They read as two parts because the
- * material says so — the plate is a milled face, the dock a recessed trough the
- * controls are seated in, the same raised/recessed grammar the app bar keeps.
+ * **One plate, with the filters' key seated in its bottom edge.** It was one
+ * block stacking identity, season, both control pills, a 108px dial, the record
+ * and two stat cells — about 470px of a 700px phone before the first row of the
+ * list — then a plate with a recessed dock under it, which fixed the stacking and
+ * left a ~50px trough holding a single control. This card is pinned over the
+ * list, so that trough was 50px of league rows covered on all three tabs for a
+ * part that is usually pressed once.
+ *
+ * So the key moved onto the plate's own bottom edge, straddling it: the inner
+ * half sits in padding the avatar's row already paid for, the outer half hangs
+ * below the border. Net it costs about a third of what the dock did.
+ *
+ * **It is a raised key and not a tab, and that is the whole of the styling
+ * argument.** The plate's edges already carry parts — the season and the stat
+ * count, cut into the top corners — and those are `lab-well`, because on this
+ * card recessed means *read me*. A filter is pressed, so a tab-shaped well here
+ * would be the plate telling you to read its filter. The key keeps
+ * `.lab-chip`'s wall and its press travel, which is also why the plate's
+ * `overflow-hidden` can't contain it: a clipped wall is a part with no
+ * thickness, which is the one thing a pressable part must not be. The clip stays
+ * where it is needed (the rail and the sweep are drawn square against rounded
+ * corners) and the key is a sibling outside it.
  *
  * The plate absorbs the `Rostered` cell that used to stand on its own: how many
  * of the leagues on screen carry a record is the record's denominator, so it
@@ -97,10 +111,10 @@ export function ManagerHeader({
   /** The view's own headline count, worn as the plate's top-right corner tab. */
   stat: HeaderStat;
   /**
-   * The filters' trigger — the dock's one occupant since the ADP board's went
-   * up into the app bar. Omitted where a view has nothing to filter (e.g. a
-   * manager with no leagues), which leaves the dock with nothing to seat and so
-   * drops it entirely.
+   * The filters' trigger, seated in the plate's bottom edge. Omitted where a
+   * view has nothing to filter (e.g. a manager with no leagues) — which is also
+   * what returns the bottom padding the key is straddling, so an unfilterable
+   * header is exactly as tall as its contents.
    */
   filters?: ReactNode;
   /**
@@ -117,6 +131,22 @@ export function ManagerHeader({
    */
   columns?: ReactNode;
 }) {
+  // The key straddles the plate's bottom border, so half of it is over the
+  // plate's own face and wants padding under the content to sit in. That is the
+  // whole of what the control costs the pinned card — against the ~50px the
+  // trough under it used to — and it is charged only where there is a key.
+  const bodyPad = filters ? "pb-4 sm:pb-4" : "pb-2 sm:pb-3";
+  // The state line is the plate's bottom edge whenever it is drawn, so the key
+  // sits over *it* rather than over the body and it needs the same clearance.
+  // It buys that below rather than to the right: reserving a right-hand gutter
+  // wide enough for the key left ~190px of a 390px screen for two pills that
+  // fit on one line before, so the one state the reader most wants to read at a
+  // glance was the one that wrapped. Clearance under them costs 8px, and only
+  // while a refresh or a failure is actually being reported.
+  const statePad = filters
+    ? "px-5 pb-4 pt-2 sm:px-6"
+    : "px-5 py-2 sm:px-6";
+
   return (
     // Pinned directly under the app bar, so who you are looking at and how their
     // season is going stay on screen while a several-hundred-row list scrolls
@@ -146,100 +176,122 @@ export function ManagerHeader({
         columns ? "mb-3 pb-1.5" : "mb-6 pb-3"
       }`}
     >
-      <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.075),rgba(255,255,255,0.02)_60%,rgba(255,255,255,0.008))] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.12),inset_0_-2px_8px_rgba(0,0,0,0.5),0_18px_40px_-22px_rgba(0,0,0,0.9)]">
-        {/* The cyan rail down the plate, echoing the league rows' accent. */}
-        <span
-          aria-hidden="true"
-          className="absolute inset-y-0 left-0 z-[2] w-1 bg-gradient-to-b from-active to-active/30 shadow-[0_0_16px_rgba(0,255,229,0.4)]"
-        />
-        {/* The specular sweep that reads as a milled face under a light. It is
-            the plate's only decoration and sits under the content, not over it. */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_30%,rgba(255,255,255,0.06)_48%,transparent_62%)]"
-        />
+      {/* The plate and the key are siblings in an unclipped wrapper, which is
+          the one structural cost of seating a *raised* part in the edge. The
+          plate has to keep `overflow-hidden` — the rail and the specular sweep
+          are square boxes drawn against its rounded corners — and a key inside
+          that clip would lose the wall and the drop shadow that are its whole
+          claim to being pressable. The wrapper carries the bottom margin the
+          overhanging half needs, so a header with no filters is exactly as tall
+          as its plate.
 
-        {/* The two corner tabs, cut into the plate's top edge. They sit above the
-            rail (`z-[3]` against its `z-[2]`), so the accent passes behind the
-            left tab and resumes below it rather than stopping at the chip. */}
-        <CornerTab side="left">
-          <span className="font-mono text-[12px] font-bold leading-none tabular-nums text-active drop-shadow-[0_0_12px_rgba(0,255,229,0.35)]">
-            {season}
-          </span>
-        </CornerTab>
-        <CornerTab side="right">
-          <span className="font-bold uppercase tracking-[0.12em] text-foreground/40">
-            {stat.label}
-          </span>
-          <span className="font-mono text-[12px] font-bold leading-none tabular-nums text-foreground/85">
-            {stat.value}
-          </span>
-          {stat.sub && <span className="text-foreground/35">{stat.sub}</span>}
-        </CornerTab>
-
-        {/* `pt` clears the tabs rather than the row being pushed below them: the
-            avatar is the row's height either way, so the plate is exactly as tall
-            as it was with both pills on the name line. It is the tab's own height
-            plus a hairline and nothing more — the plate is pinned over the list,
-            so every pixel of padding here is a pixel of the list it covers. */}
-        <div className="relative flex items-center gap-3 pb-2 pl-5 pr-4 pt-[22px] sm:gap-4 sm:pb-3 sm:pl-6 sm:pr-5 sm:pt-6">
-          <Avatar
-            url={user.avatar_url}
-            name={user.display_name || user.username}
-            size="lg"
+          The margin is the overhang (16px of a 32px key) plus its wall plus the
+          gap the header already sets, not the overhang alone: the next thing
+          down is usually the columns rail, which is a raised billet of its own,
+          and two lit faces 3px apart read as one crowded part. */}
+      <div className={`relative ${filters ? "mb-5" : ""}`}>
+        <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.075),rgba(255,255,255,0.02)_60%,rgba(255,255,255,0.008))] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.12),inset_0_-2px_8px_rgba(0,0,0,0.5),0_18px_40px_-22px_rgba(0,0,0,0.9)]">
+          {/* The cyan rail down the plate, echoing the league rows' accent. */}
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-0 left-0 z-[2] w-1 bg-gradient-to-b from-active to-active/30 shadow-[0_0_16px_rgba(0,255,229,0.4)]"
+          />
+          {/* The specular sweep that reads as a milled face under a light. It is
+              the plate's only decoration and sits under the content, not over it. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_30%,rgba(255,255,255,0.06)_48%,transparent_62%)]"
           />
 
-          <div className="min-w-0 flex-1">
-            {/* The name has the line to itself now, so it truncates against the
-                gauge rather than against two pills — which is what moving them
-                to the corners was for. */}
-            <h1 className="min-w-0 truncate font-display text-base font-semibold tracking-tight sm:text-xl">
-              {user.display_name || user.username}
-            </h1>
-            <RecordLine
-              record={record}
-              scope={scope}
-              leagueCount={leagueCount}
+          {/* The two corner tabs, cut into the plate's top edge. They sit above the
+              rail (`z-[3]` against its `z-[2]`), so the accent passes behind the
+              left tab and resumes below it rather than stopping at the chip. */}
+          <CornerTab side="left">
+            <span className="font-mono text-[12px] font-bold leading-none tabular-nums text-active drop-shadow-[0_0_12px_rgba(0,255,229,0.35)]">
+              {season}
+            </span>
+          </CornerTab>
+          <CornerTab side="right">
+            <span className="font-bold uppercase tracking-[0.12em] text-foreground/40">
+              {stat.label}
+            </span>
+            <span className="font-mono text-[12px] font-bold leading-none tabular-nums text-foreground/85">
+              {stat.value}
+            </span>
+            {stat.sub && <span className="text-foreground/35">{stat.sub}</span>}
+          </CornerTab>
+
+          {/* `pt` clears the tabs rather than the row being pushed below them: the
+              avatar is the row's height either way, so the plate is exactly as tall
+              as it was with both pills on the name line. It is the tab's own height
+              plus a hairline and nothing more — the plate is pinned over the list,
+              so every pixel of padding here is a pixel of the list it covers. */}
+          <div
+            className={`relative flex items-center gap-3 pl-5 pr-4 pt-[22px] sm:gap-4 sm:pl-6 sm:pr-5 sm:pt-6 ${bodyPad}`}
+          >
+            <Avatar
+              url={user.avatar_url}
+              name={user.display_name || user.username}
+              size="lg"
             />
-            <RecordBar record={record} />
+
+            <div className="min-w-0 flex-1">
+              {/* The name has the line to itself now, so it truncates against the
+                  gauge rather than against two pills — which is what moving them
+                  to the corners was for. */}
+              <h1 className="min-w-0 truncate font-display text-base font-semibold tracking-tight sm:text-xl">
+                {user.display_name || user.username}
+              </h1>
+              <RecordLine
+                record={record}
+                scope={scope}
+                leagueCount={leagueCount}
+              />
+              <RecordBar record={record} />
+            </div>
+
+            <HeaderReadout season={season} pct={record.pct} />
           </div>
 
-          <HeaderReadout season={season} pct={record.pct} />
+          {/* The state line. It carries only what is transient — a refresh in
+              flight, a sync that failed — so it is drawn only when there is
+              something to say: with the countdown up in the readout slot, an
+              always-present row would be an empty band under the record for the
+              whole season. */}
+          {(refreshing ||
+            (summary && summary.failed > 0) ||
+            refreshError) && (
+            <div
+              className={`relative flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 text-[11px] ${statePad}`}
+            >
+              {refreshing && <RefreshingPill progress={progress} />}
+              {summary && summary.failed > 0 && (
+                <Warning>{summary.failed} failed to sync</Warning>
+              )}
+              {refreshError && (
+                <Warning>Refresh failed — showing cached data</Warning>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* The state line. It carries only what is transient — a refresh in
-            flight, a sync that failed — so it is drawn only when there is
-            something to say: with the countdown up in the readout slot, an
-            always-present row would be an empty band under the record for the
-            whole season. */}
-        {(refreshing ||
-          (summary && summary.failed > 0) ||
-          refreshError) && (
-          <div className="relative flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 px-5 py-2 text-[11px] sm:px-6">
-            {refreshing && <RefreshingPill progress={progress} />}
-            {summary && summary.failed > 0 && (
-              <Warning>{summary.failed} failed to sync</Warning>
-            )}
-            {refreshError && (
-              <Warning>Refresh failed — showing cached data</Warning>
-            )}
+        {/* The key, seated in the bottom edge. It is anchored to the *plate*
+            rather than to the body, so it follows the plate's bottom down when
+            the transient state line appears rather than being left floating in
+            the middle of the card.
+
+            Right rather than left for two reasons: the accent rail runs down the
+            left edge and a key started over it would stop the accent at a
+            button, and the plate's right edge then reads read-then-press — the
+            stat count's well above, the control below it. Half in, half out
+            (`translate-y-1/2`), which is what makes it a part rising out of the
+            edge rather than a chip parked inside the card. */}
+        {filters && (
+          <div className="absolute bottom-0 right-5 translate-y-1/2 sm:right-6">
+            {filters}
           </div>
         )}
       </div>
-
-      {/* The dock. A recessed trough rather than a second card, so the control
-          reads as a part seated in the header rather than as more of the plate's
-          content. It holds one thing now — the board's trigger went up into the
-          app bar, where the population it narrows (every crawled draft, nobody's
-          leagues in particular) actually lives — and the trough stays, because
-          what it says is that the part in it operates on the list below rather
-          than being part of the card above. It hugs what it holds (`w-fit`): a
-          trough running the width of a desktop card is mostly empty slot. */}
-      {filters && (
-        <div className="lab-well lab-notch-lg flex w-fit max-w-full flex-wrap items-center gap-2 p-1.5">
-          {filters}
-        </div>
-      )}
 
       {columns}
     </header>

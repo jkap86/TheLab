@@ -67,10 +67,11 @@ import { PanelMessage } from "./ui";
  * tabs off the one per-manager store: the drawer, and a trigger rendered into
  * the app bar's seat. The two are still two controls and not one — the league
  * filters narrow *this manager's leagues*, the board narrows *the drafts in the
- * database* — and the split is now spatial as well: the filters stay in the
- * header, over the list they narrow, and the board sits up in the chrome with
- * the population it describes, which belongs to no manager at all. The board
- * names itself inside the drawer; no tab repeats that on the page.
+ * database* — and the split is now spatial as well: the filters are a key in the
+ * header plate's own bottom edge, over the list they narrow, and the board sits
+ * up in the chrome with the population it describes, which belongs to no manager
+ * at all. The board names itself inside the drawer; no tab repeats that on the
+ * page.
  */
 export function LeaguesViewLayout({
   view,
