@@ -662,6 +662,23 @@ stops holding, a comment saying it does would not have caught it.
   mark — the bubbles rest at their keyframe start (opacity 0), so what remains
   is the glass. Dropping the whole indicator would take the *status* away from
   the reader who asked for less motion, which is not what they asked for.
+- **An *exit* animation costs a mounted beat, and the unmount is a timer rather
+  than `animationend`.** Every other animation here plays on arrival, so it
+  needs nothing of the component; the ADP drawer slides out as well as in, which
+  means it has to stay rendered after `open` goes false — `closing`, set in the
+  same render-time adjustment against the previous `open` that already resets
+  the drawer's floating panels, and cleared by a `setTimeout` of the exit's own
+  duration. **`animationend` is the trap**: under `prefers-reduced-motion` the
+  media query kills the animation, so the event never fires and a drawer closed
+  once would stay mounted forever. That block hides the closing panel outright
+  instead, which is what makes waiting the beat out there invisible. Two details
+  travel with it — the exit is `forwards`, or the panel snaps back into view for
+  the frame between the animation ending and the unmount; and the closing panel
+  takes `pointer-events: none`, since a press landing on a drawer that is
+  leaving hits a control the reader can no longer see. The scroll lock is held
+  across the exit for the same reason (a scrollbar returning mid-slide jumps the
+  page sideways), while Escape and the focus move stay on `open` alone: what is
+  leaving is not a dialog any more.
 - **The flask's glass is the `active` token; its liquid is literal hex, and that
   is the exception rather than a lapse.** `@theme` registers exactly two colors,
   `active` and `foreground`, so a two-stop gradient — a lighter top and a darker

@@ -823,6 +823,48 @@ body {
   }
 }
 
+/* The ADP drawer, coming in off the right edge and leaving the same way.
+   A drawer is the one part of the app whose *place* is the thing to say — it
+   comes from outside the page rather than appearing over it, which is what a
+   slide states and a fade does not — so the panel travels and the scrim fades
+   under it.
+
+   The one thing here that the entrance-only `dialog-rise` above doesn't need is
+   an exit, and it is its own keyframe rather than that entrance reversed,
+   because the two are not the same gesture: arriving is eased out over a longer
+   beat so the panel settles, leaving is eased in and shorter so a dismissed
+   control gets out of the way. The timings stay at the call site with the rest
+   of them — the exit's duration is also how long the component keeps the drawer
+   mounted, so it is one constant in the component rather than a number here for
+   that one to be kept in step with. */
+@keyframes adp-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes adp-drawer-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes adp-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes adp-scrim-out {
+  to {
+    opacity: 0;
+  }
+}
+/* A drawer on its way out is not a control: it is still on screen for the
+   length of the exit, and a press landing on a panel that is leaving hits a
+   filter the reader can no longer see. */
+.adp-drawer-panel[data-closing],
+.adp-drawer-scrim[data-closing] {
+  pointer-events: none;
+}
+
 /* Respect a reader who asked the OS for less motion: freeze the flask rather
    than bubble at them. Bubbles rest at opacity 0 (keyframe start), so what's
    left is a calm, static flask that still reads as a loading mark. The tools
@@ -835,8 +877,19 @@ body {
   .lab-anim,
   .filters-dialog-panel,
   .filters-segment-pop,
-  .tools-menu-panel {
+  .tools-menu-panel,
+  .adp-drawer-panel,
+  .adp-drawer-scrim {
     animation: none !important;
+  }
+  /* The drawer's exit is the one frozen animation that can't simply be dropped:
+     the component keeps it mounted for the length of the animation, so with no
+     animation to play it would sit there whole and then blink out. Hidden the
+     moment it starts closing, it is gone when the reader dismissed it and the
+     unmount a beat later is invisible. */
+  .adp-drawer-panel[data-closing],
+  .adp-drawer-scrim[data-closing] {
+    opacity: 0;
   }
   /* The key's travel is motion too: a reader who asked for less gets the
      colour change and the glow, without the part moving under the finger. The
