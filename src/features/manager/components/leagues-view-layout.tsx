@@ -211,6 +211,9 @@ export function LeaguesViewLayout({
         onReset={resetControls}
         defaultSeason={defaultSeason}
         leagues={data.leagues}
+        // The manager's own leagues, so "Match a league…" is a name they
+        // recognise — see the prop's note for why the trades board passes none.
+        seedLeagues={data.leagues}
         board={board}
         density={density}
       />

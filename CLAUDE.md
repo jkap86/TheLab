@@ -1391,11 +1391,12 @@ stops holding, a comment saying it does would not have caught it.
   in its own `AdpControlsProvider`), and the temptation is to hoist one provider
   to the root layout so a board chosen anywhere follows you everywhere. That is
   wrong for the reason the two filter sets above are wrong to merge: what the two
-  boards *mean* differs. The manager drawer's "Match a league…" seeds from leagues
-  you play in and its size options are the sizes you play; the trades drawer has
-  no such account to read, so a shared selection would carry a board seeded from
-  one manager's league onto a page that is about nobody. Two providers, one
-  store definition.
+  boards *mean* differs. The manager drawer's size options are the sizes you
+  play and its "Match a league…" seeds from a league you play in; the trades
+  drawer has no account to read, draws no seed control at all (see below), and
+  reads its sizes off the whole crawled corpus. A shared selection would carry a
+  board seeded from one manager's league onto a page that is about nobody. Two
+  providers, one store definition.
 
   Unlike the league filters, whose
   provider holds a selection from the start, `AdpControls` used to open as
@@ -1421,6 +1422,19 @@ stops holding, a comment saying it does would not have caught it.
   least like. The season is seeded for the same kind of reason — a 2025 league's
   board is read from 2025 drafts, and leaving it on this year prices the league
   against a market it was never in.
+
+  **That bridge is a manager-tab control and the trades board draws none**
+  (`seedLeagues`, which the drawer takes separately from the `leagues` its size
+  options are read off). It looks like the same control over a longer list and is
+  a different one: seeding is a *shortcut*, and it works because you pick the
+  league by name — you know it, and you know what its settings are. The trades
+  board's population is every crawled league in the season, so the same menu is
+  alphabetised strangers whose settings you have no opinion about and whose names
+  you cannot search for. That is the tell for whether a control ports to that
+  page: every other filter in this drawer describes the *market* and works there
+  unchanged; this one describes the *reader*, and that page deliberately has
+  none. Two league props rather than one list passed twice, because the two
+  populations genuinely differ there.
 - **The ADP controls are a drawer behind one button, not a bar on the page.** Ten
   selects and a caption sat above the first row of every manager tab — ~110px of
   chrome, wrapping to three lines on a laptop — for settings that are chosen once
