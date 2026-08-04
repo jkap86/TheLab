@@ -45,6 +45,14 @@ const EMPTY_LEAGUES: readonly ManagerLeague[] = [];
  * mechanism) and the timing is here with the rest of the app's — the same split
  * `dialog-rise` and its call sites use.
  *
+ * **They are roughly twice the app's other animations, which is deliberate.**
+ * `dialog-rise` runs 140–180ms because it is a fade and 10px of travel: it is
+ * over before it registers, and that is right for a panel that simply appears.
+ * This one crosses the whole width of the drawer, and at those durations it read
+ * as an instant swap — the movement was there and nobody saw it. A slide only
+ * says where a panel came from if the eye can follow it, so the distance sets
+ * the duration.
+ *
  * The exit is the number the component itself needs: it is how long the drawer
  * stays mounted after `open` goes false, so there is something for the exit to
  * play on. That is a **timer** rather than an `animationend` listener because
@@ -53,8 +61,8 @@ const EMPTY_LEAGUES: readonly ManagerLeague[] = [];
  * block hides it outright instead, which is what makes waiting out a beat there
  * cost nothing.
  */
-const ADP_DRAWER_ENTER_MS = 260;
-const ADP_DRAWER_EXIT_MS = 190;
+const ADP_DRAWER_ENTER_MS = 460;
+const ADP_DRAWER_EXIT_MS = 340;
 
 /**
  * The board's filters, as a table rather than six hand-written controls.
@@ -374,7 +382,12 @@ export function AdpDrawer({
         style={{
           animation: closing
             ? `adp-drawer-out ${ADP_DRAWER_EXIT_MS}ms cubic-bezier(0.4, 0, 1, 1) forwards`
-            : `adp-drawer-in ${ADP_DRAWER_ENTER_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`,
+            // A gentler decelerate than the entrance curves elsewhere in the
+            // app, because it is running over twice their duration: an
+            // out-quint spends four fifths of its travel in the first third,
+            // which at this length reads as a panel that snaps in and then
+            // creeps the last few pixels rather than as a slower slide.
+            : `adp-drawer-in ${ADP_DRAWER_ENTER_MS}ms cubic-bezier(0.32, 0.72, 0, 1)`,
         }}
       >
         {/* Pinned: everything that changes the board stays on screen while the
