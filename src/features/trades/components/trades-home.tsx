@@ -4,10 +4,17 @@ import dynamic from "next/dynamic";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
+  AdpTrigger,
   DEFAULT_LEAGUE_FILTERS,
   FlaskLoader,
+  HeaderSlot,
   activeFilterCount,
+  adpNarrowingCount,
+  adpQueryString,
   todayIso,
+  useAdp,
+  useAdpControls,
+  useAdpDensity,
   useStoredAccount,
 } from "@/features/shared";
 import type { LeagueFilters } from "@/features/shared";
@@ -54,6 +61,19 @@ const LeagueFiltersModal = dynamic(
   // box, so it has to wear the same label or the row is a different width for
   // the moment the chunk is loading.
   { ssr: false, loading: () => <TriggerPlaceholder label="Leagues" /> },
+);
+
+/**
+ * The ADP board, loaded the first time it is opened — the manager tool's own
+ * split (`LeaguesViewLayout`), reused here now that this page reads the same
+ * board. The **trigger** stays statically imported (it's in the app bar at
+ * first paint and it's small); the drawer behind it — the pinned filter
+ * block, the value-curve slider, the NFL-calendar layer, the range scrubber's
+ * whole brush-over-a-histogram — is not on screen until pressed.
+ */
+const AdpDrawer = dynamic(
+  () => import("@/features/shared/ui/adp-drawer").then((m) => m.AdpDrawer),
+  { ssr: false },
 );
 
 /**
@@ -134,6 +154,30 @@ export function TradesHome({ season }: { season: string }) {
     loading: leaguesLoading,
   } = useTradeLeagues(season);
 
+  // The ADP board's own selection, seated in the app bar rather than beside
+  // the trade filters below: it narrows the crawled *market*, not this
+  // page's trades, the same split the manager tool draws between its league
+  // filters and its board. `AdpControlsProvider` is mounted per-page around
+  // `TradesHome` (see `app/trades/page.tsx`) rather than shared with the
+  // manager tool's own store — a board chosen here describes a different
+  // population (every crawled draft) than one seeded from a manager's own
+  // leagues, and the two have no reason to share a selection.
+  const {
+    controls: adpControls,
+    setControls: setAdpControls,
+    resetControls: resetAdpControls,
+    defaultSeason,
+  } = useAdpControls();
+  const [boardOpen, setBoardOpen] = useState(false);
+  const [everOpenedBoard, setEverOpenedBoard] = useState(false);
+  if (boardOpen && !everOpenedBoard) setEverOpenedBoard(true);
+  const adpQuery = useMemo(
+    () => adpQueryString(adpControls, todayIso()),
+    [adpControls],
+  );
+  const board = useAdp(adpQuery, { enabled: boardOpen });
+  const density = useAdpDensity(boardOpen);
+
   // The one thing on this page that asks who is reading it, and it asks softly:
   // without an account the circle filter is inert and everything else is exactly
   // what it was. That is why the tools grid still lists this page as
@@ -212,6 +256,22 @@ export function TradesHome({ season }: { season: string }) {
 
   return (
     <>
+      {/* The board's trigger, seated in the app bar rather than the ledge
+          below — it narrows the crawled market, not this page's trades, the
+          same split the manager tool draws (and the same seat: directly to
+          the left of the Tools menu). Only its *box* moves; it is still a
+          child of this page, reading the same store and driving the drawer
+          rendered at the end of this fragment. */}
+      <HeaderSlot>
+        <AdpTrigger
+          range={adpControls.range}
+          season={adpControls.season}
+          draftCount={board.data?.draft_count ?? null}
+          narrowed={adpNarrowingCount(adpControls, defaultSeason)}
+          onClick={() => setBoardOpen(true)}
+        />
+      </HeaderSlot>
+
       {/* Everything above the list, watched by the virtualizer — which is what
           makes the ledge safe to expand in place: opening it moves the board
           down, and the observer on this element is how the list is told. */}
@@ -319,6 +379,23 @@ export function TradesHome({ season }: { season: string }) {
             </p>
           )}
         </>
+      )}
+
+      {/* Latched rather than gated on `boardOpen`, so the drawer isn't
+          unmounted by its own close and a second press is instant — the same
+          reason the manager tool's `LeaguesViewLayout` latches it. */}
+      {everOpenedBoard && (
+        <AdpDrawer
+          open={boardOpen}
+          onClose={() => setBoardOpen(false)}
+          controls={adpControls}
+          onChange={setAdpControls}
+          onReset={resetAdpControls}
+          defaultSeason={defaultSeason}
+          leagues={leagues}
+          board={board}
+          density={density}
+        />
       )}
     </>
   );

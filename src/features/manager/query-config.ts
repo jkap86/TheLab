@@ -33,10 +33,6 @@ export const STALE_TIMES = {
   ktc: 15 * 60 * 1000,
   /** ADP valuation, per curve — the crawled board behind it moves slowly. */
   adpValue: 15 * 60 * 1000,
-  /** The global ADP board: an average over thousands of crawled drafts. */
-  adp: 15 * 60 * 1000,
-  /** The density strip: a month-grain histogram of the same drafts. */
-  adpDensity: 30 * 60 * 1000,
   /** One league's standings and rosters, behind an expanded card. */
   leagueDetail: 5 * 60 * 1000,
   /** Kickoff: an instant that is fixed once Sleeper has scheduled the season. */

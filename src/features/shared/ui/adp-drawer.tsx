@@ -2,6 +2,8 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
+import type { DraftDensityMonth, ManagerLeague } from "@/shared/manager";
+
 import {
   ADP_PEAK,
   type AdpControls,
@@ -18,11 +20,10 @@ import {
   steepnessSummary,
   todayIso,
 } from "../adp-controls";
-import type { AdpState } from "../hooks/use-adp";
-import type { AdpDensityState } from "../hooks/use-adp-density";
-import type { DraftDensityMonth, ManagerLeague } from "../types";
+import type { AdpState } from "../use-adp";
+import type { AdpDensityState } from "../use-adp-density";
+import { PositionBadge } from "./position-badge";
 import { RangeScrubber, RangeSparkline } from "./range-scrubber";
-import { PositionBadge } from "./ui";
 
 /**
  * The board's grid, written out whole so Tailwind can see it, and shared by the
@@ -255,7 +256,7 @@ export function AdpDrawer({
   onReset: () => void;
   /** The season a board opens on; decides which relative presets can mean anything. */
   defaultSeason: string;
-  leagues: ManagerLeague[];
+  leagues: readonly ManagerLeague[];
   /** The board these controls produce; `data` is null until the first load lands. */
   board: AdpState;
   /** Crawled drafts per month and season, for the range scrubber's strip. */
@@ -973,7 +974,7 @@ function FilterRow({
 }: {
   controls: AdpControls;
   filters: readonly FilterSpec[];
-  leagues: ManagerLeague[];
+  leagues: readonly ManagerLeague[];
   open: boolean;
   onToggle: () => void;
   onChange: (controls: AdpControls) => void;

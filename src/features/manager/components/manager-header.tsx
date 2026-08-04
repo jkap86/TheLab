@@ -5,7 +5,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { Avatar } from "@/features/shared";
+import { Avatar, firstKickoff } from "@/features/shared";
 
 import {
   countdownSegments,
@@ -14,7 +14,6 @@ import {
   formatWinPct,
 } from "../format";
 import { useKickoff } from "../hooks/use-kickoff";
-import { firstKickoff } from "../nfl-calendar";
 import type { OverallRecord } from "../record";
 import type { LeaguesResult, SyncProgress } from "../types";
 
