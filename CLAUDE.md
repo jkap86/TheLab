@@ -372,6 +372,26 @@ about how it is laid out. Each replaced something that read as fine and wasn't.
   `remainingDue`: a tombstoned league leaves the queue as surely as a refreshed
   one, and counting only the refreshed ones overstated the backlog the scheduler
   warns on.
+
+  **That rule needs a bound, because a permanent failure is not a failure to
+  retry — and unbounded it wedged the whole pass, not just the manager.** An
+  unstamped manager sorts to the *front* of `pendingManagers`, so a league
+  Sleeper has deleted — which fails its first sync every time — held its managers
+  at the head of the queue forever: the same dead leagues re-fetched every tick,
+  discovery finding nothing for anyone, and the corpus stopped growing. So
+  `partitionGoneLeagues` re-asks for the league itself before deciding, and a
+  null answer tombstones it through `persistGoneLeagues`. That write is the whole
+  fix: the league is unknown to us, so a marker with no row has nowhere to live
+  and every member rediscovers it. Two halves are load-bearing. **The probe is a
+  second signal, not a re-read of the first** — a first sync fetches half a dozen
+  child collections, so the error it throws cannot tell a deleted league from a
+  Sleeper hiccup, and only the league endpoint can. And **a probe that throws
+  stays retryable**: the tombstone is permanent as far as the crawler is
+  concerned (only a manager-driven sync clears it, via `persistLeagueGraph`), so
+  an ambiguous answer must never reach it. The refresh pass takes the same
+  answer through `markLeaguesGone`, which is why `getLeague` folds 404 into
+  Sleeper's usual 200-with-null rather than throwing — the two spellings mean one
+  thing, and a 404 that threw left the league due forever.
 - **The season is resolved, not compiled in.** `DEFAULT_SEASON` was a release note
   disguised as a string. `shared/season` is an override (`NFL_SEASON_OVERRIDE`),
   then Sleeper's `state/nfl` on a six-hour cache, then that constant as the floor.
