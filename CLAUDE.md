@@ -1727,6 +1727,48 @@ stops holding, a comment saying it does would not have caught it.
   `PageShell`'s `wide` gutter and paints `--background`, because a transparent
   pinned card lets the rows scroll through the gaps around its rounded corners.
   Its `z-40` sits above the cards' `z-30` menus and below the drawer's `z-50`.
+  **It lets go of the top for exactly one thing: a league card opened into its
+  detail panel** (`pinned`, defaulting to true and lowered only by
+  `ManagerLeagues`). That is the same argument the pinning rests on, run the
+  other way — a pinned card is paying for its height out of whatever is behind
+  it, and an open panel is sized to the screen, so the plate would be taking a
+  quarter of the one thing being read to restate facts about the account. What
+  makes it cheap is that a sticky element occupies its normal flow space either
+  way: the swap is `sticky` → `relative` and nothing moves, the plate simply
+  stops following the scroll. `relative` rather than nothing, because the fade
+  below the header is an `::after` on that box.
+- **An open league card is one screen: pulled to the top, capped there, and
+  scrolling inside itself.** The panel is several hundred rows in a deep dynasty
+  league, so left to run it pushed its own card's head off the top of the screen
+  and the rest of the list several screens down. Four pieces hold the correction
+  up, and each is easy to undo by treating the cap as styling:
+  - **Which league is open lives in `ManagerLeagues`, not in the card.** Opening
+    one is a claim about the whole page — the card takes the screen and the
+    header lets go of the top — and two cards making that claim at once is two
+    things each asking to be the thing being read. So it is one id, and opening
+    a league closes the one before it. It is also **read against the filtered
+    list during render** rather than trusted: narrowing the filters can take the
+    open league off screen, and an id pointing at a card nobody can see would
+    leave the header unpinned for a panel that isn't there.
+  - **The scroll is `scrollIntoView` against a `scroll-mt`,** so the app bar's
+    height is the browser's arithmetic rather than a number read at runtime —
+    and only on *open*. Closing scrolls nothing: reversing a scroll the reader
+    didn't ask for is how a list loses its place.
+  - **The panel takes no `flex-1`.** A flex item's default `0 1 auto` is what
+    makes a short panel — one still loading, or a shallow league — exactly as
+    tall as its contents while only an overrunning one shrinks into the cap and
+    scrolls; `flex-1` would stretch every open card to the full screen whatever
+    it had to say. `min-h-0` is what allows the shrink at all, and the card's
+    head is `shrink-0` because the league's name is what says which panel this
+    is.
+  - **The cap is `svh`, and the scroll box repeats the card's radius.** `svh` is
+    the viewport *with* the browser's own chrome showing, which is the only unit
+    that keeps the promise on a phone; `dvh` would grow and shrink the card as
+    that chrome hides, which on a scrolling panel reads as the page fighting the
+    finger. A scroll container clips, so without `rounded-b-xl` the last roster
+    row paints square across the card's rounded corners — and `overscroll-contain`
+    keeps a flick at the end of the panel from carrying on into the list behind
+    it.
 - **The header is one plate with the filters' key seated in its bottom edge, and
   it got there in two moves worth reading together.** It was one card stacking
   identity, the season, the record and both control pills, which on a phone was

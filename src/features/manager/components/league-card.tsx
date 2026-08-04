@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   LIST_ROW_HOVER,
@@ -47,6 +47,14 @@ import { Chevron } from "./ui";
  * which is also why the rail lights and the hover lift goes away (a several-
  * hundred-pixel panel that rises under the pointer is a card pretending to still
  * be a row).
+ *
+ * **An open card takes the screen, which is why it doesn't hold its own open
+ * state.** Expanding pulls the card up under the app bar, unpins the manager
+ * plate above it (see {@link ManagerHeader}) and caps the panel at the viewport
+ * so the detail scrolls inside the card rather than running off the bottom of a
+ * page several screens long. Every one of those is a claim only one card can
+ * make at a time, so which league is open is held in {@link ManagerLeagues} and
+ * arrives here as a prop.
  */
 export function LeagueCard({
   league,
@@ -56,6 +64,8 @@ export function LeagueCard({
   valuedAt,
   adp,
   columns,
+  expanded,
+  onToggle,
 }: {
   league: ManagerLeague;
   /**
@@ -83,15 +93,46 @@ export function LeagueCard({
   adp: LeagueAdpEntry | null;
   /** The metric key each of the four stat columns shows, shared by every card. */
   columns: string[];
+  /** Whether this is the league currently open — one at a time, list-wide. */
+  expanded: boolean;
+  /** Open this league, or close it if it is the one already open. */
+  onToggle: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const ref = useRef<HTMLLIElement>(null);
+
+  // Opening pulls the card to the top of the screen, because that is what makes
+  // the cap below a whole panel rather than the top of one: a card opened
+  // halfway down the viewport would have half a screen to draw a panel that is
+  // sized for a screen. The offset is `scroll-mt`, so the browser does the
+  // arithmetic against the app bar rather than this reading a height at runtime.
+  //
+  // Closing scrolls nothing. The reader is looking at the card they just closed,
+  // and moving the page under them to reverse a scroll they didn't ask for is
+  // how a list loses its place.
+  useEffect(() => {
+    if (!expanded) return;
+    const reduced =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    ref.current?.scrollIntoView({
+      block: "start",
+      behavior: reduced ? "auto" : "smooth",
+    });
+  }, [expanded]);
 
   const record = league.record;
   const standing = ranks?.standing ?? null;
   const ctx: MetricContext = { league, ranks, ktc, adp, weeks, valuedAt };
 
   return (
-    <li className={expanded ? OPEN_SURFACE : `${LIST_ROW_SURFACE} ${LIST_ROW_HOVER}`}>
+    <li
+      ref={ref}
+      className={
+        expanded
+          ? `${OPEN_SURFACE} ${OPEN_BOX}`
+          : `${LIST_ROW_SURFACE} ${LIST_ROW_HOVER}`
+      }
+    >
       <RowSheen lit={expanded} />
 
       {/* The whole row is the toggle, not just the name half. The stat columns
@@ -113,16 +154,19 @@ export function LeagueCard({
       <div
         role="button"
         tabIndex={0}
-        onClick={() => setExpanded((v) => !v)}
+        onClick={onToggle}
         onKeyDown={(event) => {
           if (event.key !== "Enter" && event.key !== " ") return;
           // Space scrolls the page otherwise, which is what a native button
           // suppresses for us.
           event.preventDefault();
-          setExpanded((v) => !v);
+          onToggle();
         }}
         aria-expanded={expanded}
-        className="relative flex w-full cursor-pointer flex-col items-stretch gap-3 px-4 py-3 pl-5 text-left sm:flex-row sm:items-center sm:gap-4"
+        // `shrink-0` because the open card is a flex column with a ceiling: the
+        // head is the one part of it that must not be compressed to make room,
+        // since the league's name is what says which panel this is.
+        className="relative flex w-full shrink-0 cursor-pointer flex-col items-stretch gap-3 px-4 py-3 pl-5 text-left sm:flex-row sm:items-center sm:gap-4"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <Chevron open={expanded} size="md" />
@@ -166,9 +210,24 @@ export function LeagueCard({
       {/* No seam and no inset of its own: the panel is on this card's face, so
           what used to be a border between two surfaces would now be a line drawn
           across one. The padding under it belongs to the panel, which is where
-          the container query that sizes it can see a width. */}
+          the container query that sizes it can see a width.
+
+          This is the box that scrolls. It takes no `flex-1`: a flex item's
+          default is `0 1 auto`, so a short panel — a league still loading, or a
+          shallow one — is exactly as tall as its contents, and only one that
+          would run past the card's ceiling shrinks into it and scrolls. `flex-1`
+          would stretch every open card to the full screen whatever it had to
+          say. `min-h-0` is what lets that shrink happen at all, since a flex
+          item's floor is its content size otherwise.
+
+          The radius is repeated here because a scroll container clips: without
+          it the last roster row paints square across the card's rounded bottom
+          corners. `overscroll-contain` keeps a flick at the end of the panel
+          from carrying on into the page behind it — the card is the thing being
+          read, and scroll chaining out of it is the list moving under a reader
+          who was pulling on a roster. */}
       {expanded && (
-        <div className="relative">
+        <div className="relative min-h-0 overflow-y-auto overscroll-contain rounded-b-xl">
           <LeagueDetailPanel leagueId={league.league_id} />
         </div>
       )}
@@ -184,6 +243,30 @@ export function LeagueCard({
  * above it is scrolled past.
  */
 const OPEN_SURFACE = "lab-plate group relative rounded-xl border border-active/25";
+
+/**
+ * The box an expanded card lives in: a column with a ceiling, so the head stays
+ * put and the panel scrolls inside it.
+ *
+ * The ceiling is the screen less the app bar and a hair of clearance, which is
+ * the whole point — the panel is several hundred rows in a league with a deep
+ * bench, and left to run it pushed its own card's head off the top of the
+ * screen and the rest of the list several screens down. Capped, one open league
+ * is one screen: the name and the stat columns above, the standings and rosters
+ * under them, and the next league still where it was when the card is closed.
+ *
+ * `svh` and not `vh` or `dvh`: this must not extend past the bottom of the
+ * screen on a phone, so the unit to size against is the viewport *with* the
+ * browser's own chrome showing. `dvh` would grow and shrink the card as that
+ * chrome hides, which on a scrolling panel reads as the page fighting the
+ * finger.
+ *
+ * `scroll-mt` is the offset the open-scroll uses; it belongs on the element
+ * being scrolled to, which is why it is here rather than in the effect.
+ */
+const OPEN_BOX =
+  "flex max-h-[calc(100svh-var(--site-header-h)-1.5rem)] flex-col " +
+  "scroll-mt-[var(--site-header-h)]";
 
 /**
  * A small state dot standing in for the old text badge: the accent for a league
