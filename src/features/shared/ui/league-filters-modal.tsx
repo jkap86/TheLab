@@ -26,6 +26,44 @@ import {
 import type { ManagerLeague } from "@/shared/manager";
 
 /**
+ * The two ways this trigger is mounted, and the only thing that varies between
+ * them.
+ *
+ * A shared control with two looks is the drift this component exists to
+ * prevent, so what a seat may change is *shape* and nothing else: the material
+ * (`.lab-chip` / `.lab-chip-on`), the icon, the word and the count are the same
+ * part in both. What differs is the edge it is seated against.
+ *
+ * `free` stands on a page — the trades ledge, where nothing bounds it, so it is
+ * the pill `.lab-chip` was written for. `corner` is machined into the bottom
+ * right of the manager header's plate: two of its corners are square because
+ * they meet the plate's own edges, the outer one takes the plate's `rounded-2xl`
+ * so it traces that corner exactly, and the inner one is the small return the
+ * plate's top tabs already use. It runs at those tabs' type scale rather than
+ * the pill's for a plain geometric reason — the plate's bottom padding is what
+ * holds it clear of the win-pct dial above it, and at `text-sm` the part is
+ * 32px tall and crosses the dial instead.
+ */
+const SEATS = {
+  free: {
+    key: "gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm",
+    icon: "h-3.5 w-3.5",
+    badge: "px-1.5 py-0.5 text-[11px]",
+  },
+  corner: {
+    key: "gap-1.5 rounded-br-2xl rounded-tl-lg py-1 pl-3 pr-3.5 text-[11px] leading-none",
+    icon: "h-3 w-3",
+    // `py-px`, so the badge is no taller than the icon beside it and the key is
+    // the same 20px narrowed or not. A trigger seated in an edge must not change
+    // height with its own state: it is anchored to that edge, so growing moves
+    // its top into whatever the plate's bottom padding was holding it clear of.
+    badge: "px-1 py-px text-[10px]",
+  },
+} as const;
+
+type SeatName = keyof typeof SEATS;
+
+/**
  * The league filters, behind a modal.
  *
  * They used to be a second zone of the header card — two rows of segment
@@ -65,6 +103,7 @@ export function LeagueFiltersModal({
   onChange,
   leagues,
   label = "Filters",
+  seat = "free",
 }: {
   filters: LeagueFilters;
   onChange: (filters: LeagueFilters) => void;
@@ -79,6 +118,11 @@ export function LeagueFiltersModal({
    * which of two filter sets a reader is being pointed at.
    */
   label?: string;
+  /**
+   * How the trigger is mounted, which is the only thing that varies about its
+   * *shape* — see {@link SEATS}.
+   */
+  seat?: SeatName;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -154,14 +198,16 @@ export function LeagueFiltersModal({
         // A raised part, because it is pressable — the app bar's grammar, in the
         // pill form `.lab-chip` carries. The cyan face is reserved for a filter
         // actually narrowing something, which is this button's one signal.
-        className={`inline-flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm font-semibold ${
+        className={`inline-flex items-center font-semibold ${SEATS[seat].key} ${
           active > 0 ? "lab-chip-on" : "lab-chip text-foreground/85"
         }`}
       >
-        <FilterIcon dim={active === 0} />
+        <FilterIcon dim={active === 0} size={SEATS[seat].icon} />
         {label}
         {active > 0 && (
-          <span className="rounded-[5px] bg-[#052029] px-1.5 py-0.5 text-[11px] font-bold leading-none text-active">
+          <span
+            className={`rounded-[5px] bg-[#052029] font-bold leading-none text-active ${SEATS[seat].badge}`}
+          >
             {active}
           </span>
         )}
@@ -964,12 +1010,12 @@ function CloseIcon() {
   );
 }
 
-function FilterIcon({ dim }: { dim: boolean }) {
+function FilterIcon({ dim, size }: { dim: boolean; size: string }) {
   return (
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      className={`h-3.5 w-3.5 ${dim ? "stroke-foreground/55" : "stroke-[#052029]"}`}
+      className={`${size} ${dim ? "stroke-foreground/55" : "stroke-[#052029]"}`}
       fill="none"
       strokeWidth={1.6}
       strokeLinecap="round"

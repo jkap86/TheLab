@@ -68,7 +68,7 @@ import { PanelMessage } from "./ui";
  * the app bar's seat. The two are still two controls and not one — the league
  * filters narrow *this manager's leagues*, the board narrows *the drafts in the
  * database* — and the split is now spatial as well: the filters are a key in the
- * header plate's own bottom edge, over the list they narrow, and the board sits
+ * header plate's own bottom-right corner, over the list they narrow, and the board sits
  * up in the chrome with the population it describes, which belongs to no manager
  * at all. The board names itself inside the drawer; no tab repeats that on the
  * page.
@@ -157,6 +157,9 @@ export function LeaguesViewLayout({
               filters={filters}
               onChange={setFilters}
               leagues={data.leagues}
+              // Machined into the plate's bottom-right corner rather than
+              // standing free on the page — see `SEATS`.
+              seat="corner"
             />
           ) : undefined
         }

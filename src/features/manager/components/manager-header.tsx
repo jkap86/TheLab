@@ -30,28 +30,46 @@ export type HeaderStat = {
  * Who is being looked at, how their season is going, and the control that
  * narrows it.
  *
- * **One plate, with the filters' key seated in its bottom edge.** It was one
- * block stacking identity, season, both control pills, a 108px dial, the record
- * and two stat cells — about 470px of a 700px phone before the first row of the
- * list — then a plate with a recessed dock under it, which fixed the stacking and
- * left a ~50px trough holding a single control. This card is pinned over the
- * list, so that trough was 50px of league rows covered on all three tabs for a
- * part that is usually pressed once.
+ * **One plate, with the filters' key machined into its bottom-right corner.** It
+ * was one block stacking identity, season, both control pills, a 108px dial, the
+ * record and two stat cells — about 470px of a 700px phone before the first row
+ * of the list — then a plate with a recessed dock under it, which fixed the
+ * stacking and left a ~50px trough holding a single control. This card is pinned
+ * over the list, so that trough was 50px of league rows covered on all three tabs
+ * for a part that is usually pressed once.
  *
- * So the key moved onto the plate's own bottom edge, straddling it: the inner
- * half sits in padding the avatar's row already paid for, the outer half hangs
- * below the border. Net it costs about a third of what the dock did.
+ * The key moved onto the plate's own bottom edge, and then into its corner. The
+ * intermediate form straddled the border — half in padding the avatar's row
+ * already paid for, half hanging below — which read well and cost 24px, **20 of
+ * them pure clearance**: the next thing down is the columns rail, and two lit
+ * faces 3px apart read as one crowded part. Flush in the corner nothing
+ * overhangs, so that 20px goes back to the list and the wrapper keeps 4.
+ *
+ * What the corner buys back it partly spends upward, and the trade is worth
+ * knowing before anyone "tidies" the padding. The key now sits under the
+ * readout — the win-pct dial, or the kickoff countdown — so the plate's bottom
+ * padding is the seam between them, and it is sized against the *lit* case: a
+ * narrowed key glows and so does the countdown's running cell, which is the same
+ * crowding rule pointing up instead of down. `pb-4` → `pb-6` is 8px for a 7px
+ * seam. Net **8px of league rows returned**, on all three tabs, and the key stops
+ * moving when a refresh line appears under it.
+ *
+ * The scale follows from the same seam. At the pill's own `text-sm` the part is
+ * 32px tall and crosses the dial outright, so it runs at the top tabs' type size
+ * instead — which is what makes the four corners one family rather than three
+ * machined tabs and a chip parked near one.
  *
  * **It is a raised key and not a tab, and that is the whole of the styling
  * argument.** The plate's edges already carry parts — the season and the stat
  * count, cut into the top corners — and those are `lab-well`, because on this
  * card recessed means *read me*. A filter is pressed, so a tab-shaped well here
- * would be the plate telling you to read its filter. The key keeps
- * `.lab-chip`'s wall and its press travel, which is also why the plate's
- * `overflow-hidden` can't contain it: a clipped wall is a part with no
- * thickness, which is the one thing a pressable part must not be. The clip stays
- * where it is needed (the rail and the sweep are drawn square against rounded
- * corners) and the key is a sibling outside it.
+ * would be the plate telling you to read its filter. So the four corners are one
+ * family at one scale, split by material: two wells at the top you read, one key
+ * at the bottom you press. The key keeps `.lab-chip`'s wall and its press
+ * travel, which is also why the plate's `overflow-hidden` can't contain it: a
+ * clipped wall is a part with no thickness, which is the one thing a pressable
+ * part must not be. The clip stays where it is needed (the rail and the sweep are
+ * drawn square against rounded corners) and the key is a sibling outside it.
  *
  * The plate absorbs the `Rostered` cell that used to stand on its own: how many
  * of the leagues on screen carry a record is the record's denominator, so it
@@ -111,10 +129,10 @@ export function ManagerHeader({
   /** The view's own headline count, worn as the plate's top-right corner tab. */
   stat: HeaderStat;
   /**
-   * The filters' trigger, seated in the plate's bottom edge. Omitted where a
-   * view has nothing to filter (e.g. a manager with no leagues) — which is also
-   * what returns the bottom padding the key is straddling, so an unfilterable
-   * header is exactly as tall as its contents.
+   * The filters' trigger, seated in the plate's bottom-right corner. Omitted
+   * where a view has nothing to filter (e.g. a manager with no leagues) — which
+   * is also what returns the bottom padding holding the key clear of the dial,
+   * so an unfilterable header is exactly as tall as its contents.
    */
   filters?: ReactNode;
   /**
@@ -131,20 +149,23 @@ export function ManagerHeader({
    */
   columns?: ReactNode;
 }) {
-  // The key straddles the plate's bottom border, so half of it is over the
-  // plate's own face and wants padding under the content to sit in. That is the
-  // whole of what the control costs the pinned card — against the ~50px the
-  // trough under it used to — and it is charged only where there is a key.
-  const bodyPad = filters ? "pb-4 sm:pb-4" : "pb-2 sm:pb-3";
-  // The state line is the plate's bottom edge whenever it is drawn, so the key
-  // sits over *it* rather than over the body and it needs the same clearance.
+  // The key is machined into the plate's bottom-right corner, so the padding
+  // under the content is the seam between it and the readout directly above —
+  // the dial, or the kickoff countdown. It is measured against the *lit* case
+  // rather than the boxes: a narrowed key glows and so does the countdown's
+  // running cell, and two lit faces a few pixels apart read as one crowded part
+  // (the rule the old straddling key spent 20px of clearance on downward). At
+  // `pb-5` that seam was 3px on a laptop, which is exactly the failure; `pb-6`
+  // makes it 7px. Charged only where there is a key.
+  const bodyPad = filters ? "pb-6 sm:pb-6" : "pb-2 sm:pb-3";
+  // The state line becomes the plate's bottom edge whenever it is drawn, so the
+  // key seats itself in *its* corner instead and it needs the same clearance.
   // It buys that below rather than to the right: reserving a right-hand gutter
   // wide enough for the key left ~190px of a 390px screen for two pills that
   // fit on one line before, so the one state the reader most wants to read at a
-  // glance was the one that wrapped. Clearance under them costs 8px, and only
-  // while a refresh or a failure is actually being reported.
+  // glance was the one that wrapped.
   const statePad = filters
-    ? "px-5 pb-4 pt-2 sm:px-6"
+    ? "px-5 pb-6 pt-2 sm:px-6"
     : "px-5 py-2 sm:px-6";
 
   return (
@@ -181,15 +202,15 @@ export function ManagerHeader({
           plate has to keep `overflow-hidden` — the rail and the specular sweep
           are square boxes drawn against its rounded corners — and a key inside
           that clip would lose the wall and the drop shadow that are its whole
-          claim to being pressable. The wrapper carries the bottom margin the
-          overhanging half needs, so a header with no filters is exactly as tall
-          as its plate.
+          claim to being pressable.
 
-          The margin is the overhang (16px of a 32px key) plus its wall plus the
-          gap the header already sets, not the overhang alone: the next thing
-          down is usually the columns rail, which is a raised billet of its own,
-          and two lit faces 3px apart read as one crowded part. */}
-      <div className={`relative ${filters ? "mb-5" : ""}`}>
+          The margin is now the key's wall and nothing else. It used to be 20px,
+          because the key hung half-way below the plate and the next thing down
+          is the columns rail — a raised billet of its own, and two lit faces 3px
+          apart read as one crowded part. Seated flush there is no overhang to
+          clear, so the clearance goes back to the list this card is pinned
+          over. */}
+      <div className={`relative ${filters ? "mb-1" : ""}`}>
         <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.075),rgba(255,255,255,0.02)_60%,rgba(255,255,255,0.008))] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.12),inset_0_-2px_8px_rgba(0,0,0,0.5),0_18px_40px_-22px_rgba(0,0,0,0.9)]">
           {/* The cyan rail down the plate, echoing the league rows' accent. */}
           <span
@@ -275,21 +296,38 @@ export function ManagerHeader({
           )}
         </div>
 
-        {/* The key, seated in the bottom edge. It is anchored to the *plate*
-            rather than to the body, so it follows the plate's bottom down when
-            the transient state line appears rather than being left floating in
-            the middle of the card.
+        {/* The key, machined into the plate's bottom-right corner — the top
+            tabs' geometry in the raised material, so the plate's four corners
+            read as one family: two wells you read at the top, one key you press
+            at the bottom. It is anchored to the *plate* rather than to the body,
+            so it follows the plate's bottom down when the transient state line
+            appears rather than being left floating in the middle of the card.
 
             Right rather than left for two reasons: the accent rail runs down the
             left edge and a key started over it would stop the accent at a
             button, and the plate's right edge then reads read-then-press — the
-            stat count's well above, the control below it. Half in, half out
-            (`translate-y-1/2`), which is what makes it a part rising out of the
-            edge rather than a chip parked inside the card. */}
+            stat count's well above, the control below it.
+
+            **Flush rather than straddling, which is the change.** Hanging half
+            below the border made the key a part rising out of the edge, and cost
+            20px of clearance to keep its lit face off the columns rail's lit
+            face — on a card that is pinned over the list, which is 20px of
+            league rows covered for a gap. Flush it costs the 4px its wall stands
+            on, and the corner it fills was empty plate. The wall is why it is
+            still a sibling outside the clip and not a `CornerTab`: a clipped
+            wall is a part with no thickness, which is the one thing a pressable
+            part must not be. */}
         {filters && (
-          <div className="absolute bottom-0 right-5 translate-y-1/2 sm:right-6">
-            {filters}
-          </div>
+          // Seated 3px up, `flex` so no inline baseline adds its own descender.
+          // `.lab-chip`'s wall is a `0 3px 0` shadow — the face's own shape
+          // shifted down — so a face resting 3px above the border puts the
+          // *wall* on the plate's bottom-right corner, tracing its radius. The
+          // part is then exactly contained by the plate: thickness visible,
+          // nothing overhanging, which is the whole of what flush buys over
+          // straddling. At `bottom-0` the face would fill the corner and the
+          // wall would hang below it, which is a smaller overhang than before
+          // but still an overhang to be cleared.
+          <div className="absolute bottom-[3px] right-0 flex">{filters}</div>
         )}
       </div>
 
