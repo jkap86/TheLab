@@ -38,7 +38,7 @@ export async function GET(
   if (!resolved.ok) return resolved.response;
   const { user, season, searchParams } = resolved;
 
-  // `?refresh=1` forces the full ~9-requests-per-league fan-out past the TTL, so
+  // `?refresh=1` forces the full ~11-requests-per-league fan-out past the TTL, so
   // it is an operator knob, not a public one: anonymous callers get the ordinary
   // stale-while-revalidate behaviour and the parameter is ignored. The route
   // itself stays public — this is a read every manager page makes, and the whole

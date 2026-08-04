@@ -8,8 +8,9 @@ import { getNflState, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague, SleeperNflState } from "@/shared/sleeper";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
-import { fetchLeagueGraph, type WeekRange } from "./graph";
+import { fetchLeagueGraph, type GraphWeeks, type WeekRange } from "./graph";
 import {
+  getStoredMaxMatchupWeekByLeague,
   getStoredMaxWeekByLeague,
   persistLeagueGraph,
   replaceManagerLeagueOrder,
@@ -24,6 +25,8 @@ export type LeagueCounts = {
   drafts: number;
   draftPicks: number;
   transactions: number;
+  /** Roster-weeks of scoring persisted (one row per roster per week). */
+  matchups: number;
 };
 
 export type SyncSummary = LeagueCounts & {
@@ -79,6 +82,7 @@ const emptyCounts = (): LeagueCounts => ({
   drafts: 0,
   draftPicks: 0,
   transactions: 0,
+  matchups: 0,
 });
 
 /**
@@ -104,10 +108,16 @@ export async function getCurrentWeek(): Promise<number> {
  * transaction, so a slow or failed league neither stalls the others nor rolls
  * back the batch. `onProgress` fires after each league completes.
  *
- * A league's transaction weeks are frozen once past, so only the tail is
- * re-fetched: from its last stored week minus one (to catch late-settling
- * waivers/trades in the just-closed week) up to `currentWeek`. A league with no
- * stored transactions is backfilled from week 1.
+ * A league's weeks are frozen once past, so only the tail of each week-keyed
+ * collection is re-fetched: from its last stored week minus one (to catch
+ * late-settling waivers and trades, and the stat corrections that move a closed
+ * week's points) up to `currentWeek`. A league with nothing stored is backfilled
+ * from week 1.
+ *
+ * Transactions and matchups are gated **separately**, on their own stored
+ * weeks. They fill up independently — every league stored before matchups
+ * existed has transactions through the current week and no matchups at all — so
+ * one shared gate would open the window past a whole unfetched season.
  */
 export async function syncLeagueGraphs(
   leagues: SleeperLeague[],
@@ -120,16 +130,19 @@ export async function syncLeagueGraphs(
   const { concurrency = LEAGUE_FETCH_CONCURRENCY, onProgress } = options;
   const total = leagues.length;
 
-  const storedMaxWeek = await getStoredMaxWeekByLeague(
-    leagues.map((l) => l.league_id),
-  );
-  const txWeeksFor = (leagueId: string): WeekRange => {
-    const stored = storedMaxWeek.get(leagueId);
-    return {
-      from: stored ? Math.max(stored - 1, 1) : 1,
-      to: Math.max(currentWeek, stored ?? 1, 1),
-    };
-  };
+  const leagueIds = leagues.map((l) => l.league_id);
+  const [storedMaxWeek, storedMaxMatchupWeek] = await Promise.all([
+    getStoredMaxWeekByLeague(leagueIds),
+    getStoredMaxMatchupWeekByLeague(leagueIds),
+  ]);
+  const tailFrom = (stored: number | undefined): WeekRange => ({
+    from: stored ? Math.max(stored - 1, 1) : 1,
+    to: Math.max(currentWeek, stored ?? 1, 1),
+  });
+  const weeksFor = (leagueId: string): GraphWeeks => ({
+    transactions: tailFrom(storedMaxWeek.get(leagueId)),
+    matchups: tailFrom(storedMaxMatchupWeek.get(leagueId)),
+  });
 
   let loaded = 0;
   let failed = 0;
@@ -141,7 +154,7 @@ export async function syncLeagueGraphs(
 
   await mapWithConcurrency(leagues, concurrency, async (league) => {
     try {
-      const graph = await fetchLeagueGraph(league, txWeeksFor(league.league_id));
+      const graph = await fetchLeagueGraph(league, weeksFor(league.league_id));
       await persistLeagueGraph(graph);
       counts.rosters += graph.rosters.length;
       counts.leagueUsers += graph.users.length;
@@ -149,6 +162,7 @@ export async function syncLeagueGraphs(
       counts.drafts += graph.drafts.length;
       counts.draftPicks += graph.draftPicks.length;
       counts.transactions += graph.transactions.length;
+      counts.matchups += graph.matchups.length;
       loaded += 1;
       loadedIds.push(league.league_id);
     } catch (error) {
@@ -167,14 +181,15 @@ export async function syncLeagueGraphs(
 }
 
 /**
- * Fetch a manager's leagues (and rosters, members, traded picks, drafts, and
- * draft picks) from Sleeper for a season and persist them to Postgres.
+ * Fetch a manager's leagues (and rosters, members, traded picks, drafts, draft
+ * picks, transactions and matchups) from Sleeper for a season and persist them
+ * to Postgres.
  *
  * Held under a per-manager advisory lock so concurrent callers — two tabs, or
- * two app instances sharing one database — don't each run the full ~9-requests-
- * per-league fan-out against Sleeper. The lock *waits* rather than skipping,
- * because callers want the data, not just the work done: a loser that skipped
- * would answer from a cache the winner is mid-way through writing. The
+ * two app instances sharing one database — don't each run the full
+ * ~11-requests-per-league fan-out against Sleeper. The lock *waits* rather than
+ * skipping, because callers want the data, not just the work done: a loser that
+ * skipped would answer from a cache the winner is mid-way through writing. The
  * freshness decision lives inside the lock (the "take it around the freshness
  * check too" rule), and a sync that completed while we queued counts as this
  * request's sync even when `force` is set — force means "the caller decided a

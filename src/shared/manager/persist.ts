@@ -4,6 +4,7 @@ import { bulkInsert, jsonb as j, pool, withTransaction } from "@/shared/db";
 import type { SleeperLeague } from "@/shared/sleeper";
 
 import type { LeagueGraph } from "./graph";
+import { dedupeMatchups } from "./matchups";
 
 /**
  * Store leagues Sleeper no longer serves, tombstoned on arrival.
@@ -155,6 +156,37 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
       j(t.settings), j(t.metadata),
     ],
   });
+
+  // Same rule as transactions, for the same reason: only the weeks this sync
+  // re-fetched are replaced. Points do move after a week closes (stat
+  // corrections), which is what the refresh window's one week of look-back is
+  // for — earlier weeks are settled and stay as stored.
+  await client.query(
+    `DELETE FROM matchups WHERE league_id = $1 AND week BETWEEN $2 AND $3`,
+    [l.league_id, g.matchupWeeks.from, g.matchupWeeks.to],
+  );
+  await bulkInsert(client, {
+    table: "matchups",
+    columns: [
+      "league_id", "week", "roster_id", "matchup_id", "points", "custom_points",
+      "starters", "players", "starters_points", "players_points",
+    ],
+    rows: dedupeMatchups(g.matchups),
+    values: (m) => [
+      l.league_id, m.week, m.roster_id, m.matchup_id, m.points,
+      m.custom_points, j(m.starters), j(m.players), j(m.starters_points),
+      j(m.players_points),
+    ],
+    // Reached only across chunk boundaries — a duplicate *within* one INSERT is
+    // what {@link dedupeMatchups} is for, because `ON CONFLICT DO UPDATE` does
+    // not cover that case: Postgres refuses the whole command with "cannot
+    // affect row a second time" rather than applying the clause.
+    onConflict: `(league_id, week, roster_id) DO UPDATE SET
+        matchup_id = EXCLUDED.matchup_id, points = EXCLUDED.points,
+        custom_points = EXCLUDED.custom_points, starters = EXCLUDED.starters,
+        players = EXCLUDED.players, starters_points = EXCLUDED.starters_points,
+        players_points = EXCLUDED.players_points, updated_at = now()`,
+  });
 }
 
 /** Persist one league graph in its own transaction (atomic per league). */
@@ -202,19 +234,46 @@ export function replaceManagerLeagueOrder(
 }
 
 /**
- * Highest transaction week already stored per league, for the given league ids.
- * Leagues with no transactions yet are absent from the map (→ full backfill).
+ * Highest week already stored per league in one of the week-keyed tables.
+ *
+ * The table is a closed union rather than a string, because it is interpolated:
+ * these are the only two collections Sleeper keys by week, and each needs its
+ * own answer. A league absent from the map has nothing stored there yet (→ full
+ * backfill), which is exactly the state every league is in for `matchups` until
+ * a sync has run since they were first stored — reading the transaction gate for
+ * both would leave those weeks permanently behind the refresh window.
  */
-export async function getStoredMaxWeekByLeague(
+async function maxWeekByLeague(
+  table: "transactions" | "matchups",
   leagueIds: string[],
 ): Promise<Map<string, number>> {
   if (leagueIds.length === 0) return new Map();
   const { rows } = await pool.query<{ league_id: string; max_week: number }>(
     `SELECT league_id, max(week) AS max_week
-       FROM transactions
+       FROM ${table}
       WHERE league_id = ANY($1::varchar[]) AND week IS NOT NULL
       GROUP BY league_id`,
     [leagueIds],
   );
   return new Map(rows.map((r) => [r.league_id, Number(r.max_week)]));
+}
+
+/**
+ * Highest transaction week already stored per league, for the given league ids.
+ * Leagues with no transactions yet are absent from the map (→ full backfill).
+ */
+export function getStoredMaxWeekByLeague(
+  leagueIds: string[],
+): Promise<Map<string, number>> {
+  return maxWeekByLeague("transactions", leagueIds);
+}
+
+/**
+ * Highest matchup week already stored per league. Absent means no matchups yet,
+ * which backfills the season — see {@link maxWeekByLeague}.
+ */
+export function getStoredMaxMatchupWeekByLeague(
+  leagueIds: string[],
+): Promise<Map<string, number>> {
+  return maxWeekByLeague("matchups", leagueIds);
 }

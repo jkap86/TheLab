@@ -141,6 +141,29 @@ export type SleeperTransaction = {
 };
 
 /**
+ * One roster's week, from `GET /v1/league/<league_id>/matchups/<week>`.
+ *
+ * This is a *side*, not a game: the two rosters facing each other share a
+ * `matchup_id`, and it is null when a roster has no opponent that week — a bye
+ * in an odd-sized league, or a week the league has not scheduled.
+ *
+ * `starters_points` is positional against `starters`; `players_points` is keyed
+ * by player_id. Every field but `roster_id` is nullable because a week with no
+ * scoring yet omits them, and nothing about this payload is versioned.
+ */
+export type SleeperMatchup = {
+  roster_id: number;
+  matchup_id: number | null;
+  points: number | null;
+  /** Commissioner override; null unless one was set. */
+  custom_points: number | null;
+  starters: string[] | null;
+  players: string[] | null;
+  starters_points: number[] | null;
+  players_points: Record<string, number> | null;
+};
+
+/**
  * One player's projection for one week, from
  * `GET api.sleeper.com/projections/nfl/<season>/<week>` — undocumented, and on a
  * different host from the v1 API (see `SLEEPER_DATA_BASE`).

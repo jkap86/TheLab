@@ -259,6 +259,13 @@ upstream hiccup returning nothing can't empty the slice.
 query (`pts_ppr::float8`) rather than converting in TypeScript, so a value is a
 number by the time it leaves the query layer.
 
+**`ON CONFLICT DO UPDATE` does not deduplicate a multi-row INSERT.** Postgres
+refuses the whole command — "cannot affect row a second time" — when one
+statement carries the same key twice, so the clause covers `bulkInsert`'s chunk
+boundaries and nothing inside a chunk. A payload whose natural key could repeat
+is deduplicated in code first (`manager/matchups`), because what a duplicate
+costs otherwise is the league's entire sync transaction, every collection in it.
+
 Schema: nested Sleeper payloads (settings, scoring, metadata, id arrays) stay
 `JSONB`; promote a column only when it gets queried or joined on. Migrations are
 plain SQL in `db/migrations`, applied automatically on boot.
@@ -2475,6 +2482,19 @@ stops holding, a comment saying it does would not have caught it.
   "dynasty" rather than leaving it to be inferred.
 - Transactions are keyed by week with no all-at-once endpoint; a league's full
   history is the union of each week.
+- **Matchups are the second collection keyed that way, and the two are gated
+  separately.** `league/<id>/matchups/<week>` returns a *side* per roster, not a
+  game — the two sides share a `matchup_id`, null for a bye or an unscheduled
+  week — so `matchups` is keyed `(league_id, week, roster_id)` and a sync
+  replaces only the weeks it re-fetched, exactly as transactions do. What must
+  not be shared is the **stored-max-week gate**: the two collections fill up
+  independently, and every league stored before matchups existed has
+  transactions to the current week and no matchups at all, so reading the
+  transaction gate for both would open the refresh window past a whole
+  unfetched season. `fetchLeagueGraph` therefore takes a range per collection
+  and runs both through one bounded per-league pool — adding a second request
+  per week doubles the burst otherwise, and the crawler's discovery budget
+  (`CRAWL_DISCOVERY_CAP`) is written against that arithmetic.
 - **Projections live on a different host and aren't documented or versioned.**
   `api.sleeper.com/projections/nfl/<season>/<week>`, not `api.sleeper.app/v1` —
   and the v1 host answers that path with 200 and an object of empty objects, so a
