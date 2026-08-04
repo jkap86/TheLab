@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { useAdpControls } from "../filters-context";
@@ -26,9 +28,17 @@ import { LeaguesViewLayout } from "./leagues-view-layout";
  * and {@link LeaguesViewLayout} and vary only in the resource they read, the count
  * line, and the body. Here the body is the card list; the resource is the rank
  * and KTC chips those cards wear.
+ *
+ * Which league is open lives here rather than in the card, because opening one
+ * is a claim about the whole page: the card is pulled to the top of the screen
+ * and capped at it, and the manager plate above lets go of the top so the panel
+ * has the screen to itself. Two cards making that claim at once is two things
+ * each asking to be the one being read, so opening a league closes the one
+ * before it.
  */
 export function ManagerLeagues({ searched }: { searched: string }) {
   const view = useFilteredLeagues(searched);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   // The card chips are a bonus on top of the list, so a fetch that fails costs
   // the chips and nothing else — the errors go deliberately unread. Three reads
@@ -58,6 +68,13 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   const total = view.data?.leagues.length ?? 0;
   const showing = view.filtered.length;
 
+  // Read against the list on screen rather than trusted: narrowing the filters
+  // can take the open league out from under the selection, and an id pointing
+  // at a card nobody can see would leave the header unpinned for a panel that
+  // isn't there. Derived during render, so there is no effect chasing the
+  // filters to reset it.
+  const open = view.filtered.some((l) => l.league_id === openId) ? openId : null;
+
   // What the editor previews a metric against: the first league on screen. An
   // assumption — every league has its own numbers — so the editor names it in
   // the footer rather than letting `#3 / 12` pass as the column's own answer.
@@ -81,6 +98,10 @@ export function ManagerLeagues({ searched }: { searched: string }) {
         value: showing,
         sub: showing === total ? undefined : `of ${total} total`,
       }}
+      // The header lets go of the top while a league is open — the open card is
+      // sized to the screen, and a plate pinned over it would be taking a
+      // quarter of the panel to restate facts about the account.
+      pinned={open === null}
       columns={
         <ColumnsBar
           metrics={LEAGUE_METRICS}
@@ -106,6 +127,12 @@ export function ManagerLeagues({ searched }: { searched: string }) {
             valuedAt={ktc.data?.updated_at ?? null}
             adp={adp.data?.leagues[league.league_id] ?? null}
             columns={columns}
+            expanded={open === league.league_id}
+            onToggle={() =>
+              setOpenId((current) =>
+                current === league.league_id ? null : league.league_id,
+              )
+            }
           />
         ))}
       </ul>

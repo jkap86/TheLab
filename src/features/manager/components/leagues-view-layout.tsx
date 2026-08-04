@@ -79,6 +79,7 @@ export function LeaguesViewLayout({
   view,
   stat,
   columns,
+  pinned = true,
   children,
 }: {
   view: FilteredLeagues;
@@ -91,6 +92,13 @@ export function LeaguesViewLayout({
    * scaffold's business; a tab whose list has no stat columns omits it.
    */
   columns?: ReactNode;
+  /**
+   * Whether the header keeps the top of the screen — see {@link ManagerHeader}'s
+   * own note. A tab lowers it while one of its rows has opened into something
+   * that owns the viewport; only the leagues tab has such a row today, so the
+   * default is the pinned card every tab has always had.
+   */
+  pinned?: boolean;
   /** The tab's content, rendered once at least one league passes the filters. */
   children: ReactNode;
 }) {
@@ -165,6 +173,7 @@ export function LeaguesViewLayout({
         // Only where there are rows for it to head: a heading rail over "no
         // leagues match these filters" names columns nothing is under.
         columns={filtered.length > 0 ? columns : undefined}
+        pinned={pinned}
       />
 
       {/* The trigger is drawn in the app bar rather than in the header's dock —
