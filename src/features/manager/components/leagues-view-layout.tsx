@@ -4,20 +4,22 @@ import dynamic from "next/dynamic";
 import { type ReactNode, useMemo, useState } from "react";
 
 import {
+  AdpTrigger,
   HeaderSlot,
   LeagueFiltersModal,
   PageShell,
   activeFilterCount,
+  adpNarrowingCount,
+  adpQueryString,
   filterSummary,
+  todayIso,
+  useAdp,
+  useAdpDensity,
 } from "@/features/shared";
 
-import { adpNarrowingCount, adpQueryString, todayIso } from "../adp-controls";
 import { useAdpControls } from "../filters-context";
-import { useAdp } from "../hooks/use-adp";
-import { useAdpDensity } from "../hooks/use-adp-density";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
 import { aggregateRecord } from "../record";
-import { AdpTrigger } from "./adp-drawer";
 
 /**
  * The board drawer, loaded the first time it is opened.
@@ -35,7 +37,7 @@ import { AdpTrigger } from "./adp-drawer";
  * third.
  */
 const AdpDrawer = dynamic(
-  () => import("./adp-drawer").then((m) => m.AdpDrawer),
+  () => import("@/features/shared/ui/adp-drawer").then((m) => m.AdpDrawer),
   { ssr: false },
 );
 import { ManagerHeader, type HeaderStat } from "./manager-header";

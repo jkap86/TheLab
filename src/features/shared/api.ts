@@ -32,3 +32,13 @@ export async function apiFetch(
  */
 export const isAbortError = (error: unknown): boolean =>
   error instanceof Error && error.name === "AbortError";
+
+/** Read one of this app's JSON routes, as every query hook does. */
+export async function fetchJson<T>(
+  url: string,
+  fallbackError: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  const res = await apiFetch(url, { signal, fallbackError });
+  return (await res.json()) as T;
+}

@@ -79,14 +79,12 @@ export function SiteHeader() {
             />
           </>
         )}
-        {/* The seat a page fills — the ADP board's trigger today. It sits beside
-            the page chip rather than beside the Tools key on purpose: what it
-            opens belongs to the tool you are in, not to the app, and the two
-            navigation parts stay together at the ends of the bar. An unfilled
-            seat has no width, so every other page's bar is laid out exactly as
-            it was. */}
-        <HeaderSlotTarget />
-        <div className="ml-auto flex-none">
+        {/* The seat a page fills — the ADP board's trigger today — sits beside
+            the Tools key at the bar's trailing end, both pushed there by this
+            wrapper's `ml-auto`. An unfilled seat has no width, so every other
+            page's bar is laid out exactly as it was. */}
+        <div className="ml-auto flex flex-none items-center gap-2.5 sm:gap-3.5">
+          <HeaderSlotTarget />
           <ToolsMenu />
         </div>
       </div>

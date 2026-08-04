@@ -30,29 +30,16 @@ const seasonKey = (season?: string): string => season ?? "default";
 /** The manager as the cache spells them — see the lower-casing note above. */
 const managerKey = (searched: string): string => searched.toLowerCase();
 
-/**
- * An `/api/adp` query string reduced to its meaning: every parameter as a
- * `[name, value]` pair, sorted by name.
- *
- * The board is fetched by two consumers — the Players tab's ADP column and the
- * drawer's own board — and they must land on one cache entry or the drawer
- * re-fetches a board the page already has. `adpQueryString` builds both, so in
- * practice they already agree; normalising anyway is what keeps that true when a
- * third caller assembles the same filters in a different order, or sends
- * `limit=1000` where the other sent it first. The pairs are an array rather than
- * an object because a repeated parameter is legal in a query string and an
- * object would silently keep only the last one.
- */
-export type NormalizedAdpQuery = readonly (readonly [string, string])[];
-
-export function normalizeAdpQuery(query: string): NormalizedAdpQuery {
-  const pairs: [string, string][] = [];
-  for (const [name, value] of new URLSearchParams(query)) pairs.push([name, value]);
-  pairs.sort((a, b) => (a[0] === b[0] ? compare(a[1], b[1]) : compare(a[0], b[0])));
-  return pairs;
-}
-
-const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+// The board's own query key moved to `features/shared` once the trades page
+// started reading the same board — it was never manager-scoped to begin with
+// (see `boardQueryKeys`'s own note), so a second feature reading it is the
+// mover's rule applying to a key rather than a component. Re-exported under
+// its old name for this feature's own consumers.
+export {
+  boardQueryKeys,
+  normalizeAdpQuery,
+  type NormalizedAdpQuery,
+} from "../shared/adp-query.ts";
 
 export const managerQueryKeys = {
   /** Every manager-scoped entry, for a blunt "drop it all" invalidation. */
@@ -90,21 +77,6 @@ export const managerQueryKeys = {
    */
   adpValue: (searched: string, season: string | undefined, steepness: number | string) =>
     [...managerQueryKeys.adpValues(searched, season), String(steepness)] as const,
-};
-
-/**
- * The global ADP board and the density strip under its scrubber.
- *
- * Deliberately *not* under the manager prefix: `/api/adp` describes every draft
- * this app has crawled, narrowed by settings — the same board is the same answer
- * whichever manager is being looked at, so scoping it to one would re-fetch an
- * identical board per manager and let a manager-wide invalidation throw away a
- * board that has nothing to do with them.
- */
-export const boardQueryKeys = {
-  all: ["adp"] as const,
-  adp: (query: string) => [...boardQueryKeys.all, "board", normalizeAdpQuery(query)] as const,
-  density: () => [...boardQueryKeys.all, "density"] as const,
 };
 
 /** `/api/league/[leagueId]` — the expanded card's standings and rosters. */

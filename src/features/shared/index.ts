@@ -47,6 +47,36 @@ export {
   todayIso,
 } from "./date-range";
 export { ordinal } from "./format";
+export { firstKickoff, nflMarkers, nflMarkersIn } from "./nfl-calendar";
+export type { NflMarker, NflMarkerKind } from "./nfl-calendar";
+export {
+  ADP_PEAK,
+  DEFAULT_ADP_STEEPNESS,
+  DEFAULT_STEEPNESS,
+  STEEPNESS_RANGE,
+  adpNarrowingCount,
+  adpQueryString,
+  adpRangePresets,
+  boardLabel,
+  defaultAdpControls,
+  isUnboundedRange,
+  previewAdpPool,
+  previewAdpValue,
+  rangeBounds,
+  rangeLabel,
+  rangeSummary,
+  seasonOptions,
+  seedFromLeague,
+  steepnessSummary,
+} from "./adp-controls";
+export type { AdpControls, AdpRange, AdpRangeBounds, AdpRangePreset } from "./adp-controls";
+export { AdpControlsProvider, useAdpControls } from "./adp-controls-context";
+export { useAdp } from "./use-adp";
+export type { AdpState } from "./use-adp";
+export { useAdpDensity } from "./use-adp-density";
+export type { AdpDensityState } from "./use-adp-density";
+export { AdpDrawer, AdpTrigger } from "./ui/adp-drawer";
+export { PositionBadge } from "./ui/position-badge";
 export {
   TOOL_GROUPS,
   isToolActive,
