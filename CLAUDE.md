@@ -2158,8 +2158,31 @@ stops holding, a comment saying it does would not have caught it.
     cards' own columns spend the same pixel (drop it and every heading after the
     first sits one pixel left of the number it names, four unevenly shared
     below `sm`), while the lit wall is an inset highlight in the class. And the
-    **hover lights the whole cell, not the label** — a column that answers the
-    cursor with a colour change alone is text, where a lit face is a part.
+    **hover lights the part, not the label** — a column that answers the cursor
+    with a colour change alone is text, where a lit surface is a part.
+    **The face is lighter than the rows it heads, and each heading is cut into
+    it (`.lab-ledge-slot`) rather than painted on it.** Both halves fix one
+    complaint — the rail read as a grey band between the filter dock and the
+    first card — and the first half is the cause: the face used to end at
+    `#0c1c29`, *under* the page ground and well under the cards' lit glass, so a
+    header darker than its own content read as a gap between sections whatever
+    weight its labels were set in. Keep the darkest stop above the ground colour.
+    The second half is `.lab-channel` at heading scale, for the reason that class
+    exists: at 10px a label lying on a surface is text, and the same label in a
+    milled slot is a part — which is what a heading has to be here, since
+    pressing one opens the columns editor. The slot is what the *hover* lights
+    now, not the cell around it: with the label in a channel the channel is the
+    control, and washing the face beside it would light the one thing that
+    isn't. Two knock-ons worth keeping. The slot replaced the disclosure caret
+    rather than joining it — a channel says "control" without spending two
+    characters of a label that has to fit in 76px — and it retired the face's
+    two corner **dimples**, which now fall inside a slot's lit lip (the last
+    column's at every width, the first column's below `sm`, where the subject
+    cell is dropped): a 4px dot inside a channel reads as a blemish on the part,
+    not as machining in the face. The slot's inset comes out of the column's own,
+    which is why `COLUMN_WIDTH` is split from `COLUMN_BOX` — 6px of cell plus 4px
+    of channel lands the label at the same x as the number under it, and a shared
+    box owning the inset would have to be overridden by the rail.
   The notch is kept for the small parts and the panel stays rounded (the `H3`
   mockup of three): six rows of 11px text want a calm surface, and nothing else
   in the app has to change its corners to match.

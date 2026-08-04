@@ -522,8 +522,24 @@ body {
        every shadow on the rail. Two drop-shadows rather than one: a tight dark
        one where the wall meets the surface, a wide diffuse one beyond it.
 
-     The dimples are the two intact corners the notch leaves — recessed, so they
-     read as machining rather than as dots. */
+     It used to carry a recessed dimple in each of the two corners the notch
+     leaves intact, and **the channels took their place rather than merely
+     crowding them out.** A dimple was the only machining on a face that was
+     otherwise a flat gradient; with a slot cut under every heading there is a
+     great deal more of it, and both corners are now inside a slot's lit lip —
+     the last column's at every width, the first column's below `sm`, where the
+     subject cell is dropped and the channels run to the left edge. A 4px dot
+     sitting inside a channel reads as a blemish on the part rather than as
+     machining in the face, which is why they are gone rather than nudged.
+
+     **The face is lighter than the rows it heads, and that is the fix rather
+     than a preference.** Its last stop used to be `#0c1c29`, which is *under*
+     the page ground (`rgb(10,20,30)`) and well under the cards' lit glass — so
+     below the top lip the rail was a hole, and a header darker than its own
+     content reads as a gap between sections however the type on it is set. The
+     stops all sit above the cards now, which is what lets the labels be read as
+     a band covering the list instead of a shelf between two lit things. Keep
+     the darkest stop above the ground colour when retuning it. */
   .lab-ledge {
     padding-bottom: 5px;
     background: linear-gradient(180deg, #071825 0%, #030e17 100%);
@@ -533,15 +549,15 @@ body {
   .lab-ledge-face {
     background: linear-gradient(
       177deg,
-      #47738f 0px,
-      #47738f 1.5px,
-      #2e5470 3px,
-      #21405a 16%,
-      #14283a 62%,
-      #0c1c29 100%
+      #6d9cba 0px,
+      #6d9cba 1.5px,
+      #416f8e 3px,
+      #315874 16%,
+      #1c374c 62%,
+      #122636 100%
     );
     box-shadow:
-      inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.55),
       inset 0 -7px 12px -7px rgba(0, 0, 0, 0.75);
     /* Engraved labels, inherited rather than set per heading: the lit lip sits
        under the glyph and the shadow above it, which is the light this face is
@@ -568,22 +584,46 @@ body {
   .lab-ledge-col + .lab-ledge-col {
     box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.1);
   }
-  /* The face itself lights, not only the label — a column that answers the
-     cursor with a colour change alone reads as text, where the whole cell
-     lighting reads as a part. `:focus-within` so a keyboard reader gets the
-     same cell, since the heading is the editor's trigger. */
-  .lab-ledge-col:hover,
-  .lab-ledge-col:focus-within {
-    background: linear-gradient(180deg, rgba(0, 255, 229, 0.12), transparent 85%);
-  }
-  /* A milled dimple. Recessed: the shadow inside, the lit lip below. */
-  .lab-ledge-dimple {
-    background: #0a1a26;
-    box-shadow:
-      inset 0 1px 1px rgba(0, 0, 0, 0.9),
-      0 1px 0 rgba(255, 255, 255, 0.13);
-  }
+  /* **A heading is cut into the face, not painted on it.** This is
+     `.lab-channel` at heading scale and for the same reason: at 10px a label
+     painted on a surface is read as text, where the same label sitting in a
+     milled slot is read as a part — which is what a heading here has to be,
+     since pressing one opens the columns editor armed on that slot.
 
+     Recessed is the right side of the raised/recessed grammar even though this
+     *is* a trigger. What is raised here is the rail: the whole billet is the
+     `.lab-key`, and a slot cut into its face marks where a press lands rather
+     than claiming to be a second key sitting on top of one. Four shadows, each
+     doing a job — the cut, its lit far lip, the hairline of light where the
+     face falls away below it, and a text shadow that replaces the face's own
+     engraving (that one lights the glyph from beneath, which is right on a lit
+     face and wrong inside a dark channel).
+
+     It carries no radius, padding or width: those are layout, and they live in
+     utilities at the call site per the rule this whole file holds to. */
+  .lab-ledge-slot {
+    background: linear-gradient(180deg, #0b1c28, #123045);
+    box-shadow:
+      inset 0 2px 3px rgba(0, 0, 0, 0.8),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+      0 1px 0 rgba(255, 255, 255, 0.07);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  }
+  /* The cursor lights the inside of the channel, and the cut still reads.
+     The whole *cell* used to wash cyan, which was right while the label was
+     painted on the face — a column answering the cursor with a colour change
+     alone reads as text, so the cell had to light to read as a part. With the
+     label in a channel the channel is the part, and washing the face around it
+     would light the one thing here that isn't the control. `:focus-within` on
+     the column, since what a keyboard reader lands on is the button inside. */
+  .lab-ledge-col:hover .lab-ledge-slot,
+  .lab-ledge-col:focus-within .lab-ledge-slot {
+    background: linear-gradient(180deg, #08202a, #0f3b46);
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.85),
+      inset 0 0 10px rgba(0, 255, 229, 0.22),
+      0 1px 0 rgba(255, 255, 255, 0.08);
+  }
   /* The same grammar for a continuous control: a milled slot with a raised key
      riding in it — the ADP drawer's value curve. The track is recessed for the
      reason the current-page chip is (it is the thing being read, not pressed)

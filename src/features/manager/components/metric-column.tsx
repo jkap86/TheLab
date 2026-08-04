@@ -27,8 +27,18 @@ import type { Metric, MetricCell } from "../metric-cell";
  * wider than the 80px this used to hard-code, and, more to the point, a width
  * the heading rail can reproduce exactly. That is what keeps one geometry at
  * both breakpoints rather than two — see {@link MetricHeadings}.
+ *
+ * **The width is what the two ends share; the inset is not.** A heading's label
+ * sits in a milled slot with an inset of its own, so a heading spends its 10px
+ * as 6px of cell and 4px of channel where a cell spends all 10 at once — the
+ * text still starts at the same x, which is the whole of what has to hold. That
+ * is why {@link COLUMN_WIDTH} is split out and the padding is added per end: a
+ * shared box that also owned the inset would have to be overridden by the rail,
+ * which is the drift writing the geometry once was meant to prevent.
  */
-const COLUMN_BOX = "min-w-0 flex-1 px-2.5 sm:w-24 sm:flex-none sm:shrink-0";
+const COLUMN_WIDTH = "min-w-0 flex-1 sm:w-24 sm:flex-none sm:shrink-0";
+
+const COLUMN_BOX = `${COLUMN_WIDTH} px-2.5`;
 
 /**
  * The box the four columns sit in, worn by a card's cells and by the heading rail
@@ -157,6 +167,18 @@ export function MetricColumn<C>({
  * `globals.css`; what stays here is the layout, per the rule those classes hold
  * to.
  *
+ * **Each heading is cut into that face rather than painted on it, and it carries
+ * no caret.** The rail read as a grey band between the filter dock and the first
+ * card, and the cause was material before it was typographic: the face ended
+ * *darker* than the cards it heads, and four 10px labels lying flat on it are
+ * text whatever weight they are set in. The face is lighter than the rows now
+ * (`.lab-ledge-face`), and the label sits in a `.lab-ledge-slot` — the app bar's
+ * milled channel at heading scale, which is this app's existing answer to making
+ * a small label read as a part. The slot does the caret's job better than the
+ * caret did: a channel says "this is a control" without spending two characters
+ * of a label that has to fit in 76px, and it marks where the four columns are
+ * before the words are read at all.
+ *
  * **The billet spans the row, and its first cell names the row's subject.** It
  * used to shrink-wrap the four columns, which put a raised island over the right
  * two-fifths of the list with a hundred card-widths of nothing to its left — at
@@ -207,18 +229,6 @@ export function MetricHeadings({
         cut into machining is `.lab-ledge-col`'s inset highlight.
       */}
       <div className="lab-ledge-face lab-notch-lg relative flex w-full items-stretch divide-x divide-[rgba(0,0,0,0.5)]">
-        {/* The two corners the notch leaves intact — top-right and bottom-left.
-            They precede the columns, which is why `.lab-ledge-col + .lab-ledge-col`
-            names the class rather than using a bare sibling selector. */}
-        <span
-          aria-hidden="true"
-          className="lab-ledge-dimple pointer-events-none absolute bottom-1 left-1 h-1 w-1 rounded-full"
-        />
-        <span
-          aria-hidden="true"
-          className="lab-ledge-dimple pointer-events-none absolute right-1 top-1 h-1 w-1 rounded-full"
-        />
-
         {/*
           The name column's own heading, and the half of this rail that makes it
           read as one. It takes the space the four cells don't (`flex-1`), which
@@ -228,7 +238,7 @@ export function MetricHeadings({
           draws that one, which is the line between what a row *is* and what is
           measured about it).
         */}
-        <span className="hidden min-w-0 flex-1 items-center truncate py-[9px] pl-1 pr-2.5 text-[10px] font-semibold uppercase tracking-wider text-foreground/45 sm:flex">
+        <span className="hidden min-w-0 flex-1 items-center truncate py-[9px] pl-1 pr-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/75 sm:flex">
           {subject}
         </span>
 
@@ -237,7 +247,12 @@ export function MetricHeadings({
           return (
             <div
               key={slot}
-              className={`lab-ledge-col group/col relative py-[9px] ${COLUMN_BOX}`}
+              // 6px of cell against the cells' own 10px, with the slot's 4px
+              // making up the difference — see {@link COLUMN_WIDTH}. The
+              // vertical padding is the same trade, so the rail is exactly as
+              // tall as it was: it is pinned inside the manager header, and a
+              // heading that grows takes its height out of the list behind it.
+              className={`lab-ledge-col group/col relative px-1.5 py-1.5 ${COLUMN_WIDTH}`}
             >
               <button
                 type="button"
@@ -247,38 +262,17 @@ export function MetricHeadings({
                 // column's width — a truncated heading is the only name its
                 // column has.
                 title={metric?.label}
-                className="flex w-full items-center text-left"
+                className="block w-full text-left"
               >
-                <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wider text-foreground/70 transition-[color,text-shadow] group-hover/col:text-active group-hover/col:[text-shadow:0_0_12px_rgba(0,255,229,0.55)]">
+                <span className="lab-ledge-slot block truncate rounded-[3px] px-1 py-[3px] text-[10px] font-semibold uppercase tracking-wider text-foreground/90 transition-colors group-hover/col:text-active">
                   {metric?.label}
                 </span>
               </button>
-              <Caret />
             </div>
           );
         })}
       </div>
     </div>
-  );
-}
-
-/**
- * The heading's disclosure mark: dim at rest, lit on hover.
- *
- * Absolutely placed over the column's right gutter rather than laid in the row
- * beside the label — a 10px mark and its gap is two characters out of a label
- * that already has to fit in 76px, and the gutter is empty. It centres on the
- * label's line rather than sitting at the column's top, since the column is a
- * cell of the rail now and has padding of its own above the text.
- */
-function Caret() {
-  return (
-    <span
-      aria-hidden="true"
-      className="pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 text-[8px] leading-none text-foreground/30 transition-colors group-hover/col:text-active"
-    >
-      ▾
-    </span>
   );
 }
 
