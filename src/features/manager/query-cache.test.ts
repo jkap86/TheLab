@@ -7,6 +7,7 @@ import {
   type QueryObserverOptions,
 } from "@tanstack/react-query";
 
+import { ADP_STALE_TIMES } from "../shared/adp-query.ts";
 import { STALE_TIMES } from "./query-config.ts";
 import {
   fetchJson,
@@ -55,7 +56,7 @@ const leaguesOptions = (searched: string) => ({
 const adpOptions = (query: string) => ({
   queryKey: boardQueryKeys.adp(query),
   queryFn: () => fetchJson<{ query: string }>(`/api/adp?${query}`, "Failed to load ADP"),
-  staleTime: STALE_TIMES.adp,
+  staleTime: ADP_STALE_TIMES.board,
 });
 
 test("navigating between sibling manager routes", async (t) => {

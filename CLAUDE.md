@@ -457,8 +457,20 @@ keep from coming back:
 | File | Side | Job |
 | --- | --- | --- |
 | `shared/manager/adp-filters.ts` | server | validates `/api/adp`'s query string |
-| `features/manager/adp-controls.ts` | client, pure | *builds* that query string, resolves the date range, seeds it from a league |
-| `features/manager/components/adp-drawer.tsx` | client, UI | the drawer that drives the controls |
+| `features/shared/adp-controls.ts` | client, pure | *builds* that query string, resolves the date range, seeds it from a league |
+| `features/shared/ui/adp-drawer.tsx` | client, UI | the drawer that drives the controls |
+
+**The two client files are in `features/shared` and not `features/manager`,
+which is the mover's rule and not a filing preference.** The board describes
+every crawled draft, so it was never a fact about a manager; what kept it in
+that feature was only that the manager tool read it first. The trades page is
+the second reader, so `adp-controls`, `adp-controls-context`, `use-adp`,
+`use-adp-density`, `adp-query` (the board's own cache key), the drawer, the
+range scrubber, `range-domain` and `nfl-calendar` all moved out, and
+`features/manager` re-exports each under its old name so its own consumers
+read one canonical definition under two names. `shared/manager/adp-filters.ts`
+did **not** move: it is the server half, and it was already outside the
+feature.
 
 The two ends are a matched pair with no compiler link between them — the client
 writes the vocabulary the server parses (the scoring buckets, the league-type
@@ -1131,6 +1143,29 @@ stops holding, a comment saying it does would not have caught it.
     static, the part nobody has opened is split. The ADP drawer and the columns
     editor are split the same way in the manager tool, each latched so closing
     doesn't unmount the dialog inside its own `close` handler.
+
+    **A `dynamic()` import splits nothing if the trigger sits in the same module
+    as the thing it opens, and nothing at all if a barrel re-exports either
+    one.** Both halves were learned here and both are invisible in review — the
+    code reads as split and the bundle is not. `AdpTrigger` and `AdpDrawer` lived
+    in one file, so the trigger's *static* import pulled the drawer, the range
+    scrubber, `nfl-calendar` and `range-domain` into the graph and the
+    `dynamic()` beside it bought nothing; `AdpTrigger` is
+    `features/shared/ui/adp-trigger.tsx` now, and the seam is a module boundary
+    rather than an export name. Then re-exporting the drawer from
+    `features/shared/index.ts` put it in the graph of **every page that imports
+    anything from that barrel** — `/tools`, `/picktracker` and `/lineupchecker`
+    were each shipping an ADP drawer they have no button for. So the barrel
+    exports the trigger and never the drawer, and a `dynamic()` call site names
+    the module path directly. The check is one command, and worth running
+    whenever something behind a press moves house:
+
+    ```
+    grep -rl "<a string only the split-out part contains>" .next/static/chunks/
+    # → then grep that chunk's name in .next/server/app/<route>.html
+    ```
+
+    A route with no button for the part must not name its chunk.
   - **The board holds its previous pages while a new filter set lands**
     (`keepPreviousData`). It is what makes committing live affordable: a filter
     change is a *different key* with nothing in it, so without this every press
@@ -1349,7 +1384,21 @@ stops holding, a comment saying it does would not have caught it.
   reset per manager by the same subtree key — because the ADP controls stopped
   being a Players-tab thing: their board filters drive that tab's per-player ADP
   *and* their steepness drives the Leagues tab's team value, so a curve chosen on
-  one tab has to survive the trip to the other. Unlike the league filters, whose
+  one tab has to survive the trip to the other.
+
+  **The provider is per *tool*, not per app, and the trades page mounts a second
+  one.** That page reads the same board (`app/trades/page.tsx` wraps `TradesHome`
+  in its own `AdpControlsProvider`), and the temptation is to hoist one provider
+  to the root layout so a board chosen anywhere follows you everywhere. That is
+  wrong for the reason the two filter sets above are wrong to merge: what the two
+  boards *mean* differs. The manager drawer's size options are the sizes you
+  play and its "Match a league…" seeds from a league you play in; the trades
+  drawer has no account to read, draws no seed control at all (see below), and
+  reads its sizes off the whole crawled corpus. A shared selection would carry a
+  board seeded from one manager's league onto a page that is about nobody. Two
+  providers, one store definition.
+
+  Unlike the league filters, whose
   provider holds a selection from the start, `AdpControls` used to open as
   **null** — its default was the viewed season, which the layout doesn't know, so
   each tab filled it in through a `useAdpControlsFor(season)` the consumers all
@@ -1373,6 +1422,19 @@ stops holding, a comment saying it does would not have caught it.
   least like. The season is seeded for the same kind of reason — a 2025 league's
   board is read from 2025 drafts, and leaving it on this year prices the league
   against a market it was never in.
+
+  **That bridge is a manager-tab control and the trades board draws none**
+  (`seedLeagues`, which the drawer takes separately from the `leagues` its size
+  options are read off). It looks like the same control over a longer list and is
+  a different one: seeding is a *shortcut*, and it works because you pick the
+  league by name — you know it, and you know what its settings are. The trades
+  board's population is every crawled league in the season, so the same menu is
+  alphabetised strangers whose settings you have no opinion about and whose names
+  you cannot search for. That is the tell for whether a control ports to that
+  page: every other filter in this drawer describes the *market* and works there
+  unchanged; this one describes the *reader*, and that page deliberately has
+  none. Two league props rather than one list passed twice, because the two
+  populations genuinely differ there.
 - **The ADP controls are a drawer behind one button, not a bar on the page.** Ten
   selects and a caption sat above the first row of every manager tab — ~110px of
   chrome, wrapping to three lines on a laptop — for settings that are chosen once
@@ -1727,6 +1789,48 @@ stops holding, a comment saying it does would not have caught it.
   `PageShell`'s `wide` gutter and paints `--background`, because a transparent
   pinned card lets the rows scroll through the gaps around its rounded corners.
   Its `z-40` sits above the cards' `z-30` menus and below the drawer's `z-50`.
+  **It lets go of the top for exactly one thing: a league card opened into its
+  detail panel** (`pinned`, defaulting to true and lowered only by
+  `ManagerLeagues`). That is the same argument the pinning rests on, run the
+  other way — a pinned card is paying for its height out of whatever is behind
+  it, and an open panel is sized to the screen, so the plate would be taking a
+  quarter of the one thing being read to restate facts about the account. What
+  makes it cheap is that a sticky element occupies its normal flow space either
+  way: the swap is `sticky` → `relative` and nothing moves, the plate simply
+  stops following the scroll. `relative` rather than nothing, because the fade
+  below the header is an `::after` on that box.
+- **An open league card is one screen: pulled to the top, capped there, and
+  scrolling inside itself.** The panel is several hundred rows in a deep dynasty
+  league, so left to run it pushed its own card's head off the top of the screen
+  and the rest of the list several screens down. Four pieces hold the correction
+  up, and each is easy to undo by treating the cap as styling:
+  - **Which league is open lives in `ManagerLeagues`, not in the card.** Opening
+    one is a claim about the whole page — the card takes the screen and the
+    header lets go of the top — and two cards making that claim at once is two
+    things each asking to be the thing being read. So it is one id, and opening
+    a league closes the one before it. It is also **read against the filtered
+    list during render** rather than trusted: narrowing the filters can take the
+    open league off screen, and an id pointing at a card nobody can see would
+    leave the header unpinned for a panel that isn't there.
+  - **The scroll is `scrollIntoView` against a `scroll-mt`,** so the app bar's
+    height is the browser's arithmetic rather than a number read at runtime —
+    and only on *open*. Closing scrolls nothing: reversing a scroll the reader
+    didn't ask for is how a list loses its place.
+  - **The panel takes no `flex-1`.** A flex item's default `0 1 auto` is what
+    makes a short panel — one still loading, or a shallow league — exactly as
+    tall as its contents while only an overrunning one shrinks into the cap and
+    scrolls; `flex-1` would stretch every open card to the full screen whatever
+    it had to say. `min-h-0` is what allows the shrink at all, and the card's
+    head is `shrink-0` because the league's name is what says which panel this
+    is.
+  - **The cap is `svh`, and the scroll box repeats the card's radius.** `svh` is
+    the viewport *with* the browser's own chrome showing, which is the only unit
+    that keeps the promise on a phone; `dvh` would grow and shrink the card as
+    that chrome hides, which on a scrolling panel reads as the page fighting the
+    finger. A scroll container clips, so without `rounded-b-xl` the last roster
+    row paints square across the card's rounded corners — and `overscroll-contain`
+    keeps a flick at the end of the panel from carrying on into the list behind
+    it.
 - **The header is one plate with the filters' key seated in its bottom edge, and
   it got there in two moves worth reading together.** It was one card stacking
   identity, the season, the record and both control pills, which on a phone was
@@ -1990,14 +2094,24 @@ stops holding, a comment saying it does would not have caught it.
 - **The seat beside it is the one place a page may put a part in the chrome, and
   it holds a control rather than a link.** That is what keeps it from being the
   second navigation system the note above spent two paragraphs retiring: the ADP
-  block opens a drawer belonging to the tool you are already in, so it sits with
-  the page chip rather than with the tools key, and pressing it moves nobody
-  anywhere. The bar owns *where* the part goes and nothing about what it is —
+  block opens a drawer belonging to the tool you are already in, and pressing it
+  moves nobody anywhere. **It sits at the bar's trailing end, immediately left of
+  the tools key** — grouped with it in one `ml-auto` wrapper. It used to sit with
+  the page chip on the leading side, on the reasoning that a page's own control
+  belongs with the page's own name and the two navigation parts should hold the
+  ends; what that produced was a bar with a hole in the middle and the one thing
+  you press on most pages the furthest thing from the thumb already reaching for
+  Tools. Adjacency to the *hand* beat adjacency to the *idea*. The bar owns
+  *where* the part goes and nothing about what it is —
   `HeaderSlotTarget` is an empty flex box with a `data-header-seat` hook, and the
   only thing the bar asks about its occupant is whether there is one. Two rules
-  ride on that question and both are easy to undo. The seat is filled by a
-  **layout** and not a page, so the three manager tabs are one occupant rather
-  than three racing to fill it; and the wordmark's text hides below `sm` **only
+  ride on that question and both are easy to undo. **The seat takes exactly one
+  occupant per route**, which is a layout's job where a tool spans several routes
+  (the three manager tabs fill it once, from
+  `app/manager/[searched]/layout.tsx`, rather than three racing to) and the
+  page's own where a tool is one route (`/trades`, from `TradesHome`). Read the
+  rule as one-per-route and not as "a layout must do it" — filling it from a
+  component that mounts twice is the failure, wherever that component lives; and the wordmark's text hides below `sm` **only
   when the seat is filled**, since a mark, a wordmark, one chip and the tools key
   fit a 390px bar and a fifth part does not — with the block in and the wordmark
   out, "Leagues" is spelled in full where it had truncated to "Le…". That is the

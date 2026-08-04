@@ -5,7 +5,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { Avatar } from "@/features/shared";
+import { Avatar, firstKickoff } from "@/features/shared";
 
 import {
   countdownSegments,
@@ -14,7 +14,6 @@ import {
   formatWinPct,
 } from "../format";
 import { useKickoff } from "../hooks/use-kickoff";
-import { firstKickoff } from "../nfl-calendar";
 import type { OverallRecord } from "../record";
 import type { LeaguesResult, SyncProgress } from "../types";
 
@@ -99,6 +98,7 @@ export function ManagerHeader({
   stat,
   filters,
   columns,
+  pinned = true,
 }: {
   user: LeaguesResult["user"];
   season: string;
@@ -148,6 +148,16 @@ export function ManagerHeader({
    * the rows rather than with anything on this card.
    */
   columns?: ReactNode;
+  /**
+   * Whether the card holds the top of the screen. It normally does — that is the
+   * whole argument above — and the leagues tab lowers it while a league is
+   * expanded: an open panel is capped at the viewport and given the screen, so a
+   * card pinned over it would be spending a quarter of the one thing being read
+   * on facts about the account. Unpinning is a change of `position` and nothing
+   * else, because a sticky element occupies its normal flow space either way, so
+   * the plate stays exactly where it is and simply stops following the scroll.
+   */
+  pinned?: boolean;
 }) {
   // The key is machined into the plate's bottom-right corner, so the padding
   // under the content is the seam between it and the readout directly above —
@@ -193,7 +203,12 @@ export function ManagerHeader({
     // first row it heads is what makes the two read as separate things. With the
     // rail absent the header is a card above a list and keeps the fuller gap.
     <header
-      className={`sticky top-[var(--site-header-h)] z-40 -mx-4 -mt-10 flex flex-col gap-1.5 bg-[var(--background)] px-4 pt-1.5 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent ${
+      className={`${
+        // `relative` rather than nothing when it lets go: the fade below the
+        // header is an `::after` on this box, and an unpositioned header would
+        // hand it to whatever ancestor happens to be positioned instead.
+        pinned ? "sticky top-[var(--site-header-h)]" : "relative"
+      } z-40 -mx-4 -mt-10 flex flex-col gap-1.5 bg-[var(--background)] px-4 pt-1.5 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent ${
         columns ? "mb-3 pb-1.5" : "mb-6 pb-3"
       }`}
     >

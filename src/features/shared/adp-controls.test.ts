@@ -22,7 +22,7 @@ import {
   type AdpControls,
   type AdpRange,
 } from "./adp-controls.ts";
-import type { ManagerLeague } from "./types.ts";
+import type { ManagerLeague } from "@/shared/manager";
 
 /** A fixed "today" so the relative presets resolve to asserted dates. */
 const TODAY = "2026-07-31";

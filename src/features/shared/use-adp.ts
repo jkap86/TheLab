@@ -3,12 +3,11 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+import type { AdpPayload } from "@/shared/contract";
 import { errorMessage } from "@/shared/util";
 
-import { fetchJson } from "../query-fns";
-import { STALE_TIMES } from "../query-config";
-import { boardQueryKeys } from "../query-keys";
-import type { AdpPayload } from "../types";
+import { fetchJson } from "./api";
+import { ADP_STALE_TIMES, boardQueryKeys } from "./adp-query";
 
 export type AdpState = {
   data: AdpPayload | null;
@@ -55,7 +54,7 @@ export function useAdp(
     queryFn: ({ signal }) =>
       fetchJson<AdpPayload>(`/api/adp?${query}`, "Failed to load ADP", signal),
     enabled: enabled && query !== null,
-    staleTime: STALE_TIMES.adp,
+    staleTime: ADP_STALE_TIMES.board,
     placeholderData: keepPreviousData,
   });
 

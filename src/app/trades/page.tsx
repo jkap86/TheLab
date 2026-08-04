@@ -1,4 +1,4 @@
-import { PageShell } from "@/features/shared";
+import { AdpControlsProvider, PageShell } from "@/features/shared";
 import { TradesHome } from "@/features/trades";
 import { getActiveSeason } from "@/shared/season";
 
@@ -12,12 +12,18 @@ import { getActiveSeason } from "@/shared/season";
 export const dynamic = "force-dynamic";
 
 export default async function TradesPage() {
+  const season = await getActiveSeason();
   return (
     <PageShell width="wide">
       {/* The season crosses from the server the way the manager layout hands its
           ADP controls one: which league year is current is a server fact, not
-          something for pure client code to guess off a clock. */}
-      <TradesHome season={await getActiveSeason()} />
+          something for pure client code to guess off a clock. `AdpControlsProvider`
+          is mounted here rather than shared with the manager tool's own store —
+          this page's board describes every crawled draft, not one manager's
+          leagues, so there is no reason for the two selections to be one. */}
+      <AdpControlsProvider season={season}>
+        <TradesHome season={season} />
+      </AdpControlsProvider>
     </PageShell>
   );
 }

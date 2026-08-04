@@ -8,16 +8,18 @@ import {
   LeagueFiltersModal,
   PageShell,
   activeFilterCount,
+  adpNarrowingCount,
+  adpQueryString,
   filterSummary,
+  todayIso,
+  useAdp,
+  useAdpDensity,
 } from "@/features/shared";
+import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 
-import { adpNarrowingCount, adpQueryString, todayIso } from "../adp-controls";
 import { useAdpControls } from "../filters-context";
-import { useAdp } from "../hooks/use-adp";
-import { useAdpDensity } from "../hooks/use-adp-density";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
 import { aggregateRecord } from "../record";
-import { AdpTrigger } from "./adp-drawer";
 
 /**
  * The board drawer, loaded the first time it is opened.
@@ -35,7 +37,7 @@ import { AdpTrigger } from "./adp-drawer";
  * third.
  */
 const AdpDrawer = dynamic(
-  () => import("./adp-drawer").then((m) => m.AdpDrawer),
+  () => import("@/features/shared/ui/adp-drawer").then((m) => m.AdpDrawer),
   { ssr: false },
 );
 import { ManagerHeader, type HeaderStat } from "./manager-header";
@@ -77,6 +79,7 @@ export function LeaguesViewLayout({
   view,
   stat,
   columns,
+  pinned = true,
   children,
 }: {
   view: FilteredLeagues;
@@ -89,6 +92,13 @@ export function LeaguesViewLayout({
    * scaffold's business; a tab whose list has no stat columns omits it.
    */
   columns?: ReactNode;
+  /**
+   * Whether the header keeps the top of the screen — see {@link ManagerHeader}'s
+   * own note. A tab lowers it while one of its rows has opened into something
+   * that owns the viewport; only the leagues tab has such a row today, so the
+   * default is the pinned card every tab has always had.
+   */
+  pinned?: boolean;
   /** The tab's content, rendered once at least one league passes the filters. */
   children: ReactNode;
 }) {
@@ -166,6 +176,7 @@ export function LeaguesViewLayout({
         // Only where there are rows for it to head: a heading rail over "no
         // leagues match these filters" names columns nothing is under.
         columns={filtered.length > 0 ? columns : undefined}
+        pinned={pinned}
       />
 
       {/* The trigger is drawn in the app bar rather than in the header's dock —
@@ -212,6 +223,9 @@ export function LeaguesViewLayout({
         onReset={resetControls}
         defaultSeason={defaultSeason}
         leagues={data.leagues}
+        // The manager's own leagues, so "Match a league…" is a name they
+        // recognise — see the prop's note for why the trades board passes none.
+        seedLeagues={data.leagues}
         board={board}
         density={density}
       />

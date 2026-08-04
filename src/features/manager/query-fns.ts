@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { apiFetch } from "../shared/api.ts";
+import { apiFetch, fetchJson } from "../shared/api.ts";
 import { takeLines } from "../shared/ndjson.ts";
 import { dependentManagerQueryKeys } from "./query-keys.ts";
 import type { LeaguesResult, ManagerLeague, SyncProgress } from "./types";
@@ -20,15 +20,10 @@ import type { LeaguesStreamMessage } from "@/shared/contract";
  * `query-keys`.
  */
 
-/** Read one of this app's JSON routes, as every manager query does. */
-export async function fetchJson<T>(
-  url: string,
-  fallbackError: string,
-  signal?: AbortSignal,
-): Promise<T> {
-  const res = await apiFetch(url, { signal, fallbackError });
-  return (await res.json()) as T;
-}
+// Re-exported under its old name: this module's own consumers (the tests,
+// `fetchManagerResource` below) already import it from here, the same
+// mover's-rule habit `adp-controls` keeps for `todayIso`.
+export { fetchJson };
 
 /** One of the manager's cached sub-resources: rosters, membership, ranks, values. */
 export function fetchManagerResource<T>(

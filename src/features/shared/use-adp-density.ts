@@ -2,12 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import type { AdpDensityPayload } from "@/shared/contract";
+import type { DraftDensityMonth } from "@/shared/manager";
 import { errorMessage } from "@/shared/util";
 
-import { fetchJson } from "../query-fns";
-import { STALE_TIMES } from "../query-config";
-import { boardQueryKeys } from "../query-keys";
-import type { AdpDensityResult, DraftDensityMonth } from "../types";
+import { fetchJson } from "./api";
+import { ADP_STALE_TIMES, boardQueryKeys } from "./adp-query";
 
 export type AdpDensityState = {
   /** Ascending by month; empty until the first load lands, and after a failure. */
@@ -39,13 +39,13 @@ export function useAdpDensity(enabled: boolean): AdpDensityState {
   const density = useQuery({
     queryKey: boardQueryKeys.density(),
     queryFn: ({ signal }) =>
-      fetchJson<AdpDensityResult>(
+      fetchJson<AdpDensityPayload>(
         "/api/adp/density",
         "Failed to load draft activity",
         signal,
       ),
     enabled,
-    staleTime: STALE_TIMES.adpDensity,
+    staleTime: ADP_STALE_TIMES.density,
   });
 
   return {
