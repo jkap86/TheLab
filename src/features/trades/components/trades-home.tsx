@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
-  AdpTrigger,
   DEFAULT_LEAGUE_FILTERS,
   FlaskLoader,
   HeaderSlot,
@@ -18,6 +17,7 @@ import {
   useStoredAccount,
 } from "@/features/shared";
 import type { LeagueFilters } from "@/features/shared";
+import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { DEFAULT_TRADE_FILTERS, tradeRangeBounds } from "../filters";

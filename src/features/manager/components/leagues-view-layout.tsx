@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { type ReactNode, useMemo, useState } from "react";
 
 import {
-  AdpTrigger,
   HeaderSlot,
   LeagueFiltersModal,
   PageShell,
@@ -16,6 +15,7 @@ import {
   useAdp,
   useAdpDensity,
 } from "@/features/shared";
+import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 
 import { useAdpControls } from "../filters-context";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
