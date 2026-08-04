@@ -75,7 +75,10 @@ export { useAdp } from "./use-adp";
 export type { AdpState } from "./use-adp";
 export { useAdpDensity } from "./use-adp-density";
 export type { AdpDensityState } from "./use-adp-density";
-export { AdpDrawer, AdpTrigger } from "./ui/adp-drawer";
+// The trigger only. `AdpDrawer` is deliberately absent: it is loaded through
+// `dynamic()` at its call sites, and a barrel re-export would pull it back into
+// the static graph of every page that imports anything from here.
+export { AdpTrigger } from "./ui/adp-trigger";
 export { PositionBadge } from "./ui/position-badge";
 export {
   TOOL_GROUPS,
