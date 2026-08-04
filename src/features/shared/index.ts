@@ -59,6 +59,7 @@ export { AmbientBackdrop } from "./ui/ambient-backdrop";
 export { PageHeading } from "./ui/page-heading";
 export { PageShell } from "./ui/page-shell";
 export { LIST_ROW_HOVER, LIST_ROW_SURFACE, RowSheen } from "./ui/list-row";
+export { HeaderSlot } from "./ui/header-slot";
 export { SiteHeader } from "./ui/site-header";
 export { ToolsMenu } from "./ui/tools-menu";
 export { ToolIcon } from "./ui/tool-icon";

@@ -386,6 +386,44 @@ export function boardLabel(range: AdpRange, season: string): string {
 }
 
 /**
+ * How many of the board's settings are narrowing it away from the default —
+ * which, since the trigger stopped naming the board, is the one fact about it
+ * worth carrying outside the drawer.
+ *
+ * The trigger used to say `All of 2026 · 1,204 drafts` and therefore needed no
+ * indicator: it stated which board was loaded. Moved into the app bar it says
+ * only `ADP`, so the reader loses the difference between the board they left
+ * narrowed and the one everybody else sees — and that difference is exactly what
+ * makes a number on the page behind it mean something else. A count rather than
+ * a boolean because the caller can spell it either way, and because it is the
+ * same shape `activeFilterCount` hands the league filters' own trigger.
+ *
+ * Two judgement calls in what it counts. The **season** counts, though it is the
+ * board's population rather than one of its filters: a reader looking at 2024
+ * against a default of 2026 is reading a different market, which is a larger
+ * departure than any filter here, not a smaller one. The **steepness** does not,
+ * because it narrows nothing — it converts an ADP into value once averaged, so
+ * it changes the Leagues tab's team value and leaves the population the trigger
+ * describes untouched.
+ */
+export function adpNarrowingCount(
+  controls: AdpControls,
+  defaultSeason: string,
+): number {
+  const narrowing = [
+    controls.season !== defaultSeason,
+    !isUnboundedRange(controls.range),
+    controls.leagueType !== "all",
+    controls.scoring !== "all",
+    controls.superflex !== "all",
+    controls.bestBall !== "all",
+    controls.teams !== "all",
+    controls.rounds !== "all",
+  ];
+  return narrowing.filter(Boolean).length;
+}
+
+/**
  * The dates a range actually resolves to, in words — `since Aug 1, 2025`, `up
  * to Mar 3, 2026`, the pair when it is bounded both ways.
  *

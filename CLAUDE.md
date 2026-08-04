@@ -1376,15 +1376,48 @@ stops holding, a comment saying it does would not have caught it.
 - **The ADP controls are a drawer behind one button, not a bar on the page.** Ten
   selects and a caption sat above the first row of every manager tab — ~110px of
   chrome, wrapping to three lines on a laptop — for settings that are chosen once
-  and then read. `AdpTrigger` is seated in the header's control dock instead,
+  and then read. `AdpTrigger` was seated in the header's control dock instead,
   beside the league filters' own trigger, badged with the range and the draft
-  count, which is what a reader needs without opening anything. They stay **two
-  buttons** rather than two tabs of one dialog for the reason the two filter sets
-  stay independent: one narrows this manager's leagues, the other the whole
-  crawled database, and one dialog over both would suggest a single selection.
-  The pill is shared but the accent is not — the filters trigger takes the cyan
-  key face (`.lab-chip-on`) when a filter is active, a state the board has no
-  equivalent of, so tinting this one too would spend that signal on a constant.
+  count. **It is in the app bar now, and it says one word.** Three things moved
+  with it, and each is a consequence of the last:
+  - **The seat is a portal, not a prop** (`features/shared/ui/header-slot.tsx`).
+    The bar is mounted at the root layout and this trigger reads the manager
+    layout's ADP store, drives the drawer that layout renders and shows the board
+    it fetches — none of which can climb to a layout that knows nothing about a
+    manager. So `HeaderSlotTarget` marks where a part lands and `HeaderSlot`
+    portals one there: the part stays a child of the page as far as React is
+    concerned and only its *box* is in the bar. An unfilled seat has no width, so
+    every other page's bar is laid out exactly as before, and a manager with no
+    leagues fills nothing.
+  - **The label is the tool's name and the sentence is inside.** `All of 2026 ·
+    1,204 drafts` was right in a dock, where a line of chrome can afford a
+    sentence; the bar is a row of names at the width a phone has for all of them
+    at once, and the drawer states the board and the count in its own header one
+    press away. It is still named on hover — the desktop backstop the contracted
+    player names already use, not the plan, since the phone is the width the
+    change was made for.
+  - **It wears its own subject.** An accent rail down the leading face — the
+    manager plate's mark for "a readout follows" — and three descending bars,
+    which is what an ADP curve looks like at 13px. The bars stand in a milled
+    channel rather than being painted on the face, and that is the detail
+    carrying the depth: at this size the eye reads the *inside* of a part before
+    its outline, so three cyan rectangles are a texture where three solids with a
+    lit top edge and a dark side standing in a cut are objects.
+  - **The trigger takes a state it deliberately refused before.** It never wore
+    the accent, on the grounds that a board is always chosen so tinting it spends
+    a signal on a constant — an argument that held *because the trigger named the
+    board*. It doesn't now, so `adpNarrowingCount` lights the **bars** when the
+    board is narrowed away from the default (the season counts, being a different
+    market; the value curve doesn't, narrowing nothing) and raises the block's own
+    glow. The signal rides on the part that already means "board", and never on
+    the face: the bar keeps exactly one fully lit key, and that is Tools.
+
+  They stay **two controls** rather than two tabs of one dialog for the reason
+  the two filter sets stay independent: one narrows this manager's leagues, the
+  other the whole crawled database, and one dialog over both would suggest a
+  single selection. The split is spatial now as well — the filters stay in the
+  dock over the list they narrow, and the board sits up in the chrome with the
+  population it describes, which belongs to no manager at all.
   Two things inside the
   drawer are load-bearing. The controls are **pinned** and only the board scrolls:
   the point of the shape is that changing a filter and watching the ADP move is one
@@ -1709,11 +1742,14 @@ stops holding, a comment saying it does would not have caught it.
     under the app bar can't change how much of the list it covers as the season
     turns over.
   - **The dock hugs what it holds** (`w-fit`). Run to the card's width, a trough
-    with two chips at the left end is mostly empty slot on a desktop.
+    with a chip at its left end is mostly empty slot on a desktop. It holds one
+    control since the board's trigger went up into the app bar, and it *stays*
+    rather than being dropped: what a trough says is that the part in it operates
+    on the list below, not that there are two of them.
 - **The plate's record readout is where the filter bar used to be.** The two rows
   of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger is
-  down in the dock — next to `AdpTrigger`, which the same move brought there from
-  its own bar — and the space they freed carries the manager's season across the
+  down in the dock — where `AdpTrigger` sat beside it until the board moved into
+  the app bar — and the space they freed carries the manager's season across the
   filtered leagues: a dial for the win percentage, a proportion bar for the wins
   and losses behind it. The `Rostered` cell that used to stand in a rail of its
   own is folded onto the record's line, since how many of the leagues on screen
@@ -1904,8 +1940,8 @@ stops holding, a comment saying it does would not have caught it.
   held to at the smallest size: a part that does nothing when pressed must not
   look pressable, so the already-added state loses its wall rather than only
   dimming its text.
-- **`SiteHeader` is the only global chrome, and it is three zones: the mark
-  home, the page you are on, and every tool.** Every tool is reached by navigating
+- **`SiteHeader` is the only global chrome, and it is four zones: the mark
+  home, the page you are on, one seat the page fills, and every tool.** Every tool is reached by navigating
   away from `/tools`, which used to leave the back button as the only way home;
   the slim bar in `app/layout.tsx` closes that loop. It hides itself on `/tools`
   — the wordmark and the whole tool list *are* that page — which is the whole
@@ -1932,6 +1968,25 @@ stops holding, a comment saying it does would not have caught it.
   `/manager` is the username search and belongs to no tool, so the bar names
   nothing rather than guessing. The cost is real and was the trade asked for:
   Leagues → Players is two presses now instead of one.
+- **The seat beside it is the one place a page may put a part in the chrome, and
+  it holds a control rather than a link.** That is what keeps it from being the
+  second navigation system the note above spent two paragraphs retiring: the ADP
+  block opens a drawer belonging to the tool you are already in, so it sits with
+  the page chip rather than with the tools key, and pressing it moves nobody
+  anywhere. The bar owns *where* the part goes and nothing about what it is —
+  `HeaderSlotTarget` is an empty flex box with a `data-header-seat` hook, and the
+  only thing the bar asks about its occupant is whether there is one. Two rules
+  ride on that question and both are easy to undo. The seat is filled by a
+  **layout** and not a page, so the three manager tabs are one occupant rather
+  than three racing to fill it; and the wordmark's text hides below `sm` **only
+  when the seat is filled**, since a mark, a wordmark, one chip and the tools key
+  fit a 390px bar and a fifth part does not — with the block in and the wordmark
+  out, "Leagues" is spelled in full where it had truncated to "Le…". That is the
+  `:has()` query the tabs' removal retired, brought back for the same arithmetic
+  and this time asking about a seat rather than about a slot of tabs. It is
+  written as one `max-sm:group-has-[…]` utility rather than as `hidden` against
+  `sm:inline`, because those two collide: Tailwind v4 emits the display utilities
+  alphabetically and `.inline` beats `.hidden` at every width.
 - **A tool's `pattern` matches by prefix and the first match wins, so catalogue
   order is load-bearing.** `isToolActive` compares segment by segment and accepts
   a longer pathname, which is what makes `/picktracker` name the tool while you
@@ -1947,7 +2002,7 @@ stops holding, a comment saying it does would not have caught it.
   press me, recessed means you are here.** The tools trigger is a raised keycap
   that travels its own thickness on `:active`; the current-page chip is a
   recessed well; the icon tiles are moulded. Break that pairing and a label
-  invites a press that does nothing. Seven things in `globals.css` hold it up:
+  invites a press that does nothing. Eight things in `globals.css` hold it up:
   - **A `.lab-*` class carries material and never layout**, and it is in
     `@layer components` so a utility beside it wins. Both halves were learned the
     same way. `.lab-face` used to own `display: flex` and `width: 100%`, so a
@@ -1979,6 +2034,29 @@ stops holding, a comment saying it does would not have caught it.
     wall, child is the lit face, the wrapper's `padding-bottom` is how thick the
     part is. That is also what makes the press animation free: swap the padding
     to the top and the face meets the wall.
+  - **`.lab-billet` is a block rather than a face — the one part with a wall on
+    two sides.** Every other part extrudes 3px straight down, which reads as a row
+    lit from directly above and is what keeps them from competing; the ADP
+    trigger is the bar's one control belonging to the *page*, so its wall runs
+    6px down **and** right, graded from a lit near corner to a dark far one with a
+    hairline contact shadow under it. The thickness is the whole point and the
+    thing to resist trimming: at 3px a wall is a line and its colour is
+    decoration, at 6px it is a face you read the shading of, which is the
+    difference between an object sitting on the bar and a rectangle drawn in it.
+    Four details are load-bearing and each is a way of getting it wrong. The
+    chamfer is `.lab-notch-all` on **both** layers — a wall that turns two corners
+    shows a square one wherever the clip doesn't follow it. The press is a
+    `transform` and not the padding swap, since the part travels along both walls
+    at once and there is no padding on the side that would say so (which is why
+    the reduced-motion block cancels it beside `.lab-chip`'s). The face carries a
+    specular sweep, the manager plate's device held to a 34px part, which is what
+    makes it read as metal rather than as a gradient. And the narrowed state
+    lights the bars in `.lab-channel`, never the face: the bar keeps exactly one
+    fully lit key, and that is Tools. **`.lab-channel` is where the depth
+    actually lives** — a slot cut into the face with the light catching its far
+    wall, the bars raised in it with their dark sides falling the same way as the
+    block's own. Its bars' three heights stay at the call site, since they are
+    data (the shape of a board) and a class cannot carry three of anything.
   - **The bar's extruded edge is drawn *inside* the header box** (`--bar-edge-h`,
     counted into `--site-header-h`). As an outside shadow it would be covered by
     the manager card, which pins at exactly that offset.
@@ -2000,8 +2078,9 @@ stops holding, a comment saying it does would not have caught it.
     (`0 3px 0 var(--edge)`) and the whole part is one element rather than the
     wrapper-and-face pair `.lab-key` needs. It obeys both halves of the first
     rule — material only, inside the layer — so a chip that loses its stylesheet
-    is a plain pill rather than a control that resizes. Three triggers share it
-    — the league filters, the trade filters and the ADP board — which is the
+    is a plain pill rather than a control that resizes. Two page triggers share
+    it — the league filters and the trade filters — plus the ADP drawer's own
+    keys, which is the
     point of putting it in `globals.css` rather than in one of them:
     `LeagueFiltersModal` renders on two pages, and one control with two looks is
     exactly the drift a shared class prevents. Its one unlayered rule is the
@@ -2078,13 +2157,16 @@ stops holding, a comment saying it does would not have caught it.
   `@username`, or "no account connected" — says which of the two you are getting.
   That row is also what makes "Leagues" mean *your* leagues in a menu that never
   names the manager.
-- **The wordmark keeps its text at every width, which is what dropping the tabs
-  bought.** Three tabs, a mark, a wordmark and a trigger did not fit a 390px bar,
-  and the wordmark was the part that gave way (behind a `:has()` query asking
-  whether the slot was filled). A mark, a wordmark, one chip and the trigger fit
-  with room to spare, so that rule and the marker attribute behind it are gone.
-  The part that yields now is the chip, which `truncate`s if a tool name ever runs
-  long.
+- **The wordmark keeps its text wherever the bar has room for it, which is now a
+  question rather than a constant.** Three tabs, a mark, a wordmark and a trigger
+  did not fit a 390px bar, and the wordmark gave way behind a `:has()` query
+  asking whether the slot was filled; dropping the tabs left a mark, a wordmark,
+  one chip and the trigger fitting with room to spare, and the query went with
+  them. The ADP block spends that room, so the same query is back — asking about
+  the header seat instead, and only below `sm`. On every page with an empty seat
+  the wordmark reads in full at every width, exactly as the retired rule said.
+  The part that yields after it is the chip, which `truncate`s if a tool name
+  ever runs long.
 - **The four manager sub-resource hooks are one hook, bound four ways.**
   `useManagerPlayers`, `useManagerLeaguemates`, `useManagerRanks` and
   `useManagerKtc` read `/api/user/[username]/{players,leaguemates,ranks,ktc}`,

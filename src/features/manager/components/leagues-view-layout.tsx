@@ -4,13 +4,14 @@ import dynamic from "next/dynamic";
 import { type ReactNode, useMemo, useState } from "react";
 
 import {
+  HeaderSlot,
   LeagueFiltersModal,
   PageShell,
   activeFilterCount,
   filterSummary,
 } from "@/features/shared";
 
-import { adpQueryString, todayIso } from "../adp-controls";
+import { adpNarrowingCount, adpQueryString, todayIso } from "../adp-controls";
 import { useAdpControls } from "../filters-context";
 import { useAdp } from "../hooks/use-adp";
 import { useAdpDensity } from "../hooks/use-adp-density";
@@ -63,12 +64,13 @@ import { PanelMessage } from "./ui";
  * that renders numbers rather than one that derives them.
  *
  * The shared ADP board lives here too, so it opens identically from all three
- * tabs off the one per-manager store: a trigger in the header's state cluster,
- * beside the league filters' own, and the drawer behind it. The two triggers are
- * neighbours and not one control — the league filters narrow *this manager's
- * leagues*, the board narrows *the drafts in the database* — which is why they
- * are separate buttons rather than two sections of one dialog. The board names
- * itself inside the drawer; no tab repeats that on the page.
+ * tabs off the one per-manager store: the drawer, and a trigger rendered into
+ * the app bar's seat. The two are still two controls and not one — the league
+ * filters narrow *this manager's leagues*, the board narrows *the drafts in the
+ * database* — and the split is now spatial as well: the filters stay in the
+ * header, over the list they narrow, and the board sits up in the chrome with
+ * the population it describes, which belongs to no manager at all. The board
+ * names itself inside the drawer; no tab repeats that on the page.
  */
 export function LeaguesViewLayout({
   view,
@@ -157,21 +159,31 @@ export function LeaguesViewLayout({
             />
           ) : undefined
         }
-        board={
-          hasLeagues ? (
-            <AdpTrigger
-              range={controls.range}
-              season={controls.season}
-              draftCount={board.data?.draft_count ?? null}
-              loading={board.loading}
-              onClick={() => setBoardOpen(true)}
-            />
-          ) : undefined
-        }
         // Only where there are rows for it to head: a heading rail over "no
         // leagues match these filters" names columns nothing is under.
         columns={filtered.length > 0 ? columns : undefined}
       />
+
+      {/* The trigger is drawn in the app bar rather than in the header's dock —
+          the board describes every crawled draft rather than this manager's
+          leagues, so it belongs to the chrome the way the tools menu does, and
+          up there it is reachable from the bottom of a several-hundred-row list
+          on all three tabs. Only its *box* moves: it is still a child of this
+          layout, so it reads the same ADP store and drives the drawer below
+          without anything being threaded through two server layouts.
+          A manager with no leagues has no board worth opening, so the seat
+          simply goes unfilled and the bar carries one less part. */}
+      {hasLeagues && (
+        <HeaderSlot>
+          <AdpTrigger
+            range={controls.range}
+            season={controls.season}
+            draftCount={board.data?.draft_count ?? null}
+            narrowed={adpNarrowingCount(controls, defaultSeason)}
+            onClick={() => setBoardOpen(true)}
+          />
+        </HeaderSlot>
+      )}
 
       {!hasLeagues ? (
         <EmptyState season={season} />

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { activeTool } from "../tools";
+import { HeaderSlotTarget } from "./header-slot";
 import { ToolIcon } from "./tool-icon";
 import { ToolsMenu } from "./tools-menu";
 
@@ -65,7 +66,7 @@ export function SiteHeader() {
 
       {/* Match `PageShell`'s container so the wordmark lines up with the page
           content below it rather than floating at the viewport edge. */}
-      <div className="mx-auto flex h-[calc(var(--site-header-h)-var(--bar-edge-h))] w-full max-w-4xl items-center gap-2.5 px-4 sm:gap-3.5 sm:px-6">
+      <div className="group/bar mx-auto flex h-[calc(var(--site-header-h)-var(--bar-edge-h))] w-full max-w-4xl items-center gap-2.5 px-4 sm:gap-3.5 sm:px-6">
         <Wordmark />
         {current && (
           <>
@@ -78,6 +79,13 @@ export function SiteHeader() {
             />
           </>
         )}
+        {/* The seat a page fills — the ADP board's trigger today. It sits beside
+            the page chip rather than beside the Tools key on purpose: what it
+            opens belongs to the tool you are in, not to the app, and the two
+            navigation parts stay together at the ends of the bar. An unfilled
+            seat has no width, so every other page's bar is laid out exactly as
+            it was. */}
+        <HeaderSlotTarget />
         <div className="ml-auto flex-none">
           <ToolsMenu />
         </div>
@@ -116,7 +124,20 @@ function Wordmark() {
           <FlaskGlyph />
         </span>
       </span>
-      <span className="bg-gradient-to-b from-foreground from-35% to-[#8feee6] bg-clip-text font-display text-[13px] font-bold uppercase tracking-[0.19em] text-transparent [filter:drop-shadow(0_1px_0_rgba(0,0,0,0.8))]">
+      {/* It yields on a phone, and only to a *filled* seat.
+          A mark, a wordmark, one chip and the tools key fit a 390px bar with
+          room to spare, which is what dropping the manager tabs bought and what
+          the rule here used to say. A part seated in the bar spends that room:
+          with the ADP block in, "Leagues" truncated to "Le…" — a tool naming
+          itself in two letters, to keep a wordmark two centimetres from the
+          mark that already says it. So the text goes and the mark stays, on
+          exactly the pages that took the room.
+
+          Written as one utility rather than as `hidden` against `sm:inline`
+          because those two collide: Tailwind v4 emits the display utilities
+          alphabetically, so `.inline` beats `.hidden` at every width. A single
+          `max-sm:` variant has nothing to lose to. */}
+      <span className="bg-gradient-to-b from-foreground from-35% to-[#8feee6] bg-clip-text font-display text-[13px] font-bold uppercase tracking-[0.19em] text-transparent [filter:drop-shadow(0_1px_0_rgba(0,0,0,0.8))] max-sm:group-has-[[data-header-seat]:not(:empty)]/bar:hidden">
         The Lab
       </span>
     </Link>

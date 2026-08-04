@@ -66,7 +66,6 @@ export function ManagerHeader({
   leagueCount,
   stat,
   filters,
-  board,
   columns,
 }: {
   user: LeaguesResult["user"];
@@ -98,18 +97,12 @@ export function ManagerHeader({
   /** The view's own headline count, worn as the plate's top-right corner tab. */
   stat: HeaderStat;
   /**
-   * The filters' trigger. Omitted where a view has nothing to filter (e.g. a
+   * The filters' trigger — the dock's one occupant since the ADP board's went
+   * up into the app bar. Omitted where a view has nothing to filter (e.g. a
    * manager with no leagues), which leaves the dock with nothing to seat and so
    * drops it entirely.
    */
   filters?: ReactNode;
-  /**
-   * The ADP board's trigger, beside the filters' own. Two controls rather than
-   * two tabs of one dialog, because they narrow different populations — these
-   * leagues against every crawled draft — and merging them would suggest one
-   * selection where there are two.
-   */
-  board?: ReactNode;
   /**
    * The list's stat-column headings, laid on the cards' geometry.
    *
@@ -234,16 +227,17 @@ export function ManagerHeader({
         )}
       </div>
 
-      {/* The dock. A recessed trough rather than a second card, so the controls
-          read as parts seated in the header rather than as more of the plate's
-          content — and so the two of them can sit together without implying one
-          selection, which is what a single dialog over both would suggest. It
-          hugs what it holds (`w-fit`): a trough running the width of a desktop
-          card with two chips at the left end is mostly empty slot. */}
-      {(filters || board) && (
+      {/* The dock. A recessed trough rather than a second card, so the control
+          reads as a part seated in the header rather than as more of the plate's
+          content. It holds one thing now — the board's trigger went up into the
+          app bar, where the population it narrows (every crawled draft, nobody's
+          leagues in particular) actually lives — and the trough stays, because
+          what it says is that the part in it operates on the list below rather
+          than being part of the card above. It hugs what it holds (`w-fit`): a
+          trough running the width of a desktop card is mostly empty slot. */}
+      {filters && (
         <div className="lab-well lab-notch-lg flex w-fit max-w-full flex-wrap items-center gap-2 p-1.5">
           {filters}
-          {board}
         </div>
       )}
 

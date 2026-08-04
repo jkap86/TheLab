@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   ADP_PEAK,
   DEFAULT_ADP_STEEPNESS,
+  adpNarrowingCount,
   adpQueryString,
   adpRangePresets,
   boardLabel,
@@ -465,5 +466,51 @@ describe("todayIso", () => {
     // "last 30 days" should start from the date on their calendar.
     assert.equal(todayIso(new Date(2026, 6, 31, 23, 30)), "2026-07-31");
     assert.equal(todayIso(new Date(2026, 0, 5, 0, 15)), "2026-01-05");
+  });
+});
+
+describe("adpNarrowingCount", () => {
+  test("the default board narrows nothing", () => {
+    assert.equal(adpNarrowingCount(defaultAdpControls(SEASON), SEASON), 0);
+  });
+
+  test("each filter counts once", () => {
+    const base = defaultAdpControls(SEASON);
+    assert.equal(adpNarrowingCount({ ...base, superflex: "yes" }, SEASON), 1);
+    assert.equal(
+      adpNarrowingCount(
+        { ...base, superflex: "yes", rounds: "rookie", teams: "12" },
+        SEASON,
+      ),
+      3,
+    );
+  });
+
+  test("a bounded window counts, an unbounded one doesn't", () => {
+    const base = defaultAdpControls(SEASON);
+    // A custom range with neither end set narrows nothing — the same reading
+    // `isUnboundedRange` gives it, so the diamond stays dark for a window that
+    // is "custom" in name only.
+    const range = (range: AdpRange) => adpNarrowingCount({ ...base, range }, SEASON);
+    assert.equal(range({ preset: "custom", from: null, to: null }), 0);
+    assert.equal(range({ preset: "30d", from: null, to: null }), 1);
+    assert.equal(range({ preset: "custom", from: "2026-05-01", to: null }), 1);
+  });
+
+  test("a season other than the default counts", () => {
+    // The board's population, and a larger departure from the board everybody
+    // else is reading than any filter here — a different season is a different
+    // market, not a slice of this one.
+    assert.equal(adpNarrowingCount(defaultAdpControls("2024"), SEASON), 1);
+    assert.equal(adpNarrowingCount(defaultAdpControls("all"), SEASON), 1);
+  });
+
+  test("the value curve is not a narrowing", () => {
+    // It converts an ADP into value once averaged, so it moves the Leagues tab's
+    // team value and leaves the population the trigger describes untouched.
+    assert.equal(
+      adpNarrowingCount({ ...defaultAdpControls(SEASON), steepness: 6 }, SEASON),
+      0,
+    );
   });
 });
