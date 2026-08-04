@@ -1356,20 +1356,52 @@ stops holding, a comment saying it does would not have caught it.
   than what market it priced, and left the startup-against-rookie cut spelled out
   as `≤5 rds` in a second chip.
 
-  **The pinned block is three rows, and each one it lost was a row reporting
-  that nothing was set.** It was six — a header, a labelled season row, a
-  labelled window row, three wrapped rows of filter chips and a two-line curve —
-  at ~337px on a laptop and ~369px on a phone, against ~225 and ~257 now. What
+  **The pinned block is four rows, and each one it lost was a row reporting that
+  nothing was set.** It was six — a header, a labelled season row, a labelled
+  window row, three wrapped rows of filter chips and a two-line curve — at
+  ~337px on a laptop and ~369px on a phone, against ~136 and ~160 now. What
   went, and why each was safe to take:
   - **The header stated the draft count the trigger already carried**, over a
     labelled row holding two season keys. Both fit on one line with the count as
     a `.lab-readout` cell, which is the material the kickoff timer's digits
     already use (plain, not `-live`: the count isn't ticking, and spending the
     live face on a constant is the same mistake as tinting this trigger).
-  - **The window presets moved onto the strip's own caption** (`presets`, a slot
-    on `RangeScrubber`). They fly the handles, so the line reporting where the
-    handles are is where they belong; the labelled segment row above the strip
-    was a label column and a full-height strip for at most three chips.
+  - **The window is one line, and the scrubber floats over the panel when it is
+    opened.** The strip and its three attendant rows — calendar rail, month
+    axis, caption — were ~112px of a ~224px block, half of it, above the board
+    the drawer is opened to read; a window is chosen once and then read, which
+    is the same case the filter row below answers. Three things make the
+    collapse affordable rather than merely shorter, and each is easy to undo:
+    - **The resting line keeps the strip's own argument.** The scrubber replaced
+      two date inputs because it says where the drafts *are* before you pick a
+      window, and behind a press it would say that only afterwards — so the
+      trigger carries a `RangeSparkline`, the same bars over the same domain
+      through the same functions, lit inside the window and dim outside it. The
+      hint is what earns the press, not decoration on it.
+    - **It floats; it does not push.** Expanding in place would shove the
+      filters, the curve and the board down by more than the collapse just
+      saved, which is the reader back where they started one press later. It is
+      a raised face over the pinned block's own ground — and it keeps *exactly*
+      that ground rather than a lighter one, because the scrubber paints its
+      scrim, its pointer bubble and its draft flag in `rgb(12,23,33)` by hand,
+      so a lifted fill would leave four hardcoded surfaces a shade adrift. It
+      owes the three behaviours any floating control here owes: one open at a
+      time (`openPanel`, shared with the filter tray — an open tray under the
+      float is a control you can see and can't reach), a press outside
+      dismisses, and **Escape closes the innermost thing that is up**, or one
+      keypress takes the whole drawer with it.
+    - **The presets stay on the resting line, outside the float.** They fly the
+      handles, but they are also the whole of what most readers want here, so
+      "last 30 days" has to stay the single press it was — and drawing them
+      inside the panel as well would be two controls for one selection, which
+      is why `RangeScrubber` no longer has a `presets` slot at all.
+    Two details in that line. It **wraps rather than compresses**: everything in
+    the trigger is `shrink-0` except the sparkline, so its min-content width
+    decides the break and a phone puts the presets on a second 18px line instead
+    of truncating the one thing on the row that answers the question. And it
+    carries `boardLabel` and **not** `rangeSummary` — the dates behind a
+    preset's name belong inside the control, where the handles are sitting on
+    them; out here the name is exact and stays true as time passes.
   - **The filter row shows only what is narrowing the board.** Seven chips
     permanently reading "All" is seven controls' worth of height reporting that
     nothing is set. `FilterRow` renders the narrowing ones plus one `Filters`
@@ -1451,16 +1483,19 @@ stops holding, a comment saying it does would not have caught it.
     though it is still a preset *value* — it is what moving a handle produces.
     The relative presets keep earning their place for the reason they always did:
     "Last 90 days" is still the last 90 days tomorrow, where the dates behind it
-    would not be. They are laid out as the same label-and-segments row as the
-    season above and the value curve below, because rows of controls that behave
-    identically shouldn't look like different kinds of control — which is also
-    why the 12-month chip reads `12 mo`: as an equal quarter of that row it is
-    ~72px on a phone, and "12 months" wraps to two lines in it. The unbounded
+    would not be. They sit on the drawer's resting window line beside the
+    trigger — not inside the panel they fly the handles of, since the whole
+    point of keeping them is that a preset is reachable without opening
+    anything — which is also why the 12-month chip reads `12 mo`: sharing that
+    line with the label and the sparkline it is ~72px on a phone, and "12
+    months" wraps to two lines in it. The unbounded
     preset names what it covers (`All 2026` / `All time`), and `boardLabel` folds
     it into the season everywhere the board is named at all — "2026 · All time"
     would be claiming two contradictory things. `rangeLabel` still names the
     window alone, which is right only under the strip, where the season it
-    belongs to is the row above.
+    belongs to is the row above. `rangeSummary` is narrower still — it belongs
+    *inside* the scrubber and nowhere else, since naming a window's edges is
+    worth the width only where the handles are sitting on them.
   - **What the gesture means depends on where it starts** — the brush split
     everyone already knows. Inside the window drags the *window* (`panWindow`,
     clamped at the domain edges with its length intact, because a pan that

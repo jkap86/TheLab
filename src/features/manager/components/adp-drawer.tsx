@@ -21,7 +21,7 @@ import {
 import type { AdpState } from "../hooks/use-adp";
 import type { AdpDensityState } from "../hooks/use-adp-density";
 import type { DraftDensityMonth, ManagerLeague } from "../types";
-import { RangeScrubber } from "./range-scrubber";
+import { RangeScrubber, RangeSparkline } from "./range-scrubber";
 import { PositionBadge } from "./ui";
 
 /**
@@ -216,10 +216,31 @@ export function AdpDrawer({
   const [dragging, setDragging] = useState<number | null>(null);
   const steepness = dragging ?? controls.steepness;
 
-  // Whether the filters nobody has set are on screen. Closed, the row shows only
-  // what is narrowing the board — which is usually nothing, and is never seven
-  // controls' worth of height reporting "All".
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Which of the two expanding controls is up, as one selection rather than two
+  // booleans. They can't both be: the window's panel *floats* over the rows below
+  // it, so an open filter tray under it would be a control the reader can see and
+  // can't reach — and one-open-at-a-time is what the league filters' own floating
+  // rows do, for the same reason.
+  const [openPanel, setOpenPanel] = useState<"range" | "filters" | null>(null);
+  const toggle = (which: "range" | "filters") =>
+    setOpenPanel((current) => (current === which ? null : which));
+
+  // A drawer reopened is a drawer at rest: the window's panel floats over the
+  // board, so one left hanging open covers the thing the drawer was opened to
+  // show. Adjusted during render against the previous `open` rather than in an
+  // effect — the pattern `useFilteredTrades` and `ColumnsEditor` use, and the
+  // cascading render the lint rule objects to.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (openPanel !== null) setOpenPanel(null);
+  }
+
+  // Read by the Escape handler below, which depends on `open` alone.
+  const latestPanel = useRef(openPanel);
+  useEffect(() => {
+    latestPanel.current = openPanel;
+  }, [openPanel]);
 
   // Held in a ref so the effect below can depend on `open` alone. Callers pass a
   // fresh arrow every render, so depending on `onClose` re-ran the whole effect
@@ -239,7 +260,14 @@ export function AdpDrawer({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") latestClose.current();
+      if (e.key !== "Escape") return;
+      // Escape closes the innermost thing that is up. Without this the window's
+      // floating panel and the whole drawer would go on one keypress.
+      if (latestPanel.current !== null) {
+        setOpenPanel(null);
+        return;
+      }
+      latestClose.current();
     };
     document.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;
@@ -374,6 +402,9 @@ export function AdpDrawer({
             months={seasonMonths}
             density={density}
             today={todayIso()}
+            open={openPanel === "range"}
+            onToggle={() => toggle("range")}
+            onClose={() => setOpenPanel(null)}
             onChange={(range) => onChange({ ...controls, range })}
           />
 
@@ -381,8 +412,8 @@ export function AdpDrawer({
             controls={controls}
             filters={filters}
             leagues={leagues}
-            open={filtersOpen}
-            onToggle={() => setFiltersOpen((o) => !o)}
+            open={openPanel === "filters"}
+            onToggle={() => toggle("filters")}
             onChange={onChange}
           />
 
@@ -521,14 +552,31 @@ export function AdpDrawer({
 }
 
 /**
- * The window control: a row of presets over the range scrubber.
+ * The window control: one line at rest, the full scrubber floating over the
+ * panel when it is opened.
  *
- * The presets are no longer a *mode* the scrubber is an alternative to — they
- * fly the handles somewhere, and a custom window is what you get by moving one.
- * That is why the "Custom…" chip is gone: it existed to reveal two date inputs,
- * and there are none to reveal. The relative presets keep earning their place
- * because they mean something a pair of dates can't — "Last 90 days" is still
- * the last 90 days tomorrow.
+ * The strip and its three attendant rows — the calendar rail, the month axis and
+ * the caption — were ~112px of a ~224px pinned block, half of it, sitting above
+ * the board that is the reason the drawer opens at all. A window is chosen once
+ * and then read, which is the same case the filter row already answers: state
+ * what is set, put the control that sets it behind one press.
+ *
+ * Three things make that affordable rather than merely shorter:
+ *
+ *   - **The resting line keeps the strip's argument.** The scrubber replaced two
+ *     date inputs because it says where the drafts *are* before you pick a
+ *     window; behind a press it would say that only afterwards. So the trigger
+ *     carries a {@link RangeSparkline} of the same bars over the same domain,
+ *     and the answer is still on screen at rest.
+ *   - **The panel floats; it does not push.** Expanding in place would shove the
+ *     filters, the curve and the board down by more than the height this change
+ *     just saved — the reader would be back where they started, one press later.
+ *     It is a raised face over the pinned block's own ground, the material
+ *     grammar the app bar and the league filters' floating rows already use.
+ *   - **The presets stay outside it.** They fly the handles, but they are also
+ *     the whole of what most readers want from this control, and drawing them in
+ *     both places would be two controls for one selection. They sit on the
+ *     resting line, so "last 30 days" is still the single press it was.
  */
 function RangeControl({
   range,
@@ -537,6 +585,9 @@ function RangeControl({
   months,
   density,
   today,
+  open,
+  onToggle,
+  onClose,
   onChange,
 }: {
   range: AdpRange;
@@ -547,31 +598,108 @@ function RangeControl({
   density: AdpDensityState;
   /** `YYYY-MM-DD`, resolving the relative presets. */
   today: string;
+  /** The scrubber is up. */
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
   onChange: (range: AdpRange) => void;
 }) {
+  const wrapper = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+
   const presets = adpRangePresets(season, defaultSeason);
+  const bounds = rangeBounds(range, today);
+  // Only a board that can contain today gets an axis running to it.
+  const live = season === "all" || season === defaultSeason;
+
+  // Held in a ref for the reason the drawer holds `onClose` in one: the parent
+  // passes a fresh arrow every render and re-renders on every pointer move of a
+  // drag, so a listener keyed on its identity would be torn down and re-attached
+  // once a frame for the whole of a gesture.
+  const latestClose = useRef(onClose);
+  useEffect(() => {
+    latestClose.current = onClose;
+  }, [onClose]);
+
+  // A press anywhere else dismisses it — the third of the three behaviours a
+  // floating control owes (with Escape, handled by the drawer, and one open at a
+  // time, handled by its `openPanel`). Containment covers the trigger too, so a
+  // press on it toggles rather than closing and immediately reopening.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!wrapper.current?.contains(e.target as Node)) latestClose.current();
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [open]);
+
+  // Closing takes the focused element with it when the focus was inside the
+  // panel, which drops the reader on `body` with no way back into the drawer by
+  // keyboard. The trigger is where they were.
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (wasOpen.current && !open && document.activeElement === document.body) {
+      trigger.current?.focus();
+    }
+    wasOpen.current = open;
+  }, [open]);
+
   return (
-    <RangeScrubber
-      range={range}
-      season={season}
-      bounds={rangeBounds(range, today)}
-      months={months}
-      // Only a board that can contain today gets an axis running to it.
-      live={season === "all" || season === defaultSeason}
-      error={density.error}
-      loading={density.loading}
-      today={today}
-      // The presets go on the strip's own caption rather than in a labelled row
-      // above it. They fly the handles, so the line reporting where the handles
-      // are is where they belong — and the row they used to have was a label
-      // column and a full-height segment strip for at most three chips.
-      //
-      // A finished season leaves one preset, and a row of one is no choice at
-      // all, so nothing is drawn: the strip and its calendar markers are the
-      // control there, which is what they were for.
-      presets={
-        presets.length > 1
-          ? presets.map((preset) => (
+    <div ref={wrapper} className="relative">
+      {/* It wraps rather than compressing, and the wrap is decided by the
+          trigger's own min-content width: every part of it below is `shrink-0`
+          except the sparkline, so the line breaks exactly when the words stop
+          fitting and never truncates the one thing on it that answers the
+          question. A phone, and a desktop showing a spelled-out custom window,
+          put the presets on a second 18px line. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/*
+          One key holding everything the line says, the shape `AdpTrigger` already
+          has: the label, the board it resolves to, and a picture of it. It never
+          takes `.lab-chip-on` — a window is always chosen, so tinting it would
+          spend the drawer's one "something is narrowed" signal on a constant,
+          and the lit preset chip beside it already carries that where it means
+          something.
+        */}
+        <button
+          ref={trigger}
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="lab-chip lab-chip-sm flex flex-1 items-center gap-2 rounded-full py-[3px] pl-2.5 pr-2 text-left"
+        >
+          <span className="shrink-0 text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-foreground/40">
+            Window
+          </span>
+          {/* The board's name and nothing else. The dates behind a preset's name
+              are `rangeSummary`'s job and they belong *inside* the scrubber,
+              where the handles are sitting on them — out here the name is exact
+              and stays true as time passes, which is the whole reason a preset
+              keeps its name. */}
+          <span className="shrink-0 whitespace-nowrap text-[0.7rem] font-semibold text-active">
+            {boardLabel(range, season)}
+          </span>
+          {/* The elastic member, so the line fits a phone and a laptop without a
+              breakpoint: everything else on it is content-sized. */}
+          <RangeSparkline
+            months={months}
+            live={live}
+            today={today}
+            bounds={bounds}
+            className="h-4 min-w-[2.25rem] flex-1"
+          />
+          <span aria-hidden className="shrink-0 text-[0.6rem] text-foreground/40">
+            {open ? "▴" : "▾"}
+          </span>
+        </button>
+
+        {/* A finished season leaves one preset, and a row of one is no choice at
+            all — the strip and its calendar markers are the control there, which
+            is what they were for. */}
+        {presets.length > 1 && (
+          <span className="flex shrink-0 items-center gap-1">
+            {presets.map((preset) => (
               <KeyChip
                 key={preset.value}
                 small
@@ -580,11 +708,32 @@ function RangeControl({
               >
                 {preset.chip}
               </KeyChip>
-            ))
-          : undefined
-      }
-      onChange={onChange}
-    />
+            ))}
+          </span>
+        )}
+      </div>
+
+      {open && (
+        // Raised over the pinned block rather than expanding it. It keeps the
+        // panel's own ground rather than a lighter one, because the scrubber
+        // paints its scrim, its bubble and its draft flag in that exact colour —
+        // a lifted face here would leave four hardcoded surfaces a shade adrift.
+        // `z-30` clears the board's sticky headings (`z-10`) below it.
+        <div className="absolute inset-x-0 top-full z-30 mt-1.5 rounded-lg border border-active/20 bg-[rgb(12,23,33)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_20px_44px_rgba(0,0,0,0.6)]">
+          <RangeScrubber
+            range={range}
+            season={season}
+            bounds={bounds}
+            months={months}
+            live={live}
+            error={density.error}
+            loading={density.loading}
+            today={today}
+            onChange={onChange}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
