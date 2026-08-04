@@ -35,10 +35,13 @@ export const CRAWL_MANAGER_BATCH = 5;
 
 /**
  * Newly discovered leagues fetched per tick, capped separately because a first
- * sync costs far more than a refresh: it backfills every transaction week, so
- * in-season it is ~24 Sleeper requests against a refresh's ~9. Together the two
- * passes stay near 500 requests/minute at their worst, comfortably inside
- * Sleeper's budget while leaving room for real traffic.
+ * sync costs far more than a refresh: it backfills every week of *both*
+ * week-keyed collections — transactions and matchups — so in-season it is ~41
+ * Sleeper requests against a refresh's ~11. At this cap the two passes peak near
+ * 800 requests/minute, which is inside Sleeper's budget but no longer has the
+ * headroom the transaction-only backfill left. Lower it before raising
+ * {@link CRAWL_LEAGUE_BATCH} if the crawler starts seeing 429s; the per-league
+ * burst is bounded separately, inside `fetchLeagueGraph`.
  */
 export const CRAWL_DISCOVERY_CAP = 15;
 

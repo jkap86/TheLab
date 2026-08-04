@@ -16,6 +16,7 @@ export {
   getLeagueDrafts,
   getDraftPicks,
   getLeagueTransactions,
+  getLeagueMatchups,
 } from "./leagues";
 export { getNflState } from "./state";
 export { getAllPlayers } from "./players";
@@ -30,6 +31,7 @@ export type {
   SleeperDraft,
   SleeperDraftPick,
   SleeperTransaction,
+  SleeperMatchup,
   SleeperNflState,
   SleeperPlayer,
   SleeperPlayerMap,

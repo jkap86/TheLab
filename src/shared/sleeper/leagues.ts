@@ -6,6 +6,7 @@ import type {
   SleeperDraftPick,
   SleeperLeague,
   SleeperLeagueUser,
+  SleeperMatchup,
   SleeperRoster,
   SleeperTradedPick,
   SleeperTransaction,
@@ -84,4 +85,22 @@ export function getLeagueTransactions(
   week: number,
 ): Promise<SleeperTransaction[]> {
   return sleeperGet(sleeperUrl("league", leagueId, "transactions", week), []);
+}
+
+/**
+ * Every roster's scoring for a single week — one entry per roster, not per game
+ * (see {@link SleeperMatchup}). Keyed by week for the same reason transactions
+ * are, with no all-at-once endpoint, so a season is the union of each week.
+ *
+ * A week the league has not scheduled answers with either nothing or a row per
+ * roster carrying a null `matchup_id` — the offseason reads one of those two
+ * ways. Neither is filtered here: an empty week simply writes no rows, and the
+ * unscheduled rows are stored as sent, so the table mirrors Sleeper rather than
+ * this code's guess about which it will be.
+ */
+export function getLeagueMatchups(
+  leagueId: string,
+  week: number,
+): Promise<SleeperMatchup[]> {
+  return sleeperGet(sleeperUrl("league", leagueId, "matchups", week), []);
 }

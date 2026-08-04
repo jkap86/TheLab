@@ -46,7 +46,7 @@ export type ManagerLeaguesState = {
  *
  * What that parameter buys depends on who is asking, and the asymmetry is
  * deliberate. Forcing the sync past the server's TTL means the full
- * ~9-requests-per-league fan-out at Sleeper, so the route honours `?refresh=1`
+ * ~11-requests-per-league fan-out at Sleeper, so the route honours `?refresh=1`
  * only from an internally authorized caller (see `app/api/internal-auth.ts`).
  * From a browser it is ignored and this is a re-read: the stream still delivers
  * whatever a background refresh has since written, which is the part a reader
