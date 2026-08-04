@@ -4,7 +4,12 @@ export { clearTradeCircleCache, resolveTradeCircle } from "./circle";
 export type { TradeCircleScope } from "./circle";
 export { decodeTradeCursor, encodeTradeCursor } from "./cursor";
 export type { TradeCursor } from "./cursor";
-export { lookupKtc, lookupPlayers, clearTradeEnrichmentCaches } from "./enrich";
+export {
+  lookupKtc,
+  lookupKtcPicks,
+  lookupPlayers,
+  clearTradeEnrichmentCaches,
+} from "./enrich";
 export {
   DEFAULT_TRADE_PAGE_SIZE,
   MAX_LEAGUE_IDS,

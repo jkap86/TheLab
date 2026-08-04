@@ -207,6 +207,7 @@ export function TradesHome({ season }: { season: string }) {
   const players = data?.players ?? EMPTY_MAP;
   const managers = data?.managers ?? EMPTY_MAP;
   const ktc = data?.ktc ?? EMPTY_MAP;
+  const pickKtc = data?.pickKtc ?? EMPTY_MAP;
   const pickSlots = data?.pickSlots ?? EMPTY_MAP;
 
   return (
@@ -302,6 +303,7 @@ export function TradesHome({ season }: { season: string }) {
             managers={managers}
             metric={metric}
             ktc={ktc}
+            pickKtc={pickKtc}
             pickSlots={pickSlots}
             headerRef={headerRef}
             hasMore={hasMore}

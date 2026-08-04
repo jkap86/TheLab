@@ -71,6 +71,7 @@ export function TradesList({
   managers,
   metric,
   ktc,
+  pickKtc,
   pickSlots,
   headerRef,
   hasMore,
@@ -84,6 +85,8 @@ export function TradesList({
   /** The metric every card's value column shows — one selection for the list. */
   metric: TradeMetric;
   ktc: Record<string, KtcValue>;
+  /** KTC's pick rows, keyed by season, round and tier — see `ktcPickKey`. */
+  pickKtc: Record<string, KtcValue>;
   /** Draft slots for the picks whose league has set an order, keyed per pick. */
   pickSlots: Record<string, number>;
   /**
@@ -205,6 +208,7 @@ export function TradesList({
               managers={managers}
               metric={metric}
               ktc={ktc}
+              pickKtc={pickKtc}
               pickSlots={pickSlots}
             />
           </li>

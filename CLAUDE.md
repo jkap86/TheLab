@@ -1170,9 +1170,45 @@ stops holding, a comment saying it does would not have caught it.
     every crawled league, so a chunk sends `{sf, oneqb}` per player and the card
     reads `isSuperflexLineup(league.roster_positions)` — the same predicate
     `/api/adp` groups a draft with. An unpriced haul is an em dash and never a
-    zero (KTC's board is ~500 dynasty skill players deep and carries no picks at
-    all), and a partly-priced one says how much of itself it priced, the same
+    zero, and a partly-priced one says how much of itself it priced, the same
     habit as `priced` of `rostered`.
+  - **Draft picks are priced too, and the note that said otherwise was reading
+    the wrong half of KTC's board** (`shared/ktc/picks.ts`, pure and tested).
+    KTC publishes ~500 dynasty skill players *and* a few dozen `RDP` rows —
+    "2027 Mid 1st", "2029 1st" — which the sync has always stored; nothing read
+    them, so a card priced the players in a haul and told the reader picks
+    weren't on the board at all. On a page where a first is routinely the whole
+    trade, that was a total answering a different question from the one the
+    column asks. Four things hold the resolution up:
+    - **A pick has no `sleeper_id`, which is why it needed a lookup of its own.**
+      The matcher resolves KTC entries to Sleeper players by name and a pick is
+      not a player anywhere in that map, so every pick row carries a null id and
+      is invisible to `getKtcValuesBySleeperId`. `getKtcPickBoard` reads them
+      whole — a few dozen rows — and `lookupKtcPicks` caches that beside the
+      player prices.
+    - **KTC names a pick by a third of the round and Sleeper by a roster**, so
+      the two are joined through the league's own draft order: `pickTier(slot,
+      teams)` places slot 3 of 12 as an early 1st. The slot is the map the card
+      already names picks from, and the size is `total_rosters` off the league
+      list — so **the tier is resolved on the client and the route sends the rows
+      it could resolve to**, all three tiers plus the untiered one per `(season,
+      round)`. Resolved server-side it would be one entry per pick per league,
+      re-sent on every page a pick from that draft appears in.
+    - **An unplaced pick is priced, and says that it is a stand-in.** Most picks
+      on this board are seasons out, so there is no draft and no order — the
+      untiered row is preferred there (it *is* the price of a pick with no
+      place) and the mid tier stands in where KTC publishes none, which is what
+      every trade calculator does with an unknown future pick. `exact: false`
+      travels with it, so the line's hover names the row it read rather than
+      passing an assumption off as KTC's answer. Refusing to price them would
+      leave nearly every pick on the board blank, which is the failure this
+      replaced.
+    - **The names are scraped, so they are parsed by token rather than by
+      regex.** `parseKtcPickName` reads a season, a round and a tier out of the
+      words and fails the whole name on one it doesn't know — a row filed under a
+      pick it might not be is worse than one left unpriced — and the read warns
+      once per TTL when rows are stored and *none* parse, which is what a KTC
+      rename looks like from here and is otherwise silent.
   - **A side lists what it received, at every width.** Below `sm` the card used
     to draw a give-and-take table — each manager's take beside what they sent —
     on the reasoning that a stack loses what columns are for. What it produced on
@@ -1198,11 +1234,11 @@ stops holding, a comment saying it does would not have caught it.
     is a single line — otherwise the most common trade there is prints one
     player's price against his name and the identical figure a line above. And
     **not covered and not priced are different answers**, the distinction the
-    total's hover already draws: a pick gets no cell at all, since KTC's board
-    carries no picks and a dash there would report a hole in a board they were
-    never on, while an unpriced *player* is a genuine gap and gets the em dash.
-    Only `ktc` has a per-asset form; a count of players is 1 on every line, which
-    is a column of ones.
+    total's hover already draws: FAAB gets no cell at all, since a dash there
+    would report a hole in a board it was never on, while an unpriced *player* —
+    or a pick from a draft KTC no longer carries — is a genuine gap and gets the
+    em dash. Only `ktc` has a per-asset form; a count of players is 1 on every
+    line, which is a column of ones.
   - **A pick is named the way Sleeper names it: its slot where the order is set,
     its round where it isn't, and its origin only when that is a surprise**
     (`features/trades/pick-display`). Once a league has set that draft's order the
@@ -2515,6 +2551,16 @@ stops holding, a comment saying it does would not have caught it.
   board and the only one this app scrapes, which is the wrong lens on the redraft
   leagues sitting in the same list, so anything showing the number says
   "dynasty" rather than leaving it to be inferred.
+- **The same board carries rookie draft picks, as `position` "RDP", and they are
+  named rather than identified.** `"2027 Mid 1st"`, `"2029 1st"` — a season, a
+  round and (sometimes) a third of the round, in a string. There is no id to join
+  on: the name matcher resolves KTC entries to Sleeper *players*, and a pick is
+  not one, so every pick row's `sleeper_id` is null. Read them through
+  `getKtcPickBoard`, parse the name with `parseKtcPickName` (never a bespoke
+  regex — the format is a scraped string KTC has promised nothing about), and
+  place a traded pick against them with `pickTier`/`ktcPickPrice`. Which seasons
+  get the three tiers and which get one untiered row moves through the year, so
+  a lookup states a preference and reports which row it landed on.
 - Transactions are keyed by week with no all-at-once endpoint; a league's full
   history is the union of each week.
 - **Matchups are the second collection keyed that way, and the two are gated

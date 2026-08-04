@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { LeaguematePayload, TradesPagePayload } from "@/shared/contract";
+import { ktcPickKey, KTC_PICK_TIERS } from "@/shared/ktc";
 import { isSeason } from "@/shared/query";
 import { getActiveSeason } from "@/shared/season";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
@@ -15,6 +16,7 @@ import {
   leagueScopeQuery,
   listTrades,
   lookupKtc,
+  lookupKtcPicks,
   lookupPlayers,
   parseTradeQuery,
   pickSlotKey,
@@ -158,7 +160,7 @@ async function resolveTotals(
 /**
  * The names the ids on this page stand for.
  *
- * The four lookups are independent and run together; each is a no-op on an
+ * The five lookups are independent and run together; each is a no-op on an
  * empty id list, which is the common case for every page after the first few.
  * Leagues are deliberately **not** among them — they arrive whole from
  * `/api/trades/leagues`, once per season, which is what removed the stream's
@@ -178,6 +180,12 @@ async function resolveNames(trades: readonly Trade[]) {
     out.push(id);
   };
 
+  // KTC's pick rows the page's picks could land on. Kept in a set of its own
+  // rather than sharing `seen`: these keys are built from a season and a round
+  // rather than from an id, so they belong to a different namespace and sharing
+  // one would only be safe by accident.
+  const pickKeys = new Set<string>();
+
   for (const trade of trades) {
     for (const side of trade.sides) {
       for (const id of side.players) take(id, playerIds);
@@ -188,16 +196,28 @@ async function resolveNames(trades: readonly Trade[]) {
         // covered by the side ids above — and it is exactly the case the card
         // names an owner for.
         if (pick.user_id) take(pick.user_id, managerIds);
+        // **Every tier, not the one this pick falls in.** Which third of the
+        // round a pick lands in is a function of the league's draft order *and*
+        // its size, and the size is on the league list the client already holds
+        // — so the client resolves the tier and this sends the rows it could
+        // resolve to. Four rows per `(season, round)` the page names, of which a
+        // page names a handful; resolving the tier here instead would send one
+        // entry per pick per league and re-send it on every page a pick from
+        // that draft appears in.
+        for (const tier of [...KTC_PICK_TIERS, null]) {
+          pickKeys.add(ktcPickKey(pick.season, pick.round, tier));
+        }
       }
     }
   }
 
-  const [players, managers, ktc, draftSlots] = await Promise.all([
+  const [players, managers, ktc, pickKtc, draftSlots] = await Promise.all([
     lookupPlayers(playerIds),
     getTradeManagers(managerIds),
     // Keyed on the same new-ids list as the names, so a player priced once is
     // priced once for the whole board.
     lookupKtc(playerIds),
+    lookupKtcPicks([...pickKeys]),
     getDraftSlots(draftKeys),
   ]);
 
@@ -214,6 +234,7 @@ async function resolveNames(trades: readonly Trade[]) {
     players: Object.fromEntries(players),
     managers: resolvedManagers,
     ktc: Object.fromEntries(ktc),
+    pickKtc: Object.fromEntries(pickKtc),
     // Narrowed to the picks the page actually holds: a league's order covers
     // every roster in it, and a page names two or three of them.
     pickSlots: resolvePickSlots(trades, draftSlots),
