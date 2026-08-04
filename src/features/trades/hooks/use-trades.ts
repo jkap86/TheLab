@@ -62,6 +62,8 @@ export type TradesData = {
   players: Record<string, PlayerSummary>;
   managers: Record<string, TradeManager>;
   ktc: Record<string, KtcValue>;
+  /** KTC's pick rows, keyed by season, round and tier — see `ktcPickKey`. */
+  pickKtc: Record<string, KtcValue>;
   /** Pick key → draft slot, for the picks whose league has set an order. */
   pickSlots: Record<string, number>;
 };
@@ -152,6 +154,7 @@ export function useTrades(request: TradeRequest): TradesState {
     const players: Record<string, PlayerSummary> = {};
     const managers: Record<string, TradeManager> = {};
     const ktc: Record<string, KtcValue> = {};
+    const pickKtc: Record<string, KtcValue> = {};
     const pickSlots: Record<string, number> = {};
 
     for (const page of pages) {
@@ -162,6 +165,7 @@ export function useTrades(request: TradeRequest): TradesState {
       Object.assign(players, page.players);
       Object.assign(managers, page.managers);
       Object.assign(ktc, page.ktc);
+      Object.assign(pickKtc, page.pickKtc);
       Object.assign(pickSlots, page.pickSlots);
     }
 
@@ -196,6 +200,7 @@ export function useTrades(request: TradeRequest): TradesState {
       players,
       managers,
       ktc,
+      pickKtc,
       pickSlots,
     };
   }, [query.data]);

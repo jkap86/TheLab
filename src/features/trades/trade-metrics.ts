@@ -1,4 +1,8 @@
+import { ktcPickPrice, pickTier } from "../../shared/ktc/picks.ts";
+import type { KtcPickMatch, KtcPickTier } from "../../shared/ktc/picks.ts";
 import { ktcBoardValue } from "../../shared/ktc/roster.ts";
+import { pickSlotKey } from "../../shared/trades/pick-slots.ts";
+import { ordinal } from "../shared/format.ts";
 import type { Metric } from "../shared/metric-cell.ts";
 import type { TradeBundle } from "./exchange.ts";
 import type { KtcValue, TradePickAsset } from "./types";
@@ -44,6 +48,11 @@ export type TradeSideContext = {
    */
   ktc: Record<string, KtcValue>;
   /**
+   * KTC's rookie-pick rows, as the page delivered them — keyed by season, round
+   * and tier rather than by an id, because a pick has none.
+   */
+  pickKtc: Record<string, KtcValue>;
+  /**
    * Which of KTC's two boards this trade's league reads — derived from the
    * league's own lineup, since the stream spans leagues that read different
    * ones and a roster read off the wrong board is wrong at every position. A
@@ -51,7 +60,51 @@ export type TradeSideContext = {
    * `isSuperflexLineup` answers for an unknown lineup.
    */
   superflex: boolean;
+  /** The league this trade happened in — half of a pick's draft-slot key. */
+  leagueId: string;
+  /**
+   * The page's draft slots, keyed by {@link pickSlotKey} — the same map the card
+   * names a pick from, so the price and the label can't disagree about which
+   * pick this is.
+   */
+  pickSlots: Record<string, number>;
+  /**
+   * How many teams draft in that league, which is what turns a slot into a
+   * third of the round. Null where the league list hasn't answered yet, which
+   * reads exactly as an unset draft order does: the pick is priced, without a
+   * place.
+   */
+  teams: number | null;
 };
+
+/**
+ * Which of KTC's rows prices one of this side's picks, or null where the board
+ * has nothing for its season and round.
+ *
+ * The two facts it needs are on the context rather than the pick, for the reason
+ * the slot itself is: where a pick falls belongs to the league's draft, not to
+ * the pick, so one map serves every trade naming that roster's pick.
+ */
+function pickMatch(
+  ctx: TradeSideContext,
+  pick: TradePickAsset,
+): KtcPickMatch | null {
+  const slot =
+    ctx.pickSlots[pickSlotKey(ctx.leagueId, pick.season, pick.roster_id)] ??
+    null;
+  const tier =
+    slot === null || ctx.teams === null ? null : pickTier(slot, ctx.teams);
+  return ktcPickPrice(ctx.pickKtc, pick, tier);
+}
+
+/** `"2027 Mid 1st"` — the row a price was read off, as KTC names it. */
+function pickRowName(
+  pick: TradePickAsset,
+  tier: KtcPickTier | null,
+): string {
+  const third = tier === null ? "" : `${tier[0].toUpperCase()}${tier.slice(1)} `;
+  return `${pick.season} ${third}${ordinal(pick.round)}`;
+}
 
 /**
  * One line of a haul, as the card lists it and a metric reads it.
@@ -71,11 +124,11 @@ export type TradeAsset =
  *
  * The two ways of saying nothing are deliberately different, and it is the same
  * distinction the side total's hover already draws. A null cell means the metric
- * does not cover this line — KTC's board carries no draft picks, so a dash
- * against a pick would read as a hole in the board rather than as a category it
- * was never in. A cell with a null `text` means the metric *does* cover it and
- * has no number: an unpriced player, which is a genuine gap and reads as an em
- * dash.
+ * does not cover this line — KTC has no opinion on FAAB, so a dash against it
+ * would read as a hole in the board rather than as a category it was never in. A
+ * cell with a null `text` means the metric *does* cover it and has no number: an
+ * unpriced player, or a pick from a draft KTC no longer carries, which is a
+ * genuine gap and reads as an em dash.
  */
 export type TradeAssetCell = { text: string | null; title: string };
 
@@ -111,60 +164,111 @@ function boardName(superflex: boolean): string {
  *
  * The KTC entry leads because it is the question the column was added for, and
  * it is the one that can decline to answer: KTC prices ~500 dynasty skill
- * players, so a haul of a kicker and a 2029 4th is off the board entirely. That
- * reads as an em dash rather than as zero, and a partly-priced haul says so in
- * its hover — the same habit as the league card's `priced` of `rostered`.
+ * players and a few dozen pick rows, so a haul of a kicker and a 2032 4th is off
+ * the board entirely. That reads as an em dash rather than as zero, and a
+ * partly-priced haul says so in its hover — the same habit as the league card's
+ * `priced` of `rostered`.
+ *
+ * **Picks are part of that total now, and the change is larger than it looks.**
+ * The column used to price the players in a haul and print "draft picks aren't
+ * on KTC's board" beside the rest, which was true of the player board and false
+ * of the one KTC publishes — it prices picks by third of the round, and the sync
+ * has always stored those rows. On a board where a first is routinely the whole
+ * trade, a total covering only the players was answering a different question
+ * from the one the column asks.
  */
 export const TRADE_METRICS: TradeMetric[] = [
   {
     key: "ktc",
     group: "Value",
     label: "KTC",
-    cell: ({ received, ktc, superflex }) => {
+    cell: (ctx) => {
+      const { received, ktc, superflex } = ctx;
       let total = 0;
       let priced = 0;
+      // How many of the priced lines came off a row that isn't the pick's own
+      // tier — see {@link ktcPickPrice}. Counted rather than merely flagged so
+      // the hover can say how much of the total rests on a stand-in.
+      let assumed = 0;
+
       for (const id of received.players) {
         const value = ktcBoardValue(superflex, ktc[id]);
         if (value === null) continue;
         total += value;
         priced += 1;
       }
+      for (const pick of received.picks) {
+        const match = pickMatch(ctx, pick);
+        if (!match) continue;
+        const value = ktcBoardValue(superflex, match.price);
+        if (value === null) continue;
+        total += value;
+        priced += 1;
+        if (!match.exact) assumed += 1;
+      }
 
-      const of = received.players.length;
-      const picks = received.picks.length;
+      // Players and picks together: they are one board now, so a haul is priced
+      // out of everything in it that could carry a price. FAAB is not — it is
+      // the league's own currency and KTC has never had an opinion on it.
+      const of = received.players.length + received.picks.length;
       return {
         kind: "value",
-        // Zero priced players is not a value of zero: it is a haul this board
-        // has nothing to say about, which is most pick-only trades.
+        // Zero priced assets is not a value of zero: it is a haul this board has
+        // nothing to say about — a kicker, an IDP, a pick five drafts out.
         text: priced > 0 ? total.toLocaleString() : null,
         title:
           priced > 0
-            ? `Dynasty KTC, ${boardName(superflex)} · ${priced} of ${of} player${
+            ? `Dynasty KTC, ${boardName(superflex)} · ${priced} of ${of} asset${
                 of === 1 ? "" : "s"
-              } priced${picks > 0 ? ` · ${picks} pick${picks === 1 ? "" : "s"} unpriced` : ""}`
-            : // KTC carries no draft picks at all, so a pick-only haul is not a
-              // gap in the board — saying which it is keeps the em dash from
-              // reading as missing data.
-              picks > 0 && of === 0
-              ? "Draft picks aren't on KTC's board"
-              : `Nothing in this haul is priced on the ${boardName(superflex)}`,
+              } priced${
+                assumed > 0
+                  ? ` · ${assumed} pick${assumed === 1 ? "" : "s"} priced off a stand-in row`
+                  : ""
+              }`
+            : `Nothing in this haul is priced on the ${boardName(superflex)}`,
       };
     },
-    // Per line, the same board the total above was summed on. Picks and FAAB
-    // return null rather than an em dash: KTC's board is ~500 dynasty skill
-    // players and carries no picks at all, so a dash on every pick line would
-    // report a gap in a board those assets were never on — and on a card whose
-    // whole point can be a first-round pick, that is a column of dashes.
-    asset: ({ ktc, superflex }, asset) => {
-      if (asset.kind !== "player") return null;
-      const value = ktcBoardValue(superflex, ktc[asset.id]);
-      return {
-        text: value === null ? null : value.toLocaleString(),
-        title:
-          value === null
-            ? `Not priced on the ${boardName(superflex)}`
-            : `Dynasty KTC, ${boardName(superflex)}`,
-      };
+    // Per line, the same board the total above was summed on. FAAB alone returns
+    // null rather than an em dash: it is not an asset this board covers, so a
+    // dash against it would report a gap in a board it was never on, where the
+    // dash on an unpriced player or pick is a genuine one.
+    asset: (ctx, asset) => {
+      const { ktc, superflex } = ctx;
+
+      if (asset.kind === "player") {
+        const value = ktcBoardValue(superflex, ktc[asset.id]);
+        return {
+          text: value === null ? null : value.toLocaleString(),
+          title:
+            value === null
+              ? `Not priced on the ${boardName(superflex)}`
+              : `Dynasty KTC, ${boardName(superflex)}`,
+        };
+      }
+
+      if (asset.kind === "pick") {
+        const match = pickMatch(ctx, asset.pick);
+        const value = match ? ktcBoardValue(superflex, match.price) : null;
+        if (!match || value === null) {
+          return {
+            text: null,
+            title: `Not priced on the ${boardName(superflex)}`,
+          };
+        }
+        return {
+          text: value.toLocaleString(),
+          // The row is named rather than the pick, because it is the row that
+          // was priced: a reader who sees "2027 Mid 1st" against a pick whose
+          // draft has no order yet can tell the number is the middle of the
+          // round and not a claim about where this one lands.
+          title: `Dynasty KTC, ${boardName(superflex)} · ${pickRowName(
+            asset.pick,
+            match.tier,
+          )}${match.exact ? "" : " (draft order not set)"}`,
+        };
+      }
+
+      return null;
     },
   },
   {

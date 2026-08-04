@@ -1,5 +1,8 @@
 import { pool } from "@/shared/db";
 
+import { ktcPickKey, parseKtcPickName } from "./picks";
+import type { KtcPickPrice } from "./picks";
+
 /**
  * Reads of `ktc_values`, the table this module owns.
  *
@@ -89,4 +92,60 @@ export async function getKtcValuesBySleeperId(
   }
 
   return { values, updated_at: newest?.toISOString() ?? null };
+}
+
+/** KTC's pick rows, keyed by {@link ktcPickKey} — see {@link getKtcPickBoard}. */
+export type KtcPickBoard = Record<string, KtcPickPrice>;
+
+/**
+ * Every rookie-pick row KTC currently prices, keyed the way a traded pick is
+ * looked up.
+ *
+ * **Its own read rather than a case of {@link getKtcValuesBySleeperId}, because
+ * a pick has no `sleeper_id`.** The matcher resolves KTC entries to Sleeper
+ * players by name, and a pick is not a player anywhere in Sleeper's map, so
+ * every one of these rows carries a null id and is invisible to the lookup every
+ * other surface uses. That is why the board's picks went unread for as long as
+ * they did: nothing was excluding them, nothing could reach them.
+ *
+ * The whole board is one query and a few dozen rows — KTC prices three or four
+ * rounds across three or four seasons — so it is read whole and narrowed by the
+ * caller, rather than asked about a key at a time. Rows whose name doesn't parse
+ * are dropped rather than guessed at (see {@link parseKtcPickName}), and a name
+ * that somehow appears twice keeps its first row, ordered by `ktc_id` so which
+ * one that is doesn't move between reads.
+ */
+export async function getKtcPickBoard(): Promise<KtcPickBoard> {
+  const { rows } = await pool.query<{
+    player_name: string | null;
+    sf_value: number | null;
+    oneqb_value: number | null;
+  }>(
+    `SELECT player_name, sf_value, oneqb_value
+       FROM ktc_values
+      WHERE position = 'RDP'
+        AND (sf_value IS NOT NULL OR oneqb_value IS NOT NULL)
+      ORDER BY ktc_id`,
+  );
+
+  const board: KtcPickBoard = {};
+  for (const row of rows) {
+    const parsed = parseKtcPickName(row.player_name ?? "");
+    if (!parsed) continue;
+    const key = ktcPickKey(parsed.season, parsed.round, parsed.tier);
+    if (key in board) continue;
+    board[key] = { sf: row.sf_value, oneqb: row.oneqb_value };
+  }
+
+  // Rows stored and none of them understood is what a KTC rename looks like from
+  // here, and it is otherwise silent: every pick on the trades board simply
+  // stops carrying a price, which reads as picks being unpriced rather than as
+  // the parser having gone deaf. Said once per cache TTL, not per read.
+  if (rows.length > 0 && Object.keys(board).length === 0) {
+    console.warn(
+      `[ktc] ${rows.length} pick row(s) stored and none parsed — ` +
+        `KTC may have renamed them (e.g. "${rows[0].player_name}").`,
+    );
+  }
+  return board;
 }

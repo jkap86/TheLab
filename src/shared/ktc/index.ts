@@ -22,8 +22,20 @@ export {
   KTC_MAX_DUPLICATE_FRACTION,
 } from "./validate";
 export type { KtcValidation } from "./validate";
-export { getKtcValuesBySleeperId, countPricedKtcValues } from "./queries";
-export type { KtcValue, KtcValueSet } from "./queries";
+export {
+  getKtcValuesBySleeperId,
+  countPricedKtcValues,
+  getKtcPickBoard,
+} from "./queries";
+export type { KtcValue, KtcValueSet, KtcPickBoard } from "./queries";
+export {
+  ktcPickKey,
+  ktcPickPrice,
+  parseKtcPickName,
+  pickTier,
+  KTC_PICK_TIERS,
+} from "./picks";
+export type { KtcPickMatch, KtcPickName, KtcPickPrice, KtcPickTier } from "./picks";
 export {
   isSuperflexLineup,
   ktcBoardValue,

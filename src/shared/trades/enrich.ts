@@ -1,4 +1,4 @@
-import { getKtcValuesBySleeperId } from "@/shared/ktc";
+import { getKtcPickBoard, getKtcValuesBySleeperId } from "@/shared/ktc";
 import type { KtcValue } from "@/shared/ktc";
 import { getPlayersByIds } from "@/shared/players";
 import type { PlayerSummary } from "@/shared/players";
@@ -52,6 +52,18 @@ const KTC_TTL_MS = 15 * 60 * 1000;
 const playersCache = new BoundedCache<PlayerSummary | null>(20000, PLAYERS_TTL_MS);
 const ktcCache = new BoundedCache<KtcValue | null>(20000, KTC_TTL_MS);
 
+/**
+ * The pick half of the same board, keyed by {@link ktcPickKey} rather than by a
+ * player id.
+ *
+ * Its own cache because it is a different population read a different way: KTC
+ * prices a few dozen pick rows against ~500 players, and they are asked for by
+ * `(season, round, tier)` — a pick carries no `sleeper_id` for the player cache
+ * to hold it under. Sized to that population several times over rather than to
+ * the players'.
+ */
+const ktcPicksCache = new BoundedCache<KtcValue | null>(2000, KTC_TTL_MS);
+
 /** Player summaries for `ids`, from cache where possible. */
 export function lookupPlayers(
   ids: readonly string[],
@@ -82,8 +94,26 @@ export function lookupKtc(
   });
 }
 
+/**
+ * KTC's price for the pick rows `keys` names, from cache where possible.
+ *
+ * **The fetch ignores which keys missed and reads the whole board**, which is
+ * the one place these lookups differ from the three above. A pick board is a few
+ * dozen rows and one unindexed scan of a 500-row table; narrowing it to the
+ * handful a page names would cost the same query and answer less of the next
+ * page. `cachedLookup` still records only what was asked for — including the
+ * keys the board has nothing for, so a season KTC no longer prices is asked
+ * about once rather than on every page a pick from it appears in.
+ */
+export function lookupKtcPicks(
+  keys: readonly string[],
+): Promise<Map<string, KtcValue>> {
+  return cachedLookup(ktcPicksCache, keys, () => getKtcPickBoard());
+}
+
 /** For tests, and for a sync that has just replaced what these hold. */
 export function clearTradeEnrichmentCaches(): void {
   playersCache.clear();
   ktcCache.clear();
+  ktcPicksCache.clear();
 }

@@ -309,6 +309,25 @@ export type TradesPagePayload = {
    */
   ktc: Record<string, KtcValue>;
   /**
+   * KTC's **rookie-pick** rows, for the picks on this page — keyed by
+   * {@link ktcPickKey}, which is a season, a round and a third of that round.
+   *
+   * A second map rather than more entries in the one above, because a pick is
+   * not a player anywhere: it has no Sleeper id to be keyed by, which is why
+   * these rows sat unread in `ktc_values` while the card said draft picks
+   * weren't on KTC's board at all.
+   *
+   * **All three tiers travel, plus the untiered row where KTC publishes one.**
+   * Which third a pick falls in needs the league's draft order *and* its size,
+   * and the size is on the league list the client already holds — so the tier is
+   * resolved there and this sends what it could resolve to. That is four small
+   * entries per `(season, round)` the page names rather than one per pick, and
+   * it is what keeps a busy league's page from re-sending the same price forty
+   * times. {@link ktcPickPrice} is the lookup, and it is what decides the
+   * fallback for a pick whose draft doesn't exist yet.
+   */
+  pickKtc: Record<string, KtcValue>;
+  /**
    * Where a traded pick falls, for the picks on this page whose league has set
    * the order — keyed by {@link pickSlotKey}, so a card names a pick the way
    * Sleeper does ("2026 1.05") where the order is known and by its round

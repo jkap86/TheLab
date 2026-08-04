@@ -62,6 +62,7 @@ export const TradeCard = memo(function TradeCard({
   managers,
   metric,
   ktc,
+  pickKtc,
   pickSlots,
 }: {
   trade: Trade;
@@ -72,6 +73,12 @@ export const TradeCard = memo(function TradeCard({
   /** The value column every side wears, chosen once for the whole list. */
   metric: TradeMetric;
   ktc: Record<string, KtcValue>;
+  /**
+   * KTC's rookie-pick rows for the picks on this page, keyed by season, round
+   * and tier. Which row a pick reads is resolved from `pickSlots` below plus the
+   * league's own size — see `../trade-metrics`.
+   */
+  pickKtc: Record<string, KtcValue>;
   /** Draft slots for the picks whose league has set an order — see `../pick-display`. */
   pickSlots: Record<string, number>;
 }) {
@@ -115,8 +122,10 @@ export const TradeCard = memo(function TradeCard({
             managers={managers}
             metric={metric}
             ktc={ktc}
+            pickKtc={pickKtc}
             superflex={superflex}
             pickSlots={pickSlots}
+            teams={league?.total_rosters ?? null}
           />
         ))}
       </div>
@@ -144,8 +153,10 @@ function SideColumn({
   managers,
   metric,
   ktc,
+  pickKtc,
   superflex,
   pickSlots,
+  teams,
   wide,
 }: {
   side: TradeSide;
@@ -154,15 +165,30 @@ function SideColumn({
   managers: Record<string, TradeManager>;
   metric: TradeMetric;
   ktc: Record<string, KtcValue>;
+  pickKtc: Record<string, KtcValue>;
   superflex: boolean;
   pickSlots: Record<string, number>;
+  /**
+   * How many teams draft in this league — what turns a pick's slot into the
+   * third of the round KTC prices. Null where the league list hasn't answered,
+   * which prices the pick without placing it.
+   */
+  teams: number | null;
   /** Whether this side takes the whole row — see the grid at the call site. */
   wide: boolean;
 }) {
   const manager = side.user_id ? managers[side.user_id] : undefined;
   const name = manager?.display_name || `Roster ${side.roster_id}`;
   const received = receivedBundle(side);
-  const ctx: TradeSideContext = { received, ktc, superflex };
+  const ctx: TradeSideContext = {
+    received,
+    ktc,
+    pickKtc,
+    superflex,
+    leagueId: trade.league_id,
+    pickSlots,
+    teams,
+  };
 
   const assets = bundleAssets(received);
   // Who handed this side its haul, resolved once for the side rather than per
