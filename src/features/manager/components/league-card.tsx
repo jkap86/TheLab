@@ -49,12 +49,12 @@ import { Chevron } from "./ui";
  * be a row).
  *
  * **An open card takes the screen, which is why it doesn't hold its own open
- * state.** Expanding pulls the card up under the app bar, unpins the manager
- * plate above it (see {@link ManagerHeader}) and caps the panel at the viewport
- * so the detail scrolls inside the card rather than running off the bottom of a
- * page several screens long. Every one of those is a claim only one card can
- * make at a time, so which league is open is held in {@link ManagerLeagues} and
- * arrives here as a prop.
+ * state.** Expanding pulls the card up under the app bar, pins it there, unpins
+ * the manager plate above it (see {@link ManagerHeader}) and caps the panel at
+ * the viewport so the detail scrolls inside the card rather than running off the
+ * bottom of a page several screens long. Every one of those is a claim only one
+ * card can make at a time, so which league is open is held in
+ * {@link ManagerLeagues} and arrives here as a prop.
  *
  * **It opens and closes as a movement, which is why the panel outlives the press
  * that closed it.** A card appearing and vanishing at full height moved the rows
@@ -156,24 +156,54 @@ export function LeagueCard({
     return () => clearTimeout(id);
   }, [expanded]);
 
+  // Closing scrolls nothing — *unless the card was pinned above its own place in
+  // the list*, which is the one case the sticky top introduced. A pinned card
+  // holds the top of the screen while the rows behind it pass underneath, so by
+  // the time it is closed its resting position can be well above the fold, and
+  // releasing it drops the row out of the viewport entirely: the reader presses
+  // a card and the thing they pressed vanishes. So the collapsed row is put back
+  // where the reader is looking, and only from above the fold — a card still on
+  // screen has not moved and is left exactly where it is, which is the original
+  // rule intact for every close that never scrolled. Instant, because by then
+  // there is a row rather than a panel and a smooth travel across a list several
+  // screens long is a journey nobody asked for.
+  //
+  // It runs after `closing` clears rather than beside it, since a sticky element
+  // reports the position it is pinned at and not the one it would rest at. The
+  // ref is what keeps it to *this card's own close*: a card above the fold is
+  // the ordinary state of a scrolled list, so without it every card mounting
+  // into a scrolled page — a filter change, a background refresh — would haul
+  // the page up to itself.
+  const wasPinned = useRef(false);
+  useEffect(() => {
+    if (expanded || closing) return;
+    if (!wasPinned.current) return;
+    wasPinned.current = false;
+    const el = ref.current;
+    if (!el || el.getBoundingClientRect().top >= 0) return;
+    el.scrollIntoView({ block: "start", behavior: "auto" });
+  }, [expanded, closing]);
+
   // Opening pulls the card to the top of the screen, because that is what makes
   // the cap below a whole panel rather than the top of one: a card opened
   // halfway down the viewport would have half a screen to draw a panel that is
   // sized for a screen. The offset is `scroll-mt`, so the browser does the
-  // arithmetic against the app bar rather than this reading a height at runtime.
-  //
-  // Closing scrolls nothing. The reader is looking at the card they just closed,
-  // and moving the page under them to reverse a scroll they didn't ask for is
-  // how a list loses its place.
+  // arithmetic against the app bar rather than this reading a height at runtime
+  // — and it is the same offset the card then sticks at, so the position it is
+  // aimed at and the position it holds cannot disagree.
   //
   // It scrolls twice, and the second one is a correction rather than a repeat:
-  // opening a league closes the one before it, so while this card is travelling
-  // to the top the card above it may be collapsing several hundred pixels out
-  // of the page — which moves this one up past the offset it was just aimed at.
-  // A second call once the collapse has finished lands it where it was asked to
-  // be, and is a no-op when nothing moved.
+  // opening a league closes the one before it, so while this card is
+  // travelling to the top the card above it may be collapsing several hundred
+  // pixels out of the page — which moves this one up past the offset it was just
+  // aimed at. A second call once the collapse has finished lands it where it was
+  // asked to be, and is a no-op when nothing moved.
   useEffect(() => {
     if (!expanded) return;
+    // Armed here rather than during render: a ref written in a render body
+    // survives a render React threw away, so the flag is set where the card
+    // genuinely took the top of the screen.
+    wasPinned.current = true;
     const reduced =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -199,11 +229,11 @@ export function LeagueCard({
       // collapsing would be two halves of one gesture running at different
       // speeds — and the hover lift returning under the pointer mid-collapse
       // reads as the row jumping. It is the plate until the panel is gone.
-      className={
+      className={`${SCROLL_OFFSET} ${
         mounted
           ? `${OPEN_SURFACE} ${OPEN_BOX}`
           : `${LIST_ROW_SURFACE} ${LIST_ROW_HOVER}`
-      }
+      }`}
     >
       <RowSheen lit={expanded} />
 
@@ -343,7 +373,7 @@ const PANEL_MS = 280;
  * hairline, since a lit edge is what says which league is open when the card
  * above it is scrolled past.
  */
-const OPEN_SURFACE = "lab-plate group relative rounded-xl border border-active/25";
+const OPEN_SURFACE = "lab-plate group rounded-xl border border-active/25";
 
 /**
  * The box an expanded card lives in: a column with a ceiling, so the head stays
@@ -362,12 +392,44 @@ const OPEN_SURFACE = "lab-plate group relative rounded-xl border border-active/2
  * chrome hides, which on a scrolling panel reads as the page fighting the
  * finger.
  *
- * `scroll-mt` is the offset the open-scroll uses; it belongs on the element
- * being scrolled to, which is why it is here rather than in the effect.
+ * **It is `sticky` at the app bar's own height, which is what makes the cap a promise
+ * rather than a starting position.** Scrolled to the top and left there, the
+ * open card walked straight back off the top of the screen the moment a reader
+ * pulled on the list — and since the head is the one part of it that says which
+ * league this panel belongs to, what was left was several hundred rows of
+ * standings and rosters with nothing naming them. Pinned, the head and the stat
+ * columns stay under the app bar for as long as the card is open (the head takes
+ * no `sticky` of its own: it is already outside the box that scrolls, so pinning
+ * the card pins it), and the rows behind it pass underneath — which they can do
+ * because `.lab-plate`'s face is opaque.
+ *
+ * Three details ride on it. `top` and `scroll-mt` are the same offset, so the
+ * position the open-scroll aims at is exactly the one the card sticks at and the
+ * two can't disagree by a pixel. The `z` is what keeps the cards *after* it from
+ * painting over it — they are `relative` themselves, so DOM order would
+ * otherwise win — and it sits below the header plate's `z-40` and the cards'
+ * `z-30` menus, since this is a surface rather than something raised over one.
+ * And it replaces `relative` on the surface rather than joining it: `sticky` is
+ * a positioned element too, so {@link RowSheen} still has its containing block,
+ * and two position utilities on one element is a fight decided by Tailwind's
+ * alphabetical emission order rather than by anything readable here.
  */
 const OPEN_BOX =
-  "flex max-h-[calc(100svh-var(--site-header-h)-1.5rem)] flex-col " +
-  "scroll-mt-[var(--site-header-h)]";
+  "sticky top-[var(--site-header-h)] z-20 " +
+  "flex max-h-[calc(100svh-var(--site-header-h)-1.5rem)] flex-col";
+
+/**
+ * The offset every scroll to this card aims at, and the one the open card sticks
+ * at — the app bar's height, so the browser does that arithmetic rather than an
+ * effect reading a height at runtime.
+ *
+ * It is worn at **both** states rather than riding with the open box, because
+ * the two scrolls happen at opposite ends of the gesture: opening aims at a card
+ * about to become a panel, and the close correction aims at one that is already
+ * a row again. Carried only while open, the second would land the row under the
+ * app bar.
+ */
+const SCROLL_OFFSET = "scroll-mt-[var(--site-header-h)]";
 
 /**
  * A small state dot standing in for the old text badge: the accent for a league
