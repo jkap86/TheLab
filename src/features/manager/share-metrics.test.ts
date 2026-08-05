@@ -32,16 +32,18 @@ function league(
 }
 
 const adp: AdpPlayerPayload = {
-  rank: 12,
   player_id: "4046",
   name: "Patrick Mahomes",
   position: "QB",
   team: "KC",
-  adp: 14.6,
-  min_pick: 3,
-  max_pick: 41,
-  picks: 88,
-  stdev: 6.4,
+  redraft: { adp: 34.2, min_pick: 18, max_pick: 60, picks: 41, stdev: 8.1 },
+  dynasty: { adp: 14.6, min_pick: 3, max_pick: 41, picks: 88, stdev: 6.4 },
+};
+
+/** Priced on one board only — a rookie no redraft has taken, typically. */
+const dynastyOnly: AdpPlayerPayload = {
+  ...adp,
+  redraft: null,
 };
 
 const base: ShareMetricContext = {
@@ -155,13 +157,26 @@ describe("league-type metrics", () => {
 });
 
 describe("player ADP metrics", () => {
-  test("print the average and the spread behind it", () => {
-    assert.equal(text("adp", { adp }), "14.6");
-    assert.equal(text("adp_spread", { adp }), "3–41");
+  test("each board's column prints its own average and spread", () => {
+    // The fetch answers both markets; one column must never read the other's
+    // number, or a rookie's dynasty price would pass as a redraft one.
+    assert.equal(text("adp_redraft", { adp }), "34.2");
+    assert.equal(text("adp_dynasty", { adp }), "14.6");
+    assert.equal(text("adp_spread_redraft", { adp }), "18–60");
+    assert.equal(text("adp_spread_dynasty", { adp }), "3–41");
+  });
+
+  test("a player one board can't average is an em dash there and a number here", () => {
+    assert.equal(text("adp_redraft", { adp: dynastyOnly }), null);
+    assert.equal(text("adp_dynasty", { adp: dynastyOnly }), "14.6");
+    assert.match(
+      cell("adp_redraft", { adp: dynastyOnly }).title,
+      /not priced on the redraft board/,
+    );
   });
 
   test("an unpriced player is an em dash, not a zero", () => {
-    assert.equal(text("adp"), null);
-    assert.equal(metricPreview(cell("adp")), "—");
+    assert.equal(text("adp_redraft"), null);
+    assert.equal(metricPreview(cell("adp_dynasty")), "—");
   });
 });

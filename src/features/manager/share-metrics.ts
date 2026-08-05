@@ -2,7 +2,7 @@ import { leagueType } from "../shared/league-filters/predicates.ts";
 import { formatRecord, formatWinPct } from "./format.ts";
 import type { ColumnPreset, Metric } from "./metric-cell.ts";
 import { aggregateRecord } from "./record.ts";
-import type { AdpPlayerPayload, ManagerLeague } from "./types";
+import type { AdpBoardStats, AdpPlayerPayload, ManagerLeague } from "./types";
 
 /**
  * The metrics a share card can show in each of its stat columns, and how to read
@@ -40,9 +40,10 @@ export type ShareMetricContext = {
    */
   leagueCount: number;
   /**
-   * This player's entry on the ADP board the drawer selected, or null — for a
-   * leaguemate row, and for a player the board didn't price. Only the player
-   * metrics read it.
+   * This player's row on the ADP board the drawer selected — carrying his
+   * redraft and dynasty averages side by side, the way `/api/adp` answers — or
+   * null for a leaguemate row and for a player the board didn't price at all.
+   * Only the player metrics read it, one league-type board apiece.
    */
   adp: AdpPlayerPayload | null;
 };
@@ -65,13 +66,14 @@ function shareTitle(held: number, of: number, tail: string): string {
 }
 
 /**
- * The ADP hover, saying what the average rests on — the spread it was taken over,
- * how many drafts stood behind it and how wide they disagreed. The same "state the
- * population" habit the KTC and projection hovers keep on a league card.
+ * The ADP hover, saying what the average rests on — the spread it was taken
+ * over, how many of that league-type board's drafts stood behind it and how
+ * wide they disagreed. The same "state the population" habit the KTC and
+ * projection hovers keep on a league card.
  */
-function adpTitle(entry: AdpPlayerPayload | null): string {
-  if (!entry) return "not priced on this board";
-  return `Picks ${entry.min_pick}–${entry.max_pick} · ${entry.picks} draft${
+function adpTitle(entry: AdpBoardStats | null, board: string): string {
+  if (!entry) return `not priced on the ${board} board`;
+  return `Picks ${entry.min_pick}–${entry.max_pick} · ${entry.picks} ${board} draft${
     entry.picks === 1 ? "" : "s"
   } · ±${entry.stdev.toFixed(1)}`;
 }
@@ -193,8 +195,11 @@ export const SHARE_METRICS: ShareMetric[] = [
 ];
 
 /**
- * The player-only metrics: the market's average draft position for him on the
- * board the ADP drawer selected, and the spread the picks landed across.
+ * The player-only metrics: the market's average draft position for him over the
+ * drafts the ADP drawer selected — once per league-type board, since the fetch
+ * answers the redraft and dynasty markets side by side and which to show is the
+ * reader's column choice. A rookie is early on one and absent from the other,
+ * which is exactly why one "ADP" column couldn't say both.
  *
  * A raw ADP rather than the draft-capital value a league card reads, because this
  * column is one player and not a roster — the inversion `adp-value` performs is
@@ -202,23 +207,43 @@ export const SHARE_METRICS: ShareMetric[] = [
  */
 export const PLAYER_ADP_METRICS: ShareMetric[] = [
   {
-    key: "adp",
+    key: "adp_redraft",
     group: "Draft market",
-    label: "ADP",
+    label: "Redraft ADP",
     cell: ({ adp }) => ({
       kind: "value",
-      text: adp ? adp.adp.toFixed(1) : null,
-      title: adpTitle(adp),
+      text: adp?.redraft ? adp.redraft.adp.toFixed(1) : null,
+      title: adpTitle(adp?.redraft ?? null, "redraft"),
     }),
   },
   {
-    key: "adp_spread",
+    key: "adp_dynasty",
     group: "Draft market",
-    label: "Picks",
+    label: "Dynasty ADP",
     cell: ({ adp }) => ({
       kind: "value",
-      text: adp ? `${adp.min_pick}–${adp.max_pick}` : null,
-      title: adpTitle(adp),
+      text: adp?.dynasty ? adp.dynasty.adp.toFixed(1) : null,
+      title: adpTitle(adp?.dynasty ?? null, "dynasty"),
+    }),
+  },
+  {
+    key: "adp_spread_redraft",
+    group: "Draft market",
+    label: "Redraft picks",
+    cell: ({ adp }) => ({
+      kind: "value",
+      text: adp?.redraft ? `${adp.redraft.min_pick}–${adp.redraft.max_pick}` : null,
+      title: adpTitle(adp?.redraft ?? null, "redraft"),
+    }),
+  },
+  {
+    key: "adp_spread_dynasty",
+    group: "Draft market",
+    label: "Dynasty picks",
+    cell: ({ adp }) => ({
+      kind: "value",
+      text: adp?.dynasty ? `${adp.dynasty.min_pick}–${adp.dynasty.max_pick}` : null,
+      title: adpTitle(adp?.dynasty ?? null, "dynasty"),
     }),
   },
 ];
@@ -234,14 +259,17 @@ export const LEAGUEMATE_SHARE_METRICS: ShareMetric[] = SHARE_METRICS;
 
 /**
  * The four columns a player card opens with: the two numbers the table showed
- * before the slots were pickable, the ADP that was its third column, and the
- * manager's win rate where he is owned.
+ * before the slots were pickable, then the ADP that was its third column — now
+ * both league-type boards of it, side by side, since showing one would bury
+ * the split the fetch exists to answer. A selection stored before the split
+ * held `adp`, which no longer names a metric; `resolveColumns` falls that slot
+ * back on its own, which is the migration.
  */
 export const DEFAULT_PLAYER_COLUMNS: string[] = [
   "leagues",
   "share",
-  "adp",
-  "win_pct",
+  "adp_redraft",
+  "adp_dynasty",
 ];
 
 /**
@@ -272,8 +300,8 @@ export const SHARE_COLUMN_PRESETS: ColumnPreset[] = [
   { name: "League mix", columns: ["leagues", "dynasty", "redraft", "teams"] },
 ];
 
-/** Those three, plus the board price only a player row can answer. */
+/** Those three, plus the board prices only a player row can answer. */
 export const PLAYER_SHARE_COLUMN_PRESETS: ColumnPreset[] = [
   ...SHARE_COLUMN_PRESETS,
-  { name: "Market", columns: ["leagues", "adp", "adp_spread", "share"] },
+  { name: "Market", columns: ["leagues", "adp_redraft", "adp_dynasty", "share"] },
 ];

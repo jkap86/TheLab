@@ -1,4 +1,6 @@
 import type {
+  AdpBoardStats,
+  AdpBoardType,
   AdpFilters,
   AdpRosterValue,
   DraftDensityMonth,
@@ -6,7 +8,6 @@ import type {
   Leaguemate,
   LeagueRank,
   LeagueTeam,
-  LeagueType,
   ManagerLeague,
   ProjectedRank,
   SyncProgress,
@@ -65,7 +66,7 @@ export type LeagueTeamPayload = Omit<LeagueTeam, "manager"> & {
  * Both are keyed by player id with unpriced ids *absent* rather than zeroed — an
  * em dash on the roster, not a value of zero, the same reading the collapsed
  * card's KTC total takes. The board a value was read on travels with it
- * (`superflex`, `adp_league_type`), since the same player is worth materially
+ * (`superflex`, `adp_board`), since the same player is worth materially
  * different totals across boards and reading a roster off the wrong one is wrong
  * at every position.
  */
@@ -77,8 +78,12 @@ export type LeagueRosterValues = {
   superflex: boolean;
   /** When the KTC rows were scraped, ISO 8601; null when nothing here is priced. */
   ktc_updated_at: string | null;
-  /** The league type whose crawled drafts the ADP board averaged. */
-  adp_league_type: LeagueType;
+  /**
+   * The league-type board the ADP values were averaged over: dynasty leagues
+   * read the dynasty side of the fetch, redraft and keeper leagues the redraft
+   * one.
+   */
+  adp_board: AdpBoardType;
   /** How many crawled drafts stood behind the ADP board — a thin board is noisy. */
   adp_draft_count: number;
   /** Player id → KTC dynasty value on this league's board; unpriced ids absent. */
@@ -547,14 +552,16 @@ export type LeagueAdpValue = AdpRosterValue & {
    */
   superflex: boolean;
   /**
-   * The league type whose crawled drafts the board averaged — a dynasty startup
-   * drafts rookies a redraft never sees, so pooling them would misprice both.
+   * The league-type board whose crawled drafts priced this roster — a dynasty
+   * startup drafts rookies a redraft never sees, so pooling them would misprice
+   * both. The fetch answers both boards; this says which side the league read.
    */
-  league_type: LeagueType;
+  board: AdpBoardType;
   /**
-   * How many crawled drafts stood behind this board. Shipped with the number the
-   * way `/api/adp` reports what it averaged: a thin board is a noisy one, and a
-   * board of zero is why a roster can come back unpriced.
+   * How many crawled drafts stood behind that board — the side named by
+   * `board`, not the whole fetch. Shipped with the number the way `/api/adp`
+   * reports what it averaged: a thin board is a noisy one, and a board of zero
+   * is why a roster can come back unpriced.
    */
   draft_count: number;
 };
@@ -606,32 +613,42 @@ export type LeaguesStreamMessage =
   | LeaguesErrorMessage;
 
 /**
- * One player's ADP row. Unlike the roster payloads, the player is resolved
- * inline rather than through a side map — each player appears exactly once here,
- * so there is nothing to deduplicate. `name` falls back to the player id when
- * the players cache doesn't know the id.
+ * One player's ADP row, averaged per league-type board. Unlike the roster
+ * payloads, the player is resolved inline rather than through a side map — each
+ * player appears exactly once here, so there is nothing to deduplicate. `name`
+ * falls back to the player id when the players cache doesn't know the id.
+ *
+ * A board that took the player in fewer than `min_picks` drafts is null — no
+ * average worth trusting, which is a different answer from a bad one. At least
+ * one board is always present, and there is no server-assigned rank: the rows
+ * arrive ordered by the best average on either board (so a page cut keeps
+ * whoever is early on either market), and the client numbers them for whichever
+ * board(s) it displays.
  */
 export type AdpPlayerPayload = {
-  /** Position in the full filtered set, 1-based — not within the page. */
-  rank: number;
   player_id: string;
   name: string;
   position: string | null;
   team: string | null;
-  adp: number;
-  min_pick: number;
-  max_pick: number;
-  stdev: number;
-  /** Drafts that took this player, of `draft_count` matched. */
-  picks: number;
+  /** His average over the redraft board's drafts (redraft + keeper leagues). */
+  redraft: AdpBoardStats | null;
+  /** His average over the dynasty board's drafts. */
+  dynasty: AdpBoardStats | null;
 };
 
-/** `GET /api/adp` — ADP over the crawled drafts matching the query. */
+/**
+ * `GET /api/adp` — ADP over the crawled drafts matching the query, averaged
+ * separately for the redraft and dynasty boards. The league type stopped being
+ * a filter: one fetch answers both markets, and the display chooses.
+ */
 export type AdpPayload = {
   /** The filters actually applied, defaults included. */
   filters: AdpFilters;
-  /** Drafts the filters matched. */
+  /** Drafts the filters matched, across both boards. */
   draft_count: number;
+  /** How `draft_count` splits into the two boards; the halves sum to it. */
+  redraft_drafts: number;
+  dynasty_drafts: number;
   /** Players in the full filtered set; 0 when the requested page is past its end. */
   player_count: number;
   players: AdpPlayerPayload[];

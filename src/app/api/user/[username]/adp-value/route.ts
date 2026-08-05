@@ -10,7 +10,7 @@ import {
   adpValue,
   boardSignature,
   getDraftAdpForPlayers,
-  getLeagueTypes,
+  getLeagueAdpBoards,
   getManagerLeagueRosters,
   leagueAdpPool,
   parseSteepness,
@@ -38,9 +38,11 @@ export const dynamic = "force-dynamic";
  * behind the column are shared across every league rather than repeated per card.
  *
  * ADP pooled across different games is meaningless, so each league is priced
- * against the board most like it (superflex, scoring and type). Leagues that
- * share a board share a single query: the boards are grouped by
- * {@link boardSignature} and fetched once each, not once per league.
+ * against the board most like it: superflex and scoring pick the fetch, and the
+ * fetch answers the redraft and dynasty markets side by side, with each league
+ * reading the side matching its own type. Leagues that share a fetch share a
+ * single query: the boards are grouped by {@link boardSignature} and fetched
+ * once each, not once per league.
  */
 export async function GET(
   request: Request,
@@ -80,13 +82,13 @@ async function adpValuePayload(
     return NextResponse.json(empty);
   }
 
-  // League type isn't carried on the roster set (only the ADP board needs it), so
-  // read it here and use it to pick each league's board.
-  const leagueTypes = await getLeagueTypes(withOwn.map((l) => l.league_id));
+  // The league type isn't carried on the roster set (only the ADP board needs
+  // it), so read it here — it decides which side of its fetch each league reads.
+  const adpBoards = await getLeagueAdpBoards(withOwn.map((l) => l.league_id));
 
-  // Group the leagues by the board that prices them, collecting each board's
-  // rostered player ids as we go — one fetch per distinct board rather than one
-  // per league.
+  // Group the leagues by the fetch that prices them, collecting each fetch's
+  // rostered player ids as we go — one query per distinct board rather than one
+  // per league. Both league types share a fetch now that it answers both sides.
   const boards = new Map<string, { filters: AdpFilters; playerIds: Set<string> }>();
   const leagueBoard = new Map<string, string>();
   for (const league of withOwn) {
@@ -94,7 +96,6 @@ async function adpValuePayload(
       season,
       rosterPositions: league.roster_positions,
       scoringSettings: league.scoring_settings,
-      leagueType: leagueTypes.get(league.league_id) ?? "redraft",
     });
     const signature = boardSignature(filters);
     leagueBoard.set(league.league_id, signature);
@@ -148,14 +149,19 @@ async function adpValuePayload(
   for (const league of withOwn) {
     const own = league.teams.find((t) => t.owner_id === userId)!;
     const board = boardValues.get(leagueBoard.get(league.league_id)!)!;
+    // Which side of the fetch this league reads: its own market, not the pool
+    // of both — a dynasty roster priced off redraft drafts is wrong at every
+    // rookie, and the other way round at every veteran.
+    const boardType = adpBoards.get(league.league_id) ?? "redraft";
 
     const pool = leagueAdpPool(league.teams.length, league.roster_positions);
 
     // Curve this board's ADP into values for this league's pool. The pool is per
     // league, so two leagues sharing a board are still priced on their own size.
     const values = new Map<string, number>();
-    for (const [id, { adp }] of board.values) {
-      values.set(id, adpValue(adp, pool, halvings));
+    for (const [id, boardAdp] of board.values) {
+      const entry = boardAdp[boardType];
+      if (entry) values.set(id, adpValue(entry.adp, pool, halvings));
     }
 
     // Every team's starter value, so the manager's can be ranked against them;
@@ -176,8 +182,9 @@ async function adpValuePayload(
     priced[league.league_id] = {
       ...ownValue!,
       superflex: isSuperflexLineup(league.roster_positions),
-      league_type: leagueTypes.get(league.league_id) ?? "redraft",
-      draft_count: board.draft_count,
+      board: boardType,
+      draft_count:
+        boardType === "dynasty" ? board.dynasty_drafts : board.redraft_drafts,
       starters_rank: rankOf(starterValue, own.roster_id),
     };
   }

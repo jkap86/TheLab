@@ -20,6 +20,7 @@ import type {
   ManagerRanksPayload,
 } from "@/shared/contract";
 import type {
+  AdpBoardStats,
   DraftDensityMonth,
   DraftPickAsset,
   LeagueRank,
@@ -43,6 +44,7 @@ import type {
  * one import site.
  */
 export type {
+  AdpBoardStats,
   AdpPayload,
   AdpPlayerPayload,
   DraftDensityMonth,

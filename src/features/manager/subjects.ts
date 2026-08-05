@@ -1,3 +1,4 @@
+import { rankByName } from "./name-search.ts";
 import type { LeaguemateView, ManagerLeague, PlayerSummary } from "./types";
 
 /**
@@ -251,12 +252,11 @@ export function subjectOptions(
 }
 
 /**
- * The options a query matches, best first, capped.
+ * The options a query matches, best first, capped — the search panel's rows.
  *
- * Prefix matches lead, because someone typing "cha" means Chase before they mean
- * Christian McCaffrey — but a word-start match anywhere in the name counts as a
- * prefix, or a surname would be unreachable without the first name. Everything
- * else that contains the query follows in the input's own most-held-first order.
+ * The ranking itself is {@link rankByName}, which the shares sheet's field reads
+ * too: the two doors search the same names through different shapes, and the rule
+ * for what "cha" should find belongs in one place rather than in each of them.
  *
  * The cap is what keeps an empty query from rendering several hundred rows into a
  * floating panel; an empty query is a real state here, since opening the panel
@@ -267,21 +267,7 @@ export function searchSubjects(
   query: string,
   limit: number,
 ): SubjectOption[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return options.slice(0, limit);
-
-  const leading: SubjectOption[] = [];
-  const rest: SubjectOption[] = [];
-  for (const option of options) {
-    const name = option.name.toLowerCase();
-    const at = name.indexOf(needle);
-    if (at < 0) continue;
-    // Start of the name, or the start of any word in it.
-    if (at === 0 || name[at - 1] === " " || name[at - 1] === ".") leading.push(option);
-    else rest.push(option);
-    if (leading.length >= limit) break;
-  }
-  return [...leading, ...rest].slice(0, limit);
+  return rankByName(options, (option) => option.name, query, limit);
 }
 
 /**

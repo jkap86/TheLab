@@ -2,7 +2,13 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-import type { DraftDensityMonth, ManagerLeague } from "@/shared/manager";
+import type {
+  AdpBoardStats,
+  AdpBoardType,
+  DraftDensityMonth,
+  ManagerLeague,
+} from "@/shared/manager";
+import type { AdpPlayerPayload } from "@/shared/contract";
 
 import {
   ADP_PEAK,
@@ -10,6 +16,7 @@ import {
   type AdpRange,
   DEFAULT_ADP_RANGE,
   STEEPNESS_RANGE,
+  adpBoardRows,
   adpRangePresets,
   boardLabel,
   previewAdpPool,
@@ -17,8 +24,10 @@ import {
   rangeBounds,
   seasonOptions,
   seedFromLeague,
+  shownAdpBoards,
   steepnessSummary,
   todayIso,
+  toggleAdpBoard,
 } from "../adp-controls";
 import type { AdpState } from "../use-adp";
 import type { AdpDensityState } from "../use-adp-density";
@@ -27,14 +36,25 @@ import { PositionBadge } from "./position-badge";
 import { RollingNumber } from "./rolling-number";
 
 /**
- * The board's grid, written out whole so Tailwind can see it, and shared by the
- * heading row and the rows under it — a header laid out separately drifts the
- * moment a width changes, the same rule the roster panel's `SectionLayout` holds.
+ * The board's grids, written out whole so Tailwind can see them, and shared by
+ * the heading row and the rows under it — a header laid out separately drifts
+ * the moment a width changes, the same rule the roster panel's `SectionLayout`
+ * holds. One board is the classic six columns; both boards trade the Taken
+ * column for a second ADP one (its share moves to the ADP cells' hover), and
+ * seat the two value columns only from `@md` up — four numeric columns on a
+ * phone leave a name ~58px, which is no name at all. The `@` variants measure
+ * the drawer panel itself (it is the `@container`), not the viewport, since the
+ * panel is narrower than the screen everywhere a laptop is involved.
  */
-const BOARD_COLUMNS = "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.5rem_3.25rem]";
+const BOARD_COLUMNS_ONE = "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.5rem_3.25rem]";
+const BOARD_COLUMNS_BOTH =
+  "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.75rem] @md:grid-cols-[1.75rem_1fr_2rem_2.75rem_2.75rem_3.25rem_3.25rem]";
 
 /** One frozen empty, so the default `seedLeagues` keeps a stable identity. */
 const EMPTY_LEAGUES: readonly ManagerLeague[] = [];
+
+/** Likewise for the board while nothing has loaded, so the rows memo holds. */
+const EMPTY_PLAYERS: readonly AdpPlayerPayload[] = [];
 
 /**
  * The drawer's entrance and its exit, in milliseconds.
@@ -98,20 +118,11 @@ const ROUNDS_FILTER: FilterSpec = {
   set: (c, v) => ({ ...c, rounds: v as AdpControls["rounds"] }),
 };
 
+// No league-type filter in this table any more: the fetch answers the redraft
+// and dynasty markets side by side, and which is drawn is the board keys' job
+// over the list itself — a display choice, not a narrowing.
 const FIXED_FILTERS: readonly FilterSpec[] = [
   ROUNDS_FILTER,
-  {
-    key: "leagueType",
-    ariaLabel: "League type",
-    options: [
-      { value: "all", label: "All types" },
-      { value: "0", label: "Redraft" },
-      { value: "1", label: "Keeper" },
-      { value: "2", label: "Dynasty" },
-    ],
-    get: (c) => c.leagueType,
-    set: (c, v) => ({ ...c, leagueType: v as AdpControls["leagueType"] }),
-  },
   {
     key: "scoring",
     ariaLabel: "Scoring",
@@ -343,13 +354,31 @@ export function AdpDrawer({
     [density.months, controls.season],
   );
 
+  // The fetch's order is fair to both markets and therefore right for neither
+  // column alone — the display re-sorts for the boards it shows and renumbers
+  // as it renders. Memoised above the early return, as a hook must be.
+  const players = board.data?.players ?? EMPTY_PLAYERS;
+  const rows = useMemo(
+    () => adpBoardRows(players, controls.boards),
+    [players, controls.boards],
+  );
+
   if (!onScreen) return null;
 
-  const { draft_count, player_count, players } = board.data ?? {
-    draft_count: null,
-    player_count: null,
-    players: [],
-  };
+  const { draft_count, redraft_drafts, dynasty_drafts, player_count } =
+    board.data ?? {
+      draft_count: null,
+      redraft_drafts: null,
+      dynasty_drafts: null,
+      player_count: null,
+    };
+  const shown = shownAdpBoards(controls.boards);
+  const both = controls.boards === "both";
+  // Which board the single-board columns read; unused (and arbitrary) when both
+  // are on screen, since each column names its own.
+  const soleBoard: AdpBoardType =
+    controls.boards === "dynasty" ? "dynasty" : "redraft";
+  const soleDrafts = soleBoard === "dynasty" ? dynasty_drafts : redraft_drafts;
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -376,7 +405,12 @@ export function AdpDrawer({
         aria-label="ADP board"
         tabIndex={-1}
         data-closing={closing ? "" : undefined}
-        className="adp-drawer-panel relative ml-auto flex h-full w-full max-w-[32rem] flex-col border-l border-active/20 bg-[rgb(12,23,33)] shadow-[-24px_0_60px_rgba(0,0,0,0.5)] outline-none"
+        // `@container`, so the board's value columns key off the panel's own
+        // width rather than the viewport's — the panel is narrower than the
+        // screen everywhere a laptop is involved. The panel carries no
+        // `@`-variant of its own, which is what keeps that safe (an element is
+        // never its own query container).
+        className="adp-drawer-panel @container relative ml-auto flex h-full w-full max-w-[32rem] flex-col border-l border-active/20 bg-[rgb(12,23,33)] shadow-[-24px_0_60px_rgba(0,0,0,0.5)] outline-none"
         // `forwards` on the way out, so the panel holds off screen for the beat
         // between the animation ending and the unmount rather than snapping
         // back into view for a frame.
@@ -501,75 +535,145 @@ export function AdpDrawer({
               {/* Sticky, because the board is the one part of the drawer that scrolls and
                   a column of bare numbers three hundred rows down says nothing. It
                   paints the panel's own ground rather than a translucent one — the
-                  rows have to pass *behind* it, not through it. */}
-              <div className={`sticky top-0 z-10 -mx-1 mb-1.5 grid ${BOARD_COLUMNS} items-center gap-2 bg-[rgb(12,23,33)] px-2 pb-1.5 pt-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/35`}>
-                <span className="text-right">#</span>
-                <span>Player</span>
-                <span />
-                <span className="text-right">ADP</span>
-                {/* "Taken" is a share, and the header is the only place to say of
-                    what — a column reading 46% next to an ADP of 3.2 is otherwise
-                    a number nobody can name. */}
-                <span
-                  className="text-right"
-                  title="Share of this board’s drafts the player was taken in"
-                >
-                  Taken
-                </span>
-                <span
-                  className="text-right"
-                  title={`Draft capital under the value curve above, on a ${previewAdpPool(controls.teams)}-slot startable pool — the shape a league card's team value is summed from`}
-                >
-                  Value
-                </span>
-              </div>
-              <ul>
-                {players.map((player) => {
-                  const value = previewAdpValue(player.adp, controls.teams, steepness);
-                  return (
-                    <li
-                      key={player.player_id}
-                      className={`grid ${BOARD_COLUMNS} items-center gap-2 border-t border-foreground/[0.04] px-1 py-1.5 text-sm`}
+                  rows have to pass *behind* it, not through it. The board keys ride
+                  in it rather than in the pinned block above: they choose what the
+                  *list* shows, so they sit with the columns they toggle — and each
+                  carries its own board's draft count, which is the population a
+                  reader needs to weigh a column at all. */}
+              <div className="sticky top-0 z-10 -mx-1 mb-1.5 bg-[rgb(12,23,33)] pt-0.5">
+                <div className="flex items-center gap-1.5 px-2 pb-1.5">
+                  <span className="text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-foreground/40">
+                    Boards
+                  </span>
+                  <BoardKey
+                    board="redraft"
+                    on={shown.redraft}
+                    drafts={redraft_drafts}
+                    onToggle={(b) =>
+                      onChange({ ...controls, boards: toggleAdpBoard(controls.boards, b) })
+                    }
+                  />
+                  <BoardKey
+                    board="dynasty"
+                    on={shown.dynasty}
+                    drafts={dynasty_drafts}
+                    onToggle={(b) =>
+                      onChange({ ...controls, boards: toggleAdpBoard(controls.boards, b) })
+                    }
+                  />
+                </div>
+                {both ? (
+                  <div className={`grid ${BOARD_COLUMNS_BOTH} items-center gap-2 px-2 pb-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/35`}>
+                    <span className="text-right">#</span>
+                    <span>Player</span>
+                    <span />
+                    <span className="text-right" title={boardTitle("redraft", redraft_drafts)}>
+                      ADP R
+                    </span>
+                    <span className="text-right" title={boardTitle("dynasty", dynasty_drafts)}>
+                      ADP D
+                    </span>
+                    <span
+                      className="hidden text-right @md:block"
+                      title={valueTitle(controls.teams)}
                     >
-                      <span className="text-right text-xs tabular-nums text-foreground/35">
-                        {player.rank}
-                      </span>
-                      <span className="truncate">
-                        {player.name}
-                        {player.team && (
-                          <span className="ml-1.5 text-xs text-foreground/35">
-                            {player.team}
-                          </span>
+                      Val R
+                    </span>
+                    <span
+                      className="hidden text-right @md:block"
+                      title={valueTitle(controls.teams)}
+                    >
+                      Val D
+                    </span>
+                  </div>
+                ) : (
+                  <div className={`grid ${BOARD_COLUMNS_ONE} items-center gap-2 px-2 pb-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/35`}>
+                    <span className="text-right">#</span>
+                    <span>Player</span>
+                    <span />
+                    <span className="text-right" title={boardTitle(soleBoard, soleDrafts)}>
+                      ADP
+                    </span>
+                    {/* "Taken" is a share, and the header is the only place to say of
+                        what — a column reading 46% next to an ADP of 3.2 is otherwise
+                        a number nobody can name. */}
+                    <span
+                      className="text-right"
+                      title={`Share of the ${soleBoard} board’s drafts the player was taken in`}
+                    >
+                      Taken
+                    </span>
+                    <span className="text-right" title={valueTitle(controls.teams)}>
+                      Value
+                    </span>
+                  </div>
+                )}
+              </div>
+              {rows.length === 0 ? (
+                // The filters matched drafts, just none on the one board being
+                // shown — a different answer from an empty crawl, and the key
+                // above is the way out of it.
+                <p className="px-1 py-6 text-center text-sm text-foreground/45">
+                  Nothing on the {soleBoard} board for these filters.
+                </p>
+              ) : (
+                <ul>
+                  {rows.map((player, index) => {
+                    // In single-board mode every kept row carries this board's
+                    // entry (`adpBoardRows` filters on it); the local is what
+                    // lets the cells below read it without re-asserting that.
+                    const sole = player[soleBoard];
+                    return (
+                      <li
+                        key={player.player_id}
+                        className={`grid ${both ? BOARD_COLUMNS_BOTH : BOARD_COLUMNS_ONE} items-center gap-2 border-t border-foreground/[0.04] px-1 py-1.5 text-sm`}
+                      >
+                        <span className="text-right text-xs tabular-nums text-foreground/35">
+                          {index + 1}
+                        </span>
+                        <span className="truncate">
+                          {player.name}
+                          {player.team && (
+                            <span className="ml-1.5 text-xs text-foreground/35">
+                              {player.team}
+                            </span>
+                          )}
+                        </span>
+                        <PositionBadge position={player.position} />
+                        {both ? (
+                          <>
+                            <AdpCell entry={player.redraft} board="redraft" drafts={redraft_drafts} />
+                            <AdpCell entry={player.dynasty} board="dynasty" drafts={dynasty_drafts} />
+                            <ValueCell entry={player.redraft} teams={controls.teams} steepness={steepness} collapsible />
+                            <ValueCell entry={player.dynasty} teams={controls.teams} steepness={steepness} collapsible />
+                          </>
+                        ) : (
+                          <>
+                            <AdpCell entry={sole} board={soleBoard} drafts={soleDrafts} />
+                            {/* Of the drafts on this board, not of every draft
+                                crawled — which is what makes it readable beside
+                                the ADP. */}
+                            <span className="text-right text-xs tabular-nums text-foreground/40">
+                              {soleDrafts && sole
+                                ? `${Math.round((sole.picks / soleDrafts) * 100)}%`
+                                : "—"}
+                            </span>
+                            <ValueCell
+                              entry={sole}
+                              teams={controls.teams}
+                              steepness={steepness}
+                            />
+                          </>
                         )}
-                      </span>
-                      <PositionBadge position={player.position} />
-                      <span className="text-right font-semibold tabular-nums">
-                        {player.adp.toFixed(1)}
-                      </span>
-                      {/* Of the drafts on this board, not of every draft crawled —
-                          which is what makes it readable beside the ADP. */}
-                      <span className="text-right text-xs tabular-nums text-foreground/40">
-                        {draft_count ? `${Math.round((player.picks / draft_count) * 100)}%` : "—"}
-                      </span>
-                      {/* The rail under the number is what makes the slider legible:
-                          the shape of the whole column bends as the curve does, where
-                          a row of digits only moves for the reader checking one. */}
-                      <span className="relative text-right text-xs tabular-nums text-active/80">
-                        {value.toLocaleString()}
-                        <span
-                          aria-hidden
-                          className="absolute inset-x-0 -bottom-0.5 h-px bg-active/45"
-                          style={{ transform: `scaleX(${value / ADP_PEAK})`, transformOrigin: "right" }}
-                        />
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
               {player_count !== null && player_count > players.length && (
                 <p className="px-1 pt-2 text-xs text-foreground/35">
-                  Showing the first {players.length.toLocaleString()} of{" "}
-                  {player_count.toLocaleString()} players on this board.
+                  Showing {rows.length.toLocaleString()} of{" "}
+                  {player_count.toLocaleString()} players matching these filters.
                 </p>
               )}
             </>
@@ -950,6 +1054,125 @@ function KeyChip({
     >
       {children}
     </button>
+  );
+}
+
+/** How a board is spelled where there is room for a word rather than a letter. */
+const BOARD_NAMES: Record<AdpBoardType, string> = {
+  redraft: "Redraft",
+  dynasty: "Dynasty",
+};
+
+/**
+ * One board's key in the list's sticky header: whether that market's columns
+ * are drawn, with its own draft count on the face — the population a reader
+ * needs before trusting a column, and different for the two boards by
+ * construction. Toggling the only lit board off is a no-op (`toggleAdpBoard`),
+ * so the list can never go blank.
+ */
+function BoardKey({
+  board,
+  on,
+  drafts,
+  onToggle,
+}: {
+  board: AdpBoardType;
+  on: boolean;
+  drafts: number | null;
+  onToggle: (board: AdpBoardType) => void;
+}) {
+  return (
+    <KeyChip small on={on} onClick={() => onToggle(board)}>
+      {BOARD_NAMES[board]}
+      {drafts !== null && (
+        <span className="ml-1 text-[0.55rem] tabular-nums opacity-70">
+          {drafts.toLocaleString()}
+        </span>
+      )}
+    </KeyChip>
+  );
+}
+
+/** The ADP heading's hover: which drafts that column is averaged over. */
+function boardTitle(board: AdpBoardType, drafts: number | null): string {
+  const population =
+    board === "redraft"
+      ? "drafts in redraft and keeper leagues"
+      : "drafts in dynasty leagues";
+  return drafts === null
+    ? `Average draft position over ${population}`
+    : `Average draft position over ${drafts.toLocaleString()} ${population}`;
+}
+
+/** The value headings' hover — one premise, however many columns state it. */
+function valueTitle(teams: AdpControls["teams"]): string {
+  return `Draft capital under the value curve above, on a ${previewAdpPool(teams)}-slot startable pool — the shape a league card's team value is summed from`;
+}
+
+/**
+ * One board's average for one row. Null is an em dash, never a zero — the
+ * board took this player in too few drafts to average, which is a different
+ * answer from a bad pick. The hover carries what the Taken column says in
+ * single-board mode, so nothing is lost when both boards are up and that
+ * column has stepped aside.
+ */
+function AdpCell({
+  entry,
+  board,
+  drafts,
+}: {
+  entry: AdpBoardStats | null;
+  board: AdpBoardType;
+  drafts: number | null;
+}) {
+  if (!entry) {
+    return <span className="text-right text-xs text-foreground/25">—</span>;
+  }
+  const taken = drafts ? ` of ${drafts.toLocaleString()}` : "";
+  return (
+    <span
+      className="text-right font-semibold tabular-nums"
+      title={`Picks ${entry.min_pick}–${entry.max_pick} · taken in ${
+        entry.picks
+      }${taken} ${board} draft${entry.picks === 1 ? "" : "s"} · ±${entry.stdev.toFixed(1)}`}
+    >
+      {entry.adp.toFixed(1)}
+    </span>
+  );
+}
+
+/**
+ * The draft-capital preview for one board's average. The rail under the number
+ * is what makes the slider legible: the shape of the whole column bends as the
+ * curve does, where a row of digits only moves for the reader checking one.
+ * `collapsible` is the both-boards spelling, seated only from `@md` up — see
+ * `BOARD_COLUMNS_BOTH` for the arithmetic.
+ */
+function ValueCell({
+  entry,
+  teams,
+  steepness,
+  collapsible = false,
+}: {
+  entry: AdpBoardStats | null;
+  teams: AdpControls["teams"];
+  steepness: number;
+  collapsible?: boolean;
+}) {
+  const seat = collapsible ? "hidden @md:block" : "";
+  if (!entry) {
+    return <span className={`${seat} text-right text-xs text-foreground/25`}>—</span>;
+  }
+  const value = previewAdpValue(entry.adp, teams, steepness);
+  return (
+    <span className={`${seat} relative text-right text-xs tabular-nums text-active/80`}>
+      {value.toLocaleString()}
+      <span
+        aria-hidden
+        className="absolute inset-x-0 -bottom-0.5 h-px bg-active/45"
+        style={{ transform: `scaleX(${value / ADP_PEAK})`, transformOrigin: "right" }}
+      />
+    </span>
   );
 }
 
