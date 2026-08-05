@@ -19,22 +19,28 @@ import {
 
 const DRAFT_TYPES = ["snake", "linear", "auction"] as const;
 const DRAFT_STATUSES = ["complete", "drafting", "paused", "pre_draft"] as const;
-const LEAGUE_TYPES = ["redraft", "keeper", "dynasty"] as const;
 const SCORING_FORMATS = ["std", "half_ppr", "ppr"] as const;
 
 export type DraftType = (typeof DRAFT_TYPES)[number];
 export type DraftStatus = (typeof DRAFT_STATUSES)[number];
-/** Sleeper's `settings.type`, named: 0 redraft, 1 keeper, 2 dynasty. */
-export type LeagueType = (typeof LEAGUE_TYPES)[number];
 /** Derived from the league's `scoring_settings.rec`, not stored as such. */
 export type ScoringFormat = (typeof SCORING_FORMATS)[number];
 
-/** Sleeper's numeric `settings.type` for each named league type. */
-export const LEAGUE_TYPE_CODES: Record<LeagueType, number> = {
-  redraft: 0,
-  keeper: 1,
-  dynasty: 2,
-};
+/**
+ * The two league-type populations every ADP read is split into. A dynasty
+ * startup drafts from rosters that persist and prices rookies a redraft never
+ * sees, so the two are different markets and every fetch averages them apart —
+ * there is no league-type *filter* any more, the answer simply carries both.
+ *
+ * Keeper leagues (Sleeper `settings.type` 1) count into the redraft board: a
+ * keeper draft prices the same season-long game with a few players withheld,
+ * where a dynasty draft is a different game entirely. Bucketing them into
+ * neither board would leave their drafts visible in `draft_count` and absent
+ * from both columns — the same "in the total, in none of the buckets" failure
+ * the league filters' Complete status guards against.
+ */
+export const ADP_BOARDS = ["redraft", "dynasty"] as const;
+export type AdpBoardType = (typeof ADP_BOARDS)[number];
 
 /**
  * A validated ADP query. A `null` list means "don't filter on this at all",
@@ -55,7 +61,6 @@ export type AdpFilters = {
   draft_types: DraftType[];
   draft_statuses: DraftStatus[];
   league_ids: string[] | null;
-  league_types: LeagueType[] | null;
   scoring: ScoringFormat[] | null;
   best_ball: boolean | null;
   superflex: boolean | null;
@@ -155,9 +160,6 @@ export function parseAdpFilters(
   ]);
   if (!draftStatuses.ok) return draftStatuses;
 
-  const leagueTypes = enumList(params, "league_type", LEAGUE_TYPES, null);
-  if (!leagueTypes.ok) return leagueTypes;
-
   const scoring = enumList(params, "scoring", SCORING_FORMATS, null);
   if (!scoring.ok) return scoring;
 
@@ -211,7 +213,6 @@ export function parseAdpFilters(
       draft_types: draftTypes.value ?? [],
       draft_statuses: draftStatuses.value ?? [],
       league_ids: leagueIds.length > 0 ? leagueIds : null,
-      league_types: leagueTypes.value,
       scoring: scoring.value,
       best_ball: bestBall.value,
       superflex: superflex.value,

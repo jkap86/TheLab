@@ -22,7 +22,7 @@
 import { isSuperflexLineup } from "../ktc/roster.ts";
 import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../projections/slots.ts";
 import { ADP_FILTER_DEFAULTS } from "./adp-filters.ts";
-import type { AdpFilters, LeagueType, ScoringFormat } from "./adp-filters.ts";
+import type { AdpFilters, ScoringFormat } from "./adp-filters.ts";
 
 /**
  * A pick-1 player is worth this; every later pick is worth a fraction of it.
@@ -231,11 +231,13 @@ function scoringBucket(scoring: Record<string, number> | null): ScoringFormat {
  * The ADP board that prices a given league: the crawled drafts most like it.
  *
  * ADP pooled across different games is meaningless (see `adp.ts`), so a roster is
- * valued against drafts that share the axes that move a player's price. Three
- * matter and are matched here: superflex (a quarterback is a first-round asset in
- * one and a bench piece in the other — the same board mistake `rosterKtcValue`
- * guards against), scoring, and the league type (a dynasty startup drafts rookies
- * where a redraft never sees them). Teams and rounds are left broad on purpose:
+ * valued against drafts that share the axes that move a player's price. Two are
+ * matched here: superflex (a quarterback is a first-round asset in one and a
+ * bench piece in the other — the same board mistake `rosterKtcValue` guards
+ * against) and scoring. The league type is no longer one of the filters, because
+ * every ADP read now answers the redraft and dynasty markets side by side — the
+ * caller reads the half matching the league (`getLeagueAdpBoards`), so leagues
+ * of both types share one fetch. Teams and rounds are left broad on purpose:
  * matching them too would shrink the sample to a handful of drafts and trade a
  * little pick-scale smearing for a lot of noise.
  */
@@ -243,12 +245,10 @@ export function adpBoardFor({
   season,
   rosterPositions,
   scoringSettings,
-  leagueType,
 }: {
   season: string;
   rosterPositions: readonly string[] | null;
   scoringSettings: Record<string, number> | null;
-  leagueType: LeagueType;
 }): AdpFilters {
   return {
     seasons: [season],
@@ -259,7 +259,6 @@ export function adpBoardFor({
     draft_types: [...ADP_FILTER_DEFAULTS.draft_types],
     draft_statuses: [...ADP_FILTER_DEFAULTS.draft_statuses],
     league_ids: null,
-    league_types: [leagueType],
     scoring: [scoringBucket(scoringSettings)],
     best_ball: null,
     superflex: isSuperflexLineup(rosterPositions),
@@ -276,13 +275,12 @@ export function adpBoardFor({
 /**
  * A stable key for the board {@link adpBoardFor} produced, so leagues that share
  * one are priced by a single query rather than one apiece. Reads only the axes
- * that function varies — season, scoring, superflex and league type.
+ * that function varies — season, scoring and superflex.
  */
 export function boardSignature(filters: AdpFilters): string {
   return [
     filters.seasons?.[0] ?? "all",
     filters.scoring?.[0] ?? "any",
     filters.superflex,
-    filters.league_types?.[0] ?? "any",
   ].join("|");
 }

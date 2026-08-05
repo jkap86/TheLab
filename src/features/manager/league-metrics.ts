@@ -115,7 +115,7 @@ function projTitle(
  */
 function adpTitle(adp: LeagueAdpEntry | null): string {
   if (!adp || adp.priced === 0) return "no players priced from ADP";
-  const board = `${adp.superflex ? "superflex" : "1QB"} ${adp.league_type}`;
+  const board = `${adp.superflex ? "superflex" : "1QB"} ${adp.board}`;
   return [
     adp.starters_rank &&
       `#${adp.starters_rank.rank} of ${adp.starters_rank.of} by starter value`,
