@@ -273,7 +273,12 @@ export function LookbackPanel({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") e.currentTarget.blur();
                 }}
-                className="h-full w-full bg-transparent text-center font-display text-[1.35rem] font-bold tabular-nums text-active [appearance:textfield] [text-shadow:0_0_14px_rgba(0,255,229,0.45)] placeholder:font-normal placeholder:text-foreground/25 placeholder:[text-shadow:none] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                // The lens lights on focus (`lab-readout-live`, driven by
+                // `editing`), which is the visible indicator this replaced its
+                // outline with — but that state is set by `onFocus` and a
+                // `focus-visible` ring costs nothing beside it, so a keyboard
+                // reader gets the same mark as everywhere else in the drawer.
+                className="h-full w-full bg-transparent text-center font-display text-[1.35rem] font-bold tabular-nums text-active [appearance:textfield] [text-shadow:0_0_14px_rgba(0,255,229,0.45)] placeholder:font-normal placeholder:text-foreground/25 placeholder:[text-shadow:none] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </span>
             <LensUnit>Days back</LensUnit>
@@ -302,7 +307,9 @@ export function LookbackPanel({
                   }
                 }}
                 onBlur={() => setDateDraft(null)}
-                className="bg-transparent px-2 font-display text-[0.68rem] font-bold tabular-nums text-active [color-scheme:dark] [text-shadow:0_0_10px_rgba(0,255,229,0.4)] focus:outline-none"
+                // Unlike the day counter beside it this lens does not light on
+                // focus, so removing the outline left it with nothing at all.
+                className="bg-transparent px-2 font-display text-[0.68rem] font-bold tabular-nums text-active [color-scheme:dark] [text-shadow:0_0_10px_rgba(0,255,229,0.4)] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active"
               />
             </span>
             <LensUnit>Ending</LensUnit>

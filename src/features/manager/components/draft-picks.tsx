@@ -39,9 +39,10 @@ export function DraftPicks({
 
   return (
     <div className="mt-3">
-      <h5 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground/35">
+      {/* `h3` beside the roster's own section headings — see `RosterSection`. */}
+      <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground/35">
         Draft Picks
-      </h5>
+      </h3>
       <ul className="flex flex-col gap-1.5">
         {bySeason.map(({ season, picks }) => (
           <li key={season} className="flex items-baseline gap-2">

@@ -3,6 +3,13 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { ADP_DRAWER_EXIT_MS } from "./adp-drawer.constants.ts";
+import {
+  TABBABLE_SELECTOR,
+  drawerKeydownHandler,
+  lockScroll,
+  restoreFocus,
+  tabbableStops,
+} from "./adp-drawer.focus.ts";
 import type { AdpDrawerPanel } from "./adp-drawer.types.ts";
 
 export type AdpDrawerLifecycle = {
@@ -10,7 +17,11 @@ export type AdpDrawerLifecycle = {
   onScreen: boolean;
   /** On its way out — what the exit animations and the CSS rules key off. */
   closing: boolean;
-  /** The dialog element, focused once on open. */
+  /**
+   * The dialog element: focused once on open, and the boundary the focus trap
+   * holds Tab inside — so it must be the element carrying `role="dialog"`, not
+   * the overlay around it.
+   */
   panelRef: RefObject<HTMLDivElement | null>;
   /** Which floating panel is up, if any. */
   openPanel: AdpDrawerPanel | null;
@@ -20,13 +31,21 @@ export type AdpDrawerLifecycle = {
 
 /**
  * Everything about the drawer being on screen, in one place: the beat it stays
- * mounted for its exit, the page's scroll lock, the focus move on open, Escape,
- * and which of its floating panels is up.
+ * mounted for its exit, the page's scroll lock, the modal's keyboard contract —
+ * the focus move on open, Escape, Tab held inside the dialog, and focus handed
+ * back to the opener on the way out — and which of its floating panels is up.
  *
- * Those last two belong together and that is why the panel selection is here
- * rather than in the component: **Escape closes the innermost thing that is
- * up**, so the key handler has to know whether a panel is open before it can
- * decide whether the drawer is what a keypress means.
+ * The panel selection is here rather than in the component because **Escape
+ * closes the innermost thing that is up**, so the key handler has to know
+ * whether a panel is open before it can decide whether the drawer is what a
+ * keypress means.
+ *
+ * What it does *not* hold is any of the deciding: which keys mean what, where
+ * Tab goes next, whether an opener may be focused again and what the scroll lock
+ * restores are all in `adp-drawer.focus`, which is free of the DOM and tested.
+ * What is left here is the wiring — listeners, timers, and reading
+ * `document.activeElement` — which is the part a test without a browser could
+ * never reach anyway.
  */
 export function useAdpDrawerLifecycle({
   open,
@@ -90,34 +109,65 @@ export function useAdpDrawerLifecycle({
   // full-height panel over a scrolling page reads as a rendering bug. It holds
   // through the exit as well as the open state: released a beat early, the
   // scrollbar comes back and the page jumps sideways under a panel that is
-  // still sliding off it. The cleanup restores what was there, so an unmount
-  // mid-exit cannot leave the page locked.
+  // still sliding off it. `lockScroll` hands back the undo carrying the value it
+  // replaced, so an unmount mid-exit cannot leave the page locked.
   const onScreen = open || closing;
   useEffect(() => {
     if (!onScreen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
+    return lockScroll(document.body);
   }, [onScreen]);
 
-  // Escape closes. Focus moves to the panel once, on open.
+  // Where focus goes when the drawer closes. Captured on open rather than passed
+  // in, because the drawer is rendered by a layout and pressed from the app bar
+  // — the two are far enough apart that threading a ref between them would be a
+  // prop on every caller for a fact the platform already has.
+  const opener = useRef<HTMLElement | null>(null);
+
+  // The modal's whole keyboard contract, in one listener on `open`: Escape (the
+  // innermost thing first), Tab held inside the dialog, and focus handed back on
+  // the way out. It keys on `open` alone — a drawer playing its exit is not a
+  // dialog any more, which is the same line `closing` draws for pointer events —
+  // and the two callbacks it needs are read through refs above so a fresh arrow
+  // from the caller cannot re-run it and steal focus mid-keystroke.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      // Escape closes the innermost thing that is up. Without this the window's
-      // floating panel and the whole drawer would go on one keypress.
-      if (latestPanel.current !== null) {
-        setOpenPanel(null);
-        return;
-      }
-      latestClose.current();
-    };
+
+    opener.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    // Every dependency is a thunk, so the stops are re-read per press: opening
+    // the filter tray or the lookback panel adds controls the reader must be
+    // able to Tab into, and a list captured when the listener was attached
+    // would hold them outside it. See {@link drawerKeydownHandler}.
+    const onKey = drawerKeydownHandler<HTMLElement>({
+      stops: () => {
+        const container = panelRef.current;
+        return container
+          ? tabbableStops(container.querySelectorAll<HTMLElement>(TABBABLE_SELECTOR))
+          : [];
+      },
+      activeElement: () =>
+        document.activeElement instanceof HTMLElement ? document.activeElement : null,
+      focusContainer: () => panelRef.current?.focus(),
+      panelOpen: () => latestPanel.current !== null,
+      closePanel: () => setOpenPanel(null),
+      closeDrawer: () => latestClose.current(),
+    });
+
     document.addEventListener("keydown", onKey);
     panelRef.current?.focus();
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      // Closing, or unmounted while open. Either way the focused element is
+      // inside a dialog that is going, so it goes back where it came from —
+      // unless the opener is gone or disabled, which `restoreFocus` judges. A
+      // drawer reopened before this settles is no exception to worry about: the
+      // setup above runs straight after and focuses the panel, so the reopened
+      // drawer wins the last word.
+      const target = opener.current;
+      opener.current = null;
+      restoreFocus(target);
+    };
   }, [open]);
 
   return { onScreen, closing, panelRef, openPanel, togglePanel, closePanel };

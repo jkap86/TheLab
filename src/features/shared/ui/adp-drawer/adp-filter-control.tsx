@@ -30,7 +30,11 @@ export function ChipSelect<T extends string>({
       value={value}
       aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value as T)}
-      className={`max-w-[12rem] truncate rounded-full border px-2.5 py-1 text-xs transition-colors [color-scheme:dark] focus:outline-none ${className} ${
+      // The focus ring is *replaced*, never merely removed: `focus:outline-none`
+      // on its own left the chip with no visible focus state at all, which is
+      // the whole of WCAG 2.4.7 on a control a keyboard reader has to find among
+      // seven identical pills.
+      className={`max-w-[12rem] truncate rounded-full border px-2.5 py-1 text-xs transition-colors [color-scheme:dark] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active ${className} ${
         narrowed
           ? "border-active/32 bg-active/10 text-active hover:border-active/50"
           : "border-foreground/10 bg-foreground/5 text-foreground/60 hover:border-foreground/25 hover:text-foreground/85"

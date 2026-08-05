@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
+import { useReturnFocus } from "@/features/shared";
 import type { MetricCell } from "@/features/shared/metric-cell";
 
 import type { TradeMetric, TradeSideContext } from "../trade-metrics";
@@ -87,7 +88,12 @@ export function TradeValuePicker({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
   const active = metrics.find((metric) => metric.key === metricKey) ?? metrics[0];
+  // Escape closes the menu from a document listener, which unmounts whatever a
+  // keyboard reader had landed on inside it.
+  useReturnFocus(open, trigger);
 
   // One menu, dismissed by a press outside it or by Escape — the same three
   // behaviours every floating control in the app keeps.
@@ -112,10 +118,12 @@ export function TradeValuePicker({
   return (
     <div ref={ref} className="relative">
       <button
+        ref={trigger}
         type="button"
         onClick={() => setOpen((was) => !was)}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
         className="lab-chip inline-flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm font-semibold text-foreground/85"
       >
         <span className="text-[11px] uppercase tracking-wide text-foreground/45">
@@ -129,7 +137,9 @@ export function TradeValuePicker({
 
       {open && (
         <div
+          id={menuId}
           role="menu"
+          aria-label="Trade value column"
           className="absolute right-0 top-full z-30 mt-1.5 min-w-[10rem] rounded-lg border border-foreground/15 bg-[var(--background)] p-1 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.9)]"
         >
           {metrics.map((metric) => {

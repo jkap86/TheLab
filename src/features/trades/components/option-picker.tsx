@@ -152,6 +152,10 @@ export function OptionPicker({
                   }`}
                 >
                   {option.count}
+                  {/* Nothing visible names this column — the count is what makes
+                      the list worth reading, and read aloud it was a digit
+                      trailing a player's name. */}
+                  <span className="sr-only"> trades</span>
                 </span>
               </button>
             </li>
