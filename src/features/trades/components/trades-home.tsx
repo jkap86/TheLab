@@ -68,8 +68,8 @@ const LeagueFiltersModal = dynamic(
  * split (`LeaguesViewLayout`), reused here now that this page reads the same
  * board. The **trigger** stays statically imported (it's in the app bar at
  * first paint and it's small); the drawer behind it — the pinned filter
- * block, the value-curve slider, the NFL-calendar layer, the range scrubber's
- * whole brush-over-a-histogram — is not on screen until pressed.
+ * block, the value-curve slider, the NFL-calendar layer, the lookback
+ * counter and its density channel — is not on screen until pressed.
  */
 const AdpDrawer = dynamic(
   () => import("@/features/shared/ui/adp-drawer").then((m) => m.AdpDrawer),

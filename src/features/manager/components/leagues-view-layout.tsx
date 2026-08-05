@@ -26,10 +26,10 @@ import { subjectSummary } from "../subjects";
  * The board drawer, loaded the first time it is opened.
  *
  * It is the largest hidden component in the manager tool — the pinned filter
- * block, the value-curve slider, the NFL-calendar layer and the range scrubber's
- * whole brush-over-a-histogram (another ~560 lines on its own) — and none of it
- * is on screen until the trigger is pressed. Statically imported it was parsed
- * and evaluated before the first league card could be drawn, on all three tabs.
+ * block, the value-curve slider, the NFL-calendar layer and the lookback
+ * counter with its density channel — and none of it is on screen until the
+ * trigger is pressed. Statically imported it was parsed and evaluated before
+ * the first league card could be drawn, on all three tabs.
  *
  * The **trigger** stays statically imported: it is in the header at first paint,
  * it carries the badge that says what the board is set to, and it is small.
@@ -123,10 +123,10 @@ export function LeaguesViewLayout({
   );
   const board = useAdp(query, { enabled: boardOpen });
 
-  // The strip the range scrubber draws, behind the same gate. It takes no query
-  // and re-fetches on nothing: it describes the crawled population *before* any
-  // board filter, which is what lets a window be dragged across it without the
-  // bars reshaping under the hand choosing them.
+  // The density the window control draws, behind the same gate. It takes no
+  // query and re-fetches on nothing: it describes the crawled population
+  // *before* any board filter, which is what keeps the bars from reshaping
+  // under the hand choosing a window against them.
   const density = useAdpDensity(boardOpen);
 
   // The header's record, over the leagues the filters leave — so it answers

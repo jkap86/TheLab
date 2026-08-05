@@ -4,10 +4,10 @@
  * trades.
  *
  * They are different populations chosen against different things — the ADP one
- * is a brush over a density strip, the trades one a row of presets — but "what
- * day is it", "shift a `YYYY-MM-DD` by days" and "write a date out" are the same
- * questions in both, and two copies of a month table is exactly the drift the
- * `shared/query` primitives were consolidated to stop. It lives here rather than
+ * is a lookback counter over a density readout, the trades one a row of presets
+ * — but "what day is it", "shift a `YYYY-MM-DD` by days" and "write a date out"
+ * are the same questions in both, and two copies of a month table is exactly the
+ * drift the `shared/query` primitives were consolidated to stop. It lives here rather than
  * in either feature for that reason; `adp-controls` re-exports what its own
  * consumers already import from it.
  *
@@ -46,8 +46,8 @@ export function shiftMonths(date: string, months: number): string {
 
 /**
  * Spelled out rather than left to `Intl`, so a date reads the same in every
- * locale the app is opened in — and so the axis initials the ADP scrubber labels
- * its ticks with are the same list, not a second one that could disagree.
+ * locale the app is opened in — one month table behind every label the range
+ * controls write, not several that could disagree.
  */
 export const MONTH_ABBREVIATIONS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -60,7 +60,7 @@ export function formatRangeDate(date: string): string {
   return `${MONTH_ABBREVIATIONS[Number(month) - 1]} ${Number(day)}, ${year}`;
 }
 
-/** `2026-06` → `Jun 2026`. What a bar on the ADP scrubber's axis is. */
+/** `2026-06` → `Jun 2026`. What a bar on the ADP window's channel is. */
 export function formatRangeMonth(month: string): string {
   return `${MONTH_ABBREVIATIONS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
 }

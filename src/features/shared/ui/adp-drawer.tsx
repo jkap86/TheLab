@@ -22,8 +22,9 @@ import {
 } from "../adp-controls";
 import type { AdpState } from "../use-adp";
 import type { AdpDensityState } from "../use-adp-density";
+import { LookbackPanel, RangeSparkline } from "./lookback-panel";
 import { PositionBadge } from "./position-badge";
-import { RangeScrubber, RangeSparkline } from "./range-scrubber";
+import { RollingNumber } from "./rolling-number";
 
 /**
  * The board's grid, written out whole so Tailwind can see it, and shared by the
@@ -204,7 +205,7 @@ export function AdpDrawer({
   seedLeagues?: readonly ManagerLeague[];
   /** The board these controls produce; `data` is null until the first load lands. */
   board: AdpState;
-  /** Crawled drafts per month and season, for the range scrubber's strip. */
+  /** Crawled drafts per month and season, for the window control's density. */
   density: AdpDensityState;
 }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -263,8 +264,8 @@ export function AdpDrawer({
   // on every keystroke — which meant `panel.focus()` fired again and took focus
   // off whatever was being used. That was survivable while the drawer held only
   // selects (each change already ends the interaction); it is not survivable for
-  // the range scrubber, whose handles are nudged with the arrow keys one press
-  // at a time.
+  // the steepness slider or the lookback counter's fields, which are nudged and
+  // typed into one keystroke at a time.
   const latestClose = useRef(onClose);
   useEffect(() => {
     latestClose.current = onClose;
@@ -303,8 +304,8 @@ export function AdpDrawer({
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
-  // The seasons on offer and the strip behind the window are both slices of the
-  // one density read. Memoised on the rows so the scrubber's own domain memo
+  // The seasons on offer and the density behind the window are both slices of
+  // the one density read. Memoised on the rows so the panel's own domain memo
   // isn't invalidated by a fresh array every render.
   const seasons = useMemo(
     () => seasonOptions(density.months, controls.season, defaultSeason),
@@ -425,8 +426,13 @@ export function AdpDrawer({
               ))}
             </div>
             <span className="lab-readout ml-auto flex items-baseline gap-1.5 rounded-[5px] px-2.5 py-[3px]">
+              {/* The count rolls to its new value rather than swapping — it is
+                  the needle the window control moves, and a digit that travels
+                  is what says the two are connected. */}
               <span className="font-display text-[0.8rem] font-bold tabular-nums text-active">
-                {draft_count === null ? "—" : draft_count.toLocaleString()}
+                <RollingNumber
+                  value={draft_count === null ? "—" : draft_count.toLocaleString()}
+                />
               </span>
               <span className="text-[0.55rem] font-semibold uppercase tracking-[0.16em] text-foreground/40">
                 {draft_count === 1 ? "draft" : "drafts"}
@@ -599,31 +605,35 @@ export function AdpDrawer({
 }
 
 /**
- * The window control: one line at rest, the full scrubber floating over the
+ * The window control: one line at rest, the lookback counter floating over the
  * panel when it is opened.
  *
- * The strip and its three attendant rows — the calendar rail, the month axis and
- * the caption — were ~112px of a ~224px pinned block, half of it, sitting above
- * the board that is the reason the drawer opens at all. A window is chosen once
- * and then read, which is the same case the filter row already answers: state
- * what is set, put the control that sets it behind one press.
+ * The line's shape predates the counter and survives it unchanged — a window is
+ * chosen once and then read, so the control that sets it lives behind one
+ * press, exactly as the filter row answers the same case. What changed is only
+ * the panel behind the press: a counter instrument (last N days, ending on a
+ * date that defaults to today) in place of the brush-over-a-histogram, whose
+ * gesture grammar was the complexity the redesign removed. See
+ * {@link LookbackPanel} for the decisions the instrument itself carries.
  *
- * Three things make that affordable rather than merely shorter:
+ * Three things keep the collapsed line affordable rather than merely shorter:
  *
- *   - **The resting line keeps the strip's argument.** The scrubber replaced two
- *     date inputs because it says where the drafts *are* before you pick a
- *     window; behind a press it would say that only afterwards. So the trigger
- *     carries a {@link RangeSparkline} of the same bars over the same domain,
- *     and the answer is still on screen at rest.
+ *   - **The resting line keeps the density's argument.** The strip earned its
+ *     place by saying where the drafts *are* before you pick a window; behind a
+ *     press it would say that only afterwards. So the trigger carries a
+ *     {@link RangeSparkline} of the same bars over the same domain, and the
+ *     answer is still on screen at rest.
  *   - **The panel floats; it does not push.** Expanding in place would shove the
- *     filters, the curve and the board down by more than the height this change
- *     just saved — the reader would be back where they started, one press later.
- *     It is a raised face over the pinned block's own ground, the material
- *     grammar the app bar and the league filters' floating rows already use.
- *   - **The presets stay outside it.** They fly the handles, but they are also
- *     the whole of what most readers want from this control, and drawing them in
- *     both places would be two controls for one selection. They sit on the
- *     resting line, so "last 30 days" is still the single press it was.
+ *     filters, the curve and the board down — the reader would be back where
+ *     they started, one press later. It is a raised face over the pinned
+ *     block's own ground, the material grammar the app bar and the league
+ *     filters' floating rows already use.
+ *   - **The presets stay outside it.** They fill the counter's fields, but they
+ *     are also the whole of what most readers want from this control, and
+ *     drawing them in both places would be two controls for one selection. They
+ *     sit on the resting line, so "last 30 days" is still the single press it
+ *     was — and the one anchor no fixed chip can carry, "since the NFL draft",
+ *     lives inside as the panel's ◆ key, computed from the calendar table.
  */
 function RangeControl({
   range,
@@ -645,7 +655,7 @@ function RangeControl({
   density: AdpDensityState;
   /** `YYYY-MM-DD`, resolving the relative presets. */
   today: string;
-  /** The scrubber is up. */
+  /** The counter panel is up. */
   open: boolean;
   onToggle: () => void;
   onClose: () => void;
@@ -720,8 +730,8 @@ function RangeControl({
             Window
           </span>
           {/* The board's name and nothing else. The dates behind a preset's name
-              are `rangeSummary`'s job and they belong *inside* the scrubber,
-              where the handles are sitting on them — out here the name is exact
+              are `rangeSummary`'s job and they belong *inside* the panel,
+              where the lenses are sitting on them — out here the name is exact
               and stays true as time passes, which is the whole reason a preset
               keeps its name. */}
           <span className="shrink-0 whitespace-nowrap text-[0.7rem] font-semibold text-active">
@@ -761,13 +771,16 @@ function RangeControl({
       </div>
 
       {open && (
-        // Raised over the pinned block rather than expanding it. It keeps the
-        // panel's own ground rather than a lighter one, because the scrubber
-        // paints its scrim, its bubble and its draft flag in that exact colour —
-        // a lifted face here would leave four hardcoded surfaces a shade adrift.
-        // `z-30` clears the board's sticky headings (`z-10`) below it.
-        <div className="absolute inset-x-0 top-full z-30 mt-1.5 rounded-lg border border-active/20 bg-[rgb(12,23,33)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_20px_44px_rgba(0,0,0,0.6)]">
-          <RangeScrubber
+        // Raised over the pinned block rather than expanding it, and machined
+        // rather than flat: the face falls away from a lit near corner, with a
+        // specular hairline along its top — the billet grammar at panel scale,
+        // for the one part of the drawer that is an instrument rather than a
+        // row of chips. The counter's channel and lenses carry their own
+        // grounds, so the face is free to grade where the old scrubber needed
+        // the panel colour exactly. `z-30` clears the board's sticky headings
+        // (`z-10`) below it.
+        <div className="absolute inset-x-0 top-full z-30 mt-1.5 rounded-lg border border-active/20 bg-[linear-gradient(148deg,#1a3140,#12242f_46%,#0c1c28)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-6px_11px_rgba(0,0,0,0.45),0_20px_44px_rgba(0,0,0,0.6)]">
+          <LookbackPanel
             range={range}
             season={season}
             bounds={bounds}

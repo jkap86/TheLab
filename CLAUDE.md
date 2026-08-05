@@ -466,7 +466,8 @@ every crawled draft, so it was never a fact about a manager; what kept it in
 that feature was only that the manager tool read it first. The trades page is
 the second reader, so `adp-controls`, `adp-controls-context`, `use-adp`,
 `use-adp-density`, `adp-query` (the board's own cache key), the drawer, the
-range scrubber, `range-domain` and `nfl-calendar` all moved out, and
+window control (`lookback` and its panel), `range-domain` and `nfl-calendar`
+all moved out, and
 `features/manager` re-exports each under its old name so its own consumers
 read one canonical definition under two names. `shared/manager/adp-filters.ts`
 did **not** move: it is the server half, and it was already outside the
@@ -1552,43 +1553,48 @@ stops holding, a comment saying it does would not have caught it.
   - **The header stated the draft count the trigger already carried**, over a
     labelled row holding two season keys. Both fit on one line with the count as
     a `.lab-readout` cell, which is the material the kickoff timer's digits
-    already use (plain, not `-live`: the count isn't ticking, and spending the
-    live face on a constant is the same mistake as tinting this trigger).
-  - **The window is one line, and the scrubber floats over the panel when it is
-    opened.** The strip and its three attendant rows — calendar rail, month
-    axis, caption — were ~112px of a ~224px block, half of it, above the board
-    the drawer is opened to read; a window is chosen once and then read, which
-    is the same case the filter row below answers. Three things make the
-    collapse affordable rather than merely shorter, and each is easy to undo:
-    - **The resting line keeps the strip's own argument.** The scrubber replaced
-      two date inputs because it says where the drafts *are* before you pick a
-      window, and behind a press it would say that only afterwards — so the
-      trigger carries a `RangeSparkline`, the same bars over the same domain
-      through the same functions, lit inside the window and dim outside it. The
-      hint is what earns the press, not decoration on it.
+    already use (plain, not `-live`: the count isn't a running clock, and
+    spending the live face on a constant is the same mistake as tinting this
+    trigger). The digits *roll* to a new value rather than swapping
+    (`RollingNumber`) — the count is the needle the window control moves, and a
+    digit that travels is what says the two are connected.
+  - **The window is one line, and the lookback counter floats over the panel
+    when it is opened.** The old strip and its three attendant rows — calendar
+    rail, month axis, caption — were ~112px of a ~224px block, half of it,
+    above the board the drawer is opened to read; a window is chosen once and
+    then read, which is the same case the filter row below answers. Three
+    things make the collapse affordable rather than merely shorter, and each is
+    easy to undo:
+    - **The resting line keeps the density's argument.** The strip earned its
+      place by saying where the drafts *are* before you pick a window, and
+      behind a press it would say that only afterwards — so the trigger carries
+      a `RangeSparkline`, the same bars over the same domain through the same
+      functions as the panel's own channel, lit inside the window and dim
+      outside it. The hint is what earns the press, not decoration on it.
     - **It floats; it does not push.** Expanding in place would shove the
       filters, the curve and the board down by more than the collapse just
       saved, which is the reader back where they started one press later. It is
-      a raised face over the pinned block's own ground — and it keeps *exactly*
-      that ground rather than a lighter one, because the scrubber paints its
-      scrim, its pointer bubble and its draft flag in `rgb(12,23,33)` by hand,
-      so a lifted fill would leave four hardcoded surfaces a shade adrift. It
-      owes the three behaviours any floating control here owes: one open at a
-      time (`openPanel`, shared with the filter tray — an open tray under the
+      a raised face over the pinned block's own ground — machined now, a graded
+      face with a specular top edge, which the old scrubber forbade by painting
+      its scrim and bubble in the panel's flat colour by hand; the counter's
+      channel and lenses carry their own grounds, so the face is free to grade.
+      It owes the three behaviours any floating control here owes: one open at
+      a time (`openPanel`, shared with the filter tray — an open tray under the
       float is a control you can see and can't reach), a press outside
       dismisses, and **Escape closes the innermost thing that is up**, or one
       keypress takes the whole drawer with it.
-    - **The presets stay on the resting line, outside the float.** They fly the
-      handles, but they are also the whole of what most readers want here, so
-      "last 30 days" has to stay the single press it was — and drawing them
-      inside the panel as well would be two controls for one selection, which
-      is why `RangeScrubber` no longer has a `presets` slot at all.
+    - **The presets stay on the resting line, outside the float.** They fill
+      the counter's fields, but they are also the whole of what most readers
+      want here, so "last 30 days" has to stay the single press it was — and
+      drawing them inside the panel as well would be two controls for one
+      selection. The one anchor no fixed chip can carry, "since the NFL draft",
+      lives inside the panel as its ◆ key instead.
     Two details in that line. It **wraps rather than compresses**: everything in
     the trigger is `shrink-0` except the sparkline, so its min-content width
     decides the break and a phone puts the presets on a second 18px line instead
     of truncating the one thing on the row that answers the question. And it
     carries `boardLabel` and **not** `rangeSummary` — the dates behind a
-    preset's name belong inside the control, where the handles are sitting on
+    preset's name belong inside the control, where the lenses are sitting on
     them; out here the name is exact and stays true as time passes.
   - **The filter row shows only what is narrowing the board.** Seven chips
     permanently reading "All" is seven controls' worth of height reporting that
@@ -1630,113 +1636,86 @@ stops holding, a comment saying it does would not have caught it.
     that reliably returns nothing is worse than no chip. Twelve months goes
     further: inside one season it is the season with extra steps, so it survives
     only on the all-seasons board. A finished season is left with one preset, and
-    the row isn't drawn at all — a row of one is no choice, and the strip and its
-    markers are the control there.
+    the row isn't drawn at all — a row of one is no choice, and the counter's own
+    fields are the control there.
   - **The strip is the season's, not the calendar's.** `/api/adp/density` returns
     `(season, month, drafts)` and the drawer slices to the season it is showing;
-    `densityThrough` then runs the axis to today only for a board still being
-    drafted, since an axis running from a finished season to today is mostly
-    blank. A season-scoped domain is also why a band clipped to a sliver is now
-    dropped rather than drawn (`MIN_BAND_FRACTION`): the left edge *is* a season
-    boundary, so the last four days of the previous regular season arrive as a 2px
-    chip reading "R".
-- **The window is chosen against the drafts, not against a calendar widget.**
-  `RangeScrubber` is a brush over a histogram of the crawled drafts
-  (`/api/adp/density`), and it replaced a pair of `mm/dd/yyyy` inputs that asked
-  you to name a date while telling you nothing about where the drafts were —
-  you guessed, then read the count that came back. Six things in it are
-  decisions, not styling:
-  - **A handle on an edge of the domain is an *open* bound, not that date**
-    (`edgeBounds` in `range-domain`, pure and tested). It is what keeps "all
-    time" reachable by dragging and what stops the control quietly closing a
-    range that was deliberately half-open — a range is two independent halves,
-    and a control that can't express one is a control that loses it.
-  - **The strip is narrowed by nothing the drawer can change.** `getDraftDensity`
-    applies only the two conditions no filter can lift (a draft with no
-    `start_time` can't be placed in time; an unfinished one is never averaged).
-    Narrowing it by the live filters would reshape the bars under the hand
-    dragging across them. It follows that the strip and the board's `draft_count`
-    are different populations, which is why the scrubber shows **no count** — only
-    dates. The header states the real one.
-  - **The NFL calendar rides underneath, and its markers are controls.**
-    `nfl-calendar.ts` is a table of six dates a season (draft, preseason,
-    regular season) — clicking a band takes exactly that window, clicking the
-    draft flag starts the window there and leaves the end alone. That last one is
-    the point of the whole layer: "drafts since the NFL draft" is the most
-    natural cut of a rookie board there is and **no fixed preset can ever carry
-    it**, because the date moves every April. A new season is one row; a season
-    the league hasn't scheduled yet is provisional, which is why the labels name it.
-  - **The presets stayed and "Custom…" went.** The chips fly the handles rather
-    than switching a mode, so `ADP_RANGE_PRESETS` no longer offers `custom` even
-    though it is still a preset *value* — it is what moving a handle produces.
-    The relative presets keep earning their place for the reason they always did:
-    "Last 90 days" is still the last 90 days tomorrow, where the dates behind it
-    would not be. They sit on the drawer's resting window line beside the
-    trigger — not inside the panel they fly the handles of, since the whole
-    point of keeping them is that a preset is reachable without opening
-    anything — which is also why the 12-month chip reads `12 mo`: sharing that
-    line with the label and the sparkline it is ~72px on a phone, and "12
-    months" wraps to two lines in it. The unbounded
-    preset names what it covers (`All 2026` / `All time`), and `boardLabel` folds
-    it into the season everywhere the board is named at all — "2026 · All time"
-    would be claiming two contradictory things. `rangeLabel` still names the
-    window alone, which is right only under the strip, where the season it
-    belongs to is the row above. `rangeSummary` is narrower still — it belongs
-    *inside* the scrubber and nowhere else, since naming a window's edges is
-    worth the width only where the handles are sitting on them.
-  - **What the gesture means depends on where it starts** — the brush split
-    everyone already knows. Inside the window drags the *window* (`panWindow`,
-    clamped at the domain edges with its length intact, because a pan that
-    silently shortened the span answers a different question than the one being
-    dragged); outside it sweeps a new one. The consequence worth stating is that
-    a **press has to be able to mean nothing at all**: sweeping used to commit on
-    pointer-down, so the lightest tap anywhere on the strip collapsed the window
-    to the single day under the finger — which on a phone is what "I meant to
-    scroll" looks like. `SWEEP_SLOP` is that: a few pixels of travel before a
-    press counts as drawing.
-  - **The gesture is decided by proximity, not by which element was hit, and the
-    track is the only thing listening.** Letting each drawn part catch its own
-    presses made **the mark the target**, and a 7px thumb is not a target a
-    finger hits. Worse, a near miss didn't do nothing: it fell through to the
-    track and *swept a new window*, so on a phone reaching for a handle usually
-    destroyed the selection. `scrubTargetAt` (pure and tested, in `range-domain`)
-    answers `from` / `to` / `pan` / `sweep` from one pixel position, and the
-    handles and the window block are `pointer-events-none` — paint, not hit
-    areas. Four things follow that are easy to undo by "simplifying" the routing
-    back into the parts:
-    - **The radius is asymmetric.** Full width *outside* the window, capped to a
-      third of the window's width *inside* it — an uncapped radius makes a short
-      window entirely handle, trading an unreachable resize for an unreachable
-      pan. On a wide window the cap never binds.
-    - **It is measured from the handle, not around it.** The default board is
-      unbounded, so both handles sit on the domain's edges where half of any
-      *box* hangs off the panel. A distance has no half to lose, which is what
-      makes the opening state grabbable at all.
-    - **The radius comes off `e.pointerType`, not a `(pointer: coarse)` query.**
-      A laptop with a touchscreen is both, and the event already knows which one
-      this press is; it also needs no state, so it can't differ between the
-      server and the first client render. A finger gets 22px, a mouse 9 — a
-      generous radius for a cursor only makes a narrow window hard to pan.
-    - **`hover` is a state, because there is no `:hover` left.** With nothing
-      catching its own events, the cursor and the lit handle have to be driven
-      from the same hit test; a control that doesn't answer the pointer reads as
-      decoration. It clears on a touch release rather than persisting, since a
-      finger leaves nothing hovering behind it.
-    Only the *grip* is nudged inward on the domain's edges (`GRIP_INSET_PX`) —
-    the hairline stays on the date, because it is the one part here making a
-    claim about the data rather than being something to hold.
-  - **A date the control is about is a date the control says.** Three readouts,
-    none of them decoration: a bubble follows the pointer over the strip (the
-    answer to "what is this bar" used to require dragging a handle onto it), the
-    handles are a thumb rather than a hairline (a hairline is where the date is,
-    not something you can pick up), and the
-    caption spells out the dates behind a preset's name — `rangeSummary`, which
-    is what `rangeLabel` deliberately doesn't say. The label stays "Last 90 days"
-    everywhere it stands alone, because the name survives the passage of time;
-    inside the control, where the handles are sitting on those dates, naming the
-    window without naming its edges leaves them to be read off the axis. Panning
-    is the one gesture with no bubble — both ends are moving, and the caption's
-    live pair says more than one date would.
+    `densityThrough` then runs the domain to today only for a board still being
+    drafted, since a strip running from a finished season to today is mostly
+    blank. The resting sparkline and the panel's channel read one domain through
+    one set of functions (`range-domain`), so the hint at rest and the readout
+    inside the panel cannot disagree about where a month sits.
+- **The window is a sentence — last N days, ending on a date that defaults to
+  today — and the sentence replaced the brush.** `RangeScrubber` was a brush
+  over the draft histogram: two handles, a sweep, a pan, a slop threshold and a
+  proximity router deciding which of them a press meant, plus a marker rail and
+  a month axis to read the handles against. Every piece earned its place in
+  isolation, and together they read as an instrument that needs a manual —
+  while nearly every window a reader actually wants is "how far back should the
+  average reach", which is a number, not a gesture. `LookbackPanel` asks it as
+  one: a day-count lens with ± keys, a date lens for the end, and the presets
+  filling the fields. Six things in it are decisions, not styling:
+  - **The two fields are a view over the stored range, never a second store.**
+    `lookback.ts` (pure, tested) maps both ways: every `AdpRange` reads as
+    `{days, end}`, and a write lands in the storage its meaning asks for. A
+    window ending **today is relative** — 30 and 90 land on the *named* presets
+    so the resting line's chips light exactly, and any other count is the
+    `lookback` preset carrying its `days` — so it rolls forward with the
+    calendar, which is the promise the named presets always made. A **hand-set
+    end freezes** the window into `custom`, because a reader who named a day
+    meant that day. The same two lenses show both, so the caption states which
+    the board is doing ("rolls forward daily" / "ends Jun 30, 2026").
+  - **"Since the NFL draft" survives as a computed key, and it pins rather than
+    counts.** The date moves every April, so no fixed chip and no typed number
+    can carry it — the ◆ key (and the flag on the channel) fills the lens with
+    the day count but *stores* the draft's date (`sinceDraftRange`, a `custom`
+    from-bound): days-since-the-draft grows nightly, and a stored count would
+    walk the window's start off the date it names. `draftAnchor` resolves which
+    draft the key means — the latest at or before the window's end within the
+    strip's domain, so the all-seasons board anchors on the newest one and a
+    historical cut reaches the one before it — and a domain holding no draft
+    draws no key. `nfl-calendar.ts` stays the source; what retired with the
+    scrubber is only the clickable REG/PRE bands, whose windows the counter
+    expresses as plainly as any other pair of dates.
+  - **The density stays on screen and stops being a control.** The same bars in
+    a milled channel (`.lab-channel` — the app bar's slot at panel width, bars
+    with lit tops standing in a cut), lit inside the window, the window's edges
+    ticked over them, the draft's fuchsia hairline kept. It is still narrowed
+    by nothing the drawer can change — a readout reshaping under the hand using
+    the filters beside it is worse than none — and it still shows **no count**,
+    because the bars and the board's `draft_count` are different populations;
+    the header states the real one. The draft flag is the channel's one press;
+    everything else is paint, which is what retired the gesture machinery
+    (`scrubTargetAt`, `panWindow`, `edgeBounds` and the axis-tick thinning went
+    with the component, and `range-domain` keeps only the domain-and-bars maths
+    the sparkline and the channel share).
+  - **The number previews; the release commits** — the steepness slider's rule,
+    for the same reason. A committed window re-fetches the board, so typing
+    "104" must not fetch three boards on the way: the channel and the caption
+    re-read per keystroke (local and free), and the store moves on blur or
+    Enter. The ± keys and every chip commit at once, since a press is a
+    finished value. The date field carries the same idea sideways — a
+    controlled date input that snaps back on every incomplete value fights the
+    keyboard, so the transient string stays local and only a full date the
+    window can end on commits.
+  - **Stepping down from "whole season" does nothing.** An empty lens means no
+    start bound, and the − key counting it down to a one-day board would be a
+    press nobody meant; the + key from empty starts at 1, because "narrow this
+    a little" has to start somewhere.
+  - **The presets stayed and the handles went.** The chips fill the fields
+    rather than flying handles, so `ADP_RANGE_PRESETS` still doesn't offer
+    `custom` — it is what a hand-set end date produces now, as it was what a
+    moved handle produced before. The relative presets keep earning their place
+    for the reason they always did ("Last 90 days" is still the last 90 days
+    tomorrow), and they keep their resting-line seat and `12 mo` spelling. The
+    unbounded preset names what it covers (`All 2026` / `All time`), and
+    `boardLabel` folds it into the season everywhere the board is named at all
+    — "2026 · All time" would be claiming two contradictory things.
+    `rangeLabel` still names the window alone and now speaks the counter's own
+    grammar for the general case ("Last 45 days"); `rangeSummary` is narrower
+    still — it belongs *inside* the panel and nowhere else, since naming a
+    window's edges is worth the width only where the lenses are sitting on
+    them.
 - **A modal that refocuses itself must not depend on its callers' callbacks.**
   `AdpDrawer`'s open effect held `onClose` in its deps, and every caller passes a
   fresh arrow each render — so every keystroke re-ran it and `panel.focus()` took
@@ -1748,11 +1727,11 @@ stops holding, a comment saying it does would not have caught it.
   sends `outlook: null`, and the KTC route lets a failed solve cost the split but
   not the value. `useAdpDensity` is the same call one layer out: a failure leaves
   `months` empty rather than tearing the control down, because the bars are the
-  only part of the scrubber that needs them — the presets, the NFL markers and
-  the handles all work on dates alone, so the strip degrades to a bare axis and
-  the caption says the activity is unavailable. Ask what a read is *load-bearing*
-  for before letting its failure propagate; here it decorates a control that
-  still functions without it.
+  only part of the window control that needs them — the presets, the lenses and
+  the draft key all work on dates alone, so the channel degrades to an empty slot
+  and the caption says the activity is unavailable. Ask what a read is
+  *load-bearing* for before letting its failure propagate; here it decorates a
+  control that still functions without it.
 - **`useAdp` is not keyed to the manager, unlike every other hook on these
   pages.** The four sub-resource hooks re-fetch on the leagues array because they
   read what that stream wrote; ADP describes the whole crawled database narrowed

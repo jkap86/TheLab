@@ -737,8 +737,8 @@ export type PlayersSyncPayload = PlayersSyncSummary;
  * `kickoff` is epoch ms, and null is a real answer, not a failure: Sleeper
  * hasn't scheduled the season (or has scheduled it only to the day), so there
  * is no instant to count down to. The client falls back to the NFL calendar
- * table's provisional date in that case — the same claim the ADP scrubber's
- * markers make — rather than the server inventing an hour.
+ * table's provisional date in that case — the same claim the ADP window's
+ * draft anchor makes — rather than the server inventing an hour.
  */
 export type KickoffPayload = {
   season: string;

@@ -325,6 +325,22 @@ describe("rangeBounds", () => {
     assert.equal(rangeBounds({ preset: "30d", from: null, to: null }, "2026-01-15").from, "2025-12-16");
   });
 
+  test("a lookback counts back its own days and ends open", () => {
+    // The counter's general case: the same shape as 30d/90d, carrying its
+    // count — so "last 45 days" rolls forward with the calendar exactly as the
+    // named presets do.
+    assert.deepEqual(
+      rangeBounds({ preset: "lookback", from: null, to: null, days: 45 }, TODAY),
+      { from: "2026-06-16", to: null },
+    );
+    // Days-less is malformed, and it must read as unbounded rather than as
+    // "since today" — the one misreading that would silently narrow the board.
+    assert.deepEqual(
+      rangeBounds({ preset: "lookback", from: null, to: null }, TODAY),
+      { from: null, to: null },
+    );
+  });
+
   test("all time bounds nothing; custom passes its own ends through", () => {
     assert.deepEqual(rangeBounds({ preset: "all", from: null, to: null }, TODAY), {
       from: null,
@@ -341,6 +357,20 @@ describe("rangeLabel", () => {
   test("a preset keeps its name, so it stays true tomorrow", () => {
     assert.equal(rangeLabel({ preset: "90d", from: null, to: null }), "Last 90 days");
     assert.equal(rangeLabel({ preset: "all", from: null, to: null }), "All time");
+  });
+
+  test("a lookback names itself on the presets' own scale", () => {
+    // "Last 45 days" beside "Last 30 days" — one scale, so the typed and the
+    // pressed spell the same way.
+    assert.equal(
+      rangeLabel({ preset: "lookback", from: null, to: null, days: 45 }),
+      "Last 45 days",
+    );
+    assert.equal(
+      rangeLabel({ preset: "lookback", from: null, to: null, days: 1 }),
+      "Last 1 day",
+    );
+    assert.equal(rangeLabel({ preset: "lookback", from: null, to: null }), "All time");
   });
 
   test("a custom range spells out the ends it has", () => {
@@ -433,9 +463,9 @@ describe("seasonOptions", () => {
 
 describe("rangeSummary", () => {
   test("says the dates a preset's name doesn't", () => {
-    // The label stays "Last 90 days"; inside the scrubber, where the handles
-    // are sitting on those dates, the reader shouldn't have to work them back
-    // off the axis.
+    // The label stays "Last 90 days"; inside the panel, where the lenses are
+    // sitting on those dates, the reader shouldn't have to work them back off
+    // the channel.
     assert.equal(rangeSummary({ preset: "90d", from: null, to: null }, TODAY), "since May 2, 2026");
     assert.equal(rangeSummary({ preset: "12m", from: null, to: null }, TODAY), "since Jul 31, 2025");
   });
@@ -495,6 +525,10 @@ describe("adpNarrowingCount", () => {
     assert.equal(range({ preset: "custom", from: null, to: null }), 0);
     assert.equal(range({ preset: "30d", from: null, to: null }), 1);
     assert.equal(range({ preset: "custom", from: "2026-05-01", to: null }), 1);
+    // The counter's general case counts like the named presets it sits beside;
+    // its days-less spelling bounds nothing and must not light the trigger.
+    assert.equal(range({ preset: "lookback", from: null, to: null, days: 45 }), 1);
+    assert.equal(range({ preset: "lookback", from: null, to: null }), 0);
   });
 
   test("a season other than the default counts", () => {

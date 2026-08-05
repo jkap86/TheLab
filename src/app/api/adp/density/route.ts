@@ -13,9 +13,9 @@ export const dynamic = "force-dynamic";
  *   GET /api/adp/density
  *
  * It takes no parameters, and that is the point rather than an omission. Its one
- * caller is the range scrubber in the ADP drawer, which draws these counts as a
- * strip and lets you drag a window across it; narrowing them by the drawer's
- * live filters would reshape the strip under the hand choosing them. What it
+ * caller is the ADP drawer's window control, which draws these counts as the
+ * resting sparkline and the panel's channel; narrowing them by the drawer's
+ * live filters would reshape the readout under the hand using them. What it
  * describes is therefore the population *before* any board filter — which is
  * also what makes it cacheable and fetched once per drawer rather than once per
  * chip.

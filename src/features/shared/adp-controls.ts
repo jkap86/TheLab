@@ -18,7 +18,7 @@ import { deriveScoring } from "./league-filters/predicates.ts";
 import type { ManagerLeague } from "@/shared/manager";
 
 // Re-exported rather than re-imported at each call site: this module's own
-// consumers (the drawer, the scrubber, `range-domain`) already import
+// consumers (the drawer, the window control, `range-domain`) already import
 // `todayIso` and friends from *here*, a habit that predates this file's own
 // move into `features/shared` — the manager tool's `adp-controls` still hands
 // them out under the same names for its own callers, per the mover's rule.
@@ -127,9 +127,18 @@ export type AdpRange = {
   /** `YYYY-MM-DD`, both inclusive. Read only when `preset` is `"custom"`; either may be null for an open end. */
   from: string | null;
   to: string | null;
+  /**
+   * Read only when `preset` is `"lookback"`: how many days back from today the
+   * window starts. A *relative* window like the named presets — `30d` and `90d`
+   * are the two named points on this scale, kept as their own values so the
+   * resting line's chips still light exactly — and unlike `custom` it rolls
+   * forward with the calendar, which is the counter's promise for a window
+   * that ends on today.
+   */
+  days?: number;
 };
 
-export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom";
+export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom" | "lookback";
 
 /**
  * The presets, in the order the drawer offers them. Two labels each: `label`
@@ -141,10 +150,10 @@ export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom";
  * "12 months" wraps to two lines in and takes the whole row's height with it.
  *
  * `custom` is deliberately **not** on this list, though it is still a preset
- * value. It used to be a fifth chip that revealed two date inputs; the range
- * scrubber replaced them, so a custom window is now what you get by moving a
- * handle or taking a marker rather than a mode you enter first. The chips fly
- * the handles somewhere, which is why the relative ones keep earning their place
+ * value — and so is `lookback`, for the same reason. Neither is a mode you
+ * enter first: a custom window is what setting the counter's end date produces,
+ * and a lookback is what typing any unnamed day count produces. The chips fill
+ * the counter's fields, which is why the relative ones keep earning their place
  * — "Last 90 days" stays true tomorrow, where the dates behind it would not.
  */
 export const ADP_RANGE_PRESETS: AdpRangePresetOption[] = [
@@ -339,6 +348,12 @@ export function rangeBounds(range: AdpRange, today: string): AdpRangeBounds {
       return { from: shiftDays(today, -90), to: null };
     case "12m":
       return { from: shiftMonths(today, -12), to: null };
+    case "lookback":
+      // A days-less lookback is malformed rather than meaningful, and it reads
+      // as unbounded — the one answer that can't silently narrow the board.
+      return range.days == null
+        ? { from: null, to: null }
+        : { from: shiftDays(today, -range.days), to: null };
   }
 }
 
@@ -348,6 +363,12 @@ export function rangeBounds(range: AdpRange, today: string): AdpRangeBounds {
  * would have to be re-read — and only a custom window spells its dates out.
  */
 export function rangeLabel(range: AdpRange): string {
+  if (range.preset === "lookback") {
+    // The same name shape as the chips, so "Last 45 days" and "Last 30 days"
+    // read as the one scale they are — and it stays true tomorrow, which is
+    // what a relative window's label is for.
+    return range.days == null ? "All time" : `Last ${range.days} day${range.days === 1 ? "" : "s"}`;
+  }
   if (range.preset !== "custom") {
     return ADP_RANGE_PRESETS.find((p) => p.value === range.preset)!.label;
   }
@@ -363,7 +384,10 @@ export function rangeLabel(range: AdpRange): string {
 export function isUnboundedRange(range: AdpRange): boolean {
   return (
     range.preset === "all" ||
-    (range.preset === "custom" && range.from === null && range.to === null)
+    (range.preset === "custom" && range.from === null && range.to === null) ||
+    // The malformed spelling `rangeBounds` already reads as unbounded; counting
+    // it as a narrowing would light the trigger for a window that cuts nothing.
+    (range.preset === "lookback" && range.days == null)
   );
 }
 
