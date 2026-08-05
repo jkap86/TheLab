@@ -57,7 +57,7 @@ describe("the filter table", () => {
     }
   });
 
-  test("the fixed filters are the six the drawer has always had", () => {
+  test("the fixed filters are the four whose options are not data", () => {
     assert.deepEqual(
       FIXED_FILTERS.map((f) => f.key),
       ["rounds", "scoring", "superflex", "bestBall"],
