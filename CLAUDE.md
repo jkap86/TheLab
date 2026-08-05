@@ -331,6 +331,24 @@ Filtering *on* those blobs takes two habits:
 - **Parenthesise a SQL fragment you intend to reuse.** Call sites append their
   own comparison, so a fragment ending in `= 1` makes `${FRAG} = $1` a chained
   `=`, which Postgres rejects. `shared/manager/adp` builds its `WHERE` this way.
+- **A CTE whose column is one of those fragments must be `AS MATERIALIZED`.**
+  Postgres 12+ inlines a CTE referenced once, which is normally the right call
+  and is exactly wrong when the column is a JSONB extraction plus a regex plus a
+  cast: inlining pushes that expression into every `FILTER` of every aggregate
+  above it. `/api/adp`'s board has ten, so a fact about a *draft* — 6,963 of
+  them — was recomputed once per pick per aggregate, ~11M jsonb lookups and ~11M
+  regex matches that appear nowhere in the query as written. One keyword took
+  the read from 2,872ms to 590ms over 1.5M picks, and ~2.2s to ~0.5s end to end.
+  The tell is that the cost is invisible in the SQL and only shows up in a plan,
+  where the expression is printed out once per aggregate. A subquery in `FROM`
+  is not affected (`countMatchedDrafts` evaluates it once per draft either way);
+  it is the single-reference CTE that inlines.
+  **The covering indexes beside it are a *consequence* of that fix, not an
+  independent one** (`draft_picks_adp_board_idx`, `…_player_idx`): on their own
+  they make the board *slower* — 2,280ms to 2,900ms — because they move the
+  planner to a nested loop that does the expensive per-row work more times.
+  Materialized first, then indexed, 597ms. Neither half should be reverted
+  without the other.
 
 Build a dynamic `WHERE` by pushing onto a params array and binding the index it
 returns (`` `$${params.push(value)}` ``) — the validated enum decides *which*
