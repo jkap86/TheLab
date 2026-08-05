@@ -8,6 +8,7 @@ import { parseWeeks, syncProjections } from "@/shared/projections";
 import { isSeason } from "@/shared/query";
 
 import { authorizeInternalRequest, methodNotAllowed } from "../../internal-auth";
+import { readFailureResponse } from "../../read-failure";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,8 +66,7 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: result.locked ? 409 : 200 });
   } catch (error) {
     console.error("[proj] sync failed:", error);
-    const payload: ApiErrorPayload = { error: "Failed to sync projections" };
-    return NextResponse.json(payload, { status: 500 });
+    return readFailureResponse(error, "Failed to sync projections");
   }
 }
 

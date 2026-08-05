@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import type { ApiErrorPayload, ManagerRanksPayload } from "@/shared/contract";
+import type { ManagerRanksPayload } from "@/shared/contract";
 import {
   getManagerLeagueRosters,
   projectedRank,
@@ -9,6 +9,7 @@ import {
 } from "@/shared/manager";
 import { getWeeklyTeamPoints } from "@/shared/projections";
 
+import { readFailureResponse } from "../../../read-failure";
 import { resolveManagerRequest } from "../manager-request";
 
 export const runtime = "nodejs";
@@ -38,8 +39,7 @@ export async function GET(
     return await ranksPayload(userId, season);
   } catch (error) {
     console.error("[ranks] query failed:", error);
-    const payload: ApiErrorPayload = { error: "Failed to load ranks" };
-    return NextResponse.json(payload, { status: 500 });
+    return readFailureResponse(error, "Failed to load ranks");
   }
 }
 

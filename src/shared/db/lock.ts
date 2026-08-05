@@ -1,3 +1,4 @@
+import { databaseBudget } from "./budget";
 import { pool } from "./pool";
 
 /** A Postgres advisory lock key: the two-int `(classid, objid)` form. */
@@ -46,11 +47,29 @@ export class AdvisoryLockTimeoutError extends Error {
  * an ordinary league sync ahead of us finishes and we serve its data (the whole
  * point of blocking rather than skipping), short enough that a wedged one is
  * bounded.
+ *
+ * A share of the platform's request deadline rather than a number of its own
+ * (see `./budget`), because it used to *be* that deadline: a caller waiting the
+ * router's whole 30 seconds for a lock had no time left to send what it waited
+ * for, so even a wait that succeeded produced a request the client had already
+ * been told had failed.
  */
-export const ADVISORY_LOCK_WAIT_MS = 30 * 1000;
+export const ADVISORY_LOCK_WAIT_MS = databaseBudget().lockWaitMs;
 
 /** Postgres `lock_not_available` — what `lock_timeout` raises. */
 const LOCK_NOT_AVAILABLE = "55P03";
+
+/**
+ * Postgres `query_canceled` — what `statement_timeout` raises.
+ *
+ * The pool sets a statement timeout on every connection, and the acquisition
+ * below is a statement like any other, so a wait can be cut by either bound.
+ * The budget keeps `lock_timeout` the shorter of the two, so in practice this
+ * is the one that never fires — it is mapped anyway because the alternative is
+ * a caller that is bounded correctly and reports it as an unexplained database
+ * error, which is exactly the outcome `SyncSummary.locked` exists to prevent.
+ */
+const QUERY_CANCELED = "57014";
 
 /**
  * Run `fn` while holding a Postgres advisory lock, waiting for it rather than
@@ -88,7 +107,8 @@ export async function withBlockingAdvisoryLock<T>(
         objId,
       ]);
     } catch (error) {
-      if ((error as { code?: string })?.code === LOCK_NOT_AVAILABLE) {
+      const code = (error as { code?: string })?.code;
+      if (code === LOCK_NOT_AVAILABLE || code === QUERY_CANCELED) {
         throw new AdvisoryLockTimeoutError([classId, objId], waitMs);
       }
       throw error;

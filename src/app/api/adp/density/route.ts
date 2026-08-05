@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
-import type { AdpDensityPayload, ApiErrorPayload } from "@/shared/contract";
+import type { AdpDensityPayload } from "@/shared/contract";
 import { getDraftDensity } from "@/shared/manager";
+
+import { readFailureResponse } from "../../read-failure";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +32,6 @@ export async function GET() {
     return NextResponse.json(payload);
   } catch (error) {
     console.error("[adp/density] query failed:", error);
-    const payload: ApiErrorPayload = { error: "Failed to load draft activity" };
-    return NextResponse.json(payload, { status: 500 });
+    return readFailureResponse(error, "Failed to load draft activity");
   }
 }

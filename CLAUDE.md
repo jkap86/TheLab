@@ -385,7 +385,7 @@ doubles cost for nothing a bigger batch wouldn't do better.
 
 ## Operating safety
 
-Five rules that are about the app staying correct and unexploited rather than
+Six rules that are about the app staying correct and unexploited rather than
 about how it is laid out. Each replaced something that read as fine and wasn't.
 
 - **A route that spends someone else's budget is an operator route.**
@@ -498,6 +498,49 @@ about how it is laid out. Each replaced something that read as fine and wasn't.
   `require`. An unrecognised mode throws. Beside it, a missing `DATABASE_URL` is
   fatal in production: `instrumentation.ts` throws before starting a single loop,
   because "alive but connected to libpq's defaults" is worse than not booting.
+- **Every wait is bounded, and bounded shorter than the deadline the request is
+  already under.** `shared/db/budget.ts` holds the arithmetic: one platform
+  deadline (Heroku's router, 30s) and four shares of it — connect, lock wait,
+  statement, and how much of the pool one request may hold. It replaced four
+  unbounded waits that each looked local and were one failure between them. A
+  route with no `connectionTimeoutMillis` does not fail when the pool is full,
+  it *queues*, so the platform answers 503 on its behalf at 30 seconds while the
+  dyno keeps working; with no `statement_timeout` the query underneath runs to
+  completion holding the connection the next caller is queueing for; and the
+  browser, told only that the request failed, asks again. That is the whole
+  spiral — the observed end of it is the role's connection limit (`53300`) in a
+  background loop that was doing nothing unusual. Four things hold the fix up,
+  and each is undone by treating one number as independent of the others:
+  - **The shares are ordered connect < lock wait < statement < deadline**, and
+    the ordering is load-bearing rather than tidy. `lock_timeout` being the
+    shorter of the two bounds on a contended advisory lock is what keeps a
+    caller that lost the lock reported as one (`55P03` →
+    `AdvisoryLockTimeoutError`) instead of as a cancelled query — the same
+    distinction `SyncSummary.locked` exists to draw. `budget.test.ts` asserts
+    the ordering, not just the values.
+  - **One pool per process, cached on `globalThis` in production too.** The old
+    guard was dev-only, on the HMR reasoning; production is the case that cost
+    something, because a route bundle carrying its own copy of `pool.ts` gets
+    its own `max` and nothing in the process can tell. The ceiling that matters
+    belongs to the *role*, not to the pool: a small managed plan caps every
+    dyno, review app and `psql` session at 20 between them, which is what
+    `DATABASE_POOL_MAX` is for.
+  - **A fan-out whose width is data is bounded to a share of the pool**
+    (`collectWithConcurrency`, `budget.fanout`). `Promise.all(items.map(…))` is
+    the shape that reads as harmless: over a list that grows with the account
+    being looked at, and where each unit holds a connection for its whole
+    duration, it is one request holding more of the pool than the pool has —
+    `/api/user/…/adp-value` priced six ADP boards with two queries each, so two
+    readers took every connection on the dyno. A fixed-width fan-out over units
+    that are mostly *network* is not this (`LEAGUE_FETCH_CONCURRENCY` stays as
+    it is, tuned against Sleeper's budget).
+  - **Out of budget is a 503, not a 500** (`isDatabaseBusy` →
+    `app/api/read-failure.ts`, the same pure/`NextResponse` split as
+    `resolveManagerUser`/`resolveManagerRequest`). The two want opposite things
+    from a caller: a 500 says stop asking, and asking again is exactly right
+    when the database merely had no room. It is applied at **every** route that
+    catches a read rather than at the ones that were seen to be slow — a rule
+    held by two routes of fourteen reports the twelfth as a bug in itself.
 
 ## Testing
 

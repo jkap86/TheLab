@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-import type { ApiErrorPayload, PlayersSyncPayload } from "@/shared/contract";
+import type { PlayersSyncPayload } from "@/shared/contract";
 import { syncPlayers } from "@/shared/players";
 
 import { authorizeInternalRequest, methodNotAllowed } from "../../internal-auth";
+import { readFailureResponse } from "../../read-failure";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,8 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: result.locked ? 409 : 200 });
   } catch (error) {
     console.error("[players] sync failed:", error);
-    const payload: ApiErrorPayload = { error: "Failed to sync players" };
-    return NextResponse.json(payload, { status: 500 });
+    return readFailureResponse(error, "Failed to sync players");
   }
 }
 

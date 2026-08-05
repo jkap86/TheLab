@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import type { ApiErrorPayload, ManagerKtcPayload } from "@/shared/contract";
+import type { ManagerKtcPayload } from "@/shared/contract";
 import {
   getKtcValuesBySleeperId,
   isSuperflexLineup,
@@ -11,6 +11,7 @@ import { getManagerLeagueRosters, rankOf } from "@/shared/manager";
 import { getOptimalLineups } from "@/shared/projections";
 import { errorMessage } from "@/shared/util";
 
+import { readFailureResponse } from "../../../read-failure";
 import { resolveManagerRequest } from "../manager-request";
 
 export const runtime = "nodejs";
@@ -47,8 +48,7 @@ export async function GET(
     return await ktcPayload(username, userId, season);
   } catch (error) {
     console.error("[ktc] query failed:", error);
-    const payload: ApiErrorPayload = { error: "Failed to load KTC values" };
-    return NextResponse.json(payload, { status: 500 });
+    return readFailureResponse(error, "Failed to load KTC values");
   }
 }
 

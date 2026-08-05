@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 
-import type {
-  ApiErrorPayload,
-  ManagerAdpValuePayload,
-} from "@/shared/contract";
+import type { ManagerAdpValuePayload } from "@/shared/contract";
+import { databaseBudget } from "@/shared/db";
 import { isSuperflexLineup } from "@/shared/ktc";
 import {
   adpBoardFor,
@@ -19,8 +17,9 @@ import {
 } from "@/shared/manager";
 import type { AdpFilters } from "@/shared/manager";
 import { getOptimalLineups } from "@/shared/projections";
-import { errorMessage } from "@/shared/util";
+import { collectWithConcurrency, errorMessage } from "@/shared/util";
 
+import { readFailureResponse } from "../../../read-failure";
 import { resolveManagerRequest } from "../manager-request";
 
 export const runtime = "nodejs";
@@ -61,8 +60,7 @@ export async function GET(
     return await adpValuePayload(username, userId, season, halvings);
   } catch (error) {
     console.error("[adp-value] query failed:", error);
-    const payload: ApiErrorPayload = { error: "Failed to load ADP values" };
-    return NextResponse.json(payload, { status: 500 });
+    return readFailureResponse(error, "Failed to load ADP values");
   }
 }
 
@@ -132,14 +130,23 @@ async function adpValuePayload(
     }),
     // The raw ADP per board — the curve is applied per league below, since it
     // depends on each league's startable pool, not on the board alone.
-    Promise.all(
-      [...boards].map(async ([signature, board]) => {
+    //
+    // Bounded rather than `Promise.all`'d, because the width is data: an
+    // account spread across superflex and 1QB leagues at three scoring rules is
+    // six boards, each holding a connection across a pair of queries, so one
+    // request took most of the pool and two of them took all of it — leaving
+    // every other route queueing until the platform gave up on it. The boards
+    // still overlap, just not without limit.
+    collectWithConcurrency(
+      [...boards],
+      databaseBudget().fanout,
+      async ([signature, board]) => {
         const result = await getDraftAdpForPlayers(
           board.filters,
           [...board.playerIds],
         );
         return [signature, result] as const;
-      }),
+      },
     ),
   ]);
 

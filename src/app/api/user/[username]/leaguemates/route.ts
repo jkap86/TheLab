@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
 import type {
-  ApiErrorPayload,
   LeaguematePayload,
   ManagerLeaguematesPayload,
 } from "@/shared/contract";
 import { getManagerLeaguemates } from "@/shared/manager";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 
+import { readFailureResponse } from "../../../read-failure";
 import { resolveManagerRequest } from "../manager-request";
 
 export const runtime = "nodejs";
@@ -51,7 +51,6 @@ export async function GET(
     return NextResponse.json(payload);
   } catch (error) {
     console.error("[leaguemates] query failed:", error);
-    const payload: ApiErrorPayload = { error: "Failed to load leaguemates" };
-    return NextResponse.json(payload, { status: 500 });
+    return readFailureResponse(error, "Failed to load leaguemates");
   }
 }
