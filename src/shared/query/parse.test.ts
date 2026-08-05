@@ -6,7 +6,9 @@ import {
   booleanFlag,
   enumList,
   integer,
+  isIsoDate,
   isSeason,
+  isoDate,
   list,
 } from "./parse.ts";
 
@@ -113,5 +115,76 @@ describe("isSeason", () => {
     assert.equal(isSeason("20266"), false);
     assert.equal(isSeason("all"), false);
     assert.equal(isSeason(""), false);
+  });
+});
+
+describe("isIsoDate", () => {
+  it("accepts a real calendar day", () => {
+    assert.equal(isIsoDate("2026-06-01"), true);
+    assert.equal(isIsoDate("2026-12-31"), true);
+    assert.equal(isIsoDate("2024-02-29"), true);
+  });
+
+  it("rejects a day the shape allows and the calendar doesn't", () => {
+    // The whole reason this isn't a regex: `2026-02-31` passes the shape check
+    // *and* parses — V8 rolls the day forward to March 3 rather than failing, so
+    // a bad bound would silently become a different, real date. Only a day that
+    // survives the round trip is accepted.
+    assert.equal(isIsoDate("2026-02-31"), false);
+    assert.equal(isIsoDate("2026-04-31"), false);
+    assert.equal(isIsoDate("2025-02-29"), false, "2025 is not a leap year");
+    assert.equal(isIsoDate("2026-13-01"), false);
+    assert.equal(isIsoDate("2026-00-10"), false);
+    assert.equal(isIsoDate("2026-06-00"), false);
+  });
+
+  it("rejects anything that isn't the bare YYYY-MM-DD shape", () => {
+    // A padded shape only, so the round trip above compares like with like:
+    // `2026-6-1` parses fine and would format back as `2026-06-01`, which is a
+    // different string from the one asked about.
+    assert.equal(isIsoDate("2026-6-1"), false);
+    assert.equal(isIsoDate("26-06-01"), false);
+    assert.equal(isIsoDate("2026/06/01"), false);
+    assert.equal(isIsoDate("2026-06-01T00:00:00Z"), false);
+    assert.equal(isIsoDate("2026-06-01 "), false);
+    assert.equal(isIsoDate("yesterday"), false);
+    assert.equal(isIsoDate(""), false);
+  });
+});
+
+describe("isoDate", () => {
+  it("returns the string it was given, not a timestamp", () => {
+    // What a bare date *means* is a zone question, and the caller that knows the
+    // zone is SQL. Converting here would bake this process's zone into every
+    // answer — an off-by-one day, in some deployments only.
+    assert.deepEqual(isoDate(params("start_after=2026-06-01"), "start_after"), {
+      ok: true,
+      value: "2026-06-01",
+    });
+  });
+
+  it("reads an absent or blank bound as an open end, not a default", () => {
+    // A range is two independent halves, so null has to be expressible.
+    assert.deepEqual(isoDate(params(""), "k"), { ok: true, value: null });
+    assert.deepEqual(isoDate(params("k="), "k"), { ok: true, value: null });
+    assert.deepEqual(isoDate(params("k=%20%20"), "k"), { ok: true, value: null });
+  });
+
+  it("trims before judging, so a padded date is still that date", () => {
+    assert.deepEqual(isoDate(params("k=%202026-06-01%20"), "k"), {
+      ok: true,
+      value: "2026-06-01",
+    });
+  });
+
+  it("fails the request on a date that isn't one, naming the key and the value", () => {
+    for (const raw of ["2026-02-31", "2026-6-1", "junk"]) {
+      const parsed = isoDate(params(`k=${raw}`), "k");
+      assert.equal(parsed.ok, false, `${raw} should not parse`);
+      if (!parsed.ok) {
+        assert.match(parsed.error, /k/);
+        assert.match(parsed.error, /YYYY-MM-DD/);
+      }
+    }
   });
 });

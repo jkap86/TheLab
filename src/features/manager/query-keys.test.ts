@@ -4,8 +4,10 @@ import test from "node:test";
 import {
   boardQueryKeys,
   dependentManagerQueryKeys,
+  leagueQueryKeys,
   managerQueryKeys,
   normalizeAdpQuery,
+  scheduleQueryKeys,
 } from "./query-keys.ts";
 
 /** What the cache actually compares: the hash of the key, not the array. */
@@ -73,39 +75,51 @@ test("managerQueryKeys", async (t) => {
   });
 });
 
-test("normalizeAdpQuery", async (t) => {
-  await t.test("parameter order doesn't make a second board", () => {
-    assert.deepEqual(
-      normalizeAdpQuery("season=2026&limit=1000&draft_type=snake,linear"),
-      normalizeAdpQuery("draft_type=snake,linear&limit=1000&season=2026"),
-    );
-  });
-
-  await t.test("a changed filter is a different board", () => {
-    assert.notDeepEqual(
-      normalizeAdpQuery("season=2026&superflex=1"),
-      normalizeAdpQuery("season=2026&superflex=0"),
-    );
-    // A filter the other side omits is a narrowing, not the same question.
-    assert.notDeepEqual(
-      normalizeAdpQuery("season=2026"),
-      normalizeAdpQuery("season=2026&teams_min=12"),
-    );
-  });
-
-  await t.test("a repeated parameter is kept, not collapsed", () => {
-    assert.deepEqual(normalizeAdpQuery("scoring=ppr&scoring=std"), [
-      ["scoring", "ppr"],
-      ["scoring", "std"],
-    ]);
+test("the ADP board's key, as this feature re-exports it", async (t) => {
+  // The board's own behaviour is `features/shared/adp-query.test.ts`, where the
+  // module lives; what this feature has to keep is that the name it hands out
+  // still reaches that one definition, and that the board it keys stays outside
+  // the manager prefix.
+  await t.test("the re-export is that module's own normaliser, not a copy", async () => {
+    const shared = await import("../shared/adp-query.ts");
+    assert.equal(normalizeAdpQuery, shared.normalizeAdpQuery);
+    assert.equal(boardQueryKeys, shared.boardQueryKeys);
   });
 
   await t.test("the board is not filed under the manager", () => {
     // A board is a fact about the crawled drafts, so it must survive a
     // manager-wide invalidation and not be re-fetched per manager.
     const key = hash(boardQueryKeys.adp("season=2026"));
-    assert.ok(!key.includes("manager"));
+    assert.ok(!key.includes(managerQueryKeys.all[0]));
     assert.notEqual(key, hash(boardQueryKeys.density()));
+  });
+});
+
+test("leagueQueryKeys", async (t) => {
+  await t.test("two leagues are two entries under one prefix", () => {
+    // The panel mounts on expand and clears on change, so a key shared between
+    // two leagues would show one league's rosters under the other's name.
+    assert.notEqual(hash(leagueQueryKeys.detail("123")), hash(leagueQueryKeys.detail("124")));
+    assert.deepEqual(leagueQueryKeys.detail("123").slice(0, 1), [...leagueQueryKeys.all]);
+  });
+
+  await t.test("it is not manager-scoped, since a league belongs to all its members", () => {
+    // Two managers expanding the same league read one answer; filing it under
+    // the searched name would fetch the same standings once per reader.
+    assert.ok(!hash(leagueQueryKeys.detail("123")).includes(managerQueryKeys.all[0]));
+  });
+});
+
+test("scheduleQueryKeys", async (t) => {
+  await t.test("kickoff is keyed by season and nothing else", () => {
+    // One instant for the whole app — it belongs to no manager, and the header
+    // that draws it renders on every manager page.
+    assert.deepEqual(scheduleQueryKeys.kickoff("2026"), ["kickoff", "2026"]);
+    assert.notEqual(
+      hash(scheduleQueryKeys.kickoff("2026")),
+      hash(scheduleQueryKeys.kickoff("2025")),
+    );
+    assert.ok(!hash(scheduleQueryKeys.kickoff("2026")).includes(managerQueryKeys.all[0]));
   });
 });
 

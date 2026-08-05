@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import {
   DEFAULT_SUBJECT_FILTERS,
+  EMPTY_SUBJECT_INDEX,
   type SubjectFilters,
   type SubjectIndex,
   hasSubject,
@@ -10,6 +11,7 @@ import {
   matchesSubjects,
   removeSubjectAt,
   searchSubjects,
+  subjectKey,
   subjectOptions,
   subjectSummary,
   toggleSubject,
@@ -282,5 +284,65 @@ describe("subjectSummary", () => {
       ),
       "any of 1 player and 1 leaguemate",
     );
+  });
+});
+
+describe("subjectKey", () => {
+  test("the kind is part of the identity, since the two id spaces are not one", () => {
+    // A Sleeper player id and a Sleeper user id are both digit strings, so a key
+    // of the id alone would let a player deselect a leaguemate — and the
+    // selection is compared by this key everywhere it is edited.
+    assert.notEqual(subjectKey(player("1234")), subjectKey(mate("1234")));
+  });
+
+  test("the same subject keys the same, and different ones differ", () => {
+    assert.equal(subjectKey(player("bijan")), subjectKey(player("bijan")));
+    assert.notEqual(subjectKey(player("bijan")), subjectKey(player("chase")));
+  });
+
+  test("selection by key survives a colliding id across the two kinds", () => {
+    // The consequence the key exists for, asserted where a reader would see it:
+    // toggling a player must not remove the leaguemate sharing that id.
+    const both = filters({ subjects: [player("1234"), mate("1234")] });
+    assert.equal(hasSubject(both, player("1234")), true);
+    assert.equal(hasSubject(both, mate("1234")), true);
+    assert.deepEqual(toggleSubject(both, player("1234")).subjects, [mate("1234")]);
+  });
+});
+
+describe("EMPTY_SUBJECT_INDEX", () => {
+  test("every league is unknown in it, which is not the same as holding nobody", () => {
+    // What the page holds before the two membership payloads land. Null and
+    // false are different answers here, the same rule `slotCount` keeps.
+    assert.equal(holdsSubject("1", player("bijan"), EMPTY_SUBJECT_INDEX), null);
+    assert.equal(holdsSubject("1", mate("dark"), EMPTY_SUBJECT_INDEX), null);
+  });
+
+  test("a selection against it matches nothing rather than everything", () => {
+    // The list is empty while the maps load, not unnarrowed: showing all 121
+    // leagues under "owns Bijan" and then dropping to 19 would have answered the
+    // question wrongly first.
+    assert.equal(
+      matchesSubjects("1", filters({ subjects: [player("bijan")] }), EMPTY_SUBJECT_INDEX),
+      false,
+    );
+    assert.equal(
+      matchesSubjects(
+        "1",
+        filters({ subjects: [player("bijan"), mate("dark")], match: "any" }),
+        EMPTY_SUBJECT_INDEX,
+      ),
+      false,
+    );
+  });
+
+  test("with nothing selected it still admits every league", () => {
+    // The caller never has to ask whether a selection is set before applying it,
+    // so an empty one has to pass even when nothing is known.
+    assert.equal(matchesSubjects("1", DEFAULT_SUBJECT_FILTERS, EMPTY_SUBJECT_INDEX), true);
+  });
+
+  test("it is empty on both halves", () => {
+    assert.deepEqual(EMPTY_SUBJECT_INDEX, { rosters: {}, members: {} });
   });
 });

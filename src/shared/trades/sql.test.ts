@@ -6,9 +6,13 @@ import { describe, test } from "node:test";
 import type { TradeCircleScope } from "./circle.ts";
 import type { TradeQuery } from "./params.ts";
 import {
+  PICK_TOKEN_SQL,
+  STARTUP_DRAFT_SQL,
   TRADES_POPULATION_SQL,
+  TRADE_COLUMNS_SQL,
   TRADE_ORDER_SQL,
   TRADE_SORT_SQL,
+  jsonbArraySql,
   tradeCursorSql,
   tradeFilterSql,
 } from "./sql.ts";
@@ -359,5 +363,148 @@ describe("the ordering agrees with the index built for it", () => {
     // The index is partial on exactly these two, so a read that widened past
     // them would silently fall off it.
     assert.match(TRADES_POPULATION_SQL, /t\.type = 'trade' AND t\.status = 'complete'/);
+  });
+});
+
+describe("STARTUP_DRAFT_SQL", () => {
+  // Three decisions are packed into one statement, and each is a way of getting
+  // the startup boundary wrong. None of them is visible to a type.
+
+  test("it takes the league's *first* draft, not its latest", () => {
+    // An inaugural dynasty league runs a rookie draft after its startup in the
+    // same league year; bounding on the later draft's last pick hides months of
+    // real trades between the two.
+    assert.match(STARTUP_DRAFT_SQL, /DISTINCT ON \(d\.league_id\)/);
+    assert.match(STARTUP_DRAFT_SQL, /ORDER BY d\.league_id, d\.start_time ASC NULLS LAST/);
+  });
+
+  test("an undated draft is the fallback rather than the answer", () => {
+    // `NULLS LAST` on an ascending order is what makes a stray draft with no
+    // start time lose to any dated one — and the `draft_id` behind it is what
+    // keeps the pick deterministic when two drafts tie.
+    assert.match(STARTUP_DRAFT_SQL, /NULLS LAST, d\.draft_id/);
+  });
+
+  test("no previous league is what makes a draft a startup, in all three spellings", () => {
+    // A continuing dynasty's draft is a rookie draft — additive to rosters that
+    // already exist — so it bounds nothing and the league is simply absent here.
+    // Sleeper spells the empty case as null, '' and '0' depending on vintage.
+    assert.match(STARTUP_DRAFT_SQL, /coalesce\(l\.previous_league_id, ''\) IN \('', '0'\)/);
+  });
+
+  test("it selects the two columns the boundary is read from, and filters on neither", () => {
+    // `last_picked` alone can't say whether the startup is over, so the status
+    // travels with it; filtering the unusable rows out *here* is what left an
+    // unfinished startup looking like a league with no boundary at all.
+    assert.match(STARTUP_DRAFT_SQL, /d\.last_picked/);
+    assert.match(STARTUP_DRAFT_SQL, /d\.status/);
+    assert.doesNotMatch(STARTUP_DRAFT_SQL, /d\.status\s*=\s*'complete'/);
+    assert.doesNotMatch(STARTUP_DRAFT_SQL, /d\.last_picked IS NOT NULL/);
+  });
+
+  test("it is scoped to the season the board is reading, as $1", () => {
+    // The same parameter the population binds, so the two cannot describe
+    // different seasons within one read.
+    assert.match(STARTUP_DRAFT_SQL, /l\.season = \$1/);
+    assert.deepEqual([...STARTUP_DRAFT_SQL.matchAll(/\$(\d+)/g)].map((m) => m[1]), ["1"]);
+  });
+});
+
+describe("the startup boundary in the population", () => {
+  test("it is a NOT EXISTS, so a league with no startup row is never rejected", () => {
+    // The exact rewrite of the join form it replaced: a trade was kept when
+    // there was no startup row *or* the row permitted it, so it is dropped
+    // exactly when a row exists and rejects it.
+    assert.match(TRADES_POPULATION_SQL, /AND NOT EXISTS \(\s*SELECT 1 FROM startup_draft sd/);
+    assert.match(TRADES_POPULATION_SQL, /sd\.league_id = t\.league_id/);
+  });
+
+  test("a status Sleeper didn't send is inert, not evidence of a running draft", () => {
+    // Hiding a whole league's trades on a missing field is the louder failure,
+    // so unknown reads as finished.
+    assert.match(TRADES_POPULATION_SQL, /sd\.status IS NOT NULL AND sd\.status <> 'complete'/);
+  });
+
+  test("an unfinished startup rejects the league's trades outright", () => {
+    // The running edge is not a boundary: a trade made in the draft room lands
+    // *after* the pick before it, so a moving cutoff lets through the entire
+    // population it exists to drop. Until the startup ends there is no
+    // post-startup market to be reading, and that clause stands alone — not
+    // `AND`ed with a last-pick test that would neutralise it.
+    const clause = TRADES_POPULATION_SQL.slice(TRADES_POPULATION_SQL.indexOf("sd.status IS NOT NULL"));
+    assert.match(clause, /^sd\.status IS NOT NULL AND sd\.status <> 'complete'\)?\s*\n?\s*(--[^\n]*\n\s*)*OR /);
+  });
+
+  test("an absent or zero last pick is no cutoff", () => {
+    // A draft nobody has picked in, or one stored before the column existed,
+    // keeps every trade — which is what makes this inert until the crawler has
+    // re-visited a league, rather than wrong in the meantime. Comparing above
+    // zero reads a zero as the absent value Sleeper means by it, not as 1970.
+    assert.match(TRADES_POPULATION_SQL, /sd\.last_picked IS NOT NULL AND sd\.last_picked > 0/);
+  });
+
+  test("an undated trade is dropped only in a league that has a boundary", () => {
+    // There is no honest side of the cutoff to put it on — the same rule the
+    // date filters and /api/adp follow for an undated draft. It sits *inside*
+    // the last-pick branch, so a league with no boundary keeps it.
+    const branch = TRADES_POPULATION_SQL.slice(
+      TRADES_POPULATION_SQL.indexOf("sd.last_picked > 0"),
+    );
+    assert.match(branch, /coalesce\(t\.status_updated, t\.created\) IS NULL\s*\n?\s*OR/);
+  });
+
+  test("the season is bound, not spliced, and both halves read the same $1", () => {
+    assert.match(TRADES_POPULATION_SQL, /l\.season = \$1/);
+    const used = new Set([...TRADES_POPULATION_SQL.matchAll(/\$(\d+)/g)].map((m) => m[1]));
+    assert.deepEqual([...used], ["1"], "the population binds nothing but the season");
+  });
+});
+
+describe("TRADE_COLUMNS_SQL", () => {
+  test("the epoch columns are cast out of BIGINT's string form", () => {
+    // `pg` hands a bigint back as a *string* to avoid overflowing a JS number,
+    // and `assembleTrade` compares and sorts these — cast in the query rather
+    // than converted in TypeScript, the house rule for a numeric column.
+    assert.match(TRADE_COLUMNS_SQL, /t\.created::float8\s+AS created/);
+    assert.match(TRADE_COLUMNS_SQL, /t\.status_updated::float8\s+AS status_updated/);
+  });
+
+  test("it carries every column a trade is assembled from", () => {
+    // Sleeper's flat maps: `adds` is player → roster, the picks and the budget
+    // carry their own owners, and `roster_ids` is what the sides come from —
+    // dropping any one of them leaves a card with a side it cannot draw.
+    for (const column of [
+      "t.transaction_id",
+      "t.league_id",
+      "t.week",
+      "t.roster_ids",
+      "t.adds",
+      "t.draft_picks",
+      "t.waiver_budget",
+    ]) {
+      assert.ok(TRADE_COLUMNS_SQL.includes(column), `${column} is missing`);
+    }
+  });
+
+  test("it is a column list and nothing else, so any read can interpolate it", () => {
+    assert.ok(!TRADE_COLUMNS_SQL.includes("FROM"));
+    assert.ok(!TRADE_COLUMNS_SQL.includes("$"), "it binds nothing of its own");
+  });
+});
+
+describe("the jsonb reads", () => {
+  test("a column that isn't an array reads as an empty one rather than failing", () => {
+    // `jsonb_array_elements` errors on a scalar, which would fail the whole
+    // board for one league whose column Sleeper wrote as something else.
+    const guarded = jsonbArraySql("t.draft_picks");
+    assert.match(guarded, /jsonb_typeof\(t\.draft_picks\) = 'array'/);
+    assert.match(guarded, /ELSE '\[\]'::jsonb END/);
+  });
+
+  test("a pick token is the season and the round, joined by a hyphen", () => {
+    // The spelling the client's `pickToken` writes; the two ends are a matched
+    // pair with no compiler link, so a filter built one way and read the other
+    // matches nothing rather than erroring.
+    assert.equal(PICK_TOKEN_SQL, `((p->>'season') || '-' || (p->>'round'))`);
   });
 });

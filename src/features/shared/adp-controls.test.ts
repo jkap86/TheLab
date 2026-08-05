@@ -319,6 +319,36 @@ describe("seedFromLeague", () => {
     );
     assert.equal(seeded.boards, "redraft");
   });
+
+  test("a league with no stored settings seeds without throwing", () => {
+    // `settings` is nullable on the payload — a league the crawler stored before
+    // it read the blob — and this is the one shortcut that reaches into it.
+    // Every setting it can't read falls back the way an omitted field does.
+    const seeded = seedFromLeague(defaultAdpControls(SEASON), league({ settings: null }));
+    assert.equal(seeded.boards, "redraft");
+    assert.equal(seeded.bestBall, "no");
+    assert.equal(seeded.superflex, "no", "an unknown lineup is not a superflex one");
+    assert.equal(seeded.scoring, "std", "and an unknown rate is standard scoring");
+    assert.equal(seeded.teams, "12");
+  });
+
+  test("a type Sleeper wrote as a string is not read as dynasty", () => {
+    // The client's own half of the regex-guard rule: only a real number is a
+    // type, so a junk value reads as redraft rather than as whatever it coerces
+    // to. `"2"` would be dynasty under a loose comparison.
+    const seeded = seedFromLeague(
+      defaultAdpControls(SEASON),
+      league({ settings: { type: "2" } }),
+    );
+    assert.equal(seeded.boards, "redraft");
+  });
+
+  test("seeding twice from one league is the same board", () => {
+    // It writes every field it seeds rather than merging, so pressing the
+    // shortcut again can't accumulate a different answer.
+    const once = seedFromLeague(defaultAdpControls(SEASON), league({ total_rosters: 10 }));
+    assert.deepEqual(seedFromLeague(once, league({ total_rosters: 10 })), once);
+  });
 });
 
 describe("rangeBounds", () => {
@@ -484,6 +514,33 @@ describe("seasonOptions", () => {
     const many = ["2022", "2023", "2024", "2025", "2026"].map((season) => ({ season }));
     const options = seasonOptions(many, "2022", SEASON, 3);
     assert.deepEqual(options, ["2026", "2025", "2022", "all"]);
+  });
+
+  test("the pooled board is already last, so selecting it adds no chip", () => {
+    // `"all"` is not a season and has no place in the ordering — the branch that
+    // keeps a selection alive has to skip it or it would displace a real one.
+    assert.deepEqual(seasonOptions(density, "all", SEASON), [
+      "2026",
+      "2025",
+      "2024",
+      "all",
+    ]);
+    const many = ["2022", "2023", "2024", "2025", "2026"].map((season) => ({ season }));
+    assert.deepEqual(seasonOptions(many, "all", SEASON, 3), ["2026", "2025", "2024", "all"]);
+  });
+
+  test("a season crawled but not this one's is still offered", () => {
+    // The list is what there are drafts for, not what a calendar says.
+    assert.deepEqual(seasonOptions([{ season: "2019" }], "2026", SEASON), [
+      "2026",
+      "2019",
+      "all",
+    ]);
+  });
+
+  test("no crawled drafts at all still offers this season and the pool", () => {
+    // The cold-database state, and every spring for a few weeks.
+    assert.deepEqual(seasonOptions([], "2026", SEASON), ["2026", "all"]);
   });
 });
 

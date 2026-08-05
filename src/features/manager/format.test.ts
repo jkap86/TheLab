@@ -10,6 +10,7 @@ import {
   formatWeekRange,
   formatWinPct,
   shortPlayerName,
+  weekCount,
 } from "./format.ts";
 
 describe("formatRecord", () => {
@@ -174,5 +175,21 @@ describe("shortPlayerName", () => {
 
   test("does not treat a leading space as a first name", () => {
     assert.equal(shortPlayerName(" McCaffrey", "RB"), " McCaffrey");
+  });
+});
+
+describe("weekCount", () => {
+  test("spells the count out, singular where it is one", () => {
+    // For a tooltip, where the horizon is written in words beside the number it
+    // qualifies rather than as the `Wk 3–5` the column heading uses.
+    assert.equal(weekCount(1), "1 week");
+    assert.equal(weekCount(3), "3 weeks");
+    assert.equal(weekCount(18), "18 weeks");
+  });
+
+  test("no weeks is plural, since it is not one", () => {
+    // The offseason case, and the one an `n > 1` test would get right by
+    // accident — a projection covering nothing reads as "0 weeks".
+    assert.equal(weekCount(0), "0 weeks");
   });
 });

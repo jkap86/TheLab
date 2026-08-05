@@ -1,17 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { PICK_TOKEN_SQL } from "../../shared/trades/sql.ts";
 import {
   DEFAULT_TRADE_FILTERS,
+  DEFAULT_TRADE_RANGE,
   TRADE_CIRCLES,
+  TRADE_RANGE_PRESETS,
   activeTradeFilterCount,
   pickLabel,
   pickToken,
   tradeCircleSummary,
   tradeFilterSummary,
   tradeRangeBounds,
+  tradeRangeLabel,
 } from "./filters.ts";
-import type { TradeFilters } from "./filters.ts";
+import type { TradeFilters, TradeRange } from "./filters.ts";
 
 const filters = (over: Partial<TradeFilters> = {}): TradeFilters => ({
   ...DEFAULT_TRADE_FILTERS,
@@ -55,6 +59,81 @@ describe("tradeRangeBounds", () => {
       "2026-07-31",
     );
     assert.equal(bounds.to, null);
+  });
+
+  test("a custom range with neither end set bounds nothing", () => {
+    // What the two date inputs read as before either is filled — an unbounded
+    // window rather than a window of zero width.
+    assert.deepEqual(
+      tradeRangeBounds({ preset: "custom", ...OPEN }, "2026-07-31"),
+      OPEN,
+    );
+  });
+
+  test("an unparseable start reads as an open end, never as NaN", () => {
+    // `NaN` as a bound compares false against every trade, which would empty the
+    // board with nothing on screen to say why — so the guard reads it as "not
+    // set". The control is a native date input and only ever emits `""` or a
+    // real date, so this is the belt behind the braces rather than a live path.
+    assert.deepEqual(
+      tradeRangeBounds({ preset: "custom", from: "not a date", to: null }, "2026-07-31"),
+      OPEN,
+    );
+  });
+
+  test("each relative preset is longer than the one before it", () => {
+    // They are one scale, so a reader stepping out through them widens the
+    // board every time — the day counts are off by one from their names on
+    // purpose (seven days *including* today), which is easy to fix into a bug.
+    const today = "2026-07-31";
+    const from = (preset: TradeRange["preset"]) =>
+      tradeRangeBounds({ preset, ...OPEN }, today).from!;
+    assert.ok(from("7d") > from("30d"));
+    assert.ok(from("30d") > from("90d"));
+    assert.equal(tradeRangeBounds({ preset: "all", ...OPEN }, today).from, null);
+  });
+
+  test("the default window is the whole market", () => {
+    // The page opens unnarrowed, which is what makes the circle the thing that
+    // narrows it back to a reader's own leagues.
+    assert.equal(DEFAULT_TRADE_RANGE.preset, "all");
+    assert.deepEqual(tradeRangeBounds(DEFAULT_TRADE_RANGE, "2026-07-31"), OPEN);
+  });
+});
+
+describe("tradeRangeLabel", () => {
+  test("a preset keeps its name, so it stays true as time passes", () => {
+    assert.equal(tradeRangeLabel({ preset: "7d", ...OPEN }), "Last 7 days");
+    assert.equal(tradeRangeLabel({ preset: "all", ...OPEN }), "All time");
+  });
+
+  test("every offered preset has a name to be read by", () => {
+    // The lookup is a `find(...)!`, so a preset added to the type and not to the
+    // table is a crash on the trigger rather than a compiler error.
+    for (const { value } of TRADE_RANGE_PRESETS) {
+      assert.equal(typeof tradeRangeLabel({ preset: value, ...OPEN }), "string");
+    }
+  });
+
+  test("a custom window spells out the ends it has", () => {
+    assert.equal(
+      tradeRangeLabel({ preset: "custom", from: "2026-06-01", to: "2026-06-30" }),
+      "2026-06-01 – 2026-06-30",
+    );
+    assert.equal(
+      tradeRangeLabel({ preset: "custom", from: "2026-06-01", to: null }),
+      "Since 2026-06-01",
+    );
+    assert.equal(
+      tradeRangeLabel({ preset: "custom", from: null, to: "2026-06-30" }),
+      "Through 2026-06-30",
+    );
+  });
+
+  test("a custom window with neither end says what it does, not 'Custom'", () => {
+    // It narrows nothing, and the summary line beside it is read mid-sentence —
+    // "custom" there would name the control rather than the board.
+    assert.equal(tradeRangeLabel({ preset: "custom", ...OPEN }), "All time");
   });
 });
 
@@ -144,5 +223,27 @@ describe("pick tokens", () => {
       pickToken({ season: "2026", round: 2, roster_id: 7 } as never),
       "2026-2",
     );
+  });
+
+  test("the client writes the token the server's SQL builds", () => {
+    // The two ends are a matched pair with no compiler link between them: the
+    // client sends these tokens and `tradeFilterSql` compares them against a
+    // token it assembles in SQL, so a separator changed on one side matches no
+    // trades rather than failing. Read the SQL's own halves back out and build
+    // the same token from them.
+    const [, left, joiner, right] =
+      /\(\(p->>'(\w+)'\) \|\| '(.+)' \|\| \(p->>'(\w+)'\)\)/.exec(PICK_TOKEN_SQL) ?? [];
+    const pick = { season: "2026", round: 1 };
+    assert.equal(
+      `${pick[left as "season"]}${joiner}${pick[right as "round"]}`,
+      pickToken(pick),
+    );
+  });
+
+  test("a round past the teens still reads as an ordinal", () => {
+    // Startups run 25 rounds, so the label's exception window is reachable from
+    // a real board rather than only from an arithmetic edge.
+    assert.equal(pickLabel("2026-11"), "2026 11th");
+    assert.equal(pickLabel("2026-21"), "2026 21st");
   });
 });

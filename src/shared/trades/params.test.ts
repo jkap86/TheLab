@@ -83,6 +83,22 @@ describe("parseTradeQuery", () => {
     assert.equal(parse("limit=0").limit, DEFAULT_TRADE_PAGE_SIZE);
     assert.equal(parse("limit=abc").limit, DEFAULT_TRADE_PAGE_SIZE);
   });
+
+  test("the cursor is carried through opaque, and absent is a first page", () => {
+    // It is the keyset resume token, decoded a layer further in — so nothing
+    // here may normalise or validate it. A cursor silently dropped restarts
+    // every page at the top of the board, which as an infinite scroll is the
+    // same twenty trades appended forever rather than an error.
+    assert.equal(parse("cursor=eyJhdCI6MSwiaWQiOiJ0OSJ9").cursor, "eyJhdCI6MSwiaWQiOiJ0OSJ9");
+    assert.equal(parse("").cursor, null);
+  });
+
+  test("a cursor is not a narrowing, so it doesn't move the total off the stored row", () => {
+    // Paging deeper into the board asks the same question — counting the
+    // population again per page is exactly what precomputing it avoided.
+    assert.equal(isUnnarrowed(parse("cursor=abc")), true);
+    assert.equal(isUnnarrowed(parse("limit=50")), true);
+  });
 });
 
 describe("what counts as narrowed", () => {
