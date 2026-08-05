@@ -25,43 +25,11 @@ import {
 } from "../league-filters";
 import type { ManagerLeague } from "@/shared/manager";
 
-/**
- * The two ways this trigger is mounted, and the only thing that varies between
- * them.
- *
- * A shared control with two looks is the drift this component exists to
- * prevent, so what a seat may change is *shape* and nothing else: the material
- * (`.lab-chip` / `.lab-chip-on`), the icon, the word and the count are the same
- * part in both. What differs is the edge it is seated against.
- *
- * `free` stands on a page — the trades ledge, where nothing bounds it, so it is
- * the pill `.lab-chip` was written for. `corner` is machined into the bottom
- * right of the manager header's plate: two of its corners are square because
- * they meet the plate's own edges, the outer one takes the plate's `rounded-2xl`
- * so it traces that corner exactly, and the inner one is the small return the
- * plate's top tabs already use. It runs at those tabs' type scale rather than
- * the pill's for a plain geometric reason — the plate's bottom padding is what
- * holds it clear of the win-pct dial above it, and at `text-sm` the part is
- * 32px tall and crosses the dial instead.
- */
-const SEATS = {
-  free: {
-    key: "gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm",
-    icon: "h-3.5 w-3.5",
-    badge: "px-1.5 py-0.5 text-[11px]",
-  },
-  corner: {
-    key: "gap-1.5 rounded-br-2xl rounded-tl-lg py-1 pl-3 pr-3.5 text-[11px] leading-none",
-    icon: "h-3 w-3",
-    // `py-px`, so the badge is no taller than the icon beside it and the key is
-    // the same 20px narrowed or not. A trigger seated in an edge must not change
-    // height with its own state: it is anchored to that edge, so growing moves
-    // its top into whatever the plate's bottom padding was holding it clear of.
-    badge: "px-1 py-px text-[10px]",
-  },
-} as const;
-
-type SeatName = keyof typeof SEATS;
+// The seat table and the placeholder that stands in for this key live in
+// `./league-filters-seat`, not here: this module is behind a `dynamic()` at both
+// its call sites, so a fallback declared in it would drag the dialog back into
+// the static graph and split nothing. See that file's own note.
+import { SEATS, type SeatName } from "./league-filters-seat";
 
 /**
  * The league filters, behind a modal.

@@ -5,7 +5,7 @@ import { type ReactNode, useMemo, useState } from "react";
 
 import {
   HeaderSlot,
-  LeagueFiltersModal,
+  LeagueFiltersPlaceholder,
   PageShell,
   activeFilterCount,
   adpNarrowingCount,
@@ -40,6 +40,38 @@ import { subjectSummary } from "../subjects";
 const AdpDrawer = dynamic(
   () => import("@/features/shared/ui/adp-drawer").then((m) => m.AdpDrawer),
   { ssr: false },
+);
+
+/**
+ * The league filters, loaded the first time this tab renders a list to narrow.
+ *
+ * Unlike the board above there is no visible half to keep back: the component
+ * *is* a trigger and a `<dialog>`, so the seam is the whole of it and the
+ * fallback is what holds the key's box in the plate's corner until the chunk
+ * lands. That box is load-bearing here — the plate carries the overhang's margin
+ * only when it has a key to overhang — so a fallback of nothing would shift the
+ * pinned header on hydration.
+ *
+ * The module path is named directly rather than the `@/features/shared` barrel,
+ * which is the half of this split that is invisible in review: re-exported from
+ * there the dialog joined the static graph of every page importing anything from
+ * that barrel, and this `dynamic()` deferred bytes the browser had already been
+ * sent.
+ */
+const LeagueFiltersModal = dynamic(
+  () =>
+    import("@/features/shared/ui/league-filters-modal").then(
+      (m) => m.LeagueFiltersModal,
+    ),
+  {
+    ssr: false,
+    // "Filters" is this seat's own word — the modal's default, since the league
+    // filters are the only such control on a manager tab, where the trades ledge
+    // has to say "Leagues" to tell its two apart. The placeholder stands in for
+    // that key's box, so it has to wear the same word or the corner changes
+    // width when the chunk lands.
+    loading: () => <LeagueFiltersPlaceholder label="Filters" seat="corner" />,
+  },
 );
 import { ManagerHeader, type HeaderStat } from "./manager-header";
 import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";

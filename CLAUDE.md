@@ -1219,6 +1219,23 @@ stops holding, a comment saying it does would not have caught it.
     ```
 
     A route with no button for the part must not name its chunk.
+
+    **The barrel half came back for the second dialog, which is the tell that
+    the rule wants stating as a rule and not as a story about the drawer.**
+    `LeagueFiltersModal` was re-exported from that same barrel while the trades
+    page `dynamic()`'d it, so six prerendered pages carried a 55KB chunk for a
+    dialog only two routes have a trigger for — and the `dynamic()` deferred
+    bytes the browser had already been sent. The fix is the drawer's, twice
+    over: the barrel exports the placeholder and never the dialog, and both call
+    sites name the module path. What is new is the **fallback**, because this
+    component is the trigger as well as the dialog, so splitting it takes the
+    key off the page until the chunk lands. A fallback declared in the dialog's
+    own module would pull that module back into the static graph and split
+    nothing, so `ui/league-filters-seat.tsx` holds the seat table and the
+    placeholder, the dialog imports *it*, and the arrow never points back. That
+    is also what keeps one spelling of the key's geometry: the placeholder is
+    standing in for its exact box, so a second copy of those classes is a reflow
+    waiting for someone to edit one of them.
   - **The board holds its previous pages while a new filter set lands**
     (`keepPreviousData`). It is what makes committing live affordable: a filter
     change is a *different key* with nothing in it, so without this every press

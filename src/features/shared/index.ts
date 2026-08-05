@@ -98,5 +98,14 @@ export { ToolsMenu } from "./ui/tools-menu";
 export { ToolIcon } from "./ui/tool-icon";
 export { Avatar } from "./ui/avatar";
 export { FlaskLoader } from "./ui/flask-loader";
-export { LeagueFiltersModal } from "./ui/league-filters-modal";
+// The placeholder only, for the same reason `AdpDrawer` is absent above:
+// `LeagueFiltersModal` is loaded through `dynamic()` at both its call sites, and
+// re-exporting it here put it in the static graph of every page importing
+// anything from this barrel — `/tools`, `/picktracker` and `/lineupchecker` were
+// each shipping a filters dialog they have no trigger for, and the `dynamic()`
+// on the trades page bought nothing because the bytes arrived anyway. The
+// placeholder holds the key's box while that chunk loads and knows nothing about
+// the dialog.
+export { LeagueFiltersPlaceholder } from "./ui/league-filters-seat";
+export type { SeatName } from "./ui/league-filters-seat";
 export type { FlaskVariant, FlaskTone } from "./ui/flask-loader";

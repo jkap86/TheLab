@@ -7,6 +7,7 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   FlaskLoader,
   HeaderSlot,
+  LeagueFiltersPlaceholder,
   activeFilterCount,
   adpNarrowingCount,
   adpQueryString,
@@ -60,7 +61,7 @@ const LeagueFiltersModal = dynamic(
   // "Leagues" is the trigger's own word — the placeholder is standing in for its
   // box, so it has to wear the same label or the row is a different width for
   // the moment the chunk is loading.
-  { ssr: false, loading: () => <TriggerPlaceholder label="Leagues" /> },
+  { ssr: false, loading: () => <LeagueFiltersPlaceholder label="Leagues" /> },
 );
 
 /**
@@ -419,17 +420,6 @@ function activeTradeSelection(filters: TradeFilters): boolean {
  * the real button arrives would move the list down the page — which the
  * virtualizer would then have to re-measure and re-lay-out from.
  */
-function TriggerPlaceholder({ label }: { label: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="lab-chip inline-flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm font-semibold text-foreground/40"
-    >
-      {label}
-    </span>
-  );
-}
-
 /** Stable empties, so a render before the first page doesn't change identity. */
 const EMPTY_TRADES: readonly never[] = [];
 const EMPTY_MAP = {};
