@@ -78,6 +78,13 @@ src/shared/    Domain logic, one folder per concern.
   decide per read whether a failure is fatal. `/api/league/[leagueId]` catches
   its projections read and sends `outlook: null` — the rosters are the point of
   that route and the lineups are a bonus on top.
+  **The question is per read, not per `Promise.all`, and phrasing it around the
+  parallel case is how one route missed it.** `/api/user/[username]/ranks` reads
+  sequentially on purpose — which rosters to project is the first read's answer —
+  so there was no `Promise.all` to prompt the question, and a projections failure
+  500'd a payload whose other two ranks were already in hand and never depended
+  on it. Dependent reads earn the same judgement: the second one failing is not
+  automatically fatal just because it had to wait for the first.
 - Aliases: `@/*` → `src/*`, `@thelab/http` → the configured axios instance.
 
 ## Anything crossing the network
