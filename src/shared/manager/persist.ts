@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { bulkInsert, jsonb as j, pool, withTransaction } from "@/shared/db";
 import type { SleeperLeague } from "@/shared/sleeper";
 
+import { dedupeBy } from "./dedupe";
 import type { LeagueGraph } from "./graph";
 import { dedupeMatchups } from "./matchups";
 
@@ -47,6 +48,20 @@ export async function persistGoneLeagues(
 async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<void> {
   const l = g.league;
 
+  // A refused replacement is said out loud, because it is otherwise invisible:
+  // the sync reports this league as synced either way, and the answer that
+  // tripped the guard arrived as a 200. Warned rather than thrown — what is
+  // stored is still consistent, and the next pass re-fetches.
+  const empty = [
+    g.users.length === 0 ? "users" : null,
+    g.rosters.length === 0 ? "rosters" : null,
+  ].filter((name): name is string => name !== null);
+  if (empty.length > 0) {
+    console.warn(
+      `[leagues] ${l.league_id} answered with no ${empty.join(" and ")}; keeping what is stored.`,
+    );
+  }
+
   await bulkInsert(client, {
     table: "leagues",
     columns: [
@@ -73,52 +88,84 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
         gone_at = NULL`,
   });
 
-  // Child collections are replaced wholesale so the DB mirrors Sleeper.
-  await client.query(`DELETE FROM league_users WHERE league_id = $1`, [l.league_id]);
-  await bulkInsert(client, {
-    table: "league_users",
-    columns: [
-      "league_id", "user_id", "display_name", "avatar", "team_name", "is_owner",
-      "is_bot", "metadata",
-    ],
-    rows: g.users,
-    values: (u) => [
-      l.league_id, u.user_id, u.display_name, u.avatar,
-      u.metadata?.team_name ?? null, u.is_owner, u.is_bot, j(u.metadata),
-    ],
-  });
+  // Child collections are replaced wholesale so the DB mirrors Sleeper, and each
+  // is deduplicated on its own primary key first — {@link dedupeBy} has why a
+  // repeat inside one INSERT costs this league's whole transaction rather than
+  // being absorbed by a conflict clause. The keys drop `league_id`, which is
+  // constant across one graph.
+  //
+  // **Users and rosters are replaced only on a non-empty fetch, and the rule
+  // behind that guard is whether a collection can legitimately be empty for a
+  // live league.** These two cannot — Sleeper ships every league with both — so
+  // `[]` here is a failed request wearing a successful answer: `sleeperGet`
+  // folds Sleeper's 200-with-null into the fallback without throwing, so nothing
+  // upstream raises and the transaction would commit the wipe. What that costs
+  // is not cosmetic: an emptied `rosters` drops the league out of every member's
+  // list, since `FIELDED_A_TEAM_SQL` reads a roster to decide it was fielded.
+  // The guard can only ever keep rows a previous sync wrote — a league that
+  // genuinely has none has none stored either, so the skipped delete had nothing
+  // to delete.
+  //
+  // Traded picks, transactions and matchups are *not* guarded, for the same
+  // rule read the other way: each empties legitimately (a redraft league trades
+  // no picks, a quiet week has no moves), so refusing to clear them would leave
+  // rows that quietly look current — the opposite failure, and the one the
+  // upsert-then-delete-what's-missing rule exists to prevent.
+  if (g.users.length > 0) {
+    await client.query(`DELETE FROM league_users WHERE league_id = $1`, [l.league_id]);
+    await bulkInsert(client, {
+      table: "league_users",
+      columns: [
+        "league_id", "user_id", "display_name", "avatar", "team_name", "is_owner",
+        "is_bot", "metadata",
+      ],
+      rows: dedupeBy(g.users, (u) => u.user_id),
+      values: (u) => [
+        l.league_id, u.user_id, u.display_name, u.avatar,
+        u.metadata?.team_name ?? null, u.is_owner, u.is_bot, j(u.metadata),
+      ],
+    });
+  }
 
-  await client.query(`DELETE FROM rosters WHERE league_id = $1`, [l.league_id]);
-  await bulkInsert(client, {
-    table: "rosters",
-    columns: [
-      "league_id", "roster_id", "owner_id", "players", "starters", "reserve",
-      "taxi", "settings", "metadata",
-    ],
-    rows: g.rosters,
-    values: (r) => [
-      l.league_id, r.roster_id, r.owner_id, j(r.players), j(r.starters),
-      j(r.reserve), j(r.taxi), j(r.settings), j(r.metadata),
-    ],
-  });
+  if (g.rosters.length > 0) {
+    await client.query(`DELETE FROM rosters WHERE league_id = $1`, [l.league_id]);
+    await bulkInsert(client, {
+      table: "rosters",
+      columns: [
+        "league_id", "roster_id", "owner_id", "players", "starters", "reserve",
+        "taxi", "settings", "metadata",
+      ],
+      rows: dedupeBy(g.rosters, (r) => String(r.roster_id)),
+      values: (r) => [
+        l.league_id, r.roster_id, r.owner_id, j(r.players), j(r.starters),
+        j(r.reserve), j(r.taxi), j(r.settings), j(r.metadata),
+      ],
+    });
+  }
 
   await client.query(`DELETE FROM traded_picks WHERE league_id = $1`, [l.league_id]);
   await bulkInsert(client, {
     table: "traded_picks",
     columns: ["league_id", "season", "round", "roster_id", "owner_id", "previous_owner_id"],
-    rows: g.tradedPicks,
+    rows: dedupeBy(g.tradedPicks, (p) => `${p.season}:${p.round}:${p.roster_id}`),
     values: (p) => [l.league_id, p.season, p.round, p.roster_id, p.owner_id, p.previous_owner_id],
   });
 
-  // Deleting drafts cascades to draft_picks, so re-insert both.
-  await client.query(`DELETE FROM drafts WHERE league_id = $1`, [l.league_id]);
+  // **Drafts are upserted rather than replaced, and that is what takes the
+  // cascade out of the picture.** `DELETE FROM drafts` cascades to
+  // `draft_picks`, so a drafts fetch that came back empty took the league's ADP
+  // corpus with it — and for a league Sleeper has since deleted that is
+  // permanent, because the crawler tombstones it and never fetches its graph
+  // again. Those picks are exactly what `gone_at` keeps the row around to
+  // preserve. Nothing wanted the delete anyway: Sleeper does not drop a draft
+  // from a league, and one it stopped listing is the row worth keeping.
   await bulkInsert(client, {
     table: "drafts",
     columns: [
       "draft_id", "league_id", "season", "status", "type", "start_time",
       "last_picked", "draft_order", "settings", "metadata",
     ],
-    rows: g.drafts,
+    rows: dedupeBy(g.drafts, (d) => d.draft_id),
     values: (d) => [
       d.draft_id, l.league_id, d.season, d.status, d.type, d.start_time,
       // Coalesced because Sleeper's draft shape is not versioned: a build that
@@ -128,13 +175,33 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
       d.last_picked ?? null,
       j(d.draft_order), j(d.settings), j(d.metadata),
     ],
+    onConflict: `(draft_id) DO UPDATE SET
+        league_id = EXCLUDED.league_id, season = EXCLUDED.season,
+        status = EXCLUDED.status, type = EXCLUDED.type,
+        start_time = EXCLUDED.start_time, last_picked = EXCLUDED.last_picked,
+        draft_order = EXCLUDED.draft_order, settings = EXCLUDED.settings,
+        metadata = EXCLUDED.metadata, updated_at = now()`,
   });
-  await bulkInsert(client, {
-    table: "draft_picks",
-    columns: ["draft_id", "pick_no", "round", "roster_id", "player_id", "picked_by", "metadata"],
-    rows: g.draftPicks,
-    values: (p) => [p.draft_id, p.pick_no, p.round, p.roster_id, p.player_id, p.picked_by, j(p.metadata)],
-  });
+
+  // Picks are replaced per draft that actually returned some, rather than for
+  // every draft on the league: a pick is never un-picked, so a draft answering
+  // with none is either pre-draft (nothing stored to lose) or a failed fetch
+  // (everything to lose), and neither wants its stored picks cleared. Scoping
+  // the delete to the drafts present in the payload is what keeps one draft's
+  // failure from emptying another's.
+  const pickedDraftIds = [...new Set(g.draftPicks.map((p) => p.draft_id))];
+  if (pickedDraftIds.length > 0) {
+    await client.query(
+      `DELETE FROM draft_picks WHERE draft_id = ANY($1::varchar[])`,
+      [pickedDraftIds],
+    );
+    await bulkInsert(client, {
+      table: "draft_picks",
+      columns: ["draft_id", "pick_no", "round", "roster_id", "player_id", "picked_by", "metadata"],
+      rows: dedupeBy(g.draftPicks, (p) => `${p.draft_id}:${p.pick_no}`),
+      values: (p) => [p.draft_id, p.pick_no, p.round, p.roster_id, p.player_id, p.picked_by, j(p.metadata)],
+    });
+  }
 
   // Replace only the weeks we re-fetched; earlier weeks (frozen once past) stay.
   await client.query(
@@ -148,13 +215,27 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
       "status_updated", "roster_ids", "consenter_ids", "adds", "drops",
       "draft_picks", "waiver_budget", "settings", "metadata",
     ],
-    rows: g.transactions,
+    rows: dedupeBy(g.transactions, (t) => t.transaction_id),
     values: (t) => [
       t.transaction_id, l.league_id, t.type, t.status, t.leg, t.creator,
       t.created, t.status_updated, j(t.roster_ids), j(t.consenter_ids),
       j(t.adds), j(t.drops), j(t.draft_picks), j(t.waiver_budget),
       j(t.settings), j(t.metadata),
     ],
+    // The delete above covers the weeks this sync re-fetched, and the primary
+    // key does not mention a week: a transaction arriving under a different one
+    // from the copy already stored — a null `leg`, or a refresh window that has
+    // since moved past where it was filed — meets a row the delete never saw.
+    // The clause makes the write idempotent whatever week the stored copy wore.
+    onConflict: `(transaction_id) DO UPDATE SET
+        league_id = EXCLUDED.league_id, type = EXCLUDED.type,
+        status = EXCLUDED.status, week = EXCLUDED.week,
+        creator = EXCLUDED.creator, created = EXCLUDED.created,
+        status_updated = EXCLUDED.status_updated, roster_ids = EXCLUDED.roster_ids,
+        consenter_ids = EXCLUDED.consenter_ids, adds = EXCLUDED.adds,
+        drops = EXCLUDED.drops, draft_picks = EXCLUDED.draft_picks,
+        waiver_budget = EXCLUDED.waiver_budget, settings = EXCLUDED.settings,
+        metadata = EXCLUDED.metadata, updated_at = now()`,
   });
 
   // Same rule as transactions, for the same reason: only the weeks this sync

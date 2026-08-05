@@ -255,6 +255,32 @@ one transaction** — an upsert alone leaves rows that quietly look current
 (`shared/projections/sync`). Guard the delete on a non-empty fetch, so an
 upstream hiccup returning nothing can't empty the slice.
 
+**Which slices earn that guard is decided by whether one can legitimately be
+empty, and the league graph carries both answers.** `manager/persist` replaces
+seven collections; users and rosters can never be empty for a live league, so
+`[]` there is a failed request wearing a successful answer — `sleeperGet` folds
+Sleeper's 200-with-null into the fallback without throwing, so nothing raises
+and the transaction commits the wipe. An emptied `rosters` drops the league out
+of every member's list, since `FIELDED_A_TEAM_SQL` reads a roster to decide one
+was fielded. Traded picks, transactions and matchups *do* empty legitimately — a
+redraft league trades no picks, a quiet week has no moves — so guarding those
+would leave rows that quietly look current, which is the failure the rule above
+is about. The guard is free when the answer is honest: a league that genuinely
+has none of a collection has none stored either, so the skipped delete had
+nothing to delete. A refusal is logged, because the sync reports the league as
+synced either way and the answer that tripped it arrived as a 200.
+
+**A cascading delete is a destructive write in a table you did not name.**
+`DELETE FROM drafts` cascades to `draft_picks`, so an empty drafts fetch used to
+take the league's ADP corpus with it — permanently for a league Sleeper has
+since deleted, since the crawler tombstones it and never fetches its graph
+again, and those picks are exactly what `gone_at` keeps the row around to
+preserve. Drafts are **upserted** rather than replaced (Sleeper does not drop a
+draft from a league, and one it stopped listing is the row worth keeping), and
+picks are replaced per draft that actually returned some — scoping that delete
+to the drafts present in the payload is what stops one draft's failed fetch from
+emptying another's.
+
 `NUMERIC` columns come back from `pg` as **strings**, not numbers. Cast in the
 query (`pts_ppr::float8`) rather than converting in TypeScript, so a value is a
 number by the time it leaves the query layer.
@@ -263,8 +289,18 @@ number by the time it leaves the query layer.
 refuses the whole command — "cannot affect row a second time" — when one
 statement carries the same key twice, so the clause covers `bulkInsert`'s chunk
 boundaries and nothing inside a chunk. A payload whose natural key could repeat
-is deduplicated in code first (`manager/matchups`), because what a duplicate
-costs otherwise is the league's entire sync transaction, every collection in it.
+is deduplicated in code first — `dedupeBy` in `manager/dedupe`, which every keyed
+collection in the league graph goes through and which `manager/matchups` spells
+the roster-week key for — because what a duplicate costs otherwise is the
+league's entire sync transaction, every collection in it, and it repeats on every
+retry since the payload is what triggers it. Composite keys are joined with `:`,
+which is safe only because no part can carry the separator (Sleeper's ids are
+digit strings, its seasons four-digit years); a key with a free-text part wants a
+different join. **A conflict clause is still worth having where the delete cannot
+cover the insert**: `transactions` is replaced by week and keyed by
+`transaction_id` alone, so a transaction arriving under a different week from the
+copy stored — a null `leg`, or a refresh window that has moved past where it was
+filed — meets a row the delete never saw.
 
 Schema: nested Sleeper payloads (settings, scoring, metadata, id arrays) stay
 `JSONB`; promote a column only when it gets queried or joined on. Migrations are
