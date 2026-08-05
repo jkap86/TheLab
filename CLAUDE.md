@@ -711,8 +711,16 @@ three categories, the window never joining the alternatives. Two of them reach
 past the module: `TRADE_SORT_SQL` is checked against the migration that indexes
 that very expression (no type can carry that agreement, and breaking it turns an
 index walk into a season-wide sort while still answering), and the probe for the
-`OR` join deliberately avoids the managers fragment, which carries an internal
-`OR` of its own for a roster id spelled as a number or a string.
+`OR` join is written over players and picks, the two categories that emit no `OR`
+of their own, so the one being asserted can only have come from the mode.
+**Two more pin agreements that are otherwise invisible.** The managers filter and
+the `traders` circle are asserted to be *one* fragment, because two spellings of
+"was this manager in this trade" is how the slow one survived unnoticed. And
+`tradeScopeSql` + `tradeNarrowingSql` are asserted to concatenate to
+`tradeFilterSql` — same string, same `$n` for the same value — since the board
+reads the whole and a first page's two denominators read the halves, and halves
+that are not exactly the whole leave a count describing rows the list doesn't
+show.
 
 `shared/trades/pick-slots` is pure for a second reason — it holds the key
 the slots are stored under, and the client deep-imports it the way it reaches
@@ -1156,7 +1164,7 @@ stops holding, a comment saying it does would not have caught it.
     is one. Their real leagues arrive anyway, through the leaguemates still in
     them.
   - **The leaguemate-trades predicate is driven by the trade's own roster ids, and
-    that is a planner decision.** Written the way the managers filter is —
+    that is a planner decision.** Written from `rosters` inwards —
     `FROM rosters WHERE league_id = t.league_id AND owner_id = ANY(…)` — the
     subquery is decorrelatable, and against a few hundred leaguemates the planner
     takes it: hash join, whole population, top-N heapsort, the same cost on page 40
@@ -1164,6 +1172,20 @@ stops holding, a comment saying it does would not have caught it.
     pulled up. Measured over 150k transactions with 850 leaguemates: **205ms that
     way, 9ms this way**, and only this way is flat with depth. All four circles are
     ordered index walks off `transactions_trade_keyset_idx`.
+    **The trade filters' own managers selection is the same question of a
+    different id list, and it spent a while being the copy still written the
+    losing way** — which made it the slowest narrowing on the board, at 347ms a
+    page against 30ms over 1.2M transactions, for the exact reason above. Both
+    read `tradedByOwnersSql` now. Reading roster ids through
+    `jsonb_array_elements_text` is also what makes the two forgiving of Sleeper
+    sending a roster id as a number or as a string, which the old spelling paid
+    for with an explicit `@>` against both — so the fragment is shorter as well
+    as faster. It has one consequence worth knowing: a `roster_ids` that is a
+    bare jsonb scalar rather than an array now matches nothing, where the
+    containment form matched it. That is the reading the facet menu, the circle
+    and `assembleTrade` already took of the same column, so the filter joined
+    them rather than diverging; Sleeper does not send it (a trade names at least
+    two rosters).
   - **An empty circle is an empty board, not an unnarrowed one.** An account this
     database has never synced has no leagues and no leaguemates; folding that back
     to "not narrowing" would answer a question nobody asked. The page's empty state
@@ -1240,7 +1262,14 @@ stops holding, a comment saying it does would not have caught it.
     second timer for one query). It was a `count(*)` over the population on every
     request, which pagination would have turned into one per *page*. Narrowed
     counts still can't be stored — the space is unbounded — so they run once per
-    filter set, on a first page only. The freshness gate stamps the *attempt*,
+    filter set, on a first page only. **And a first page states two of them —
+    "N of M" — which is one pass, not two.** The scope population (the league
+    filters and the circle, the window and the selection lifted out) is a
+    superset of the query's by construction, so `countTradeTotals` counts the
+    wider one and reads the narrower off an aggregate `FILTER` over the same
+    scan. Two counts in parallel already waited on the slower, which is always
+    the scope one, so what this buys is the other scan and a pooled connection
+    rather than latency — the resource that runs out first here. The freshness gate stamps the *attempt*,
     the `projection_week_syncs` rule: a season with no trades counts zero, and a
     gate reading the count itself would find it unsynced and recount every tick
     forever. The client clamps a stored total up to what it has loaded, since a

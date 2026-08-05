@@ -22,19 +22,63 @@ export type {
   ManagerLeaguemates,
 };
 
-type Row = {
+/**
+ * The columns a {@link ManagerLeague} is built from, aliased `l`.
+ *
+ * Three reads projected this list by hand and mapped it by hand — the two here
+ * and the trades board's own league list, which is the same shape for a caller
+ * that has no manager. A fourth column added to the type is one edit now rather
+ * than three, and the compiler cannot see the other two.
+ *
+ * The record is deliberately **not** in it: it comes off a join to the manager's
+ * own roster, and only one of the three callers has a manager to join to.
+ */
+export const LEAGUE_COLUMNS_SQL = `
+  l.league_id, l.name, l.season, l.status, l.total_rosters, l.avatar,
+  l.settings, l.roster_positions, l.scoring_settings`;
+
+/** One row of {@link LEAGUE_COLUMNS_SQL}. */
+export type LeagueRow = {
   league_id: string;
   name: string;
   season: string;
   status: string;
   total_rosters: number;
   avatar: string | null;
-  wins: string | null;
-  losses: string | null;
-  ties: string | null;
   settings: Record<string, unknown> | null;
   roster_positions: string[] | null;
   scoring_settings: Record<string, number> | null;
+};
+
+/**
+ * A {@link LeagueRow} as the league shape every reader of these routes holds.
+ *
+ * `record` is a separate argument rather than a column of the row, because it is
+ * a *manager's* record in a league and two of the three callers are asking about
+ * leagues with no manager in the question — see {@link getLeaguesByIds}.
+ */
+export function toManagerLeague(
+  r: LeagueRow,
+  record: ManagerLeague["record"] = null,
+): ManagerLeague {
+  return {
+    league_id: r.league_id,
+    name: r.name,
+    season: r.season,
+    status: r.status,
+    total_rosters: r.total_rosters,
+    avatar: r.avatar,
+    record,
+    settings: r.settings,
+    roster_positions: r.roster_positions,
+    scoring_settings: r.scoring_settings,
+  };
+}
+
+type Row = LeagueRow & {
+  wins: string | null;
+  losses: string | null;
+  ties: string | null;
 };
 
 /**
@@ -152,9 +196,7 @@ export async function getManagerLeagues(
   season: string,
 ): Promise<ManagerLeague[]> {
   const { rows } = await pool.query<Row>(
-    `SELECT
-        l.league_id, l.name, l.season, l.status, l.total_rosters, l.avatar,
-        l.settings, l.roster_positions, l.scoring_settings,
+    `SELECT ${LEAGUE_COLUMNS_SQL},
         mr.settings->>'wins'   AS wins,
         mr.settings->>'losses' AS losses,
         mr.settings->>'ties'   AS ties
@@ -171,14 +213,9 @@ export async function getManagerLeagues(
     [userId, season],
   );
 
-  return rows.map((r) => ({
-    league_id: r.league_id,
-    name: r.name,
-    season: r.season,
-    status: r.status,
-    total_rosters: r.total_rosters,
-    avatar: r.avatar,
-    record:
+  return rows.map((r) =>
+    toManagerLeague(
+      r,
       r.wins == null && r.losses == null && r.ties == null
         ? null
         : {
@@ -186,10 +223,8 @@ export async function getManagerLeagues(
             losses: Number(r.losses ?? 0),
             ties: Number(r.ties ?? 0),
           },
-    settings: r.settings,
-    roster_positions: r.roster_positions,
-    scoring_settings: r.scoring_settings,
-  }));
+    ),
+  );
 }
 
 /**
@@ -270,28 +305,15 @@ export async function getLeaguesByIds(
 ): Promise<ManagerLeague[]> {
   if (leagueIds.length === 0) return [];
 
-  const { rows } = await pool.query<Row>(
-    `SELECT
-        l.league_id, l.name, l.season, l.status, l.total_rosters, l.avatar,
-        l.settings, l.roster_positions, l.scoring_settings
+  const { rows } = await pool.query<LeagueRow>(
+    `SELECT ${LEAGUE_COLUMNS_SQL}
      FROM leagues l
      WHERE l.league_id = ANY($1::varchar[])
      ORDER BY l.name`,
     [[...leagueIds]],
   );
 
-  return rows.map((r) => ({
-    league_id: r.league_id,
-    name: r.name,
-    season: r.season,
-    status: r.status,
-    total_rosters: r.total_rosters,
-    avatar: r.avatar,
-    record: null,
-    settings: r.settings,
-    roster_positions: r.roster_positions,
-    scoring_settings: r.scoring_settings,
-  }));
+  return rows.map((r) => toManagerLeague(r));
 }
 
 /**
@@ -453,11 +475,7 @@ export async function getManagerLeagueRosters(
       starters: r.starters ?? [],
       reserve: r.reserve ?? [],
       taxi: r.taxi ?? [],
-      record: {
-        wins: Number(s.wins ?? 0),
-        losses: Number(s.losses ?? 0),
-        ties: Number(s.ties ?? 0),
-      },
+      record: foldRecord(s),
       fpts: foldPoints(s.fpts, s.fpts_decimal),
     });
   }
@@ -511,6 +529,27 @@ type TeamRow = {
 /** Sleeper stores a whole-point count plus a separate hundredths field. */
 function foldPoints(whole: unknown, decimal: unknown): number {
   return Number(whole ?? 0) + Number(decimal ?? 0) / 100;
+}
+
+/**
+ * A team's record out of a roster's `settings` blob.
+ *
+ * Zero-filled per field, which is the right reading *here* and not everywhere:
+ * this is a roster that exists, so an absent `wins` is a season not yet played
+ * rather than a league nobody fielded a team in. The null-record distinction
+ * lives one level up, in {@link getManagerLeagues}, where the roster itself can
+ * be missing.
+ */
+function foldRecord(settings: Record<string, unknown>): {
+  wins: number;
+  losses: number;
+  ties: number;
+} {
+  return {
+    wins: Number(settings.wins ?? 0),
+    losses: Number(settings.losses ?? 0),
+    ties: Number(settings.ties ?? 0),
+  };
 }
 
 /**
@@ -577,11 +616,7 @@ export async function getLeagueDetail(
             team_name: r.team_name,
           }
         : null,
-      record: {
-        wins: Number(s.wins ?? 0),
-        losses: Number(s.losses ?? 0),
-        ties: Number(s.ties ?? 0),
-      },
+      record: foldRecord(s),
       fpts: foldPoints(s.fpts, s.fpts_decimal),
       fpts_against: foldPoints(s.fpts_against, s.fpts_against_decimal),
       players: r.players ?? [],

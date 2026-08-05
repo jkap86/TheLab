@@ -53,6 +53,17 @@ export const STARTUP_DRAFT_SQL = `
    ORDER BY d.league_id, d.start_time ASC NULLS LAST, d.draft_id`;
 
 /**
+ * {@link STARTUP_DRAFT_SQL} as the `WITH` header every read here opens with.
+ *
+ * Four queries wrote out the same clause, which is four chances for one of them
+ * to name the CTE differently from the population fragment that reads it — and
+ * that failure is a syntax error in only one of the two directions. The facets
+ * read appends a second CTE to it, so this is the header and not the whole
+ * `WITH`.
+ */
+export const STARTUP_DRAFT_CTE = `WITH startup_draft AS (${STARTUP_DRAFT_SQL})`;
+
+/**
  * The season/status/startup half of the `WHERE` — what is on this board before
  * a reader narrows anything.
  *
@@ -162,6 +173,56 @@ export function tradeFilterSql(
   params: unknown[],
   circle: TradeCircleScope | null = null,
 ): string {
+  // The two halves in the order they have always been emitted, so the string
+  // this returns is byte-for-byte what it returned before the split and the
+  // params land on the same indices.
+  return join([
+    ...tradeScopeClauses(query, params, circle),
+    ...tradeNarrowingClauses(query, params),
+  ]);
+}
+
+/**
+ * The *scope* half of the narrowing: the league filters' answer and the
+ * reader's circle, and nothing they picked off a list of trades.
+ *
+ * It is the population the page's headline reads "N of M" against — see
+ * `leagueScopeQuery` — and it is separated from {@link tradeNarrowingSql} so
+ * that both denominators can be counted in one pass over it rather than in two
+ * passes over nearly the same rows. Splitting is safe precisely because these
+ * clauses already came first: `tradeFilterSql` is the two concatenated.
+ */
+export function tradeScopeSql(
+  query: TradeQuery,
+  params: unknown[],
+  circle: TradeCircleScope | null = null,
+): string {
+  return join(tradeScopeClauses(query, params, circle));
+}
+
+/**
+ * The *selection* half: the window and the player/pick/manager choices, as a
+ * bare boolean rather than as an ` AND `-prefixed fragment.
+ *
+ * Bare because its second caller is a `FILTER (WHERE …)` on an aggregate, where
+ * a leading `AND` is a syntax error. Empty means nothing was selected, which the
+ * caller reads as "this count is the scope count" rather than binding a
+ * tautology.
+ */
+export function tradeNarrowingSql(query: TradeQuery, params: unknown[]): string {
+  return tradeNarrowingClauses(query, params).join(" AND ");
+}
+
+/** `AND`-joined and prefixed, or empty where nothing narrows. */
+function join(clauses: string[]): string {
+  return clauses.length ? ` AND ${clauses.join(" AND ")}` : "";
+}
+
+function tradeScopeClauses(
+  query: TradeQuery,
+  params: unknown[],
+  circle: TradeCircleScope | null,
+): string[] {
   const clauses: string[] = [];
   const bind = (value: unknown) => `$${params.push(value)}`;
 
@@ -179,6 +240,13 @@ export function tradeFilterSql(
     // leagues" is the only reading of a circle and a selection together.
     clauses.push(circleSql(circle, bind));
   }
+
+  return clauses;
+}
+
+function tradeNarrowingClauses(query: TradeQuery, params: unknown[]): string[] {
+  const clauses: string[] = [];
+  const bind = (value: unknown) => `$${params.push(value)}`;
 
   // Spelled with the `IS NOT NULL` rather than left to comparison semantics,
   // because an undated trade being dropped by *any* bound is a decision — the
@@ -222,21 +290,13 @@ export function tradeFilterSql(
 
   if (query.managers.length > 0) {
     const owners = bind(query.managers);
-    // Driven from `rosters` rather than from the trade's own `roster_ids`: a
-    // trade names rosters and a reader names people, and the join is the only
-    // place that mapping exists. Containment is checked against both a number
-    // and a string because Sleeper has been seen to send roster ids either way
-    // — the same defensiveness `assembleTrade` carries.
-    const rosterMatch = `
-      FROM rosters r
-       WHERE r.owner_id = ANY(${owners}::varchar[])
-         AND r.league_id = t.league_id
-         AND (t.roster_ids @> to_jsonb(r.roster_id)
-              OR t.roster_ids @> to_jsonb(r.roster_id::text))`;
     selections.push(
       all
-        ? `(SELECT count(DISTINCT r.owner_id) ${rosterMatch}) = ${bind(query.managers.length)}`
-        : `EXISTS (SELECT 1 ${rosterMatch})`,
+        ? // Counted distinctly because unnesting can hand back the same roster
+          // twice: a trade Sleeper filed with a repeated roster id would
+          // otherwise satisfy a two-manager selection on one manager.
+          `(${tradedByOwnersSql(owners, "count(DISTINCT r.owner_id)")}) = ${bind(query.managers.length)}`
+        : `EXISTS (${tradedByOwnersSql(owners, "1")})`,
     );
   }
 
@@ -248,7 +308,49 @@ export function tradeFilterSql(
     );
   }
 
-  return clauses.length ? ` AND ${clauses.join(" AND ")}` : "";
+  return clauses;
+}
+
+/**
+ * Trades one of `owners` was party to, as a subquery body over the trade's own
+ * `roster_ids` — the mapping from the rosters a trade names to the people a
+ * reader names.
+ *
+ * **Written from `roster_ids` outwards rather than from `rosters` inwards, and
+ * that is a planner decision rather than a stylistic one.** As
+ * `FROM rosters r WHERE r.league_id = t.league_id AND r.owner_id = ANY(…)` with
+ * the roster id checked by `@>` containment, the subquery is decorrelatable —
+ * and the planner takes it, hash-joining `rosters` against the season, so the
+ * board's `ORDER BY` no longer comes off `transactions_trade_keyset_idx` and a
+ * page becomes a top-N heapsort of the whole population. Measured on 1.2M
+ * transactions holding 59k trades for the season: **347ms that way, 30ms this
+ * way** for one page, with 36,850 buffers against 9,652. Unnesting makes the
+ * subquery a function of `t`, so it cannot be pulled up.
+ *
+ * It is one fragment because the circle's `traders` shape asks the identical
+ * question of a different id list, and two spellings of "was this manager in
+ * this trade" is the drift `./sql` exists to prevent — the managers *filter*
+ * was the one that still read it the other way, which is how it came to be the
+ * slowest narrowing on the board.
+ *
+ * Reading roster ids through `jsonb_array_elements_text` is also the more
+ * forgiving read of the column, for free: Sleeper has been seen to send them as
+ * numbers and as strings, and this flattens both. The regex guard before the
+ * cast is the house rule, and it sits **inside the join condition** rather than
+ * in a `WHERE` beside it: the cast is what the index lookup is built from, so it
+ * is evaluated whatever the planner does with a filter one level up, and `CASE`
+ * short-circuits — a junk roster id yields null and matches nothing rather than
+ * failing the whole board.
+ *
+ * `owners` is an already-bound `$n`; `select` is what the caller needs off it.
+ */
+function tradedByOwnersSql(owners: string, select: string): string {
+  return `SELECT ${select}
+      FROM jsonb_array_elements_text(${asArray("t.roster_ids")}) ri
+      JOIN rosters r
+        ON r.league_id = t.league_id
+       AND r.roster_id = (CASE WHEN ri ~ '^[0-9]+$' THEN ri::int END)
+     WHERE r.owner_id = ANY(${owners}::varchar[])`;
 }
 
 /**
@@ -266,25 +368,12 @@ export function tradeFilterSql(
  *   primary key is `(league_id, user_id)`, so per candidate trade this is an
  *   index scan over one league's dozen rows.
  * - **`traders`** — trades a leaguemate was *party to*. A trade names rosters
- *   and this names people, so it reads through `rosters`; **the trade's own
- *   roster ids drive it, and that is a planner decision rather than a stylistic
- *   one.** Written the way the managers filter is — `FROM rosters WHERE
- *   r.league_id = t.league_id AND r.owner_id = ANY(…)` with the roster id
- *   checked by `@>` containment — the subquery is decorrelatable, and against an
- *   id list this size the planner takes it: it hash-joins `rosters`, collects
- *   the whole population and top-N heapsorts it, at the same cost on page 40 as
- *   on page 1. Measured over 150k transactions with 850 leaguemates: **205ms
- *   that way, 9.0ms this way**, and only this way is flat with depth. Unnesting
- *   `roster_ids` makes the subquery a function of `t`, so it cannot be pulled
- *   up. It is also the more forgiving read of the column, for free: Sleeper has
- *   been seen to send roster ids as numbers and as strings, and
- *   `jsonb_array_elements_text` flattens both — which is why the facets query's
- *   manager branch already reads it this way. The regex guard before the cast is
- *   the house rule, and it sits **inside the join condition** rather than in a
- *   `WHERE` beside it: the cast is what the index lookup is built from, so it is
- *   evaluated whatever the planner does with a filter one level up, and `CASE`
- *   short-circuits — a junk roster id yields null and matches nothing rather
- *   than failing the whole board.
+ *   and this names people, so it reads through {@link tradedByOwnersSql}, which
+ *   is the identical question the managers filter asks of a different id list —
+ *   see there for why the trade's own roster ids drive it and what the two
+ *   spellings cost. Measured over 150k transactions with 850 leaguemates: 205ms
+ *   as a decorrelatable subquery, 9.0ms as this one, and only this way is flat
+ *   with depth.
  *
  * All three are `EXISTS`/`ANY` filters over `transactions` alone, so the board's
  * `ORDER BY` is still satisfied straight from `transactions_trade_keyset_idx`
@@ -305,13 +394,7 @@ function circleSql(
          WHERE lu.league_id = t.league_id
            AND lu.user_id = ANY(${ids}::varchar[]))`;
     case "traders":
-      return `EXISTS (
-        SELECT 1
-          FROM jsonb_array_elements_text(${asArray("t.roster_ids")}) ri
-          JOIN rosters r
-            ON r.league_id = t.league_id
-           AND r.roster_id = (CASE WHEN ri ~ '^[0-9]+$' THEN ri::int END)
-         WHERE r.owner_id = ANY(${ids}::varchar[]))`;
+      return `EXISTS (${tradedByOwnersSql(ids, "1")})`;
   }
 }
 
