@@ -42,8 +42,11 @@ import { leagueSizeFilter } from "./adp-drawer.utils.ts";
  * hook-free sections as plain functions answers what their controls *do* — a
  * React element carries its handlers as props, so a press can be made by
  * invoking one. What neither can reach is anything an effect owns: the exit
- * timer, the scroll lock, Escape, and the focus move all need a document. Those
- * live in `use-adp-drawer-lifecycle` and are noted there.
+ * timer, the scroll lock, Escape and the focus move all need a document to run
+ * in. What those effects *decide* was pulled out into `adp-drawer.focus` for
+ * exactly that reason and is covered in `adp-drawer.focus.test.ts`; what is
+ * asserted here is the other side of that seam — that the markup those rules
+ * run against is the shape they assume.
  */
 
 type Props = Record<string, unknown> & { children?: ReactNode };
@@ -220,6 +223,25 @@ describe("what is on screen", () => {
     const scrim = drawer().match(/<button[^>]*aria-label="Close ADP board"[^>]*>/)?.[0];
     assert.ok(scrim, "expected the scrim to be a button");
     assert.match(scrim, /tabindex="-1"/);
+  });
+
+  test("the dialog holds tab stops, which is what the trap needs to find", () => {
+    // The focus trap's own rules are checked against fakes in
+    // `adp-drawer.focus.test.ts` — there is no DOM here to run them on. This is
+    // the other half of that seam: the drawer really does render controls
+    // matching `TABBABLE_SELECTOR`, so the trap has somewhere to send Tab
+    // rather than falling through to its empty-dialog case.
+    const html = drawer({ seedLeagues: leagues });
+    const panel = html.slice(html.indexOf("<div role=\"dialog\""));
+    for (const tag of ["<button", "<select", "<input"]) {
+      assert.ok(panel.includes(tag), `the dialog should render a ${tag} tab stop`);
+    }
+    // And the dialog itself is not one of them: `tabindex="-1"` is on the same
+    // element as `role="dialog"`, so the focus move on open lands somewhere the
+    // trap reads as "not on a stop" and the first Tab goes to the first control.
+    const openingTag = panel.slice(0, panel.indexOf(">"));
+    assert.match(openingTag, /tabindex="-1"/);
+    assert.match(openingTag, /adp-drawer-panel/);
   });
 
   test("every control keeps an accessible name", () => {
