@@ -170,6 +170,27 @@ function draftSelection(filters: AdpFilters): { where: string; params: unknown[]
  * The draft/league join every read matches over, carrying which board each
  * draft counts into. The `$n` placeholders in `where` are positions in the
  * params array `draftSelection` returned alongside it.
+ *
+ * **Both aggregate readers spell it `AS MATERIALIZED`, and that keyword is the
+ * single largest thing separating this board from a statement timeout.**
+ * Postgres 12+ inlines a CTE referenced once, which is normally what you want
+ * and is exactly wrong here: `dynasty` is a JSONB extraction, a regex match and
+ * a cast, and inlining pushes that expression into every `FILTER` of every
+ * aggregate above it — ten of them on the board read. So a fact about a *draft*
+ * (6,963 of them) was being recomputed once per pick per aggregate: ~11M jsonb
+ * lookups and ~11M regex matches, none of which appear in the query as written.
+ * Materialized, it is computed 6,963 times and each `FILTER` is a boolean test.
+ * Measured over 1.5M picks in 8,000 leagues, the board read went 2,872ms →
+ * 590ms at the query and ~2.2s → ~0.5s end to end; pricing one roster's board
+ * went from 573/1,094/13,978ms across three runs to a flat ~400ms.
+ *
+ * The rule generalises past this query: **a CTE column derived from JSONB, and
+ * read by an aggregate `FILTER` or a `CASE`, has to be materialized.** The cost
+ * is invisible in the SQL and shows up only in a plan, where the expression is
+ * written out once per aggregate.
+ *
+ * `countMatchedDrafts` needs no such thing — it reads the join as a plain
+ * subquery and evaluates the expression once per draft either way.
  */
 const matchedDraftsSql = (where: string) => `
     SELECT d.draft_id, ${DYNASTY_BOARD_SQL} AS dynasty
@@ -271,7 +292,7 @@ export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
   const { rows } = await pool.query<
     BoardColumns & { player_id: string; player_count: number }
   >(
-    `WITH matched_drafts AS (${matchedDrafts}),
+    `WITH matched_drafts AS MATERIALIZED (${matchedDrafts}),
      adp AS (
        SELECT dp.player_id,
               ${boardAggregates("redraft")},
@@ -408,7 +429,7 @@ export async function getDraftAdpForPlayers(
     dynasty_adp: number | null;
     dynasty_picks: number;
   }>(
-    `WITH matched_drafts AS (${matchedDrafts})
+    `WITH matched_drafts AS MATERIALIZED (${matchedDrafts})
      SELECT dp.player_id,
             round((avg(dp.pick_no) FILTER (WHERE NOT md.dynasty))::numeric, 2)::float8 AS redraft_adp,
             (count(*) FILTER (WHERE NOT md.dynasty))::int AS redraft_picks,

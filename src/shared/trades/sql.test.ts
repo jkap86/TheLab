@@ -6,11 +6,15 @@ import { describe, test } from "node:test";
 import type { TradeCircleScope } from "./circle.ts";
 import type { TradeQuery } from "./params.ts";
 import {
+  STARTUP_DRAFT_CTE,
+  STARTUP_DRAFT_SQL,
   TRADES_POPULATION_SQL,
   TRADE_ORDER_SQL,
   TRADE_SORT_SQL,
   tradeCursorSql,
   tradeFilterSql,
+  tradeNarrowingSql,
+  tradeScopeSql,
 } from "./sql.ts";
 
 /**
@@ -176,10 +180,8 @@ describe("tradeFilterSql", () => {
     });
 
     test("the mode joins the categories, not just the values inside one", () => {
-      // Probed with players and picks rather than managers: the managers
-      // fragment carries an `OR` of its own — a roster id checked as a number
-      // and as a string, since Sleeper sends both — so it would answer this
-      // question with its own defensiveness. These two categories emit none.
+      // Probed with players and picks, which emit no `OR` of their own, so the
+      // one being asserted can only have come from the mode.
       const all = build(query({ players: ["p"], picks: ["2026-1"] })).sql;
       const any = build(
         query({ players: ["p"], picks: ["2026-1"], match: "any" }),
@@ -189,12 +191,31 @@ describe("tradeFilterSql", () => {
     });
 
     test("a manager is matched whether Sleeper wrote the roster id as a number or a string", () => {
-      // The internal `OR` the test above steps around, asserted for its own
-      // sake — `assembleTrade` carries the same defensiveness, and a filter that
-      // only read one spelling would silently miss half the trades in a league
-      // stored under the other.
-      const sql = build(query({ managers: ["u"] })).sql;
-      assert.match(sql, /to_jsonb\(r\.roster_id\)\s*\n?\s*OR .*to_jsonb\(r\.roster_id::text\)/);
+      // `assembleTrade` carries the same defensiveness, and a filter that only
+      // read one spelling would silently miss half the trades in a league stored
+      // under the other. It is `jsonb_array_elements_text` that provides it here
+      // — it flattens a number and a string to the same text — which is also
+      // what keeps the subquery a function of `t`; see `tradedByOwnersSql`.
+      for (const q of [query({ managers: ["u"] }), query({ managers: ["u"], match: "any" })]) {
+        const sql = build(q).sql;
+        assert.match(sql, /jsonb_array_elements_text\(CASE WHEN jsonb_typeof\(t\.roster_ids\)/);
+        assert.match(sql, /CASE WHEN ri ~ '\^\[0-9\]\+\$' THEN ri::int END/);
+      }
+    });
+
+    test("the managers filter and the traders circle are one fragment", () => {
+      // They ask the identical question of different id lists, and two
+      // spellings of it is exactly the drift this module exists to prevent —
+      // the managers filter was the copy that stayed decorrelatable, which made
+      // it the slowest narrowing on the board. Compared with the bound index
+      // normalised away, since that is the only thing that legitimately differs.
+      const strip = (s: string) => s.replace(/\$\d+/g, "$n").replace(/\s+/g, " ").trim();
+      const filter = strip(build(query({ managers: ["u"], match: "any" })).sql);
+      const circle = strip(build(query(), { kind: "traders", ids: ["u"] }).sql);
+      assert.ok(
+        filter.includes(circle.replace(/^AND /, "")),
+        "the managers filter no longer reads the traders circle's fragment",
+      );
     });
   });
 
@@ -284,6 +305,11 @@ describe("tradeFilterSql", () => {
       const traders = forKind("traders");
       assert.match(traders, /jsonb_array_elements_text/);
       assert.match(traders, /r\.league_id = t\.league_id/);
+      assert.doesNotMatch(
+        traders,
+        /FROM rosters r\s+WHERE/,
+        "rosters must not be the driving relation, or the subquery decorrelates",
+      );
     });
 
     test("a junk roster id yields null rather than failing the board", () => {
@@ -306,6 +332,67 @@ describe("tradeFilterSql", () => {
       const orAt = sql.indexOf(" OR ");
       assert.ok(circleAt >= 0 && orAt > circleAt, "the circle is outside the OR");
     });
+  });
+});
+
+describe("the scope and narrowing halves", () => {
+  /**
+   * The board reads `tradeFilterSql` and the two denominators read the halves,
+   * so if the halves are not *exactly* the whole the count stops describing the
+   * rows — silently, since both still answer. These pin the identity itself
+   * rather than either half's contents.
+   */
+  const shapes: [string, Partial<TradeQuery>, TradeCircleScope | null][] = [
+    ["nothing", {}, null],
+    ["leagues only", { leagues: ["a", "b"] }, null],
+    ["circle only", {}, { kind: "traders", ids: ["u1"] }],
+    ["window only", { from: 1, to: 2 }, null],
+    [
+      "everything, all",
+      { leagues: ["a"], excludeLeagues: ["b"], from: 1, to: 2, players: ["p"], picks: ["2026-1"], managers: ["u"] },
+      { kind: "members", ids: ["u2"] },
+    ],
+    [
+      "everything, any",
+      { leagues: ["a"], from: 1, players: ["p", "q"], picks: ["2026-1"], managers: ["u"], match: "any" as const },
+      { kind: "leagues", ids: ["l1"] },
+    ],
+  ];
+
+  for (const [label, overrides, circle] of shapes) {
+    test(`${label}: the halves concatenate to the whole, params and all`, () => {
+      const whole: unknown[] = ["2026"];
+      const combined = tradeFilterSql(query(overrides), whole, circle);
+
+      const split: unknown[] = ["2026"];
+      const scope = tradeScopeSql(query(overrides), split, circle);
+      const narrowing = tradeNarrowingSql(query(overrides), split);
+
+      // The narrowing half is bare so it can sit inside a `FILTER (WHERE …)`;
+      // joined back on, it has to reproduce the board's own `WHERE` byte for
+      // byte, and the values have to land on the same `$n`.
+      assert.equal(scope + (narrowing ? ` AND ${narrowing}` : ""), combined);
+      assert.deepEqual(split, whole);
+    });
+  }
+
+  test("a bare narrowing is a legal FILTER predicate", () => {
+    // Not merely non-empty: a leading `AND` here is a syntax error rather than
+    // a wrong answer, which is the one failure mode this shape adds.
+    const sql = tradeNarrowingSql(query({ from: 1, players: ["p"] }), ["2026"]);
+    assert.ok(sql.length > 0);
+    assert.ok(!sql.trimStart().startsWith("AND"));
+  });
+});
+
+describe("the startup-draft CTE", () => {
+  test("the header names the relation the population reads", () => {
+    // Four reads open with this and every one of them refers to `startup_draft`
+    // in the population fragment; naming them apart is a syntax error in only
+    // one direction, so the agreement is asserted rather than trusted.
+    assert.ok(STARTUP_DRAFT_CTE.startsWith("WITH startup_draft AS ("));
+    assert.ok(STARTUP_DRAFT_CTE.includes(STARTUP_DRAFT_SQL));
+    assert.match(TRADES_POPULATION_SQL, /FROM startup_draft sd/);
   });
 });
 
