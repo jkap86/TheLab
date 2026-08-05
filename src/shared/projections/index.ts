@@ -31,6 +31,7 @@ export type {
 } from "./outlook";
 export {
   parseProjectionFilters,
+  usesDefaultSeason,
   PROJECTION_FILTER_DEFAULTS,
   PROJECTIONS_LIMIT_MAX,
 } from "./filters";

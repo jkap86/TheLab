@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { ADP_FILTER_DEFAULTS, ADP_LIMIT_MAX, parseAdpFilters } from "./adp-filters.ts";
+import {
+  ADP_FILTER_DEFAULTS,
+  ADP_LIMIT_MAX,
+  parseAdpFilters,
+  usesDefaultSeason,
+} from "./adp-filters.ts";
 import type { AdpFilters } from "./adp-filters.ts";
 
 /**
@@ -157,5 +162,68 @@ describe("parseAdpFilters", () => {
       limit: ADP_FILTER_DEFAULTS.limit,
       offset: 0,
     });
+  });
+});
+
+/**
+ * The predicate the route gates its season resolution on.
+ *
+ * It is exported so `/api/adp` can skip `getActiveSeason()` — a fetched value —
+ * for a board the caller already bounded, and the parser branches on the same
+ * function so the two cannot disagree. These tests are that agreement: for every
+ * shape, whether the predicate says the default is read has to match whether
+ * omitting it changes the answer.
+ */
+describe("usesDefaultSeason", () => {
+  const uses = (query: string) => usesDefaultSeason(new URLSearchParams(query));
+
+  test("an unbounded board is the one shape that needs a default", () => {
+    assert.equal(uses(""), true);
+    assert.equal(uses("scoring=ppr&teams_min=12"), true);
+  });
+
+  test("a season or a date bound is the caller's own answer", () => {
+    assert.equal(uses("season=2024"), false);
+    assert.equal(uses("season=all"), false);
+    assert.equal(uses("start_after=2026-05-01"), false);
+    assert.equal(uses("start_before=2026-05-01"), false);
+    assert.equal(uses("season=2024&start_after=2026-05-01"), false);
+  });
+
+  test("a blank bound is no bound, as the parser reads it", () => {
+    // `list` drops empty values and `isoDate` reads a blank as absent, so a
+    // predicate keying on mere presence would send `?start_after=` to the
+    // unbounded board — every season on file — instead of this one.
+    assert.equal(uses("season="), true);
+    assert.equal(uses("start_after=&start_before="), true);
+    assert.equal(uses("start_after=%20"), true);
+  });
+
+  test("the predicate agrees with what the parser actually reads", () => {
+    for (const query of [
+      "",
+      "scoring=ppr",
+      "season=2024",
+      "season=all",
+      "start_after=2026-05-01",
+      "season=2024&start_after=2026-05-01",
+      "season=",
+      "start_after=",
+    ]) {
+      const withDefault = parseAdpFilters(new URLSearchParams(query), "2026");
+      const withNone = parseAdpFilters(new URLSearchParams(query), null);
+      assert(withDefault.ok);
+      if (uses(query)) {
+        assert.equal(withNone.ok, false, `${query} should need a default`);
+        assert.deepEqual(withDefault.filters.seasons, ["2026"]);
+      } else {
+        assert(withNone.ok, `${query} should not need a default`);
+        assert.deepEqual(
+          withNone.filters,
+          withDefault.filters,
+          `${query} must parse the same either way`,
+        );
+      }
+    }
   });
 });

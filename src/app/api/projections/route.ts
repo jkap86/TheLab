@@ -6,6 +6,7 @@ import {
   getLatestStoredWeek,
   listWeekProjections,
   parseProjectionFilters,
+  usesDefaultSeason,
 } from "@/shared/projections";
 import { getActiveSeason } from "@/shared/season";
 
@@ -28,9 +29,12 @@ export const dynamic = "force-dynamic";
  * pull one in.
  */
 export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams;
+  // Resolved only where the parser will read it — see `/api/adp` for the same
+  // gate and why evaluation order made an explicit `?season` wait on Sleeper.
   const parsed = parseProjectionFilters(
-    new URL(request.url).searchParams,
-    await getActiveSeason(),
+    params,
+    usesDefaultSeason(params) ? await getActiveSeason() : null,
   );
   if (!parsed.ok) {
     const error: ApiErrorPayload = { error: parsed.error };

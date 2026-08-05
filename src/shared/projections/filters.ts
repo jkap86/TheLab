@@ -50,9 +50,26 @@ export type ParsedProjectionFilters =
   | { ok: false; error: string };
 
 /**
+ * Whether {@link parseProjectionFilters} will read its `defaultSeason`.
+ *
+ * The ADP filters' predicate of the same name, for the same reason: the route
+ * resolves a season only where the answer is used, so `?season=2024` never waits
+ * on Sleeper's state call. Simpler here because a projections read has no date
+ * bound to bound it another way — a blank `season=` is no season, matching what
+ * the parser itself reads.
+ */
+export function usesDefaultSeason(params: URLSearchParams): boolean {
+  return !params.get("season")?.trim();
+}
+
+/**
  * Validate a projections query string. `defaultSeason` is passed in rather than
- * imported so this module stays dependency-free; the route supplies
- * `DEFAULT_SEASON`.
+ * imported so this module stays dependency-free; the route supplies the season
+ * the app is operating in.
+ *
+ * It may be `null` where the caller checked {@link usesDefaultSeason} and found
+ * none was wanted. Null on the path that does want one is refused rather than
+ * left to become an undefined season in a query.
  *
  * `stats` is an on/off flag (`booleanFlag`, absent → false): it switches a
  * feature on, unlike the ADP filters' tri-state booleans that narrow a
@@ -60,11 +77,16 @@ export type ParsedProjectionFilters =
  */
 export function parseProjectionFilters(
   params: URLSearchParams,
-  defaultSeason: string,
+  defaultSeason: string | null,
 ): ParsedProjectionFilters {
   const season = params.get("season")?.trim();
   if (season && !isSeason(season)) {
     return { ok: false, error: `Invalid season: ${season}. Expected a 4-digit year.` };
+  }
+  // The only path that reads the argument, so this is where its absence is
+  // caught — unreachable for a caller that gated on `usesDefaultSeason`.
+  if (!season && defaultSeason === null) {
+    return { ok: false, error: "No season resolved for a projections read." };
   }
 
   const week = integer(params, "week", {
@@ -110,7 +132,9 @@ export function parseProjectionFilters(
   return {
     ok: true,
     filters: {
-      season: season || defaultSeason,
+      // Non-null by the guard above: either the caller named one, or they
+      // resolved one because `usesDefaultSeason` said it would be read.
+      season: season || (defaultSeason as string),
       week: week.value,
       scoring: (rawScoring as ProjectionScoring) || PROJECTION_FILTER_DEFAULTS.scoring,
       positions: positions.length > 0 ? positions : null,

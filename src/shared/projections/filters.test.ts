@@ -5,6 +5,7 @@ import {
   PROJECTION_FILTER_DEFAULTS,
   PROJECTIONS_LIMIT_MAX,
   parseProjectionFilters,
+  usesDefaultSeason,
 } from "./filters.ts";
 import type { ProjectionFilters } from "./filters.ts";
 
@@ -108,5 +109,38 @@ describe("parseProjectionFilters", () => {
   test("rejects a season that isn't a 4-digit year", () => {
     assert.match(error("season=20x5"), /Invalid season/);
     assert.match(error("season=all"), /Invalid season/);
+  });
+});
+
+/**
+ * The predicate `/api/projections` gates its season resolution on — the ADP
+ * filters' of the same name, and tested the same way: what it claims has to
+ * match what the parser actually reads.
+ */
+describe("usesDefaultSeason", () => {
+  const uses = (query: string) => usesDefaultSeason(new URLSearchParams(query));
+
+  test("only an unnamed season takes the default", () => {
+    assert.equal(uses(""), true);
+    assert.equal(uses("week=3&scoring=ppr"), true);
+    assert.equal(uses("season=2024"), false);
+  });
+
+  test("a blank season is no season, as the parser reads it", () => {
+    assert.equal(uses("season="), true);
+    assert.equal(uses("season=%20"), true);
+  });
+
+  test("the predicate agrees with what the parser actually reads", () => {
+    for (const query of ["", "week=3", "season=2024", "season=2024&week=3", "season="]) {
+      const withDefault = parseProjectionFilters(new URLSearchParams(query), "2026");
+      const withNone = parseProjectionFilters(new URLSearchParams(query), null);
+      assert.equal(withDefault.ok, true);
+      if (uses(query)) {
+        assert.equal(withNone.ok, false, `${query} should need a default`);
+      } else {
+        assert.equal(withNone.ok, true, `${query} should not need a default`);
+      }
+    }
   });
 });

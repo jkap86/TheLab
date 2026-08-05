@@ -22,6 +22,24 @@
  *     caller's answer; this only fills the blank. Historical routes stay
  *     deterministic.
  *
+ * **A request never waits on Sleeper for a value this process can already
+ * answer**, which is the rule the three above imply and the first version did
+ * not keep. It sat in front of every defaulted read, so a stale cache meant the
+ * *request* paid the state call — and behind the shared axios instance that is
+ * up to four attempts with backoff, ~141s, to re-learn a string that changes
+ * once a year while Postgres was ready to answer the whole query. So a stale
+ * value is served immediately and the refresh runs behind it: the rollover is
+ * picked up by the request *after* the TTL rather than by the one that found it
+ * expired, which for a once-a-year change is a distinction with no reader.
+ *
+ * A cold process still waits, because there is nothing to serve and the
+ * compiled-in constant is exactly the release note this exists to stop trusting.
+ * What bounds *that* is {@link SeasonResolverOptions.failureBackoffMs}: a failed
+ * attempt is remembered for a minute, so an upstream that is down costs one
+ * timeout ladder rather than one per request. It is short on purpose — the point
+ * of not re-stamping the cache on failure is that recovery doesn't wait out a
+ * six-hour TTL nothing earned, and a minute is still that promise kept.
+ *
  * Pure: the state fetch and the clock arrive as arguments, so the cache and the
  * fallback ladder are testable without a network or a timer.
  */
@@ -44,6 +62,16 @@ export type SeasonResolverOptions = {
   override?: () => string | undefined | null;
   now?: () => number;
   ttlMs?: number;
+  /**
+   * How long a *failed* attempt is remembered before another is made.
+   *
+   * Only a cold resolver can be made to wait by an outage — a warm one serves
+   * its stale value and refreshes behind the request — so this is what keeps
+   * that one case from costing every request a full timeout ladder. Far shorter
+   * than the TTL, because a failure earns no freshness: it is a rate limit on
+   * retrying, not a claim that the answer is current.
+   */
+  failureBackoffMs?: number;
 };
 
 export type SeasonResolver = {
@@ -63,6 +91,14 @@ export type SeasonResolver = {
  */
 export const SEASON_TTL_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * How long a failed state call is remembered — see
+ * {@link SeasonResolverOptions.failureBackoffMs}. A minute: long enough that a
+ * down upstream isn't re-dialled per request, short enough that nobody notices
+ * the recovery.
+ */
+export const SEASON_FAILURE_BACKOFF_MS = 60 * 1000;
+
 export function createSeasonResolver(
   options: SeasonResolverOptions,
 ): SeasonResolver {
@@ -72,9 +108,12 @@ export function createSeasonResolver(
     override,
     now = Date.now,
     ttlMs = SEASON_TTL_MS,
+    failureBackoffMs = SEASON_FAILURE_BACKOFF_MS,
   } = options;
 
   let cached: { season: string; at: number } | null = null;
+  /** When the last attempt failed, for the backoff above; null once one works. */
+  let failedAt: number | null = null;
   /** De-duplicates concurrent refreshes: one state call, not one per request. */
   let inFlight: Promise<string> | null = null;
 
@@ -84,6 +123,7 @@ export function createSeasonResolver(
       const season = state?.season;
       if (isPlausibleSeason(season)) {
         cached = { season, at: now() };
+        failedAt = null;
         return season;
       }
       console.warn(
@@ -96,11 +136,24 @@ export function createSeasonResolver(
         error instanceof Error ? error.message : error,
       );
     }
-    // Deliberately not re-stamped: a failed attempt leaves the cache as stale as
-    // it was, so the next caller tries again rather than waiting out a TTL that
-    // was never earned. Same rule as the projections gate stamping the *fetch*.
+    // The *cache* is deliberately not re-stamped: a failed attempt leaves it as
+    // stale as it was, so recovery doesn't wait out a TTL that was never earned.
+    // Same rule as the projections gate stamping the *fetch*. What is stamped is
+    // the failure, which only rate-limits the retry.
+    failedAt = now();
     return cached?.season ?? fallback;
   }
+
+  /** One refresh at a time: concurrent callers share the state call. */
+  function startRefresh(): Promise<string> {
+    inFlight ??= refresh().finally(() => {
+      inFlight = null;
+    });
+    return inFlight;
+  }
+
+  const retrying = () =>
+    failedAt === null || now() - failedAt >= failureBackoffMs;
 
   return {
     async resolve() {
@@ -113,14 +166,28 @@ export function createSeasonResolver(
       }
 
       if (cached && now() - cached.at < ttlMs) return cached.season;
-      inFlight ??= refresh().finally(() => {
-        inFlight = null;
-      });
-      return inFlight;
+
+      if (cached) {
+        // Stale but usable, so the request is answered from it and the refresh
+        // runs behind: nobody waits on Sleeper for a value we hold. Caught
+        // because this one is unawaited — `refresh` handles its own failures, so
+        // this can only fire if that ever stops being true, and an unhandled
+        // rejection in a background task takes the process with it.
+        if (retrying()) void startRefresh().catch(() => {});
+        return cached.season;
+      }
+
+      // Nothing to serve. Waiting is right here — the compiled-in fallback is
+      // the release note this module exists to stop trusting, so a cold process
+      // should learn the real season before answering. Unless the upstream just
+      // failed, in which case it has already told us what waiting would buy.
+      if (!retrying()) return fallback;
+      return startRefresh();
     },
     peek: () => cached,
     reset: () => {
       cached = null;
+      failedAt = null;
       inFlight = null;
     },
   };

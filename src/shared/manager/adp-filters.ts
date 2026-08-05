@@ -104,9 +104,31 @@ export type ParsedAdpFilters =
   | { ok: false; error: string };
 
 /**
+ * Whether {@link parseAdpFilters} will read its `defaultSeason` argument.
+ *
+ * **Exported so the route can decide whether to resolve one at all**, and used
+ * by the parser itself so the two cannot come to different views of it. The
+ * season the app is operating in is a *fetched* value — `shared/season` asks
+ * Sleeper — so a caller that has bounded the board has nothing to gain by
+ * waiting on that, and a historical read stays deterministic. `/api/adp` gates
+ * on this; the trades routes spell the equivalent inline because their default
+ * is a plain "no season given".
+ *
+ * A date bound counts as bounding the board, which is the whole subtlety: the
+ * predicate is not "is `season` absent".
+ */
+export function usesDefaultSeason(params: URLSearchParams): boolean {
+  if (list(params, "season").length > 0) return false;
+  // Trimmed, not merely present: `isoDate` reads a blank bound as no bound, and
+  // a predicate that disagreed with it would leave `?start_after=` spanning
+  // every season on file rather than taking the default.
+  return !params.get("start_after")?.trim() && !params.get("start_before")?.trim();
+}
+
+/**
  * Validate an ADP query string. `defaultSeason` is passed in rather than
- * imported so this module stays dependency-free; the route supplies
- * `DEFAULT_SEASON`. Pass `season=all` to span every season on file.
+ * imported so this module stays dependency-free; the route supplies the season
+ * the app is operating in. Pass `season=all` to span every season on file.
  *
  * The boolean filters are tri-state (`booleanFilter`): leaving `best_ball` off
  * must narrow nothing, which is different from `best_ball=false`.
@@ -116,10 +138,16 @@ export type ParsedAdpFilters =
  * exactly that, and quietly intersecting it with this season would hand back a
  * range that silently isn't the one requested. Bounding nothing at all is still
  * the expensive case, so that one keeps its default.
+ *
+ * It may therefore be `null`, meaning the caller checked {@link usesDefaultSeason}
+ * and found none was wanted. Null on the path that *does* want one is a caller
+ * bug rather than a bad request, and it is refused rather than left to fall
+ * through: an unbounded board with no season spans every season on file, which
+ * is the one wrong answer here that looks like a working one.
  */
 export function parseAdpFilters(
   params: URLSearchParams,
-  defaultSeason: string,
+  defaultSeason: string | null,
 ): ParsedAdpFilters {
   const seasonValues = list(params, "season");
   const allSeasons = seasonValues.some((s) => s.toLowerCase() === "all");
@@ -194,18 +222,31 @@ export function parseAdpFilters(
   if (!offset.ok) return offset;
 
   const leagueIds = list(params, "league_id");
-  const dated = startAfter.value !== null || startBefore.value !== null;
+
+  // Written as a branch on {@link usesDefaultSeason} rather than as a chain
+  // ending in a default, so the predicate the route gates on and the path that
+  // reads its answer are one decision. The order of the rest is load-bearing:
+  // an explicit season beats a date bound, since `?season=2024&start_after=…`
+  // means both, and only a request carrying neither takes the default.
+  let seasons: string[] | null;
+  if (usesDefaultSeason(params)) {
+    if (defaultSeason === null) {
+      return { ok: false, error: "No season resolved for an unbounded board." };
+    }
+    seasons = [defaultSeason];
+  } else if (allSeasons) {
+    seasons = null;
+  } else if (seasonValues.length > 0) {
+    seasons = seasonValues;
+  } else {
+    // A date bound and no season: the window spans whatever seasons it covers.
+    seasons = null;
+  }
 
   return {
     ok: true,
     filters: {
-      seasons: allSeasons
-        ? null
-        : seasonValues.length > 0
-          ? seasonValues
-          : dated
-            ? null
-            : [defaultSeason],
+      seasons,
       start_after: startAfter.value,
       start_before: startBefore.value,
       draft_types: draftTypes.value ?? [],

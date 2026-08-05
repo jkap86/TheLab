@@ -58,6 +58,7 @@ export {
 export type { AdpRosterValue } from "./adp-value";
 export {
   parseAdpFilters,
+  usesDefaultSeason,
   ADP_FILTER_DEFAULTS,
   ADP_LIMIT_MAX,
   LEAGUE_TYPE_CODES,

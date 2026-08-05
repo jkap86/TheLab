@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { AdpPayload, AdpPlayerPayload, ApiErrorPayload } from "@/shared/contract";
-import { getDraftAdp, parseAdpFilters } from "@/shared/manager";
+import { getDraftAdp, parseAdpFilters, usesDefaultSeason } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 import { getActiveSeason } from "@/shared/season";
 
@@ -40,9 +40,17 @@ export const dynamic = "force-dynamic";
  * defaults stay visible to the caller.
  */
 export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams;
+  // The resolver is consulted only where the parser will read its answer.
+  // `getActiveSeason` asks Sleeper when its cache is cold, and a board the
+  // caller has already bounded — `?season=2024`, or a date window — has no use
+  // for the answer: awaiting it there made a historical read wait on an upstream
+  // it does not depend on, which is the house rule about explicitly requested
+  // seasons broken by evaluation order rather than by intent. The predicate is
+  // the parser's own branch, exported, so the two cannot drift.
   const parsed = parseAdpFilters(
-    new URL(request.url).searchParams,
-    await getActiveSeason(),
+    params,
+    usesDefaultSeason(params) ? await getActiveSeason() : null,
   );
   if (!parsed.ok) {
     const error: ApiErrorPayload = { error: parsed.error };

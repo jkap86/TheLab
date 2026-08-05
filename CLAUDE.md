@@ -447,6 +447,30 @@ about how it is laid out. Each replaced something that read as fine and wasn't.
   — a route with no `?season`, a background tick — and nowhere else. A page that
   reads it must not be prerendered (`/trades` is `force-dynamic`), or the
   resolution is baked into the bundle and it is a hardcoded constant again.
+
+  **That last rule is broken by evaluation order, not by intent, and it takes a
+  predicate to keep.** `parseAdpFilters(params, await getActiveSeason())`
+  evaluates the argument first, so a historical read waited on a state call whose
+  answer the parser would then discard — and the ADP default is subtler than "is
+  `season` absent", since a date bound bounds the board too. So the parser's own
+  branch is exported as `usesDefaultSeason` and the route gates on it: one
+  function, so the two cannot drift, and the argument is `string | null` where
+  null means the caller checked. It is refused rather than defaulted on the path
+  that does read it, because an unbounded board with no season silently spans
+  every season on file — the one wrong answer here that looks like a working one.
+  The tests assert the agreement itself: for each shape, whether the predicate
+  says the default is read matches whether omitting it changes the answer.
+
+  **And a request never waits on Sleeper for a value this process can already
+  answer.** A stale cache is served *now* and refreshed behind the request, so
+  the rollover lands on the next caller rather than costing the one that found it
+  expired up to four attempts with backoff. A cold process still waits — there is
+  nothing to serve, and the compiled-in constant is the release note this exists
+  to stop trusting — so what bounds that case is a short failure backoff: a
+  failed attempt is remembered for a minute, and only the *cache* stays
+  un-re-stamped. That is the "recovery is immediate" promise intact (a minute,
+  not six hours) while a down upstream costs one timeout ladder rather than one
+  per request.
   The UI's `nfl-calendar` is the *separate* concern: it derives provisional
   markers past its table (Thursday after Labor Day, the Thursday in April 23–29,
   preseason at −35/−12 days) so the ADP strip doesn't expire, bounded by the
