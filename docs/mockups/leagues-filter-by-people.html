@@ -1,4 +1,4 @@
-<title>Leagues — filter by who's in them</title>
+<title>Leagues — a row above the headings</title>
 
 <style>
   /* ------------------------------------------------------------------
@@ -625,15 +625,114 @@
     * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
     .field__caret { opacity: 1; }
   }
-</style>
 
+  /* ---------------------------------------------- header-stack mock parts */
+  .stack { display: grid; gap: 0; }
+
+  /* the plate, cropped to its bottom edge — enough to place the row under it */
+  .plate--crop { border-radius: 14px; padding: 10px 14px 12px; }
+  .plate--crop .plate__row { gap: 10px; }
+
+  /* the columns rail: .lab-ledge construction, wall wrapper + lit face */
+  .ledge { padding-bottom: 5px; background: linear-gradient(180deg, #071825 0%, #030e17 100%); filter: drop-shadow(0 5px 3px rgba(0,0,0,0.5)) drop-shadow(0 14px 22px rgba(0,0,0,0.65)); border-radius: 11px; }
+  .ledge__face {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 5px 13px 6px;
+    border-radius: 11px;
+    background: linear-gradient(177deg, #6d9cba 0px, #6d9cba 1.5px, #416f8e 3px, #315874 16%, #1c374c 62%, #122636 100%);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.55), inset 0 -7px 12px -7px rgba(0, 0, 0, 0.75);
+  }
+  .ledge__subject { flex: 1; min-width: 0; }
+  .ledge__cols { display: flex; }
+  .ledge__col { width: 96px; padding-left: 6px; border-left: 1px solid rgba(0, 0, 0, 0.25); }
+  .ledge__slot {
+    display: block;
+    padding: 3px 6px;
+    border-radius: 5px;
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.72);
+    background: linear-gradient(180deg, #0b1c28, #123045);
+    box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.8), inset 0 -1px 0 rgba(255, 255, 255, 0.12), 0 1px 0 rgba(255, 255, 255, 0.07);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  }
+  .ledge__slot--sub { text-align: left; }
+
+  /* variant A — an always-open search rail spanning the list's width */
+  .searchrail {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: var(--slot);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.9), inset 0 -1px 0 rgba(255, 255, 255, 0.05), inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+    font-size: 12.5px;
+  }
+
+  /* variant C — the rail's upper storey, milled into the same face */
+  .ledge__storey {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 13px 0;
+    border-radius: 11px 11px 0 0;
+    background: linear-gradient(177deg, #6d9cba 0px, #6d9cba 1.5px, #416f8e 3px, #315874 30%, #24455c 100%);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.55);
+  }
+  .ledge__seam { height: 1px; background: linear-gradient(90deg, rgba(0,0,0,0.45), rgba(0,0,0,0.3)); box-shadow: 0 1px 0 rgba(255,255,255,0.09); }
+  .ledge__face--lower { border-radius: 0 0 11px 11px; background: linear-gradient(177deg, #2b506b 0%, #1c374c 55%, #122636 100%); box-shadow: inset 0 -7px 12px -7px rgba(0,0,0,0.75); }
+
+  /* the price tag on each option */
+  .price {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    white-space: nowrap;
+  }
+  .price b { font-size: 14px; font-weight: 700; }
+  .price--good { color: var(--active); background: rgba(0, 255, 229, 0.09); border-color: rgba(0, 255, 229, 0.28); }
+
+  .callout {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 11px 13px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.035);
+    border-left: 2px solid var(--active);
+  }
+  .callout b { color: #fff; }
+
+  .shared { display: grid; gap: 10px; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .shared > div { padding: 13px 15px; border-radius: 10px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); }
+  .shared h3 { font-size: 12.5px; }
+  .shared p { font-size: 13.5px; color: rgba(255,255,255,0.63); }
+</style>
 <nav class="bar">
-  <span class="bar__mark">THE LAB · LEAGUES FILTER</span>
+  <span class="bar__mark">THE LAB · A ROW ABOVE THE HEADINGS</span>
   <span class="bar__keys">
-    <a class="bar__key" href="#a">A · Bay</a>
-    <a class="bar__key" href="#b">B · Trough rows</a>
-    <a class="bar__key" href="#c">C · Own key</a>
-    <a class="bar__key" href="#d">D · From shares</a>
+    <a class="bar__key" href="#slot">The slot</a>
+    <a class="bar__key" href="#a">A · Search rail</a>
+    <a class="bar__key" href="#b">B · Key &amp; tokens</a>
+    <a class="bar__key" href="#c">C · Upper storey</a>
     <a class="bar__key" href="#compare">Compare</a>
   </span>
 </nav>
@@ -641,66 +740,89 @@
 <div class="wrap">
 
   <header>
-    <p class="eyebrow">Manager tool · /manager/[searched] · four options</p>
+    <p class="eyebrow">Manager tool · above the column headings · three seatings</p>
     <h1>Filter leagues by who's in them</h1>
     <p class="lede">
-      Two new questions for the Leagues tab: <b>which of my leagues hold this player</b>, and
-      <b>which do I share with this manager</b>. Everything below is the same control seated four
-      different ways — the choice is where it lives, not what it is.
+      Owns a player, shares a league with a manager — as a row of its own between the plate and the
+      heading rail, not in the filters dialog. That placement settles three things at once and
+      leaves one real question: <b>how much of the list it is allowed to cover.</b>
     </p>
   </header>
 
-  <section>
+  <section id="slot">
     <div class="sec-head">
-      <h2>The one finding that shapes all four</h2>
+      <h2>The slot, and what it costs to sit in it</h2>
       <span class="eyebrow">Read first</span>
     </div>
     <div class="rule"></div>
+
     <p class="prose" style="margin-top:20px">
-      <b>A person is not a rule.</b> Every filter in the dialog today is a key, a comparison and a
-      number — <code>qb+sf ≥ 2</code>, <code>rec = 0.5</code> — and the rule row exists because all
-      three parts are choices. A player or a leaguemate is just a name, out of several hundred, and
-      there is nothing to compare it to. So the control that fits is a <b>search that leaves tokens
-      behind</b>, not a third rule bay with three menus in every row.
+      Out of the dialog, three problems disappear. The shared modal never learns about a manager, so
+      the trades board keeps a filter set it can fully use. There is no draft to protect, so the row
+      <b>commits live</b> — type, watch the count move. And the state lives outside
+      <code>LeagueFilters</code> entirely, which is where it wanted to be anyway.
     </p>
     <p class="prose">
-      That is what all four options draw. What separates them is the seat — and the seat decides how
-      much chrome it costs, how discoverable it is, and whether the shared dialog has to learn about
-      a manager.
+      What it buys instead is a bill. This row lands <b>inside the pinned header</b>, so its height is
+      league rows covered on every tab, on every screen, forever — the currency this card has already
+      been through two rounds of. Seating the filters key flush in the plate's corner returned 20px of
+      list; the padding trade around it returned 8 more. A row that costs 36px spends both of those
+      and then some. <b>So each option below is priced at rest, with nothing selected</b>, because that
+      is the state it is in almost all the time.
     </p>
 
-    <div class="cards">
-      <div class="card">
-        <span class="card__tag">Needs a lookup</span>
-        <h3>The predicate is pure over one league</h3>
-        <p>
-          <code>matchesFilters</code> reads a league's own settings, and the trades board runs it
-          over a whole season. "Owns Bijan" is <code>rosters[league_id]</code>; "shared with" is
-          <code>members[league_id]</code>. Neither is on the league. Either the predicate takes a
-          context the trades page passes empty, or this is a second narrowing layer inside the
-          manager tool, after the shared one.
-        </p>
+    <div class="screen">
+      <div class="screen__tab"><span>Manager header</span> · <b>where the row goes</b></div>
+      <div class="screen__stage">
+        <div class="stage-inner stack">
+          <div class="plate plate--crop">
+            <div class="plate__row">
+              <span class="plate__av" style="width:28px;height:28px"></span>
+              <div style="min-width:0">
+                <div class="plate__name" style="font-size:13px">@jkap86</div>
+                <div class="scopeline" style="margin-top:2px">84-61-1 · <b>dynasty</b></div>
+              </div>
+              <span class="chip chip--on" style="margin-left:auto;border-radius:8px 8px 14px 4px;padding:4px 11px;font-size:10.5px;align-self:flex-end">Filters <span class="chip__badge">1</span></span>
+            </div>
+          </div>
+
+          <div style="margin:9px 0;padding:9px 12px;border-radius:9px;border:1px dashed rgba(0,255,229,0.5);background:rgba(0,255,229,0.05);text-align:center">
+            <span class="cap" style="color:var(--active)">the new row goes here</span>
+          </div>
+
+          <div class="ledge">
+            <div class="ledge__face">
+              <span class="ledge__subject"><span class="ledge__slot ledge__slot--sub" style="display:inline-block">League</span></span>
+              <span class="ledge__cols">
+                <span class="ledge__col"><span class="ledge__slot">Record</span></span>
+                <span class="ledge__col"><span class="ledge__slot">KTC start</span></span>
+                <span class="ledge__col"><span class="ledge__slot">Proj</span></span>
+                <span class="ledge__col"><span class="ledge__slot">ADP val</span></span>
+              </span>
+            </div>
+          </div>
+
+          <div style="margin-top:10px">
+            <div class="row">
+              <span class="row__name">Dynasty Warriors XII</span>
+              <span class="row__cols"><span class="row__col">9-4-0</span><span class="row__col">31,940</span><span class="row__col">3rd of 12</span><span class="row__col">1,204</span></span>
+            </div>
+            <div class="row ghost">
+              <span class="row__name">The Gauntlet SF</span>
+              <span class="row__cols"><span class="row__col">11-2-0</span><span class="row__col">34,880</span><span class="row__col">1st of 12</span><span class="row__col">1,388</span></span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="card card--warn">
-        <span class="card__tag">Costs a request</span>
-        <h3>Leagues fetches neither route today</h3>
-        <p>
-          Rosters and membership are the other two tabs' resources. The query cache is shared per
-          manager, so a reader who has opened Players or Leaguemates already pays nothing — a cold
-          Leagues tab pays one request per list the control offers. Gate the fetch on the control
-          being opened, exactly as the ADP board is gated on its drawer.
-        </p>
-      </div>
-      <div class="card">
-        <span class="card__tag">any is real here</span>
-        <h3>The one list that earns a match mode</h3>
-        <p>
-          House rule: league rules narrow on an <i>attribute</i>, so they all AND. This is a set of
-          <i>subjects</i> — and "leagues where I have Bijan <b>or</b> Chase" is asked as often as
-          "leagues where I have <b>both</b>". Same argument the trades selection makes. Default
-          <code>all</code>, as it does.
-        </p>
-      </div>
+    </div>
+
+    <div class="callout">
+      <span>
+        <b>A person is not a rule.</b> Every filter in the dialog is a key, a comparison and a number —
+        <code>qb+sf ≥ 2</code>. A name has nothing to compare against, and there are several hundred of
+        them. So all three options are the same control: a <b>search that leaves tokens behind</b>.
+        What differs is how it rests when you are not using it.
+      </span>
     </div>
   </section>
 
@@ -709,100 +831,59 @@
     <div class="opt__head">
       <span class="opt__letter">A</span>
       <div>
-        <h2>A subjects bay, full width under the two rule bays</h2>
+        <h2>An open search rail, spanning the list</h2>
         <p class="opt__thesis">
-          The filters dialog gains a third bay. It spans both columns rather than becoming a third
-          one — three rule bays at 1040px leaves ~230px each, and the rule row is already tight at
-          half that width.
+          A milled slot the full width of the rows below it, permanently open. Tokens sit inside it as
+          they are added; results drop over the list. Nothing to press first — the control is the
+          field.
         </p>
+        <p style="margin-top:10px"><span class="price"><b>~38px</b> at rest</span></p>
       </div>
     </div>
 
     <div class="screen">
-      <div class="screen__tab"><span>Dialog</span> · <b>Filter leagues</b> · lower half</div>
+      <div class="screen__tab"><span>Variant A</span> · <b>open rail</b> · shown mid-search</div>
       <div class="screen__stage">
-        <div class="stage-inner">
-          <div class="panel">
-            <div class="panel__body panel__body--rail">
-              <div style="display:grid;gap:14px;min-width:0">
+        <div class="stage-inner stack">
+          <div class="plate plate--crop">
+            <div class="plate__row">
+              <span class="plate__av" style="width:28px;height:28px"></span>
+              <div><div class="plate__name" style="font-size:13px">@jkap86</div><div class="scopeline" style="margin-top:2px">61-38-0 · <b>dynasty · owns bijan robinson</b></div></div>
+              <span class="chip chip--on" style="margin-left:auto;border-radius:8px 8px 14px 4px;padding:4px 11px;font-size:10.5px;align-self:flex-end">Filters <span class="chip__badge">1</span></span>
+            </div>
+          </div>
 
-                <div class="ghost" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-                  <div class="bay">
-                    <div class="bay__head"><span class="cap cap--active">Roster slots</span><span class="line"></span><span class="cap">1</span></div>
-                    <div class="rulerow">
-                      <span class="inset" style="flex:1">QB + SF</span>
-                      <span class="inset inset--op">≥</span>
-                      <span class="inset">2</span>
-                      <span class="num">84</span>
-                    </div>
-                  </div>
-                  <div class="bay">
-                    <div class="bay__head"><span class="cap cap--active">Scoring settings</span><span class="line"></span></div>
-                    <div class="rulerow">
-                      <span class="inset" style="flex:1">rec</span>
-                      <span class="inset inset--op">=</span>
-                      <span class="inset">0.5</span>
-                      <span class="num">41</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- the new bay -->
-                <div class="bay">
-                  <div class="bay__head">
-                    <span class="cap cap--active">Who's in it</span>
-                    <span class="line"></span>
-                    <span class="chip chip--sm" style="padding:3px 9px;font-size:10px">all</span>
-                    <span class="cap" style="opacity:0.5">any</span>
-                    <span class="cap">2</span>
-                  </div>
-
-                  <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px">
-                    <span class="token">
-                      <span class="pos">RB</span> owns Bijan Robinson <span class="num">19</span> <span class="token__x">×</span>
-                    </span>
-                    <span class="token">
-                      <span class="av"></span> with @DarksideEmperors <span class="num">9</span> <span class="token__x">×</span>
-                    </span>
-                  </div>
-
-                  <div class="field field--focus" style="margin-bottom:9px">
-                    <svg class="icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14" stroke-linecap="round"/></svg>
-                    <span>bow</span><span class="field__caret"></span>
-                  </div>
-
-                  <div class="pop" style="display:grid;gap:5px">
-                    <span class="cap" style="padding:2px 4px 4px">Players</span>
-                    <span class="optline"><span class="pos pos--te">TE</span>Brock Bowers <span class="optline__sub">LV</span><span class="num">24</span></span>
-                    <span class="optline"><span class="pos pos--wr">WR</span>Nico Collins <span class="optline__sub">HOU</span><span class="num">7</span></span>
-                    <span class="cap" style="padding:8px 4px 4px">Leaguemates</span>
-                    <span class="optline"><span class="av"></span>@bowersfan <span class="num">3</span></span>
-                  </div>
-                </div>
-
-              </div>
-
-              <aside class="well rail">
-                <span class="cap">Leagues matching</span>
-                <div style="display:flex;align-items:baseline;gap:8px">
-                  <span class="rail__big">19</span>
-                  <span style="font-size:12px;color:rgba(255,255,255,0.45)">of 121 · 16%</span>
-                </div>
-                <div class="meter"><i style="width:16%"></i></div>
-                <span class="cap">Narrowing</span>
-                <div style="display:flex;flex-wrap:wrap;gap:6px">
-                  <span class="token">dynasty <span class="token__x">×</span></span>
-                  <span class="token">qb+sf ≥ 2 <span class="token__x">×</span></span>
-                  <span class="token">owns bijan robinson <span class="token__x">×</span></span>
-                  <span class="token">with @darksideemperors <span class="token__x">×</span></span>
-                </div>
-              </aside>
+          <div style="position:relative;margin:9px 0">
+            <div class="searchrail">
+              <svg class="icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14" stroke-linecap="round"/></svg>
+              <span class="token" style="padding:2px 5px 2px 6px;font-size:10.5px"><span class="pos" style="width:22px;height:14px;font-size:8px">RB</span>Bijan Robinson <span class="token__x">×</span></span>
+              <span>bow</span><span class="field__caret"></span>
+              <span class="num" style="margin-left:auto">19 of 121</span>
             </div>
 
-            <div class="panel__foot">
-              <span style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:7px 14px;font-weight:600;color:rgba(255,255,255,0.6)">Reset</span>
-              <span>Every filter narrows — a league has to pass all of them.</span>
-              <span class="apply">Apply</span>
+            <div class="pop" style="position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:20;display:grid;gap:5px;max-width:420px">
+              <span class="cap" style="padding:2px 4px 3px">Players</span>
+              <span class="optline"><span class="pos pos--te">TE</span>Brock Bowers <span class="optline__sub">LV</span><span class="num">24</span></span>
+              <span class="optline"><span class="pos pos--wr">WR</span>Nico Collins <span class="optline__sub">HOU</span><span class="num">7</span></span>
+              <span class="cap" style="padding:7px 4px 3px">Leaguemates</span>
+              <span class="optline"><span class="av"></span>@bowersfan <span class="num">3</span></span>
+              <div style="display:flex;align-items:center;gap:7px;padding:7px 4px 2px;border-top:1px solid rgba(255,255,255,0.09)">
+                <span class="cap">Match</span>
+                <span class="chip chip--on chip--sm" style="padding:3px 10px;font-size:10px">all</span>
+                <span class="chip chip--sm" style="padding:3px 10px;font-size:10px">any</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ledge ghost">
+            <div class="ledge__face">
+              <span class="ledge__subject"><span class="ledge__slot ledge__slot--sub" style="display:inline-block">League</span></span>
+              <span class="ledge__cols">
+                <span class="ledge__col"><span class="ledge__slot">Record</span></span>
+                <span class="ledge__col"><span class="ledge__slot">KTC start</span></span>
+                <span class="ledge__col"><span class="ledge__slot">Proj</span></span>
+                <span class="ledge__col"><span class="ledge__slot">ADP val</span></span>
+              </span>
             </div>
           </div>
         </div>
@@ -813,19 +894,18 @@
       <div class="note">
         <h3>Why it fits</h3>
         <p>
-          One dialog holds the whole selection, so the readout rail's count, chips and breakdown keep
-          being the single place a reader audits what they narrowed to — which is the rail's whole
-          job. The draft-and-Apply model is already right for this: the per-name counts beside each
-          result can't be read while the list behind the dialog moves.
+          Nothing announces a search like a search box. It is the only one of the three a reader finds
+          without being curious, it is one click to a first result, and the recessed material is
+          honest — you type into it, so it is a slot rather than a key. Spanning the rows it reads as
+          belonging to the list, the same argument that made the heading rail full width.
         </p>
       </div>
       <div class="note note--cost">
         <h3>What it costs</h3>
         <p>
-          The shared dialog learns about a manager. It renders on the trades page too, so it takes an
-          optional subjects prop that page passes nothing for — a shared component with a half nobody
-          on one of its two pages can use. The panel also grows by ~150px, and it is already
-          scrolling at 72vh on a laptop.
+          The most expensive rest state of the three, and it never gets cheaper — an empty field is
+          the same height as a full one. It also puts a permanent second inset band directly above the
+          heading rail, so the header reads as three stacked bars before a single league appears.
         </p>
       </div>
     </div>
@@ -836,71 +916,87 @@
     <div class="opt__head">
       <span class="opt__letter">B</span>
       <div>
-        <h2>Two more rows in the trough, opening a search instead of a list</h2>
+        <h2>A key at the left, tokens trailing it</h2>
         <p class="opt__thesis">
-          Status, Type and Format are collapsed rows whose options float over the panel. Owns and
-          Shared with become the fourth and fifth — same row, same float, with a search field above
-          the results because the list is hundreds long instead of four.
+          One raised key — <code>Who's in it</code>, badged when it narrows — with the chosen names
+          laid out beside it on the same line. Pressing floats the search over the list. The line is
+          nearly empty until it is used, and it says exactly what is set when it is.
         </p>
+        <p style="margin-top:10px"><span class="price price--good"><b>~26px</b> at rest</span></p>
       </div>
     </div>
 
     <div class="screen">
-      <div class="screen__tab"><span>Dialog</span> · <b>Filter leagues</b> · the trough</div>
+      <div class="screen__tab"><span>Variant B</span> · <b>at rest</b>, then <b>narrowed</b>, then <b>open</b></div>
       <div class="screen__stage">
-        <div class="stage-inner">
-          <div class="panel">
-            <div class="panel__body">
-              <div class="well" style="padding:6px;position:relative;z-index:10">
+        <div class="stage-inner stack">
 
-                <div style="display:flex;align-items:center;gap:12px;padding:7px 11px;border-radius:9px">
-                  <span class="cap">Status</span>
-                  <span style="margin-left:auto;font-size:13px;font-weight:700;color:rgba(255,255,255,0.8)">Any status</span>
-                  <span class="num">121</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:12px;padding:7px 11px;border-radius:9px">
-                  <span class="cap">Type</span>
-                  <span style="margin-left:auto;font-size:13px;font-weight:700;color:var(--active)">Dynasty</span>
-                  <span class="num">84</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:12px;padding:7px 11px;border-radius:9px">
-                  <span class="cap">Format</span>
-                  <span style="margin-left:auto;font-size:13px;font-weight:700;color:rgba(255,255,255,0.8)">Any format</span>
-                  <span class="num">121</span>
-                </div>
+          <p class="cap" style="margin-bottom:7px">At rest — nothing selected</p>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px">
+            <span class="chip chip--sm" style="font-size:10.5px;padding:3px 11px">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+              Who's in it
+            </span>
+            <span class="num" style="opacity:0.6">player or leaguemate</span>
+          </div>
 
-                <!-- the two new rows -->
-                <div style="position:relative">
-                  <div style="display:flex;align-items:center;gap:12px;padding:7px 11px;border-radius:9px;background:rgba(255,255,255,0.07)">
-                    <span class="cap">Owns</span>
-                    <span style="margin-left:auto;font-size:13px;font-weight:700;color:var(--active)">Bijan Robinson</span>
-                    <span class="num">19</span>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.6" stroke-linecap="round" style="transform:rotate(180deg)"><path d="M3 4.5 6 8l3-3.5"/></svg>
-                  </div>
+          <p class="cap" style="margin-bottom:7px">Narrowed — two subjects</p>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+            <span class="chip chip--on chip--sm" style="font-size:10.5px;padding:3px 11px">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#052029" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+              Who's in it <span class="chip__badge">2</span>
+            </span>
+            <span class="token" style="padding:2px 5px 2px 6px;font-size:10.5px"><span class="pos" style="width:22px;height:14px;font-size:8px">RB</span>Bijan Robinson <span class="token__x">×</span></span>
+            <span class="token" style="padding:2px 5px 2px 6px;font-size:10.5px"><span class="av" style="width:14px;height:14px"></span>@DarksideEmperors <span class="token__x">×</span></span>
+            <span class="num" style="margin-left:auto">9 of 121</span>
+          </div>
 
-                  <div class="pop" style="position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;display:grid;gap:6px">
-                    <div class="field field--focus">
-                      <svg class="icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14" stroke-linecap="round"/></svg>
-                      <span class="field__ph">Search 486 rostered players</span>
-                    </div>
-                    <span class="optline optline--on"><span class="pos">RB</span>Bijan Robinson <span class="optline__sub">ATL</span><span class="num">19</span></span>
-                    <span class="optline"><span class="pos pos--te">TE</span>Brock Bowers <span class="optline__sub">LV</span><span class="num">24</span></span>
-                    <span class="optline"><span class="pos pos--wr">WR</span>Ja'Marr Chase <span class="optline__sub">CIN</span><span class="num">11</span></span>
-                    <span class="optline"><span class="pos">RB</span>Jahmyr Gibbs <span class="optline__sub">DET</span><span class="num">16</span></span>
-                  </div>
-                </div>
+          <p class="cap" style="margin-bottom:7px">Open — the search floats over the list</p>
+          <div class="plate plate--crop">
+            <div class="plate__row">
+              <span class="plate__av" style="width:28px;height:28px"></span>
+              <div><div class="plate__name" style="font-size:13px">@jkap86</div><div class="scopeline" style="margin-top:2px">61-38-0 · <b>dynasty · owns bijan robinson</b></div></div>
+              <span class="chip chip--on" style="margin-left:auto;border-radius:8px 8px 14px 4px;padding:4px 11px;font-size:10.5px;align-self:flex-end">Filters <span class="chip__badge">1</span></span>
+            </div>
+          </div>
 
-                <div style="display:flex;align-items:center;gap:12px;padding:7px 11px;border-radius:9px">
-                  <span class="cap">Shared with</span>
-                  <span style="margin-left:auto;font-size:13px;font-weight:700;color:rgba(255,255,255,0.8)">Anyone</span>
-                  <span class="num">121</span>
-                </div>
+          <div style="position:relative;margin:9px 0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class="chip chip--on chip--sm" style="font-size:10.5px;padding:3px 11px">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#052029" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+                Who's in it <span class="chip__badge">1</span>
+              </span>
+              <span class="token" style="padding:2px 5px 2px 6px;font-size:10.5px"><span class="pos" style="width:22px;height:14px;font-size:8px">RB</span>Bijan Robinson <span class="token__x">×</span></span>
+              <span class="num" style="margin-left:auto">19 of 121</span>
+            </div>
+
+            <div class="pop" style="position:absolute;left:0;top:calc(100% + 6px);z-index:20;width:min(100%,410px);display:grid;gap:5px">
+              <div class="field field--focus">
+                <svg class="icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14" stroke-linecap="round"/></svg>
+                <span>bow</span><span class="field__caret"></span>
               </div>
-
-              <div class="ghost" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:64px">
-                <div class="bay" style="height:74px"><div class="bay__head"><span class="cap cap--active">Roster slots</span><span class="line"></span></div></div>
-                <div class="bay" style="height:74px"><div class="bay__head"><span class="cap cap--active">Scoring settings</span><span class="line"></span></div></div>
+              <span class="cap" style="padding:5px 4px 2px">Players</span>
+              <span class="optline"><span class="pos pos--te">TE</span>Brock Bowers <span class="optline__sub">LV</span><span class="num">24</span></span>
+              <span class="optline"><span class="pos pos--wr">WR</span>Nico Collins <span class="optline__sub">HOU</span><span class="num">7</span></span>
+              <span class="cap" style="padding:6px 4px 2px">Leaguemates</span>
+              <span class="optline"><span class="av"></span>@bowersfan <span class="num">3</span></span>
+              <div style="display:flex;align-items:center;gap:7px;padding:7px 4px 2px;border-top:1px solid rgba(255,255,255,0.09)">
+                <span class="cap">Match</span>
+                <span class="chip chip--on chip--sm" style="padding:3px 10px;font-size:10px">all</span>
+                <span class="chip chip--sm" style="padding:3px 10px;font-size:10px">any</span>
               </div>
+            </div>
+          </div>
+
+          <div class="ledge ghost">
+            <div class="ledge__face">
+              <span class="ledge__subject"><span class="ledge__slot ledge__slot--sub" style="display:inline-block">League</span></span>
+              <span class="ledge__cols">
+                <span class="ledge__col"><span class="ledge__slot">Record</span></span>
+                <span class="ledge__col"><span class="ledge__slot">KTC start</span></span>
+                <span class="ledge__col"><span class="ledge__slot">Proj</span></span>
+                <span class="ledge__col"><span class="ledge__slot">ADP val</span></span>
+              </span>
             </div>
           </div>
         </div>
@@ -911,19 +1007,20 @@
       <div class="note">
         <h3>Why it fits</h3>
         <p>
-          It is the cheapest thing to build and the least new vocabulary: the row, the float, the
-          one-open-at-a-time rule, the outside-press dismiss and the Escape ordering all exist. Two
-          rows cost ~62px closed, against a bay's ~150px, and the trough is what a reader already
-          scans for a one-line answer to "what is this set to".
+          It is the app's own grammar for this: a raised key you press, a floating panel over what it
+          narrows, one open at a time, Escape closing the innermost thing up. The tokens make the
+          selection readable without opening anything — the same debt the filters key pays with its
+          badge and the plate pays with its scope line. And the line carries several names without
+          growing, which is the one thing a collapsed row can't do.
         </p>
       </div>
       <div class="note note--cost">
         <h3>What it costs</h3>
         <p>
-          A row states <i>one</i> selection. Several players means either a row that reads
-          "3 players" — the one place in the dialog that hides its own state — or tokens spilling out
-          of a control built for a single line. And it puts a subject beside three attributes, which
-          quietly says they behave alike, when only this one has a match mode.
+          A key labelled <code>Who's in it</code> is not self-evidently a search until pressed, so it
+          is the least discoverable of the three. It also puts a third badge-bearing control on one
+          screen — the Filters key below the plate, the ADP block in the app bar, and now this — which
+          is a lot of parts each claiming a small cyan count.
         </p>
       </div>
     </div>
@@ -934,173 +1031,60 @@
     <div class="opt__head">
       <span class="opt__letter">C</span>
       <div>
-        <h2>Its own key on the plate, beside Filters</h2>
+        <h2>An upper storey milled into the heading rail</h2>
         <p class="opt__thesis">
-          Not in the dialog at all. A second key in the header plate's bottom edge opens a search
-          panel over the list: type a name, press a result, it becomes a token. The dialog stays
-          about what a league <i>is</i>; this asks who is <i>in</i> it.
+          Not a row above the rail — the <i>top of</i> the rail. One billet, two storeys: the subject
+          line cut into the lit face above, the heading channels below it, one wall and one shadow for
+          both. It is "above the headings" without being a second part.
         </p>
+        <p style="margin-top:10px"><span class="price price--good"><b>~24px</b> at rest</span> <span class="price price--good">no gap, no second shadow</span></p>
       </div>
     </div>
 
     <div class="screen">
-      <div class="screen__tab"><span>Manager header</span> · <b>plate + open search</b></div>
+      <div class="screen__tab"><span>Variant C</span> · <b>two-storey rail</b> · narrowed</div>
       <div class="screen__stage">
-        <div class="stage-inner">
-
-          <div class="plate">
-            <div class="plate__row">
-              <span class="plate__av"></span>
-              <div style="min-width:0">
-                <div class="plate__name">@jkap86</div>
-                <div style="font-size:11px;color:rgba(255,255,255,0.45)">2026 · 121 leagues</div>
-              </div>
-              <div style="margin-left:auto;display:flex;gap:10px">
-                <span class="well" style="padding:6px 12px;border-radius:9px;text-align:right">
-                  <span class="cap" style="display:block">Leagues</span>
-                  <span style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--active)">19</span>
-                </span>
-              </div>
-            </div>
-            <div style="margin-top:11px" class="scopeline">
-              Counting <b>dynasty · owns bijan robinson · with @darksideemperors</b>
-            </div>
-            <div class="plate__keys">
-              <span class="chip chip--on" style="border-radius:8px 8px 4px 16px;padding:5px 13px;font-size:11px">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#052029" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
-                Who's in it <span class="chip__badge">2</span>
-              </span>
-              <span class="chip chip--on" style="border-radius:8px 8px 16px 4px;padding:5px 13px;font-size:11px">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#052029" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 3.5h13M4 8h8M6.5 12.5h3"/></svg>
-                Filters <span class="chip__badge">1</span>
-              </span>
-            </div>
-          </div>
-
-          <div class="pop" style="margin-top:14px;max-width:430px;margin-left:auto;display:grid;gap:7px">
-            <div class="field field--focus">
-              <svg class="icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14" stroke-linecap="round"/></svg>
-              <span>chase</span><span class="field__caret"></span>
-              <span class="num" style="margin-left:auto">11 leagues</span>
-            </div>
-
-            <div style="display:flex;flex-wrap:wrap;gap:6px">
-              <span class="token"><span class="pos">RB</span> Bijan Robinson <span class="token__x">×</span></span>
-              <span class="token"><span class="av"></span> @DarksideEmperors <span class="token__x">×</span></span>
-            </div>
-
-            <span class="cap" style="padding:6px 4px 2px">Players · 3 matches</span>
-            <span class="optline"><span class="pos pos--wr">WR</span>Ja'Marr Chase <span class="optline__sub">CIN</span><span class="num">11</span></span>
-            <span class="optline"><span class="pos">RB</span>Chase Brown <span class="optline__sub">CIN</span><span class="num">6</span></span>
-            <span class="cap" style="padding:6px 4px 2px">Leaguemates · 1 match</span>
-            <span class="optline"><span class="av"></span>@chasing_rings <span class="num">4</span></span>
-
-            <div style="display:flex;align-items:center;gap:8px;padding:8px 4px 2px;border-top:1px solid rgba(255,255,255,0.09);margin-top:4px">
-              <span class="cap">Match</span>
-              <span class="chip chip--on chip--sm" style="padding:3px 10px;font-size:10px">all</span>
-              <span class="chip chip--sm" style="padding:3px 10px;font-size:10px">any</span>
-              <span class="num" style="margin-left:auto">19 of 121</span>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-
-    <div class="opt__body">
-      <div class="note">
-        <h3>Why it fits</h3>
-        <p>
-          It commits live and shows its answer in the plate's own count as you type, so finding
-          "leagues where I have Bijan" is one press and four keystrokes — no dialog, no Apply. It
-          also keeps the shared modal free of manager-only data, and both filter sets stay named for
-          the question they ask, the way Leagues and Filters do on the trades board.
-        </p>
-      </div>
-      <div class="note note--cost">
-        <h3>What it costs</h3>
-        <p>
-          A third control on a pinned plate, and the second one to wear a badge — the plate's edge is
-          the height budget the record readout already fought for. Live commit also means no
-          per-result count read against a still list; the counts here are each name's own total, not
-          what it would leave beside the rest of the selection.
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================ OPTION D -->
-  <section class="opt opt--pair" id="d">
-    <div class="opt__head">
-      <span class="opt__letter">D</span>
-      <div>
-        <h2>Start it from the share cards — pairs with any of the above</h2>
-        <p class="opt__thesis">
-          Not a filter control at all. Every share card already lists the leagues behind it; the one
-          thing it can't do is take you there. A single action per row sets the subject and drops you
-          on Leagues with it applied — so the question is answered where it is actually asked.
-        </p>
-      </div>
-    </div>
-
-    <div class="screen">
-      <div class="screen__tab"><span>Players tab</span> · <b>share row</b> → <b>Leagues tab</b></div>
-      <div class="screen__stage">
-        <div class="stage-inner">
-
-          <div class="row">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.7" stroke-linecap="round"><path d="M4.5 3 8 6l-3.5 3"/></svg>
-            <span class="pos">RB</span>
-            <span class="row__name">Bijan Robinson</span>
-            <span style="font-size:11px;color:rgba(255,255,255,0.4)">ATL</span>
-            <span class="chip chip--sm" style="margin-left:14px;font-size:10.5px;padding:3px 10px">Filter leagues →</span>
-            <span class="row__cols">
-              <span class="row__col">19 of 116</span>
-              <span class="row__col">7,912</span>
-              <span class="row__col">1.04</span>
-            </span>
-          </div>
-          <div class="row ghost">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.7" stroke-linecap="round"><path d="M4.5 3 8 6l-3.5 3"/></svg>
-            <span class="pos pos--te">TE</span>
-            <span class="row__name">Brock Bowers</span>
-            <span style="font-size:11px;color:rgba(255,255,255,0.4)">LV</span>
-            <span class="row__cols">
-              <span class="row__col">24 of 116</span>
-              <span class="row__col">8,140</span>
-              <span class="row__col">2.11</span>
-            </span>
-          </div>
-
-          <div style="display:flex;align-items:center;gap:10px;margin:20px 0 16px;color:rgba(255,255,255,0.3);font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase">
-            <span style="flex:1;height:1px;background:rgba(255,255,255,0.12)"></span>
-            lands on Leagues, already narrowed
-            <span style="flex:1;height:1px;background:rgba(255,255,255,0.12)"></span>
-          </div>
-
-          <div class="plate" style="padding:12px 14px">
+        <div class="stage-inner stack">
+          <div class="plate plate--crop">
             <div class="plate__row">
               <span class="plate__av" style="width:28px;height:28px"></span>
-              <div class="plate__name" style="font-size:13px">@jkap86</div>
-              <span style="margin-left:auto" class="scopeline">Counting <b>owns bijan robinson</b> · <b>19</b> of 121</span>
+              <div><div class="plate__name" style="font-size:13px">@jkap86</div><div class="scopeline" style="margin-top:2px">61-38-0 · <b>dynasty · owns bijan robinson</b></div></div>
+              <span class="chip chip--on" style="margin-left:auto;border-radius:8px 8px 14px 4px;padding:4px 11px;font-size:10.5px;align-self:flex-end">Filters <span class="chip__badge">1</span></span>
+            </div>
+          </div>
+
+          <div class="ledge" style="margin-top:9px">
+            <div class="ledge__storey">
+              <span class="cap" style="color:rgba(255,255,255,0.55)">Who's in it</span>
+              <span class="token" style="padding:2px 5px 2px 6px;font-size:10.5px"><span class="pos" style="width:22px;height:14px;font-size:8px">RB</span>Bijan Robinson <span class="token__x">×</span></span>
+              <span class="ledge__slot" style="display:inline-flex;align-items:center;gap:6px;text-align:left;color:rgba(255,255,255,0.5);letter-spacing:0.02em;text-transform:none;font-size:10.5px;padding:3px 9px">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+                add a player or leaguemate
+              </span>
+              <span class="num" style="margin-left:auto;color:rgba(255,255,255,0.55)">19 of 121</span>
+            </div>
+            <div class="ledge__seam"></div>
+            <div class="ledge__face ledge__face--lower">
+              <span class="ledge__subject"><span class="ledge__slot ledge__slot--sub" style="display:inline-block">League</span></span>
+              <span class="ledge__cols">
+                <span class="ledge__col"><span class="ledge__slot">Record</span></span>
+                <span class="ledge__col"><span class="ledge__slot">KTC start</span></span>
+                <span class="ledge__col"><span class="ledge__slot">Proj</span></span>
+                <span class="ledge__col"><span class="ledge__slot">ADP val</span></span>
+              </span>
             </div>
           </div>
 
           <div style="margin-top:10px">
             <div class="row">
               <span class="row__name">Dynasty Warriors XII</span>
-              <span class="row__cols"><span class="row__col">3rd of 12</span><span class="row__col">41,208</span></span>
-            </div>
-            <div class="row">
-              <span class="row__name">The Gauntlet SF</span>
-              <span class="row__cols"><span class="row__col">1st of 12</span><span class="row__col">44,970</span></span>
+              <span class="row__cols"><span class="row__col">9-4-0</span><span class="row__col">31,940</span><span class="row__col">3rd of 12</span><span class="row__col">1,204</span></span>
             </div>
             <div class="row ghost">
-              <span class="row__name">Big Board Dynasty</span>
-              <span class="row__cols"><span class="row__col">7th of 14</span><span class="row__col">38,116</span></span>
+              <span class="row__name">The Gauntlet SF</span>
+              <span class="row__cols"><span class="row__col">11-2-0</span><span class="row__col">34,880</span><span class="row__col">1st of 12</span><span class="row__col">1,388</span></span>
             </div>
           </div>
-
         </div>
       </div>
     </div>
@@ -1109,18 +1093,20 @@
       <div class="note">
         <h3>Why it fits</h3>
         <p>
-          The share card is where a reader is already looking at "19 of 116" and wanting the 19. It
-          costs no new filter surface, no search, and no menu to populate — the name is the row. It
-          also makes whichever control you build discoverable, since the first time most readers see
-          the filter is the moment it fills itself in.
+          Cheapest of the three, because a separate part costs more than its own contents: its wall,
+          its drop shadow, and the clearance holding its lit face off the rail's lit face — the exact
+          20px the filters key gave back by seating flush. One billet pays that once. It also says
+          something true: both storeys are the list's own header, one naming its columns and one
+          naming its population.
         </p>
       </div>
       <div class="note note--cost">
         <h3>What it costs</h3>
         <p>
-          On its own it is one subject at a time and no way to add a second, or to reach a player you
-          can't already see — so it is an entry point rather than the feature. It needs a control
-          behind it to hold and edit what it set, which is why it pairs rather than competes.
+          <code>ColumnsBar</code> is shared by all three tabs and knows nothing about filters today, so
+          it grows a slot and a reason to care. The rail is also drawn only when there are rows to
+          head — so on "no leagues match these filters" the control that would widen the selection
+          disappears with it, and it has to be exempted from that rule.
         </p>
       </div>
     </div>
@@ -1130,112 +1116,159 @@
   <section id="compare">
     <div class="sec-head">
       <h2>Side by side</h2>
-      <span class="eyebrow">Scroll for all four</span>
+      <span class="eyebrow">Scroll for all three</span>
     </div>
     <div class="rule"></div>
 
     <div class="tablewrap">
       <table>
         <thead>
-          <tr>
-            <th></th>
-            <th>A · Subjects bay</th>
-            <th>B · Trough rows</th>
-            <th>C · Own key</th>
-            <th>D · From shares</th>
-          </tr>
+          <tr><th></th><th>A · Search rail</th><th>B · Key &amp; tokens</th><th>C · Upper storey</th></tr>
         </thead>
         <tbody>
           <tr>
-            <th>Holds several names</th>
-            <td class="yes">Yes, as tokens</td>
-            <td class="mid">Awkwardly — a row states one</td>
-            <td class="yes">Yes, as tokens</td>
-            <td class="no">One at a time</td>
+            <th>Pinned height at rest</th>
+            <td class="mid">~38px, always</td>
+            <td class="yes">~26px</td>
+            <td class="yes">~24px, no gap</td>
           </tr>
           <tr>
-            <th>Presses to first answer</th>
-            <td>3 — open, type, apply</td>
-            <td>4 — open, row, type, apply</td>
-            <td class="yes">2 — open, type</td>
-            <td class="yes">1</td>
+            <th>Parts added to the header</th>
+            <td class="mid">A band + its shadow</td>
+            <td class="mid">A key + its wall</td>
+            <td class="yes">None — one billet</td>
           </tr>
           <tr>
-            <th>Chrome added to the pinned plate</th>
-            <td class="yes">None</td>
-            <td class="yes">None</td>
-            <td class="mid">A second key + badge</td>
-            <td class="yes">None</td>
+            <th>Found without being told</th>
+            <td class="yes">A search box is a search box</td>
+            <td class="no">A key you have to press</td>
+            <td class="mid">A prompt in the rail</td>
           </tr>
           <tr>
-            <th>Shared dialog learns about a manager</th>
-            <td class="mid">Yes — optional prop</td>
-            <td class="mid">Yes — optional prop</td>
+            <th>Presses to a first result</th>
+            <td class="yes">0 — type</td>
+            <td>1</td>
+            <td>1</td>
+          </tr>
+          <tr>
+            <th>Several names at once</th>
+            <td class="yes">Inline, field grows</td>
+            <td class="yes">Trailing tokens</td>
+            <td class="yes">Trailing tokens</td>
+          </tr>
+          <tr>
+            <th>Survives an empty result set</th>
+            <td class="yes">Yes</td>
+            <td class="yes">Yes</td>
+            <td class="mid">Needs the rail exempted</td>
+          </tr>
+          <tr>
+            <th>Touches shared components</th>
             <td class="yes">No</td>
             <td class="yes">No</td>
-          </tr>
-          <tr>
-            <th>Counts read against a still list</th>
-            <td class="yes">Yes — draft + Apply</td>
-            <td class="yes">Yes — draft + Apply</td>
-            <td class="mid">No — commits live</td>
-            <td>n/a</td>
-          </tr>
-          <tr>
-            <th>Match mode (all / any)</th>
-            <td class="yes">In the bay head</td>
-            <td class="no">Nowhere natural</td>
-            <td class="yes">In the panel foot</td>
-            <td>n/a</td>
-          </tr>
-          <tr>
-            <th>Discoverable without being told</th>
-            <td class="mid">Behind a dialog</td>
-            <td class="mid">Behind a dialog</td>
-            <td class="yes">On the plate</td>
-            <td class="yes">Where it's wanted</td>
+            <td class="mid"><code>ColumnsBar</code>, all tabs</td>
           </tr>
           <tr>
             <th>Rough build</th>
-            <td>Medium</td>
-            <td class="yes">Smallest</td>
-            <td>Medium</td>
             <td class="yes">Small</td>
+            <td class="yes">Small</td>
+            <td>Medium</td>
           </tr>
         </tbody>
       </table>
     </div>
   </section>
 
-  <!-- ================================================================ RECO -->
+  <section>
+    <div class="sec-head"><h2>True of all three</h2></div>
+    <div class="rule"></div>
+    <div class="shared">
+      <div>
+        <h3>It commits live</h3>
+        <p>
+          No dialog means no draft to protect, so the count moves as you type. The per-name counts are
+          each name's own total rather than what it would leave beside the rest — the honest reading
+          when the list behind is moving.
+        </p>
+      </div>
+      <div>
+        <h3>One search, two kinds of answer</h3>
+        <p>
+          Players and leaguemates in one field, grouped in the results. They are the same question —
+          who is in this league — and two fields would make a reader choose which one they meant
+          before typing a name that only exists in one of them.
+        </p>
+      </div>
+      <div>
+        <h3>The state sits beside the league filters</h3>
+        <p>
+          Its own type in the manager layout's provider, reset per manager by the same subtree key.
+          Narrowing runs in <code>useFilteredLeagues</code>, after the shared predicate, where
+          <code>rosters</code> and <code>members</code> are in hand.
+        </p>
+      </div>
+      <div>
+        <h3>The lists load on open</h3>
+        <p>
+          The players and leaguemates payloads are the other two tabs' resources, off a cache shared
+          per manager — so anyone who has visited either pays nothing, and a cold Leagues tab fetches
+          only once the control is opened.
+        </p>
+      </div>
+      <div>
+        <h3><code>all</code> and <code>any</code> are both real</h3>
+        <p>
+          Rules narrow on an attribute, so they all AND. These are subjects, and "Bijan <i>or</i>
+          Chase" is asked as often as "both" — the same case the trades selection makes. Default
+          <code>all</code>, as it does.
+        </p>
+      </div>
+      <div>
+        <h3>It narrows all three tabs</h3>
+        <p>
+          Which is the point: Players then answers "who else do I own alongside Bijan", Leaguemates
+          "who am I in those leagues with". Expect the filtered player's own share to read 19 of 19 —
+          correct, and worth a note rather than a fix.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <section>
     <div class="reco">
       <h2>What I'd build</h2>
       <p class="prose">
-        <b>C, with D as the way in.</b> The two questions this adds are subjects, not attributes, and
-        the app already draws that line twice — the trades board separates <i>which leagues</i> from
-        <i>which trades</i> into two controls for exactly this reason. A key of its own keeps the
-        shared dialog free of manager data, keeps live commit (which is what makes the search feel
-        like a search), and lets the share cards fill it in.
+        <b>B, the key with trailing tokens.</b> It is the app's existing grammar with nothing invented,
+        it is the cheapest thing that survives an empty list, and it touches no shared component. The
+        26px it costs is a row of the list you get back the moment nothing is selected — which is most
+        of the time.
       </p>
       <p class="prose" style="margin-top:12px">
-        If the plate's edge can't take a second key, <b>A</b> is the next best — it keeps one place to
-        audit a selection, at the cost of the shared modal carrying a half the trades page can't use.
+        <b>C is the better idea and the riskier build.</b> Folding the control into the rail is the only
+        option that adds no part at all, and two storeys of one billet is the most honest thing to
+        draw. It costs a shared component learning about filters, and an exemption so the control
+        doesn't vanish exactly when a reader has narrowed to nothing. Worth doing if the header's
+        height is the binding constraint.
+      </p>
+      <p class="prose" style="margin-top:12px">
+        <b>A only if discovery is the worry.</b> An open field is the one thing nobody has to be told
+        about — but it charges the full price on every screen, every tab, whether or not it is ever
+        used, and this header has spent two rounds buying that height back.
       </p>
       <ol class="steps">
-        <li><b>State beside the league filters.</b> A <code>SubjectFilters</code> in the manager layout's provider, reset per manager by the same subtree key — so the selection survives the trip between the three tabs.</li>
-        <li><b>Narrowing after the shared predicate</b>, in <code>useFilteredLeagues</code>, where the lookups are in hand. <code>features/shared</code> stays free of anything a trades reader can't use.</li>
-        <li><b>Data on open</b> — the players and leaguemates payloads, gated on the control being opened, off the same cache the other two tabs fill.</li>
-        <li><b>It narrows all three tabs</b>, which is a feature: Players then answers "who else do I own alongside Bijan", Leaguemates "who am I in those leagues with". Expect the filtered player's own share to read 19 of 19 — correct, and worth a note rather than a fix.</li>
+        <li><b>Add it in <code>LeaguesViewLayout</code></b>, not per tab — the same place the filters key and the ADP trigger are wired, so all three tabs get it once.</li>
+        <li><b>Pass it into <code>ManagerHeader</code> as a node</b> beside <code>columns</code>, so the pinned card keeps owning its own stacking and the gap under it.</li>
+        <li><b>Narrow in <code>useFilteredLeagues</code></b>, after <code>matchesFilters</code>, so <code>features/shared</code> stays free of anything the trades board can't use.</li>
+        <li><b>Add the subject to the scope line</b> — <code>filterSummary</code>'s job, extended: the plate already names what the record is counted over, and this is now part of it.</li>
       </ol>
     </div>
   </section>
 
   <footer>
-    Drawn in the app's own material — <code>.lab-chip</code> keys, <code>.lab-well</code> troughs, the
-    cyan <code>active</code> token, Orbitron on the named rows. Single-theme on purpose: this is a
-    mockup of a dark instrument, and it would misreport itself on a light ground. Counts are
-    illustrative.
+    Drawn in the app's own material — <code>.lab-ledge</code> for the heading rail,
+    <code>.lab-chip</code> keys, the cyan <code>active</code> token, Orbitron on the named rows.
+    Heights are measured off the mock at laptop width and are indicative, not exact. Single-theme on
+    purpose: this is a mockup of a dark instrument. Counts are illustrative.
   </footer>
 
 </div>
