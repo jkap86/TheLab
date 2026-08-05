@@ -15,6 +15,8 @@ export { runLeagueCrawl } from "./crawl";
 export type { CrawlSummary, CrawlOptions } from "./crawl";
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
+  LEAGUE_COLUMNS_SQL,
+  toManagerLeague,
   getLeagueDetail,
   getLeagueAdpBoards,
   getLeaguesByIds,
@@ -26,6 +28,7 @@ export {
   getManagerRosters,
   getManagerSyncedAt,
 } from "./queries";
+export type { LeagueRow } from "./queries";
 export type {
   LeagueDetail,
   Leaguemate,

@@ -1,5 +1,6 @@
 import { pool } from "@/shared/db";
-import type { ManagerLeague } from "@/shared/manager";
+import { LEAGUE_COLUMNS_SQL, toManagerLeague } from "@/shared/manager";
+import type { LeagueRow, ManagerLeague } from "@/shared/manager";
 
 import { assembleTrade } from "./assemble";
 import type { TradeRow } from "./assemble";
@@ -11,13 +12,15 @@ import type { TradeQuery } from "./params";
 import {
   jsonbArraySql,
   PICK_TOKEN_SQL,
-  STARTUP_DRAFT_SQL,
+  STARTUP_DRAFT_CTE,
   TRADES_POPULATION_SQL,
   TRADE_COLUMNS_SQL,
   TRADE_ORDER_SQL,
   TRADE_SORT_SQL,
   tradeCursorSql,
   tradeFilterSql,
+  tradeNarrowingSql,
+  tradeScopeSql,
 } from "./sql";
 import type { Trade } from "./types";
 
@@ -103,7 +106,7 @@ export async function listTrades(query: TradeQuery): Promise<TradesPage> {
   const limit = `$${params.push(query.limit + 1)}`;
 
   const { rows } = await pool.query<TradeRow>(
-    `WITH startup_draft AS (${STARTUP_DRAFT_SQL})
+    `${STARTUP_DRAFT_CTE}
       SELECT ${TRADE_COLUMNS_SQL}
       ${TRADES_POPULATION_SQL}${filters}${resume}
       ${TRADE_ORDER_SQL}
@@ -146,11 +149,71 @@ export async function countTrades(query: TradeQuery): Promise<number> {
   const filters = tradeFilterSql(query, params, circle);
 
   const { rows } = await pool.query<{ total: string }>(
-    `WITH startup_draft AS (${STARTUP_DRAFT_SQL})
+    `${STARTUP_DRAFT_CTE}
       SELECT count(*) AS total ${TRADES_POPULATION_SQL}${filters}`,
     params,
   );
   return Number(rows[0]?.total ?? 0);
+}
+
+/** The two denominators a first page states, from one pass over the population. */
+export type TradeTotals = {
+  /** Matching the whole query — the `N` of "N of M trades". */
+  total: number;
+  /** Matching the league filters and the circle alone — the `M`. */
+  scopeTotal: number;
+};
+
+/**
+ * Both of a first page's denominators, counted together.
+ *
+ * They used to be two calls to {@link countTrades} — the query, and the query
+ * with the window and the selection lifted out — which is two bitmap scans of
+ * the season, two `startup_draft` derivations and two pooled connections held
+ * for the length of them, for two numbers over *nearly the same rows*. The
+ * scope population is a strict superset of the query's by construction (see
+ * `leagueScopeQuery`: it only ever removes narrowings), so the narrower number
+ * is an aggregate `FILTER` over the wider one's scan rather than a scan of its
+ * own.
+ *
+ * **What that buys is a connection and the work, not wall clock, and the
+ * difference is worth stating** — the pair ran in parallel, so the request
+ * already waited on the slower of the two, and the slower of the two is always
+ * the scope count (it is the superset, and it is the one no selection can help
+ * with an index). Merging removes the *other* scan. Measured on 1.2M
+ * transactions holding 59k trades for the season: with a date window, 170ms of
+ * database work across two connections becomes 110ms on one; with a player
+ * selection — which the GIN index answers cheaply on its own — 128ms becomes
+ * 121ms. Wall clock is unchanged in both. That is the trade this is for: the
+ * pool is what runs out first here, and a first page now holds one connection
+ * for its denominators rather than two.
+ *
+ * The two halves come off the same builder as the board's own `WHERE`
+ * (`tradeFilterSql` is their concatenation), so the count and the rows cannot
+ * come to different views of the population — the guarantee `./sql` exists for.
+ *
+ * An unnarrowed query counts one number and reports it twice, which is what the
+ * caller did for itself before and is kept here so there is one place that knows
+ * the two are equal.
+ */
+export async function countTradeTotals(query: TradeQuery): Promise<TradeTotals> {
+  const circle = await resolveTradeCircle(query);
+  const params: unknown[] = [query.season];
+  const scope = tradeScopeSql(query, params, circle);
+  const narrowing = tradeNarrowingSql(query, params);
+
+  const { rows } = await pool.query<{ total: string; scope_total: string }>(
+    `${STARTUP_DRAFT_CTE}
+      SELECT count(*) AS scope_total,
+             ${narrowing ? `count(*) FILTER (WHERE ${narrowing})` : `count(*)`} AS total
+      ${TRADES_POPULATION_SQL}${scope}`,
+    params,
+  );
+
+  return {
+    total: Number(rows[0]?.total ?? 0),
+    scopeTotal: Number(rows[0]?.scope_total ?? 0),
+  };
 }
 
 /**
@@ -179,46 +242,23 @@ export async function countTrades(query: TradeQuery): Promise<number> {
 export async function getSeasonTradeLeagues(
   season: string,
 ): Promise<ManagerLeague[]> {
-  type Row = {
-    league_id: string;
-    name: string;
-    season: string;
-    status: string;
-    total_rosters: number;
-    avatar: string | null;
-    settings: Record<string, unknown> | null;
-    roster_positions: string[] | null;
-    scoring_settings: Record<string, number> | null;
-  };
-
-  const { rows } = await pool.query<Row>(
-    `WITH startup_draft AS (${STARTUP_DRAFT_SQL}),
+  const { rows } = await pool.query<LeagueRow>(
+    `${STARTUP_DRAFT_CTE},
           traded AS (
             SELECT DISTINCT t.league_id ${TRADES_POPULATION_SQL}
           )
-      SELECT l.league_id, l.name, l.season, l.status, l.total_rosters, l.avatar,
-             l.settings, l.roster_positions, l.scoring_settings
+      SELECT ${LEAGUE_COLUMNS_SQL}
         FROM leagues l
         JOIN traded ON traded.league_id = l.league_id
        ORDER BY l.name`,
     [season],
   );
 
-  return rows.map((r) => ({
-    league_id: r.league_id,
-    name: r.name,
-    season: r.season,
-    status: r.status,
-    total_rosters: r.total_rosters,
-    avatar: r.avatar,
-    // Not read on this page — a trade card names a league, it doesn't stand it
-    // against a record — and the leagues route that does fill it is scoped to a
-    // manager, which this one deliberately isn't.
-    record: null,
-    settings: r.settings,
-    roster_positions: r.roster_positions,
-    scoring_settings: r.scoring_settings,
-  }));
+  // `record` is left null by {@link toManagerLeague}'s default, and that is the
+  // answer rather than a gap: a trade card names a league, it doesn't stand it
+  // against a record, and the leagues route that does fill one is scoped to a
+  // manager — which this read deliberately isn't.
+  return rows.map((r) => toManagerLeague(r));
 }
 
 /** One selectable value in a filter menu, with how many trades carry it. */
@@ -330,7 +370,7 @@ async function facetQuery(
   const filters = tradeFilterSql(query, params, circle);
 
   const { rows } = await pool.query<{ value: string; count: string }>(
-    `WITH startup_draft AS (${STARTUP_DRAFT_SQL}),
+    `${STARTUP_DRAFT_CTE},
           pop AS MATERIALIZED (
             SELECT t.transaction_id, t.league_id, t.adds, t.draft_picks, t.roster_ids
             ${TRADES_POPULATION_SQL}${filters}

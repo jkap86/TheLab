@@ -667,4 +667,21 @@ describe("adpBoardRows", () => {
     adpBoardRows(players, "redraft");
     assert.deepEqual(ids(players), ["b", "a"]);
   });
+
+  test("the rows are the payload's own objects, not copies", () => {
+    // `AdpBoardRow` is memoised on a player object, so the board re-sorting
+    // must hand back the *same* objects or every row re-renders whenever
+    // anything above it does — a filter tray opening, the draft count landing.
+    // A `map` into fresh objects here would cost nothing visible and silently
+    // undo that, which is why the identity is asserted rather than assumed.
+    const players = [row("b", 9, null), row("a", 1, null), row("c", 3, 4)];
+    for (const shown of ["redraft", "dynasty", "both"] as const) {
+      for (const kept of adpBoardRows(players, shown)) {
+        assert.ok(
+          players.some((p) => p === kept),
+          `${shown} returned a copy of ${kept.player_id}`,
+        );
+      }
+    }
+  });
 });

@@ -22,6 +22,7 @@ export {
 export type { TradeCircle, TradeMatchMode, TradeQuery } from "./params";
 export { draftOrderKey, pickSlotKey } from "./pick-slots";
 export {
+  countTradeTotals,
   countTrades,
   getDraftSlots,
   getSeasonTradeLeagues,
@@ -33,6 +34,7 @@ export type {
   TradeFacet,
   TradeFacets,
   TradeManagerRow,
+  TradeTotals,
   TradesPage,
 } from "./queries";
 export {

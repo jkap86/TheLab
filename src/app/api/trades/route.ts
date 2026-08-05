@@ -6,14 +6,12 @@ import { isSeason } from "@/shared/query";
 import { getActiveSeason } from "@/shared/season";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 import {
-  countTrades,
+  countTradeTotals,
   draftOrderKey,
   getDraftSlots,
   getStoredTradeCount,
   getTradeManagers,
-  hasTradeNarrowing,
   isUnnarrowed,
-  leagueScopeQuery,
   listTrades,
   lookupKtc,
   lookupKtcPicks,
@@ -81,8 +79,8 @@ export async function GET(request: Request) {
   try {
     const page = await listTrades(query);
 
-    // Both counts run only on a first page, and both are skipped when they are
-    // free or knowable without a scan. Started together with the enrichment
+    // The counts run only on a first page, and are skipped entirely when the
+    // number is knowable without a scan. Started together with the enrichment
     // rather than before it: they are independent queries and the page waits on
     // the slowest, not on the sum.
     const first = query.cursor === null;
@@ -122,10 +120,11 @@ const EMPTY_TOTALS = { total: null, scopeTotal: null } as const;
  * - Unnarrowed, `total` is the stored count and no scan happens at all. A season
  *   the refresh has never reached counts once and stores it, so the first reader
  *   after a deploy pays what every reader used to.
- * - `scopeTotal` is the league-filtered population, and it is only its own query
- *   when something beyond the league filters is narrowing — otherwise it is the
- *   same number as `total`, and counting it twice would be a scan for a value
- *   already in hand.
+ * - Narrowed, both come off one pass: `scopeTotal` is the league-filtered
+ *   population and `total` an aggregate `FILTER` over the same scan, since the
+ *   scope population is a superset of the query's by construction. The case
+ *   where the two are equal needs no special handling any more — it is an empty
+ *   filter over the same count rather than a second query skipped by hand.
  */
 async function resolveTotals(
   query: TradeQuery,
@@ -137,16 +136,11 @@ async function resolveTotals(
       return { total, scopeTotal: total };
     }
 
-    if (!hasTradeNarrowing(query)) {
-      const total = await countTrades(query);
-      return { total, scopeTotal: total };
-    }
-
-    const [total, scopeTotal] = await Promise.all([
-      countTrades(query),
-      countTrades(leagueScopeQuery(query)),
-    ]);
-    return { total, scopeTotal };
+    // One pass over the scope population answers both, including the case where
+    // they are the same number — see {@link countTradeTotals}. It used to be two
+    // counts in parallel, which was two scans of nearly the same rows and two
+    // pooled connections held for the length of them.
+    return await countTradeTotals(query);
   } catch (error) {
     // A denominator, not the list. The page draws a count without a total the
     // same way it drew one mid-stream, so a failed count costs a percentage and
