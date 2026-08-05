@@ -2075,15 +2075,35 @@ stops holding, a comment saying it does would not have caught it.
     behind** — there is nothing to compare a name to, and there are several
     hundred of them. One field over both kinds, grouped in the results: they are
     the same question, and two fields would make a reader pick which one they
-    meant before typing a name that exists in only one. The search has a second
-    door: a **Player shares** key beside the trigger opens the same panel on the
-    whole ranked list — every rostered player, most-held first, uncapped where
-    the search keeps its top eight — because the names worth narrowing by are
-    mostly the ones held everywhere, and typing is only one way to arrive at
-    one. Same rows, same toggle, so a player picked by browsing leaves exactly
-    the token typing would, and the input stays live over the list; what the
-    second door must not become is a second control — one panel, two
-    populations.
+    meant before typing a name that exists in only one. It stays capped at eight,
+    because it is the door for a reader who already knows the name they want.
+  - **The second door is a sheet, not a taller panel** (`player-shares-sheet`).
+    The names worth narrowing by are mostly the ones held everywhere, so the
+    *Player shares* key opens the whole ranked list — but a floating panel can
+    only say a name and a count, which is the table the Players tab was before
+    its columns were pickable. So the browse *is* that tab's list, over the page
+    it narrows: `ShareList` → `ShareCard` → `MetricColumns` on the same persisted
+    `share` selection, the same catalogue, and the league filters key in its
+    title bar (`seat="bar"`) — every row's share is out of the leagues the other
+    filters leave, so narrowing there rewrites every number and reorders the list
+    under it. Four rules it keeps:
+    - **Counted over `leagueFiltered`**, like the menu it replaces: the numerator
+      is what you picked, the denominator is what you picked it from.
+    - **A row press picks; the chevron expands.** `ShareCard` splits its one
+      target only when `onSelect` is passed, so the tabs keep the whole-row
+      expand — a press nine times out of ten is the pick, and a card whose own
+      mark did nothing would be worse than two behaviours.
+    - **The glass is spent on the frame.** A translucent panel is the one new
+      material here and it is what says the page is still underneath; the rows
+      sit on an opaque well, because four numbers read over a drifting league
+      list is what the effect must not buy.
+    - **`onClose` tests its target.** The filters modal and the columns editor
+      are dialogs *inside* this one, and React walks its own tree for `close` —
+      which doesn't bubble in the DOM — so an unguarded handler closes the sheet
+      whenever a reader dismisses either of them. Everything else about the
+      stacking (top layer, Escape innermost-first, presses inside a nested dialog
+      never reaching this one's box) is the platform's, which is why this is a
+      `<dialog>` and not an overlay.
   - **Null and false are different answers, exactly as `slotCount`'s are.** A
     league whose rosters were never synced is not evidence a player is absent
     from it, so `holdsSubject` returns null and a rule against it *fails* rather

@@ -81,6 +81,7 @@ export function ColumnsBar<C>({
   ctx,
   previewLabel,
   view,
+  storey,
   headings = true,
   onColumnChange,
   onColumns,
@@ -104,6 +105,16 @@ export function ColumnsBar<C>({
    * the single-storey heading rail it has always been.
    */
   view?: FilteredLeagues;
+  /**
+   * An upper storey supplied by the caller, for a list whose rail is not the
+   * page's — the shares sheet, which draws the selection it is editing there
+   * rather than the rail's own triggers (its search lives in the sheet's title
+   * bar, and the key that opens it is what a reader pressed to get here).
+   *
+   * Mutually exclusive with {@link view}: that one hands the storey to
+   * {@link SubjectRail}, which would open a second sheet from inside this one.
+   */
+  storey?: React.ReactNode;
   /**
    * Whether the list has rows for the headings to head.
    *
@@ -146,7 +157,7 @@ export function ColumnsBar<C>({
       {view ? (
         <SubjectRail view={view} headings={headingCells} />
       ) : (
-        <ListLedge headings={headingCells} />
+        <ListLedge storey={storey} headings={headingCells} />
       )}
 
       {everOpened && (

@@ -39,6 +39,8 @@ export function ShareList<T extends ShareRow>({
   metrics,
   columns,
   adpFor,
+  isSelected,
+  onSelect,
 }: {
   rows: T[];
   /** Leagues the shares are out of — see each view's own `league_count`. */
@@ -57,6 +59,14 @@ export function ShareList<T extends ShareRow>({
    * by the leaguemates view, whose menu holds nothing that reads it.
    */
   adpFor?: (row: T) => AdpPlayerPayload | null;
+  /**
+   * Whether a row is one of the subjects narrowing the league list, and how to
+   * toggle it — passed only by the shares sheet, where the list is a picker over
+   * the leagues behind it. Both or neither: a row that draws as selectable and
+   * doesn't toggle is the promise this app's raised/recessed grammar keeps.
+   */
+  isSelected?: (row: T) => boolean;
+  onSelect?: (row: T) => void;
 }) {
   return (
     <ul className="flex w-full flex-col gap-4">
@@ -76,6 +86,8 @@ export function ShareList<T extends ShareRow>({
             metrics={metrics}
             ctx={ctx}
             columns={columns}
+            selected={isSelected?.(row) ?? false}
+            onSelect={onSelect && (() => onSelect(row))}
           />
         );
       })}
