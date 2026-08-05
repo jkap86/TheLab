@@ -277,6 +277,12 @@ export function TradesHome({ season }: { season: string }) {
           makes the ledge safe to expand in place: opening it moves the board
           down, and the observer on this element is how the list is told. */}
       <div ref={headerRef}>
+        {/* The page deliberately leads with its controls rather than a title —
+            the app bar already names the tool, which is the whole argument for
+            deleting the masthead. What that left was a document whose first
+            heading was a trade card, so the name it dropped is kept where only
+            a heading outline can see it. */}
+        <h1 className="sr-only">Trades</h1>
         <TradeFiltersLedge
           filters={tradeFilters}
           onChange={setTradeFilters}
@@ -295,6 +301,10 @@ export function TradesHome({ season }: { season: string }) {
                   It leads the trailing group because the two triggers beside it
                   are what move it. */}
               <p
+                // The number every filter on this page is pressed to move, and
+                // the only feedback a press gives — the board itself is a
+                // windowed list a reader may be nowhere near.
+                role="status"
                 className={`flex shrink-0 items-baseline gap-1.5 text-sm text-foreground/55 transition-opacity ${
                   // Dimmed while a narrowed board is on its way, so the number
                   // reads as the one being replaced rather than the answer to
@@ -338,8 +348,14 @@ export function TradesHome({ season }: { season: string }) {
 
       {loading ? (
         <div className="flex flex-col items-center gap-3 py-16 text-foreground/60">
-          <FlaskLoader />
-          <p className="text-sm">Reading every league&rsquo;s trades…</p>
+          {/* The flask already carries the `role="status"`, so the line under it
+              is its label rather than a second announcement — `PanelLoading`'s
+              own pairing. Left to the default the wait announced as "Loading"
+              and the sentence saying what is being loaded was silent. */}
+          <FlaskLoader label="Reading every league’s trades…" />
+          <p aria-hidden="true" className="text-sm">
+            Reading every league&rsquo;s trades…
+          </p>
         </div>
       ) : visible.length === 0 ? (
         <Note>
@@ -433,6 +449,10 @@ function Note({
 }) {
   return (
     <p
+      // A read that failed is worth interrupting for; an empty board is not —
+      // that one is the answer to the filter the reader just pressed, and the
+      // count beside the trigger already announces it.
+      role={tone === "error" ? "alert" : undefined}
       className={`rounded-xl border px-4 py-6 text-center text-sm ${
         tone === "error"
           ? "border-red-400/25 bg-red-400/5 text-red-200"

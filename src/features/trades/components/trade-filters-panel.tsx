@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 import type { UserInfo } from "@/shared/contract";
 
@@ -135,6 +135,11 @@ export function TradeFiltersPanel({
   const setPreset = (preset: TradeRangePreset) =>
     onChange({ ...filters, range: { ...filters.range, preset } });
 
+  // The caption under the scope keys is what says *why* they are inert without
+  // an account, so the keys point at it rather than leaving the sentence beside
+  // them and unrelated.
+  const circleNoteId = useId();
+
   return (
     <div className="mt-3 flex flex-col gap-4 border-t border-foreground/10 pt-3">
       {/* The population, on a line of its own above the three groups that cut
@@ -151,8 +156,11 @@ export function TradeFiltersPanel({
               // Every circle but the widest is drawn around an account, so
               // without one there is nothing to draw. Disabled rather than
               // absent: what it takes to switch it on is a sentence, and hiding
-              // the control hides the sentence too.
+              // the control hides the sentence too — which is also why it is
+              // `aria-disabled`, so the key stays reachable and carries the
+              // sentence with it.
               disabled={option.value !== "all" && account === null}
+              describedBy={circleNoteId}
               onClick={() => onChange({ ...filters, circle: option.value })}
             >
               {option.label}
@@ -163,7 +171,7 @@ export function TradeFiltersPanel({
             labels alone don't separate the two leaguemate readings — one is
             about who was dealing, the other about where the deal happened — and
             four notes at this width is a paragraph where the row should be. */}
-        <p className="text-xs text-foreground/45">
+        <p id={circleNoteId} className="text-xs text-foreground/45">
           {circleNote(filters.circle, account)}
         </p>
       </Group>
@@ -288,9 +296,17 @@ function Group({
   label: string;
   children: React.ReactNode;
 }) {
+  const labelId = useId();
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-xs font-bold uppercase tracking-[0.16em] text-foreground/40">
+    // A real group rather than a caption sitting above some controls: the two
+    // date fields are `From` and `To`, which say nothing on their own — what
+    // makes them readable is the word over them, and only a labelled group puts
+    // that word in their announcement.
+    <div role="group" aria-labelledby={labelId} className="flex flex-col gap-2">
+      <span
+        id={labelId}
+        className="text-xs font-bold uppercase tracking-[0.16em] text-foreground/40"
+      >
         {label}
       </span>
       {children}
@@ -309,11 +325,14 @@ function Group({
 function Key({
   selected,
   disabled = false,
+  describedBy,
   onClick,
   children,
 }: {
   selected: boolean;
   disabled?: boolean;
+  /** The note saying why this key is inert, where it is. */
+  describedBy?: string;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -321,8 +340,17 @@ function Key({
     <button
       type="button"
       aria-pressed={selected}
-      disabled={disabled}
-      onClick={onClick}
+      // `aria-disabled`, not `disabled`. The reason these are inert is a
+      // sentence printed under them, and `disabled` takes the key out of the tab
+      // order and the sentence out of reach with it — a filter nobody can find
+      // is one nobody knows they could have, which is the argument that kept the
+      // keys visible in the first place.
+      aria-disabled={disabled || undefined}
+      aria-describedby={disabled ? describedBy : undefined}
+      onClick={() => {
+        if (disabled) return;
+        onClick();
+      }}
       className={`rounded-full px-3 py-1 text-xs font-semibold ${
         selected
           ? "lab-chip-on lab-chip-sm"

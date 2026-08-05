@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 
 import type { ManagerLeague } from "@/shared/manager";
 
 import { type AdpControls, seasonOptions, todayIso } from "../../adp-controls";
+import { useReturnFocus } from "../../use-return-focus";
 import type { AdpState } from "../../use-adp";
 import type { AdpDensityState } from "../../use-adp-density";
 import { AdpBoard } from "./adp-board";
@@ -92,6 +93,20 @@ export function AdpDrawer({
   const { onScreen, closing, panelRef, openPanel, togglePanel, closePanel } =
     useAdpDrawerLifecycle({ open, onClose });
 
+  // The footer's premise line, as the dialog's description: a board priced on an
+  // assumed pool is exactly the caveat a reader should hear on arrival rather
+  // than have to find at the bottom of a panel that scrolls.
+  const premiseId = useId();
+
+  // The filter tray's id and its trigger. They live here rather than in
+  // `AdpFilterBar` because *this* is where the tray is closed from — Escape goes
+  // through the lifecycle hook's document listener — so this is where the focus
+  // has to be put back; and because keeping that section a pure function of its
+  // props is what lets `adp-drawer.render.test` call it directly.
+  const filterTrayId = useId();
+  const filterTrigger = useRef<HTMLButtonElement>(null);
+  useReturnFocus(openPanel === "filters", filterTrigger);
+
   // The curve the slider is *currently* sitting on, while it is being dragged.
   // The preview below has to re-price on every notch — watching the board bend
   // is the whole reason the curve is a slider — but the committed value re-fetches
@@ -130,6 +145,10 @@ export function AdpDrawer({
       <button
         type="button"
         aria-label="Close ADP board"
+        // A pointer target and nothing else. It is a sibling of the dialog
+        // rather than a child, so a tab stop here is a stop *outside* the modal
+        // — and it says nothing the header's own close key and Escape don't.
+        tabIndex={-1}
         onClick={onClose}
         // The marker class is what the reduced-motion block and the
         // pointer-events rule address; `data-closing` is the state those rules
@@ -148,6 +167,7 @@ export function AdpDrawer({
         role="dialog"
         aria-modal="true"
         aria-label="ADP board"
+        aria-describedby={premiseId}
         tabIndex={-1}
         data-closing={closing ? "" : undefined}
         // `@container`, so the board's value columns key off the panel's own
@@ -210,6 +230,8 @@ export function AdpDrawer({
             filters={filters}
             seedLeagues={seedLeagues}
             open={openPanel === "filters"}
+            trayId={filterTrayId}
+            triggerRef={filterTrigger}
             onToggle={() => togglePanel("filters")}
             onChange={onChange}
           />
@@ -238,6 +260,7 @@ export function AdpDrawer({
 
         <AdpDrawerFooter
           teams={controls.teams}
+          premiseId={premiseId}
           onReset={onReset}
           onClose={onClose}
         />

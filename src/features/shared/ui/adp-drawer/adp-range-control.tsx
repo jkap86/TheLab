@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import type { DraftDensityMonth } from "@/shared/manager";
 
@@ -10,6 +10,7 @@ import {
   boardLabel,
   rangeBounds,
 } from "../../adp-controls";
+import { useReturnFocus } from "../../use-return-focus";
 import type { AdpDensityState } from "../../use-adp-density";
 import { LookbackPanel, RangeSparkline } from "../lookback-panel";
 import { KeyChip } from "./key-chip";
@@ -73,6 +74,7 @@ export function AdpRangeControl({
 }) {
   const wrapper = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
 
   const presets = adpRangePresets(season, defaultSeason);
   const bounds = rangeBounds(range, today);
@@ -103,14 +105,9 @@ export function AdpRangeControl({
 
   // Closing takes the focused element with it when the focus was inside the
   // panel, which drops the reader on `body` with no way back into the drawer by
-  // keyboard. The trigger is where they were.
-  const wasOpen = useRef(open);
-  useEffect(() => {
-    if (wasOpen.current && !open && document.activeElement === document.body) {
-      trigger.current?.focus();
-    }
-    wasOpen.current = open;
-  }, [open]);
+  // keyboard. The trigger is where they were. Written inline here first; it is
+  // `useReturnFocus` now, because four other floating controls owe the same.
+  useReturnFocus(open, trigger);
 
   return (
     <div ref={wrapper} className="relative">
@@ -134,6 +131,7 @@ export function AdpRangeControl({
           type="button"
           onClick={onToggle}
           aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
           className="lab-chip lab-chip-sm flex flex-1 items-center gap-2 rounded-full py-[3px] pl-2.5 pr-2 text-left"
         >
           <span className="shrink-0 text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-foreground/40">
@@ -189,7 +187,10 @@ export function AdpRangeControl({
         // grounds, so the face is free to grade where the old scrubber needed
         // the panel colour exactly. `z-30` clears the board's sticky headings
         // (`z-10`) below it.
-        <div className="absolute inset-x-0 top-full z-30 mt-1.5 rounded-lg border border-active/20 bg-[linear-gradient(148deg,#1a3140,#12242f_46%,#0c1c28)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-6px_11px_rgba(0,0,0,0.45),0_20px_44px_rgba(0,0,0,0.6)]">
+        <div
+          id={panelId}
+          className="absolute inset-x-0 top-full z-30 mt-1.5 rounded-lg border border-active/20 bg-[linear-gradient(148deg,#1a3140,#12242f_46%,#0c1c28)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-6px_11px_rgba(0,0,0,0.45),0_20px_44px_rgba(0,0,0,0.6)]"
+        >
           <LookbackPanel
             range={range}
             season={season}

@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+
+import { useReturnFocus } from "../use-return-focus";
 
 import {
   type ActiveFilter,
@@ -99,6 +101,19 @@ export function LeagueFiltersModal({
   const active = activeFilterCount(filters);
 
   /**
+   * The dialog's own ids.
+   *
+   * Generated rather than written out, because **two of these are on the page at
+   * once**: the manager Leagues tab renders one in the header plate's corner and
+   * the shares sheet opened from its rail renders a second in its title bar. With
+   * a literal `id="league-filters-title"` both dialogs pointed their
+   * `aria-labelledby` at whichever heading came first in the document — a
+   * duplicate id, and a label resolved off the wrong element.
+   */
+  const titleId = useId();
+  const hintId = useId();
+
+  /**
    * Which segment row has its options open, if any — one at a time.
    *
    * The options float over the panel rather than expanding into it: pushing the
@@ -183,7 +198,10 @@ export function LeagueFiltersModal({
 
       <dialog
         ref={ref}
-        aria-labelledby="league-filters-title"
+        aria-labelledby={titleId}
+        // The rule the whole dialog encodes, stated on arrival — the same line
+        // the footer draws where the rail isn't beside the controls.
+        aria-describedby={hintId}
         // The backdrop is the dialog's own pseudo-element, so a click that lands
         // on the dialog box itself (padding-free, panel-sized) is a click outside
         // the panel — the gesture the platform doesn't wire up for you.
@@ -218,7 +236,7 @@ export function LeagueFiltersModal({
 
           <div className="flex items-center gap-3 border-b border-foreground/10 bg-gradient-to-b from-foreground/[0.05] to-transparent px-5 py-4">
             <h2
-              id="league-filters-title"
+              id={titleId}
               className="text-base font-semibold tracking-tight"
             >
               Filter leagues
@@ -360,7 +378,14 @@ export function LeagueFiltersModal({
               </b>{" "}
               of {leagues.length} match
             </span>
-            <span className="hidden text-xs text-foreground/40 lg:inline">
+            {/* `sr-only` beside the `lg:inline` copy rather than an id on that
+                copy: it is `display: none` below `lg`, where a description
+                referencing it would resolve to nothing at exactly the width the
+                rail is stacked out of sight. */}
+            <span id={hintId} className="sr-only">
+              Every filter narrows — a league has to pass all of them.
+            </span>
+            <span aria-hidden="true" className="hidden text-xs text-foreground/40 lg:inline">
               Every filter narrows — a league has to pass all of them.
             </span>
             <button
@@ -436,6 +461,13 @@ function SegmentRow<T extends string>({
   onToggle: () => void;
   onClose: () => void;
 }) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const popId = useId();
+  // Escape is the dialog's `cancel`, which closes this row from the outside —
+  // so a reader who had tabbed onto one of the options loses it out from under
+  // them and lands on `body`.
+  useReturnFocus(open, trigger);
+
   const counts = useMemo(
     () =>
       options.map(
@@ -460,9 +492,14 @@ function SegmentRow<T extends string>({
   return (
     <div className="relative">
       <button
+        ref={trigger}
         type="button"
         aria-expanded={open}
-        aria-haspopup="true"
+        aria-controls={open ? popId : undefined}
+        // No `aria-haspopup`: what opens is a list of radio-ish keys, not a
+        // menu, and `expanded` plus `controls` is the disclosure this actually
+        // is. The name is left to come from the row's own contents — caption,
+        // selection and count — which is the whole of what it says.
         onClick={onToggle}
         className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
           open ? "bg-foreground/[0.07]" : "hover:bg-foreground/5"
@@ -484,6 +521,9 @@ function SegmentRow<T extends string>({
 
       {open && (
         <div
+          id={popId}
+          role="group"
+          aria-label={label}
           // `top-full` rather than a computed offset: the panel hangs off the
           // row it belongs to, and the trough is at the top of a scroll box tall
           // enough to hold it.
@@ -670,6 +710,11 @@ function RuleBay({
         <button
           type="button"
           onClick={() => onChange([...rules, newRule])}
+          // The `+` is decoration, so the name would otherwise be the bare noun
+          // "Rule" — which says what the control is *about* rather than what
+          // pressing it does. The visible word is inside the label, so the
+          // spoken and written names still agree.
+          aria-label={`Add ${label.toLowerCase()} rule`}
           className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-active/35 bg-active/[0.06] py-1.5 text-[11px] font-bold uppercase tracking-wider text-active transition-colors hover:bg-active/15"
         >
           <span aria-hidden="true" className="text-sm leading-none">
@@ -687,8 +732,17 @@ function RuleBay({
             <button
               key={preset.label}
               type="button"
-              disabled={already}
-              onClick={() => onChange([...rules, preset.rule])}
+              // `aria-disabled` rather than `disabled`, which is the difference
+              // between a key a reader can find and one that isn't there. A
+              // dimmed preset is not an unavailable control — it is one whose
+              // rule is *already on the list*, which is a fact worth being able
+              // to reach and hear. `disabled` removed it from the tab order and
+              // took the explanation with it.
+              aria-disabled={already || undefined}
+              onClick={() => {
+                if (already) return;
+                onChange([...rules, preset.rule]);
+              }}
               className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
                 already
                   ? "cursor-default bg-active/[0.07] text-active/40 shadow-[inset_0_0_0_1px_rgba(0,255,229,0.18)]"
@@ -696,6 +750,7 @@ function RuleBay({
               }`}
             >
               {preset.label}
+              {already && <span className="sr-only"> — already added</span>}
             </button>
           );
         })}
@@ -811,7 +866,9 @@ function RuleRow({
 
       <button
         type="button"
-        aria-label="Remove rule"
+        // Named by the rule it removes: a bay can hold half a dozen of these and
+        // "Remove rule" six times over is a list a reader has to count through.
+        aria-label={`Remove rule ${rule.key} ${rule.op} ${formatRuleValue(rule.value)}`}
         onClick={onRemove}
         className="shrink-0 rounded-md border border-foreground/10 px-1.5 py-1 text-sm font-bold leading-none text-foreground/40 transition-colors hover:border-[#ff5f6d]/50 hover:text-[#ff5f6d]"
       >
@@ -856,11 +913,19 @@ function MatchRail({
   const share = total > 0 ? matched.length / total : null;
 
   return (
-    <aside
+    // A labelled group rather than an `<aside>`: an aside that is not inside
+    // sectioning content maps to the `complementary` landmark, and a `<dialog>`
+    // is not sectioning content — so this was publishing a page-level landmark
+    // from inside a modal.
+    <div
+      role="group"
       aria-label="Matching leagues"
       className="lab-well flex flex-col gap-4 rounded-xl p-4 lg:sticky lg:top-0 lg:self-start"
     >
-      <div className="flex flex-col gap-1">
+      {/* The one number the dialog exists to move, so it is announced when it
+          moves rather than only when a reader goes looking for it. `polite`, and
+          on the count alone — the breakdown under it is read on demand. */}
+      <div role="status" className="flex flex-col gap-1">
         <span className={CAPTION}>Leagues matching</span>
         <div className="flex items-baseline gap-2">
           <span className="font-mono text-[2.5rem] font-bold leading-none tabular-nums text-active [text-shadow:0_0_22px_rgba(0,255,229,0.45)]">
@@ -922,7 +987,7 @@ function MatchRail({
           </div>
         </>
       )}
-    </aside>
+    </div>
   );
 }
 

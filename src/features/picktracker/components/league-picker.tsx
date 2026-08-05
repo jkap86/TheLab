@@ -90,7 +90,10 @@ export function LeaguePicker({
         role="combobox"
         aria-label="Search your leagues"
         aria-expanded={open}
-        aria-controls={listboxId}
+        // The listbox is mounted with the popup, so the reference is only true
+        // while it is open — a combobox that permanently points at a missing id
+        // is a broken relationship rather than a closed one.
+        aria-controls={open && !disabled ? listboxId : undefined}
         aria-autocomplete="list"
         aria-activedescendant={
           open && filtered[activeIndex] ? optionId(activeIndex) : undefined
@@ -128,7 +131,10 @@ export function LeaguePicker({
           className="absolute inset-x-0 top-full z-10 mt-1 max-h-64 overflow-auto rounded-lg border border-foreground/15 py-1 shadow-lg shadow-black/40"
         >
           {filtered.length === 0 ? (
-            <li className="px-4 py-2 text-sm text-foreground/45">
+            // `presentation`, because a `listbox` may only own `option`s — an
+            // empty-state row announced as a selectable league is worse than
+            // one announced as nothing at all.
+            <li role="presentation" className="px-4 py-2 text-sm text-foreground/45">
               No leagues match “{query.trim()}”
             </li>
           ) : (

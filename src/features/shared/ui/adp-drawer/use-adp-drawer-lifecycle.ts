@@ -102,23 +102,104 @@ export function useAdpDrawerLifecycle({
     };
   }, [onScreen]);
 
-  // Escape closes. Focus moves to the panel once, on open.
+  // Escape closes, Tab stays inside, and the focus comes back where it started.
+  //
+  // The last two are what a hand-rolled `role="dialog"` owes that a native
+  // `<dialog>` gives away: `aria-modal` tells a screen reader to ignore the page
+  // behind, and does nothing at all about the Tab key — so without the trap a
+  // reader tabbed off the end of the board straight into the league list under
+  // an opaque panel, with no way to tell where they were. Restoring is the same
+  // rule one step later: the panel is unmounted on close and the browser drops
+  // focus on `<body>`, which on a pinned-header page is several dozen stops from
+  // the trigger that opened this.
   useEffect(() => {
     if (!open) return;
+    const opener = document.activeElement as HTMLElement | null;
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      // Escape closes the innermost thing that is up. Without this the window's
-      // floating panel and the whole drawer would go on one keypress.
-      if (latestPanel.current !== null) {
-        setOpenPanel(null);
+      // A native `<dialog>` shown with `showModal()` owns the focus and Escape
+      // for as long as it is up, and it makes everything under it inert — so
+      // both halves below would be fighting it: Escape would close this drawer
+      // instead of the thing on top of it, and the trap would preventDefault a
+      // Tab and then fail to move focus, because `focus()` on an inert element
+      // does nothing. The drawer's own scrim makes this unreachable by pointer
+      // and the trap makes it unreachable by keyboard; the guard is what keeps
+      // that true if either ever stops holding.
+      if (document.querySelector("dialog[open]")) return;
+      if (e.key === "Escape") {
+        // Escape closes the innermost thing that is up. Without this the
+        // window's floating panel and the whole drawer would go on one
+        // keypress.
+        if (latestPanel.current !== null) {
+          setOpenPanel(null);
+          return;
+        }
+        latestClose.current();
         return;
       }
-      latestClose.current();
+      if (e.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const stops = tabbableWithin(panel);
+      if (stops.length === 0) {
+        // Nothing to land on, so the panel itself keeps the focus rather than
+        // letting the page behind take it.
+        e.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      const active = document.activeElement;
+      // Wrapping at the ends, and hauling focus back in if it ever got out —
+      // the drawer's scrim is a sibling rather than a child, so a stray
+      // Shift+Tab used to land on it.
+      if (!panel.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && (active === first || active === panel)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
+
     document.addEventListener("keydown", onKey);
     panelRef.current?.focus();
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      // Guarded on `isConnected`, so an unmount that comes from navigating away
+      // doesn't chase an element that is no longer on the page.
+      if (opener?.isConnected) opener.focus();
+    };
   }, [open]);
 
   return { onScreen, closing, panelRef, openPanel, togglePanel, closePanel };
+}
+
+/**
+ * Everything inside `root` a Tab would stop on, in document order.
+ *
+ * Read fresh on every keypress rather than cached: the drawer's contents change
+ * as its floating panels open, the filter tray grows and shrinks, and the board
+ * itself is a list that arrives after the panel does — a snapshot taken on open
+ * would be wrong by the first press.
+ *
+ * `getClientRects()` is the visibility test rather than `offsetParent`, which is
+ * null for a positioned element and would drop the floating panels this exists
+ * to keep reachable. `disabled` is excluded by the selector; `[hidden]` and
+ * `display: none` fall out of the rect check.
+ */
+function tabbableWithin(root: HTMLElement): HTMLElement[] {
+  const selector =
+    "a[href], button:not([disabled]), input:not([disabled]), " +
+    "select:not([disabled]), textarea:not([disabled]), [tabindex]";
+  return Array.from(root.querySelectorAll<HTMLElement>(selector)).filter(
+    (el) =>
+      el.tabIndex >= 0 &&
+      el.getAttribute("aria-hidden") !== "true" &&
+      el.getClientRects().length > 0,
+  );
 }

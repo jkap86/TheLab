@@ -132,6 +132,10 @@ export function PanelMessage({
 }) {
   return (
     <p
+      // Only the error tone interrupts: the muted spelling is an *answer* ("no
+      // leagues match these filters"), and the count beside the control that
+      // narrowed them already announces it.
+      role={tone === "error" ? "alert" : undefined}
       className={`rounded-lg border px-4 py-6 text-center text-sm ${
         tone === "error"
           ? "border-red-500/20 bg-red-500/5 text-red-300"

@@ -298,6 +298,11 @@ export function ManagerHeader({
             (summary && (summary.failed > 0 || summary.locked)) ||
             refreshError) && (
             <div
+              // The one part of the plate that appears and disappears, and every
+              // line in it is something the page cannot otherwise be told apart
+              // from a complete one: a refresh in flight, leagues that failed, a
+              // list another sync is still filling in.
+              role="status"
               className={`relative flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 text-[11px] ${statePad}`}
             >
               {refreshing && <RefreshingPill progress={progress} />}
@@ -488,6 +493,14 @@ function KickoffCountdown({ msLeft }: { msLeft: number }) {
 
   return (
     <div
+      // **`role="timer"`, because `aria-label` on a bare `<div>` is ignored.**
+      // Every cell below is `aria-hidden` (four elements would be read as four
+      // unrelated numbers), so without a role to hang the label on the whole
+      // countdown was invisible to a screen reader rather than merely awkward.
+      // `timer` is a `status` whose implicit `aria-live` is `off`, which is
+      // exactly right for a value that changes every second: named and readable
+      // on demand, never announced on its own.
+      role="timer"
       className="grid h-[56px] w-fit flex-none content-center gap-1 sm:h-[66px] sm:gap-1.5"
       aria-label={`Kickoff in ${formatCountdown(msLeft)}`}
     >
@@ -744,8 +757,16 @@ function RefreshingPill({ progress }: { progress: SyncProgress | null }) {
       : "…";
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-active/30 bg-active/10 px-2.5 py-0.5 text-active">
-      <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-active/40 border-t-active" />
-      Refreshing{suffix}
+      <span
+        aria-hidden="true"
+        className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-active/40 border-t-active"
+      />
+      Refreshing
+      {/* The running tally is hidden from the live region around this: it moves
+          once per league, and a polite region re-reading "Refreshing 41/121"
+          every few hundred milliseconds is the announcement talking over the
+          page it is describing. "Refreshing" is announced once and stays true. */}
+      <span aria-hidden="true">{suffix}</span>
     </span>
   );
 }

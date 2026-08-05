@@ -108,9 +108,12 @@ export const TradeCard = memo(function TradeCard({
             aria-hidden="true"
             className="lab-billet-rail h-4 w-0.5 shrink-0 rounded-sm"
           />
-          <h3 className="min-w-0 truncate font-display text-[13px] font-bold uppercase tracking-[0.13em] text-foreground/85 [text-shadow:0_1px_0_rgba(255,255,255,0.12),0_-1px_1px_rgba(0,0,0,0.9)]">
+          {/* `h2`: the page's own title is a visually-hidden `h1` (the ledge is
+              what leads it on screen), so a card is the next level down and a 3
+              here skipped one. */}
+          <h2 className="min-w-0 truncate font-display text-[13px] font-bold uppercase tracking-[0.13em] text-foreground/85 [text-shadow:0_1px_0_rgba(255,255,255,0.12),0_-1px_1px_rgba(0,0,0,0.9)]">
             {league?.name ?? trade.league_id}
-          </h3>
+          </h2>
           <span className="lab-readout ml-auto shrink-0 rounded px-2 py-0.5 text-[11px] tabular-nums text-foreground/60">
             {formatTradeDate(trade.completed_at)}
             {formatTradeTime(trade.completed_at)}

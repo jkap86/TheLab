@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import {
   LIST_ROW_HOVER,
@@ -108,6 +108,10 @@ export function LeagueCard({
   onToggle: () => void;
 }) {
   const ref = useRef<HTMLLIElement>(null);
+  // The panel this row's `aria-expanded` is about. Named, so "expanded" points
+  // at something a reader can be taken to rather than being a state with no
+  // object.
+  const panelId = useId();
 
   // Opening and closing are two states of one gesture, so the panel is animated
   // in *and* out — which takes two flags rather than one, because an unmounted
@@ -265,6 +269,11 @@ export function LeagueCard({
           onToggle();
         }}
         aria-expanded={expanded}
+        // Only while the panel is in the tree: it is mounted on expand and
+        // unmounted a beat after the collapse, and a reference to an id that
+        // isn't in the document is a broken relationship rather than an absent
+        // one.
+        aria-controls={mounted ? panelId : undefined}
         // `shrink-0` because the open card is a flex column with a ceiling: the
         // head is the one part of it that must not be compressed to make room,
         // since the league's name is what says which panel this is.
@@ -276,9 +285,11 @@ export function LeagueCard({
           {/* The display face, as on a tool card — Orbitron is wider than the
               body face, so the size drops a step to keep a long league name from
               truncating any sooner than it did. */}
-          <h3 className="min-w-0 flex-1 truncate font-display text-sm font-semibold tracking-tight">
+          {/* `h2`, not `h3`: the only heading above this on a manager page is
+              the plate's `h1`, so a level 3 skipped a level in the outline. */}
+          <h2 className="min-w-0 flex-1 truncate font-display text-sm font-semibold tracking-tight">
             {league.name}
-          </h3>
+          </h2>
           {record && (
             <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground/70">
               {formatRecord(record)}
@@ -343,6 +354,7 @@ export function LeagueCard({
           was, immediately, which is the same call the flask's animations make. */}
       {mounted && (
         <div
+          id={panelId}
           className={`grid min-h-0 transition-[grid-template-rows,opacity] duration-[280ms] ease-out motion-reduce:transition-none ${
             open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
           }`}

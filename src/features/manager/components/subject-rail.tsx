@@ -1,9 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
-import { Avatar, PositionBadge } from "@/features/shared";
+import { Avatar, PositionBadge, useReturnFocus } from "@/features/shared";
 
 import { useSubjectFilters } from "../filters-context";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
@@ -108,6 +108,11 @@ export function SubjectRail({
   const [query, setQuery] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchTrigger = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+  // The panel takes the focus on mount, so Escape — which closes it from a
+  // document listener below — takes the focused input with it.
+  useReturnFocus(open, searchTrigger);
 
   const leagues = view.data?.leagues ?? null;
   const selfId = view.data?.user.user_id ?? "";
@@ -207,6 +212,7 @@ export function SubjectRail({
                 channel the headings below sit in, which is this app's answer to
                 making a small label read as a part rather than as text. */}
             <button
+              ref={searchTrigger}
               type="button"
               onClick={() => {
                 // Focusing in the same tick the panel mounts is a frame early;
@@ -215,7 +221,11 @@ export function SubjectRail({
                 else setOpen(true);
               }}
               aria-expanded={open}
-              aria-haspopup="dialog"
+              // What opens is a search panel hanging off the rail, not a dialog:
+              // it traps nothing, the page behind it stays live, and announcing
+              // "dialog" promised a modal that never arrives. The key beside it
+              // *does* open one, and keeps the attribute.
+              aria-controls={open ? panelId : undefined}
               className="lab-ledge-slot flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[10px] font-semibold text-foreground/70 transition-colors hover:text-active"
             >
               <SearchIcon />
@@ -242,18 +252,25 @@ export function SubjectRail({
             {/* The rail's own answer. Dimmed while the maps behind a selection
                 are still being read, since the number is briefly zero and a
                 confident zero is worse than an obviously pending one. */}
+            {/* The rail commits live, so this number is the whole feedback a
+                press on a result gives. `sr-only` says what it counts: on
+                screen the list under it is the context, and read aloud on its
+                own "19 of 121" names nothing. */}
             <span
+              role="status"
               className={`ml-auto shrink-0 pr-1 font-mono text-[10px] tabular-nums ${
                 view.subjectsLoading ? "text-foreground/25" : "text-foreground/55"
               }`}
             >
               {count > 0 ? `${view.filtered.length} of ${total}` : `${total}`}
+              <span className="sr-only"> leagues</span>
             </span>
           </>
         }
         panel={
           open && (
             <SubjectPanel
+              id={panelId}
               inputRef={inputRef}
               query={query}
               onQuery={setQuery}
@@ -294,6 +311,7 @@ export function SubjectRail({
  * for a reader who already knows the name they want.
  */
 function SubjectPanel({
+  id,
   inputRef,
   query,
   onQuery,
@@ -305,6 +323,8 @@ function SubjectPanel({
   loading,
   error,
 }: {
+  /** The trigger's `aria-controls` target. */
+  id: string;
   inputRef: React.RefObject<HTMLInputElement | null>;
   query: string;
   onQuery: (value: string) => void;
@@ -334,6 +354,9 @@ function SubjectPanel({
     // `overscroll-contain` keeps a flick at its end from carrying on into the
     // page, exactly as the league panel's scroll box does.
     <div
+      id={id}
+      role="group"
+      aria-label="Filter by player or leaguemate"
       className="absolute left-4 right-4 top-full z-30 mt-1.5 flex max-h-[min(60vh,26rem)] flex-col gap-1.5 rounded-xl border border-active/25 bg-gradient-to-b from-[#1b3040] to-[#0d1c27] p-2 shadow-[0_24px_50px_-20px_rgba(0,0,0,0.95),0_0_36px_-16px_rgba(0,255,229,0.35)] sm:max-w-[26rem]"
       style={{ animation: "dialog-rise 0.14s cubic-bezier(0.2,0.9,0.3,1)" }}
     >
@@ -446,6 +469,9 @@ function ResultGroup({
               }`}
             >
               {option.count}
+              {/* `title` is a pointer affordance and nothing else — read aloud
+                  the row ended in a bare number with no word for it. */}
+              <span className="sr-only"> leagues</span>
             </span>
           </button>
         );
