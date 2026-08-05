@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 import {
   type LeagueFilters,
@@ -109,6 +109,18 @@ export function LeagueFiltersModal({
     onCancel,
   } = useLeagueFiltersModal(filters, onChange);
 
+  /**
+   * The dialog's own ids.
+   *
+   * Generated rather than written out, because **two of these are on the page at
+   * once**: the manager Leagues tab renders one in the header plate's corner and
+   * the shares sheet opened from its rail renders a second in its title bar. With
+   * a literal id both dialogs pointed their `aria-labelledby` at whichever
+   * heading came first in the document.
+   */
+  const titleId = useId();
+  const hintId = useId();
+
   // The scoring vocabulary is whatever these leagues actually pay for, so it is
   // derived from the list rather than listed — see `scoringKeyOptions`.
   const scoringKeys = useMemo(() => scoringKeyOptions(leagues), [leagues]);
@@ -131,7 +143,10 @@ export function LeagueFiltersModal({
 
       <dialog
         ref={dialogRef}
-        aria-labelledby="league-filters-title"
+        aria-labelledby={titleId}
+        // The rule the whole dialog encodes, stated on arrival — the same line
+        // the footer draws where the rail isn't beside the controls.
+        aria-describedby={hintId}
         onClick={onBackdropClick}
         onCancel={onCancel}
         className="m-auto w-[min(1040px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
@@ -152,7 +167,7 @@ export function LeagueFiltersModal({
             className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-active/70 to-transparent"
           />
 
-          <FiltersDialogHeader onClose={close} />
+          <FiltersDialogHeader titleId={titleId} onClose={close} />
 
           {/*
             The controls scroll and the footer — where Apply is — stays put below
@@ -193,6 +208,7 @@ export function LeagueFiltersModal({
           <FiltersDialogFooter
             matched={matched.length}
             total={leagues.length}
+            hintId={hintId}
             onReset={reset}
             onApply={apply}
           />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { groupMetrics } from "@/features/shared/columns";
 
@@ -84,6 +84,15 @@ export function ColumnsEditor<C>({
   const ref = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   /**
+   * Generated rather than written out, for the reason `LeagueFiltersModal`'s
+   * are: **two of these are on the page at once** on the Leagues tab, since the
+   * shares sheet opened from the rail renders a `ColumnsBar` of its own. With a
+   * literal `id="columns-editor-title"` both dialogs labelled themselves off
+   * whichever heading came first in the document.
+   */
+  const titleId = useId();
+  const hintId = useId();
+  /**
    * Which slot the next pick fills.
    *
    * Armed rather than dragged: the catalogue is a dozen entries in two bays and
@@ -135,7 +144,8 @@ export function ColumnsEditor<C>({
   return (
     <dialog
       ref={ref}
-      aria-labelledby="columns-editor-title"
+      aria-labelledby={titleId}
+      aria-describedby={hintId}
       onClose={onClose}
       // The backdrop is the dialog's own pseudo-element, so a click landing on
       // the dialog box itself is a click outside the panel.
@@ -158,12 +168,18 @@ export function ColumnsEditor<C>({
 
           <div className="flex items-center gap-3 border-b border-foreground/10 bg-gradient-to-b from-foreground/[0.05] to-transparent px-5 py-4">
             <h2
-              id="columns-editor-title"
+              id={titleId}
               className="text-base font-semibold tracking-tight"
             >
               Stat columns
             </h2>
-            <span className="hidden text-xs text-foreground/40 sm:inline">
+            {/* `sr-only` beside the `sm:inline` copy rather than an id on it:
+                that one is `display: none` on a phone, where a description
+                pointing at it would resolve to nothing. */}
+            <span id={hintId} className="sr-only">
+              Every card in the list shows the same four columns.
+            </span>
+            <span aria-hidden="true" className="hidden text-xs text-foreground/40 sm:inline">
               Every card shows the same four.
             </span>
             <button
@@ -249,6 +265,11 @@ export function ColumnsEditor<C>({
                         <button
                           key={metric.key}
                           type="button"
+                          // The lit row is the metric the armed slot already
+                          // holds, which is a *state* rather than a colour —
+                          // the same claim `aria-pressed` makes on the slot
+                          // wells above it.
+                          aria-pressed={shown === slot}
                           onClick={() => onColumnChange(slot, metric.key)}
                           className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors ${
                             shown === slot
@@ -266,9 +287,21 @@ export function ColumnsEditor<C>({
                             visible before the press.
                           */}
                           {shown >= 0 && shown !== slot && (
-                            <span className="shrink-0 rounded-[4px] border border-foreground/15 px-1 font-mono text-[9px] leading-4 text-foreground/40">
-                              {shown + 1}
-                            </span>
+                            <>
+                              <span
+                                aria-hidden="true"
+                                className="shrink-0 rounded-[4px] border border-foreground/15 px-1 font-mono text-[9px] leading-4 text-foreground/40"
+                              >
+                                {shown + 1}
+                              </span>
+                              {/* A bare digit beside a metric name is
+                                  unreadable aloud — and the point of the badge
+                                  is that picking this one *swaps* two columns,
+                                  which is worth knowing before the press. */}
+                              <span className="sr-only">
+                                currently in column {shown + 1}
+                              </span>
+                            </>
                           )}
                           {value !== null && (
                             <span className="shrink-0 font-mono text-[11px] tabular-nums text-foreground/40">

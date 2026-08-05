@@ -9,16 +9,27 @@ import { type AdpControls, previewAdpPool } from "../../adp-controls";
  */
 export function AdpDrawerFooter({
   teams,
+  premiseId,
   onReset,
   onClose,
 }: {
   teams: AdpControls["teams"];
+  /**
+   * The drawer's `aria-describedby` target — this line is the caveat the whole
+   * board rests on, so it is read on arrival rather than found at the bottom of
+   * a panel that scrolls.
+   */
+  premiseId: string;
   /** Back to the default board — held by the store, which owns what "default" is. */
   onReset: () => void;
   onClose: () => void;
 }) {
   return (
-    <footer className="flex items-center gap-3 border-t border-foreground/10 bg-foreground/[0.015] px-4 py-2.5">
+    // A `<div>` and not a `<footer>`: a `footer` that isn't inside an article,
+    // aside, nav, section or main maps to the `contentinfo` landmark, and
+    // `role="dialog"` is not one of those — so this was publishing a page-level
+    // landmark from inside a modal.
+    <div className="flex items-center gap-3 border-t border-foreground/10 bg-foreground/[0.015] px-4 py-2.5">
       <button
         type="button"
         onClick={onReset}
@@ -26,7 +37,7 @@ export function AdpDrawerFooter({
       >
         Reset
       </button>
-      <p className="min-w-0 flex-1 truncate text-xs text-foreground/35">
+      <p id={premiseId} className="min-w-0 flex-1 truncate text-xs text-foreground/35">
         This app’s crawled drafts, not market ADP · values on a{" "}
         {previewAdpPool(teams)}-slot pool
       </p>
@@ -37,6 +48,6 @@ export function AdpDrawerFooter({
       >
         Done
       </button>
-    </footer>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useId, useMemo, useRef } from "react";
 
 import { type LeagueFilters, matchesFilters } from "../../league-filters";
+import { useReturnFocus } from "../../use-return-focus";
 import type { ManagerLeague } from "@/shared/manager";
 
 import { CAPTION } from "./league-filters-modal.constants.ts";
@@ -52,6 +53,13 @@ export function SegmentRow<T extends string>({
   onToggle: () => void;
   onClose: () => void;
 }) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const popId = useId();
+  // Escape is the dialog's `cancel`, which closes this row from the outside — so
+  // a reader who had tabbed onto one of the options loses it out from under them
+  // and lands on `body`.
+  useReturnFocus(open, trigger);
+
   const counts = useMemo(
     () =>
       options.map(
@@ -71,9 +79,14 @@ export function SegmentRow<T extends string>({
   return (
     <div className="relative">
       <button
+        ref={trigger}
         type="button"
         aria-expanded={open}
-        aria-haspopup="true"
+        aria-controls={open ? popId : undefined}
+        // No `aria-haspopup`: what opens is a list of radio-ish keys, not a
+        // menu, and `expanded` plus `controls` is the disclosure this actually
+        // is. The name is left to come from the row's own contents — caption,
+        // selection and count — which is the whole of what it says.
         onClick={onToggle}
         className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
           open ? "bg-foreground/[0.07]" : "hover:bg-foreground/5"
@@ -95,6 +108,9 @@ export function SegmentRow<T extends string>({
 
       {open && (
         <div
+          id={popId}
+          role="group"
+          aria-label={label}
           // `top-full` rather than a computed offset: the panel hangs off the
           // row it belongs to, and the trough is at the top of a scroll box tall
           // enough to hold it.

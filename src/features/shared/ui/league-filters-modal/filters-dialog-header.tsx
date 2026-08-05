@@ -2,16 +2,22 @@
  * What the panel is, and the way out of it.
  *
  * The title carries the id the `<dialog>` names in `aria-labelledby`, so the two
- * are a matched pair — this is the one element in the folder that must keep its
- * `id`.
+ * are a matched pair — and it is **passed in** rather than written here, because
+ * two of these dialogs are on the page at once: the manager Leagues tab renders
+ * one in the header plate's corner and the shares sheet opened from its rail
+ * renders a second. Written literally, both pointed their `aria-labelledby` at
+ * whichever heading came first in the document.
  */
-export function FiltersDialogHeader({ onClose }: { onClose: () => void }) {
+export function FiltersDialogHeader({
+  titleId,
+  onClose,
+}: {
+  titleId: string;
+  onClose: () => void;
+}) {
   return (
     <div className="flex items-center gap-3 border-b border-foreground/10 bg-gradient-to-b from-foreground/[0.05] to-transparent px-5 py-4">
-      <h2
-        id="league-filters-title"
-        className="text-base font-semibold tracking-tight"
-      >
+      <h2 id={titleId} className="text-base font-semibold tracking-tight">
         Filter leagues
       </h2>
       {/*

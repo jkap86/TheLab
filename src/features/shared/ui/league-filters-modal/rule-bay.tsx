@@ -95,6 +95,11 @@ export function RuleBay({
         <button
           type="button"
           onClick={() => onChange(appendRule(rules, newRule))}
+          // The `+` is decoration, so the name would otherwise be the bare noun
+          // "Rule" — which says what the control is *about* rather than what
+          // pressing it does. The visible word is inside the label, so the
+          // spoken and written names still agree.
+          aria-label={`Add ${label.toLowerCase()} rule`}
           className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-active/35 bg-active/[0.06] py-1.5 text-[11px] font-bold uppercase tracking-wider text-active transition-colors hover:bg-active/15"
         >
           <span aria-hidden="true" className="text-sm leading-none">
@@ -112,8 +117,17 @@ export function RuleBay({
             <button
               key={preset.label}
               type="button"
-              disabled={already}
-              onClick={() => onChange(appendRule(rules, preset.rule))}
+              // `aria-disabled` rather than `disabled`, which is the difference
+              // between a key a reader can find and one that isn't there. A
+              // dimmed preset is not an unavailable control — it is one whose
+              // rule is *already on the list*, which is a fact worth being able
+              // to reach and hear. `disabled` removed it from the tab order and
+              // took the explanation with it.
+              aria-disabled={already || undefined}
+              onClick={() => {
+                if (already) return;
+                onChange(appendRule(rules, preset.rule));
+              }}
               className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
                 already
                   ? "cursor-default bg-active/[0.07] text-active/40 shadow-[inset_0_0_0_1px_rgba(0,255,229,0.18)]"
@@ -121,6 +135,7 @@ export function RuleBay({
               }`}
             >
               {preset.label}
+              {already && <span className="sr-only"> — already added</span>}
             </button>
           );
         })}

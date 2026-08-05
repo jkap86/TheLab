@@ -9,12 +9,18 @@
 export function FiltersDialogFooter({
   matched,
   total,
+  hintId,
   onReset,
   onApply,
 }: {
   /** How many leagues the *draft* leaves — the same walk the rail reads. */
   matched: number;
   total: number;
+  /**
+   * The dialog's `aria-describedby` target — the rule the whole panel encodes,
+   * stated on arrival rather than found in a footer.
+   */
+  hintId: string;
   onReset: () => void;
   onApply: () => void;
 }) {
@@ -37,7 +43,14 @@ export function FiltersDialogFooter({
         <b className="font-semibold tabular-nums text-foreground">{matched}</b> of{" "}
         {total} match
       </span>
-      <span className="hidden text-xs text-foreground/40 lg:inline">
+      {/* `sr-only` beside the `lg:inline` copy rather than an id on that copy:
+          it is `display: none` below `lg`, where a description referencing it
+          would resolve to nothing at exactly the width the rail is stacked out
+          of sight. */}
+      <span id={hintId} className="sr-only">
+        Every filter narrows — a league has to pass all of them.
+      </span>
+      <span aria-hidden="true" className="hidden text-xs text-foreground/40 lg:inline">
         Every filter narrows — a league has to pass all of them.
       </span>
       <button

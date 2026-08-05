@@ -1,5 +1,9 @@
 "use client";
 
+import { useId, useRef } from "react";
+
+import { useReturnFocus } from "@/features/shared";
+
 /**
  * A column heading that doubles as a picker: the current metric's label with a
  * caret, opening a menu that swaps the whole column to another metric.
@@ -54,14 +58,22 @@ export function ColumnPicker({
   wrapperClassName?: string;
 }) {
   const active = options.find((o) => o.key === activeKey) ?? options[0];
+  const menuId = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
+  // Escape and the outside-click both live in the panel that owns "one picker at
+  // a time", so this menu is closed from outside itself — and a reader who had
+  // tabbed onto one of its options is left on `body`.
+  useReturnFocus(open, trigger);
 
   return (
     <span className={`relative justify-self-end ${wrapperClassName}`}>
       <button
+        ref={trigger}
         type="button"
         onClick={onToggle}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
         className={`group/pick inline-flex items-center gap-0.5 whitespace-nowrap uppercase tracking-wide transition-colors ${
           open ? "text-foreground/80" : "text-foreground/40 hover:text-foreground/70"
         } ${className}`}
@@ -84,7 +96,9 @@ export function ColumnPicker({
 
       {open && (
         <div
+          id={menuId}
           role="menu"
+          aria-label={`${active.label} column`}
           className="absolute right-0 top-full z-30 mt-1 min-w-[8rem] rounded-lg border border-foreground/15 bg-[var(--background)] p-1 normal-case tracking-normal shadow-[0_18px_44px_-14px_rgba(0,0,0,0.9)]"
         >
           {options.map((option) => {

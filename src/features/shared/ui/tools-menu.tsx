@@ -71,7 +71,10 @@ export function ToolsMenu() {
         type="button"
         onClick={() => setOpenedAt(open ? null : pathname)}
         aria-expanded={open}
-        aria-controls={panelId}
+        // Only while the panel is in the tree: it is mounted on press, so a
+        // permanent reference pointed at an id that isn't in the document on
+        // every page where the menu is closed — which is all of them.
+        aria-controls={open ? panelId : undefined}
         aria-label="Tools"
         // A raised cyan keycap: the one part of the bar that is meant to be
         // pressed, so it is the one part standing above the plate. It travels

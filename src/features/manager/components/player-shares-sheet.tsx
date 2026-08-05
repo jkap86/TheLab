@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import dynamic from "next/dynamic";
 
@@ -113,6 +113,9 @@ export function PlayerSharesSheet({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Generated for the reason the two dialogs *inside* this one generate theirs:
+  // a literal id in a component is a duplicate waiting for a second mount.
+  const titleId = useId();
   const [query, setQuery] = useState("");
   const { subjects, setSubjects } = useSubjectFilters();
 
@@ -231,7 +234,7 @@ export function PlayerSharesSheet({
   return (
     <dialog
       ref={ref}
-      aria-labelledby="player-shares-title"
+      aria-labelledby={titleId}
       // **Both handlers test the target, and `onClose` has to.** The filters
       // modal and the columns editor are dialogs *inside* this one, and React
       // walks its own tree for `close` — which does not bubble in the DOM — so
@@ -265,7 +268,7 @@ export function PlayerSharesSheet({
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-foreground/10 bg-gradient-to-b from-foreground/[0.06] to-transparent px-3 py-2.5 sm:flex-nowrap sm:gap-3 sm:px-4">
           <h2
-            id="player-shares-title"
+            id={titleId}
             className="shrink-0 font-display text-sm font-semibold tracking-tight"
           >
             Player shares
@@ -302,6 +305,10 @@ export function PlayerSharesSheet({
               number is briefly zero and a confident zero is worse than an
               obviously pending one. */}
           <span
+            // The sheet commits live, so this is the only feedback a press on a
+            // row gives — announced when it moves rather than only when a reader
+            // navigates back up to it.
+            role="status"
             className={`ml-auto shrink-0 font-mono text-[11px] tabular-nums sm:ml-0 ${
               view.subjectsLoading ? "text-foreground/25" : "text-foreground/55"
             }`}

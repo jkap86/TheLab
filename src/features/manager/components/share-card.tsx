@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import {
   LIST_ROW_HOVER,
@@ -66,6 +66,9 @@ export function ShareCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const toggleExpanded = () => setExpanded((v) => !v);
+  // What `aria-expanded` is about — see `LeagueCard`, which names its panel for
+  // the same reason.
+  const panelId = useId();
 
   return (
     <li
@@ -92,6 +95,7 @@ export function ShareCard({
               type="button"
               onClick={toggleExpanded}
               aria-expanded={expanded}
+              aria-controls={expanded ? panelId : undefined}
               aria-label={`Show the leagues holding ${name}`}
               className="-my-1 -ml-1 shrink-0 rounded-lg p-1 transition-colors hover:bg-foreground/5"
             >
@@ -103,7 +107,10 @@ export function ShareCard({
             onClick={onSelect ?? toggleExpanded}
             {...(onSelect
               ? { "aria-pressed": selected }
-              : { "aria-expanded": expanded })}
+              : {
+                  "aria-expanded": expanded,
+                  "aria-controls": expanded ? panelId : undefined,
+                })}
             className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left"
           >
             {!onSelect && <Chevron open={expanded} size="md" />}
@@ -112,9 +119,11 @@ export function ShareCard({
                 league card — the two lists are the same row wearing a different
                 subject, and a player's name reading larger than a league's would
                 say otherwise. */}
-            <h3 className="min-w-0 flex-1 truncate font-display text-sm font-semibold tracking-tight">
+            {/* `h2` for the reason a league card's name is one: the manager
+                plate's title is the page's only `h1`, so a 3 here skipped 2. */}
+            <h2 className="min-w-0 flex-1 truncate font-display text-sm font-semibold tracking-tight">
               {name}
-            </h3>
+            </h2>
             {note && (
               <span className="shrink-0 text-xs tabular-nums text-foreground/40">
                 {note}
@@ -131,7 +140,7 @@ export function ShareCard({
       </div>
 
       {expanded && (
-        <ul className="relative border-t border-foreground/10 px-4 py-3">
+        <ul id={panelId} className="relative border-t border-foreground/10 px-4 py-3">
           {leagues.map((league) => (
             <SharedLeagueRow key={league.league_id} league={league} />
           ))}

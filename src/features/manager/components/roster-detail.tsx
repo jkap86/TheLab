@@ -307,9 +307,11 @@ function RosterSection({
             at 12px "Starters" was wider than the track and truncated to "STARTE…"
             — a heading clipped inside its own word reads as broken where a
             clipped *name* only reads as long. */}
-        <h5 className="min-w-0 truncate text-[0.65rem] font-medium uppercase tracking-wide text-foreground/35 @lg:text-xs">
+        {/* `h3`, not `h5`: the league name this panel belongs to is an `h2`, so
+            a 5 here skipped two levels. The size is a class either way. */}
+        <h3 className="min-w-0 truncate text-[0.65rem] font-medium uppercase tracking-wide text-foreground/35 @lg:text-xs">
           {title}
-        </h5>
+        </h3>
         {valueColumns.map((key, slot) => (
           <ColumnPicker
             key={slot}

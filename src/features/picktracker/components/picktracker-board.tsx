@@ -21,11 +21,16 @@ export function PicktrackerBoard({ leagueId }: { leagueId: string }) {
       <div>
         <BackLink />
         {error ? (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-200">
+          <div
+            role="alert"
+            className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-200"
+          >
             {error}
           </div>
         ) : (
-          <p className="py-16 text-center text-foreground/55">Loading draft…</p>
+          <p role="status" className="py-16 text-center text-foreground/55">
+            Loading draft…
+          </p>
         )}
       </div>
     );
@@ -48,7 +53,12 @@ export function PicktrackerBoard({ leagueId }: { leagueId: string }) {
       </header>
 
       <div className="mb-8 flex flex-wrap items-center gap-3">
-        <div className="rounded-xl border border-active/30 bg-active/10 px-5 py-3">
+        {/* The one thing on this page that moves while a reader is watching it,
+            and the whole reason the tracker is opened mid-draft. */}
+        <div
+          role="status"
+          className="rounded-xl border border-active/30 bg-active/10 px-5 py-3"
+        >
           {data.next_pick ? (
             <>
               <span className="text-sm uppercase tracking-wide text-foreground/50">
@@ -72,7 +82,11 @@ export function PicktrackerBoard({ leagueId }: { leagueId: string }) {
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
-        {error && <span className="text-sm text-red-300">{error}</span>}
+        {error && (
+          <span role="alert" className="text-sm text-red-300">
+            {error}
+          </span>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-lg border border-foreground/10">

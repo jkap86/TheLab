@@ -47,6 +47,14 @@ export function KickoffCountdown({ msLeft }: { msLeft: number }) {
 
   return (
     <div
+      // **`role="timer"`, because `aria-label` on a bare `<div>` is ignored.**
+      // Every cell below is `aria-hidden` (four elements would be read as four
+      // unrelated numbers), so without a role to hang the label on the whole
+      // countdown was invisible to a screen reader rather than merely awkward.
+      // `timer` is a `status` whose implicit `aria-live` is `off`, which is
+      // exactly right for a value that changes every second: named and readable
+      // on demand, never announced on its own.
+      role="timer"
       className="grid h-[56px] w-fit flex-none content-center gap-1 sm:h-[66px] sm:gap-1.5"
       aria-label={`Kickoff in ${formatCountdown(msLeft)}`}
     >

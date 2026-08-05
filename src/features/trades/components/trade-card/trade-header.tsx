@@ -24,9 +24,12 @@ export function TradeCardHeader({
         aria-hidden="true"
         className="lab-billet-rail h-4 w-0.5 shrink-0 rounded-sm"
       />
-      <h3 className="min-w-0 truncate font-display text-[13px] font-bold uppercase tracking-[0.13em] text-foreground/85 [text-shadow:0_1px_0_rgba(255,255,255,0.12),0_-1px_1px_rgba(0,0,0,0.9)]">
+      {/* `h2`: the page's own title is a visually-hidden `h1` (the ledge is what
+          leads it on screen), so a card is the next level down and a 3 here
+          skipped one. */}
+      <h2 className="min-w-0 truncate font-display text-[13px] font-bold uppercase tracking-[0.13em] text-foreground/85 [text-shadow:0_1px_0_rgba(255,255,255,0.12),0_-1px_1px_rgba(0,0,0,0.9)]">
         {name}
-      </h3>
+      </h2>
       {/* The date and the clock time are two functions and one reading — see
           `formatTradeTime`, which carries its own separator so a trade with no
           timestamp leaves nothing dangling after the words that say so. */}

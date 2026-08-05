@@ -1,3 +1,5 @@
+import type { RefObject } from "react";
+
 import type { ManagerLeague } from "@/shared/manager";
 
 import type { AdpControls } from "../../adp-controls";
@@ -26,6 +28,8 @@ export function AdpFilterBar({
   filters,
   seedLeagues,
   open,
+  trayId,
+  triggerRef,
   onToggle,
   onChange,
 }: {
@@ -34,6 +38,19 @@ export function AdpFilterBar({
   /** See {@link AdpDrawer}'s own prop — empty means no seed control at all. */
   seedLeagues: readonly ManagerLeague[];
   open: boolean;
+  /** The tray's id, so the trigger's `aria-controls` has something to name. */
+  trayId: string;
+  /**
+   * The trigger, held by the drawer.
+   *
+   * It is the drawer that closes this tray — Escape reaches it through a
+   * document listener, so a reader who had tabbed into the tray loses the
+   * focused `<select>` out from under them — and the drawer is therefore where
+   * the focus is put back. This section stays a pure function of its props for
+   * it: the id and the ref come in rather than being made here, which is what
+   * lets it be called directly in `adp-drawer.render.test`.
+   */
+  triggerRef: RefObject<HTMLButtonElement | null>;
   onToggle: () => void;
   onChange: (controls: AdpControls) => void;
 }) {
@@ -43,9 +60,11 @@ export function AdpFilterBar({
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-1.5">
         <button
+          ref={triggerRef}
           type="button"
           onClick={onToggle}
           aria-expanded={open}
+          aria-controls={open ? trayId : undefined}
           className={`lab-chip lab-chip-sm inline-flex items-center gap-1.5 rounded-full px-3 py-[3px] text-xs font-semibold transition-colors ${
             narrowing.length > 0 && !open ? "lab-chip-on" : "text-foreground/70"
           }`}
@@ -88,7 +107,10 @@ export function AdpFilterBar({
       </div>
 
       {open && (
-        <div className="flex flex-wrap gap-1.5 border-t border-foreground/[0.07] pt-2">
+        <div
+          id={trayId}
+          className="flex flex-wrap gap-1.5 border-t border-foreground/[0.07] pt-2"
+        >
           {filters.map((f) => (
             <ChipSelect
               key={f.key}

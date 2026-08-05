@@ -325,7 +325,7 @@ describe("the card as a document", () => {
   test("the league is the card's heading and each track is a list", () => {
     const html = card();
     assert.match(html, /<article/);
-    assert.match(html, /<h3/);
+    assert.match(html, /<h2/);
     assert.match(html, /<ul/);
     assert.match(html, /<li/);
   });

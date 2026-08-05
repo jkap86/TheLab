@@ -124,6 +124,22 @@ const loaded = (over: Partial<AdpPayload> = {}): AdpState => ({
 const leagues = [league("a", 12), league("b", 10)];
 const density = { months: [{ season: "2026", month: "2026-05", drafts: 120 }], error: null, loading: false };
 
+/**
+ * The filter bar's props that say nothing about the filters themselves.
+ *
+ * The id and the trigger ref belong to the *drawer* — it is what closes the tray
+ * (Escape reaches it through the lifecycle hook's document listener), so it is
+ * what puts the focus back. Passing them in rather than making them here is what
+ * keeps this section a plain function this file can call.
+ */
+const filterBarProps = {
+  seedLeagues: [] as readonly ManagerLeague[],
+  trayId: "tray",
+  triggerRef: { current: null },
+  onToggle: () => {},
+  onChange: () => {},
+};
+
 function drawer(over: Partial<Parameters<typeof AdpDrawer>[0]> = {}): string {
   return renderToStaticMarkup(
     createElement(AdpDrawer, {
@@ -166,9 +182,47 @@ describe("what is on screen", () => {
     assert.match(html, new RegExp(`adp-scrim-in ${ADP_DRAWER_ENTER_MS}ms`));
   });
 
-  test("nothing carries an id, so nothing can collide", () => {
-    const ids = drawer().match(/ id="[^"]*"/g) ?? [];
-    assert.deepEqual(ids, []);
+  test("every id is unique and every reference to one resolves", () => {
+    // This used to assert the drawer carried *no* id at all, which was the
+    // cheapest way to say "nothing here can collide" while nothing needed one.
+    // The description does, so the rule is stated properly instead: ids come
+    // from `useId` (two drawers on a page is a real state — the manager tabs and
+    // the trades board each mount their own), and every ARIA reference has to
+    // land on one that is actually in the markup. A literal id passes the first
+    // half and is exactly what the second half of this file's siblings got wrong.
+    const html = drawer();
+    const ids = Array.from(html.matchAll(/ id="([^"]*)"/g), (m) => m[1]);
+    assert.equal(new Set(ids).size, ids.length, "ids must be unique");
+
+    const referenced = Array.from(
+      html.matchAll(/ aria-(?:describedby|labelledby|controls)="([^"]*)"/g),
+      (m) => m[1],
+    ).flatMap((value) => value.split(/\s+/));
+    assert.ok(referenced.length > 0, "expected at least one ARIA reference");
+    for (const target of referenced) {
+      assert.ok(ids.includes(target), `aria reference ${target} resolves to nothing`);
+    }
+  });
+
+  test("the drawer is described by the board's own premise", () => {
+    const html = drawer();
+    const id = html.match(/aria-describedby="([^"]*)"/)?.[1];
+    assert.ok(id, "expected the dialog to carry a description");
+    // The footer's caveat and nothing else: a board priced against an assumed
+    // pool is what a reader has to hear before reading the value column.
+    assert.match(
+      html,
+      new RegExp(`id="${id}"[^>]*>[^<]*crawled drafts, not market ADP`),
+    );
+  });
+
+  test("the scrim is a pointer target and not a tab stop", () => {
+    // It is a sibling of the dialog rather than a child, so a tab stop on it is
+    // a stop outside the modal — and the header's own close key says the same
+    // thing from inside.
+    const scrim = drawer().match(/<button[^>]*aria-label="Close ADP board"[^>]*>/)?.[0];
+    assert.ok(scrim, "expected the scrim to be a button");
+    assert.match(scrim, /tabindex="-1"/);
   });
 
   test("the dialog holds tab stops, which is what the trap needs to find", () => {
@@ -349,6 +403,8 @@ describe("what the controls do", () => {
       filters: [...FIXED_FILTERS, leagueSizeFilter(leagues)],
       seedLeagues: [],
       open: false,
+      trayId: "tray",
+      triggerRef: { current: null },
       onToggle: () => {},
       onChange: (value) => {
         next = value;
@@ -362,12 +418,12 @@ describe("what the controls do", () => {
     const filters = [...FIXED_FILTERS, leagueSizeFilter(leagues)];
     const controls: AdpControls = { ...defaultAdpControls("2026"), scoring: "ppr" };
     const closed = elements(
-      AdpFilterBar({ controls, filters, seedLeagues: [], open: false, onToggle: () => {}, onChange: () => {} }),
+      AdpFilterBar({ ...filterBarProps, controls, filters, open: false }),
     ).filter((el) => typeof el.props.ariaLabel === "string");
     assert.deepEqual(closed.map((el) => el.props.ariaLabel), ["Scoring"]);
 
     const open = elements(
-      AdpFilterBar({ controls, filters, seedLeagues: [], open: true, onToggle: () => {}, onChange: () => {} }),
+      AdpFilterBar({ ...filterBarProps, controls, filters, open: true }),
     ).filter((el) => typeof el.props.ariaLabel === "string");
     assert.deepEqual(open.map((el) => el.props.ariaLabel), filters.map((f) => f.ariaLabel));
   });
@@ -416,6 +472,7 @@ describe("what the controls do", () => {
     let closed = 0;
     const tree = AdpDrawerFooter({
       teams: "all",
+      premiseId: "premise",
       onReset: () => {
         reset += 1;
       },

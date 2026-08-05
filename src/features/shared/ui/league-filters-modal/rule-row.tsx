@@ -112,7 +112,10 @@ export function RuleRow({
 
       <button
         type="button"
-        aria-label="Remove rule"
+        // Named by the rule it removes: a bay can hold half a dozen of these
+        // and "Remove rule" six times over is a list a reader has to count
+        // through.
+        aria-label={`Remove rule ${rule.key} ${rule.op} ${formatRuleValue(rule.value)}`}
         onClick={onRemove}
         className="shrink-0 rounded-md border border-foreground/10 px-1.5 py-1 text-sm font-bold leading-none text-foreground/40 transition-colors hover:border-[#ff5f6d]/50 hover:text-[#ff5f6d]"
       >

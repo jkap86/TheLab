@@ -137,12 +137,35 @@ function modal(over: Partial<Parameters<typeof LeagueFiltersModal>[0]> = {}): st
 describe("what is on screen", () => {
   test("the dialog is labelled by its own title, and the panel takes the focus", () => {
     const html = modal();
-    assert.match(html, /aria-labelledby="league-filters-title"/);
-    assert.match(html, /id="league-filters-title"/);
+    // The id is generated rather than literal, because **two of these dialogs
+    // are on the page at once** — the manager Leagues tab renders one in the
+    // header plate's corner and the shares sheet opened from its rail renders a
+    // second. So what is asserted is the *relationship* rather than a string:
+    // the label points at a heading that is actually in this markup.
+    const titleId = html.match(/aria-labelledby="([^"]*)"/)?.[1];
+    assert.ok(titleId, "expected the dialog to be labelled");
+    assert.match(html, new RegExp(`<h2 id="${titleId}"`));
     // Focusable as the target for the focus move on open, but out of the tab
     // order — `showModal` would otherwise land the ring on the close button.
     assert.match(html, /tabindex="-1"/);
     assert.match(html, /aria-label="Close"/);
+  });
+
+  test("every id is unique and every reference to one resolves", () => {
+    // The property a literal id breaks the moment a second dialog mounts, which
+    // is a real state on the Leagues tab — and the one a string assertion above
+    // would happily pass while both dialogs pointed at the same heading.
+    const html = modal();
+    const ids = Array.from(html.matchAll(/ id="([^"]*)"/g), (m) => m[1]);
+    assert.equal(new Set(ids).size, ids.length, "ids must be unique");
+    const referenced = Array.from(
+      html.matchAll(/ aria-(?:describedby|labelledby|controls)="([^"]*)"/g),
+      (m) => m[1],
+    ).flatMap((value) => value.split(/\s+/));
+    assert.ok(referenced.length > 0, "expected at least one ARIA reference");
+    for (const target of referenced) {
+      assert.ok(ids.includes(target), `aria reference ${target} resolves to nothing`);
+    }
   });
 
   test("the trigger says it opens a dialog", () => {
@@ -164,7 +187,11 @@ describe("what is on screen", () => {
   test("a collapsed row states its selection, its count and its expanded state", () => {
     const html = modal();
     assert.match(html, /aria-expanded="false"/);
-    assert.match(html, /aria-haspopup="true"/);
+    // **No `aria-haspopup`**, which this used to assert. What a row opens is a
+    // list of radio-ish keys, not a menu, and `haspopup="true"` *means* menu —
+    // `expanded` plus `controls` is the disclosure this actually is. The
+    // reference is asserted where the popup exists, in the open case below.
+    assert.doesNotMatch(html, /aria-haspopup="true"/);
     for (const label of ["Status", "Type", "Format"]) {
       assert.ok(html.includes(`>${label}</span>`), `expected a ${label} row`);
     }
@@ -186,9 +213,20 @@ describe("what is on screen", () => {
 
   test("every rule control keeps an accessible name", () => {
     const html = modal({ filters: { ...DEFAULT_LEAGUE_FILTERS, slots: [superflex] } });
-    for (const name of ["Filter on", "Comparison", "Value", "Remove rule"]) {
+    for (const name of ["Filter on", "Comparison", "Value"]) {
       assert.match(html, new RegExp(`aria-label="${name}"`));
     }
+    // The remove key names *its own rule* rather than saying "Remove rule": a
+    // bay holds half a dozen of these, and a screen reader listing six
+    // identically named buttons gives a reader nothing to choose between.
+    // A literal `includes` rather than a regex: the slot group is `QB+SF`, and
+    // the `+` in a pattern is a quantifier.
+    assert.ok(
+      html.includes(
+        `aria-label="Remove rule ${superflex.key} ${superflex.op} ${superflex.value}"`,
+      ),
+      "expected the remove key to name its own rule",
+    );
   });
 
   test("a rule on a key the menu doesn't offer still shows its own key", () => {
@@ -392,21 +430,50 @@ describe("what the controls do", () => {
         match: matchesSlotRule,
       });
 
+    // **The dimmed state is `aria-disabled`, not `disabled`** — a preset that is
+    // already on the list is not an unavailable control, it is one carrying a
+    // fact worth reaching and hearing, and `disabled` took it out of the tab
+    // order and the explanation with it. So the press has to be a no-op rather
+    // than merely unreachable, which is the half a `disabled` attribute gave for
+    // free and this has to assert.
+    const presetKeys = (tree: ReturnType<typeof bay>) =>
+      elements(tree).filter(
+        (el) => el.type === "button" && typeof el.props.onClick === "function",
+      );
+
     let next: FilterRule[] | null = null;
-    const live = elements(bay([], (r) => {
+    const live = presetKeys(bay([], (r) => {
       next = r;
-    })).filter((el) => el.props.disabled === false);
-    assert.equal(live.length, SLOT_PRESETS.length, "every preset is live on an empty list");
-    press(live[0], "onClick")();
+    })).filter((el) => el.props["aria-disabled"] === undefined);
+    // The bay's own "+ Rule" button is a press too, so the presets are what is
+    // left once it is discounted.
+    assert.equal(
+      live.length,
+      SLOT_PRESETS.length + 1,
+      "every preset is live on an empty list, beside the add button",
+    );
+    press(live[1], "onClick")();
     assert.deepEqual(next, [SLOT_PRESETS[0].rule]);
 
     // Superflex now on the list: its own key dims, the other four stay live.
-    const withSuperflex = elements(bay([SLOT_PRESETS[0].rule]));
-    assert.equal(withSuperflex.filter((el) => el.props.disabled === true).length, 1);
+    const withSuperflex = presetKeys(bay([SLOT_PRESETS[0].rule]));
+    const dimmed = withSuperflex.filter((el) => el.props["aria-disabled"] === true);
+    assert.equal(dimmed.length, 1);
     assert.equal(
-      withSuperflex.filter((el) => el.props.disabled === false).length,
-      SLOT_PRESETS.length - 1,
+      withSuperflex.filter((el) => el.props["aria-disabled"] === undefined).length,
+      SLOT_PRESETS.length,
     );
+
+    // Still reachable, and still a no-op: pressing it must not add the rule a
+    // second time.
+    let after: FilterRule[] | null = null;
+    press(
+      presetKeys(bay([SLOT_PRESETS[0].rule], (r) => {
+        after = r;
+      })).filter((el) => el.props["aria-disabled"] === true)[0],
+      "onClick",
+    )();
+    assert.equal(after, null, "a dimmed preset writes nothing");
   });
 
   test("a rule row edits and removes by position, with a twin beside it", () => {
@@ -456,7 +523,7 @@ describe("what the controls do", () => {
 
   test("the header's close, the footer's Reset and Apply reach the props they were given", () => {
     let closed = 0;
-    press(elements(FiltersDialogHeader({ onClose: () => (closed += 1) }))
+    press(elements(FiltersDialogHeader({ titleId: "t", onClose: () => (closed += 1) }))
       .filter((el) => el.type === "button")[0], "onClick")();
     assert.equal(closed, 1);
 
@@ -466,6 +533,7 @@ describe("what the controls do", () => {
       FiltersDialogFooter({
         matched: 3,
         total: 12,
+        hintId: "hint",
         onReset: () => (reset += 1),
         onApply: () => (applied += 1),
       }),

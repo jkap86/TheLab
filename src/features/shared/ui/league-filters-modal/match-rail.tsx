@@ -45,11 +45,19 @@ export function MatchRail({
   const share = matchShare(matched.length, total);
 
   return (
-    <aside
+    // A labelled group rather than an `<aside>`: an aside that is not inside
+    // sectioning content maps to the `complementary` landmark, and a `<dialog>`
+    // is not sectioning content — so this was publishing a page-level landmark
+    // from inside a modal.
+    <div
+      role="group"
       aria-label="Matching leagues"
       className="lab-well flex flex-col gap-4 rounded-xl p-4 lg:sticky lg:top-0 lg:self-start"
     >
-      <div className="flex flex-col gap-1">
+      {/* The one number the dialog exists to move, so it is announced when it
+          moves rather than only when a reader goes looking for it. `polite`, and
+          on the count alone — the breakdown under it is read on demand. */}
+      <div role="status" className="flex flex-col gap-1">
         <span className={CAPTION}>Leagues matching</span>
         <div className="flex items-baseline gap-2">
           <span className="font-mono text-[2.5rem] font-bold leading-none tabular-nums text-active [text-shadow:0_0_22px_rgba(0,255,229,0.45)]">
@@ -111,7 +119,7 @@ export function MatchRail({
           </div>
         </>
       )}
-    </aside>
+    </div>
   );
 }
 

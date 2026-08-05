@@ -30,11 +30,21 @@ export function ToolLinkCard({
 }) {
   if (disabled) {
     return (
+      // `role="link"` is what gives `aria-disabled` something to attach to: on a
+      // bare `<div>` the attribute has no host role and is simply dropped, so
+      // the card announced as ordinary text and the dimming — the only thing
+      // saying it is inert — was invisible to a screen reader. The reason is
+      // stated too, since the account this is waiting on is resolved in a card
+      // several hundred pixels up the page.
       <div
-        aria-disabled
+        role="link"
+        aria-disabled="true"
         className={`${TOOL_CARD_SURFACE} cursor-not-allowed opacity-45`}
       >
         <ToolCardContent text={tool.text} description={tool.description} />
+        <span className="sr-only">
+          Unavailable until a Sleeper account is connected.
+        </span>
       </div>
     );
   }
