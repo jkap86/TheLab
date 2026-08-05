@@ -473,10 +473,13 @@ did **not** move: it is the server half, and it was already outside the
 feature.
 
 The two ends are a matched pair with no compiler link between them — the client
-writes the vocabulary the server parses (the scoring buckets, the league-type
-codes, the auction exclusion, the `start_after`/`start_before` dates), so a value
+writes the vocabulary the server parses (the scoring buckets, the auction
+exclusion, the `start_after`/`start_before` dates), so a value
 added on one side and not the other fails as an ignored parameter rather than a
-type error. `adp-controls` derives
+type error. The league type left that vocabulary entirely: every `/api/adp`
+answer now carries the redraft and dynasty boards side by side and the display
+chooses, so there is no `league_type` parameter for the two ends to disagree on
+— see the drawer's board keys below for the shape of that. `adp-controls` derives
 its scoring bucket to mirror the endpoint's own `SCORING_SQL` for that reason:
 seeding a filter from a league has to land on the bucket that league would
 actually be counted in, or "match a league" quietly returns a board the league
@@ -1593,12 +1596,41 @@ stops holding, a comment saying it does would not have caught it.
   - **The filter row shows only what is narrowing the board.** Seven chips
     permanently reading "All" is seven controls' worth of height reporting that
     nothing is set. `FilterRow` renders the narrowing ones plus one `Filters`
-    key badged with their count; the tray behind it holds **all** seven so the
+    key badged with their count; the tray behind it holds **all** six so the
     set doesn't reshuffle as it is used, and the summary chips step aside while
     it is up rather than appearing twice. A filter already set stays a live
     `<select>`, so changing one is the single press it always was — the second
     press is only for reaching a filter that was off, which is the case the
     drawer was previously spending the height on.
+  - **The league type is not one of those filters — every fetch answers both
+    markets, and two board keys over the list choose what is drawn.** A dynasty
+    startup and a redraft price different games, which is exactly why the type
+    chip used to be the most consequential filter here; it is now the split the
+    answer itself carries. `/api/adp` averages every player twice — a redraft
+    board (keeper folds in: the same season-long game with a few players
+    withheld, where leaving it in neither bucket would put its drafts in the
+    total and in no column, the Complete-status failure) and a dynasty one —
+    with `min_picks` gated per board, so a rookie is a real number on one and an
+    honest em dash on the other. The keys sit in the board's sticky header with
+    the columns they toggle, each carrying its own board's draft count (the
+    population a reader needs before trusting a column), and the last lit one
+    refuses to go out: `boards` is a three-value union (`toggleAdpBoard`), so a
+    blank board is unrepresentable rather than guarded against. The display
+    re-sorts for what it shows (`adpBoardRows`) because the fetch's order is
+    fair to both markets and therefore right for neither column alone — one
+    board keeps only what it can average and sorts on it; both keep every row,
+    redraft order first, the dynasty-only tail after it in its own order, never
+    interleaved on numbers from two different markets. One board shown keeps
+    the Taken and Value columns at every width; both trade Taken for the second
+    ADP (its share moves to the ADP cells' hover) and seat the two value
+    columns only from `@md` up — the panel is its own `@container`, so that
+    measures the drawer, not the viewport. `boards` lives on `AdpControls`
+    beside `steepness` and shares its standing exactly: display state, never on
+    the query string (the cache would split into two entries holding identical
+    payloads) and never counted as a narrowing. What "Match a league…" seeds
+    for the type is therefore *which board is displayed* — the market that
+    league is actually in — and the Players tab asks the same question through
+    its own column picker instead, where the ADP metrics come one per board.
   - **The keys are `.lab-chip`, not the drawer's own outlined `Segment`.** This
     was the last place in the app still drawing flat bordered buttons for
     something you press; the season keys, the window presets and the filters
@@ -2678,10 +2710,12 @@ stops holding, a comment saying it does would not have caught it.
 - **The share catalogue serves two views and is still one grain.** A player share
   and a leaguemate share are the same subject shape — something held across some
   of the manager's leagues — and the only thing a player has that a person does
-  not is a price on the ADP board. That is two extra metrics
-  (`PLAYER_SHARE_METRICS = SHARE_METRICS + the ADP pair`), not a second catalogue;
-  the leaguemates menu never lists them, so the null they would read can't
-  surface. Its record metrics are the **manager's** own over the leagues behind
+  not is a price on the ADP board. That is four extra metrics
+  (`PLAYER_SHARE_METRICS = SHARE_METRICS + an ADP and a pick-spread column per
+  league-type board`, since the fetch answers the redraft and dynasty markets
+  side by side and a column must never read the other market's number), not a
+  second catalogue; the leaguemates menu never lists them, so the null they
+  would read can't surface. Its record metrics are the **manager's** own over the leagues behind
   the row — how the teams holding a player are doing, how he fares against the
   crowd a leaguemate is part of — and they carry the two `aggregateRecord` rules
   intact: counted over leagues that report a record, and no games played is an em

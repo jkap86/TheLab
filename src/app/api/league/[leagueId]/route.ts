@@ -16,11 +16,11 @@ import {
   adpBoardFor,
   adpValue,
   getDraftAdpForPlayers,
+  getLeagueAdpBoards,
   getLeagueDetail,
-  getLeagueTypes,
   leagueAdpPool,
 } from "@/shared/manager";
-import type { LeagueType, PlayerAdp } from "@/shared/manager";
+import type { AdpBoardType, PlayerBoardAdp } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 import { getLeagueOutlook } from "@/shared/projections";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
@@ -53,14 +53,14 @@ async function priceRosters(args: {
     args;
   const superflex = isSuperflexLineup(rosterPositions);
 
-  const [ktcSet, leagueTypes] = await Promise.all([
+  const [ktcSet, adpBoards] = await Promise.all([
     getKtcValuesBySleeperId(playerIds).catch((error): KtcValueSet => {
       console.error(`[league] KTC failed for ${leagueId}:`, errorMessage(error));
       return { values: {}, updated_at: null };
     }),
-    getLeagueTypes([leagueId]).catch((error): Map<string, LeagueType> => {
+    getLeagueAdpBoards([leagueId]).catch((error): Map<string, AdpBoardType> => {
       console.error(
-        `[league] league type failed for ${leagueId}:`,
+        `[league] ADP board failed for ${leagueId}:`,
         errorMessage(error),
       );
       return new Map();
@@ -75,12 +75,18 @@ async function priceRosters(args: {
     if (priced !== null) ktc[id] = priced;
   }
 
-  const leagueType = leagueTypes.get(leagueId) ?? "redraft";
-  const board = adpBoardFor({ season, rosterPositions, scoringSettings, leagueType });
+  // The fetch answers both league-type boards; this league reads its own side.
+  const boardType = adpBoards.get(leagueId) ?? "redraft";
+  const board = adpBoardFor({ season, rosterPositions, scoringSettings });
   const adpResult = await getDraftAdpForPlayers(board, playerIds).catch(
-    (error): { draft_count: number; values: Map<string, PlayerAdp> } => {
+    (error): {
+      draft_count: number;
+      redraft_drafts: number;
+      dynasty_drafts: number;
+      values: Map<string, PlayerBoardAdp>;
+    } => {
       console.error(`[league] ADP failed for ${leagueId}:`, errorMessage(error));
-      return { draft_count: 0, values: new Map() };
+      return { draft_count: 0, redraft_drafts: 0, dynasty_drafts: 0, values: new Map() };
     },
   );
 
@@ -91,16 +97,19 @@ async function priceRosters(args: {
 
   const adp: Record<string, number> = {};
   const adp_position: Record<string, number> = {};
-  for (const [id, { adp: position }] of adpResult.values) {
-    adp[id] = adpValue(position, pool, halvings);
-    adp_position[id] = position;
+  for (const [id, boards] of adpResult.values) {
+    const entry = boards[boardType];
+    if (!entry) continue;
+    adp[id] = adpValue(entry.adp, pool, halvings);
+    adp_position[id] = entry.adp;
   }
 
   return {
     superflex,
     ktc_updated_at: ktcSet.updated_at,
-    adp_league_type: leagueType,
-    adp_draft_count: adpResult.draft_count,
+    adp_board: boardType,
+    adp_draft_count:
+      boardType === "dynasty" ? adpResult.dynasty_drafts : adpResult.redraft_drafts,
     ktc,
     adp,
     adp_position,

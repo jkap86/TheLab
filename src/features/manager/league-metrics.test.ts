@@ -51,7 +51,7 @@ const adp: LeagueAdpEntry = {
   rostered: 16,
   split: { starters: 26100, bench: 12300 },
   superflex: true,
-  league_type: "dynasty",
+  board: "dynasty",
   draft_count: 37,
   starters_rank: { rank: 5, of: 12 },
 };

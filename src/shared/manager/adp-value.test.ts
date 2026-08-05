@@ -226,17 +226,15 @@ describe("rosterAdpValue", () => {
 });
 
 describe("adpBoardFor", () => {
-  test("reads the board off the league's slots, scoring and type", () => {
+  test("reads the board off the league's slots and scoring", () => {
     const board = adpBoardFor({
       season: "2025",
       rosterPositions: ["QB", "RB", "WR", "SUPER_FLEX", "BN"],
       scoringSettings: { rec: 1 },
-      leagueType: "dynasty",
     });
     assert.deepEqual(board.seasons, ["2025"]);
     assert.equal(board.superflex, true);
     assert.deepEqual(board.scoring, ["ppr"]);
-    assert.deepEqual(board.league_types, ["dynasty"]);
   });
 
   test("a single QB league reads the 1QB board, half-PPR its bucket", () => {
@@ -244,11 +242,9 @@ describe("adpBoardFor", () => {
       season: "2025",
       rosterPositions: ["QB", "RB", "WR", "FLEX", "BN"],
       scoringSettings: { rec: 0.5 },
-      leagueType: "redraft",
     });
     assert.equal(board.superflex, false);
     assert.deepEqual(board.scoring, ["half_ppr"]);
-    assert.deepEqual(board.league_types, ["redraft"]);
   });
 
   test("missing reception scoring is standard, not a failure", () => {
@@ -256,29 +252,28 @@ describe("adpBoardFor", () => {
       season: "2025",
       rosterPositions: ["QB", "RB", "WR"],
       scoringSettings: null,
-      leagueType: "redraft",
     });
     assert.deepEqual(board.scoring, ["std"]);
   });
 
   test("leagues sharing the priced axes share a signature", () => {
+    // The league type is deliberately not an axis: the fetch answers both
+    // boards, so a dynasty league and a redraft league alike in slots and
+    // scoring share one query and read their own side of it.
     const a = adpBoardFor({
       season: "2025",
       rosterPositions: ["QB", "SUPER_FLEX", "BN"],
       scoringSettings: { rec: 1 },
-      leagueType: "dynasty",
     });
     const b = adpBoardFor({
       season: "2025",
       rosterPositions: ["QB", "QB", "RB"],
       scoringSettings: { rec: 1.5 },
-      leagueType: "dynasty",
     });
     const c = adpBoardFor({
       season: "2025",
       rosterPositions: ["QB", "RB", "WR"],
       scoringSettings: { rec: 1 },
-      leagueType: "dynasty",
     });
     assert.equal(boardSignature(a), boardSignature(b));
     assert.notEqual(boardSignature(a), boardSignature(c));
