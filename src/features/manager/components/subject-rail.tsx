@@ -19,8 +19,16 @@ import {
 } from "../subjects";
 import { ListLedge } from "./list-ledge";
 
-/** How many results a panel over the list can show without becoming the list. */
+/**
+ * How many results a panel over the list can show without becoming the list.
+ *
+ * The shares browse is exempt on purpose — becoming the list is what it is
+ * for, and the panel's own max-height is what bounds it there.
+ */
 const RESULT_LIMIT = 8;
+
+/** The two things the panel can be showing: search results, or the shares. */
+type PanelMode = "search" | "shares";
 
 /**
  * The list's header rail, carrying the *who is in it* filter above the column
@@ -29,11 +37,11 @@ const RESULT_LIMIT = 8;
  * **This is the whole of that feature's chrome, and it is one storey of the
  * headings billet rather than a row of its own** — see {@link ListLedge} for why
  * a separate part is the expensive way to draw this. What rides here is a
- * caption, the chosen subjects as tokens, and a slot that opens the search; the
- * count of what survives sits at the far end, where the rail's own answer
- * belongs.
+ * caption, the chosen subjects as tokens, and two slots that open the panel —
+ * the search, and the shares browse; the count of what survives sits at the far
+ * end, where the rail's own answer belongs.
  *
- * Four decisions worth keeping:
+ * Five decisions worth keeping:
  *
  * **It commits live, and that is what taking it out of the filters dialog
  * bought.** There is no draft to protect here, because there is no per-option
@@ -57,6 +65,16 @@ const RESULT_LIMIT = 8;
  * over the subject selection itself a menu collapses to what is already picked
  * the moment anything is picked, and cannot be widened again without being
  * cleared — the rule the trades board's facets keep, for the same reason.
+ *
+ * **The shares key is the same panel over a different population.** Typing is
+ * only one way to arrive at a name: the players a reader narrows by are mostly
+ * the ones they hold everywhere, and that is a list this control can simply
+ * show — every rostered player, most-held first, the Players tab's own
+ * ordering. So the storey carries a second key beside the search trigger, and
+ * what it opens is the identical panel with the cap off and the leaguemates
+ * group gone. Same rows, same counts, same toggle — a player picked by
+ * browsing leaves exactly the token a player picked by typing does, and the
+ * input stays live over it, so the two doors are one control rather than two.
  */
 export function SubjectRail({
   view,
@@ -67,16 +85,18 @@ export function SubjectRail({
   headings?: React.ReactNode;
 }) {
   const { subjects, setSubjects } = useSubjectFilters();
-  const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState<PanelMode | null>(null);
   const [query, setQuery] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const open = panel !== null;
   const leagues = view.data?.leagues ?? null;
   const selfId = view.data?.user.user_id ?? "";
-  // Both halves are needed whenever the panel is up: the search is one field
-  // over both kinds, so opening it with only the rosters loaded would silently
-  // answer half the question.
+  // Both halves are fetched whenever the panel is up, whichever mode it is in:
+  // the search is one field over both kinds, so opening it with only the
+  // rosters loaded would silently answer half the question — and the shares
+  // mode is one press from being the search, off the same cache.
   const rosters = useManagerPlayers(view.searched, leagues, open);
   const members = useManagerLeaguemates(view.searched, leagues, open);
 
@@ -100,6 +120,15 @@ export function SubjectRail({
     [options, query],
   );
 
+  // The shares browse: players only, uncapped — the tail the search's cap keeps
+  // out of the panel is the point of this mode. The query still narrows it, so
+  // the one input serves both doors.
+  const shareResults = useMemo(() => {
+    if (panel !== "shares") return [];
+    const players = options.filter((o) => o.subject.kind === "player");
+    return searchSubjects(players, query, Infinity);
+  }, [panel, options, query]);
+
   /** What a selected subject is called — resolved from the same option list. */
   const nameOf = useCallback(
     (subject: Subject) =>
@@ -108,9 +137,23 @@ export function SubjectRail({
   );
 
   const close = useCallback(() => {
-    setOpen(false);
+    setPanel(null);
     setQuery("");
   }, []);
+
+  /**
+   * Each key toggles its own mode: pressed again it closes, pressed while the
+   * other mode is up it switches in place. The query survives a switch — it is
+   * visible in the input either way, and clearing it would make the same
+   * keystrokes mean different things depending on which key was pressed last.
+   */
+  const toggleMode = useCallback(
+    (mode: PanelMode) => {
+      if (panel === mode) close();
+      else setPanel(mode);
+    },
+    [panel, close],
+  );
 
   // A press outside the rail dismisses the panel. Pointer-down rather than
   // click, so dragging out of it doesn't leave it up — the same gesture the
@@ -172,16 +215,30 @@ export function SubjectRail({
             <button
               type="button"
               onClick={() => {
-                setOpen((v) => !v);
+                toggleMode("search");
                 // Focusing in the same tick the panel mounts is a frame early;
                 // the panel's own effect takes it instead.
               }}
-              aria-expanded={open}
+              aria-expanded={panel === "search"}
               aria-haspopup="dialog"
               className="lab-ledge-slot flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[10px] font-semibold text-foreground/70 transition-colors hover:text-active"
             >
               <SearchIcon />
               {count > 0 ? "Add" : "Player or leaguemate"}
+            </button>
+
+            {/* The second door: the same panel opened on the whole ranked list
+                rather than a typed query. It contracts alongside the trigger
+                once tokens are taking the row's room, for the same reason. */}
+            <button
+              type="button"
+              onClick={() => toggleMode("shares")}
+              aria-expanded={panel === "shares"}
+              aria-haspopup="dialog"
+              className="lab-ledge-slot flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[10px] font-semibold text-foreground/70 transition-colors hover:text-active"
+            >
+              <SharesIcon />
+              {count > 0 ? "Shares" : "Player shares"}
             </button>
 
             {/* The rail's own answer. Dimmed while the maps behind a selection
@@ -197,18 +254,30 @@ export function SubjectRail({
           </>
         }
         panel={
-          open && (
+          panel && (
             <SubjectPanel
               inputRef={inputRef}
+              mode={panel}
               query={query}
               onQuery={setQuery}
               results={results}
+              shares={shareResults}
               selected={subjects.subjects}
               match={subjects.match}
               onMatch={(match) => setSubjects({ ...subjects, match })}
               onToggle={(subject) => setSubjects(toggleSubject(subjects, subject))}
-              loading={!rosters.data && !members.data}
-              error={rosters.error ?? members.error}
+              // The shares mode reads only the rosters, so a slow member list
+              // must not hold it up — and its errors are not its business.
+              loading={
+                panel === "shares"
+                  ? !rosters.data
+                  : !rosters.data && !members.data
+              }
+              error={
+                panel === "shares"
+                  ? rosters.error
+                  : (rosters.error ?? members.error)
+              }
             />
           )
         }
@@ -250,18 +319,25 @@ function SubjectToken({
 }
 
 /**
- * The search, floating under the rail.
+ * The search — or the shares browse — floating under the rail.
  *
  * A raised face over the list it narrows — the material grammar everywhere else
  * here: the thing you are working in sits above the thing you are working on. It
  * hangs off the rail's own box rather than pushing the list down, because a panel
  * that moved the rows would be answering the question by moving the answer.
+ *
+ * One panel for both modes, deliberately: the rows, the toggle, the match
+ * control and the input are identical, so a reader who arrives by either key is
+ * in the same place. What `mode` changes is the population under the input —
+ * the capped two-group results, or every rostered player most-held first.
  */
 function SubjectPanel({
   inputRef,
+  mode,
   query,
   onQuery,
   results,
+  shares,
   selected,
   match,
   onMatch,
@@ -270,9 +346,12 @@ function SubjectPanel({
   error,
 }: {
   inputRef: React.RefObject<HTMLInputElement | null>;
+  mode: PanelMode;
   query: string;
   onQuery: (value: string) => void;
   results: SubjectOption[];
+  /** The shares browse — players only, uncapped, still narrowed by the query. */
+  shares: SubjectOption[];
   selected: readonly Subject[];
   match: "all" | "any";
   onMatch: (match: "all" | "any") => void;
@@ -281,66 +360,103 @@ function SubjectPanel({
   error: string | null;
 }) {
   // The panel is opened to be typed into, so it takes the focus on mount rather
-  // than leaving the first keystroke to land on the page behind it.
+  // than leaving the first keystroke to land on the page behind it. `mode` is a
+  // dependency because switching doors doesn't remount the panel — either key
+  // makes the same promise, so either press puts the caret in the field.
   useEffect(() => {
     inputRef.current?.focus();
-  }, [inputRef]);
+  }, [inputRef, mode]);
 
   const players = results.filter((o) => o.subject.kind === "player");
   const mates = results.filter((o) => o.subject.kind === "leaguemate");
   const chosen = new Set(selected.map(subjectKey));
 
   return (
+    // The input and the match row are pinned; only the results scroll — the
+    // drawer's own rule, and load-bearing here now that the shares mode is the
+    // whole ranked list: filtering it from two hundred rows deep must not mean
+    // scrolling back to the field. The scroll box takes no `flex-1` for the
+    // usual reason — a short result list should leave a short panel, not
+    // stretch to the cap — and `min-h-0` is what lets a long one shrink into
+    // it. `overscroll-contain` keeps a flick at its end from carrying on into
+    // the page, exactly as the league panel's scroll box does.
     <div
-      className="absolute left-4 right-4 top-full z-30 mt-1.5 flex max-h-[min(60vh,26rem)] flex-col gap-1.5 overflow-y-auto rounded-xl border border-active/25 bg-gradient-to-b from-[#1b3040] to-[#0d1c27] p-2 shadow-[0_24px_50px_-20px_rgba(0,0,0,0.95),0_0_36px_-16px_rgba(0,255,229,0.35)] sm:max-w-[26rem]"
+      className="absolute left-4 right-4 top-full z-30 mt-1.5 flex max-h-[min(60vh,26rem)] flex-col gap-1.5 rounded-xl border border-active/25 bg-gradient-to-b from-[#1b3040] to-[#0d1c27] p-2 shadow-[0_24px_50px_-20px_rgba(0,0,0,0.95),0_0_36px_-16px_rgba(0,255,229,0.35)] sm:max-w-[26rem]"
       style={{ animation: "dialog-rise 0.14s cubic-bezier(0.2,0.9,0.3,1)" }}
     >
-      <div className="flex items-center gap-2 rounded-lg border border-foreground/10 bg-[#06111b] px-2.5 py-1.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] focus-within:border-active/60">
+      <div className="flex shrink-0 items-center gap-2 rounded-lg border border-foreground/10 bg-[#06111b] px-2.5 py-1.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] focus-within:border-active/60">
         <SearchIcon />
         <input
           ref={inputRef}
           value={query}
           onChange={(e) => onQuery(e.target.value)}
-          placeholder="Search players and leaguemates"
-          aria-label="Search players and leaguemates"
+          placeholder={
+            mode === "shares"
+              ? "Search player shares"
+              : "Search players and leaguemates"
+          }
+          aria-label={
+            mode === "shares"
+              ? "Search player shares"
+              : "Search players and leaguemates"
+          }
           className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-foreground/30"
         />
       </div>
 
       {error && !loading && (
-        <p className="px-2 py-1 text-[11px] text-amber-300">{error}</p>
+        <p className="shrink-0 px-2 py-1 text-[11px] text-amber-300">{error}</p>
       )}
 
-      {loading ? (
-        <p className="px-2 py-2 text-[12px] text-foreground/40">Reading rosters…</p>
-      ) : results.length === 0 ? (
-        <p className="px-2 py-2 text-[12px] text-foreground/40">
-          {query.trim()
-            ? "Nobody by that name in these leagues."
-            : "No rosters or members cached for these leagues yet."}
-        </p>
-      ) : (
-        <>
-          <ResultGroup
-            label="Players"
-            options={players}
-            chosen={chosen}
-            onToggle={onToggle}
-          />
-          <ResultGroup
-            label="Leaguemates"
-            options={mates}
-            chosen={chosen}
-            onToggle={onToggle}
-          />
-        </>
-      )}
+      <div className="flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain">
+        {loading ? (
+          <p className="px-2 py-2 text-[12px] text-foreground/40">
+            Reading rosters…
+          </p>
+        ) : mode === "shares" ? (
+          shares.length === 0 ? (
+            <p className="px-2 py-2 text-[12px] text-foreground/40">
+              {query.trim()
+                ? "Nobody by that name on these rosters."
+                : "No rosters cached for these leagues yet."}
+            </p>
+          ) : (
+            <ResultGroup
+              label="Player shares"
+              options={shares}
+              chosen={chosen}
+              onToggle={onToggle}
+            />
+          )
+        ) : results.length === 0 ? (
+          <p className="px-2 py-2 text-[12px] text-foreground/40">
+            {query.trim()
+              ? "Nobody by that name in these leagues."
+              : "No rosters or members cached for these leagues yet."}
+          </p>
+        ) : (
+          <>
+            <ResultGroup
+              label="Players"
+              options={players}
+              chosen={chosen}
+              onToggle={onToggle}
+            />
+            <ResultGroup
+              label="Leaguemates"
+              options={mates}
+              chosen={chosen}
+              onToggle={onToggle}
+            />
+          </>
+        )}
+      </div>
 
       {/* The mode, drawn only once there is a second subject for it to mean
           anything about — a control over a set of one is a control with one
           answer. */}
       {selected.length > 1 && (
-        <div className="mt-0.5 flex items-center gap-2 border-t border-foreground/10 px-1 pt-2">
+        <div className="mt-0.5 flex shrink-0 items-center gap-2 border-t border-foreground/10 px-1 pt-2">
           <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40">
             Match
           </span>
@@ -441,6 +557,25 @@ function SearchIcon() {
     >
       <circle cx="7" cy="7" r="4.5" />
       <path d="M10.5 10.5 14 14" />
+    </svg>
+  );
+}
+
+/** A ranked list at 12px: three bars, longest first — what the shares are. */
+function SharesIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="h-3 w-3 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+    >
+      <path d="M2.5 4h11" />
+      <path d="M2.5 8h7.5" />
+      <path d="M2.5 12h4.5" />
     </svg>
   );
 }

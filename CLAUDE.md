@@ -2075,7 +2075,15 @@ stops holding, a comment saying it does would not have caught it.
     behind** — there is nothing to compare a name to, and there are several
     hundred of them. One field over both kinds, grouped in the results: they are
     the same question, and two fields would make a reader pick which one they
-    meant before typing a name that exists in only one.
+    meant before typing a name that exists in only one. The search has a second
+    door: a **Player shares** key beside the trigger opens the same panel on the
+    whole ranked list — every rostered player, most-held first, uncapped where
+    the search keeps its top eight — because the names worth narrowing by are
+    mostly the ones held everywhere, and typing is only one way to arrive at
+    one. Same rows, same toggle, so a player picked by browsing leaves exactly
+    the token typing would, and the input stays live over the list; what the
+    second door must not become is a second control — one panel, two
+    populations.
   - **Null and false are different answers, exactly as `slotCount`'s are.** A
     league whose rosters were never synced is not evidence a player is absent
     from it, so `holdsSubject` returns null and a rule against it *fails* rather
