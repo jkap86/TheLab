@@ -214,6 +214,20 @@ data is being written a connection away. The wait is server-side, so a queued
 caller costs one idle pool connection and no polling. Keep it to per-key,
 short-lived work; a background loop that blocks is the stacking problem again.
 
+**A bounded wait has a third outcome, and it is not "skipped".** Because the wait
+times out (`ADVISORY_LOCK_WAIT_MS`), a blocking caller can come back having done
+nothing *while the winner is still writing* — which is the opposite of the other
+skip, where the winner finished and left a complete graph. `SyncSummary.locked`
+separates them, the field `PlayersSyncSummary.locked` already exists for one
+module over: "nothing to do" against "read this again shortly". Both used to
+report `skipped: true` and nothing else, so the leagues stream sent whatever the
+holder had committed so far — on a first visit a fraction of a manager's
+leagues — stamped `stale: false` with a summary, which the client cached, closed
+its progress bar on, and counted as a completed refresh (invalidating all five
+dependent reads against a list still being filled in). The rule generalises past
+this one caller: **whatever a lock-loser hands back, the thing it must never say
+is that the data is final.**
+
 **A per-key lock is computed, not listed** — `managerSyncLockKey(userId)` hashes
 the id into the object slot under one class id, because you cannot enumerate
 every manager in `LOCK_KEYS` ahead of time. The rule above still holds for the

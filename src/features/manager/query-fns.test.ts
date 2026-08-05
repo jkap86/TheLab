@@ -186,4 +186,33 @@ test("leaguesRevision", async (t) => {
 
     assert.equal(refreshSeqOf(final.revision), 3);
   });
+
+  await t.test("a sync that lost the lock does not count as a refresh", async () => {
+    // `locked` means another caller holds this manager's lock and is still
+    // writing: nothing landed that this stream saw, and the leagues below are
+    // whatever that one has committed so far. Counting it would invalidate all
+    // five dependent reads against a list still being filled in, on every
+    // request that loses the race.
+    const mock = installFetchMock(() =>
+      ndjsonResponse([
+        result([league("a")], {
+          stale: true,
+          summary: { leagues: 0, failed: 0, skipped: true, locked: true },
+        }),
+      ]),
+    );
+
+    const final = await fetchManagerLeagues({
+      searched: "alice",
+      previousRevision: leaguesRevision([league("a")], "2026", 2),
+    });
+    mock.restore();
+
+    assert.equal(refreshSeqOf(final.revision), 2, "the sequence stands still");
+    assert.equal(
+      final.revision,
+      leaguesRevision([league("a")], "2026", 2),
+      "so dependent reads are not invalidated",
+    );
+  });
 });

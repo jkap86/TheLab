@@ -111,7 +111,19 @@ export async function GET(
             user: userInfo,
             season,
             leagues,
-            stale: false,
+            // **A sync that lost the lock did not write these leagues, and the
+            // holder has not finished writing them.** Every other outcome here
+            // leaves a complete graph — a real sync, or a skip because the
+            // winner finished while we queued — and only this one leaves
+            // whatever has been committed so far, which on a manager's first
+            // visit is a fraction of their leagues. Reported `stale: false` it
+            // was a partial list wearing the word "final": the client cached it,
+            // closed its progress bar and counted a refresh it never saw. It
+            // still ships, because a partial list is worth more than an error
+            // and the client's own stale time brings it back.
+            stale: summary.locked,
+            // False either way: no second `result` follows on this stream, and
+            // that is exactly what this flag promises.
             refreshing: false,
             summary,
           });

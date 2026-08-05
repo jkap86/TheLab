@@ -295,7 +295,7 @@ export function ManagerHeader({
               always-present row would be an empty band under the record for the
               whole season. */}
           {(refreshing ||
-            (summary && summary.failed > 0) ||
+            (summary && (summary.failed > 0 || summary.locked)) ||
             refreshError) && (
             <div
               className={`relative flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 text-[11px] ${statePad}`}
@@ -303,6 +303,14 @@ export function ManagerHeader({
               {refreshing && <RefreshingPill progress={progress} />}
               {summary && summary.failed > 0 && (
                 <Warning>{summary.failed} failed to sync</Warning>
+              )}
+              {/* A sync running elsewhere kept this one from writing, so the
+                  list below is whatever that one has committed so far — on a
+                  first visit, a fraction of it. Said out loud for the reason
+                  the failed-league count is: the page cannot otherwise be told
+                  apart from a complete one. */}
+              {summary?.locked && (
+                <Warning>Syncing elsewhere — this list may be incomplete</Warning>
               )}
               {refreshError && (
                 <Warning>Refresh failed — showing cached data</Warning>

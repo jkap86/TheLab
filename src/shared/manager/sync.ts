@@ -31,7 +31,22 @@ export type LeagueCounts = {
 
 export type SyncSummary = LeagueCounts & {
   season: string;
-  /** true when the sync was skipped because existing data was still fresh. */
+  /**
+   * true when another caller held this manager's lock for longer than the wait
+   * allows, so this run did nothing and someone else is *still writing* — the
+   * same field the players, KTC and projections summaries carry.
+   *
+   * **It is what separates the two skips, which mean opposite things.** A skip
+   * because the data was already fresh (or because the lock's winner finished
+   * while we queued) leaves a complete, current league graph — that is what the
+   * blocking lock is *for*. A skip because the wait ran out leaves whatever the
+   * holder has committed so far, which for a manager being synced the first time
+   * is a fraction of their leagues. Both used to report `skipped: true` and
+   * nothing else, so a caller could not tell "nothing to do" from "read this
+   * again shortly".
+   */
+  locked: boolean;
+  /** true when the sync did no work — see {@link SyncSummary.locked} for why. */
   skipped: boolean;
   /** total leagues the manager belongs to this season. */
   total: number;
@@ -214,8 +229,12 @@ export async function syncManagerLeagues(
     console.warn(
       `[leagues] sync for ${userId} (${season}) is already running elsewhere; skipped.`,
     );
+    // `locked`, not merely `skipped`: the holder is mid-write, so what is stored
+    // right now is whatever they have committed — the caller must not present it
+    // as a finished sync. See {@link SyncSummary.locked}.
     return {
-      season, skipped: true, total: 0, leagues: 0, failed: 0, ...emptyCounts(),
+      season, locked: true, skipped: true, total: 0, leagues: 0, failed: 0,
+      ...emptyCounts(),
     };
   }
 }
@@ -233,8 +252,12 @@ async function syncManagerLeaguesLocked(
     const fresh = Date.now() - syncedAt.getTime() < SYNC_TTL_MS;
     const finishedWhileWaiting = syncedAt >= requestedAt;
     if (finishedWhileWaiting || (!force && fresh)) {
+      // Skipped with the graph complete — either it was still fresh, or the
+      // lock's winner finished writing it while this caller queued. Nothing is
+      // in flight, so this is a full answer and not a `locked` one.
       return {
-        season, skipped: true, total: 0, leagues: 0, failed: 0, ...emptyCounts(),
+        season, locked: false, skipped: true, total: 0, leagues: 0, failed: 0,
+        ...emptyCounts(),
       };
     }
   }
@@ -272,7 +295,7 @@ async function syncManagerLeaguesLocked(
   );
 
   return {
-    season, skipped: false, total: leagues.length, leagues: loaded, failed,
-    ...counts,
+    season, locked: false, skipped: false, total: leagues.length,
+    leagues: loaded, failed, ...counts,
   };
 }

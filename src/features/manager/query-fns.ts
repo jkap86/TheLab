@@ -199,7 +199,14 @@ export async function fetchManagerLeagues({
           // A `summary` rides only on the post-refresh payload, which is exactly
           // the message after which the rosters behind the dependent routes may
           // have moved. See {@link leaguesRevision}.
-          if (message.summary) refreshSeq += 1;
+          //
+          // Except a `locked` one, which says the sync never ran: another caller
+          // holds this manager's lock and is still writing. Counting it would
+          // invalidate all five dependent reads against a league list that is
+          // still being filled in — the one moment they are least worth
+          // re-asking — and it would do so on every request that loses that
+          // race. Nothing landed that this stream saw, so nothing is behind.
+          if (message.summary && !message.summary.locked) refreshSeq += 1;
           update({
             result: message,
             refreshing: message.refreshing,
