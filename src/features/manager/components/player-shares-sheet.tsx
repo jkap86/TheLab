@@ -323,10 +323,10 @@ export function PlayerSharesSheet({
                 onColumns={setColumns}
                 onReset={reset}
                 storey={
+                  // The tokens name themselves and the rows say what a press
+                  // does by doing it, so the storey carries no caption and no
+                  // instruction: with nothing picked it is the count alone.
                   <>
-                    <span className="shrink-0 pl-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/55">
-                      Picked
-                    </span>
                     {subjects.subjects.map((subject, i) => (
                       <SubjectToken
                         key={subjectKey(subject)}
@@ -337,11 +337,6 @@ export function PlayerSharesSheet({
                         }
                       />
                     ))}
-                    {picked === 0 && (
-                      <span className="text-[11px] text-foreground/40">
-                        Press a player to narrow the leagues behind this.
-                      </span>
-                    )}
                     {picked > 1 && (
                       <MatchToggle
                         match={subjects.match}
