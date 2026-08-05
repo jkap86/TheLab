@@ -8,6 +8,8 @@ import {
   standingScore,
 } from "@/shared/manager";
 import { getWeeklyTeamPoints } from "@/shared/projections";
+import type { WeeklyTeamPoints } from "@/shared/projections";
+import { errorMessage } from "@/shared/util";
 
 import { readFailureResponse } from "../../../read-failure";
 import { resolveManagerRequest } from "../manager-request";
@@ -33,20 +35,28 @@ export async function GET(
 ) {
   const resolved = await resolveManagerRequest(request, params);
   if (!resolved.ok) return resolved.response;
-  const { userId, season } = resolved;
+  const { userId, username, season } = resolved;
 
   try {
-    return await ranksPayload(userId, season);
+    return await ranksPayload(userId, username, season);
   } catch (error) {
     console.error("[ranks] query failed:", error);
     return readFailureResponse(error, "Failed to load ranks");
   }
 }
 
-async function ranksPayload(userId: string, season: string) {
+async function ranksPayload(userId: string, username: string, season: string) {
   // Sequential rather than parallel: which rosters to project is the answer to
   // the first read.
   const leagues = await getManagerLeagueRosters(userId, season);
+  // A projections read that fails costs the projected ranks and not the payload
+  // — the same call the KTC and ADP-value routes make, degraded the same way and
+  // for the same reason. Two of the three ranks here are read straight off the
+  // rosters this route already has, and the comment below says as much: they
+  // answer for a league nothing is projected in, so failing the whole request
+  // would throw away answers that are already in hand. The fallback is the
+  // *empty* triple `getWeeklyTeamPoints` itself returns when there is nothing to
+  // project, so the degraded shape is one the payload already describes.
   const { weeks, points, bench } = await getWeeklyTeamPoints({
     season,
     leagues: leagues.map((l) => ({
@@ -55,6 +65,15 @@ async function ranksPayload(userId: string, season: string) {
       scoringSettings: l.scoring_settings,
       teams: l.teams,
     })),
+  }).catch((error): WeeklyTeamPoints => {
+    console.error(
+      `[ranks] weekly points failed for ${username}:`,
+      errorMessage(error),
+    );
+    // Annotated, or the empty maps infer as `Map<any, any>` and widen the union
+    // the destructuring below reads — the failure path would type-check against
+    // anything.
+    return { weeks: [], points: new Map(), bench: new Map() };
   });
 
   const ranks: ManagerRanksPayload["ranks"] = {};

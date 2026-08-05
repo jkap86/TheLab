@@ -78,6 +78,13 @@ src/shared/    Domain logic, one folder per concern.
   decide per read whether a failure is fatal. `/api/league/[leagueId]` catches
   its projections read and sends `outlook: null` — the rosters are the point of
   that route and the lineups are a bonus on top.
+  **The question is per read, not per `Promise.all`, and phrasing it around the
+  parallel case is how one route missed it.** `/api/user/[username]/ranks` reads
+  sequentially on purpose — which rosters to project is the first read's answer —
+  so there was no `Promise.all` to prompt the question, and a projections failure
+  500'd a payload whose other two ranks were already in hand and never depended
+  on it. Dependent reads earn the same judgement: the second one failing is not
+  automatically fatal just because it had to wait for the first.
 - Aliases: `@/*` → `src/*`, `@thelab/http` → the configured axios instance.
 
 ## Anything crossing the network
@@ -690,7 +697,24 @@ window resolves against today. `features/trades/pick-display` is the third of
 that shape and the smallest: what a pick is *called* and when its origin is worth
 printing, two rules the card had neither of. All are pure and tested, and the thin
 I/O around them (`shared/trades/queries`, the routes, the page) has no rules of
-its own. `shared/trades/pick-slots` is pure for a second reason — it holds the key
+its own.
+
+**`shared/trades/sql` belongs to that list and was the last of them to get a
+test, which is backwards — it is the one whose regressions are silent.** It is
+where a reader's selection becomes a `WHERE`, so a mistake there is not an error
+but *the wrong rows*: an `?&` for an `?|`, a pick count that isn't `DISTINCT`, a
+window folded into the `OR` it should bound. Being a string builder is what makes
+it feel untestable and is exactly why it needs testing, and the tests are written
+as properties rather than snapshots — every caller value bound and none spliced,
+every `$n` resolving to a value actually pushed, `all` and `any` differing in all
+three categories, the window never joining the alternatives. Two of them reach
+past the module: `TRADE_SORT_SQL` is checked against the migration that indexes
+that very expression (no type can carry that agreement, and breaking it turns an
+index walk into a season-wide sort while still answering), and the probe for the
+`OR` join deliberately avoids the managers fragment, which carries an internal
+`OR` of its own for a roster id spelled as a number or a string.
+
+`shared/trades/pick-slots` is pure for a second reason — it holds the key
 the slots are stored under, and the client deep-imports it the way it reaches
 `@/shared/ktc/roster`, so both ends of that map read one definition.
 Three decisions live in the pair rather than in the components:

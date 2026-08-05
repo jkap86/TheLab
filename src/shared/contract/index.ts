@@ -463,8 +463,11 @@ export type ManagerRanksPayload = {
   /**
    * Weeks the projected totals cover, ascending — the horizon travels with the
    * number here as it does everywhere else. Empty when nothing remains to
-   * project, in which case every `proj` is null (the record and points ranks
-   * don't depend on it).
+   * project *or* when the projections read failed, in which case every `proj` is
+   * null and the record and points ranks answer as usual — they are read off the
+   * rosters and never depended on it. The two are not distinguished, the same
+   * choice the KTC and ADP-value routes make for their own null `split`: what a
+   * reader can act on is that there is no projection, not why.
    */
   weeks: number[];
   /**
