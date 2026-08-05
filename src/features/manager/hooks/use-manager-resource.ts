@@ -48,12 +48,23 @@ export function useManagerResource<T>(
   path: string,
   fallbackError: string,
   staleTime: number,
+  /**
+   * A second gate on top of "are there leagues to ask about".
+   *
+   * The views that are *about* a resource read it unconditionally; the ones that
+   * only reach for it when a control is used pass this. The subject filter is
+   * both of those at once — the search panel needs the lists when it opens, and
+   * the narrowing needs them whenever a subject is selected — and the two gates
+   * resolve to one request either way, because both callers name the same query
+   * key and the cache is what deduplicates them.
+   */
+  enabled = true,
 ): ManagerResourceState<T> {
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) =>
       fetchManagerResource<T>(searched, path, fallbackError, signal),
-    enabled: (leagues?.length ?? 0) > 0,
+    enabled: enabled && (leagues?.length ?? 0) > 0,
     staleTime,
   });
 

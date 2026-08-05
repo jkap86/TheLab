@@ -167,6 +167,15 @@ export function MetricColumn<C>({
  * `globals.css`; what stays here is the layout, per the rule those classes hold
  * to.
  *
+ * **This renders the face's *contents* and not the billet, which is the one
+ * thing to know before editing it.** The wall, the notch and the face belong to
+ * {@link ListLedge} now, because the billet grew a second storey: the subject
+ * filter — which of these leagues hold a given player, or are shared with a
+ * given leaguemate — sits above the headings, and drawn as a part of its own it
+ * would have paid for a second wall, a second cast shadow and the clearance
+ * holding two lit faces apart. Everything below still describes the rail; what
+ * moved is where the three material classes are applied.
+ *
  * **Each heading is cut into that face rather than painted on it, and it carries
  * no caret.** The rail read as a grey band between the filter dock and the first
  * card, and the cause was material before it was typographic: the face ended
@@ -213,66 +222,50 @@ export function MetricHeadings({
   onOpen: (slot: number) => void;
 }) {
   return (
-    // The wall, run to the width of the cards below it — the rail is the list's
-    // header, so it covers the list.
-    <div className="lab-ledge lab-notch-lg flex w-full items-stretch">
+    <>
       {/*
-        The face. `relative` is what the cyan seam (`::before`) and the dimples
-        hang off; the material classes deliberately carry no `position`.
-
-        `divide-x` is the groove's dark cut, and it is spelled here rather than
-        in the material class because a border changes the box: the cards' own
-        columns carry the same 1px *inside* their box, so without it every
-        heading after the first would sit a pixel left of the number it names —
-        four pixels shared out unevenly below `sm`, where the columns divide the
-        row rather than taking a fixed width. The lit far wall that turns that
-        cut into machining is `.lab-ledge-col`'s inset highlight.
+        The name column's own heading, and the half of this rail that makes it
+        read as one. It takes the space the four cells don't (`flex-1`), which
+        is exactly the space a card's name half takes, and it is inert — no
+        `.lab-ledge-col`, so it neither lights under the cursor nor cuts a
+        groove of its own against the first stat heading (the face's `divide-x`
+        draws that one, which is the line between what a row *is* and what is
+        measured about it).
       */}
-      <div className="lab-ledge-face lab-notch-lg relative flex w-full items-stretch divide-x divide-[rgba(0,0,0,0.5)]">
-        {/*
-          The name column's own heading, and the half of this rail that makes it
-          read as one. It takes the space the four cells don't (`flex-1`), which
-          is exactly the space a card's name half takes, and it is inert — no
-          `.lab-ledge-col`, so it neither lights under the cursor nor cuts a
-          groove of its own against the first stat heading (the `divide-x` above
-          draws that one, which is the line between what a row *is* and what is
-          measured about it).
-        */}
-        <span className="hidden min-w-0 flex-1 items-center truncate py-[9px] pl-1 pr-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/75 sm:flex">
-          {subject}
-        </span>
+      <span className="hidden min-w-0 flex-1 items-center truncate py-[9px] pl-1 pr-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/75 sm:flex">
+        {subject}
+      </span>
 
-        {columns.map((key, slot) => {
-          const metric = metrics.find((m) => m.key === key) ?? metrics[0];
-          return (
-            <div
-              key={slot}
-              // 6px of cell against the cells' own 10px, with the slot's 4px
-              // making up the difference — see {@link COLUMN_WIDTH}. The
-              // vertical padding is the same trade, so the rail is exactly as
-              // tall as it was: it is pinned inside the manager header, and a
-              // heading that grows takes its height out of the list behind it.
-              className={`lab-ledge-col group/col relative px-1.5 py-1.5 ${COLUMN_WIDTH}`}
+      {columns.map((key, slot) => {
+        const metric = metrics.find((m) => m.key === key) ?? metrics[0];
+        return (
+          <div
+            key={slot}
+            // 6px of cell against the cells' own 10px, with the slot's 4px
+            // making up the difference — see {@link COLUMN_WIDTH}. The
+            // vertical padding is the same trade, so the rail is exactly as
+            // tall as it was: it is pinned inside the manager header, and a
+            // heading that grows takes its height out of the list behind it.
+            className={`lab-ledge-col group/col relative px-1.5 py-1.5 ${COLUMN_WIDTH}`}
+          >
+            <button
+              type="button"
+              onClick={() => onOpen(slot)}
+              aria-haspopup="dialog"
+              // The full label, in case a catalogue ever grows one past the
+              // column's width — a truncated heading is the only name its
+              // column has.
+              title={metric?.label}
+              className="block w-full text-left"
             >
-              <button
-                type="button"
-                onClick={() => onOpen(slot)}
-                aria-haspopup="dialog"
-                // The full label, in case a catalogue ever grows one past the
-                // column's width — a truncated heading is the only name its
-                // column has.
-                title={metric?.label}
-                className="block w-full text-left"
-              >
-                <span className="lab-ledge-slot block truncate rounded-[3px] px-1 py-[3px] text-[10px] font-semibold uppercase tracking-wider text-foreground/90 transition-colors group-hover/col:text-active">
-                  {metric?.label}
-                </span>
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+              <span className="lab-ledge-slot block truncate rounded-[3px] px-1 py-[3px] text-[10px] font-semibold uppercase tracking-wider text-foreground/90 transition-colors group-hover/col:text-active">
+                {metric?.label}
+              </span>
+            </button>
+          </div>
+        );
+      })}
+    </>
   );
 }
 

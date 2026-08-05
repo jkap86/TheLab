@@ -3,9 +3,12 @@
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 
+import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
 import type { ColumnPreset, Metric } from "../metric-cell";
 import type { ColumnsEditor as ColumnsEditorComponent } from "./columns-editor";
+import { ListLedge } from "./list-ledge";
 import { MetricHeadings } from "./metric-column";
+import { SubjectRail } from "./subject-rail";
 
 /**
  * The editor, loaded the first time a heading is pressed.
@@ -77,6 +80,8 @@ export function ColumnsBar<C>({
   presets,
   ctx,
   previewLabel,
+  view,
+  headings = true,
   onColumnChange,
   onColumns,
   onReset,
@@ -89,6 +94,26 @@ export function ColumnsBar<C>({
   /** The subject the editor previews against — the list's first row, or null. */
   ctx: C | null;
   previewLabel: string | null;
+  /**
+   * The page's league view, where the rail is to carry the *who is in it*
+   * filter in a storey above the headings.
+   *
+   * Optional, and this component knows nothing about what the filter *is* — it
+   * owns the billet's geometry and hands the upper storey to {@link SubjectRail},
+   * which is the piece that reads the selection. Omitted, the rail is exactly
+   * the single-storey heading rail it has always been.
+   */
+  view?: FilteredLeagues;
+  /**
+   * Whether the list has rows for the headings to head.
+   *
+   * False draws the billet with the subject storey alone — which is the whole
+   * exemption the two-storey rail costs: that storey holds the control that
+   * narrowed the list to nothing, so dropping it with the headings would take
+   * away the only way back. The tab decides, because what counts as a row is the
+   * tab's own grain: leagues here, shares on the other two.
+   */
+  headings?: boolean;
   onColumnChange: (slot: number, key: string) => void;
   onColumns: (keys: readonly string[]) => void;
   onReset: () => void;
@@ -103,17 +128,26 @@ export function ColumnsBar<C>({
   const [everOpened, setEverOpened] = useState(false);
   if (openSlot !== null && !everOpened) setEverOpened(true);
 
+  // Below `sm` the headings take a line of their own, as the cards' columns do —
+  // so the rail sits over the numbers it names at both widths. From `sm` up it
+  // spans the row, as the cards do. The box that lays that out is `ListLedge`'s,
+  // since the billet may now carry a second storey above these.
+  const headingCells = headings ? (
+    <MetricHeadings
+      metrics={metrics}
+      columns={columns}
+      subject={subject}
+      onOpen={setOpenSlot}
+    />
+  ) : undefined;
+
   return (
-    // Below `sm` the headings take a line of their own, as the cards' columns do
-    // — so the rail sits over the numbers it names at both widths. From `sm` up
-    // it spans the row, as the cards do.
-    <div className="border border-transparent px-4 pl-5">
-      <MetricHeadings
-        metrics={metrics}
-        columns={columns}
-        subject={subject}
-        onOpen={setOpenSlot}
-      />
+    <>
+      {view ? (
+        <SubjectRail view={view} headings={headingCells} />
+      ) : (
+        <ListLedge headings={headingCells} />
+      )}
 
       {everOpened && (
       <ColumnsEditor
@@ -129,6 +163,6 @@ export function ColumnsBar<C>({
         onReset={onReset}
       />
       )}
-    </div>
+    </>
   );
 }

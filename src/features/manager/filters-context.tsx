@@ -4,6 +4,8 @@ import { createContext, useContext, useState } from "react";
 
 import { DEFAULT_LEAGUE_FILTERS, type LeagueFilters } from "@/features/shared";
 
+import { DEFAULT_SUBJECT_FILTERS, type SubjectFilters } from "./subjects";
+
 // The ADP drawer's controls moved to `features/shared` once the trades page
 // needed the same board and store; re-exported here because this feature's
 // own consumers (`leagues-view-layout`, `manager-players`, `manager-leagues`)
@@ -48,6 +50,56 @@ export function useLeagueFilters(): LeagueFiltersValue {
   if (!value) {
     throw new Error(
       "useLeagueFilters must be used within a LeagueFiltersProvider",
+    );
+  }
+  return value;
+}
+
+type SubjectFiltersValue = {
+  subjects: SubjectFilters;
+  setSubjects: (subjects: SubjectFilters) => void;
+};
+
+const SubjectFiltersContext = createContext<SubjectFiltersValue | null>(null);
+
+/**
+ * Holds the *who is in it* selection — the players and leaguemates narrowing the
+ * league list — for one manager, across the same three tabs.
+ *
+ * **A third store rather than a field on the league filters, and the split is
+ * the same one the ADP controls sit on.** Those filters describe what a league
+ * *is*, they are the type `features/shared` exports, and the trades board runs
+ * the identical predicate over a season of leagues it has no account for. A
+ * subject is a lookup into this manager's rosters and membership, which that
+ * page cannot answer and would never ask. Merging them would put a manager-only
+ * field in a shared type and a narrowing in a shared predicate that only one of
+ * its two callers can ever satisfy.
+ *
+ * Mounted beside the other two in the manager layout and keyed there by the
+ * searched manager, so a selection follows you between tabs and still starts
+ * fresh when you look at someone else.
+ */
+export function SubjectFiltersProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [subjects, setSubjects] = useState<SubjectFilters>(
+    DEFAULT_SUBJECT_FILTERS,
+  );
+  return (
+    <SubjectFiltersContext.Provider value={{ subjects, setSubjects }}>
+      {children}
+    </SubjectFiltersContext.Provider>
+  );
+}
+
+/** The shared subject selection. Throws outside the manager layout's provider. */
+export function useSubjectFilters(): SubjectFiltersValue {
+  const value = useContext(SubjectFiltersContext);
+  if (!value) {
+    throw new Error(
+      "useSubjectFilters must be used within a SubjectFiltersProvider",
     );
   }
   return value;

@@ -104,6 +104,8 @@ export function ManagerLeagues({ searched }: { searched: string }) {
       pinned={open === null}
       columns={
         <ColumnsBar
+          view={view}
+          headings={showing > 0}
           metrics={LEAGUE_METRICS}
           columns={columns}
           subject="League"

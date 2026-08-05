@@ -20,6 +20,8 @@ export type ManagerLeaguematesState =
 export function useManagerLeaguemates(
   searched: string,
   leagues: ManagerLeague[] | null,
+  /** Off until a subject filter needs it — see {@link useManagerResource}. */
+  enabled = true,
 ): ManagerLeaguematesState {
   const queryKey = useMemo(
     () => managerQueryKeys.leaguemates(searched),
@@ -32,5 +34,6 @@ export function useManagerLeaguemates(
     "leaguemates",
     "Failed to load leaguemates",
     STALE_TIMES.leaguemates,
+    enabled,
   );
 }

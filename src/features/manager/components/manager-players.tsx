@@ -103,8 +103,10 @@ export function ManagerPlayers({ searched }: { searched: string }) {
           : undefined,
       }}
       columns={
-        shares && shares.players.length > 0 ? (
+        shares ? (
           <ColumnsBar
+            view={view}
+            headings={shares.players.length > 0}
             metrics={PLAYER_SHARE_METRICS}
             columns={columns}
             subject="Player"

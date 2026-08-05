@@ -1,12 +1,16 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { matchesFilters } from "@/features/shared";
-import { useLeagueFilters } from "../filters-context";
+import { useLeagueFilters, useSubjectFilters } from "../filters-context";
 import { invalidateManagerDependents } from "../query-fns";
+import { EMPTY_SUBJECT_INDEX, matchesSubjects } from "../subjects";
+import type { Subject, SubjectIndex } from "../subjects";
 import { useManagerLeagues } from "./use-manager-leagues";
+import { useManagerLeaguemates } from "./use-manager-leaguemates";
+import { useManagerPlayers } from "./use-manager-players";
 
 /**
  * The leagues stream plus the filter state every manager view sits on.
@@ -38,6 +42,7 @@ import { useManagerLeagues } from "./use-manager-leagues";
 export function useFilteredLeagues(searched: string) {
   const stream = useManagerLeagues(searched);
   const { filters, setFilters } = useLeagueFilters();
+  const { subjects } = useSubjectFilters();
   const queryClient = useQueryClient();
 
   const revision = stream.revision;
@@ -53,14 +58,85 @@ export function useFilteredLeagues(searched: string) {
   }, [revision, searched, queryClient]);
 
   const leagues = stream.data?.leagues;
-  const filtered = useMemo(
+  const leagueFiltered = useMemo(
     () => (leagues ?? []).filter((league) => matchesFilters(league, filters)),
     [leagues, filters],
   );
 
+  // The rosters and membership the subject filter reads, fetched only while a
+  // subject is selected. The search panel asks for the same two query keys when
+  // it opens, so a reader browsing the menu and a reader with a selection cost
+  // one request between them — and a tab nobody has used this control on costs
+  // none. On the Players and Leaguemates tabs the page is already reading its
+  // own half, which is the cache doing exactly what it is there for.
+  const narrowing = subjects.subjects.length > 0;
+  const leaguesForResources = stream.data?.leagues ?? null;
+  const rosters = useManagerPlayers(searched, leaguesForResources, narrowing);
+  const members = useManagerLeaguemates(searched, leaguesForResources, narrowing);
+  const index: SubjectIndex = useMemo(
+    () =>
+      rosters.data || members.data
+        ? {
+            rosters: rosters.data?.rosters ?? {},
+            members: members.data?.members ?? {},
+          }
+        : EMPTY_SUBJECT_INDEX,
+    [rosters.data, members.data],
+  );
+
+  /**
+   * The list the page renders — the league filters, then the subjects.
+   *
+   * Two passes rather than one predicate because the two are counted over
+   * different populations: the subject search's per-name counts are read over
+   * `leagueFiltered`, since a menu counted over its own selection collapses to
+   * that selection the moment anything is picked and can't be widened again
+   * without being cleared.
+   *
+   * While the maps are still loading the index is empty, so every league reads
+   * as *unknown* and the list is empty rather than unnarrowed. That is the
+   * honest state — a page that showed all 121 leagues under "owns Bijan" and
+   * then dropped to 19 would have answered the question wrongly first.
+   */
+  const filtered = useMemo(
+    () =>
+      narrowing
+        ? leagueFiltered.filter((league) =>
+            matchesSubjects(league.league_id, subjects, index),
+          )
+        : leagueFiltered,
+    [leagueFiltered, narrowing, subjects, index],
+  );
+
+  /**
+   * What a selected subject is called, or null while the maps naming it load.
+   *
+   * It lives here because this is where those two payloads already are — the
+   * header's scope line has to name what its record was counted over, and the
+   * alternative was a second pair of reads in the layout for two strings.
+   */
+  const subjectLabel = useCallback(
+    (subject: Subject): string | null =>
+      subject.kind === "player"
+        ? (rosters.data?.players[subject.id]?.name ?? null)
+        : (members.data?.users[subject.id]?.display_name ?? null),
+    [rosters.data, members.data],
+  );
+
   // `searched` rides along so the layout can label its loading state and link its
   // tabs without the page threading it in a second time.
-  return { ...stream, searched, filters, setFilters, filtered };
+  return {
+    ...stream,
+    searched,
+    filters,
+    setFilters,
+    subjectLabel,
+    /** After the league filters, before the subjects — what the menus count over. */
+    leagueFiltered,
+    filtered,
+    /** True while a selected subject's maps are still being read. */
+    subjectsLoading: narrowing && !rosters.data && !members.data,
+  };
 }
 
 export type FilteredLeagues = ReturnType<typeof useFilteredLeagues>;

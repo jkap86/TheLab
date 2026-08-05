@@ -78,8 +78,10 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
           : undefined,
       }}
       columns={
-        shares && shares.mates.length > 0 ? (
+        shares ? (
           <ColumnsBar
+            view={view}
+            headings={shares.mates.length > 0}
             metrics={LEAGUEMATE_SHARE_METRICS}
             columns={columns}
             subject="Leaguemate"

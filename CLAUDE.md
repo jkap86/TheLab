@@ -2059,6 +2059,84 @@ stops holding, a comment saying it does would not have caught it.
   `leagueBreakdown` counts its four rows in **one** pass rather than four, which
   matters because the trades page counts them over a whole season's leagues and
   re-counts on every keystroke in the rules editor.
+- **Narrowing by *who is in a league* is a third selection, and it is deliberately
+  not one of those rules.** "Leagues holding this player" and "leagues shared with
+  this manager" are the two questions `LeagueFilters` cannot express, and the
+  reason is structural rather than a gap: every filter in that package is a key,
+  a comparison and a number read off the league's own settings, and its predicate
+  is the one the trades board runs over a whole season of leagues it has no
+  account for. Owning a player is `rosters[league_id]` and sharing a league is
+  `members[league_id]` — lookups a `ManagerLeague` doesn't carry and that page
+  could never satisfy. So `features/manager/subjects.ts` is pure and separate,
+  `SubjectFiltersProvider` is a third store beside the league filters and the ADP
+  controls, and the narrowing runs in `useFilteredLeagues` **after**
+  `matchesFilters`. Five rules in it:
+  - **A subject is not a rule, so the control is a search that leaves tokens
+    behind** — there is nothing to compare a name to, and there are several
+    hundred of them. One field over both kinds, grouped in the results: they are
+    the same question, and two fields would make a reader pick which one they
+    meant before typing a name that exists in only one.
+  - **Null and false are different answers, exactly as `slotCount`'s are.** A
+    league whose rosters were never synced is not evidence a player is absent
+    from it, so `holdsSubject` returns null and a rule against it *fails* rather
+    than passing on an assumed empty. A league present and empty — a pre-draft
+    roster — is a real false, the same distinction `playerShares` counts around.
+  - **This is the one list that earns `all`/`any`.** The league rules AND because
+    each narrows on an *attribute*; these are subjects, where "Bijan or Chase" is
+    asked as often as "both" — the case `TradeFilters.match` already makes, down
+    to defaulting to `all`.
+  - **Two filtered lists, because the menus are counted over the wider one.**
+    `leagueFiltered` is after the league filters and before the subjects, and it
+    is what `subjectOptions` counts over: a menu counted over its own selection
+    collapses to that selection the moment anything is picked and cannot be
+    widened again without being cleared.
+  - **While the maps load the list is empty, not unnarrowed.** A page that showed
+    all 121 leagues under "owns Bijan" and then dropped to 19 would have answered
+    the question wrongly first. The two payloads are the other tabs' resources
+    behind a shared cache, fetched when the panel opens or a subject is selected —
+    both naming the same query keys, so the two gates cost one request.
+- **That control rides in a second storey of the heading rail, not in a row of its
+  own — `ListLedge` is the billet, and `MetricHeadings` renders the face's
+  contents rather than the face.** The rail is inside the pinned header, where
+  every pixel is league rows covered on all three tabs, and a separate part costs
+  more than its own contents: its wall, its cast shadow, and the clearance holding
+  its lit face off the rail's lit face — the same 20px the plate's filters key
+  gave back by seating flush in its corner. One billet pays those once and says
+  something true, since both storeys are the list's own header. Four things hold
+  it up, and three were caught by rendering it rather than by reading it:
+  - **A billet has one top edge.** The top storey wears the three-stop chamfer
+    (`.lab-ledge-storey`) **and the cyan hairline with it** — left on the face
+    below, that hairline drew a cyan line across the middle of the part, which
+    reads as two stacked bars, the exact thing one billet exists to avoid. The
+    seated storey is `.lab-ledge-face-seated`, which drops both and picks the
+    light back up under the cut.
+  - **The notch is split with the storeys.** A parent's `clip-path` clips its
+    subtree, so the wrapper's `.lab-notch-lg` already cuts the top-left of
+    whatever is at the top; what it cannot reach is an inner face's bottom-right,
+    which sits 5px above the wrapper's. So the *last* storey carries
+    `.lab-notch-br` and no other — `.lab-notch-lg` there would chamfer a corner
+    in the middle of the part.
+  - **The search panel is outside the billet, and it has to be.** That same clip
+    would cut off anything floating under the rail, which is why `ListLedge` owns
+    the `relative` box and takes the panel as a sibling.
+  - **The storey wraps rather than compresses**, and the caption goes below `sm`.
+    At 390px a caption, a token, a trigger and the count do not fit one line, and
+    a nowrap row pushed the count off the end of the billet. Everything in the row
+    is content, so it takes a second line down there; the caption is the one part
+    a phone can lose, since the trigger reads "Player or leaguemate" until
+    something is picked.
+
+  Two knock-ons worth keeping. **The heading storey is what's conditional, never
+  the rail** — `ColumnsBar` takes `headings`, and the tab decides, because what
+  counts as a row is the tab's grain (leagues here, shares on the other two). It
+  was first written as the layout swapping in a storey-only rail once nothing
+  matched, which *remounted* the control: narrowing to zero from the open panel
+  closed the panel, on exactly the press that most needs undoing. And **the
+  plate's scope line names both selections**, since the record beside it is summed
+  over the list the subjects leave — a line naming only the league filters would
+  be labelling a number counted over something narrower than it says.
+  `subjectSummary` falls back to counting ("1 player") rather than printing a raw
+  Sleeper id while the names are still loading.
 - **The filters dialog is a bay layout with a readout rail, and the two halves
   fix different failures.** Stacked — three segment groups, then the two rule
   lists — the rules fell below a 60vh scroll box, so a reader who wanted

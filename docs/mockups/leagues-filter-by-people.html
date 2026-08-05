@@ -1236,7 +1236,18 @@
 
   <section>
     <div class="reco">
-      <h2>What I'd build</h2>
+      <h2>Chosen: C — and here is what it took</h2>
+      <p class="prose" style="margin-bottom:14px">
+        <b>C is built.</b> The rail is one billet with two storeys; the subject filter is a pure module
+        (<code>features/manager/subjects.ts</code>, 26 tests) narrowing in <code>useFilteredLeagues</code>
+        after the shared predicate, with its own provider beside the league filters. Three things only
+        showed up once it was rendered: the face's cyan hairline was stranded mid-part and had to travel
+        with the chamfer to the top storey; the storey overflowed the billet at 390px and now wraps; and
+        swapping in a storey-only rail when nothing matched <i>remounted</i> the control, closing the
+        search panel on exactly the press that most needs undoing — so the heading storey is what is
+        conditional, never the rail.
+      </p>
+      <h2 style="margin-top:22px">The original reasoning</h2>
       <p class="prose">
         <b>B, the key with trailing tokens.</b> It is the app's existing grammar with nothing invented,
         it is the cheapest thing that survives an empty list, and it touches no shared component. The

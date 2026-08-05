@@ -103,6 +103,25 @@ body {
       0 11px
     );
   }
+  /* The bottom-right chamfer alone, for a face seated *below* another in the
+     same billet — the heading storey under the subject filter's.
+
+     A parent's `clip-path` clips its whole subtree, so the billet's own
+     `.lab-notch-lg` already cuts the top-left corner of whatever is at its top.
+     What it cannot do is cut a corner of an inner face that sits above the
+     wrapper's own edge, which is why the single-storey face carries a notch of
+     its own — and why a lower storey needs the bottom half of one and not the
+     top: `.lab-notch-lg` there would chamfer a corner in the middle of the part. */
+  .lab-notch-br {
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - 11px),
+      calc(100% - 11px) 100%,
+      0 100%
+    );
+  }
+
   /* Chamfered on all four corners rather than two, for the one part in the bar
      that is a block instead of a face — see `.lab-billet`. A wall that runs down
      *and* right has to be cut the same way on every corner it turns, or the
@@ -769,6 +788,78 @@ body {
       inset 0 0 10px rgba(0, 255, 229, 0.22),
       0 1px 0 rgba(255, 255, 255, 0.08);
   }
+  /* The rail's *upper storey*, and the seam that separates it from the headings.
+
+     The subject filter — which of this manager's leagues hold a given player, or
+     are shared with a given leaguemate — is a control over the list, so it wants
+     to sit above the headings. Drawn as a part of its own it would cost three
+     things the headings rail already pays for: a second wall, a second cast
+     shadow, and the clearance holding its lit face off the rail's lit face —
+     the same 20px the filters key gave back by seating flush in the plate's
+     corner. One billet with two storeys pays them once.
+
+     What makes it read as two storeys rather than as one tall face is the
+     chamfer and the seam, and the two are a matched pair:
+
+     - **A billet has one top edge, and the storey at the top owns it.**
+       `.lab-ledge-storey` carries the three-stop chamfer `.lab-ledge-face` has
+       when it is the only storey; the headings storey then wears
+       `.lab-ledge-face-seated` beside it, which drops that chamfer and picks
+       the light back up just under the cut. Leaving the chamfer on both would
+       draw two top edges on one part, which is the tell that a "billet" is
+       really two boxes touching.
+     - **The seam is a cut, so it is dark on top and lit underneath** — the
+       groove rule the columns' `divide-x` already keeps, run horizontally. It is
+       a 1px element rather than a border for the same reason that one is: a
+       border changes the box, and both storeys own their own padding.
+
+     Do not reach for this when the rail has one storey. `.lab-ledge-face` alone
+     is still the whole part, and its percentage stops are written against that
+     height — stretched over two storeys they would put the headings on the dark
+     end of a gradient meant to light them. */
+  .lab-ledge-storey {
+    background: linear-gradient(
+      177deg,
+      #6d9cba 0px,
+      #6d9cba 1.5px,
+      #416f8e 3px,
+      #315874 30%,
+      #24455c 100%
+    );
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.55);
+  }
+  /* The cyan hairline travels with the chamfer, because it is part of it: it
+     rides just under the billet's specular edge and inset past the notch, so it
+     starts where the chamfered corner ends. Left on the face below, it drew a
+     cyan line across the middle of the part — which reads as two stacked bars,
+     the exact thing one billet is here to avoid. */
+  .lab-ledge-storey::before {
+    content: "";
+    position: absolute;
+    left: 12px;
+    right: 1px;
+    top: 2.5px;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgba(0, 255, 229, 0.55),
+      rgba(0, 255, 229, 0.14) 55%,
+      transparent
+    );
+    pointer-events: none;
+  }
+  .lab-ledge-seam {
+    background: rgba(0, 0, 0, 0.5);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.09);
+  }
+  .lab-ledge-face-seated {
+    background: linear-gradient(177deg, #2b506b 0%, #1c374c 55%, #122636 100%);
+    box-shadow: inset 0 -7px 12px -7px rgba(0, 0, 0, 0.75);
+  }
+  .lab-ledge-face-seated::before {
+    content: none;
+  }
+
   /* The same grammar for a continuous control: a milled slot with a raised key
      riding in it — the ADP drawer's value curve. The track is recessed for the
      reason the current-page chip is (it is the thing being read, not pressed)

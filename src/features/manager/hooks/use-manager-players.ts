@@ -19,6 +19,8 @@ export type ManagerPlayersState = ManagerResourceState<ManagerPlayersResult>;
 export function useManagerPlayers(
   searched: string,
   leagues: ManagerLeague[] | null,
+  /** Off until a subject filter needs it — see {@link useManagerResource}. */
+  enabled = true,
 ): ManagerPlayersState {
   const queryKey = useMemo(() => managerQueryKeys.players(searched), [searched]);
   return useManagerResource<ManagerPlayersResult>(
@@ -28,5 +30,6 @@ export function useManagerPlayers(
     "players",
     "Failed to load rosters",
     STALE_TIMES.players,
+    enabled,
   );
 }

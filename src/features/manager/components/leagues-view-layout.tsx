@@ -17,9 +17,10 @@ import {
 } from "@/features/shared";
 import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 
-import { useAdpControls } from "../filters-context";
+import { useAdpControls, useSubjectFilters } from "../filters-context";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
 import { aggregateRecord } from "../record";
+import { subjectSummary } from "../subjects";
 
 /**
  * The board drawer, loaded the first time it is opened.
@@ -42,6 +43,7 @@ const AdpDrawer = dynamic(
 );
 import { ManagerHeader, type HeaderStat } from "./manager-header";
 import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
+import { SubjectRail } from "./subject-rail";
 import { PanelMessage } from "./ui";
 
 /**
@@ -105,6 +107,7 @@ export function LeaguesViewLayout({
   const { data, searched, progress, refreshing, error, filters, setFilters, filtered } =
     view;
   const { controls, setControls, resetControls, defaultSeason } = useAdpControls();
+  const { subjects } = useSubjectFilters();
   const [boardOpen, setBoardOpen] = useState(false);
   const [everOpened, setEverOpened] = useState(false);
   if (boardOpen && !everOpened) setEverOpened(true);
@@ -129,6 +132,18 @@ export function LeaguesViewLayout({
   // The header's record, over the leagues the filters leave — so it answers
   // "how am I doing in *these* leagues" and moves when the selection does.
   const record = useMemo(() => aggregateRecord(filtered), [filtered]);
+
+  // The two selections in one phrase, in the order they are applied: what these
+  // leagues *are*, then who is in them. Either half may be absent, and both
+  // absent is no line at all rather than "all leagues" — the default describing
+  // itself is what the plate used to carry permanently.
+  const scope = useMemo(() => {
+    const parts = [
+      activeFilterCount(filters) > 0 ? filterSummary(filters) : null,
+      subjectSummary(subjects, view.subjectLabel),
+    ].filter((part): part is string => part !== null);
+    return parts.length > 0 ? parts.join(" · ") : null;
+  }, [filters, subjects, view.subjectLabel]);
 
   // Cold load: nothing cached yet.
   if (!data) {
@@ -157,8 +172,11 @@ export function LeaguesViewLayout({
         refreshError={error}
         record={record}
         // Named only when it narrows something: the default summary ("all
-        // leagues") is the absence of a selection describing itself.
-        scope={activeFilterCount(filters) > 0 ? filterSummary(filters) : null}
+        // leagues") is the absence of a selection describing itself. The
+        // subjects join it because the record beside it is summed over the list
+        // *they* leave — a scope line naming only the league filters would be
+        // labelling a number counted over something narrower than it says.
+        scope={scope}
         leagueCount={filtered.length}
         stat={stat}
         filters={
@@ -173,9 +191,14 @@ export function LeaguesViewLayout({
             />
           ) : undefined
         }
-        // Only where there are rows for it to head: a heading rail over "no
-        // leagues match these filters" names columns nothing is under.
-        columns={filtered.length > 0 ? columns : undefined}
+        // The rail is drawn whenever there are leagues, and it is the *tab* that
+        // says whether the heading storey inside it has rows to head — see
+        // `ColumnsBar`'s `headings`. It used to be swapped out here for a
+        // storey-only rail once nothing matched, which remounted the control:
+        // narrowing to zero from the open search panel closed the panel, on
+        // exactly the press that most needs undoing. The fallback below is only
+        // for a tab whose list has not loaded at all yet.
+        columns={hasLeagues ? (columns ?? <SubjectRail view={view} />) : undefined}
         pinned={pinned}
       />
 
