@@ -10,6 +10,8 @@ import {
 } from "@/shared/projections";
 import { getActiveSeason } from "@/shared/season";
 
+import { readFailureResponse } from "../read-failure";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -104,7 +106,6 @@ export async function GET(request: Request) {
     return NextResponse.json(payload);
   } catch (error) {
     console.error("[proj] query failed:", error);
-    const payload: ApiErrorPayload = { error: "Failed to read projections" };
-    return NextResponse.json(payload, { status: 500 });
+    return readFailureResponse(error, "Failed to read projections");
   }
 }

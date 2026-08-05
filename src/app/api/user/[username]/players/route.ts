@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-import type { ApiErrorPayload, ManagerPlayersPayload } from "@/shared/contract";
+import type { ManagerPlayersPayload } from "@/shared/contract";
 import { getManagerRosters } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 
+import { readFailureResponse } from "../../../read-failure";
 import { resolveManagerRequest } from "../manager-request";
 
 export const runtime = "nodejs";
@@ -39,7 +40,6 @@ export async function GET(
     return NextResponse.json(payload);
   } catch (error) {
     console.error("[players] query failed:", error);
-    const payload: ApiErrorPayload = { error: "Failed to load rosters" };
-    return NextResponse.json(payload, { status: 500 });
+    return readFailureResponse(error, "Failed to load rosters");
   }
 }

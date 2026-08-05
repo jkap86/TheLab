@@ -5,6 +5,8 @@ import { getDraftAdp, parseAdpFilters, usesDefaultSeason } from "@/shared/manage
 import { getPlayersByIds } from "@/shared/players";
 import { getActiveSeason } from "@/shared/season";
 
+import { readFailureResponse } from "../read-failure";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -88,7 +90,6 @@ export async function GET(request: Request) {
     return NextResponse.json(payload);
   } catch (error) {
     console.error("[adp] query failed:", error);
-    const payload: ApiErrorPayload = { error: "Failed to compute ADP" };
-    return NextResponse.json(payload, { status: 500 });
+    return readFailureResponse(error, "Failed to compute ADP");
   }
 }

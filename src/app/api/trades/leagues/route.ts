@@ -5,6 +5,8 @@ import { isSeason } from "@/shared/query";
 import { getActiveSeason } from "@/shared/season";
 import { getSeasonTradeLeagues } from "@/shared/trades";
 
+import { readFailureResponse } from "../../read-failure";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -47,9 +49,6 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("[trades] league list failed:", error);
-    return NextResponse.json(
-      { error: "Failed to load leagues" },
-      { status: 500 },
-    );
+    return readFailureResponse(error, "Failed to load leagues");
   }
 }

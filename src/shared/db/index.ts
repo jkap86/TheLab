@@ -9,6 +9,13 @@ export {
 } from "./tls-error";
 export { resolveDatabaseUrl, DATABASE_URL_ENV } from "./config";
 export type { DatabaseUrlResolution } from "./config";
+export {
+  databaseBudget,
+  REQUEST_DEADLINE_MS,
+  DEFAULT_POOL_MAX,
+} from "./budget";
+export type { DatabaseBudget } from "./budget";
+export { isDatabaseBusy } from "./timeout";
 export { jsonb } from "./json";
 export { msInterval } from "./interval";
 export { bulkInsert } from "./bulk";

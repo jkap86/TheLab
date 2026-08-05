@@ -24,6 +24,8 @@ import {
 } from "@/shared/trades";
 import type { Trade, TradeQuery } from "@/shared/trades";
 
+import { readFailureResponse } from "../read-failure";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -107,10 +109,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("[trades] page query failed:", error);
-    return NextResponse.json(
-      { error: "Failed to load trades" },
-      { status: 500 },
-    );
+    return readFailureResponse(error, "Failed to load trades");
   }
 }
 
