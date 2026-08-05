@@ -15,10 +15,11 @@ import {
   todayIso,
 } from "./date-range.ts";
 import { deriveScoring } from "./league-filters/predicates.ts";
-import type { ManagerLeague } from "@/shared/manager";
+import type { AdpBoardType, ManagerLeague } from "@/shared/manager";
+import type { AdpPlayerPayload } from "@/shared/contract";
 
 // Re-exported rather than re-imported at each call site: this module's own
-// consumers (the drawer, the scrubber, `range-domain`) already import
+// consumers (the drawer, the window control, `range-domain`) already import
 // `todayIso` and friends from *here*, a habit that predates this file's own
 // move into `features/shared` — the manager tool's `adp-controls` still hands
 // them out under the same names for its own callers, per the mover's rule.
@@ -72,8 +73,14 @@ export type AdpControls = {
   season: string;
   /** When within that season the drafts happened — see {@link AdpRange}. */
   range: AdpRange;
-  /** Sleeper `settings.type`: `"all"`, or 0 redraft / 1 keeper / 2 dynasty. */
-  leagueType: "all" | "0" | "1" | "2";
+  /**
+   * Which of the two league-type boards the drawer's list displays — see
+   * {@link AdpShownBoards}. Unlike every filter below it, this narrows nothing:
+   * the fetch always averages the redraft and dynasty markets side by side, and
+   * this only says which columns are drawn. `adpQueryString` never reads it and
+   * `adpNarrowingCount` never counts it, the same standing `steepness` has.
+   */
+  boards: AdpShownBoards;
   /** Derived from the league's `scoring_settings.rec`, not stored as such. */
   scoring: "all" | "std" | "half_ppr" | "ppr";
   superflex: "all" | "yes" | "no";
@@ -127,9 +134,93 @@ export type AdpRange = {
   /** `YYYY-MM-DD`, both inclusive. Read only when `preset` is `"custom"`; either may be null for an open end. */
   from: string | null;
   to: string | null;
+  /**
+   * Read only when `preset` is `"lookback"`: how many days back from today the
+   * window starts. A *relative* window like the named presets — `30d` and `90d`
+   * are the two named points on this scale, kept as their own values so the
+   * resting line's chips still light exactly — and unlike `custom` it rolls
+   * forward with the calendar, which is the counter's promise for a window
+   * that ends on today.
+   */
+  days?: number;
 };
 
-export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom";
+export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom" | "lookback";
+
+/**
+ * Which league-type boards the drawer's list displays: both side by side, or
+ * one of them alone. A three-value union rather than a flag per board so that
+ * "neither" is unrepresentable — a selection that can express a blank board is
+ * a selection that will eventually show one.
+ */
+export type AdpShownBoards = "both" | AdpBoardType;
+
+/** Whether each board is displayed under a given selection. */
+export function shownAdpBoards(
+  shown: AdpShownBoards,
+): Record<AdpBoardType, boolean> {
+  return { redraft: shown !== "dynasty", dynasty: shown !== "redraft" };
+}
+
+/**
+ * Flip one board's visibility. Turning off the only board showing is a no-op
+ * rather than an empty list, which is what the union above makes structural —
+ * the caller needs no guard, pressing the last lit key simply does nothing.
+ */
+export function toggleAdpBoard(
+  shown: AdpShownBoards,
+  board: AdpBoardType,
+): AdpShownBoards {
+  const other: AdpBoardType = board === "redraft" ? "dynasty" : "redraft";
+  if (shown === "both") return other;
+  if (shown === other) return "both";
+  return shown;
+}
+
+/** Total sample behind a row, both boards pooled — the sort's tiebreaker. */
+const totalPicks = (player: AdpPlayerPayload): number =>
+  (player.redraft?.picks ?? 0) + (player.dynasty?.picks ?? 0);
+
+/**
+ * The rows the drawer's list displays for a boards selection, in that display's
+ * own order, ranked by the caller as it renders (index + 1).
+ *
+ * The fetch orders rows by the best average on *either* board, so the page cut
+ * is fair to both markets — and therefore matches neither column read alone,
+ * which is why the display re-sorts. A single board keeps only the players it
+ * can average (a row of em dashes answers nothing) and sorts on that column.
+ * Both boards keep every row: the redraft column orders everything it prices,
+ * and the players only the dynasty board took — rookies, mostly — follow as a
+ * tail in dynasty order rather than being interleaved on numbers from two
+ * different markets.
+ */
+export function adpBoardRows(
+  players: readonly AdpPlayerPayload[],
+  shown: AdpShownBoards,
+): AdpPlayerPayload[] {
+  const primary: AdpBoardType = shown === "dynasty" ? "dynasty" : "redraft";
+  const secondary: AdpBoardType = primary === "redraft" ? "dynasty" : "redraft";
+  const kept =
+    shown === "both" ? [...players] : players.filter((p) => p[primary] !== null);
+
+  return kept.sort((a, b) => {
+    const first = a[primary];
+    const second = b[primary];
+    if (first && second) {
+      if (first.adp !== second.adp) return first.adp - second.adp;
+      // The server's own tiebreak: the better-sampled row first, then the id
+      // so the order is total and stable across refetches.
+      const picks = totalPicks(b) - totalPicks(a);
+      if (picks !== 0) return picks;
+      return a.player_id < b.player_id ? -1 : a.player_id > b.player_id ? 1 : 0;
+    }
+    if (first) return -1;
+    if (second) return 1;
+    const aTail = a[secondary]?.adp ?? Number.POSITIVE_INFINITY;
+    const bTail = b[secondary]?.adp ?? Number.POSITIVE_INFINITY;
+    return aTail - bTail;
+  });
+}
 
 /**
  * The presets, in the order the drawer offers them. Two labels each: `label`
@@ -141,10 +232,10 @@ export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom";
  * "12 months" wraps to two lines in and takes the whole row's height with it.
  *
  * `custom` is deliberately **not** on this list, though it is still a preset
- * value. It used to be a fifth chip that revealed two date inputs; the range
- * scrubber replaced them, so a custom window is now what you get by moving a
- * handle or taking a marker rather than a mode you enter first. The chips fly
- * the handles somewhere, which is why the relative ones keep earning their place
+ * value — and so is `lookback`, for the same reason. Neither is a mode you
+ * enter first: a custom window is what setting the counter's end date produces,
+ * and a lookback is what typing any unnamed day count produces. The chips fill
+ * the counter's fields, which is why the relative ones keep earning their place
  * — "Last 90 days" stays true tomorrow, where the dates behind it would not.
  */
 export const ADP_RANGE_PRESETS: AdpRangePresetOption[] = [
@@ -282,16 +373,9 @@ const ROUNDS_BOUNDS: Record<"rookie" | "full", { min?: number; max?: number }> =
   full: { min: 12 },
 };
 
-/** The `league_type` name `/api/adp` expects for each Sleeper `settings.type`. */
-const LEAGUE_TYPE_NAME: Record<"0" | "1" | "2", string> = {
-  "0": "redraft",
-  "1": "keeper",
-  "2": "dynasty",
-};
-
 /**
  * The starting board: one season of drafts, whole, both meaningful draft types
- * (snake + linear), no league narrowing.
+ * (snake + linear), no league narrowing, both league-type boards on display.
  *
  * The season is an argument again. It was dropped when the range replaced it,
  * on the grounds that a date range needs no season and the shared store could
@@ -305,7 +389,7 @@ export function defaultAdpControls(season: string): AdpControls {
   return {
     season,
     range: DEFAULT_ADP_RANGE,
-    leagueType: "all",
+    boards: "both",
     scoring: "all",
     superflex: "all",
     bestBall: "all",
@@ -339,6 +423,12 @@ export function rangeBounds(range: AdpRange, today: string): AdpRangeBounds {
       return { from: shiftDays(today, -90), to: null };
     case "12m":
       return { from: shiftMonths(today, -12), to: null };
+    case "lookback":
+      // A days-less lookback is malformed rather than meaningful, and it reads
+      // as unbounded — the one answer that can't silently narrow the board.
+      return range.days == null
+        ? { from: null, to: null }
+        : { from: shiftDays(today, -range.days), to: null };
   }
 }
 
@@ -348,6 +438,12 @@ export function rangeBounds(range: AdpRange, today: string): AdpRangeBounds {
  * would have to be re-read — and only a custom window spells its dates out.
  */
 export function rangeLabel(range: AdpRange): string {
+  if (range.preset === "lookback") {
+    // The same name shape as the chips, so "Last 45 days" and "Last 30 days"
+    // read as the one scale they are — and it stays true tomorrow, which is
+    // what a relative window's label is for.
+    return range.days == null ? "All time" : `Last ${range.days} day${range.days === 1 ? "" : "s"}`;
+  }
   if (range.preset !== "custom") {
     return ADP_RANGE_PRESETS.find((p) => p.value === range.preset)!.label;
   }
@@ -363,7 +459,10 @@ export function rangeLabel(range: AdpRange): string {
 export function isUnboundedRange(range: AdpRange): boolean {
   return (
     range.preset === "all" ||
-    (range.preset === "custom" && range.from === null && range.to === null)
+    (range.preset === "custom" && range.from === null && range.to === null) ||
+    // The malformed spelling `rangeBounds` already reads as unbounded; counting
+    // it as a narrowing would light the trigger for a window that cuts nothing.
+    (range.preset === "lookback" && range.days == null)
   );
 }
 
@@ -402,7 +501,9 @@ export function boardLabel(range: AdpRange, season: string): string {
  * departure than any filter here, not a smaller one. The **steepness** does not,
  * because it narrows nothing — it converts an ADP into value once averaged, so
  * it changes the Leagues tab's team value and leaves the population the trigger
- * describes untouched.
+ * describes untouched. `boards` follows the steepness for the same reason: which
+ * of the two markets is drawn is a display choice over an unchanged population,
+ * the same kind of selection as which stat column a league card shows.
  */
 export function adpNarrowingCount(
   controls: AdpControls,
@@ -411,7 +512,6 @@ export function adpNarrowingCount(
   const narrowing = [
     controls.season !== defaultSeason,
     !isUnboundedRange(controls.range),
-    controls.leagueType !== "all",
     controls.scoring !== "all",
     controls.superflex !== "all",
     controls.bestBall !== "all",
@@ -443,11 +543,14 @@ export function rangeSummary(range: AdpRange, today: string): string | null {
 /**
  * Fill the league-setting controls from one of the manager's leagues — the
  * "associated league setting" shortcut. It sets what a league payload carries:
- * type, scoring, best ball, size and — since the leagues stream started sending
+ * scoring, best ball, size and — since the leagues stream started sending
  * `roster_positions` for the league filters — whether it starts more than one
- * quarterback. `range` and `rounds` are left as they were: neither is a league
- * setting — when a draft happened and what kind of draft it was are facts about
- * the room, not about the league it filled.
+ * quarterback. The league's *type* is no longer a filter to seed; what it sets
+ * instead is which board the list displays, so matching a dynasty league shows
+ * the dynasty column alone — the market that league is actually in. `range` and
+ * `rounds` are left as they were: neither is a league setting — when a draft
+ * happened and what kind of draft it was are facts about the room, not about
+ * the league it filled.
  *
  * Superflex was the one league setting this couldn't seed, and it is the one that
  * moves a board most: a superflex population prices quarterbacks like first-round
@@ -469,15 +572,15 @@ export function seedFromLeague(
 ): AdpControls {
   const settings = league.settings ?? {};
   // Sleeper omits `type` for standard redraft leagues; a non-number is redraft.
+  // Type 2 is dynasty and everything else — keeper included — reads the redraft
+  // board, the same bucketing the server's `ADP_BOARDS` documents.
   const typeRaw = settings.type;
   const typeNum = typeof typeRaw === "number" ? typeRaw : 0;
-  const leagueType: AdpControls["leagueType"] =
-    typeNum === 1 ? "1" : typeNum === 2 ? "2" : "0";
 
   return {
     ...controls,
     season: league.season,
-    leagueType,
+    boards: typeNum === 2 ? "dynasty" : "redraft",
     scoring: deriveScoring(league.scoring_settings),
     superflex: isSuperflexLineup(league.roster_positions) ? "yes" : "no",
     bestBall: settings.best_ball === 1 ? "yes" : "no",
@@ -513,12 +616,12 @@ export function adpQueryString(controls: AdpControls, today: string): string {
   // its `pick_no` is nomination order rather than a draft slot, so its "ADP" is
   // not one; and snake against linear is a fact about how a room picked, not
   // about the market it priced — the question readers arrived at that chip with
-  // was startup against rookie, which is `rounds`.
+  // was startup against rookie, which is `rounds`. The league type sends
+  // nothing either, for the opposite reason: the route answers both boards on
+  // every fetch, and which of them is drawn (`controls.boards`) is the
+  // display's business, not the query's.
   params.set("draft_type", "snake,linear");
 
-  if (controls.leagueType !== "all") {
-    params.set("league_type", LEAGUE_TYPE_NAME[controls.leagueType]);
-  }
   if (controls.scoring !== "all") params.set("scoring", controls.scoring);
   if (controls.superflex !== "all") {
     params.set("superflex", controls.superflex === "yes" ? "1" : "0");

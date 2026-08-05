@@ -2,21 +2,18 @@
  * The league year the crawled drafts hang off: when the NFL draft was, when
  * preseason ran, when the regular season ran.
  *
- * It exists so the ADP board's date range is chosen against something that means
- * something. A spike of drafts in May is not "a spike in May" — it is *the
- * fortnight after the NFL draft*, which is why rookie boards move then; the
- * August one is preseason startups. Without the calendar underneath, picking a
- * window is picking dates blind and reading the count afterward.
- *
- * It is also the only way to express the question a preset never can. "Drafts
- * since the NFL draft" is the most natural cut of a rookie board there is, and
- * no fixed chip can carry it, because the date moves every April — a marker can.
+ * It exists to express the question a fixed preset never can. "Drafts since the
+ * NFL draft" is the most natural cut of a rookie board there is, and no chip
+ * and no typed number can carry it, because the date moves every April — the
+ * window control's ◆ key computes it from this table instead (`lookback`'s
+ * `draftAnchor`). The spans are why a May spike is not "a spike in May": it is
+ * the fortnight after the draft, and the August one is preseason startups.
  *
  * Pure and testable like its neighbours `shares` and `league-metrics`: a table
  * and a few functions over it, no I/O. It lives here rather than in `shared/`
- * because only this feature reads it — the drawer's markers and the header's
- * kickoff countdown; move it out the day something server-side needs to label
- * a date.
+ * because only this feature reads it — the window's draft anchor and the
+ * header's kickoff countdown; move it out the day something server-side needs
+ * to label a date.
  */
 
 /** What a marker is. The draft is an instant; the other two are spans. */

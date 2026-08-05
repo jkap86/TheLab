@@ -16,7 +16,7 @@ export type { CrawlSummary, CrawlOptions } from "./crawl";
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
   getLeagueDetail,
-  getLeagueTypes,
+  getLeagueAdpBoards,
   getLeaguesByIds,
   getLeaguemateIds,
   getManagerLeagueIds,
@@ -41,7 +41,14 @@ export type { DraftPickAsset, TradedPick } from "./draft-picks";
 export { resolveManagerUser, toUserInfo } from "./resolve";
 export type { ResolvedManager } from "./resolve";
 export { getDraftAdp, getDraftAdpForPlayers, getDraftDensity } from "./adp";
-export type { AdpResult, AdpRow, DraftDensityMonth, PlayerAdp } from "./adp";
+export type {
+  AdpBoardStats,
+  AdpResult,
+  AdpRow,
+  DraftDensityMonth,
+  PlayerAdp,
+  PlayerBoardAdp,
+} from "./adp";
 export {
   ADP_PEAK,
   DEFAULT_STEEPNESS,
@@ -59,15 +66,15 @@ export type { AdpRosterValue } from "./adp-value";
 export {
   parseAdpFilters,
   usesDefaultSeason,
+  ADP_BOARDS,
   ADP_FILTER_DEFAULTS,
   ADP_LIMIT_MAX,
-  LEAGUE_TYPE_CODES,
 } from "./adp-filters";
 export type {
+  AdpBoardType,
   AdpFilters,
   DraftStatus,
   DraftType,
-  LeagueType,
   ParsedAdpFilters,
   ScoringFormat,
 } from "./adp-filters";

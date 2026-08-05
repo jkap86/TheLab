@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   ADP_PEAK,
   DEFAULT_ADP_STEEPNESS,
+  adpBoardRows,
   adpNarrowingCount,
   adpQueryString,
   adpRangePresets,
@@ -12,6 +13,7 @@ import {
   deriveScoring,
   previewAdpPool,
   previewAdpValue,
+  shownAdpBoards,
   steepnessSummary,
   seasonOptions,
   rangeBounds,
@@ -19,10 +21,12 @@ import {
   rangeSummary,
   seedFromLeague,
   todayIso,
+  toggleAdpBoard,
   type AdpControls,
   type AdpRange,
 } from "./adp-controls.ts";
 import type { ManagerLeague } from "@/shared/manager";
+import type { AdpPlayerPayload } from "@/shared/contract";
 
 /** A fixed "today" so the relative presets resolve to asserted dates. */
 const TODAY = "2026-07-31";
@@ -111,7 +115,7 @@ describe("adpQueryString", () => {
   test("an 'all' control is omitted, not sent empty", () => {
     // Every league filter left on "all" must drop out entirely.
     const query = params(adpQueryString(defaultAdpControls(SEASON), TODAY));
-    for (const key of ["league_type", "scoring", "superflex", "best_ball"]) {
+    for (const key of ["scoring", "superflex", "best_ball"]) {
       assert.equal(key in query, false);
     }
   });
@@ -120,7 +124,7 @@ describe("adpQueryString", () => {
     const controls: AdpControls = {
       season: "2025",
       range: { preset: "all", from: null, to: null },
-      leagueType: "2",
+      boards: "dynasty",
       scoring: "ppr",
       superflex: "yes",
       bestBall: "no",
@@ -132,7 +136,6 @@ describe("adpQueryString", () => {
       limit: "1000",
       season: "2025",
       draft_type: "snake,linear",
-      league_type: "dynasty",
       scoring: "ppr",
       superflex: "1",
       best_ball: "0",
@@ -140,6 +143,19 @@ describe("adpQueryString", () => {
       teams_max: "12",
       rounds_min: "12",
     });
+  });
+
+  test("the boards selection is display state, never a query parameter", () => {
+    // The route answers both league-type boards on every fetch; which is drawn
+    // is the drawer's business. Sending it would also split the client cache
+    // into two entries holding identical payloads.
+    const both = adpQueryString(defaultAdpControls(SEASON), TODAY);
+    const one = adpQueryString(
+      { ...defaultAdpControls(SEASON), boards: "dynasty" },
+      TODAY,
+    );
+    assert.equal(both, one);
+    assert.equal("league_type" in params(both), false);
   });
 
   test("steepness is a value-curve knob, not a board filter — never sent here", () => {
@@ -260,7 +276,9 @@ describe("seedFromLeague", () => {
         scoring_settings: { rec: 0.5 },
       }),
     );
-    assert.equal(seeded.leagueType, "2");
+    // The league's type seeds which board the list displays — the market this
+    // league is actually in — since it is no longer a fetch filter to set.
+    assert.equal(seeded.boards, "dynasty");
     assert.equal(seeded.scoring, "half_ppr");
     assert.equal(seeded.bestBall, "yes");
     assert.equal(seeded.teams, "10");
@@ -290,8 +308,16 @@ describe("seedFromLeague", () => {
 
   test("a league Sleeper omits `type` for reads as redraft, lineup", () => {
     const seeded = seedFromLeague(defaultAdpControls(SEASON), league({ settings: {} }));
-    assert.equal(seeded.leagueType, "0");
+    assert.equal(seeded.boards, "redraft");
     assert.equal(seeded.bestBall, "no");
+  });
+
+  test("a keeper league reads the redraft board, the server's own bucketing", () => {
+    const seeded = seedFromLeague(
+      defaultAdpControls(SEASON),
+      league({ settings: { type: 1 } }),
+    );
+    assert.equal(seeded.boards, "redraft");
   });
 });
 
@@ -325,6 +351,22 @@ describe("rangeBounds", () => {
     assert.equal(rangeBounds({ preset: "30d", from: null, to: null }, "2026-01-15").from, "2025-12-16");
   });
 
+  test("a lookback counts back its own days and ends open", () => {
+    // The counter's general case: the same shape as 30d/90d, carrying its
+    // count — so "last 45 days" rolls forward with the calendar exactly as the
+    // named presets do.
+    assert.deepEqual(
+      rangeBounds({ preset: "lookback", from: null, to: null, days: 45 }, TODAY),
+      { from: "2026-06-16", to: null },
+    );
+    // Days-less is malformed, and it must read as unbounded rather than as
+    // "since today" — the one misreading that would silently narrow the board.
+    assert.deepEqual(
+      rangeBounds({ preset: "lookback", from: null, to: null }, TODAY),
+      { from: null, to: null },
+    );
+  });
+
   test("all time bounds nothing; custom passes its own ends through", () => {
     assert.deepEqual(rangeBounds({ preset: "all", from: null, to: null }, TODAY), {
       from: null,
@@ -341,6 +383,20 @@ describe("rangeLabel", () => {
   test("a preset keeps its name, so it stays true tomorrow", () => {
     assert.equal(rangeLabel({ preset: "90d", from: null, to: null }), "Last 90 days");
     assert.equal(rangeLabel({ preset: "all", from: null, to: null }), "All time");
+  });
+
+  test("a lookback names itself on the presets' own scale", () => {
+    // "Last 45 days" beside "Last 30 days" — one scale, so the typed and the
+    // pressed spell the same way.
+    assert.equal(
+      rangeLabel({ preset: "lookback", from: null, to: null, days: 45 }),
+      "Last 45 days",
+    );
+    assert.equal(
+      rangeLabel({ preset: "lookback", from: null, to: null, days: 1 }),
+      "Last 1 day",
+    );
+    assert.equal(rangeLabel({ preset: "lookback", from: null, to: null }), "All time");
   });
 
   test("a custom range spells out the ends it has", () => {
@@ -433,9 +489,9 @@ describe("seasonOptions", () => {
 
 describe("rangeSummary", () => {
   test("says the dates a preset's name doesn't", () => {
-    // The label stays "Last 90 days"; inside the scrubber, where the handles
-    // are sitting on those dates, the reader shouldn't have to work them back
-    // off the axis.
+    // The label stays "Last 90 days"; inside the panel, where the lenses are
+    // sitting on those dates, the reader shouldn't have to work them back off
+    // the channel.
     assert.equal(rangeSummary({ preset: "90d", from: null, to: null }, TODAY), "since May 2, 2026");
     assert.equal(rangeSummary({ preset: "12m", from: null, to: null }, TODAY), "since Jul 31, 2025");
   });
@@ -495,6 +551,10 @@ describe("adpNarrowingCount", () => {
     assert.equal(range({ preset: "custom", from: null, to: null }), 0);
     assert.equal(range({ preset: "30d", from: null, to: null }), 1);
     assert.equal(range({ preset: "custom", from: "2026-05-01", to: null }), 1);
+    // The counter's general case counts like the named presets it sits beside;
+    // its days-less spelling bounds nothing and must not light the trigger.
+    assert.equal(range({ preset: "lookback", from: null, to: null, days: 45 }), 1);
+    assert.equal(range({ preset: "lookback", from: null, to: null }), 0);
   });
 
   test("a season other than the default counts", () => {
@@ -512,5 +572,99 @@ describe("adpNarrowingCount", () => {
       adpNarrowingCount({ ...defaultAdpControls(SEASON), steepness: 6 }, SEASON),
       0,
     );
+  });
+
+  test("the boards selection is not a narrowing either", () => {
+    // Which market is drawn is a display choice over an unchanged population —
+    // the same standing the steepness has.
+    assert.equal(
+      adpNarrowingCount({ ...defaultAdpControls(SEASON), boards: "dynasty" }, SEASON),
+      0,
+    );
+  });
+});
+
+describe("shownAdpBoards / toggleAdpBoard", () => {
+  test("each selection lights the boards it names", () => {
+    assert.deepEqual(shownAdpBoards("both"), { redraft: true, dynasty: true });
+    assert.deepEqual(shownAdpBoards("redraft"), { redraft: true, dynasty: false });
+    assert.deepEqual(shownAdpBoards("dynasty"), { redraft: false, dynasty: true });
+  });
+
+  test("toggling flips one board's visibility", () => {
+    assert.equal(toggleAdpBoard("both", "redraft"), "dynasty");
+    assert.equal(toggleAdpBoard("both", "dynasty"), "redraft");
+    assert.equal(toggleAdpBoard("redraft", "dynasty"), "both");
+    assert.equal(toggleAdpBoard("dynasty", "redraft"), "both");
+  });
+
+  test("the last lit board can't be turned off", () => {
+    // A blank list is unrepresentable, so pressing the only lit key is a no-op
+    // rather than a guard every caller has to remember.
+    assert.equal(toggleAdpBoard("redraft", "redraft"), "redraft");
+    assert.equal(toggleAdpBoard("dynasty", "dynasty"), "dynasty");
+  });
+});
+
+describe("adpBoardRows", () => {
+  const row = (
+    player_id: string,
+    redraft: number | null,
+    dynasty: number | null,
+    picks = 10,
+  ): AdpPlayerPayload => ({
+    player_id,
+    name: player_id,
+    position: null,
+    team: null,
+    redraft:
+      redraft === null
+        ? null
+        : { adp: redraft, min_pick: 1, max_pick: 30, picks, stdev: 2 },
+    dynasty:
+      dynasty === null
+        ? null
+        : { adp: dynasty, min_pick: 1, max_pick: 30, picks, stdev: 2 },
+  });
+
+  const ids = (rows: AdpPlayerPayload[]) => rows.map((r) => r.player_id);
+
+  test("a single board keeps only what it can average, in its own order", () => {
+    // The fetch's order is fair to both markets, so it matches neither column
+    // read alone — a veteran early in redraft and late in dynasty must re-rank
+    // when the reader flips boards.
+    const players = [
+      row("veteran", 5, 40),
+      row("rookie", null, 3),
+      row("star", 2, 8),
+    ];
+    assert.deepEqual(ids(adpBoardRows(players, "redraft")), ["star", "veteran"]);
+    assert.deepEqual(ids(adpBoardRows(players, "dynasty")), [
+      "rookie",
+      "star",
+      "veteran",
+    ]);
+  });
+
+  test("both boards keep every row, redraft order first, dynasty-only tail after", () => {
+    // Interleaving on numbers from two different markets would rank a rookie's
+    // dynasty 3.0 against a veteran's redraft 5.0, which compares nothing.
+    const players = [row("rookie", null, 3), row("veteran", 5, 40), row("star", 2, 8)];
+    assert.deepEqual(ids(adpBoardRows(players, "both")), [
+      "star",
+      "veteran",
+      "rookie",
+    ]);
+  });
+
+  test("ties break on the better sample, then the id", () => {
+    const players = [row("thin", 4, null, 3), row("deep", 4, null, 20)];
+    assert.deepEqual(ids(adpBoardRows(players, "redraft")), ["deep", "thin"]);
+  });
+
+  test("the input order is left alone", () => {
+    const players = [row("b", 9, null), row("a", 1, null)];
+    adpBoardRows(players, "redraft");
+    assert.deepEqual(ids(players), ["b", "a"]);
   });
 });

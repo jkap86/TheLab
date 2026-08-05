@@ -44,12 +44,20 @@ describe("parseAdpFilters", () => {
     assert.equal(filters.start_after, null);
     assert.equal(filters.start_before, null);
     assert.equal(filters.league_ids, null);
-    assert.equal(filters.league_types, null);
     assert.equal(filters.scoring, null);
     assert.equal(filters.best_ball, null);
     assert.equal(filters.superflex, null);
     assert.equal(filters.rounds_min, null);
     assert.equal(filters.teams_max, null);
+  });
+
+  test("the league type is not a filter — the boards ride on every answer", () => {
+    // The redraft/dynasty split stopped being a narrowing: a fetch averages
+    // both markets and the display chooses. A leftover `league_type` parameter
+    // is simply unknown to the parser and ignored, not an error — the old
+    // vocabulary must not fail a stored link.
+    const filters = parse("league_type=dynasty");
+    assert.equal("league_types" in filters, false);
   });
 
   test("a date range is kept as given, either half open", () => {
@@ -108,7 +116,6 @@ describe("parseAdpFilters", () => {
 
   test("rejects a value outside an enum, naming the alternatives", () => {
     assert.match(errorFor("draft_type=auto"), /Invalid draft_type[\s\S]*snake/);
-    assert.match(errorFor("league_type=2"), /Invalid league_type/);
     assert.match(errorFor("scoring=full_ppr"), /Invalid scoring/);
     assert.match(errorFor("draft_status=done"), /Invalid draft_status/);
   });
@@ -141,7 +148,7 @@ describe("parseAdpFilters", () => {
   test("combines draft and league filters into one query", () => {
     const filters = parse(
       "season=2026&draft_type=snake&draft_status=complete&rounds_min=15" +
-        "&league_type=dynasty&scoring=ppr&superflex=true&teams_min=12&teams_max=12",
+        "&scoring=ppr&superflex=true&teams_min=12&teams_max=12",
     );
     assert.deepEqual(filters, {
       seasons: ["2026"],
@@ -150,7 +157,6 @@ describe("parseAdpFilters", () => {
       draft_types: ["snake"],
       draft_statuses: ["complete"],
       league_ids: null,
-      league_types: ["dynasty"],
       scoring: ["ppr"],
       best_ball: null,
       superflex: true,

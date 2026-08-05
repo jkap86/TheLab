@@ -214,7 +214,7 @@ export function TradeFiltersPanel({
                 onChange({
                   ...filters,
                   // Typing a date *is* the custom window — there is no mode to
-                  // enter first, the same rule the ADP scrubber follows.
+                  // enter first, the same rule the ADP window control follows.
                   range: { ...filters.range, preset: "custom", from },
                 })
               }

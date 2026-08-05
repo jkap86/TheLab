@@ -24,6 +24,8 @@ export function PlayerShares({
   leagueCount,
   adp,
   columns,
+  isSelected,
+  onSelect,
 }: {
   shares: PlayerShare[];
   /** Leagues the shares are out of — see `PlayerShares.league_count`. */
@@ -35,6 +37,12 @@ export function PlayerShares({
    * edits it is pinned in the manager header, on the other side of this list.
    */
   columns: string[];
+  /**
+   * Whether a player is narrowing the league list, and how to toggle him —
+   * passed by the shares sheet and by nothing else; see {@link ShareList}.
+   */
+  isSelected?: (share: PlayerShare) => boolean;
+  onSelect?: (share: PlayerShare) => void;
 }) {
   return (
     <ShareList
@@ -46,6 +54,8 @@ export function PlayerShares({
       metrics={PLAYER_SHARE_METRICS}
       columns={columns}
       adpFor={(share) => adp.get(share.player_id) ?? null}
+      isSelected={isSelected}
+      onSelect={onSelect}
     />
   );
 }

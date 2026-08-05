@@ -1,19 +1,16 @@
-import { MONTH_ABBREVIATIONS, shiftDays } from "./adp-controls.ts";
-import type { AdpRange } from "./adp-controls.ts";
-
 /**
- * The maths behind the ADP board's range scrubber: what span the strip covers,
- * where a date sits on it, and what a handle position means.
+ * The maths behind the ADP board's density displays — the resting sparkline
+ * and the lookback panel's channel: what span they cover, where a month's bar
+ * sits on it, and where a date falls as a fraction of it.
  *
  * Pure and beside `adp-controls` for the reason the filter modules are — the
- * component that renders the strip should be laying out pixels, not deciding
- * what a window means. One rule in here is worth more than the rest and is the
- * reason this isn't inlined: **a handle parked on an edge of the domain is an
- * open bound, not that date**. It is what lets a range stay two independent
- * halves after being dragged, and it is invisible in the component.
- *
- * The `.ts` extension on the import above is the test runner's requirement, the
- * same mechanism `shared/query` is shared by.
+ * component that renders a strip should be laying out pixels, not deciding
+ * what a span means. It used to carry the range *scrubber's* gesture maths too
+ * (handle proximity, panning, sweep targets); the counter that replaced the
+ * scrubber asks for none of that, so what is left is the domain and the bars,
+ * which both remaining readers draw through the same functions so they cannot
+ * disagree about where a month sits. Its counterpart for what a window *means*
+ * is `lookback.ts`.
  */
 
 /** The span the strip covers, as inclusive `YYYY-MM-DD` bounds. */
@@ -92,12 +89,6 @@ export function fractionOf(domain: ScrubDomain, date: string): number {
   return clamp(daysBetween(domain.from, date) / span, 0, 1);
 }
 
-/** The date at a fraction of the domain, snapped to a whole day. */
-export function dateAtFraction(domain: ScrubDomain, fraction: number): string {
-  const span = daysBetween(domain.from, domain.to);
-  return shiftDays(domain.from, Math.round(clamp(fraction, 0, 1) * span));
-}
-
 /**
  * A range's two ends as concrete dates on the domain — what the handles draw.
  * An open bound becomes the domain's own edge, which is where {@link edgeBounds}
@@ -110,155 +101,6 @@ export function drawnBounds(
   const from = clampDate(bounds.from ?? domain.from, domain);
   const to = clampDate(bounds.to ?? domain.to, domain);
   return from > to ? { from: to, to: from } : { from, to };
-}
-
-/**
- * The reverse: two handle positions as a custom range, where a handle on an edge
- * of the domain means that side is unbounded.
- *
- * Reading an edge as open is the whole reason "all time" is reachable by
- * dragging, and it costs nothing in truth: the domain starts at the first
- * crawled draft, so a bound on that day and no bound at all match exactly the
- * same drafts — except that the open one keeps matching as the crawler reaches
- * further back. The right edge is today's month end, so an open end also keeps
- * catching drafts that happen after the page was loaded.
- */
-export function edgeBounds(
-  from: string,
-  to: string,
-  domain: ScrubDomain,
-): AdpRange {
-  return {
-    preset: "custom",
-    from: from <= domain.from ? null : from,
-    to: to >= domain.to ? null : to,
-  };
-}
-
-/**
- * Slide a window along the axis without changing its length.
- *
- * Dragging the selected block is the half of a brush the scrubber was missing:
- * "the same fortnight, a month earlier" took two handle drags, and the second
- * one had to be measured by eye against the first. The shift is clamped rather
- * than the window being squashed at the edge — a pan that silently shortened
- * the span would answer a different question than the one being dragged.
- */
-export function panWindow(
-  window: { from: string; to: string },
-  deltaDays: number,
-  domain: ScrubDomain,
-): { from: string; to: string } {
-  const shift = clamp(
-    deltaDays,
-    -daysBetween(domain.from, window.from),
-    daysBetween(window.to, domain.to),
-  );
-  return { from: shiftDays(window.from, shift), to: shiftDays(window.to, shift) };
-}
-
-/** What a press on the strip is about to do. */
-export type ScrubTarget = "from" | "to" | "pan" | "sweep";
-
-/**
- * What a press `x` pixels across the track means.
- *
- * The strip used to let each drawn part catch its own pointer events, which made
- * **the mark the target**: a 7px thumb is not something a finger hits, and a
- * near miss didn't do nothing — it fell through to the track and *swept a new
- * window*, which is the one destructive thing this control can do. On a phone
- * that is what reaching for a handle usually did. So the track catches every
- * press and this decides by proximity: the radius is the target, and the thumb
- * is only where it is.
- *
- * Two rules make that safe rather than merely generous.
- *
- * **The radius reaches full width *outside* the window and only a third of the
- * window's width *inside* it.** An uncapped radius makes a window narrower than
- * two radii entirely handle, so a short span could be resized and never panned —
- * trading one unreachable gesture for another. Capping the inner side leaves a
- * pan target at every width, and it costs nothing on a wide window, where a
- * third is far more than the radius anyway.
- *
- * **A handle on the domain's edge is still grabbable from the edge itself.**
- * The default board is unbounded, so both handles sit exactly on the ends where
- * half of any drawn target hangs off the panel. Measuring from the handle's
- * position rather than from a box means the outer half is simply never needed.
- *
- * `window` is the two handles as fractions of the track; `grabRadius` is in the
- * same pixels as `x`, so the caller can hand a finger a wider one than a mouse.
- */
-export function scrubTargetAt(
-  x: number,
-  width: number,
-  window: { from: number; to: number },
-  grabRadius: number,
-): ScrubTarget {
-  if (width <= 0) return "sweep";
-
-  const from = window.from * width;
-  const to = window.to * width;
-  const inner = Math.min(grabRadius, (to - from) / 3);
-
-  // Signed, and both measured *away* from the window's interior, so one
-  // comparison covers each handle's asymmetric reach.
-  const fromReach = x - from;
-  const toReach = to - x;
-  const onFrom = fromReach >= -grabRadius && fromReach <= inner;
-  const onTo = toReach >= -grabRadius && toReach <= inner;
-
-  // Both in reach only happens on a window narrower than the radii; the nearer
-  // handle is the one being aimed at.
-  if (onFrom && onTo) return Math.abs(fromReach) < Math.abs(toReach) ? "from" : "to";
-  if (onFrom) return "from";
-  if (onTo) return "to";
-  return x > from && x < to ? "pan" : "sweep";
-}
-
-/** A label on the month axis, with the extent it is centred over. */
-export type AxisTick = {
-  month: string;
-  left: number;
-  width: number;
-  label: string;
-  /** January, which reads as the year — the one tick that anchors the rest. */
-  year: boolean;
-};
-
-/**
- * The axis labels, thinned to what the width can hold.
- *
- * A month gets its name where there is room for one, its initial where there
- * isn't, and nothing at all once even the initials would collide — at which
- * point the January ticks are the axis. That is the same rule at three
- * densities rather than three rules: the domain is however many months have
- * been crawled, so a twelve-month axis and a five-year one are the same
- * control.
- *
- * January always reads as the year instead of a name. It is the only tick that
- * says *which* May a bar is, and a reader scanning for last summer needs the
- * boundary more than the month.
- */
-export function axisTicks(bars: readonly MonthBar[], domain: ScrubDomain): AxisTick[] {
-  const named = bars.length <= 13;
-  const initials = bars.length <= 30;
-
-  return bars.flatMap((bar): AxisTick[] => {
-    const month = Number(bar.month.slice(5, 7));
-    const january = month === 1;
-    if (!january && !initials) return [];
-    // A four-digit year is three times the width of the initials around it, so
-    // where the months are down to one letter the year gives up two of its own
-    // — a tick wider than its month is clipped, and "202" is not a year.
-    const label = january
-      ? named || !initials
-        ? bar.month.slice(0, 4)
-        : `’${bar.month.slice(2, 4)}`
-      : named
-        ? MONTH_ABBREVIATIONS[month - 1]
-        : MONTH_ABBREVIATIONS[month - 1].charAt(0);
-    return [{ month: bar.month, label, year: january, ...monthExtent(bar.month, domain) }];
-  });
 }
 
 /** `2026-05-14` → `2026-05`. */
@@ -281,9 +123,8 @@ function addMonths(month: string, delta: number): string {
 
 /**
  * Whole days from `a` to `b`; negative when `b` is earlier. Exported because
- * the scrubber counts in days too — the slider positions its handles read, the
- * span it reports — and two spellings of a date subtraction is one timezone
- * assumption away from disagreeing.
+ * `lookback` counts in days too — the lens's whole subject — and two spellings
+ * of a date subtraction is one timezone assumption away from disagreeing.
  */
 export function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);

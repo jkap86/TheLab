@@ -20,6 +20,7 @@ import type {
   ManagerRanksPayload,
 } from "@/shared/contract";
 import type {
+  AdpBoardStats,
   DraftDensityMonth,
   DraftPickAsset,
   LeagueRank,
@@ -43,6 +44,7 @@ import type {
  * one import site.
  */
 export type {
+  AdpBoardStats,
   AdpPayload,
   AdpPlayerPayload,
   DraftDensityMonth,
@@ -62,7 +64,7 @@ export type {
   TeamOutlook,
 };
 
-/** The `/api/adp/density` response the range scrubber draws its strip from. */
+/** The `/api/adp/density` response the window control draws its density from. */
 export type AdpDensityResult = AdpDensityPayload;
 
 /** The `/api/kickoff` response the header's countdown counts to. */

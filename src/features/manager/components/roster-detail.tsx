@@ -363,7 +363,7 @@ function ValueFootnote({
       )}
       {showAdp && (
         <p>
-          ADP · draft-capital value off {board} {values.adp_league_type} drafts
+          ADP · draft-capital value off {board} {values.adp_board} drafts
           {values.adp_draft_count > 0 &&
             ` · over ${values.adp_draft_count} crawled draft${
               values.adp_draft_count === 1 ? "" : "s"

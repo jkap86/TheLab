@@ -1,7 +1,6 @@
 import { pool } from "@/shared/db";
 import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
 
-import { LEAGUE_TYPE_CODES } from "./adp-filters";
 import type { AdpFilters } from "./adp-filters";
 
 /**
@@ -11,12 +10,15 @@ import type { AdpFilters } from "./adp-filters";
  * describes the leagues in our database rather than the market at large. The
  * filters exist because that population is a mix: pooling a 12-team superflex
  * dynasty startup with a 10-team redraft would average two different games.
+ *
+ * The league-type axis is not a filter, though — every read splits the matched
+ * drafts into the redraft and dynasty boards (see `ADP_BOARDS`) and averages
+ * each, so one fetch answers both markets and the caller chooses which to show.
  */
 
-/** One player's ADP across the matched drafts. Player ids are unresolved. */
-export type AdpRow = {
-  player_id: string;
-  /** How many of the matched drafts took this player. */
+/** One board's average for a player: how the matched drafts on it took him. */
+export type AdpBoardStats = {
+  /** How many of this board's drafts took the player, of its draft count. */
   picks: number;
   adp: number;
   min_pick: number;
@@ -25,9 +27,23 @@ export type AdpRow = {
   stdev: number;
 };
 
+/**
+ * One player's ADP on each board, over the matched drafts. Player ids are
+ * unresolved. A board is null when it took him in fewer than `min_picks`
+ * drafts — too few to average — which is a different answer from 0.
+ */
+export type AdpRow = {
+  player_id: string;
+  redraft: AdpBoardStats | null;
+  dynasty: AdpBoardStats | null;
+};
+
 export type AdpResult = {
   /** Drafts that matched the filters, whether or not they contain picks. */
   draft_count: number;
+  /** How `draft_count` splits into the two boards; the halves sum to it. */
+  redraft_drafts: number;
+  dynasty_drafts: number;
   /** Players matching the filters before `limit`/`offset` — for paging. */
   player_count: number;
   rows: AdpRow[];
@@ -46,6 +62,14 @@ export type AdpResult = {
 export const LEAGUE_TYPE_SQL = `
   (CASE WHEN l.settings->>'type' ~ '^[0-9]+$'
         THEN (l.settings->>'type')::int ELSE 0 END)`;
+
+/**
+ * Which of the two ADP boards a league's drafts count into: dynasty is
+ * Sleeper's `settings.type` 2, and everything else — redraft and keeper — is
+ * the redraft board. See `ADP_BOARDS` in `./adp-filters` for why keeper folds
+ * into redraft rather than into a bucket of its own.
+ */
+const DYNASTY_BOARD_SQL = `(${LEAGUE_TYPE_SQL} = 2)`;
 
 const BEST_BALL_SQL = `
   (CASE WHEN l.settings->>'best_ball' ~ '^[0-9]+$'
@@ -133,10 +157,6 @@ function draftSelection(filters: AdpFilters): { where: string; params: unknown[]
   if (filters.league_ids) {
     clauses.push(`l.league_id = ANY(${bind(filters.league_ids)}::varchar[])`);
   }
-  if (filters.league_types) {
-    const codes = filters.league_types.map((t) => LEAGUE_TYPE_CODES[t]);
-    clauses.push(`${LEAGUE_TYPE_SQL} = ANY(${bind(codes)}::int[])`);
-  }
   if (filters.scoring) clauses.push(`${SCORING_SQL} = ANY(${bind(filters.scoring)}::varchar[])`);
   if (filters.best_ball !== null) clauses.push(`${BEST_BALL_SQL} = ${bind(filters.best_ball)}`);
   if (filters.superflex !== null) clauses.push(`${SUPERFLEX_SQL} = ${bind(filters.superflex)}`);
@@ -146,28 +166,101 @@ function draftSelection(filters: AdpFilters): { where: string; params: unknown[]
   return { where: clauses.length > 0 ? clauses.join("\n       AND ") : "true", params };
 }
 
-type Row = AdpRow & { player_count: number };
-
 /**
- * ADP for every player taken in the drafts matching `filters`, best average
- * first. `draft_count` is reported separately so an empty page still tells the
- * caller whether the filters matched no drafts or merely no players.
+ * The draft/league join every read matches over, carrying which board each
+ * draft counts into. The `$n` placeholders in `where` are positions in the
+ * params array `draftSelection` returned alongside it.
  */
-export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
-  const { where, params } = draftSelection(filters);
-
-  const matchedDrafts = `
-    SELECT d.draft_id
+const matchedDraftsSql = (where: string) => `
+    SELECT d.draft_id, ${DYNASTY_BOARD_SQL} AS dynasty
       FROM drafts d
       JOIN leagues l ON l.league_id = d.league_id
      WHERE ${where}`;
 
-  const counted = await pool.query<{ draft_count: number }>(
-    `SELECT count(*)::int AS draft_count FROM (${matchedDrafts}) md`,
+type DraftCounts = {
+  draft_count: number;
+  redraft_drafts: number;
+  dynasty_drafts: number;
+};
+
+async function countMatchedDrafts(
+  matchedDrafts: string,
+  params: unknown[],
+): Promise<DraftCounts> {
+  const { rows } = await pool.query<DraftCounts>(
+    `SELECT count(*)::int AS draft_count,
+            (count(*) FILTER (WHERE NOT md.dynasty))::int AS redraft_drafts,
+            (count(*) FILTER (WHERE md.dynasty))::int AS dynasty_drafts
+       FROM (${matchedDrafts}) md`,
     params,
   );
-  const draft_count = counted.rows[0]?.draft_count ?? 0;
-  if (draft_count === 0) return { draft_count: 0, player_count: 0, rows: [] };
+  return rows[0] ?? { draft_count: 0, redraft_drafts: 0, dynasty_drafts: 0 };
+}
+
+/**
+ * One board's five aggregate columns, prefixed with the board's name. The
+ * board names come from our own closed vocabulary, not from input; `stdev`'s
+ * COALESCE keeps a single-pick board at 0 rather than null, matching the
+ * one-board query this replaced.
+ */
+function boardAggregates(board: "redraft" | "dynasty"): string {
+  const on = board === "dynasty" ? "md.dynasty" : "NOT md.dynasty";
+  return `
+              (count(*) FILTER (WHERE ${on}))::int AS ${board}_picks,
+              round((avg(dp.pick_no) FILTER (WHERE ${on}))::numeric, 2)::float8 AS ${board}_adp,
+              min(dp.pick_no) FILTER (WHERE ${on}) AS ${board}_min_pick,
+              max(dp.pick_no) FILTER (WHERE ${on}) AS ${board}_max_pick,
+              round(COALESCE(stddev_samp(dp.pick_no) FILTER (WHERE ${on}), 0)::numeric, 2)::float8 AS ${board}_stdev`;
+}
+
+type BoardColumns = {
+  [B in "redraft" | "dynasty" as `${B}_picks`]: number;
+} & {
+  [B in "redraft" | "dynasty" as `${B}_adp`]: number | null;
+} & {
+  [B in "redraft" | "dynasty" as `${B}_min_pick`]: number | null;
+} & {
+  [B in "redraft" | "dynasty" as `${B}_max_pick`]: number | null;
+} & {
+  [B in "redraft" | "dynasty" as `${B}_stdev`]: number | null;
+};
+
+/** One board's stats off a row's prefixed columns; below `min_picks` is null. */
+function boardStats(
+  row: BoardColumns,
+  board: "redraft" | "dynasty",
+  minPicks: number,
+): AdpBoardStats | null {
+  const picks = row[`${board}_picks`];
+  const adp = row[`${board}_adp`];
+  if (picks < minPicks || adp === null) return null;
+  return {
+    picks,
+    adp,
+    min_pick: row[`${board}_min_pick`]!,
+    max_pick: row[`${board}_max_pick`]!,
+    stdev: row[`${board}_stdev`]!,
+  };
+}
+
+/**
+ * ADP for every player taken in the drafts matching `filters`, averaged per
+ * board, best average first. The `min_picks` gate applies per board — a player
+ * with one redraft pick and five dynasty ones has a dynasty average and no
+ * redraft one — and a player appears when *either* board can average him.
+ *
+ * The ordering is the best average on any board that cleared the gate, so the
+ * page cut keeps whoever is early on either market; the caller re-ranks for
+ * whichever board(s) it displays. `draft_count` and its split are reported
+ * separately so an empty page still tells the caller whether the filters
+ * matched no drafts or merely no players.
+ */
+export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
+  const { where, params } = draftSelection(filters);
+  const matchedDrafts = matchedDraftsSql(where);
+
+  const counts = await countMatchedDrafts(matchedDrafts, params);
+  if (counts.draft_count === 0) return { ...counts, player_count: 0, rows: [] };
 
   const rowParams = [...params];
   const bind = (value: unknown) => `$${rowParams.push(value)}`;
@@ -175,38 +268,40 @@ export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
   const limit = bind(filters.limit);
   const offset = bind(filters.offset);
 
-  const { rows } = await pool.query<Row>(
+  const { rows } = await pool.query<
+    BoardColumns & { player_id: string; player_count: number }
+  >(
     `WITH matched_drafts AS (${matchedDrafts}),
      adp AS (
        SELECT dp.player_id,
-              count(*)::int AS picks,
-              round(avg(dp.pick_no)::numeric, 2)::float8 AS adp,
-              min(dp.pick_no) AS min_pick,
-              max(dp.pick_no) AS max_pick,
-              round(COALESCE(stddev_samp(dp.pick_no), 0)::numeric, 2)::float8 AS stdev
+              ${boardAggregates("redraft")},
+              ${boardAggregates("dynasty")}
          FROM draft_picks dp
          JOIN matched_drafts md ON md.draft_id = dp.draft_id
         WHERE dp.player_id IS NOT NULL AND dp.player_id <> ''
         GROUP BY dp.player_id
-       HAVING count(*) >= ${minPicks}
+       HAVING count(*) FILTER (WHERE NOT md.dynasty) >= ${minPicks}
+           OR count(*) FILTER (WHERE md.dynasty) >= ${minPicks}
      )
      SELECT a.*, (count(*) OVER ())::int AS player_count
        FROM adp a
-      ORDER BY a.adp, a.picks DESC, a.player_id
+      ORDER BY LEAST(
+                 CASE WHEN a.redraft_picks >= ${minPicks} THEN a.redraft_adp END,
+                 CASE WHEN a.dynasty_picks >= ${minPicks} THEN a.dynasty_adp END
+               ),
+               (a.redraft_picks + a.dynasty_picks) DESC,
+               a.player_id
       LIMIT ${limit} OFFSET ${offset}`,
     rowParams,
   );
 
   return {
-    draft_count,
+    ...counts,
     player_count: rows[0]?.player_count ?? 0,
     rows: rows.map((r) => ({
       player_id: r.player_id,
-      picks: r.picks,
-      adp: r.adp,
-      min_pick: r.min_pick,
-      max_pick: r.max_pick,
-      stdev: r.stdev,
+      redraft: boardStats(r, "redraft", filters.min_picks),
+      dynasty: boardStats(r, "dynasty", filters.min_picks),
     })),
   };
 }
@@ -267,37 +362,38 @@ export async function getDraftDensity(): Promise<DraftDensityMonth[]> {
 export type PlayerAdp = { adp: number; picks: number };
 
 /**
+ * A player's average on each board; a board that took him in fewer than
+ * `min_picks` drafts is null — no average worth trusting.
+ */
+export type PlayerBoardAdp = {
+  redraft: PlayerAdp | null;
+  dynasty: PlayerAdp | null;
+};
+
+/**
  * ADP for a specific set of players over the drafts matching `filters`, keyed by
- * id — what pricing a roster needs, where {@link getDraftAdp} answers a paged
- * board.
+ * id and split per board — what pricing a roster needs, where {@link getDraftAdp}
+ * answers a paged board. One fetch carries both boards, so a caller pricing
+ * leagues of both types shares a single query and reads each league's side.
  *
  * Restricting the aggregation to the rostered ids is what keeps this cheap enough
  * to run once per league card's worth of rosters: it shares `getDraftAdp`'s
- * `matched_drafts` and its `min_picks` gate (a player taken in a single draft has
- * no average worth trusting), but never resolves names or pages, because the
- * caller already holds both. `draft_count` rides along so the number can say how
- * many crawled drafts stand behind it.
+ * `matched_drafts` and its per-board `min_picks` gate (a player taken in a single
+ * draft has no average worth trusting), but never resolves names or pages,
+ * because the caller already holds both. The draft counts ride along so a number
+ * can say how many crawled drafts stand behind the board it was read from.
  */
 export async function getDraftAdpForPlayers(
   filters: AdpFilters,
   playerIds: readonly string[],
-): Promise<{ draft_count: number; values: Map<string, PlayerAdp> }> {
+): Promise<DraftCounts & { values: Map<string, PlayerBoardAdp> }> {
   const ids = [...new Set(playerIds.filter((id) => id && id !== "0"))];
   const { where, params } = draftSelection(filters);
+  const matchedDrafts = matchedDraftsSql(where);
 
-  const matchedDrafts = `
-    SELECT d.draft_id
-      FROM drafts d
-      JOIN leagues l ON l.league_id = d.league_id
-     WHERE ${where}`;
-
-  const counted = await pool.query<{ draft_count: number }>(
-    `SELECT count(*)::int AS draft_count FROM (${matchedDrafts}) md`,
-    params,
-  );
-  const draft_count = counted.rows[0]?.draft_count ?? 0;
-  if (draft_count === 0 || ids.length === 0) {
-    return { draft_count, values: new Map() };
+  const counts = await countMatchedDrafts(matchedDrafts, params);
+  if (counts.draft_count === 0 || ids.length === 0) {
+    return { ...counts, values: new Map() };
   }
 
   const rowParams = [...params];
@@ -305,20 +401,40 @@ export async function getDraftAdpForPlayers(
   const idsBind = bind(ids);
   const minPicks = bind(filters.min_picks);
 
-  const { rows } = await pool.query<{ player_id: string; adp: number; picks: number }>(
+  const { rows } = await pool.query<{
+    player_id: string;
+    redraft_adp: number | null;
+    redraft_picks: number;
+    dynasty_adp: number | null;
+    dynasty_picks: number;
+  }>(
     `WITH matched_drafts AS (${matchedDrafts})
      SELECT dp.player_id,
-            round(avg(dp.pick_no)::numeric, 2)::float8 AS adp,
-            count(*)::int AS picks
+            round((avg(dp.pick_no) FILTER (WHERE NOT md.dynasty))::numeric, 2)::float8 AS redraft_adp,
+            (count(*) FILTER (WHERE NOT md.dynasty))::int AS redraft_picks,
+            round((avg(dp.pick_no) FILTER (WHERE md.dynasty))::numeric, 2)::float8 AS dynasty_adp,
+            (count(*) FILTER (WHERE md.dynasty))::int AS dynasty_picks
        FROM draft_picks dp
        JOIN matched_drafts md ON md.draft_id = dp.draft_id
       WHERE dp.player_id = ANY(${idsBind}::varchar[])
       GROUP BY dp.player_id
-     HAVING count(*) >= ${minPicks}`,
+     HAVING count(*) FILTER (WHERE NOT md.dynasty) >= ${minPicks}
+         OR count(*) FILTER (WHERE md.dynasty) >= ${minPicks}`,
     rowParams,
   );
 
-  const values = new Map<string, PlayerAdp>();
-  for (const r of rows) values.set(r.player_id, { adp: r.adp, picks: r.picks });
-  return { draft_count, values };
+  const values = new Map<string, PlayerBoardAdp>();
+  for (const r of rows) {
+    values.set(r.player_id, {
+      redraft:
+        r.redraft_picks >= filters.min_picks && r.redraft_adp !== null
+          ? { adp: r.redraft_adp, picks: r.redraft_picks }
+          : null,
+      dynasty:
+        r.dynasty_picks >= filters.min_picks && r.dynasty_adp !== null
+          ? { adp: r.dynasty_adp, picks: r.dynasty_picks }
+          : null,
+    });
+  }
+  return { ...counts, values };
 }

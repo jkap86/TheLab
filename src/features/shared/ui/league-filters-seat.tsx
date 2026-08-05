@@ -36,6 +36,12 @@
  * the pill's for a plain geometric reason — the plate's bottom padding is what
  * holds it clear of the win-pct dial above it, and at `text-sm` the part is
  * 32px tall and crosses the dial instead.
+ *
+ * `bar` rides in the shares sheet's title bar, beside a search field and a close
+ * mark. It is `free`'s pill at the smaller of the two type scales, because a
+ * title bar is a row of parts rather than a page: at the pill's own size it out-
+ * weighed the sheet's title, and it has to line up with a 28px field rather than
+ * with a plate's edge, so it keeps the round corners and drops a step.
  */
 export const SEATS = {
   free: {
@@ -50,6 +56,11 @@ export const SEATS = {
     // the same 20px narrowed or not. A trigger seated in an edge must not change
     // height with its own state: it is anchored to that edge, so growing moves
     // its top into whatever the plate's bottom padding was holding it clear of.
+    badge: "px-1 py-px text-[10px]",
+  },
+  bar: {
+    key: "gap-1.5 rounded-full py-1 pl-2.5 pr-3 text-[11px] leading-none",
+    icon: "h-3 w-3",
     badge: "px-1 py-px text-[10px]",
   },
 } as const;
