@@ -1,6 +1,6 @@
-import { ordinal } from "../format";
-import type { DraftPickAsset, LeagueTeamView } from "../types";
-import { managerLabel } from "./ui";
+import { ordinal } from "../../format";
+import { managerLabel } from "./team-label";
+import type { DraftPickAsset, LeagueTeamView } from "./types";
 
 /**
  * A team's future draft picks, grouped by season.

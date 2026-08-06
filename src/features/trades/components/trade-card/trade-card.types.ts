@@ -110,4 +110,15 @@ export type TradeCardProps = {
   ktc: Record<string, KtcValue>;
   pickKtc: Record<string, KtcValue>;
   pickSlots: Record<string, number>;
+  /**
+   * Open this trade's league — its standings and rosters, over the board.
+   *
+   * It takes the trade rather than being a closure over it, and that is a
+   * property the memo rests on: one stable callback for the whole list, built
+   * once in `TradesHome`, where a per-card arrow would be a new prop identity on
+   * every render and would re-render all ~26 windowed cards at both ends of
+   * every scroll gesture. The same reason every other prop here is a `useMemo`
+   * or a catalogue entry.
+   */
+  onOpenLeague: (trade: Trade) => void;
 };

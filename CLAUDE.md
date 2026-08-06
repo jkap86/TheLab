@@ -1128,12 +1128,31 @@ stops holding, a comment saying it does would not have caught it.
   `adp-controls` still hands out `todayIso` and `shiftDays`, `manager/format`
   still hands out `ordinal` — so one canonical definition is read under two names
   rather than a sweep through a dozen call sites. And what moves is only what a
-  second tool actually reads: `manager/format` keeps the KTC values, the week
-  horizons and the contracted player name only that tool renders, because a
-  shared module that collects a feature's whole vocabulary is just the feature
-  again under another name.
+  second tool actually reads, because a shared module that collects a feature's
+  whole vocabulary is just the feature again under another name. **`manager/format`
+  is the limit case of that second habit and worth reading as a warning rather
+  than as a model**: it kept the KTC values, the week horizons and the contracted
+  player name for exactly as long as only the manager tool rendered them, and the
+  league detail panel's move took all four — so what is left is a file of
+  re-exports with nothing of its own. That is fine and is what the first habit is
+  for; what it says is that "only this tool reads it" is a fact with a shelf life,
+  not a property of the module.
 
-  **The manager plate is the largest thing that rule has moved, and it took four
+  **The league detail panel is the largest thing that rule has moved.** The
+  trades board opens a trade card into the same standings and rosters, so
+  `components/league-detail-panel` and the five components under it are
+  `features/shared/ui/league-detail/`, and what they read went with them: the
+  standings and roster metric catalogues (`features/shared/{standings,roster}-metrics.ts`,
+  tests included), `useLeagueDetail` and the query key and TTL behind it
+  (`league-query.ts`, the `schedule-query.ts` precedent), the four formatters the
+  panel is written in, and `PanelMessage`/`PanelLoading` (`ui/panel-message.tsx`,
+  which the manager views still read through their own `components/ui`). What did
+  **not** go with it is anything about a manager — the panel has never asked whose
+  leagues these are, which is exactly why it ports to a page with no account at
+  all. The three pieces that left no re-export behind (`teamLabel`,
+  `managerLabel`, `TeamAvatar`) are the ones whose only readers moved too.
+
+  **The manager plate was the largest before it, and it took four
   modules with it.** The lineup checker draws the same card, so
   `components/manager-header/` is `features/shared/ui/manager-header/`, and what
   it reads went with it: `record.ts` (the record's shape and the two rules that
@@ -1414,6 +1433,15 @@ stops holding, a comment saying it does would not have caught it.
     editor are split the same way in the manager tool, each latched so closing
     doesn't unmount the dialog inside its own `close` handler.
 
+    **The league sheet is the third on this page and the easiest of the three**,
+    because the trigger is a trade card three modules away rather than anything
+    in the sheet's own file — so the seam is a module boundary by construction.
+    It is the heaviest thing behind a press here (the whole `ui/league-detail`
+    subtree: two dense tables, a rank dial, a draft-pick list, two metric
+    catalogues and a query hook), and it takes no `loading` fallback, unlike the
+    filters key: nothing is holding its place on the page, so a placeholder would
+    be a flash rather than a reserved box.
+
     **A `dynamic()` import splits nothing if the trigger sits in the same module
     as the thing it opens, and nothing at all if a barrel re-exports either
     one.** Both halves were learned here and both are invisible in review — the
@@ -1599,9 +1627,13 @@ stops holding, a comment saying it does would not have caught it.
     is.** League cards and share cards wear `LIST_ROW_SURFACE`, and the point of
     sharing it is that three lists read as one material; this one wears
     `.lab-slab` — the app bar's corner-lit block at card scale. What buys the
-    divergence is that a trade card is not a row that opens into something: it is
-    the whole of what it has to say, four columns deep, and the depth is what
-    sorts those columns into an order. Three countable z-levels and no more —
+    divergence is that a trade card is not a row that opens into *more of
+    itself*: it is the whole of what it has to say, four columns deep, and the
+    depth is what sorts those columns into an order. That reading survives the
+    card becoming pressable — what a press opens is the *league*, which is the
+    question a trade raises and no height of card could answer, so it is a way
+    out rather than a disclosure and there is no chevron on the card to say
+    otherwise. Three countable z-levels and no more —
     plate (`.lab-slab`), groove, readout — since a fourth flattens the other
     three, the same arithmetic `.lab-row`'s 2px wall already answers. The cyan
     rail, the hover lift and the bloom all survive, so the card still answers the
@@ -1700,6 +1732,40 @@ stops holding, a comment saying it does would not have caught it.
     the latest draft *and then* finding it unordered has to report nothing, where
     filtering unordered drafts out first falls through to the startup and hands
     back that draft's slots for a pick in this one.
+- **Pressing a trade card opens its league, as a sheet rather than in place —
+  which is the one thing the leagues list does that this board cannot copy.** A
+  league card expands where it sits, pins itself under the app bar and caps at
+  the viewport; none of that is available over a windowed list, where a card is
+  an absolutely positioned item inside a transformed box (so `sticky` resolves
+  against the *item*) and a several-hundred-row panel is a measured height change
+  on every open. `LeagueSheet` is a `<dialog>` over the board, the shares sheet's
+  material and rules: glass on the frame, an opaque plate under the rows, and the
+  top layer, focus trap, Escape and backdrop press all the platform's. The
+  virtualizer is untouched, so closing puts the reader back exactly where they
+  pressed. Four decisions in it:
+  - **The panel is the leagues list's panel**, `features/shared/ui/league-detail`
+    — the mover's rule, and the largest thing it has moved. A second copy of a
+    standings table is two answers to "how is this league going".
+  - **The card is the target and the league's name is the button.** The obvious
+    implementation is the leagues list's own — `role="button"` on the row — and it
+    is wrong at this size: `button` takes presentational children, so a card
+    holding two manager blocks, a dozen asset lines and their values would be
+    flattened to one label for assistive tech. So the nameplate's `<h2>` holds a
+    real `<button>` and the card's wrapper carries only the click handler; a
+    keyboard press of that button fires a click that bubbles to it, so one
+    handler serves both and neither fires twice.
+  - **`onOpenLeague` takes the trade rather than closing over it**, because the
+    card is `memo`'d against props that are stable by construction and a per-card
+    arrow would re-render all ~26 windowed cards at both ends of every scroll
+    gesture. One `useCallback` for the list.
+  - **It opens on a roster that dealt** (`focusRosterFor`) — the reader's own
+    where they are in the trade, the first side otherwise. The panel's own answer
+    is the projected leader, which is right for someone who arrived at a league
+    and wrong for someone who arrived at a trade. The panel takes it as
+    `focusRosterId`, a *seed* rather than a prop it follows, since a press on a
+    standings row must not be undone by the next render; the sheet mounts the
+    panel only while open, which is what makes a second press a fresh mount with
+    no stale selection to reconcile.
 - **Trades made before a league's startup draft ended are not on that board, and
   they are excluded in SQL rather than hidden on the client.** A startup fills
   empty rosters from the whole pool, so everything traded up to its last pick is
@@ -3078,10 +3144,18 @@ stops holding, a comment saying it does would not have caught it.
   | Module | Grain | Where |
   | --- | --- | --- |
   | `manager/league-metrics` | one league | collapsed card |
-  | `manager/standings-metrics` | one team | expanded panel's standings |
-  | `manager/roster-metrics` | one player | expanded panel's roster list |
+  | `shared/standings-metrics` | one team | league detail panel's standings |
+  | `shared/roster-metrics` | one player | league detail panel's roster list |
   | `manager/share-metrics` | one subject held across several leagues | players and leaguemates cards |
   | `trades/trade-metrics` | one side of one trade | trade card |
+
+  **Two of them are in `features/shared` and three are not, and the split is the
+  mover's rule rather than the grain**: the panel those two feed is drawn by the
+  leagues list *and* by a trade card, so the catalogues its columns pick from went
+  with it. Nothing else about them changed — both are still pure, still tested
+  beside themselves, and still take their subject shapes as erased `import type`s
+  (from `@/shared/contract` and `@/shared/projections` directly now, since there
+  is no feature `types.ts` where they landed).
 
   The fifth is the first outside the manager tool, which is what moved the
   vocabulary they all speak — `Metric<C>`, `MetricCell`, `metricPreview` — to

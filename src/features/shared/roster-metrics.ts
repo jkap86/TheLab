@@ -1,5 +1,5 @@
 import { formatPoints, formatValue, weekCount } from "./format.ts";
-import type { PlayerOutlook, PlayerSplit } from "./types";
+import type { PlayerOutlook, PlayerSplit } from "@/shared/projections";
 
 /**
  * The player-level values a roster column can show, and how to read one off a
@@ -19,9 +19,13 @@ import type { PlayerOutlook, PlayerSplit } from "./types";
  * only place that reads at the player grain.
  *
  * Pure and free of runtime imports beyond {@link formatPoints} and its siblings —
- * everything from {@link ./types} arrives as an erased `import type` — so the
- * accessors read and test without a fetch behind them, the same bar
- * `league-metrics` and `standings-metrics` hold.
+ * the projection shapes arrive as an erased `import type` — so the accessors read
+ * and test without a fetch behind them, the same bar `league-metrics` and
+ * `standings-metrics` hold.
+ *
+ * It sits in `features/shared` rather than beside the manager tool that wrote it
+ * because the league detail panel moved there for the trades board to open a
+ * card into, and this is the catalogue that panel’s roster columns pick from.
  */
 
 /** What a player metric reads from: one player's projection split and board values. */

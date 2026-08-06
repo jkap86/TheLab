@@ -1,18 +1,18 @@
-import { formatPoints, formatRecord, formatWeekRange } from "../format";
+import { formatPoints, formatRecord, formatWeekRange } from "../../format";
 import {
   rosterValueTotal,
   TEAM_METRICS,
   TEAM_METRICS_BY_KEY,
   type TeamMetric,
-} from "../standings-metrics";
+} from "../../standings-metrics";
+import { ColumnPicker, type ColumnOption } from "./column-picker";
+import { managerLabel, TeamAvatar } from "./team-label";
 import type {
   LeagueOutlook,
   LeagueRosterValues,
   LeagueTeamView,
   TeamOutlook,
-} from "../types";
-import { ColumnPicker, type ColumnOption } from "./column-picker";
-import { managerLabel, TeamAvatar } from "./ui";
+} from "./types";
 
 /** The team metrics offered in every standings column's picker. */
 const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({

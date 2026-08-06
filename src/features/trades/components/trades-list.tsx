@@ -87,6 +87,7 @@ export function TradesList({
   hasMore,
   loadingMore,
   onLoadMore,
+  onOpenLeague,
 }: {
   trades: readonly Trade[];
   leaguesById: ReadonlyMap<string, ManagerLeague>;
@@ -108,6 +109,12 @@ export function TradesList({
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
+  /**
+   * Open a card's league over the board. Passed straight through and never
+   * wrapped here — see `TradeCardProps.onOpenLeague` for why its identity has to
+   * survive a re-render of this list.
+   */
+  onOpenLeague: (trade: Trade) => void;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -224,6 +231,7 @@ export function TradesList({
               ktc={ktc}
               pickKtc={pickKtc}
               pickSlots={pickSlots}
+              onOpenLeague={onOpenLeague}
             />
           </li>
         );

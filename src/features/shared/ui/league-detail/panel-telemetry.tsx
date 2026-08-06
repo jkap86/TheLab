@@ -5,8 +5,8 @@ import { useId } from "react";
 // note on `rank.ts`.
 import { rankOf } from "@/shared/manager/rank";
 
-import { formatPoints } from "../format";
-import type { LeagueOutlook, TeamOutlook } from "../types";
+import { formatPoints } from "../../format";
+import type { LeagueOutlook, TeamOutlook } from "./types";
 
 /**
  * The card's second head line while it is open: where the selected team stands

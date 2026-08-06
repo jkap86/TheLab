@@ -6,19 +6,19 @@ import { useMemo } from "react";
 // pull `pg`-backed code into the client bundle — see `slots.ts`.
 import { NON_STARTING_SLOTS } from "@/shared/projections/slots";
 
-import { PLAYER_METRICS } from "../roster-metrics";
+import { PLAYER_METRICS } from "../../roster-metrics";
+import { ColumnPicker, type ColumnOption } from "./column-picker";
+import { DraftPicks } from "./draft-picks";
+import { PlayerRow } from "./player-row";
+import { NO_NUMBERS, SPLIT_LAYOUT } from "./roster-layout";
+import type { SectionLayout } from "./roster-layout";
 import type {
   LeagueOutlook,
   LeagueRosterValues,
   LeagueTeamView,
   PlayerSummary,
   TeamOutlook,
-} from "../types";
-import { ColumnPicker, type ColumnOption } from "./column-picker";
-import { DraftPicks } from "./draft-picks";
-import { PlayerRow } from "./player-row";
-import { NO_NUMBERS, SPLIT_LAYOUT } from "./roster-layout";
-import type { SectionLayout } from "./roster-layout";
+} from "./types";
 
 /** The player metrics offered in every roster column's picker. */
 const PLAYER_METRIC_OPTIONS: ColumnOption[] = PLAYER_METRICS.map((m) => ({

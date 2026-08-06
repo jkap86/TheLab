@@ -16,7 +16,8 @@ import { formatTradeDate, formatTradeTime } from "./trade-card.utils.ts";
  */
 
 /**
- * The league's name, on a plate straddling the card's top edge.
+ * The league's name, on a plate straddling the card's top edge — and the card's
+ * one focusable control.
  *
  * It renders as a **sibling of the slab, never a child**: `clip-path` clips its
  * whole subtree, so a plate inside the notched face would be cut off at the
@@ -24,6 +25,21 @@ import { formatTradeDate, formatTradeTime } from "./trade-card.utils.ts";
  * rather than a negative margin, which is what keeps it inside the box
  * `TradesList` measures — a part hanging outside that box drifts every card
  * below it down the list.
+ *
+ * **It is the button, though the whole card is the target.** Pressing a card
+ * opens that league's standings and rosters, and the obvious implementation —
+ * `role="button"` on the card, the way the league cards' own row is written — is
+ * wrong at this size: `button` takes presentational children, so a card holding
+ * two manager blocks, a dozen asset lines and their values would be flattened to
+ * one label for anyone reading it with assistive tech. So the *name* is a real
+ * `<button>` and the card's wrapper carries only the click handler. Keyboard
+ * activation of a button fires a click that bubbles, so one handler up there
+ * serves both without either firing twice — and what a screen reader is offered
+ * is the league's name, which is exactly what pressing it opens.
+ *
+ * The plate does not travel on press: it is a nameplate rather than a key, and
+ * "raised means press me" belongs to the chips. What answers the pointer is the
+ * card's own lift, which it already had.
  */
 export function TradeNameplate({
   name,
@@ -39,7 +55,10 @@ export function TradeNameplate({
       />
       {/* `h2`: the page's own title is a visually-hidden `h1` (the ledge is what
           leads it on screen), so a card is the next level down and a 3 here
-          skipped one.
+          skipped one. The button sits *inside* the heading rather than around
+          it, since a `<button>` takes phrasing content and a heading is flow —
+          the same constraint that keeps the card's own press target off a
+          `<button>` entirely.
 
           It is set at 12px rather than the 13px it wore on the card's face — one
           step down for the plate, not two. At 11px, tracked out to `0.14em` and
@@ -50,7 +69,13 @@ export function TradeNameplate({
           what overflows, and a line box that depends on an ancestor is a
           clipped ascender waiting for someone to set one. */}
       <h2 className="min-w-0 truncate font-display text-xs font-bold uppercase leading-4 tracking-[0.1em] text-foreground [text-shadow:0_1px_0_rgba(255,255,255,0.14),0_-1px_1px_rgba(0,0,0,0.9)]">
-        {name}
+        <button
+          type="button"
+          title="Standings and rosters for this league"
+          className="max-w-full cursor-pointer truncate rounded-[3px] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-active"
+        >
+          {name}
+        </button>
       </h2>
     </div>
   );

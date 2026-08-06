@@ -1,5 +1,6 @@
 import { formatPoints, formatValue } from "./format.ts";
-import type { LeagueTeamView, TeamOutlook } from "./types";
+import type { LeagueTeamPayload } from "@/shared/contract";
+import type { TeamOutlook } from "@/shared/projections";
 
 /**
  * The team-level values a standings column can show, and how to read one off a
@@ -20,14 +21,17 @@ import type { LeagueTeamView, TeamOutlook } from "./types";
  * so a manager's column is always a plain value.
  *
  * Pure and free of runtime imports beyond {@link formatPoints} and {@link
- * formatValue} — everything from {@link ./types} arrives as an erased `import
- * type` — so the accessors read and test without a fetch behind them, the same bar
+ * formatValue} — the team and outlook shapes arrive as erased `import type`s — so
+ * the accessors read and test without a fetch behind them, the same bar
  * `league-metrics` holds.
+ *
+ * In `features/shared` for the reason its roster-level twin is: the panel these
+ * columns sit in is drawn by the trades board as well as by the leagues list.
  */
 
 /** What a team metric reads from: one team's standings row, outlook and board totals. */
 export type TeamMetricContext = {
-  team: LeagueTeamView;
+  team: LeagueTeamPayload;
   /** This team's rest-of-season outlook, or null/undefined when none was projected. */
   outlook: TeamOutlook | null | undefined;
   /** This team's KTC total on the league's board, or null when nothing is priced. */

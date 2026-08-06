@@ -21,6 +21,7 @@ import type { LeagueFilters } from "@/features/shared";
 import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
+import { focusRosterFor } from "../exchange";
 import { DEFAULT_TRADE_FILTERS, hasSideSelection, tradeRangeBounds } from "../filters";
 import type { TradeFilters, TradeNames } from "../filters";
 import { useFilteredTrades } from "../hooks/use-filtered-trades";
@@ -29,6 +30,8 @@ import { useTrades } from "../hooks/use-trades";
 import type { Verdict } from "../incremental";
 import { DEFAULT_TRADE_COLUMNS, TRADE_METRICS } from "../trade-metrics";
 import { resolveLeagueScope, tradeQueryKey } from "../trade-query";
+import type { Trade } from "../types";
+import type { OpenLeague } from "./league-sheet";
 import { TradeFiltersLedge } from "./trade-filters-ledge";
 import { TradeSearch } from "./trade-search";
 import { TradeValuePicker } from "./trade-value";
@@ -75,6 +78,27 @@ const LeagueFiltersModal = dynamic(
  */
 const AdpDrawer = dynamic(
   () => import("@/features/shared/ui/adp-drawer").then((m) => m.AdpDrawer),
+  { ssr: false },
+);
+
+/**
+ * The league a card opens into, loaded the first time one is pressed.
+ *
+ * The heaviest thing on this page behind a press: the sheet pulls in the whole
+ * `ui/league-detail` subtree — two dense tables, the rank dial, the draft-pick
+ * list, two metric catalogues and a query hook — and none of it is on screen at
+ * first paint. The seam is a module boundary rather than an export name, which is
+ * what the split actually needs: the trigger is the card, three modules away, so
+ * nothing static reaches this chunk. It is deliberately not re-exported from
+ * `features/trades/index.ts` or from `features/shared`, since a barrel naming it
+ * would put it back in the graph of every page importing anything from either.
+ *
+ * No `loading` fallback: nothing is holding its place on the page — the sheet is
+ * a modal that appears where there was nothing — so a placeholder would be a
+ * flash rather than a reserved box.
+ */
+const LeagueSheet = dynamic(
+  () => import("./league-sheet").then((m) => m.LeagueSheet),
   { ssr: false },
 );
 
@@ -267,6 +291,37 @@ export function TradesHome({ season }: { season: string }) {
     [players, managers],
   );
 
+  // Which league is open over the board, and whether the sheet is showing it.
+  //
+  // Two pieces of state rather than one, and the split is what the `dynamic()`
+  // above is worth having: `openLeague` is kept past the close so the sheet is
+  // not unmounted by its own dismissal and a second press is instant — the same
+  // latch the ADP drawer keeps below. The panel *inside* it is still gated on
+  // `sheetOpen`, so a closed sheet holds no read of its own.
+  const [openLeague, setOpenLeague] = useState<OpenLeague | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // One callback for the whole list, so a card's props stay identical across the
+  // re-renders the virtualizer triggers — see `TradeCardProps.onOpenLeague`. The
+  // league's own name is read here rather than in the card, since the card is
+  // given a `ManagerLeague | null` and this is where that map lives.
+  const openLeagueFor = useCallback(
+    (trade: Trade) => {
+      const league = leaguesById.get(trade.league_id) ?? null;
+      setOpenLeague({
+        leagueId: trade.league_id,
+        name: league?.name ?? trade.league_id,
+        // Their own roster where they are in the trade, a participant otherwise
+        // — the panel's own default is the projected leader, which is the right
+        // answer for a reader who arrived at a league and the wrong one for a
+        // reader who arrived at a trade.
+        rosterId: focusRosterFor(trade, account?.user_id ?? null),
+      });
+      setSheetOpen(true);
+    },
+    [leaguesById, account],
+  );
+
   return (
     <>
       {/* The board's trigger, seated in the app bar rather than the ledge
@@ -413,6 +468,7 @@ export function TradesHome({ season }: { season: string }) {
             hasMore={hasMore}
             loadingMore={loadingMore}
             onLoadMore={loadMore}
+            onOpenLeague={openLeagueFor}
           />
           {loadingMore && (
             // Below the list rather than over it: the cards above are readable
@@ -423,6 +479,20 @@ export function TradesHome({ season }: { season: string }) {
             </p>
           )}
         </>
+      )}
+
+      {/* Latched on `openLeague` rather than on `sheetOpen`, the way the drawer
+          below is latched: gated on the open flag, the sheet would be unmounted
+          inside its own `close` handler and every reopen would go back through
+          the `dynamic()` above. What it holds is a league id and a name, so
+          keeping it costs nothing — the read behind it is gated separately. */}
+      {openLeague && (
+        <LeagueSheet
+          league={openLeague}
+          meta={leaguesById.get(openLeague.leagueId) ?? null}
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+        />
       )}
 
       {/* Latched rather than gated on `boardOpen`, so the drawer isn't

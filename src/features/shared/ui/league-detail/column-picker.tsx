@@ -2,7 +2,7 @@
 
 import { useId, useRef } from "react";
 
-import { useReturnFocus } from "@/features/shared";
+import { useReturnFocus } from "../../use-return-focus";
 
 /**
  * A column heading that doubles as a picker: the current metric's label with a

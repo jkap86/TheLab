@@ -8,7 +8,8 @@ import {
   TEAM_METRICS_BY_KEY,
   type TeamMetricContext,
 } from "./standings-metrics.ts";
-import type { LeagueTeamView, TeamOutlook } from "./types.ts";
+import type { LeagueTeamPayload } from "@/shared/contract";
+import type { TeamOutlook } from "@/shared/projections";
 
 const team = {
   roster_id: 1,
@@ -22,7 +23,7 @@ const team = {
   reserve: [],
   taxi: [],
   picks: [],
-} as unknown as LeagueTeamView;
+} as unknown as LeagueTeamPayload;
 
 const outlook = {
   roster_id: 1,

@@ -7,6 +7,10 @@ import {
   LIST_ROW_SURFACE,
   RowSheen,
 } from "@/features/shared";
+// The module path rather than that barrel: the panel is a subtree deep enough
+// that re-exporting it there would ship it to every page importing anything
+// shared — see `ui/league-detail/index.ts`.
+import { LeagueDetailPanel } from "@/features/shared/ui/league-detail";
 
 import { formatRecord, ordinal } from "../format";
 import { LEAGUE_METRICS, type MetricContext } from "../league-metrics";
@@ -16,7 +20,6 @@ import type {
   LeagueRankSet,
   ManagerLeague,
 } from "../types";
-import { LeagueDetailPanel } from "./league-detail-panel";
 import { MetricColumns } from "./metric-column";
 import { Chevron } from "./ui";
 

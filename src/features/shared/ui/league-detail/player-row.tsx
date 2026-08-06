@@ -1,13 +1,13 @@
-import { shortPlayerName, weekCount } from "../format";
-import { PLAYER_METRICS, PLAYER_METRICS_BY_KEY } from "../roster-metrics";
+import { shortPlayerName, weekCount } from "../../format";
+import { PLAYER_METRICS, PLAYER_METRICS_BY_KEY } from "../../roster-metrics";
+import { PositionBadge } from "../position-badge";
+import type { SectionLayout } from "./roster-layout";
 import type {
   LeagueRosterValues,
   PlayerOutlook,
   PlayerSplit,
   PlayerSummary,
-} from "../types";
-import type { SectionLayout } from "./roster-layout";
-import { PositionBadge } from "./ui";
+} from "./types";
 
 /**
  * One roster row and its number cells, laid out on the section's shared grid

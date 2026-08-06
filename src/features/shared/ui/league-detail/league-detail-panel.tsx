@@ -2,29 +2,57 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { adpValueQueryString, todayIso } from "@/features/shared";
-import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 // Both imported directly rather than through their barrels, which would pull
 // `pg`-backed code into the client bundle — see `slots.ts` and `rank.ts`.
 import { orderByProjectedPoints } from "@/shared/manager/rank";
 import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 
-import { useAdpControls } from "../filters-context";
-import { useLeagueDetail } from "../hooks/use-league-detail";
-import { DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS } from "../roster-metrics";
-import { DEFAULT_TEAM_COLUMNS, TEAM_METRICS } from "../standings-metrics";
-import type { LeagueDetailResult } from "../types";
+// The module paths rather than `features/shared`'s own barrel, which this file is
+// inside of: a barrel importing a subtree that imports the barrel is a cycle, and
+// this panel is deliberately absent from it in any case (see `./index.ts`).
+import { adpValueQueryString, todayIso } from "../../adp-controls";
+import { useAdpControls } from "../../adp-controls-context";
+import { DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS } from "../../roster-metrics";
+import { DEFAULT_TEAM_COLUMNS, TEAM_METRICS } from "../../standings-metrics";
+import { useLeagueDetail } from "../../use-league-detail";
+import { usePersistedColumns } from "../../use-persisted-columns";
+import { PanelLoading, PanelMessage } from "../panel-message";
 import { PanelTelemetry } from "./panel-telemetry";
 import { RosterDetail } from "./roster-detail";
 import { Standings } from "./standings";
-import { PanelLoading, PanelMessage } from "./ui";
+import type { LeagueDetailResult } from "./types";
 
 /**
- * The expanded contents of a league card: standings on the left, the selected
- * team's roster on the right. Loads its own data the first time it mounts,
- * which is when its card is expanded.
+ * A league's standings on the left and the selected team's roster on the right.
+ * Loads its own data the first time it mounts, which is when whatever holds it
+ * is opened.
+ *
+ * **It is in `features/shared` because a second tool draws it**, which is the
+ * mover's rule and not a filing preference: the leagues list expands a card into
+ * this panel, and the trades board opens a trade card into the same thing, since
+ * "what does that league look like" is the question a trade raises. What went
+ * with it is what it reads — the two metric catalogues its columns pick from, the
+ * query key and TTL behind `useLeagueDetail`, the four formatters it is written
+ * in, and the two panel states. What did *not* go is anything about a manager:
+ * this panel has never asked whose leagues these are, which is why it ports to a
+ * page that has no account at all.
+ *
+ * It is deliberately absent from `features/shared/index.ts` — see `./index.ts`.
  */
-export function LeagueDetailPanel({ leagueId }: { leagueId: string }) {
+export function LeagueDetailPanel({
+  leagueId,
+  focusRosterId,
+}: {
+  leagueId: string;
+  /**
+   * Which roster the roster half opens on, where the caller has a reason to
+   * prefer one — a trade card knows the rosters that dealt, and landing on a
+   * stranger's bench would answer a question nobody asked. Omitted by the leagues
+   * list, which arrives at a league rather than at a team and opens on the
+   * projected leader; a roster this league doesn't hold falls back to the same.
+   */
+  focusRosterId?: number;
+}) {
   // The same board the collapsed card above is priced on, read from the same
   // store — this panel has no controls of its own, so a selection made in the
   // drawer is the only thing that can move its two value columns, and being
@@ -55,7 +83,7 @@ export function LeagueDetailPanel({ leagueId }: { leagueId: string }) {
           <PanelMessage>No roster data yet.</PanelMessage>
         </PanelState>
       ) : (
-        <Panel data={data} />
+        <Panel data={data} focusRosterId={focusRosterId} />
       )}
     </div>
   );
@@ -66,7 +94,13 @@ function PanelState({ children }: { children: ReactNode }) {
   return <div className="px-3 pb-3 pt-1 @lg:px-5 @lg:pb-5">{children}</div>;
 }
 
-function Panel({ data }: { data: LeagueDetailResult }) {
+function Panel({
+  data,
+  focusRosterId,
+}: {
+  data: LeagueDetailResult;
+  focusRosterId?: number;
+}) {
   // Projected-points order, not standings order — the table's own Proj column
   // is what the rows are ranked on, so the numbers descend down the page and
   // the row's position agrees with the rank chip on the collapsed card. Ties
@@ -85,7 +119,16 @@ function Panel({ data }: { data: LeagueDetailResult }) {
     [data],
   );
 
-  const [selectedId, setSelectedId] = useState<number>(teams[0].roster_id);
+  // Seeded rather than followed: `focusRosterId` says where to *open*, and a
+  // reader who then presses a standings row must not have that press undone the
+  // next time this re-renders. A caller opening the panel at a different team
+  // remounts it (the sheet keys on the pair), which is free — the detail is a
+  // cached query by then.
+  const [selectedId, setSelectedId] = useState<number>(
+    focusRosterId ?? teams[0].roster_id,
+  );
+  // A roster the league doesn't hold — a trade whose participants have since been
+  // replaced — falls back to the head of the list rather than to nothing.
   const selected = teams.find((t) => t.roster_id === selectedId) ?? teams[0];
 
   // Each table's two value columns are slots the reader points at a metric — the

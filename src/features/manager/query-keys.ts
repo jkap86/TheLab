@@ -94,27 +94,14 @@ export const managerQueryKeys = {
     [...managerQueryKeys.adpValues(searched, season), normalizeAdpQuery(board)] as const,
 };
 
-/** `/api/league/[leagueId]` — the expanded card's standings and rosters. */
-export const leagueQueryKeys = {
-  all: ["league"] as const,
-
-  /**
-   * Every board of one league's detail — the prefix, not an entry. It is what
-   * lets {@link leagueQueryKeys.detail}'s consumer tell "a different board of the
-   * league already on screen" from "a different league": the first keeps its rows
-   * while the next answer lands, the second must not.
-   */
-  league: (leagueId: string) => [...leagueQueryKeys.all, leagueId] as const,
-
-  /**
-   * One board of it. The rosters and standings don't depend on the board at all
-   * — only the two value columns do — but they arrive on one payload, so the
-   * board has to reach the key or a narrowed drawer would be served the previous
-   * board's prices.
-   */
-  detail: (leagueId: string, board: string) =>
-    [...leagueQueryKeys.league(leagueId), normalizeAdpQuery(board)] as const,
-};
+// `/api/league/[leagueId]`'s key went to `features/shared/league-query.ts` with
+// the panel that reads it — the trades board opens a trade card into the same
+// standings and rosters, and a key built in a tool that a shared component has to
+// call is a key that tool can no longer own. It was never manager-scoped in the
+// first place (that route answers about a league and asks about no account), so
+// nothing about its shape changed; it is re-exported here for the consumers, this
+// module's tests among them, that already read it from here.
+export { leagueQueryKeys } from "../shared/league-query.ts";
 
 // `/api/kickoff`'s key went to `features/shared/schedule-query.ts` with the
 // header that reads it — the lineup checker wears the same plate, and a key

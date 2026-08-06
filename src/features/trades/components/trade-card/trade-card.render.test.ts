@@ -17,9 +17,10 @@ import {
  * The card without a DOM.
  *
  * `renderToStaticMarkup` answers what a reader *sees* — React runs on the
- * server, so this needs no browser and no dependency — which is the whole of
- * what this component is: it holds no state, no effect and no handler, so there
- * is nothing here a press could reach and nothing an effect owns.
+ * server, so this needs no browser and no dependency — which is very nearly the
+ * whole of what this component is: it holds no state and no effect, and its one
+ * handler (the press that opens the league) is a click on a wrapper, so there is
+ * nothing here that a static render leaves untested but the click itself.
  *
  * What it is for is the half of the card that no type can hold. The material
  * classes, the breakpoints, the two tones and the rules about when a line is
@@ -125,6 +126,10 @@ function card(over: Partial<Parameters<typeof TradeCard>[0]> = {}): string {
       ktc,
       pickKtc,
       pickSlots,
+      // The card's one handler. Nothing here presses it — `renderToStaticMarkup`
+      // has no DOM to press with — so it is a stub, and what these tests are
+      // still about is the markup.
+      onOpenLeague: () => {},
       ...over,
     }),
   );
@@ -166,10 +171,24 @@ describe("the card's material", () => {
 
   test("the nameplate rides the edge, outside the clip that would cut it", () => {
     // `clip-path` clips its whole subtree, so a plate inside the notched face
-    // would be severed at the exact edge it exists to straddle.
+    // would be severed at the exact edge it exists to straddle. The wrapper's
+    // `pt-3` is the overhang it straddles into, so that is what is pinned — not
+    // the rest of that element's class list, which now also carries the press.
     const html = card();
-    assert.match(html, /class="relative pt-3"><div class="lab-nameplate/);
+    assert.match(html, /pt-3"><div class="lab-nameplate/);
     assert.doesNotMatch(html, /lab-slab-face[\s\S]*lab-nameplate/);
+  });
+
+  test("the league's name is the card's one button, and it is inside the heading", () => {
+    // Pressing a card opens that league, and the whole card is the target — but
+    // the *button* is the name, because `role="button"` on the card would take
+    // presentational children and flatten two manager blocks and a dozen asset
+    // lines to one label. A `<button>` takes phrasing content and a heading is
+    // flow, so the button is inside the `h2` rather than around it.
+    const html = card();
+    assert.match(html, /<h2 [^>]*><button type="button"[^>]*>The Lab Dynasty<\/button><\/h2>/);
+    // And exactly one, so nothing else on the card has quietly become pressable.
+    assert.equal(count(html, "<button"), 1);
   });
 
   test("the nameplate carries the accent rail, and it is decoration", () => {

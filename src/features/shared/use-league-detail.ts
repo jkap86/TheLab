@@ -2,24 +2,24 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import type { LeagueDetailPayload } from "@/shared/contract";
 import { errorMessage } from "@/shared/util";
 
-import { fetchJson } from "../query-fns";
-import { STALE_TIMES } from "../query-config";
-import { leagueQueryKeys } from "../query-keys";
-import type { LeagueDetailResult } from "../types";
+import { fetchJson } from "./api";
+import { LEAGUE_DETAIL_STALE_TIME, leagueQueryKeys } from "./league-query";
 
 export type LeagueDetailState = {
-  data: LeagueDetailResult | null;
+  data: LeagueDetailPayload | null;
   loading: boolean;
   error: string | null;
 };
 
 /**
  * A league's standings and rosters, off `/api/league/[leagueId]`. The panel that
- * calls this mounts only when its card is expanded, so a collapsed league still
- * costs no request — and a league expanded, collapsed and expanded again now
- * costs one rather than three, which is the whole reason it is a query.
+ * calls this mounts only when something is opened onto it — a league card
+ * expanded, or a trade card pressed — so a collapsed league still costs no
+ * request, and one opened, closed and opened again now costs one rather than
+ * three, which is the whole reason it is a query.
  *
  * `board` is the ADP drawer's own query string, the same one the collapsed card's
  * team value is priced on: the panel's two value columns read it, so a drawer
@@ -43,12 +43,12 @@ export function useLeagueDetail(
   const detail = useQuery({
     queryKey: leagueQueryKeys.detail(leagueId, board),
     queryFn: ({ signal }) =>
-      fetchJson<LeagueDetailResult>(
+      fetchJson<LeagueDetailPayload>(
         `/api/league/${encodeURIComponent(leagueId)}?${board}`,
         "Failed to load league",
         signal,
       ),
-    staleTime: STALE_TIMES.leagueDetail,
+    staleTime: LEAGUE_DETAIL_STALE_TIME,
     // Compared against the *league* prefix rather than the whole key, since the
     // whole key is what just changed. `keepPreviousData` would have kept the
     // previous league's rosters too, which is the one thing this must not do.

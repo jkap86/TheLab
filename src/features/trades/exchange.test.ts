@@ -5,6 +5,7 @@ import type { Trade, TradeSide } from "@/shared/trades";
 
 import {
   counterpartyRoster,
+  focusRosterFor,
   givenBundle,
   isEmptyBundle,
   receivedBundle,
@@ -128,5 +129,42 @@ describe("givenBundle", () => {
 
     assert.ok(isEmptyBundle(givenBundle(t, t.sides[0])!));
     assert.equal(isEmptyBundle(givenBundle(t, t.sides[1])!), false);
+  });
+});
+
+describe("focusRosterFor", () => {
+  test("prefers the reader's own roster wherever they are in the trade", () => {
+    // The circle filter exists to narrow this board to the reader's leagues, so
+    // "my trade" is the case the page is arranged around — landing on the
+    // counterparty's bench there answers a question nobody asked.
+    const t = trade([side(1), side(2), side(3)]);
+
+    assert.equal(focusRosterFor(t, "user3"), 3);
+    assert.equal(focusRosterFor(t, "user2"), 2);
+  });
+
+  test("falls back to the first side for a stranger's trade", () => {
+    // Sleeper's `roster_ids` order is arbitrary, so this is a tiebreak rather
+    // than a claim — but any participant beats the projected leader, which is
+    // what the panel would otherwise open on.
+    const t = trade([side(4), side(5)]);
+
+    assert.equal(focusRosterFor(t, "user9"), 4);
+    assert.equal(focusRosterFor(t, null), 4);
+  });
+
+  test("a side with no owner is not the reader's, even with no account stored", () => {
+    // An orphan roster carries a null `user_id`, and a null account id must not
+    // match it — that would open on the one side nobody is playing.
+    const t = trade([side(1, { user_id: null }), side(2)]);
+
+    assert.equal(focusRosterFor(t, null), 1); // first side, not "the match"
+    assert.equal(focusRosterFor(t, "user2"), 2);
+  });
+
+  test("a trade with no sides asks for nothing, rather than inventing a roster", () => {
+    // Null lets the panel fall through to its own default; a zero would be a
+    // roster id no league holds.
+    assert.equal(focusRosterFor(trade([]), "user1"), null);
   });
 });

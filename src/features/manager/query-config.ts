@@ -33,8 +33,10 @@ export const STALE_TIMES = {
   ktc: 15 * 60 * 1000,
   /** ADP valuation, per curve — the crawled board behind it moves slowly. */
   adpValue: 15 * 60 * 1000,
-  /** One league's standings and rosters, behind an expanded card. */
-  leagueDetail: 5 * 60 * 1000,
+  // The league detail's TTL left with the panel that reads it, to
+  // `features/shared/league-query.ts`, on the same terms as kickoff's below: the
+  // trades board opens a card into that panel too, so how long its answer is
+  // worth reusing stopped being a fact about *this* area.
   // Kickoff's TTL left with the countdown that reads it, to
   // `features/shared/schedule-query.ts`: this table is "how long the *manager
   // area's* answers are worth reusing", and that instant stopped being one of

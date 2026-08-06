@@ -51,6 +51,17 @@ import type { TradeCardProps } from "./trade-card.types.ts";
  * beside it in this folder — the header, one side's plate, and the asset tracks
  * inside it.
  *
+ * **It opens into the league now, which the note above used to argue against.**
+ * "A trade card is not a row that opens into something" was the reason it wears
+ * `.lab-slab` where its neighbours wear glass, and that reading of the *card*
+ * stands: everything the card has to say is on its face, and none of it is
+ * behind a disclosure. What it opens into is not more of the trade but the
+ * league around it — the standings, the rosters, who else is in there — which is
+ * the question a trade raises and the card cannot answer at any height. So the
+ * material argument is unchanged and the press is a link to somewhere else, not
+ * a chevron. Which is also why it opens a sheet rather than expanding in place:
+ * see `../league-sheet`.
+ *
  * **Memoised, and it is worth being exact about why — the note here used to say
  * "the list re-renders on every scroll frame", which is not what happens.**
  * `@tanstack/react-virtual` only calls back into React when
@@ -79,6 +90,7 @@ export const TradeCard = memo(function TradeCard({
   ktc,
   pickKtc,
   pickSlots,
+  onOpenLeague,
 }: TradeCardProps) {
   const lookups = { players, managers, pickSlots };
   const pricing = {
@@ -97,7 +109,15 @@ export const TradeCard = memo(function TradeCard({
     // The nameplate hangs off the top edge, so it is a sibling of the slab and
     // the overhang is this wrapper's padding — inside the box `TradesList`
     // measures, which a negative margin would not be.
-    <div className="relative pt-3">
+    //
+    // **The whole card is the press target and this wrapper is where that
+    // lives**, with no `role` and no `tabIndex` of its own — the nameplate is
+    // the button, and its keyboard activation bubbles a click to here. See
+    // `TradeNameplate` for why the card cannot be the button itself.
+    <div
+      className="relative cursor-pointer pt-3"
+      onClick={() => onOpenLeague(trade)}
+    >
       <TradeNameplate name={league?.name ?? trade.league_id} />
 
       {/* The wall, and the face standing on it. Both carry the chamfer: a wall

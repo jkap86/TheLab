@@ -82,3 +82,34 @@ export function givenBundle(
   const other = trade.sides.find((s) => s.roster_id === roster);
   return other ? receivedBundle(other) : null;
 }
+
+/**
+ * Which roster the league panel opens on when this card is pressed.
+ *
+ * Pressing a card opens the league's standings and rosters, and the roster half
+ * has to open on *somebody* — the panel's own answer is the projected leader,
+ * which is right when a reader arrives at a league and wrong when they arrive at
+ * a trade. Someone who dealt is the better answer at any rate; whose side to take
+ * is the only thing here worth a rule:
+ *
+ * - **The reader's own roster, where they are in the trade.** The circle filter
+ *   exists to narrow this board to their leagues, so "my trade" is a case the
+ *   page is arranged around, and landing anywhere but their own bench there would
+ *   be answering a question nobody asked.
+ * - **Otherwise the first side.** Sleeper's `roster_ids` order is arbitrary, so
+ *   this is a tiebreak rather than a claim — but any participant beats a stranger,
+ *   and the standings beside the roster is where a reader picks another.
+ *
+ * Null for a trade with no sides at all, which lets the panel fall through to its
+ * own default rather than making this invent one.
+ */
+export function focusRosterFor(
+  trade: Trade,
+  /** The reader's Sleeper id, or null when no account is stored. */
+  userId: string | null,
+): number | null {
+  const own = userId
+    ? trade.sides.find((side) => side.user_id === userId)
+    : undefined;
+  return (own ?? trade.sides[0])?.roster_id ?? null;
+}
