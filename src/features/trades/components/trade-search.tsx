@@ -12,7 +12,7 @@ import type { UserInfo } from "@/shared/contract";
 // imports behind them: the geometry of a side, read once so the control and the
 // card cannot come to different views of it.
 import {
-  SIDE_SEAM_COLUMN,
+  SIDE_SEAM_VERTICAL,
   SIDE_ZONE,
 } from "./trade-card/trade-card.constants";
 
@@ -170,14 +170,25 @@ export function TradeSearch({
   return (
     <div ref={boxRef} className="relative mb-3">
       {/* One part holding two regions, which is the card's own construction and
-          not a resemblance to it: `SIDE_ZONE` and `SIDE_SEAM_COLUMN` come from
-          the card itself, so the control cannot drift from the thing it filters.
-          No gap — what separates two sides is a cut, not the ground showing
-          between two objects — and they stack below `sm` exactly as the card's
-          do, which is what the seam's two spellings are already for.
-          `.lab-plate` rather than the card's `.lab-slab`: this is the page's
-          instrument, not a row in the list. */}
-      <div className="lab-plate relative grid rounded-xl sm:grid-cols-2">
+          not a resemblance to it: `SIDE_ZONE` and the seam come from the card
+          itself, so the control cannot drift from the thing it filters. No gap
+          — what separates two sides is a cut, not the ground showing between two
+          objects. `.lab-plate` rather than the card's `.lab-slab`: this is the
+          page's instrument, not a row in the list.
+
+          **The bays are paired at every width, where a card's sides stack below
+          `sm`.** The two look like one geometry and are not: a card is a
+          *reading* of a trade, so its sides carry full names, positions, teams
+          and a value column, and at 390px a half-width track wraps every one of
+          those to two lines. A bay carries a truncatable token and an invitation
+          to add another, and what it has to say above all else is *which side of
+          the trade this is* — which is a fact about the two being opposed, and
+          the only thing that says it here is that they sit opposed. Stacked, the
+          control read as two unrelated lists with a key between them, and the
+          swap key it is worth pressing had nothing to point at. So the bays
+          narrow rather than stack, and their contents are held to the width they
+          get (see `AssetToken`). */}
+      <div className="lab-plate relative grid grid-cols-2 rounded-xl">
         <SideBay
           index={0}
           filters={filters}
@@ -284,11 +295,15 @@ function SideBay({
     open?.side === index && open.kind === kind;
 
   return (
-    <div className={`${SIDE_ZONE} ${seam ? SIDE_SEAM_COLUMN : ""}`}>
+    <div className={`${SIDE_ZONE} ${seam ? SIDE_SEAM_VERTICAL : ""}`}>
       {/* No parting line under the head, for the card's own reason: with the bay
           no longer a plate, the seam beside it is the only cut this block gets
-          and a second one two lines down would be back to drawing a box. */}
-      <div className="mb-2 flex items-center gap-2">
+          and a second one two lines down would be back to drawing a box.
+
+          A hair tighter than the card's own head below `sm`, where a bay is half
+          a phone: the two gaps around the dismiss key are the cheapest
+          characters of the manager's name to buy back. */}
+      <div className="mb-2 flex items-center gap-1.5 sm:gap-2">
         <button
           type="button"
           onClick={() => onOpen({ side: index, kind: "who" })}
@@ -372,7 +387,17 @@ function SideBay({
   );
 }
 
-/** One asset in a bay, named and dismissable — the subject rail's token. */
+/**
+ * One asset in a bay, named and dismissable — the subject rail's token.
+ *
+ * **`max-w-full` is what lets the bays be half a phone.** The token does not
+ * shrink (a wrapped row of them keeps each at its natural width), so without a
+ * bound against the bay a single long name runs the plate off the side of the
+ * screen — and it is the dismiss key on its trailing edge that goes first, which
+ * is the one part of a token that has to stay reachable. Bounded, the name
+ * truncates instead: `truncate` gives the label an automatic minimum of zero, so
+ * it is the part that gives way rather than the badge or the key around it.
+ */
 function AssetToken({
   label,
   badge = null,
@@ -384,7 +409,7 @@ function AssetToken({
   onRemove: () => void;
 }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-active/30 bg-active/10 py-0.5 pl-1 pr-1 text-[11px] text-foreground/90">
+    <span className="inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-md border border-active/30 bg-active/10 py-0.5 pl-1 pr-1 text-[11px] text-foreground/90">
       {badge}
       <span className="max-w-[9rem] truncate">{label}</span>
       <button
@@ -419,20 +444,15 @@ function SwapKey({ inert, onClick }: { inert: boolean; onClick: () => void }) {
       onClick={onClick}
       title="Swap the sides"
       // Centred on the part, which is where the seam is: the two bays are equal
-      // tracks and each holds a head and a row, so the cut runs through the
-      // middle in both geometries — beside the bays from `sm` up, between them
-      // stacked.
+      // tracks at every width, so the cut runs down the middle and the key sits
+      // on it. It reaches 2px into each bay's content past their own `px-3`,
+      // which is why a token's dismiss key is never under it.
       className="lab-chip lab-chip-sm absolute left-1/2 top-1/2 z-10 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-sm text-active"
     >
-      {/* Two glyphs rather than one rotated, because the bays are side by side
-          from `sm` up and stacked below it — an arrow pair has to point the way
-          the parts actually sit. */}
-      <span aria-hidden="true" className="sm:hidden">
-        ⇅
-      </span>
-      <span aria-hidden="true" className="hidden sm:inline">
-        ⇄
-      </span>
+      {/* One glyph, pointing the way the bays actually sit. It used to be a pair
+          — a vertical arrow below `sm`, where the bays stacked — and the bays do
+          not stack any more. */}
+      <span aria-hidden="true">⇄</span>
       <span className="sr-only">Swap the sides</span>
     </button>
   );

@@ -169,6 +169,20 @@ export const SIDE_SEAM_COLUMN =
   "shadow-[inset_0_1px_0_rgba(0,0,0,0.75),inset_0_2px_0_rgba(255,255,255,0.07)] sm:shadow-[inset_1px_0_0_rgba(0,0,0,0.75),inset_2px_0_0_rgba(255,255,255,0.07)]";
 
 /**
+ * The same cut for a part whose regions are side by side at *every* width — the
+ * search control, whose two bays never stack (a card's do, and the two spellings
+ * above are what that costs).
+ *
+ * It is the `sm:` half of {@link SIDE_SEAM_COLUMN} with the breakpoint taken
+ * off, and it lives here rather than in the control so the seam's own material —
+ * the dark line and its lit far lip — has one definition for every part that
+ * cuts one. Written out whole, because a class assembled from another is a class
+ * Tailwind cannot read.
+ */
+export const SIDE_SEAM_VERTICAL =
+  "shadow-[inset_1px_0_0_rgba(0,0,0,0.75),inset_2px_0_0_rgba(255,255,255,0.07)]";
+
+/**
  * Two tracks side by side from `sm` up and stacked below it, which is the same
  * thing that happens to the sides themselves one level out — and for the same
  * reason. What breaks down at 390px is geometry, not the idea: a track is ~120px
