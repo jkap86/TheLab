@@ -21,7 +21,7 @@
 
 import { isSuperflexLineup } from "../ktc/roster.ts";
 import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../projections/slots.ts";
-import { ADP_FILTER_DEFAULTS } from "./adp-filters.ts";
+import { ADP_FILTER_DEFAULTS, parseAdpFilters } from "./adp-filters.ts";
 import type { AdpFilters, ScoringFormat } from "./adp-filters.ts";
 
 /**
@@ -228,44 +228,177 @@ function scoringBucket(scoring: Record<string, number> | null): ScoringFormat {
 }
 
 /**
- * The ADP board that prices a given league: the crawled drafts most like it.
+ * The axes of an ADP board a *reader* may set, as opposed to the ones a league
+ * answers for itself.
+ *
+ * The split is the whole design of {@link adpBoardFor}, so it is a type rather
+ * than a convention: everything here is a choice about which market to read, and
+ * everything omitted — `scoring`, `superflex` — is a fact about the league being
+ * priced, which the reader must not be able to override. A superflex roster
+ * valued off 1QB drafts is wrong at every position, and the drawer's default for
+ * both is "don't narrow", so accepting them would pool the two boards for every
+ * reader who never touched the control.
+ *
+ * The rest of `AdpFilters` is omitted for a duller reason: the draft types, the
+ * statuses, `min_picks` and the paging are this route's own constants.
+ */
+/**
+ * The two parameter names `/api/user/[username]/adp-value` reads that aren't
+ * part of `/api/adp`'s own vocabulary — spelled once, here, because both ends of
+ * them live in different packages and a query string is invisible to the
+ * compiler. Renaming one and not the other is not a type error, it is a filter
+ * that silently stops applying: the route falls back to the unnarrowed board and
+ * every card goes on answering, just with the wrong number.
+ *
+ * `board_season` is not `season` on purpose. `?season` belongs to
+ * `resolveManagerRequest` on all six routes under that prefix, where it means
+ * *which season's leagues are on screen* and chooses the rosters to price — so a
+ * board reusing the name would swap the card list out from under itself. Two
+ * questions, two names.
+ */
+export const ADP_VALUE_PARAMS = {
+  boardSeason: "board_season",
+  steepness: "steepness",
+} as const;
+
+export type AdpBoardChoices = Pick<
+  AdpFilters,
+  | "seasons"
+  | "start_after"
+  | "start_before"
+  | "best_ball"
+  | "rounds_min"
+  | "rounds_max"
+  | "teams_min"
+  | "teams_max"
+>;
+
+/**
+ * The board a reader has chosen nothing about: this season, whole, every kind of
+ * draft. What {@link adpBoardFor} falls back to when no board is supplied, and
+ * what {@link parseAdpBoardChoices} answers for an empty query string.
+ */
+export function defaultBoardChoices(season: string): AdpBoardChoices {
+  return {
+    seasons: [season],
+    start_after: null,
+    start_before: null,
+    best_ball: null,
+    rounds_min: null,
+    rounds_max: null,
+    teams_min: null,
+    teams_max: null,
+  };
+}
+
+/**
+ * The reader's board off a query string, for the two routes the ADP drawer
+ * prices things on: the collapsed card's team value and the expanded panel's own
+ * two value columns.
+ *
+ * It validates through {@link parseAdpFilters} rather than reading the eight
+ * parameters itself, so `/api/adp` and these two share one definition of what a
+ * board *is* — a second parser is the drift the contract rule exists to stop, and
+ * it would show up as a filter that quietly stops narrowing rather than as a type
+ * error.
+ *
+ * **The season is renamed on the way in**, which is the only awkward part and is
+ * load-bearing. `?season` belongs to `resolveManagerRequest` on every route under
+ * `/api/user/[username]`, where it means *which season's leagues are on screen*
+ * and picks the rosters being priced; a board reusing that name would make moving
+ * the drawer to 2024 swap the card list out from under itself. So the drawer
+ * sends {@link ADP_VALUE_PARAMS.boardSeason} and this maps it back. The league
+ * detail route has no `?season` of its own to collide with, and still reads the
+ * same name — one spelling for one question beats a second that is only
+ * accidentally free.
+ *
+ * `defaultSeason` is what an empty query string resolves to: the page's season
+ * for the batch route, the league's own for the panel. `parseAdpFilters` reads it
+ * only when the caller bounded the board neither by season nor by date, which a
+ * live drawer never does.
+ */
+export function parseAdpBoardChoices(
+  params: URLSearchParams,
+  defaultSeason: string,
+): { ok: true; board: AdpBoardChoices } | { ok: false; error: string } {
+  const boardParams = new URLSearchParams(params);
+  boardParams.delete("season");
+  const boardSeason = boardParams.get(ADP_VALUE_PARAMS.boardSeason);
+  if (boardSeason) boardParams.set("season", boardSeason);
+
+  const parsed = parseAdpFilters(boardParams, defaultSeason);
+  if (!parsed.ok) return parsed;
+
+  const {
+    seasons,
+    start_after,
+    start_before,
+    best_ball,
+    rounds_min,
+    rounds_max,
+    teams_min,
+    teams_max,
+  } = parsed.filters;
+  return {
+    ok: true,
+    board: {
+      seasons,
+      start_after,
+      start_before,
+      best_ball,
+      rounds_min,
+      rounds_max,
+      teams_min,
+      teams_max,
+    },
+  };
+}
+
+/**
+ * The ADP board that prices a given league: the crawled drafts most like it,
+ * inside whatever population the reader asked for.
  *
  * ADP pooled across different games is meaningless (see `adp.ts`), so a roster is
  * valued against drafts that share the axes that move a player's price. Two are
- * matched here: superflex (a quarterback is a first-round asset in one and a
- * bench piece in the other — the same board mistake `rosterKtcValue` guards
- * against) and scoring. The league type is no longer one of the filters, because
- * every ADP read now answers the redraft and dynasty markets side by side — the
- * caller reads the half matching the league (`getLeagueAdpBoards`), so leagues
- * of both types share one fetch. Teams and rounds are left broad on purpose:
- * matching them too would shrink the sample to a handful of drafts and trade a
- * little pick-scale smearing for a lot of noise.
+ * matched here and **only** here, from the league itself: superflex (a
+ * quarterback is a first-round asset in one and a bench piece in the other — the
+ * same board mistake `rosterKtcValue` guards against) and scoring. The league
+ * type is not one of the filters, because every ADP read now answers the redraft
+ * and dynasty markets side by side — the caller reads the half matching the
+ * league (`getLeagueAdpBoards`), so leagues of both types share one fetch.
+ *
+ * Everything else is the reader's, and that is the change worth knowing about.
+ * The window, the kind of draft, the league size and the format used to be
+ * hard-nulled here on the reasoning that matching them *to the league* would
+ * shrink the sample to a handful of drafts and trade a little pick-scale
+ * smearing for a lot of noise. That reasoning still holds and this doesn't
+ * contradict it: a board narrowed by the ADP drawer is narrowed the *same way
+ * for every league*, so the sample it leaves is a population the reader can see
+ * the size of, not one silently cut per card. It is how the drawer's startup-only
+ * default reaches these numbers, which is the point — a panel narrowed to
+ * startups beside cards priced off rookie drafts was two answers to one question.
  */
 export function adpBoardFor({
   season,
   rosterPositions,
   scoringSettings,
+  board,
 }: {
   season: string;
   rosterPositions: readonly string[] | null;
   scoringSettings: Record<string, number> | null;
+  /** The reader's board; omitted where there is no drawer behind the call. */
+  board?: AdpBoardChoices | null;
 }): AdpFilters {
+  const chosen = board ?? defaultBoardChoices(season);
   return {
-    seasons: [season],
-    // The league cards price a *season*, so this board is cut by season and not
-    // by date — the drawer's range narrows the Players-tab board only.
-    start_after: null,
-    start_before: null,
+    ...chosen,
     draft_types: [...ADP_FILTER_DEFAULTS.draft_types],
     draft_statuses: [...ADP_FILTER_DEFAULTS.draft_statuses],
     league_ids: null,
+    // The two the reader may not set — see {@link AdpBoardChoices}.
     scoring: [scoringBucket(scoringSettings)],
-    best_ball: null,
     superflex: isSuperflexLineup(rosterPositions),
-    rounds_min: null,
-    rounds_max: null,
-    teams_min: null,
-    teams_max: null,
     min_picks: ADP_FILTER_DEFAULTS.min_picks,
     limit: ADP_FILTER_DEFAULTS.limit,
     offset: ADP_FILTER_DEFAULTS.offset,
@@ -274,13 +407,26 @@ export function adpBoardFor({
 
 /**
  * A stable key for the board {@link adpBoardFor} produced, so leagues that share
- * one are priced by a single query rather than one apiece. Reads only the axes
- * that function varies — season, scoring and superflex.
+ * one are priced by a single query rather than one apiece.
+ *
+ * It covers every axis the board carries, not only the two that vary *within* a
+ * request. The reader's choices are constant across one call of the route, so
+ * folding them in changes no grouping today — but a signature that named less
+ * than the board it stands for is a collision waiting for the caller that starts
+ * varying one, and the failure would be silent: leagues priced off somebody
+ * else's window with nothing in the payload to say so.
  */
 export function boardSignature(filters: AdpFilters): string {
   return [
-    filters.seasons?.[0] ?? "all",
+    filters.seasons?.join(",") ?? "all",
     filters.scoring?.[0] ?? "any",
     filters.superflex,
+    filters.start_after ?? "",
+    filters.start_before ?? "",
+    filters.best_ball,
+    filters.rounds_min ?? "",
+    filters.rounds_max ?? "",
+    filters.teams_min ?? "",
+    filters.teams_max ?? "",
   ].join("|");
 }

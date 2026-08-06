@@ -1649,9 +1649,11 @@ stops holding, a comment saying it does would not have caught it.
   independent for that reason. Both are now provided from the same place —
   `AdpControlsProvider` sits beside `LeagueFiltersProvider` in the manager layout,
   reset per manager by the same subtree key — because the ADP controls stopped
-  being a Players-tab thing: their board filters drive that tab's per-player ADP
-  *and* their steepness drives the Leagues tab's team value, so a curve chosen on
-  one tab has to survive the trip to the other.
+  being a Players-tab thing: they drive that tab's per-player ADP *and* the
+  Leagues tab's team value, so a board chosen on one tab has to survive the trip
+  to the other. It used to be only the *steepness* that reached the Leagues tab,
+  which was the smaller half of that and left the drawer able to say one thing
+  while the cards under it said another — see `adpValueQueryString`.
 
   **The provider is per *tool*, not per app, and the trades page mounts a second
   one.** That page reads the same board (`app/trades/page.tsx` wraps `TradesHome`
@@ -1760,6 +1762,36 @@ stops holding, a comment saying it does would not have caught it.
   snake/linear/auction chip in that slot, which named how a room picked rather
   than what market it priced, and left the startup-against-rookie cut spelled out
   as `≤5 rds` in a second chip.
+
+  **That chip is the one filter the board *opens* narrowed
+  (`DEFAULT_ADP_ROUNDS`), and "unnarrowed" was the wrong default because the
+  population is two games.** It used to open on "All drafts", on the reasoning
+  that a default should cut nothing and let the reader choose — which reads as
+  neutral and isn't: a dynasty rookie goes in the first round or two of a rookie
+  draft and somewhere in the middle of a startup, so pooling the two averages
+  two markets, and the rookies are the rows it is wrong about, which are the rows
+  a dynasty board is most often opened for. It is the same call `draft_type`
+  already made one rule down — a board is never over auctions — and it stops
+  short of that call for the same reason it stayed a chip: a rookie draft's 1.01
+  *is* a draft position, so the rookie board is one somebody can want, it is just
+  not what the panel opens on. The bucket is `full` (12+ rounds), the one
+  labelled "Startup", so the ambiguous 6–11 round middle the two buckets
+  deliberately leave to `all` stays out of a board named for startups too.
+
+  Two knock-ons, and they pull in opposite directions on purpose. The trigger's
+  `adpNarrowingCount` compares every field to **its default** rather than to
+  "all" — the season already worked that way and this is the precedent it set —
+  or the bars would light for every reader on every page and stop meaning "your
+  board differs from theirs". The drawer's own closed filter row keeps comparing
+  to `"all"` (`narrowingFilters`), so the Startup chip is on it from the start:
+  that row says what the population in front of the reader is cut by, and a
+  startup-only board saying nothing would leave its largest fact about itself
+  unsaid — the chip is also the only way back to every draft. Two questions, two
+  comparisons; collapsing them to one is how either the badge lies or the cut
+  goes unmentioned.
+
+  It reaches the Leagues tab's team value too, which took a second change and is
+  the rule below.
 
   **The pinned block is four rows, and each one it lost was a row reporting that
   nothing was set.** It was six — a header, a labelled season row, a labelled
@@ -3026,6 +3058,59 @@ stops holding, a comment saying it does would not have caught it.
   population, the same lesson as KTC's two boards. So each league is priced
   against the board most like it and leagues sharing a `boardSignature` share one
   query — grouped and fetched once per board, never once per league.
+
+  **Which axes a *reader* may set and which a league answers for itself is the
+  whole design of `adpBoardFor`, so it is a type (`AdpBoardChoices`) and not a
+  convention.** The drawer drives this route now — it used to send only the
+  steepness, which let the panel be narrowed to startup drafts while every card
+  under it went on being priced off every draft crawled, two answers to one
+  question a few pixels apart. What crosses is the *population*: the season, the
+  window, the kind of draft, the league size and the format, all of which
+  `adpBoardFor` previously hard-nulled. What does **not** cross is `scoring` and
+  `superflex`, and the reason is not tidiness — the drawer's default for both is
+  "all", so honouring them would *widen* every league's board back into one pool
+  and misprice a superflex roster at every position, not just at quarterback. The
+  arrow between a league and those two runs the other way; that is what
+  `seedFromLeague` is.
+
+  **The expanded panel reads the same board, and that is the point rather than a
+  tidy-up.** `/api/league/[leagueId]` used to call `adpBoardFor` with no choices
+  and read `DEFAULT_STEEPNESS`, on the honest grounds that the panel offers no
+  controls of its own — true, and beside the point once the drawer started
+  driving the card: a rookie's ADP in the roster list would read off a pool of
+  rookie drafts while the card that opened it was priced off startups. **A panel
+  driven by a selection has to be driven by the *same* selection**, which is the
+  roster panel's own rule about not restating the selection, run one level up.
+  So both routes take one query string (`adpValueQueryString`) through one parser
+  (`parseAdpBoardChoices`), and the panel reads the drawer's curve too — its pool
+  is still the league's own, since two leagues on one board are priced on their
+  own size.
+
+  Three details in the plumbing. The season travels as **`board_season`**,
+  because `?season` belongs to `resolveManagerRequest` on all six routes under
+  that prefix, where it means *which season's leagues are on screen* and picks
+  the rosters to price — sharing the name would have made moving the drawer to
+  2024 swap the card list out from under itself. `/api/league/[leagueId]` reads
+  no `?season` at all and *still* uses that name: one spelling for one question
+  beats a second that is only accidentally free. Both map it back and validate
+  through `parseAdpFilters`, so there is exactly one parser for these parameters
+  rather than a second spelling to drift. And `boardSignature` names **every**
+  axis the board carries, not only the two that vary within a request: the
+  reader's choices are constant across one call, so this changes no grouping
+  today, but a signature standing for less than its board is a silent collision
+  the moment a caller varies one — leagues priced off somebody else's window with
+  nothing in the payload to say so.
+
+  **`useLeagueDetail` clears on a new league and holds through a new board, and
+  that is one rule rather than two exceptions.** It is the one read on these
+  pages whose previous answer can be *about something else*, which is why it
+  never took `keepPreviousData`: a new league id must show nothing rather than
+  leave the last league's rosters on screen under the new name. A new board of
+  the same league is the opposite case — the rows are right and two columns are
+  about to move — so blanking several hundred of them is the flash every other
+  hook here refuses. The placeholder is therefore kept only when the previous
+  key names this same league, which is what `leagueQueryKeys.league` is: a
+  prefix to compare against, since the whole key is what just changed.
 - **A list of managers is labelled by username, a team by team name.** `ui.tsx`
   has both — `managerLabel` (display_name → team_name → roster number) and
   `teamLabel` (the reverse) — and the column heading says which one it is.

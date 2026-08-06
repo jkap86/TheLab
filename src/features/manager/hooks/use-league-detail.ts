@@ -21,22 +21,44 @@ export type LeagueDetailState = {
  * costs no request — and a league expanded, collapsed and expanded again now
  * costs one rather than three, which is the whole reason it is a query.
  *
- * It is the one read here that **does** clear on change, and deliberately: the
- * key is the league id, with no `keepPreviousData` behind it, so a new id shows
- * nothing rather than leaving the last league's rosters on screen under the new
- * name. Everything else on these pages keeps its previous answer; this is the
- * case where the previous answer is about something else.
+ * `board` is the ADP drawer's own query string, the same one the collapsed card's
+ * team value is priced on: the panel's two value columns read it, so a drawer
+ * narrowed to startup drafts narrows the number in the row as well as the number
+ * on the card. The rosters themselves don't depend on it, but they arrive on one
+ * payload, so it is part of the key.
+ *
+ * **It clears on a new league and holds through a new board**, which is one rule
+ * rather than two exceptions. This is the read whose previous answer can be about
+ * something else: a new id must show nothing rather than leave the last league's
+ * rosters on screen under the new name. A new *board* of the same league is the
+ * opposite case — the rows are right, two columns are about to move — and
+ * blanking several hundred of them to redraw them nearly unchanged is the flash
+ * every other hook here refuses. So the placeholder is kept only when the
+ * previous key names this same league.
  */
-export function useLeagueDetail(leagueId: string): LeagueDetailState {
+export function useLeagueDetail(
+  leagueId: string,
+  board: string,
+): LeagueDetailState {
   const detail = useQuery({
-    queryKey: leagueQueryKeys.detail(leagueId),
+    queryKey: leagueQueryKeys.detail(leagueId, board),
     queryFn: ({ signal }) =>
       fetchJson<LeagueDetailResult>(
-        `/api/league/${encodeURIComponent(leagueId)}`,
+        `/api/league/${encodeURIComponent(leagueId)}?${board}`,
         "Failed to load league",
         signal,
       ),
     staleTime: STALE_TIMES.leagueDetail,
+    // Compared against the *league* prefix rather than the whole key, since the
+    // whole key is what just changed. `keepPreviousData` would have kept the
+    // previous league's rosters too, which is the one thing this must not do.
+    placeholderData: (previous, previousQuery) => {
+      const prefix = leagueQueryKeys.league(leagueId);
+      const key = previousQuery?.queryKey;
+      const sameLeague =
+        Array.isArray(key) && prefix.every((segment, i) => key[i] === segment);
+      return sameLeague ? previous : undefined;
+    },
   });
 
   return {

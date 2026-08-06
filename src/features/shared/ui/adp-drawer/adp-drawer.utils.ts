@@ -101,7 +101,18 @@ export function leagueSizeFilter(
   };
 }
 
-/** The filters actually cutting the population — what the closed row shows. */
+/**
+ * The filters actually cutting the population — what the closed row shows.
+ *
+ * Against `"all"`, deliberately, where {@link adpNarrowingCount} compares each
+ * field to its *default*: the two answer different questions. That count tells a
+ * reader whether their board differs from the one everybody else opens, so a
+ * default cannot count; this row says what the board in front of them is cut by,
+ * and the rounds default cuts it hard — a startup-only board with nothing on the
+ * row would be the panel's largest fact about its own population left unsaid.
+ * The chip is also the way back to every draft, which a filter hidden for
+ * reading "not narrowing" would not be.
+ */
 export function narrowingFilters(
   filters: readonly FilterSpec[],
   controls: AdpControls,

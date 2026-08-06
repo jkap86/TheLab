@@ -48,12 +48,14 @@ describe("the filter table", () => {
   test("every fixed filter reads and writes its own field", () => {
     const written = FIXED_FILTERS.map((f) => f.set(controls, f.options[1].value));
     // Each write lands on exactly one field, and reads back through the same
-    // accessor — the whole point of `get`/`set` over a computed key.
+    // accessor — the whole point of `get`/`set` over a computed key. The others
+    // are checked against the *starting* controls rather than against "all",
+    // since `rounds` opens on the startup bucket.
     for (const [i, next] of written.entries()) {
       const spec = FIXED_FILTERS[i];
       assert.equal(spec.get(next), spec.options[1].value);
       const untouched = FIXED_FILTERS.filter((f) => f.key !== spec.key);
-      for (const other of untouched) assert.equal(other.get(next), "all");
+      for (const other of untouched) assert.equal(other.get(next), other.get(controls));
     }
   });
 
@@ -102,13 +104,21 @@ describe("the filter table", () => {
     ]);
   });
 
-  test("narrowing is everything that isn't 'all'", () => {
+  test("narrowing is everything that isn't 'all', the rounds default included", () => {
+    // Against "all" rather than against each field's default, which is where
+    // this parts company with `adpNarrowingCount`: the board opens on startups,
+    // so that chip is on the closed row from the start — it is the largest fact
+    // about the population, and the only way back to every draft.
     const filters = [...FIXED_FILTERS, leagueSizeFilter([league("a", 12)])];
-    assert.deepEqual(narrowingFilters(filters, controls), []);
+    assert.deepEqual(
+      narrowingFilters(filters, controls).map((f) => f.key),
+      ["rounds"],
+    );
+    assert.deepEqual(narrowingFilters(filters, { ...controls, rounds: "all" }), []);
     const narrowed = { ...controls, scoring: "ppr" as const, teams: "12" };
     assert.deepEqual(
       narrowingFilters(filters, narrowed).map((f) => f.key),
-      ["scoring", "teams"],
+      ["rounds", "scoring", "teams"],
     );
   });
 });

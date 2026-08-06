@@ -4,6 +4,7 @@ import type { ManagerAdpValuePayload } from "@/shared/contract";
 import { databaseBudget } from "@/shared/db";
 import { isSuperflexLineup } from "@/shared/ktc";
 import {
+  ADP_VALUE_PARAMS,
   adpBoardFor,
   adpValue,
   boardSignature,
@@ -11,11 +12,12 @@ import {
   getLeagueAdpBoards,
   getManagerLeagueRosters,
   leagueAdpPool,
+  parseAdpBoardChoices,
   parseSteepness,
   rankOf,
   rosterAdpValue,
 } from "@/shared/manager";
-import type { AdpFilters } from "@/shared/manager";
+import type { AdpBoardChoices, AdpFilters } from "@/shared/manager";
 import { getOptimalLineups } from "@/shared/projections";
 import { collectWithConcurrency, errorMessage } from "@/shared/util";
 
@@ -42,6 +44,13 @@ export const dynamic = "force-dynamic";
  * reading the side matching its own type. Leagues that share a fetch share a
  * single query: the boards are grouped by {@link boardSignature} and fetched
  * once each, not once per league.
+ *
+ * The population *inside* that match is the reader's, sent by the ADP drawer —
+ * the window, the kind of draft, the league size and the format. See
+ * {@link AdpBoardChoices} for why those cross the wire and `scoring`/`superflex`
+ * deliberately don't, and {@link parseAdpBoardChoices} for why the season arrives
+ * under a name of its own. The expanded panel this card opens prices its own two
+ * value columns off the same board, through the same parser.
  */
 export async function GET(
   request: Request,
@@ -54,10 +63,18 @@ export async function GET(
   // The steepness of the value curve, chosen on the ADP drawer's slider and sent
   // as a number of halvings; junk falls back to the default and an out-of-range
   // value clamps rather than being trusted.
-  const halvings = parseSteepness(searchParams.get("steepness"));
+  const halvings = parseSteepness(searchParams.get(ADP_VALUE_PARAMS.steepness));
+
+  // Rejected rather than clamped, unlike the steepness beside it: an
+  // out-of-range curve is a caller asking for more of something real, where an
+  // unparseable date has no nearest sane value to fall back to. The same answer
+  // `/api/adp` gives the same vocabulary, and this string is one the client
+  // builds from its own controls — a 400 here is a bug on this side of the wire.
+  const board = parseAdpBoardChoices(searchParams, season);
+  if (!board.ok) return NextResponse.json({ error: board.error }, { status: 400 });
 
   try {
-    return await adpValuePayload(username, userId, season, halvings);
+    return await adpValuePayload(username, userId, season, halvings, board.board);
   } catch (error) {
     console.error("[adp-value] query failed:", error);
     return readFailureResponse(error, "Failed to load ADP values");
@@ -69,6 +86,7 @@ async function adpValuePayload(
   userId: string,
   season: string,
   halvings: number,
+  chosenBoard: AdpBoardChoices,
 ) {
   const leagues = await getManagerLeagueRosters(userId, season);
   const withOwn = leagues.filter((league) =>
@@ -94,17 +112,18 @@ async function adpValuePayload(
       season,
       rosterPositions: league.roster_positions,
       scoringSettings: league.scoring_settings,
+      board: chosenBoard,
     });
     const signature = boardSignature(filters);
     leagueBoard.set(league.league_id, signature);
 
-    let board = boards.get(signature);
-    if (!board) {
-      board = { filters, playerIds: new Set() };
-      boards.set(signature, board);
+    let grouped = boards.get(signature);
+    if (!grouped) {
+      grouped = { filters, playerIds: new Set() };
+      boards.set(signature, grouped);
     }
     for (const team of league.teams) {
-      for (const id of team.players) if (id) board.playerIds.add(id);
+      for (const id of team.players) if (id) grouped.playerIds.add(id);
     }
   }
 

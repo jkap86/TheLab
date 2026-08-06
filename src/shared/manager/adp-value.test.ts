@@ -6,9 +6,12 @@ import {
   DEFAULT_STEEPNESS,
   STEEPNESS_RANGE,
   TYPICAL_STARTING_SLOTS,
+  ADP_VALUE_PARAMS,
   adpBoardFor,
   adpValue,
   boardSignature,
+  defaultBoardChoices,
+  parseAdpBoardChoices,
   leagueAdpPool,
   parseSteepness,
   rosterAdpValue,
@@ -277,5 +280,175 @@ describe("adpBoardFor", () => {
     });
     assert.equal(boardSignature(a), boardSignature(b));
     assert.notEqual(boardSignature(a), boardSignature(c));
+  });
+
+  test("with no board supplied it is this season, whole — the old behaviour", () => {
+    // The league detail route has no drawer behind it, so the fallback has to be
+    // the board this function produced before a reader could narrow one.
+    const board = adpBoardFor({
+      season: "2025",
+      rosterPositions: ["QB", "RB", "WR"],
+      scoringSettings: null,
+    });
+    assert.deepEqual(board.seasons, ["2025"]);
+    for (const bound of [
+      board.start_after,
+      board.start_before,
+      board.best_ball,
+      board.rounds_min,
+      board.rounds_max,
+      board.teams_min,
+      board.teams_max,
+    ]) {
+      assert.equal(bound, null);
+    }
+  });
+
+  test("the reader's choices narrow the population the league is matched inside", () => {
+    // What the ADP drawer sends: the window, the kind of draft, the size and the
+    // format. Without this the panel could be narrowed to startup drafts while
+    // every card went on being priced off every draft crawled.
+    const board = adpBoardFor({
+      season: "2025",
+      rosterPositions: ["QB", "RB", "WR"],
+      scoringSettings: { rec: 1 },
+      board: {
+        ...defaultBoardChoices("2026"),
+        start_after: "2026-06-01",
+        rounds_min: 12,
+        teams_min: 12,
+        teams_max: 12,
+        best_ball: false,
+      },
+    });
+    assert.deepEqual(board.seasons, ["2026"]);
+    assert.equal(board.start_after, "2026-06-01");
+    assert.equal(board.rounds_min, 12);
+    assert.deepEqual([board.teams_min, board.teams_max], [12, 12]);
+    assert.equal(board.best_ball, false);
+  });
+
+  test("a reader cannot reach the two axes the league answers for itself", () => {
+    // Scoring and superflex are facts about the league being priced, not choices
+    // about a market: a superflex roster valued off 1QB drafts is wrong at every
+    // position. The type makes that unrepresentable; this pins that the fields
+    // survive a board that carries every axis a reader *may* set.
+    const board = adpBoardFor({
+      season: "2025",
+      rosterPositions: ["QB", "SUPER_FLEX", "RB"],
+      scoringSettings: { rec: 1 },
+      board: {
+        ...defaultBoardChoices("2025"),
+        rounds_min: 12,
+        best_ball: true,
+      },
+    });
+    assert.equal(board.superflex, true);
+    assert.deepEqual(board.scoring, ["ppr"]);
+  });
+
+  test("an empty query string is the board this route always used", () => {
+    // What both routes answer for a caller that sends nothing: the season they
+    // supply, whole. A change that made the no-board case narrow anything would
+    // move numbers for readers who never opened the drawer.
+    const parsed = parseAdpBoardChoices(new URLSearchParams(), "2025");
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.board, defaultBoardChoices("2025"));
+  });
+
+  test("the season arrives as `board_season`, and plain `season` is ignored", () => {
+    // `?season` belongs to `resolveManagerRequest` on the batch route, where it
+    // picks which leagues' rosters are being priced — so a board that read it
+    // would swap the card list out from under itself. The two names are two
+    // questions, and this is the whole of that separation.
+    const parsed = parseAdpBoardChoices(
+      new URLSearchParams({ season: "2024", [ADP_VALUE_PARAMS.boardSeason]: "2026" }),
+      "2025",
+    );
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.board.seasons, ["2026"]);
+
+    // A `?season` with no board season beside it narrows nothing: the caller's
+    // default stands, which is the page's own season on one route and the
+    // league's on the other.
+    const pageOnly = parseAdpBoardChoices(new URLSearchParams({ season: "2024" }), "2025");
+    assert.ok(pageOnly.ok);
+    assert.deepEqual(pageOnly.board.seasons, ["2025"]);
+  });
+
+  test("it reads the whole board vocabulary, through the one parser", () => {
+    const parsed = parseAdpBoardChoices(
+      new URLSearchParams({
+        [ADP_VALUE_PARAMS.boardSeason]: "2026",
+        start_after: "2026-06-01",
+        start_before: "2026-07-31",
+        rounds_min: "12",
+        teams_min: "12",
+        teams_max: "12",
+        best_ball: "0",
+      }),
+      "2025",
+    );
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.board, {
+      seasons: ["2026"],
+      start_after: "2026-06-01",
+      start_before: "2026-07-31",
+      best_ball: false,
+      rounds_min: 12,
+      rounds_max: null,
+      teams_min: 12,
+      teams_max: 12,
+    });
+  });
+
+  test("an all-seasons board is `null` seasons, not the default", () => {
+    const parsed = parseAdpBoardChoices(
+      new URLSearchParams({ [ADP_VALUE_PARAMS.boardSeason]: "all" }),
+      "2025",
+    );
+    assert.ok(parsed.ok);
+    assert.equal(parsed.board.seasons, null);
+  });
+
+  test("a malformed bound is refused, never quietly dropped", () => {
+    // The failure that matters is the silent one: a board that ignored a bad
+    // date would answer with a wider population than the reader asked for and
+    // nothing on screen would say so.
+    const bounds: Record<string, string>[] = [
+      { start_after: "2026-02-31" },
+      { start_after: "2026-07-01", start_before: "2026-06-01" },
+      { rounds_min: "2.5" },
+    ];
+    for (const bad of bounds) {
+      const parsed = parseAdpBoardChoices(
+        new URLSearchParams({ [ADP_VALUE_PARAMS.boardSeason]: "2026", ...bad }),
+        "2025",
+      );
+      assert.equal(parsed.ok, false);
+    }
+  });
+
+  test("the signature names every axis of the board, not only the varying two", () => {
+    // The reader's choices are constant across one request, so this changes no
+    // grouping today — but a signature naming less than the board it stands for
+    // is a silent collision the moment a caller varies one, and the symptom
+    // would be leagues priced off somebody else's window with nothing to say so.
+    const of = (over: Partial<Parameters<typeof adpBoardFor>[0]["board"] & object>) =>
+      boardSignature(
+        adpBoardFor({
+          season: "2025",
+          rosterPositions: ["QB", "RB", "WR"],
+          scoringSettings: { rec: 1 },
+          board: { ...defaultBoardChoices("2025"), ...over },
+        }),
+      );
+    const plain = of({});
+    assert.notEqual(plain, of({ rounds_min: 12 }));
+    assert.notEqual(plain, of({ start_after: "2026-06-01" }));
+    assert.notEqual(plain, of({ teams_min: 12, teams_max: 12 }));
+    assert.notEqual(plain, of({ best_ball: true }));
+    // …and equal boards still share one query, which is what it is for.
+    assert.equal(of({ rounds_min: 12 }), of({ rounds_min: 12 }));
   });
 });

@@ -1,6 +1,7 @@
 import { isSuperflexLineup } from "../../shared/ktc/roster.ts";
 import {
   ADP_PEAK,
+  ADP_VALUE_PARAMS,
   DEFAULT_STEEPNESS,
   STEEPNESS_RANGE,
   TYPICAL_STARTING_SLOTS,
@@ -94,6 +95,8 @@ export type AdpControls = {
    * full ones rather than average across them. It is offered under those names
    * rather than as a round count, because the round count is the evidence and
    * the kind of draft is the question.
+   *
+   * It opens on `"full"` rather than `"all"` — see {@link DEFAULT_ADP_ROUNDS}.
    */
   rounds: "all" | "rookie" | "full";
   /**
@@ -374,8 +377,34 @@ const ROUNDS_BOUNDS: Record<"rookie" | "full", { min?: number; max?: number }> =
 };
 
 /**
- * The starting board: one season of drafts, whole, both meaningful draft types
- * (snake + linear), no league narrowing, both league-type boards on display.
+ * The kind of draft the board opens on: startups, not rookie drafts.
+ *
+ * It used to be `"all"`, on the reasoning that a default should narrow nothing
+ * and let the reader cut where they want. That reads as neutral and isn't: in a
+ * dynasty league every rookie is taken in the first round or two of a rookie
+ * draft and somewhere in the middle of a startup, so pooling the two doesn't
+ * average one market — it averages two, and the *rookies* are the rows it is
+ * wrong about, which are the rows a dynasty board is most often opened for. An
+ * unnarrowed board is only neutral where the population is one game.
+ *
+ * That makes this the same call `draft_type` already made one rule down: a board
+ * is never over auctions, because nomination order is not a draft position. A
+ * rookie draft's pick 1.01 is a real draft position, so this stays a *control*
+ * rather than becoming a constant — the rookie board is a board someone can want
+ * — but it is not what the panel opens on.
+ *
+ * `full` is the bucket labelled "Startup (12+ rds)" rather than a plain "not
+ * rookie", so the 6–11 round drafts the two buckets deliberately leave to `all`
+ * stay out of this one too: a board named for startups should hold drafts that
+ * are recognisably startups, and the ambiguous middle is what "All drafts" is
+ * for.
+ */
+export const DEFAULT_ADP_ROUNDS: AdpControls["rounds"] = "full";
+
+/**
+ * The starting board: one season of startup drafts, whole, both meaningful draft
+ * types (snake + linear), no league narrowing, both league-type boards on
+ * display.
  *
  * The season is an argument again. It was dropped when the range replaced it,
  * on the grounds that a date range needs no season and the shared store could
@@ -394,7 +423,7 @@ export function defaultAdpControls(season: string): AdpControls {
     superflex: "all",
     bestBall: "all",
     teams: "all",
-    rounds: "all",
+    rounds: DEFAULT_ADP_ROUNDS,
     steepness: DEFAULT_ADP_STEEPNESS,
   };
 }
@@ -495,6 +524,13 @@ export function boardLabel(range: AdpRange, season: string): string {
  * a boolean because the caller can spell it either way, and because it is the
  * same shape `activeFilterCount` hands the league filters' own trigger.
  *
+ * Every field is compared against **the default**, never against "unnarrowed" —
+ * which is the same thing for five of them and not for `rounds`, whose default is
+ * startups rather than every draft ({@link DEFAULT_ADP_ROUNDS}). A board nobody
+ * has touched must count zero, or the bars light for every reader on every page
+ * and stop meaning "yours differs from theirs"; the season has always been read
+ * this way, which is the precedent.
+ *
  * Two judgement calls in what it counts. The **season** counts, though it is the
  * board's population rather than one of its filters: a reader looking at 2024
  * against a default of 2026 is reading a different market, which is a larger
@@ -516,7 +552,7 @@ export function adpNarrowingCount(
     controls.superflex !== "all",
     controls.bestBall !== "all",
     controls.teams !== "all",
-    controls.rounds !== "all",
+    controls.rounds !== DEFAULT_ADP_ROUNDS,
   ];
   return narrowing.filter(Boolean).length;
 }
@@ -626,6 +662,63 @@ export function adpQueryString(controls: AdpControls, today: string): string {
   if (controls.superflex !== "all") {
     params.set("superflex", controls.superflex === "yes" ? "1" : "0");
   }
+  if (controls.bestBall !== "all") {
+    params.set("best_ball", controls.bestBall === "yes" ? "1" : "0");
+  }
+  if (controls.teams !== "all") {
+    params.set("teams_min", controls.teams);
+    params.set("teams_max", controls.teams);
+  }
+  if (controls.rounds !== "all") {
+    const { min, max } = ROUNDS_BOUNDS[controls.rounds];
+    if (min !== undefined) params.set("rounds_min", String(min));
+    if (max !== undefined) params.set("rounds_max", String(max));
+  }
+
+  return params.toString();
+}
+
+/**
+ * The `/api/user/[username]/adp-value` query string: the same board, minus the
+ * axes that are facts about a league rather than choices about a market.
+ *
+ * The Leagues tab's team value used to take only the steepness off this drawer,
+ * so the panel could be narrowed to startup drafts while every card went on
+ * being priced off every draft crawled. It reads the whole board now — but not
+ * by sending {@link adpQueryString}, because two of those parameters must not
+ * cross:
+ *
+ *   - **`scoring` and `superflex` stay per league**, resolved server-side by
+ *     `adpBoardFor` from the league's own settings. A superflex roster priced
+ *     off 1QB drafts is wrong at *every* position, not just at quarterback (the
+ *     lesson KTC's two boards already taught), and the drawer's default for both
+ *     is `"all"` — so honouring them would mean pooling superflex and 1QB drafts
+ *     for every reader who never opens the drawer. The arrow between a league
+ *     and these two runs the other way, which is what {@link seedFromLeague} is.
+ *   - **The season travels as `board_season`**, not `season`. Every route under
+ *     `/api/user/[username]` reads `?season` as *which season's leagues are on
+ *     screen* — it picks the rosters to price and the weeks to project — so the
+ *     board reusing that name would mean moving the drawer to 2024 silently
+ *     swapped the card list's rosters out from under it. Two questions, two
+ *     names; the route maps one back onto the ADP vocabulary so there is still
+ *     only one parser. The name itself comes from `ADP_VALUE_PARAMS`, since a
+ *     query string is invisible to the compiler and a rename on one side alone
+ *     would leave the board quietly unapplied rather than failing.
+ *
+ * Everything left is the population the reader chose, and `adpBoardFor` left all
+ * of it broad: the window, the kind of draft, the league size and the format.
+ * `draft_type`, `min_picks` and the statuses aren't sent because they are the
+ * route's own constants, the same ones `adpQueryString` spells as literals.
+ */
+export function adpValueQueryString(controls: AdpControls, today: string): string {
+  const params = new URLSearchParams();
+  params.set(ADP_VALUE_PARAMS.steepness, String(controls.steepness));
+  params.set(ADP_VALUE_PARAMS.boardSeason, controls.season);
+
+  const { from, to } = rangeBounds(controls.range, today);
+  if (from) params.set("start_after", from);
+  if (to) params.set("start_before", to);
+
   if (controls.bestBall !== "all") {
     params.set("best_ball", controls.bestBall === "yes" ? "1" : "0");
   }

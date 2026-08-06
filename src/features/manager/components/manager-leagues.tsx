@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import { adpValueQueryString, todayIso } from "@/features/shared";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { useAdpControls } from "../filters-context";
@@ -49,11 +50,15 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   const leagues = view.data?.leagues ?? null;
   const ranks = useManagerRanks(searched, leagues);
   const ktc = useManagerKtc(searched, leagues);
-  // Only the steepness of the shared ADP drawer drives the team value; the board
-  // filters beside it belong to the Players-tab per-player ADP, and the drawer's
-  // date range with them — each league here is priced on its own season's board.
+  // The whole shared ADP drawer drives the team value, not just its curve: the
+  // window, the kind of draft, the league size and the format all narrow the
+  // population these cards are priced against, so a panel showing startup ADP
+  // and a column priced off every draft crawled can't be two answers to one
+  // question any more. Scoring and superflex are the exception and stay behind
+  // on the server, matched per league — see `adpValueQueryString`.
   const { controls } = useAdpControls();
-  const adp = useManagerAdpValue(searched, leagues, controls.steepness);
+  const adpBoard = useMemo(() => adpValueQueryString(controls, todayIso()), [controls]);
+  const adp = useManagerAdpValue(searched, leagues, adpBoard);
 
   // Which metric each of the four stat columns shows, shared by every card so the
   // columns line up down the list — a change on any card's picker moves them all.
