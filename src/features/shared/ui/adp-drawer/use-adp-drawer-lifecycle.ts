@@ -5,11 +5,11 @@ import { type RefObject, useEffect, useRef, useState } from "react";
 import { ADP_DRAWER_EXIT_MS } from "./adp-drawer.constants.ts";
 import {
   TABBABLE_SELECTOR,
-  cancelFocusRestore,
   deferFocusRestore,
   drawerKeydownHandler,
   lockScroll,
   releaseFocusRestore,
+  resumeFocusRestore,
   tabbableStops,
 } from "./adp-drawer.focus.ts";
 import type { AdpDrawerPanel } from "./adp-drawer.types.ts";
@@ -135,8 +135,11 @@ export function useAdpDrawerLifecycle({
   // before it may be paid. Restoring on `open` alone put the reader on the page
   // behind while a panel still carrying `role="dialog"` and `aria-modal="true"`
   // was mid-slide and fully visible — background focus under a live modal, which
-  // is the one state the trap exists to make impossible. The three moves between
-  // the slots are `adp-drawer.focus`'s, and tested there.
+  // is the one state the trap exists to make impossible. Between them the
+  // trigger survives any number of interrupted exits — the reopen takes it back
+  // out of `pendingRestore` rather than discarding it, since by then focus is
+  // inside the drawer and there is nothing better to capture. The three moves
+  // between the slots are `adp-drawer.focus`'s, and tested there.
   const opener = useRef<HTMLElement | null>(null);
   const pendingRestore = useRef<HTMLElement | null>(null);
 
@@ -153,13 +156,23 @@ export function useAdpDrawerLifecycle({
   useEffect(() => {
     if (!open) return;
 
-    opener.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    // Opening cancels a handback still owed from the last close, which is the
-    // reopen-during-exit case: the reader is inside the dialog again — the focus
-    // move below sees to that — so sending them to the old trigger a beat later
-    // is exactly the background flash the two slots exist to prevent.
-    cancelFocusRestore(pendingRestore);
+    // **A handback still owed is asked about first, and answering it is what
+    // decides whether the active element is captured at all.** A pending target
+    // means this is a reopen during the exit: the drawer is on screen, so the
+    // reader is inside the *closing* dialog and `document.activeElement` is one
+    // of its own chips or keys — an element that unmounts with the drawer.
+    // Capturing it would overwrite the trigger that actually opened the drawer
+    // with a node the eventual handback can only refuse for being disconnected,
+    // leaving the reader on `<body>`. So the pending target is promoted back to
+    // the opener instead, and it stays the restoration target however many exits
+    // are interrupted. Nothing is focused here either way — the reader is inside
+    // the dialog again, which is the background flash the slots exist to prevent.
+    if (!resumeFocusRestore(opener, pendingRestore)) {
+      // Nothing was owed, so the drawer is opening fresh from a fully closed
+      // state and whatever holds focus really is the trigger that opened it.
+      opener.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
 
     // Every dependency is a thunk, so the stops are re-read per press: opening
     // the filter tray or the lookback panel adds controls the reader must be
