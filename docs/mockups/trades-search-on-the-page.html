@@ -1,0 +1,1618 @@
+<title>Trades search — four ways onto the page</title>
+
+<style>
+  /* ------------------------------------------------------------------
+     Fourth in the series, so the palette, the faces and the section
+     grammar are lifted from `shares-keys-in-the-rail.html` — which took
+     them from src/app/globals.css. A mock that looked like a different
+     product from the three before it would be arguing about the wrong
+     thing.
+
+     What is new here is the trades board's own parts: the recessed
+     trough the filter ledge is seated in, the machined trade card, and
+     the four seatings a search field can take on that row.
+     ------------------------------------------------------------------ */
+  :root {
+    color-scheme: dark;
+
+    --bench: #050b12;
+    --app-bg: rgb(10, 20, 30);
+
+    --well: #07131e;
+    --slot: #040e17;
+
+    --active: #00ffe5;
+    --active-deep: #00b0a0;
+    --on-active: #052029;
+    --edge: #05121d;
+    --edge-active: #00776b;
+
+    --fg: #ffffff;
+    --amber: #fbbf24;
+
+    --measure: 66ch;
+
+    --display: "Orbitron", "Eurostile", "Bahnschrift", ui-sans-serif, system-ui, sans-serif;
+    --body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  }
+
+  /* Inlined rather than linked: the artifact CSP blocks font CDNs, and a
+     silent fallback here would lose the one face that makes the app the
+     app. Variable weight axis, subset latin. */
+  @font-face {
+    font-family: "Orbitron";
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: block;
+    src: url(data:font/woff2;base64,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) format("woff2");
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 620px at 12% -8%, rgba(0, 255, 229, 0.07), transparent 62%),
+      radial-gradient(900px 520px at 92% 4%, rgba(0, 120, 190, 0.09), transparent 60%),
+      var(--bench);
+    color: var(--fg);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------------------------------------------------------- shell */
+  .wrap { max-width: 1380px; margin: 0 auto; padding: 0 20px 96px; }
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    margin-bottom: 40px;
+    background: linear-gradient(180deg, rgba(14, 32, 45, 0.92), rgba(6, 16, 24, 0.92));
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 255, 229, 0.16);
+    box-shadow: 0 6px 0 -1px #030a11, 0 12px 26px -14px rgba(0, 0, 0, 0.9);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .bar::-webkit-scrollbar { display: none; }
+  .bar__mark {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--active);
+    text-shadow: 0 0 16px rgba(0, 255, 229, 0.5);
+    white-space: nowrap;
+  }
+  .bar__keys { display: flex; gap: 6px; margin-left: auto; }
+  .bar__key {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.72);
+    text-decoration: none;
+    white-space: nowrap;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+    transition: background 0.15s, color 0.15s;
+  }
+  .bar__key:hover { background: linear-gradient(170deg, #34586f, #162b38); color: #fff; }
+  .bar__key:active { transform: translateY(2px); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.18), 0 1px 0 var(--edge); }
+
+  /* ------------------------------------------------------------ masthead */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: rgba(255, 255, 255, 0.38);
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.07;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 12px 0 0;
+    background: linear-gradient(96deg, #ffffff 18%, var(--active) 92%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lede {
+    max-width: var(--measure);
+    margin: 20px 0 0;
+    font-size: 17px;
+    color: rgba(255, 255, 255, 0.74);
+  }
+  .lede b { color: #fff; font-weight: 600; }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 20px;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; margin: 0 0 6px; color: #fff; }
+  p { margin: 0; }
+  .prose { max-width: var(--measure); color: rgba(255, 255, 255, 0.72); }
+  .prose + .prose { margin-top: 14px; }
+  .prose b { color: #fff; font-weight: 600; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 255, 229, 0.08);
+    border: 1px solid rgba(0, 255, 229, 0.14);
+    color: #9ffff2;
+    white-space: nowrap;
+  }
+
+  section { margin-top: 64px; }
+  .rule { height: 1px; background: linear-gradient(90deg, rgba(0, 255, 229, 0.5), rgba(255, 255, 255, 0.08) 40%, transparent); }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .sec-head .eyebrow { margin-left: auto; }
+
+  /* ---------------------------------------------------------- prose cards */
+  .cards {
+    display: grid;
+    gap: 14px;
+    margin-top: 26px;
+    grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  }
+  .card {
+    padding: 16px 17px 17px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+  .card p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .card__tag {
+    display: inline-block;
+    margin-bottom: 9px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--active);
+    background: rgba(0, 255, 229, 0.09);
+    border: 1px solid rgba(0, 255, 229, 0.22);
+  }
+  .card--warn .card__tag { color: var(--amber); background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.28); }
+
+  /* -------------------------------------------------------------- options */
+  .opt { margin-top: 76px; scroll-margin-top: 76px; }
+  .opt__head { display: flex; align-items: flex-start; gap: 14px; }
+  .opt__letter {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 3px 0 var(--edge-active),
+      0 8px 18px -6px rgba(0, 255, 229, 0.45);
+  }
+  .opt--alt .opt__letter {
+    color: rgba(255, 255, 255, 0.8);
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.22), 0 3px 0 var(--edge);
+  }
+  .opt__thesis { margin-top: 5px; font-size: 15px; color: rgba(255, 255, 255, 0.6); max-width: var(--measure); }
+  .opt__body { display: grid; gap: 16px; margin-top: 22px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .opt__body { grid-template-columns: 1fr 1fr; } }
+  /* A grid item's `min-width: auto` is its min-content width, so one nowrap run
+     inside a note widens the track past the page. */
+  .opt__body > * { min-width: 0; }
+  .note h3 { display: flex; align-items: center; gap: 7px; }
+  .note h3::before {
+    content: "";
+    width: 3px;
+    height: 13px;
+    border-radius: 2px;
+    background: var(--active);
+    box-shadow: 0 0 8px rgba(0, 255, 229, 0.7);
+  }
+  .note--cost h3::before { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, 0.6); }
+  .note p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .note p + p { margin-top: 10px; }
+
+  .price {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    /* Deliberately wrapping rather than nowrap: a pill that will not break is a
+       pill that widens the grid track past the page at 390px. */
+    max-width: 100%;
+  }
+  .price--good { color: var(--active); background: rgba(0, 255, 229, 0.09); border-color: rgba(0, 255, 229, 0.28); }
+
+  /* --------------------------------------------------- the mock enclosure */
+  .screen {
+    margin-top: 26px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    background: var(--app-bg);
+    box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+  }
+  .screen__tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.34);
+  }
+  .screen__tab b { color: rgba(0, 255, 229, 0.8); font-weight: 600; }
+  .screen__stage { padding: 22px; overflow-x: auto; }
+  /* The page shell is `max-w-4xl` with a 16px gutter, so the board lays out at
+     ~864px. The stage is held to that rather than to its frame, or every row
+     below would wrap at a width no reader has and the mock would be arguing
+     about a layout that doesn't happen. */
+  .stage-inner { min-width: 800px; }
+  .stage-inner + .stage-inner { margin-top: 28px; }
+  .stage-cap {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 9px;
+  }
+
+  /* The phone column: the same option at 390px, because the row's crowding is
+     the whole argument and it only shows up at the width it happens at. */
+  .split { display: grid; gap: 24px; }
+  @media (min-width: 1300px) { .split { grid-template-columns: minmax(0, 1fr) 372px; align-items: start; } }
+
+  /* The panel floats: it is a positioned sibling of the row it hangs off, so it
+     paints over the cards below rather than pushing them down. That is the
+     behaviour being proposed, so the mock has to draw it. */
+  .float { position: relative; }
+  .float > .panel { position: absolute; top: 100%; margin-top: 7px; z-index: 5; }
+  .split .screen__stage { overflow-x: auto; }
+  .phone .stage-inner { min-width: 0; width: 344px; }
+  .phone .screen__stage { padding: 14px; }
+
+  /* ------------------------------------------------------ the page's parts */
+  /* `.lab-trough`: the recessed ledge the trades controls are seated in. */
+  .trough {
+    border-radius: 16px;
+    padding: 12px;
+    background: #06111b;
+    box-shadow:
+      inset 0 6px 14px -4px rgba(0, 0, 0, 0.9),
+      inset 0 -2px 6px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .trow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+  .trow + .trow { margin-top: 10px; }
+  .trow--sub { padding-top: 9px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+
+  /* `.lab-chip`: the raised pill every filter trigger on the page wears. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: none;
+    padding: 5px 13px 6px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+  }
+  .chip--on {
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9),
+      0 3px 0 var(--edge-active),
+      0 6px 14px -5px rgba(0, 255, 229, 0.4);
+  }
+  .chip--held {
+    transform: translateY(2px);
+    background: linear-gradient(170deg, #34586f, #162b38);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.18), 0 1px 0 var(--edge);
+  }
+  .chip--sm { padding: 3px 10px 4px; font-size: 11px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -2px 4px rgba(0,0,0,0.4), 0 2px 0 var(--edge), 0 4px 8px -4px rgba(0,0,0,0.7); }
+  .chip--sm.chip--on { box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.85), 0 2px 0 var(--edge-active), 0 5px 12px -5px rgba(0,255,229,0.4); }
+  .chip__badge {
+    border-radius: 5px;
+    background: rgba(4, 20, 26, 0.25);
+    color: #04141a;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 3px 5px;
+  }
+  .caret { font-size: 8px; opacity: 0.6; }
+
+  /* The scope sentence, and the board's own size. */
+  .scope {
+    flex: 1 1 220px;
+    min-width: 0;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .scope--wrap { white-space: normal; }
+  .clear { flex: none; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.45); }
+  .tally { display: inline-flex; align-items: baseline; gap: 6px; flex: none; color: rgba(255, 255, 255, 0.55); }
+  .tally b { font-size: 18px; font-weight: 600; color: #fff; font-variant-numeric: tabular-nums; }
+  .tally span { font-size: 12px; }
+
+  /* A recessed field — `.lab-readout`'s cut, at input scale. */
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1 1 240px;
+    min-width: 0;
+    padding: 5px 10px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.85),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .field--lit { box-shadow: inset 0 2px 7px rgba(0,0,0,0.85), inset 0 0 0 1px rgba(0, 255, 229, 0.5), 0 0 18px -6px rgba(0,255,229,0.4); }
+  .field--wide { flex-basis: 100%; }
+  .field__ph { font-size: 13px; color: rgba(255, 255, 255, 0.3); }
+  .field__typed { font-size: 13px; color: #fff; }
+  .caretbar { display: inline-block; width: 1px; height: 15px; margin-left: 1px; background: var(--active); vertical-align: -3px; }
+
+  /* The milled slot the manager tool's search trigger wears today. */
+  .slotkey {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    padding: 4px 9px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.72);
+    background: linear-gradient(180deg, #0b1c28, #123045);
+    box-shadow:
+      inset 0 2px 3px rgba(0, 0, 0, 0.8),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+      0 1px 0 rgba(255, 255, 255, 0.07);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    white-space: nowrap;
+  }
+  .slotkey--lit { box-shadow: inset 0 2px 4px rgba(0,0,0,0.85), inset 0 0 10px rgba(0,255,229,0.22), 0 1px 0 rgba(255,255,255,0.08); color: var(--active); }
+
+  /* A chosen subject's token. */
+  .token {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    padding: 2px 5px 2px 4px;
+    border-radius: 6px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(0, 255, 229, 0.1);
+    border: 1px solid rgba(0, 255, 229, 0.28);
+    white-space: nowrap;
+  }
+  .token__x { color: rgba(255, 255, 255, 0.45); font-size: 12px; line-height: 1; }
+  .pos {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .pos--qb { color: #ff9ec7; border-color: rgba(255, 158, 199, 0.4); background: rgba(255, 158, 199, 0.12); }
+  .pos--rb { color: #8ee9b0; border-color: rgba(142, 233, 176, 0.4); background: rgba(142, 233, 176, 0.12); }
+  .pos--wr { color: #8fc9ff; border-color: rgba(143, 201, 255, 0.4); background: rgba(143, 201, 255, 0.12); }
+  .pos--te { color: #ffcf8f; border-color: rgba(255, 207, 143, 0.4); background: rgba(255, 207, 143, 0.12); }
+  .pos--pick { color: var(--active); border-color: rgba(0, 255, 229, 0.4); background: rgba(0, 255, 229, 0.1); }
+  .ava {
+    width: 15px; height: 15px; border-radius: 999px; flex: none;
+    background: linear-gradient(150deg, #3d6884, #16303f);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+    display: grid; place-items: center;
+    font-size: 8px; font-weight: 700; color: rgba(255,255,255,0.8);
+  }
+
+  /* The floating result panel — the app's own `SubjectPanel` box. */
+  .panel {
+    width: 340px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 255, 229, 0.25);
+    background: linear-gradient(180deg, #1b3040, #0d1c27);
+    box-shadow: 0 24px 50px -20px rgba(0, 0, 0, 0.95), 0 0 36px -16px rgba(0, 255, 229, 0.35);
+    padding: 8px;
+  }
+  .panel--wide { width: 100%; max-width: 460px; }
+  .panel--under { margin-top: 7px; }
+  .panel__field {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px;
+    border-radius: 9px;
+    border: 1px solid rgba(0, 255, 229, 0.5);
+    background: #06111b;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+    font-size: 13px;
+    color: #fff;
+  }
+  .panel__group {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 8px 4px 5px;
+  }
+  .res {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 9px;
+    border-radius: 9px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.78);
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -2px 4px rgba(0,0,0,0.4), 0 2px 0 var(--edge);
+  }
+  .res + .res { margin-top: 5px; }
+  .res--on { color: var(--on-active); background: linear-gradient(180deg, #a8fff4, #00ddc6); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.85), 0 2px 0 var(--edge-active); }
+  .res--on .res__note, .res--on .res__n { color: rgba(5, 32, 41, 0.6); }
+  .res__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .res__note { flex: none; font-size: 11px; font-weight: 500; color: rgba(255, 255, 255, 0.4); }
+  .res__n { flex: none; font-family: var(--mono); font-size: 10px; font-variant-numeric: tabular-nums; color: rgba(255, 255, 255, 0.35); }
+  .panel__foot {
+    display: flex; align-items: center; gap: 7px;
+    margin-top: 8px; padding: 8px 4px 2px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .panel__foot .cap { margin-right: 1px; }
+
+  .cap {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    flex: none;
+  }
+  .divider { width: 1px; align-self: stretch; margin: 2px 2px; background: rgba(0, 0, 0, 0.45); box-shadow: 1px 0 0 rgba(255, 255, 255, 0.08); flex: none; }
+  .icon { flex: none; }
+
+  /* The old shape: three stacked pickers inside the expanded panel. */
+  .oldpanel { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+  .pickers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 14px; }
+  .picker__lab { font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.4); }
+  .picker__in {
+    margin-top: 6px; padding: 5px 9px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 12px; color: rgba(255, 255, 255, 0.3);
+  }
+  .picker__list { margin-top: 5px; display: grid; gap: 2px; }
+  .picker__row { display: flex; align-items: center; gap: 7px; padding: 4px 6px; border-radius: 7px; font-size: 12px; color: rgba(255,255,255,0.7); }
+  .picker__row--on { background: rgba(0, 255, 229, 0.1); color: #fff; }
+  .box { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.25); flex: none; }
+  .box--on { border-color: var(--active); background: var(--active); }
+  .picker__row .n { margin-left: auto; font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,0.3); }
+  .keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+
+  /* ------------------------------------------------------- the trade card */
+  .trade {
+    padding: 0 5px 5px 0;
+    background: linear-gradient(128deg, #14545c 0%, #0a2b33 38%, var(--edge) 76%);
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9)) drop-shadow(0 10px 16px rgba(0, 0, 0, 0.75));
+    clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+  }
+  .trades { margin-top: 12px; display: grid; gap: 10px; }
+  .trade__face {
+    position: relative;
+    padding: 10px 13px 12px;
+    clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+    background:
+      repeating-linear-gradient(101deg, rgba(255,255,255,0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(168deg, #1b3245 0%, #122534 46%, #0a1723 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 2.5px 0 -1px rgba(255, 255, 255, 0.14),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
+      inset 0 -20px 38px -22px rgba(0, 0, 0, 0.9);
+  }
+  .trade__head { display: flex; align-items: baseline; gap: 8px; }
+  .trade__league { font-family: var(--display); font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.92); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trade__when { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,0.36); white-space: nowrap; margin-left: auto; }
+  .trade__sides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 9px; }
+  .side {
+    padding: 8px 10px 9px;
+    border-radius: 9px;
+    background: linear-gradient(168deg, #1a2f42, #0d1c28 62%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 0 var(--edge);
+  }
+  .side__head { display: flex; align-items: center; gap: 6px; }
+  .side__who { font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.82); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side__val { margin-left: auto; font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--active); }
+  .side__take { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11.5px; color: rgba(255,255,255,0.72); }
+  .side__take .v { margin-left: auto; font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,0.38); }
+  .hit { box-shadow: inset 0 0 0 1px rgba(0, 255, 229, 0.45), 0 0 12px -4px rgba(0,255,229,0.5); border-radius: 4px; padding: 0 3px; margin: 0 -3px; }
+
+  /* annotation pins */
+  .pin {
+    display: block;
+    max-width: 62ch;
+    margin-top: 11px;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.55);
+  }
+  .pin b { color: var(--amber); font-weight: 600; }
+  .pin--good b { color: var(--active); }
+
+  /* ------------------------------------------------------------- compare */
+  .tablewrap { overflow-x: auto; margin-top: 24px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); vertical-align: top; }
+  thead th {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: rgba(255, 255, 255, 0.42);
+    background: rgba(255, 255, 255, 0.04);
+    white-space: nowrap;
+  }
+  tbody th { font-weight: 600; color: #fff; white-space: nowrap; font-size: 13px; }
+  td { color: rgba(255, 255, 255, 0.66); }
+  tbody tr:last-child th, tbody tr:last-child td { border-bottom: none; }
+  .yes { color: var(--active); font-weight: 600; }
+  .no { color: rgba(255, 255, 255, 0.34); }
+  .mid { color: var(--amber); }
+
+  /* ------------------------------------------------------------- closing */
+  .reco {
+    margin-top: 26px;
+    padding: 22px 24px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(0, 255, 229, 0.09), rgba(0, 255, 229, 0.02));
+    border: 1px solid rgba(0, 255, 229, 0.26);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  .reco h2 { margin-bottom: 10px; }
+  .reco .prose { color: rgba(255, 255, 255, 0.8); }
+  ol.steps { max-width: var(--measure); margin: 16px 0 0; padding-left: 20px; color: rgba(255, 255, 255, 0.72); font-size: 14.5px; }
+  ol.steps li { margin-bottom: 7px; }
+  ol.steps b { color: #fff; }
+
+  .shared { display: grid; gap: 10px; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .shared > div { padding: 13px 15px; border-radius: 10px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); }
+  .shared h3 { font-size: 12.5px; }
+  .shared p { font-size: 13.5px; color: rgba(255,255,255,0.63); }
+
+  footer { margin-top: 70px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 12.5px; color: rgba(255, 255, 255, 0.35); max-width: var(--measure); }
+
+  a { color: var(--active); }
+  :focus-visible { outline: 2px solid var(--active); outline-offset: 2px; border-radius: 4px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+</style>
+
+<nav class="bar">
+  <span class="bar__mark">THE LAB · TRADES SEARCH</span>
+  <span class="bar__keys">
+    <a class="bar__key" href="#now">Today</a>
+    <a class="bar__key" href="#a">A · Slot in the row</a>
+    <a class="bar__key" href="#b">B · Its own storey</a>
+    <a class="bar__key" href="#c">C · Omnibox</a>
+    <a class="bar__key" href="#d">D · Field takes the row</a>
+    <a class="bar__key" href="#shared">Either way</a>
+    <a class="bar__key" href="#compare">Compare</a>
+  </span>
+</nav>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Trades board · the player / manager search · four seatings</p>
+    <h1>The search is two presses deep and asks you to know the answer first</h1>
+    <p class="lede">
+      Looking a player up on the trades board takes a press on <b>Filters</b>, a scroll past the
+      scope keys, the window and the match mode, and then a choice between three separate search
+      boxes — <b>you have to know whether the name you are typing is a player, a manager or a
+      pick before you can type it</b>. That is the one thing on this page every reader arrives
+      wanting, sitting behind the control built for the things they don't.
+    </p>
+    <p class="lede" style="margin-top:14px">
+      Four ways to put it on the page, drawn in the app's own faces over the real board. Each is
+      shown at laptop width and at 390px, because the ledge's row is already carrying five things
+      and <b>the crowding only shows up at the width it happens at</b>. Every height quoted below is
+      measured off these renders, not estimated — which is how the cheapest-looking option turned
+      out to be the expensive one on a phone.
+    </p>
+  </header>
+
+  <!-- ========================================================== DIAGNOSIS -->
+  <section id="now">
+    <div class="sec-head">
+      <h2>What the search costs today</h2>
+      <span class="eyebrow">Read first</span>
+    </div>
+    <div class="rule"></div>
+
+    <p class="prose" style="margin-top:20px">
+      The ledge is right about most of what it holds. The window, the circle and the match mode are
+      settings — chosen once, read afterwards — and a control that expands in place is the honest
+      seat for them. <b>The three facet lists are not settings.</b> They are the question, and they
+      are filed with the settings because that is where the dialog they came from put them.
+    </p>
+
+    <div class="screen">
+      <div class="screen__tab"><b>Today</b> · <span>after one press on Filters</span></div>
+      <div class="screen__stage">
+        <div class="stage-inner">
+          <div class="trough">
+            <div class="trow">
+              <span class="chip chip--held">Filters <span class="caret">▴</span></span>
+              <span class="scope">2026 · every crawled league · all leagues · all time</span>
+              <span class="tally"><b>50,102</b><span>trades</span></span>
+              <span class="chip chip--sm">KTC value</span>
+              <span class="chip chip--sm">Leagues</span>
+            </div>
+
+            <div class="oldpanel">
+              <p class="cap">Scope</p>
+              <div class="keys">
+                <span class="chip chip--sm chip--on">Every league</span>
+                <span class="chip chip--sm">My leagues</span>
+                <span class="chip chip--sm">Leaguemate trades</span>
+                <span class="chip chip--sm">Leaguemate leagues</span>
+              </div>
+              <div style="display:flex;gap:34px;flex-wrap:wrap;margin-top:16px">
+                <div>
+                  <p class="cap">Completed</p>
+                  <div class="keys">
+                    <span class="chip chip--sm">7 days</span>
+                    <span class="chip chip--sm">30 days</span>
+                    <span class="chip chip--sm">90 days</span>
+                    <span class="chip chip--sm chip--on">All time</span>
+                  </div>
+                </div>
+                <div>
+                  <p class="cap">Match</p>
+                  <div class="keys">
+                    <span class="chip chip--sm chip--on">All selected</span>
+                    <span class="chip chip--sm">Any selected</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pickers">
+                <div>
+                  <p class="picker__lab">Managers</p>
+                  <p class="picker__in">Search managers…</p>
+                  <div class="picker__list">
+                    <p class="picker__row"><span class="box"></span>DarksideEmperors<span class="n">412</span></p>
+                    <p class="picker__row"><span class="box"></span>ShooterMcGavin<span class="n">388</span></p>
+                    <p class="picker__row"><span class="box"></span>jkap<span class="n">341</span></p>
+                  </div>
+                </div>
+                <div>
+                  <p class="picker__lab">Players</p>
+                  <p class="picker__in">Search players…</p>
+                  <div class="picker__list">
+                    <p class="picker__row"><span class="box"></span>Brian Thomas Jr.<span class="n">1,204</span></p>
+                    <p class="picker__row"><span class="box"></span>Malik Nabers<span class="n">1,097</span></p>
+                    <p class="picker__row"><span class="box"></span>Bijan Robinson<span class="n">986</span></p>
+                  </div>
+                </div>
+                <div>
+                  <p class="picker__lab">Picks</p>
+                  <p class="picker__in">Search picks…</p>
+                  <div class="picker__list">
+                    <p class="picker__row"><span class="box"></span>2027 1st<span class="n">8,140</span></p>
+                    <p class="picker__row"><span class="box"></span>2027 2nd<span class="n">6,022</span></p>
+                    <p class="picker__row"><span class="box"></span>2028 1st<span class="n">4,915</span></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="pin"><b>↑</b> Three fields, three lists, one question. And the panel expands in
+            place, so reaching it pushes the board down by ~300px — the reader looks up a name and
+            the trades they were reading leave the screen.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <span class="card__tag">The gesture</span>
+        <p>Press Filters, find the right one of three boxes, type, press the row, press Filters again
+          to get the board back. Five actions to answer “what has Nabers gone for”.</p>
+      </div>
+      <div class="card">
+        <span class="card__tag">The categories</span>
+        <p>A reader types a name, not a category. <em>Jaylen Waddle</em> and <em>ShooterMcGavin</em>
+          are the same gesture; only this page makes you sort them first.</p>
+      </div>
+      <div class="card card--warn">
+        <span class="card__tag">The cost of a press</span>
+        <p>Opening the panel moves the list. Whatever replaces this should float over the board or
+          sit in the height the ledge already occupies — never push the cards down to be used.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== OPTION A -->
+  <section class="opt" id="a">
+    <div class="opt__head">
+      <span class="opt__letter">A</span>
+      <div>
+        <h2>A slot in the row it already has</h2>
+        <p class="opt__thesis">The search becomes one more part on the ledge's existing line — the
+          milled slot the manager tool's subject rail already wears — and the results float over
+          the board. No new height anywhere.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>Option A</b> · <span>laptop · resting, then two picked</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough">
+              <div class="trow">
+                <span class="chip">Filters <span class="caret">▾</span></span>
+                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Player, manager or pick</span>
+                <span class="scope">2026 · every crawled league · all leagues · all time</span>
+                <span class="tally"><b>50,102</b><span>trades</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <div class="trades">
+              <div class="trade"><div class="trade__face">
+                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
+                <div class="trade__sides">
+                  <div class="side">
+                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
+                    <p class="side__take"><span class="pos pos--wr">WR</span>Malik Nabers<span class="v">6,904</span></p>
+                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 2nd<span class="v">1,508</span></p>
+                  </div>
+                  <div class="side">
+                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
+                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
+                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 1.03<span class="v">2,250</span></p>
+                  </div>
+                </div>
+              </div></div>
+            </div>
+            <p class="pin pin--good"><b>↑</b> The row grows by one part and by nothing else — 68px
+              of chrome above the first card, which is exactly what the ledge costs today.</p>
+          </div>
+
+          <div class="stage-inner">
+            <p class="stage-cap">Two subjects picked · the panel floating over the board</p>
+            <div class="trough float">
+              <div class="trow">
+                <span class="chip chip--on">Filters <span class="chip__badge">2</span><span class="caret">▾</span></span>
+                <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+                <span class="token"><span class="ava">D</span>DarksideEmperors<span class="token__x">×</span></span>
+                <span class="slotkey slotkey--lit"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Add</span>
+                <span class="clear">Clear</span>
+                <span class="tally"><b>18</b><span>of 50,102 trades</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div class="panel" style="left:200px">
+                <p class="panel__field"><svg class="icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>nab<span class="caretbar"></span></p>
+                <p class="panel__group">Players</p>
+                <p class="res res--on"><span class="pos pos--wr">WR</span><span class="res__name">Malik Nabers</span><span class="res__note">NYG</span><span class="res__n">1,097</span></p>
+                <p class="res"><span class="pos pos--wr">WR</span><span class="res__name">Josh Nabers</span><span class="res__note">CIN</span><span class="res__n">12</span></p>
+                <p class="panel__group">Managers</p>
+                <p class="res"><span class="ava">N</span><span class="res__name">nabersnation</span><span class="res__note">41 leagues</span><span class="res__n">96</span></p>
+                <div class="panel__foot">
+                  <span class="cap">Match</span>
+                  <span class="chip chip--sm chip--on">all</span>
+                  <span class="chip chip--sm">any</span>
+                </div>
+              </div>
+            </div>
+            <div class="trades">
+              <div class="trade"><div class="trade__face">
+                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
+                <div class="trade__sides">
+                  <div class="side">
+                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
+                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
+                  </div>
+                  <div class="side">
+                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
+                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
+                  </div>
+                </div>
+              </div></div>
+              <div class="trade"><div class="trade__face">
+                <div class="trade__head"><span class="trade__league">SFB Dynasty · Home of the Brave</span><span class="trade__when">Aug 4, 2026 · 4:41 PM</span></div>
+                <div class="trade__sides">
+                  <div class="side">
+                    <div class="side__head"><span class="ava">J</span><span class="side__who">jkap</span><span class="side__val">9,120</span></div>
+                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
+                    <p class="side__take"><span class="pos pos--te">TE</span>Brock Bowers<span class="v">2,216</span></p>
+                  </div>
+                  <div class="side">
+                    <div class="side__head"><span class="ava">T</span><span class="side__who">TheCommish</span><span class="side__val">8,890</span></div>
+                    <p class="side__take"><span class="pos pos--qb">QB</span>Jayden Daniels<span class="v">6,640</span></p>
+                    <p class="side__take"><span class="pos pos--pick">PK</span>2028 1st<span class="v">2,250</span></p>
+                  </div>
+                </div>
+              </div></div>
+            </div>
+            <p class="pin"><b>↑</b> The panel paints over the board rather than moving it — but the
+              tokens live on the same line as the controls, so a third and fourth subject push the
+              count and both triggers onto a second row.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>A</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough">
+              <div class="trow">
+                <span class="chip">Filters <span class="caret">▾</span></span>
+                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Player, manager or pick</span>
+                <span class="scope">2026 · every crawled league · all leagues · all time</span>
+                <span class="tally"><b>50,102</b><span>trades</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <p class="pin">Three lines at rest — one more than today. <b>120px.</b></p>
+            <div class="trough" style="margin-top:14px">
+              <div class="trow">
+                <span class="chip chip--on">Filters <span class="chip__badge">2</span><span class="caret">▾</span></span>
+                <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+                <span class="token"><span class="ava">D</span>Darkside…<span class="token__x">×</span></span>
+                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Add</span>
+                <span class="scope">2026 · every crawled league · all time</span>
+                <span class="tally"><b>18</b><span>of 50,102</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <p class="pin"><b>↑</b> Four lines and <b>153px</b> with two subjects picked, the tokens
+              wedged between the Filters key and the sentence. Free on a laptop, and the most
+              expensive of the four here — which is the option's whole cost, landing on the width
+              with the least room.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>It is a port, not an invention.</b> The slot, the token, the floating panel and the
+          grouped results are all shipping parts of the manager tool's subject rail — the same
+          gesture, so a reader who has used one has used both.</p>
+        <p>Costs the board nothing: the ledge stays exactly as tall as it is, and the panel floats
+          rather than pushing the cards down.</p>
+        <span class="price price--good">+0px at rest</span>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p>The row is carrying six things before a single token lands, and the tokens are
+          interleaved with the controls rather than grouped with each other — so the selection grows
+          by pushing the count and both triggers around.</p>
+        <p><b>Free on a laptop and the dearest on a phone</b>: 120px at rest and 153px with two
+          picked, against C's 133 and 136. The height it saves is saved at the width that has it.</p>
+        <p>The search is the same size as everything beside it, so nothing says it is the part most
+          readers came for.</p>
+        <span class="price">153px at 390px with 2 picked — the worst of the four</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== OPTION B -->
+  <section class="opt" id="b">
+    <div class="opt__head">
+      <span class="opt__letter">B</span>
+      <div>
+        <h2>Its own storey above the controls</h2>
+        <p class="opt__thesis">Two lines in one part: <em>who you are looking for</em> on top,
+          <em>how the board is cut</em> underneath. The manager tool's two-storey billet, applied to
+          the trades ledge.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>Option B</b> · <span>laptop · resting, then three picked</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough">
+              <div class="trow">
+                <span class="cap">Who's in it</span>
+                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Player, manager or pick</span>
+                <span class="tally" style="margin-left:auto"><b>50,102</b><span>trades</span></span>
+              </div>
+              <div class="trow trow--sub">
+                <span class="chip">Filters <span class="caret">▾</span></span>
+                <span class="scope">2026 · every crawled league · all leagues · all time</span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <div class="trades">
+              <div class="trade"><div class="trade__face">
+                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
+                <div class="trade__sides">
+                  <div class="side">
+                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
+                    <p class="side__take"><span class="pos pos--wr">WR</span>Malik Nabers<span class="v">6,904</span></p>
+                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 2nd<span class="v">1,508</span></p>
+                  </div>
+                  <div class="side">
+                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
+                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
+                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 1.03<span class="v">2,250</span></p>
+                  </div>
+                </div>
+              </div></div>
+            </div>
+            <p class="pin pin--good"><b>↑</b> The count moves up beside the search, where the number
+              a press is meant to move sits next to the control that moves it.</p>
+          </div>
+
+          <div class="stage-inner">
+            <p class="stage-cap">Three subjects picked · the storey absorbs them, the controls don't move</p>
+            <div class="trough">
+              <div class="trow">
+                <span class="cap">Who's in it</span>
+                <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+                <span class="token"><span class="pos pos--pick">PK</span>2027 1st<span class="token__x">×</span></span>
+                <span class="token"><span class="ava">D</span>DarksideEmperors<span class="token__x">×</span></span>
+                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Add</span>
+                <span class="divider"></span>
+                <span class="chip chip--sm chip--on">any</span>
+                <span class="tally" style="margin-left:auto"><b>63</b><span>of 50,102 trades</span></span>
+              </div>
+              <div class="trow trow--sub">
+                <span class="chip chip--on">Filters <span class="chip__badge">1</span><span class="caret">▾</span></span>
+                <span class="scope">2026 · my leagues · dynasty, superflex · all time</span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <div class="trades">
+              <div class="trade"><div class="trade__face">
+                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
+                <div class="trade__sides">
+                  <div class="side">
+                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
+                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
+                  </div>
+                  <div class="side">
+                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
+                    <p class="side__take"><span class="pos pos--pick">PK</span><span class="hit">2027 1.03</span><span class="v">2,250</span></p>
+                  </div>
+                </div>
+              </div></div>
+            </div>
+            <p class="pin pin--good"><b>↑</b> The all/any key has somewhere to live: it belongs to the
+              selection, and here it is on the selection's own line rather than buried in the
+              settings panel.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>B</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough">
+              <div class="trow">
+                <span class="cap">Who's in it</span>
+                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Player, manager or pick</span>
+                <span class="tally" style="margin-left:auto"><b>50,102</b><span>trades</span></span>
+              </div>
+              <div class="trow trow--sub">
+                <span class="chip">Filters <span class="caret">▾</span></span>
+                <span class="scope">2026 · every crawled league · all time</span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <p class="pin">Four lines at rest, <b>171px</b> — the tallest of the four down here.</p>
+            <div class="trough" style="margin-top:14px">
+              <div class="trow">
+                <span class="cap">Who's in it</span>
+                <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+                <span class="token"><span class="ava">D</span>Darkside…<span class="token__x">×</span></span>
+                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Add</span>
+                <span class="tally" style="margin-left:auto"><b>18</b><span>of 50,102</span></span>
+              </div>
+              <div class="trow trow--sub">
+                <span class="chip chip--on">Filters <span class="chip__badge">1</span><span class="caret">▾</span></span>
+                <span class="scope">2026 · my leagues · all time</span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <p class="pin pin--good"><b>↑</b> Growing the selection grows the storey. The controls
+              underneath stay exactly where they were.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>Tokens stop competing with controls.</b> The selection has a line of its own, so
+          picking a fourth player pushes nothing off the board — the filter triggers never move.</p>
+        <p>It says something true about the page: one line is <em>who</em>, one line is
+          <em>where and when</em>. And it gives the count and the all/any key their honest seats,
+          beside the thing they are about.</p>
+        <span class="price price--good">stable controls at any selection</span>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p><b>49px of permanent height</b> above a list that is the page's whole subject — the most
+          of the four, and the same currency the page heading was deleted to save. 171px on a phone
+          before anything is picked.</p>
+        <p>Two storeys in a trough is new material here. The billet in the manager tool does exactly
+          this, but the trades ledge is a recessed trough, so the seam is a small piece of work
+          rather than a class swap.</p>
+        <span class="price">+49px always · 171px on a phone</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== OPTION C -->
+  <section class="opt opt--alt" id="c">
+    <div class="opt__head">
+      <span class="opt__letter">C</span>
+      <div>
+        <h2>An omnibox leading the page</h2>
+        <p class="opt__thesis">A real field, full width, above everything — tokens sit inside it and
+          the results drop under it. The board reads as a search result rather than as a list with
+          a filter on it.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>Option C</b> · <span>laptop · resting, then typing</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="field field--wide">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="field__ph">Search a player, a manager or a pick…</span>
+            </div>
+            <div class="trough" style="margin-top:10px">
+              <div class="trow">
+                <span class="chip">Filters <span class="caret">▾</span></span>
+                <span class="scope">2026 · every crawled league · all leagues · all time</span>
+                <span class="tally"><b>50,102</b><span>trades</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <div class="trades">
+              <div class="trade"><div class="trade__face">
+                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
+                <div class="trade__sides">
+                  <div class="side">
+                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
+                    <p class="side__take"><span class="pos pos--wr">WR</span>Malik Nabers<span class="v">6,904</span></p>
+                  </div>
+                  <div class="side">
+                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
+                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
+                  </div>
+                </div>
+              </div></div>
+            </div>
+            <p class="pin"><b>↑</b> 41px of chrome above the ledge, on a page that deleted its own
+              title to get that height back.</p>
+          </div>
+
+          <div class="stage-inner">
+            <p class="stage-cap">Two picked, typing a third · results drop under the field</p>
+            <div class="field field--wide field--lit float">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--active)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+              <span class="token"><span class="ava">D</span>DarksideEmperors<span class="token__x">×</span></span>
+              <span class="field__typed">gib<span class="caretbar"></span></span>
+              <div class="panel panel--wide" style="left:0">
+                <p class="panel__group" style="padding-top:2px">Players</p>
+                <p class="res"><span class="pos pos--rb">RB</span><span class="res__name">Jahmyr Gibbs</span><span class="res__note">DET</span><span class="res__n">874</span></p>
+                <p class="res"><span class="pos pos--te">TE</span><span class="res__name">Brenton Gibson</span><span class="res__note">LV</span><span class="res__n">31</span></p>
+                <p class="panel__group">Managers</p>
+                <p class="res"><span class="ava">G</span><span class="res__name">GibbsMeThatRing</span><span class="res__note">17 leagues</span><span class="res__n">44</span></p>
+                <div class="panel__foot">
+                  <span class="cap">Match</span>
+                  <span class="chip chip--sm chip--on">all</span>
+                  <span class="chip chip--sm">any</span>
+                  <span class="tally" style="margin-left:auto"><b>18</b><span>of 50,102 trades</span></span>
+                </div>
+              </div>
+            </div>
+            <div class="trough" style="margin-top:10px">
+              <div class="trow">
+                <span class="chip chip--on">Filters <span class="chip__badge">2</span><span class="caret">▾</span></span>
+                <span class="scope">2026 · every crawled league · all leagues · all time</span>
+                <span class="tally"><b>18</b><span>of 50,102 trades</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <div class="trades">
+              <div class="trade"><div class="trade__face">
+                <div class="trade__head"><span class="trade__league">SFB Dynasty · Home of the Brave</span><span class="trade__when">Aug 4, 2026 · 4:41 PM</span></div>
+                <div class="trade__sides">
+                  <div class="side">
+                    <div class="side__head"><span class="ava">J</span><span class="side__who">jkap</span><span class="side__val">9,120</span></div>
+                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
+                    <p class="side__take"><span class="pos pos--te">TE</span>Brock Bowers<span class="v">2,216</span></p>
+                  </div>
+                  <div class="side">
+                    <div class="side__head"><span class="ava">T</span><span class="side__who">TheCommish</span><span class="side__val">8,890</span></div>
+                    <p class="side__take"><span class="pos pos--qb">QB</span>Jayden Daniels<span class="v">6,640</span></p>
+                    <p class="side__take"><span class="pos pos--pick">PK</span>2028 1st<span class="v">2,250</span></p>
+                  </div>
+                </div>
+              </div></div>
+            </div>
+            <p class="pin pin--good"><b>↑</b> The field holds any number of tokens without touching a
+              single control, and the panel covers the board rather than moving it.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>C</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="field field--wide">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="field__ph">Player, manager or pick…</span>
+            </div>
+            <div class="trough" style="margin-top:10px">
+              <div class="trow">
+                <span class="chip">Filters <span class="caret">▾</span></span>
+                <span class="scope">2026 · every crawled league · all time</span>
+                <span class="tally"><b>50,102</b><span>trades</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <p class="pin">Three lines and <b>133px</b> at rest — 13px more than A, and the field is
+              the one thing a phone reader can't miss.</p>
+            <div class="field field--wide field--lit" style="margin-top:14px">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--active)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+              <span class="token"><span class="ava">D</span>Darkside…<span class="token__x">×</span></span>
+            </div>
+            <p class="pin pin--good"><b>↑</b> Tokens wrap inside the field, so the controls below are
+              untouched however many are picked — <b>136px against A's 153px</b> for the same two
+              subjects. The option that costs the most at a laptop costs the least here.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>Nobody has to be told it is there.</b> A field is the one control that explains itself,
+          and this is the only option where the search is unmistakably the page's front door.</p>
+        <p>Unlimited room for tokens, no control ever moves, and it is the shape a reader arriving
+          from any other site already expects.</p>
+        <p><b>On a phone it is the cheapest of the four</b> — 133px at rest and 136px with two
+          subjects picked, because tokens wrap inside the field instead of pushing controls onto new
+          lines. A costs 153px for the same selection.</p>
+        <span class="price price--good">obvious at first paint · flat as the selection grows</span>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p><b>41px of masthead on a laptop</b> — close to the height the page deleted its own
+          <em>Trades</em> heading to reclaim — and it puts two stacked blocks of chrome over a list
+          of cards.</p>
+        <p>It also outranks the filters visually, which is only right if the search really is the
+          more common gesture. On a board whose default is every crawled league, it probably is.</p>
+        <span class="price">+41px on a laptop · two chrome blocks</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== OPTION D -->
+  <section class="opt opt--alt" id="d">
+    <div class="opt__head">
+      <span class="opt__letter">D</span>
+      <div>
+        <h2>The field takes the row; the scope drops below it</h2>
+        <p class="opt__thesis">A real field, but seated <em>in</em> the ledge — it takes the width
+          the scope sentence was spending, and the sentence moves to a dim second line where it can
+          be read instead of truncated. The one option where the search shares the control row.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>Option D</b> · <span>laptop · resting, then two picked</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough">
+              <div class="trow">
+                <span class="chip">Filters <span class="caret">▾</span></span>
+                <div class="field">
+                  <svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+                  <span class="field__ph">Player, manager or pick…</span>
+                </div>
+                <span class="tally"><b>50,102</b><span>trades</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div class="trow trow--sub">
+                <span class="scope scope--wrap">2026 · every crawled league · all leagues · all time</span>
+              </div>
+            </div>
+            <div class="trades">
+              <div class="trade"><div class="trade__face">
+                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
+                <div class="trade__sides">
+                  <div class="side">
+                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
+                    <p class="side__take"><span class="pos pos--wr">WR</span>Malik Nabers<span class="v">6,904</span></p>
+                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 2nd<span class="v">1,508</span></p>
+                  </div>
+                  <div class="side">
+                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
+                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
+                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 1.03<span class="v">2,250</span></p>
+                  </div>
+                </div>
+              </div></div>
+            </div>
+            <p class="pin"><b>↑</b> The sentence stops truncating — it is the one thing on the row
+              that has to be read rather than pressed, and it never had room to be.</p>
+          </div>
+
+          <div class="stage-inner">
+            <p class="stage-cap">Two picked · tokens ride inside the field</p>
+            <div class="trough">
+              <div class="trow">
+                <span class="chip chip--on">Filters <span class="chip__badge">2</span><span class="caret">▾</span></span>
+                <div class="field field--lit">
+                  <svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--active)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+                  <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+                  <span class="token"><span class="ava">D</span>DarksideEmperors<span class="token__x">×</span></span>
+                </div>
+                <span class="tally"><b>18</b><span>of 50,102</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div class="trow trow--sub">
+                <span class="scope scope--wrap">2026 · every crawled league · all leagues · all time · all of 1 manager, 1 player</span>
+              </div>
+            </div>
+            <div class="trades">
+              <div class="trade"><div class="trade__face">
+                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
+                <div class="trade__sides">
+                  <div class="side">
+                    <div class="side__head"><span class="ava">D</span><span class="side__who"><span class="hit">DarksideEmperors</span></span><span class="side__val">8,412</span></div>
+                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
+                  </div>
+                  <div class="side">
+                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
+                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
+                  </div>
+                </div>
+              </div></div>
+            </div>
+            <p class="pin"><b>↑</b> Tokens inside the field push it wider, so the count and the two
+              trailing chips are what give way as the selection grows.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>D</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough">
+              <div class="trow">
+                <span class="chip">Filters <span class="caret">▾</span></span>
+                <div class="field">
+                  <svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+                  <span class="field__ph">Player, manager or pick…</span>
+                </div>
+                <span class="tally"><b>50,102</b><span>trades</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div class="trow trow--sub">
+                <span class="scope scope--wrap">2026 · every crawled league · all leagues · all time</span>
+              </div>
+            </div>
+            <p class="pin">Four lines at rest, and the field is on the first one.</p>
+            <div class="trough" style="margin-top:14px">
+              <div class="trow">
+                <span class="chip chip--on">Filters <span class="chip__badge">2</span><span class="caret">▾</span></span>
+                <div class="field field--lit">
+                  <svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--active)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+                  <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+                  <span class="token"><span class="ava">D</span>Darkside…<span class="token__x">×</span></span>
+                </div>
+                <span class="tally"><b>18</b><span>of 50,102</span></span>
+                <span class="chip chip--sm">KTC value</span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div class="trow trow--sub">
+                <span class="scope scope--wrap">2026 · every crawled league · all time · all of 1 manager, 1 player</span>
+              </div>
+            </div>
+            <p class="pin"><b>↑</b> The field wraps to a line of its own down here, which is the right
+              thing to happen — but it means the phone layout is B with the storeys swapped.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>A real field without a block of chrome of its own</b> — it spends the width the scope
+          sentence was truncating in, and hands the sentence a full line where it can finally be
+          read rather than clipped to <em>2026 · every crawle…</em></p>
+        <p>Tokens are contained: they widen the field rather than landing loose among the controls,
+          so the row keeps its order however many are picked.</p>
+        <p><b>There is a free version of this</b>, and it is worth deciding on rather than
+          defaulting into: drop the scope sentence altogether. Between the Filters badge, the
+          Leagues key and the tokens themselves, everything it says is already on screen — and
+          without it D is the only option that adds a real field for 0px.</p>
+        <span class="price price--good">0px if the scope line goes</span>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p>The field and three controls fight for one row. Below ~700px it takes a line of its own
+          anyway — measured at 390px this is <b>171px, the same as B</b>, which is B with the two
+          storeys in the other order and B's version is the tidier one.</p>
+        <p>Keeping the sentence costs 39px, which is most of what C costs for a field half the
+          width — so the honest comparison is <em>D-without-the-sentence against A</em>, and
+          <em>D-with-it against C</em>.</p>
+        <span class="price">+39px with the sentence · crowded 500–700px</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================= SHARED -->
+  <section id="shared">
+    <div class="sec-head">
+      <h2>True in all four</h2>
+      <span class="eyebrow">Decisions that don't depend on the seat</span>
+    </div>
+    <div class="rule"></div>
+
+    <div class="shared">
+      <div>
+        <h3>One field over all three kinds</h3>
+        <p>Players, managers and picks in one box, results grouped under captions. A reader types a
+          name, not a category — and the group heading still says which it found. This is what the
+          manager tool's rail already does across players and leaguemates.</p>
+      </div>
+      <div>
+        <h3>Picks come out too, or they become the lost one</h3>
+        <p>If two of the three lists move onto the page and picks stays in the modal, picks is the
+          filter nobody finds again. <code>2027 1st</code> matching by round and season is one line
+          of matching over the same facet list.</p>
+      </div>
+      <div>
+        <h3>The panel floats; it never pushes the board</h3>
+        <p>The ledge sits inside the element the virtualizer measures, so anything that expands in
+          place moves every card. Floating over the list is what the manager rail's panel and both
+          ADP floats already do.</p>
+      </div>
+      <div>
+        <h3>It commits live — no draft, no Apply</h3>
+        <p>Each result carries how many trades name it, counted <em>without</em> the current
+          selection, so pressing one can't move the number beside it. That is what makes committing
+          on press safe here and not in the league filters.</p>
+      </div>
+      <div>
+        <h3>Facets are still fetched on open</h3>
+        <p>The season-wide grouped aggregate behind those counts costs ~850ms. Mount the panel on
+          press, exactly as the ledge does today, so arriving at the page still costs one page of
+          cards and nothing else.</p>
+      </div>
+      <div>
+        <h3>The all/any key travels with the selection</h3>
+        <p>It belongs to the subjects, not to the window or the circle — so it goes where the tokens
+          go: the panel's footer (A, C, D) or the storey's trailing end (B). What stays in Filters is
+          the window and the circle.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ COMPARE -->
+  <section id="compare">
+    <div class="sec-head">
+      <h2>Side by side</h2>
+      <span class="eyebrow">Compare</span>
+    </div>
+    <div class="rule"></div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>A · Slot in the row</th>
+            <th>B · Its own storey</th>
+            <th>C · Omnibox</th>
+            <th>D · Field takes the row</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Laptop · chrome above the board</th>
+            <td class="yes">68px — today's</td>
+            <td class="no">117px <span class="mid">(+49)</span></td>
+            <td class="mid">109px <span class="mid">(+41)</span></td>
+            <td class="mid">107px <span class="mid">(+39)</span>, or 68 without the scope line</td>
+          </tr>
+          <tr>
+            <th>390px · at rest</th>
+            <td class="yes">120px · 3 lines</td>
+            <td class="no">171px · 4 lines</td>
+            <td class="mid">133px · 3 lines</td>
+            <td class="no">171px · 4 lines</td>
+          </tr>
+          <tr>
+            <th>390px · two subjects picked</th>
+            <td class="no">153px · tokens shove the controls</td>
+            <td class="no">203px</td>
+            <td class="yes">136px · controls never move</td>
+            <td class="mid">195px</td>
+          </tr>
+          <tr>
+            <th>Reads as a search</th>
+            <td class="no">a small slot among six parts</td>
+            <td class="mid">captioned, but still a slot</td>
+            <td class="yes">unmistakable</td>
+            <td class="yes">a real field, sharing a row</td>
+          </tr>
+          <tr>
+            <th>Room for tokens</th>
+            <td class="no">shares the control row</td>
+            <td class="yes">its own line</td>
+            <td class="yes">inside the field</td>
+            <td class="mid">widens the field, squeezes the row</td>
+          </tr>
+          <tr>
+            <th>New material</th>
+            <td class="yes">none — ports the rail's parts</td>
+            <td class="mid">a seam in the trough</td>
+            <td class="mid">a page-level field</td>
+            <td class="mid">a field inside the row</td>
+          </tr>
+          <tr>
+            <th>Board keeps its place</th>
+            <td class="yes">panel floats</td>
+            <td class="yes">panel floats</td>
+            <td class="yes">panel floats</td>
+            <td class="yes">panel floats</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="reco">
+      <h2>If you want a recommendation</h2>
+      <p class="prose"><b>C.</b> This page's default is every crawled league and 50,000 trades —
+        nobody reads that; they arrive with a name. A control that has to be discovered is the wrong
+        shape for the gesture that is the page's whole purpose, and C is the only one of the four a
+        reader cannot fail to see.</p>
+      <p class="prose" style="margin-top:14px"><b>Building it changed the argument against it.</b>
+        The case for A was that it is free, and it is — on a laptop. At 390px A is 120px at rest and
+        153px once two subjects are picked, because tokens land among the controls and shove them
+        onto new lines; C is 133px and 136px, because they wrap inside the field and nothing else
+        moves. So the 41px C costs on a laptop is <em>bought back</em> on the width that has the
+        least room, and the option that looked like the cheap one is the one that grows.</p>
+      <p class="prose" style="margin-top:14px">D is the interesting second, and only in its free
+        spelling — a real field on the existing row with the scope sentence deleted rather than
+        rehoused. Keep the sentence and it costs 39px for a field half of C's width. B is the most
+        disciplined shape and the tallest thing here (117px, 171px on a phone); it is the answer if
+        the selection should be able to run to six or seven tokens. A is the cheapest to build and
+        the easiest to miss.</p>
+      <ol class="steps">
+        <li><b>Pick a seat</b> — reply with a letter, or a hybrid (C's field seated in B's storey is
+          a real fifth option).</li>
+        <li><b>Lift the parts</b> — the search panel, the token and the grouped results come from
+          <code>SubjectRail</code>; the facet counts come from <code>/api/trades/facets</code>
+          unchanged.</li>
+        <li><b>Leave Filters holding the window and the circle</b>, and the ledge keeps its trigger,
+          its summary and its Clear.</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>
+    Fourth in the mockups series, drawn in the app's own faces from
+    <code>src/app/globals.css</code> — so a part shown here is the part that ships. The trade cards,
+    the trough, the chips and the floating panel are the real materials at their real sizes; the
+    names and counts are representative. Every layout above is a real flex row at the width its frame
+    says, which is why the phone column is worth reading first.
+  </footer>
+
+</div>
