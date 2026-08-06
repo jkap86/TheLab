@@ -161,16 +161,29 @@ export function removeSubjectAt(
   return { ...filters, subjects: filters.subjects.filter((_, i) => i !== index) };
 }
 
-/** One row of the search panel: what it is, what it says, and what it would leave. */
-export type SubjectOption = {
-  subject: Subject;
+/**
+ * How a subject is identified on screen, however it was resolved.
+ *
+ * Its own type because a *token* needs exactly this and nothing else, and there
+ * are three places a chosen subject is drawn — the rail's storey and each shares
+ * sheet's. A menu row ({@link SubjectOption}) is this plus what it would leave;
+ * `subjectDisplay` in `useFilteredLeagues` is this off the two payloads a
+ * selection already forces. Splitting it is what lets a token be named by either
+ * without the menu's `count` having to be invented for a subject nobody counted.
+ */
+export type SubjectLabel = {
   /** Falls back to the id, as the roster and standings views do. */
   name: string;
-  /** The dim trailing detail — an NFL team on a player, nothing on a person. */
-  note: string | null;
   /** A player's position, for the pill; null on a person. */
   position: string | null;
   avatarUrl: string | null;
+};
+
+/** One row of the search panel: what it is, what it says, and what it would leave. */
+export type SubjectOption = SubjectLabel & {
+  subject: Subject;
+  /** The dim trailing detail — an NFL team on a player, nothing on a person. */
+  note: string | null;
   /** How many of the leagues counted over hold this subject. */
   count: number;
 };

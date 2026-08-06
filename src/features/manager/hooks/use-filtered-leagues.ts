@@ -7,7 +7,7 @@ import { matchesFilters } from "@/features/shared";
 import { useLeagueFilters, useSubjectFilters } from "../filters-context";
 import { invalidateManagerDependents } from "../query-fns";
 import { EMPTY_SUBJECT_INDEX, matchesSubjects } from "../subjects";
-import type { Subject, SubjectIndex } from "../subjects";
+import type { Subject, SubjectIndex, SubjectLabel } from "../subjects";
 import { useManagerLeagues } from "./use-manager-leagues";
 import { useManagerLeaguemates } from "./use-manager-leaguemates";
 import { useManagerPlayers } from "./use-manager-players";
@@ -109,18 +109,45 @@ export function useFilteredLeagues(searched: string) {
   );
 
   /**
-   * What a selected subject is called, or null while the maps naming it load.
+   * How a selected subject is drawn, or null while the maps naming it load.
    *
    * It lives here because this is where those two payloads already are — the
    * header's scope line has to name what its record was counted over, and the
    * alternative was a second pair of reads in the layout for two strings.
+   *
+   * **It answers for *both* kinds, which is the whole reason the tokens read it
+   * rather than the menu.** A token is drawn in three places now — the rail's
+   * storey and each shares sheet's — and a sheet only builds the option list for
+   * the kind it lists, so naming a token from that list left a player token in the
+   * leaguemates sheet (and a leaguemate token in the players sheet) showing a raw
+   * Sleeper id. These two payloads are exactly the ones a selection already
+   * forces, so the cross-kind answer is free: `narrowing` is true whenever there
+   * is a token to draw at all.
    */
-  const subjectLabel = useCallback(
-    (subject: Subject): string | null =>
-      subject.kind === "player"
-        ? (rosters.data?.players[subject.id]?.name ?? null)
-        : (members.data?.users[subject.id]?.display_name ?? null),
+  const subjectDisplay = useCallback(
+    (subject: Subject): SubjectLabel | null => {
+      if (subject.kind === "player") {
+        const player = rosters.data?.players[subject.id];
+        return player
+          ? { name: player.name, position: player.position, avatarUrl: null }
+          : null;
+      }
+      const user = members.data?.users[subject.id];
+      return user
+        ? {
+            name: user.display_name || subject.id,
+            position: null,
+            avatarUrl: user.avatar_url,
+          }
+        : null;
+    },
     [rosters.data, members.data],
+  );
+
+  /** That name alone, for the plate's scope line — see {@link subjectSummary}. */
+  const subjectLabel = useCallback(
+    (subject: Subject): string | null => subjectDisplay(subject)?.name ?? null,
+    [subjectDisplay],
   );
 
   // `searched` rides along so the layout can label its loading state and link its
@@ -130,6 +157,7 @@ export function useFilteredLeagues(searched: string) {
     searched,
     filters,
     setFilters,
+    subjectDisplay,
     subjectLabel,
     /** After the league filters, before the subjects — what the menus count over. */
     leagueFiltered,
