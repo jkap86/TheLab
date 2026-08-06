@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { aggregateRecord } from "./record.ts";
-import type { ManagerLeague } from "./types.ts";
+import type { ManagerLeague } from "@/shared/manager";
 
 const league = (
   record: ManagerLeague["record"],

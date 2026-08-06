@@ -254,28 +254,35 @@ export type LeagueTeamsInput = {
 };
 
 /**
- * The reads {@link getWeeklyTeamPoints} and {@link getOptimalLineups} share:
- * which leagues can be projected at all, the horizon, and — for the union of
- * every roster across them — the stat lines and the positions.
+ * The reads the batch entry points below share: which leagues can be projected
+ * at all, the horizon, and — for the union of every roster across them — the
+ * stat lines and the positions.
  *
- * One pass for the whole account, which is the reason those two exist rather
- * than a loop over {@link getLeagueOutlook}: these reads cost the same whether
- * one league asks or a hundred do, so a per-league loop would repeat them a
- * hundred times. What genuinely differs per league is the scoring and the solve,
- * and that stays with each caller.
+ * One pass for the whole account, which is the reason those exist rather than a
+ * loop over {@link getLeagueOutlook}: these reads cost the same whether one
+ * league asks or a hundred do, so a per-league loop would repeat them a hundred
+ * times. What genuinely differs per league is the scoring and the solve, and
+ * that stays with each caller.
  *
  * Null when there is nothing to project — no projectable league, or nothing left
- * on the schedule — so neither caller has to spell out the two ways that happens
+ * on the schedule — so no caller has to spell out the two ways that happens
  * before returning its own empty shape.
+ *
+ * `only` is for a caller answering about **one** week rather than the rest of
+ * the season ({@link getWeekLineups}). It skips the horizon query, which is the
+ * point: that caller already knows its week, and re-deriving it here would both
+ * cost a query and let the two disagree about which week is being answered for.
+ * It is still a list, because everything downstream of here is written over one.
  */
 async function readBatchInputs(
   season: string,
   leagues: readonly LeagueTeamsInput[],
+  only?: readonly number[],
 ) {
   const projectable = leagues.filter(isProjectable);
   if (projectable.length === 0) return null;
 
-  const weeks = await getRemainingWeeks(season);
+  const weeks = only ? [...only] : await getRemainingWeeks(season);
   if (weeks.length === 0) return null;
 
   const playerIds = rosterPlayerIds(projectable.flatMap((l) => l.teams));
@@ -442,4 +449,119 @@ export async function getOptimalLineups({
   }
 
   return { weeks, lineups };
+}
+
+/** What one team is starting this week against what it could be starting. */
+export type TeamWeekLineup = {
+  /** The best legal lineup this roster could set for the week. */
+  optimal_points: number;
+  /** What the lineup Sleeper currently holds projects for it. */
+  current_points: number;
+  /** `optimal − current`: the points the current lineup leaves on the bench. */
+  points_left: number;
+};
+
+export type WeekLineups = {
+  /** The week every number here is for — the caller's own, echoed back. */
+  week: number;
+  /**
+   * League id → roster id → that team's week. A league that can't be projected
+   * (no slots or scoring on file, no rosters) is absent, as is every league when
+   * the week has no stored projections left to read.
+   */
+  teams: Map<string, Map<number, TeamWeekLineup>>;
+};
+
+/**
+ * One week's current-versus-optimal lineup for every team across many leagues —
+ * the lineup checker's whole question, asked once for a hundred-odd leagues.
+ *
+ * The fourth batch entry point beside {@link getLeagueOutlook},
+ * {@link getWeeklyTeamPoints} and {@link getOptimalLineups}, and it differs from
+ * all three in the same way: they answer over the *rest of the season*, where a
+ * lineup being set this Sunday is a fact about one week. Summing a horizon
+ * answers a roster-shape question; this answers "what does today's lineup cost
+ * you", which is a different number and the only one a lineup checker can act
+ * on.
+ *
+ * It re-uses {@link compareLineup} rather than re-deriving the comparison, so
+ * the gap a row prints and the gap the expanded league panel prints are one
+ * rule — including the one that matters most as advice, that a starter with no
+ * projection scores zero rather than being quietly dropped from the lineup he is
+ * actually in.
+ *
+ * **Every team passed is solved**, the same contract {@link getOptimalLineups}
+ * keeps: a caller that only needs the two rosters in a matchup should pass those
+ * two, not the league.
+ *
+ * Mid-week it covers only the games still to be played, like every other total
+ * here — {@link listPlayerWeekStats} drops a game that has kicked off. That is
+ * the right reading for a lineup you can still change and the wrong one for a
+ * lineup you can't: a starter whose game is over stops counting toward
+ * `current_points` and frees his slot in `optimal_points`, so a Sunday-evening
+ * gap names swaps Sleeper would no longer accept. The tool is for setting a
+ * lineup before the week runs, which is when the two readings agree.
+ */
+export async function getWeekLineups({
+  season,
+  week,
+  leagues,
+}: {
+  season: string;
+  week: number;
+  leagues: readonly LeagueTeamsInput[];
+}): Promise<WeekLineups> {
+  const input = await readBatchInputs(season, leagues, [week]);
+  if (!input) return { week, teams: new Map() };
+  const { projectable, stats, positions } = input;
+
+  // Bucketed by player once, so each league scores its own rosters' rows rather
+  // than re-scanning the whole account's union per league.
+  const rowsByPlayer = new Map<string, PlayerWeekStats[]>();
+  for (const row of stats) {
+    let rows = rowsByPlayer.get(row.player_id);
+    if (!rows) rowsByPlayer.set(row.player_id, (rows = []));
+    rows.push(row);
+  }
+
+  const teams = new Map<string, Map<number, TeamWeekLineup>>();
+  for (const league of projectable) {
+    const scoring = league.scoringSettings;
+    // One week asked for, so the grouping holds one entry — read through the
+    // same helper the horizon path uses rather than a second spelling of it.
+    const points =
+      groupWeeklyPoints(
+        rosterPlayerIds(league.teams).flatMap((id) => rowsByPlayer.get(id) ?? []),
+        (s) => scoreProjection(s, scoring),
+      ).get(week) ?? new Map<string, number>();
+
+    const byTeam = new Map<number, TeamWeekLineup>();
+    for (const team of league.teams) {
+      const candidates = lineupCandidates(
+        team,
+        positions,
+        // Zero for a player this week doesn't project, which is what
+        // `compareLineup` needs: he can only ever fill a slot nobody else
+        // wanted, and dropping him would overstate what the current lineup is
+        // scoring. (The horizon path omits him instead, because there the
+        // distinction is a bye rather than a zero — see `./weekly`.)
+        (id) => points.get(id) ?? 0,
+      );
+
+      const comparison = compareLineup({
+        rosterPositions: league.rosterPositions,
+        starters: team.starters,
+        players: candidates,
+      });
+
+      byTeam.set(team.roster_id, {
+        optimal_points: comparison.optimal_points,
+        current_points: comparison.current_points,
+        points_left: comparison.points_left,
+      });
+    }
+    teams.set(league.league_id, byTeam);
+  }
+
+  return { week, teams };
 }

@@ -799,9 +799,27 @@ varied between the copies. And `isProjectable` is a **type predicate**, so
 checked are gone, which is the compiler agreeing that the guard and the use are
 now the same fact.
 
-The shared *reads* behind those two batch entry points sit in `readBatchInputs`,
+The shared *reads* behind those batch entry points sit in `readBatchInputs`,
 still inside the composition file and private to it. That is the right side of
 the line: it is I/O and nothing else, so there is nothing in it to test.
+
+**A fourth entry point, `getWeekLineups`, is what that extraction was for.** The
+lineup checker asks the same question of *one* week that the other three ask of
+the rest of the season — what a roster is starting against what it could be —
+and adding it cost a `readBatchInputs` parameter (`only`, the caller's own week
+instead of the horizon query) plus a loop that hands each team to
+`compareLineup`. Nothing about candidacy, projectability or slots was retyped,
+which is the whole of the claim above: the gap a lineup row prints and the gap
+the expanded league panel prints are one rule, including the one that matters
+most as advice — a starter with no projection scores zero rather than being
+quietly dropped from the lineup he is actually in. Two things it inherits rather
+than decides. `listPlayerWeekStats` drops a game that has already kicked off, so
+mid-week the comparison names swaps Sleeper would no longer accept; the tool is
+for setting a lineup before the week runs, which is when the two readings agree.
+And it solves **every team it is handed**, `getOptimalLineups`' own contract —
+which is why `/api/user/[username]/matchups` hands it the two rosters in each
+game and not the league, turning a hundred-league account's ~1,200 solves into
+~200.
 
 Test the property the code rests on, not just its outputs. The rest-of-season
 totals are only correct because scoring is linear, so `aggregate.test` asserts
@@ -1092,9 +1110,26 @@ stops holding, a comment saying it does would not have caught it.
   `adp-controls` still hands out `todayIso` and `shiftDays`, `manager/format`
   still hands out `ordinal` — so one canonical definition is read under two names
   rather than a sweep through a dozen call sites. And what moves is only what a
-  second tool actually reads: `manager/format` keeps the records, points and week
-  horizons only that tool renders, because a shared module that collects a
-  feature's whole vocabulary is just the feature again under another name.
+  second tool actually reads: `manager/format` keeps the KTC values, the week
+  horizons and the contracted player name only that tool renders, because a
+  shared module that collects a feature's whole vocabulary is just the feature
+  again under another name.
+
+  **The manager plate is the largest thing that rule has moved, and it took four
+  modules with it.** The lineup checker draws the same card, so
+  `components/manager-header/` is `features/shared/ui/manager-header/`, and what
+  it reads went with it: `record.ts` (the record's shape and the two rules that
+  sum one), the four formatters the plate is written in plus `formatPoints`, and
+  `useKickoff` with the key and TTL it reads (`schedule-query.ts` — the instant
+  was never manager-scoped, it is a fact about a season). Each leaves the usual
+  re-export behind. Two details worth keeping. The card is **not** on
+  `features/shared/index.ts`: it pulls in a countdown, a dial and a query hook,
+  and from that barrel it would join the graph of every page that imports
+  anything shared — so both call sites name the module path, the rule the ADP
+  drawer and the league filters dialog already keep. And the three sync-state
+  props are **optional**, because the second page has no leagues stream behind
+  it: a page with nothing transient to report passes none rather than threading
+  three nulls through to say so.
 - **The trades page carries two filter sets, like the manager tabs, and for the
   same reason.** The league filters say *which leagues' trades are in the list at
   all*; the trade filters say *which of those trades* — circle, window, players,
@@ -2083,10 +2118,16 @@ stops holding, a comment saying it does would not have caught it.
   `inline-flex` itself — a shared component that hard-codes one is a component
   no caller can hide, and the failure is silent in both the class list and the
   compiler. Source order in the `class` attribute never enters into it.
-- **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
-  being looked at, the season, the sync state and the manager's record are the
-  same facts on all of them; only the headline count differs, which is what
-  `stat` is. **It is pinned under the app bar and it carries no tabs** — those
+- **Every `/manager/[searched]/…` view renders one `ManagerHeader`, and so does
+  the lineup checker.** Who is being looked at, the season, the sync state and
+  the manager's record are the same facts on all of them; only the headline count
+  differs, which is what `stat` is. The fourth page swaps the *aggregation*
+  behind `record` and nothing else — `projectedRecord` over this week's matchups
+  rather than `aggregateRecord` over the season — because the two are one shape
+  counted by the same two rules (the denominator is what contributed; zero and
+  absent are different answers), and a second card drawn to say that would be a
+  second chance for one of them to drift. Its week goes in `scope`, which is the
+  slot that names what a record was counted over. **It is pinned under the app bar and it carries no tabs** — those
   two go together: a card that stays on screen is paying for its height out of
   the list behind it, so navigation left the card entirely (first to a tab strip
   in the bar, then to the bar's tools menu, which listed the three views anyway)

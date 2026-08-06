@@ -2,10 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchJson } from "../query-fns";
-import { STALE_TIMES } from "../query-config";
-import { scheduleQueryKeys } from "../query-keys";
-import type { KickoffResult } from "../types";
+import type { KickoffPayload } from "@/shared/contract";
+
+import { fetchJson } from "./api";
+import { KICKOFF_STALE_TIME, scheduleQueryKeys } from "./schedule-query";
 
 /**
  * When the viewed season's first regular-season game kicks off, epoch ms, off
@@ -26,21 +26,24 @@ import type { KickoffResult } from "../types";
  * it doesn't retry, since a header that says nothing for two round trips is a
  * worse answer than the provisional one arriving now.
  *
- * The header renders on all three manager tabs, so this used to be one request
- * per navigation for an instant that is fixed once the season is scheduled.
+ * The header renders on all three manager tabs and on the lineup checker, so
+ * this used to be one request per navigation for an instant that is fixed once
+ * the season is scheduled. It sits in `features/shared` because that header
+ * does: a hook a shared component calls cannot live inside one of the tools
+ * calling it.
  */
 export function useKickoff(season: string): number | null | undefined {
   const kickoff = useQuery({
     queryKey: scheduleQueryKeys.kickoff(season),
     queryFn: async ({ signal }) => {
-      const payload = await fetchJson<KickoffResult>(
+      const payload = await fetchJson<KickoffPayload>(
         `/api/kickoff?season=${encodeURIComponent(season)}`,
         "Failed to load the season schedule",
         signal,
       );
       return payload.kickoff;
     },
-    staleTime: STALE_TIMES.kickoff,
+    staleTime: KICKOFF_STALE_TIME,
     retry: false,
   });
 

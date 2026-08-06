@@ -1,8 +1,11 @@
-import { Avatar } from "@/features/shared";
+import type { UserInfo } from "@/shared/contract";
 
+// The module rather than the barrel: this card is *in* `features/shared`, so
+// reaching its own index would be a cycle.
+import { Avatar } from "../avatar";
 import { formatRecord } from "../../format";
 import type { OverallRecord } from "../../record";
-import type { LeaguesResult } from "../../types";
+
 import { HeaderReadout } from "./header-readout.tsx";
 import { recordBarParts } from "./manager-header.utils.ts";
 
@@ -24,7 +27,7 @@ export function ManagerSummary({
   leagueCount,
   padding,
 }: {
-  user: LeaguesResult["user"];
+  user: UserInfo;
   season: string;
   record: OverallRecord;
   scope: string | null;

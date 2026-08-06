@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { matchupState, opponentLabel } from "./opponent.ts";
-import type { MatchupOpponentPayload } from "./types.ts";
+import type {
+  LeagueMatchupPayload,
+  MatchupOpponentPayload,
+} from "./types.ts";
 
 const opponent = (
   fields: Partial<MatchupOpponentPayload> = {},
@@ -41,9 +44,23 @@ describe("opponentLabel", () => {
   });
 });
 
+/**
+ * A stored matchup with only the field this module reads filled in — the
+ * projections ride on the same payload and `matchupState` is deliberately blind
+ * to them: which of the four states a row is in is a question about the pairing.
+ */
+const matchup = (
+  opponent: MatchupOpponentPayload | null,
+): LeagueMatchupPayload => ({
+  roster_id: 1,
+  opponent,
+  projection: null,
+  opponent_projection: null,
+});
+
 describe("matchupState", () => {
   test("no stored week is a fact about the season, whatever a league holds", () => {
-    assert.deepEqual(matchupState(null, { roster_id: 1, opponent: opponent() }), {
+    assert.deepEqual(matchupState(null, matchup(opponent())), {
       kind: "no-week",
     });
   });
@@ -53,14 +70,14 @@ describe("matchupState", () => {
   });
 
   test("stored with no opponent is a bye — a real answer", () => {
-    assert.deepEqual(matchupState(3, { roster_id: 1, opponent: null }), {
+    assert.deepEqual(matchupState(3, matchup(null)), {
       kind: "bye",
     });
   });
 
   test("carries the opponent through where there is one", () => {
     const other = opponent();
-    assert.deepEqual(matchupState(3, { roster_id: 1, opponent: other }), {
+    assert.deepEqual(matchupState(3, matchup(other)), {
       kind: "opponent",
       opponent: other,
     });

@@ -1,5 +1,5 @@
 import type { OverallRecord } from "../../record";
-import type { LeaguesResult, SyncProgress } from "../../types";
+import type { HeaderProgress, HeaderSyncSummary } from "./manager-header.types.ts";
 
 /**
  * The decisions the header makes before it draws anything: which of two paddings
@@ -54,8 +54,8 @@ export function hasSyncState({
   summary,
   refreshError,
 }: {
-  refreshing: boolean;
-  summary: LeaguesResult["summary"];
+  refreshing?: boolean;
+  summary?: HeaderSyncSummary;
   refreshError?: string | null;
 }): boolean {
   return Boolean(
@@ -71,7 +71,7 @@ export function hasSyncState({
  * page shows as a loading state rather than as a pill over cached rows. A total
  * of zero has no fraction to write.
  */
-export function refreshingSuffix(progress: SyncProgress | null): string {
+export function refreshingSuffix(progress: HeaderProgress | null | undefined): string {
   return progress && progress.phase === "refresh" && progress.total > 0
     ? ` ${progress.loaded}/${progress.total}`
     : "…";

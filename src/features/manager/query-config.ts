@@ -35,6 +35,8 @@ export const STALE_TIMES = {
   adpValue: 15 * 60 * 1000,
   /** One league's standings and rosters, behind an expanded card. */
   leagueDetail: 5 * 60 * 1000,
-  /** Kickoff: an instant that is fixed once Sleeper has scheduled the season. */
-  kickoff: 60 * 60 * 1000,
+  // Kickoff's TTL left with the countdown that reads it, to
+  // `features/shared/schedule-query.ts`: this table is "how long the *manager
+  // area's* answers are worth reusing", and that instant stopped being one of
+  // them when a second tool started drawing the same plate.
 } as const;

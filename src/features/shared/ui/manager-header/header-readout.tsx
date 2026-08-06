@@ -1,6 +1,7 @@
-import { firstKickoff } from "@/features/shared";
-
-import { useKickoff } from "../../hooks/use-kickoff";
+// Both the module rather than the barrel, for `manager-summary`'s reason: this
+// card lives inside `features/shared`, so its own index is a cycle from here.
+import { firstKickoff } from "../../nfl-calendar";
+import { useKickoff } from "../../use-kickoff";
 import { KickoffCountdown } from "./kickoff-countdown.tsx";
 import { resolveKickoff } from "./manager-header.utils.ts";
 import { useTick } from "./use-tick.ts";

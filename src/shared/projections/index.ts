@@ -20,6 +20,7 @@ export {
   getLeagueOutlook,
   getOptimalLineups,
   getWeeklyTeamPoints,
+  getWeekLineups,
 } from "./outlook";
 export type {
   LeagueOutlook,
@@ -28,7 +29,9 @@ export type {
   OutlookRoster,
   PlayerOutlook,
   TeamOutlook,
+  TeamWeekLineup,
   WeeklyTeamPoints,
+  WeekLineups,
 } from "./outlook";
 export {
   parseProjectionFilters,
