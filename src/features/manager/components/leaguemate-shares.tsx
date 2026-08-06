@@ -24,6 +24,8 @@ export function LeaguemateShares({
   mates,
   leagueCount,
   columns,
+  isSelected,
+  onSelect,
 }: {
   mates: LeaguemateShare[];
   /** Leagues the shares are out of — see `LeaguemateShares.league_count`. */
@@ -33,6 +35,12 @@ export function LeaguemateShares({
    * edits it is pinned in the manager header, on the other side of this list.
    */
   columns: string[];
+  /**
+   * Whether a person is narrowing the league list, and how to toggle them —
+   * passed by the shares sheet and by nothing else; see {@link ShareList}.
+   */
+  isSelected?: (mate: LeaguemateShare) => boolean;
+  onSelect?: (mate: LeaguemateShare) => void;
 }) {
   return (
     <ShareList
@@ -44,6 +52,8 @@ export function LeaguemateShares({
       )}
       metrics={LEAGUEMATE_SHARE_METRICS}
       columns={columns}
+      isSelected={isSelected}
+      onSelect={onSelect}
     />
   );
 }

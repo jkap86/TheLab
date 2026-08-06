@@ -11,6 +11,7 @@ import { useManagerLeaguemates } from "../hooks/use-manager-leaguemates";
 import { useManagerPlayers } from "../hooks/use-manager-players";
 import {
   type Subject,
+  type SubjectKind,
   type SubjectMatch,
   type SubjectOption,
   removeSubjectAt,
@@ -23,16 +24,35 @@ import { ListLedge } from "./list-ledge";
 import { MatchToggle, SubjectToken } from "./subject-parts";
 
 /**
- * The shares sheet, loaded the first time it is opened.
+ * The two shares sheets, each loaded the first time it is opened.
  *
- * It is the Players tab's whole apparatus — the share cards, the metric
- * catalogue, the columns editor behind the heading rail, the ADP board — none of
- * which is on screen until the key is pressed, and none of which the Leagues tab
- * would otherwise parse at all. `ssr: false` for the reason the columns editor
- * takes it: a dialog nobody has opened has no server-rendered state worth having.
+ * One is the Players tab's whole apparatus and the other the Leaguemates tab's —
+ * the share cards, the metric catalogue, the columns editor behind the heading
+ * rail, and for the players one the ADP board — none of which is on screen until
+ * a key is pressed, and none of which the Leagues tab would otherwise parse at
+ * all. `ssr: false` for the reason the columns editor takes it: a dialog nobody
+ * has opened has no server-rendered state worth having.
+ *
+ * **Two `dynamic()` calls rather than one shell imported once**, because the seam
+ * worth splitting is the one a reader actually stops at: most open one browse and
+ * never the other, and the players half carries the whole ADP apparatus the
+ * leaguemates half has no column for. Measured, that is 6.8KB and 6.5KB against
+ * ~9KB for a single chunk holding both.
+ *
+ * The cost is that {@link SharesSheet} is inlined into *each* of them — webpack
+ * does not hoist a module shared by two async chunks into a third — so a reader
+ * who opens both pays for the shell twice. That is the right way round: it is
+ * ~4KB duplicated for the minority who browse both, against ~2KB of dead
+ * catalogue and reads for everyone who browses one. Worth re-measuring if the
+ * shell ever grows into the larger half of a chunk.
  */
 const PlayerSharesSheet = dynamic(
   () => import("./player-shares-sheet").then((m) => m.PlayerSharesSheet),
+  { ssr: false },
+);
+
+const LeaguemateSharesSheet = dynamic(
+  () => import("./leaguemate-shares-sheet").then((m) => m.LeaguemateSharesSheet),
   { ssr: false },
 );
 
@@ -80,15 +100,25 @@ const RESULT_LIMIT = 8;
  * the moment anything is picked, and cannot be widened again without being
  * cleared — the rule the trades board's facets keep, for the same reason.
  *
- * **The shares key is a second door onto the same selection, and it opens a
+ * **The shares keys are a second door onto the same selection, and they open a
  * sheet rather than this panel.** Typing is only one way to arrive at a name: the
- * players a reader narrows by are mostly the ones they hold everywhere, and that
- * is a list worth *reading* rather than picking blind from — which a floating
- * panel cannot do, because a name and a count is all it has room to say. So the
- * browse is {@link PlayerSharesSheet}: the Players tab's own list, with its four
- * pickable columns and the league filters, laid over the page it narrows. What
- * the two doors still share is the thing that matters — a player picked by
- * browsing leaves exactly the token a player picked by typing does.
+ * subjects a reader narrows by are mostly the ones they hold or play everywhere,
+ * and that is a list worth *reading* rather than picking blind from — which a
+ * floating panel cannot do, because a name and a count is all it has room to say.
+ * So the browse is {@link PlayerSharesSheet} or {@link LeaguemateSharesSheet}: the
+ * matching tab's own list, with its four pickable columns and the league filters,
+ * laid over the page it narrows. What every door shares is the thing that matters
+ * — a subject picked by browsing leaves exactly the token one picked by typing
+ * does.
+ *
+ * **There is a key per kind, where the search is one field over both.** Those are
+ * opposite halves of one argument rather than an inconsistency. A reader *typing*
+ * a name already knows which kind it is, so making them pick a field first is a
+ * question with no purpose. A reader *browsing* has arrived with a question — "who
+ * do I hold" and "who do I play against" are two of them — and one merged list
+ * ranked by leagues held would answer neither: the columns differ (a person has no
+ * board price), and several hundred players would bury several hundred people
+ * whichever way it sorted.
  */
 export function SubjectRail({
   view,
@@ -100,11 +130,24 @@ export function SubjectRail({
 }) {
   const { subjects, setSubjects } = useSubjectFilters();
   const [open, setOpen] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  // Latched rather than gated on `sheetOpen`, so closing doesn't unmount the
-  // dialog inside its own close handler — and so a second press is instant.
-  const [everOpened, setEverOpened] = useState(false);
-  if (sheetOpen && !everOpened) setEverOpened(true);
+  /**
+   * Which browse is up, if either.
+   *
+   * One value rather than a flag apiece: both are modal, so two open at once is
+   * unrepresentable rather than merely avoided — and the rail is behind whichever
+   * is up, so a reader cannot reach the other key to try.
+   */
+  const [sheet, setSheet] = useState<SubjectKind | null>(null);
+  /**
+   * Which have ever been opened — latched, so closing doesn't unmount a dialog
+   * inside its own close handler and a second press is instant.
+   *
+   * Latched *per kind* rather than once for both, because mounting is what
+   * downloads the chunk: a reader who only ever browses players must not pay for
+   * the leaguemates list's catalogue and reads.
+   */
+  const [mounted, setMounted] = useState<readonly SubjectKind[]>([]);
+  if (sheet && !mounted.includes(sheet)) setMounted([...mounted, sheet]);
   const [query, setQuery] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -140,13 +183,6 @@ export function SubjectRail({
   const results = useMemo(
     () => searchSubjects(options, query, RESULT_LIMIT),
     [options, query],
-  );
-
-  /** What a selected subject is called — resolved from the same option list. */
-  const nameOf = useCallback(
-    (subject: Subject) =>
-      options.find((o) => subjectKey(o.subject) === subjectKey(subject)),
-    [options],
   );
 
   const close = useCallback(() => {
@@ -195,18 +231,20 @@ export function SubjectRail({
 
             {/* The tokens: the selection restated where it was made, each its own
                 way off. They come before the trigger rather than after it so the
-                row reads left to right as caption, selection, add. */}
-            {subjects.subjects.map((subject, i) => {
-              const option = nameOf(subject);
-              return (
-                <SubjectToken
-                  key={subjectKey(subject)}
-                  subject={subject}
-                  option={option ?? null}
-                  onRemove={() => setSubjects(removeSubjectAt(subjects, i))}
-                />
-              );
-            })}
+                row reads left to right as caption, selection, add.
+
+                Named through `subjectDisplay` rather than off the option list
+                beside them, so this rail and both sheets read one definition of
+                what a token says — see the note on that resolver for why the
+                option list cannot be it. */}
+            {subjects.subjects.map((subject, i) => (
+              <SubjectToken
+                key={subjectKey(subject)}
+                subject={subject}
+                label={view.subjectDisplay(subject)}
+                onRemove={() => setSubjects(removeSubjectAt(subjects, i))}
+              />
+            ))}
 
             {/* The trigger is a slot cut into the storey's face — the same
                 channel the headings below sit in, which is this app's answer to
@@ -232,21 +270,39 @@ export function SubjectRail({
               {count > 0 ? "Add" : "Player or leaguemate"}
             </button>
 
-            {/* The second door: the whole ranked list, over the page, with what
-                is worth knowing about each name on it. The panel closes behind
-                it — two floating things over one list, one of them covering the
-                other, is two answers to "where am I". */}
+            {/* The other two doors: the whole ranked list of each kind, over the
+                page, with what is worth knowing about every name on it. The
+                panel closes behind either — two floating things over one list,
+                one of them covering the other, is two answers to "where am I".
+
+                The label spells out what the sheet holds at rest and contracts
+                once there are tokens crowding the row, exactly as the search
+                trigger beside it does: the icon is what still tells the pair
+                apart, and this storey wraps rather than compresses. */}
             <button
               type="button"
               onClick={() => {
                 close();
-                setSheetOpen(true);
+                setSheet("player");
               }}
               aria-haspopup="dialog"
               className="lab-ledge-slot flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[10px] font-semibold text-foreground/70 transition-colors hover:text-active"
             >
               <SharesIcon />
-              {count > 0 ? "Shares" : "Player shares"}
+              {count > 0 ? "Players" : "Player shares"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                close();
+                setSheet("leaguemate");
+              }}
+              aria-haspopup="dialog"
+              className="lab-ledge-slot flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[10px] font-semibold text-foreground/70 transition-colors hover:text-active"
+            >
+              <MatesIcon />
+              {count > 0 ? "Leaguemates" : "Leaguemate shares"}
             </button>
 
             {/* The rail's own answer. Dimmed while the maps behind a selection
@@ -286,11 +342,22 @@ export function SubjectRail({
         }
       />
 
-      {everOpened && (
+      {/* `onClose` clears only its own kind: a sheet closing is the last thing
+          that happens on the way out of it, and clearing the state flatly would
+          have one dialog's exit cancel whatever had just been asked for. */}
+      {mounted.includes("player") && (
         <PlayerSharesSheet
           view={view}
-          open={sheetOpen}
-          onClose={() => setSheetOpen(false)}
+          open={sheet === "player"}
+          onClose={() => setSheet((s) => (s === "player" ? null : s))}
+        />
+      )}
+
+      {mounted.includes("leaguemate") && (
+        <LeaguemateSharesSheet
+          view={view}
+          open={sheet === "leaguemate"}
+          onClose={() => setSheet((s) => (s === "leaguemate" ? null : s))}
         />
       )}
     </div>
@@ -493,6 +560,34 @@ function SearchIcon() {
     >
       <circle cx="7" cy="7" r="4.5" />
       <path d="M10.5 10.5 14 14" />
+    </svg>
+  );
+}
+
+/**
+ * Two figures at 12px: the people you play against — the leaguemates tool's own
+ * glyph, redrawn on this rail's 16 viewBox rather than scaled off the 24 one.
+ *
+ * The three icons in this storey are one set, and the tool icons are another
+ * (20px, in a menu that is scanned): borrowing across would land a different
+ * stroke weight on the same row.
+ */
+function MatesIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="h-3 w-3 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="6" cy="5.5" r="2.4" />
+      <path d="M1.8 13.2a4.2 4.2 0 0 1 8.4 0" />
+      <path d="M10.6 3.6a2.4 2.4 0 0 1 0 3.9" />
+      <path d="M11.5 9.7a4.2 4.2 0 0 1 2.7 3.5" />
     </svg>
   );
 }
