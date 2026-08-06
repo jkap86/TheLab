@@ -9,7 +9,7 @@ import {
 import type { Trade, TradeSide } from "../../types";
 import { TradeValueTag } from "../trade-value";
 import { AssetTrack } from "./trade-assets";
-import { ASSET_TRACKS_PAIRED } from "./trade-card.constants.ts";
+import { ASSET_TRACKS_PAIRED, SIDE_ZONE } from "./trade-card.constants.ts";
 import type {
   TradeCardLookups,
   TradeCardPricing,
@@ -27,21 +27,32 @@ import { sideContext } from "./trade-card.utils.ts";
  * manager's block can now be read on its own, which is how a card in a windowed
  * list of forty thousand is actually read, rather than by finding the
  * counterparty's column and inverting it. It is paid for in *material* rather
- * than in height — the gives sit in a groove milled into the side plate, dimmer
+ * than in height — the gives sit in a groove milled into the card's face, dimmer
  * and a step smaller, so the card still reads take-first — and it is drawn only
  * where it is honest, which is a two-sided trade (see `../../exchange`).
+ *
+ * **It is a region of that face and not a plate on it**, which is the card's
+ * whole hierarchy — see `SIDE_ZONE` for what was wrong with the plate and
+ * `TradeCard` for what the correction cost.
  */
 export function TradeSideColumn({
   side,
   trade,
   lookups,
   pricing,
+  seam,
   wide,
 }: {
   side: TradeSide;
   trade: Trade;
   lookups: TradeCardLookups;
   pricing: TradeCardPricing;
+  /**
+   * The cut parting this side from the one before it, empty for the first —
+   * which way it runs is the call site's arithmetic, since only it knows where
+   * this side sits in the grid.
+   */
+  seam: string;
   /** Whether this side takes the whole row — see the grid at the call site. */
   wide: boolean;
 }) {
@@ -59,25 +70,24 @@ export function TradeSideColumn({
   const showGiven = given !== null && !isEmptyBundle(given);
 
   return (
-    // Seated in the card's own face, which is why it wears both the thinner wall
-    // and the lifted fill: a part seated in another has to catch more light than
-    // what it is seated in, or the two read as one surface with a seam.
-    <div
-      className={`lab-plate-sm lab-plate-brushed rounded-lg px-2.5 py-2.5 ${
-        wide ? "sm:col-span-2" : ""
-      }`}
-    >
+    // A region of the card's face: the seam is what says where it starts, and
+    // there is nothing else to see.
+    <div className={`${SIDE_ZONE} ${seam} ${wide ? "sm:col-span-2" : ""}`}>
       {/* No "Receives" eyebrow: at half a card's width it spent ~70px of the
           manager's line restating what every `+` under it already says, and the
-          name is what was giving way for it. The parting line under the row is a
-          milled one — a dark cut with a lit far lip — rather than a border. */}
-      <div className="mb-2 flex items-center gap-2 pb-2 shadow-[0_1px_0_rgba(0,0,0,0.6),0_2px_0_rgba(255,255,255,0.06)]">
+          name is what was giving way for it. No parting line under the row
+          either — with the side no longer a plate, the seam above it is the only
+          horizontal cut this block gets, and a second one two lines down would
+          be back to drawing a box. */}
+      <div className="mb-2 flex items-center gap-2">
         <Avatar url={manager?.avatar_url} name={name} />
         <span className="min-w-0 truncate text-[13px] font-bold">{name}</span>
-        {/* Under glass, and flush right — the same edge the per-line values
-            below sit on, so the column reads as the lines summing to the figure
-            above them. */}
-        <span className="lab-readout lab-lens ml-auto shrink-0 rounded px-2 py-0.5">
+        {/* In a readout, flush right — the same edge the per-line values below
+            sit on, so the column reads as the lines summing to the figure above
+            them. Recessed and not under a lens: a lens is glass with a cyan rim
+            and a gloss, which is the *lit* reading the card deliberately trades
+            away for an engraved one. */}
+        <span className="lab-readout ml-auto shrink-0 rounded px-2 py-0.5">
           <TradeValueTag metric={pricing.metric} ctx={context} />
         </span>
       </div>

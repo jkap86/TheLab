@@ -1,0 +1,1094 @@
+<title>Trade cards — decorated values, and a card that reads as one object</title>
+
+<style>
+  /* ------------------------------------------------------------------
+     Fourth in the series, so the palette, the faces and the section
+     grammar come from `shares-keys-in-the-rail.html` — which took them
+     from src/app/globals.css. A mock that looked like a different
+     product from the three before it would be arguing about the wrong
+     thing.
+     ------------------------------------------------------------------ */
+  :root {
+    color-scheme: dark;
+
+    --bench: #050b12;
+    --app-bg: rgb(10, 20, 30);
+
+    --well: #07131e;
+    --slot: #040e17;
+
+    --active: #00ffe5;
+    --active-deep: #00b0a0;
+    --on-active: #052029;
+    --edge: #05121d;
+    --edge-active: #00776b;
+
+    --fg: #ffffff;
+    --amber: #fbbf24;
+
+    --measure: 66ch;
+
+    --display: "Orbitron", "Eurostile", "Bahnschrift", ui-sans-serif, system-ui, sans-serif;
+    --body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  }
+
+  /* Inlined rather than linked: the artifact CSP blocks font CDNs, and a
+     silent fallback here would lose the one face the whole question is
+     about — every option below moves the numbers onto it. */
+  @font-face {
+    font-family: "Orbitron";
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: block;
+    src: url(data:font/woff2;base64,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) format("woff2");
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 620px at 12% -8%, rgba(0, 255, 229, 0.07), transparent 62%),
+      radial-gradient(900px 520px at 92% 4%, rgba(0, 120, 190, 0.09), transparent 60%),
+      var(--bench);
+    color: var(--fg);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------------------------------------------------------- shell */
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 20px 96px; }
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    margin-bottom: 40px;
+    background: linear-gradient(180deg, rgba(14, 32, 45, 0.92), rgba(6, 16, 24, 0.92));
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 255, 229, 0.16);
+    box-shadow: 0 6px 0 -1px #030a11, 0 12px 26px -14px rgba(0, 0, 0, 0.9);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .bar::-webkit-scrollbar { display: none; }
+  .bar__mark {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--active);
+    text-shadow: 0 0 16px rgba(0, 255, 229, 0.5);
+    white-space: nowrap;
+  }
+  .bar__keys { display: flex; gap: 6px; margin-left: auto; }
+  .bar__key {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.72);
+    text-decoration: none;
+    white-space: nowrap;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+    transition: background 0.15s, color 0.15s;
+  }
+  .bar__key:hover { background: linear-gradient(170deg, #34586f, #162b38); color: #fff; }
+  .bar__key:active { transform: translateY(2px); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.18), 0 1px 0 var(--edge); }
+  .bar__key:focus-visible, a:focus-visible { outline: 2px solid var(--active); outline-offset: 2px; }
+
+  /* ------------------------------------------------------------ masthead */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: rgba(255, 255, 255, 0.38);
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.07;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 12px 0 0;
+    background: linear-gradient(96deg, #ffffff 18%, var(--active) 92%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lede {
+    max-width: var(--measure);
+    margin: 20px 0 0;
+    font-size: 17px;
+    color: rgba(255, 255, 255, 0.74);
+  }
+  .lede b { color: #fff; font-weight: 600; }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 20px;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; margin: 0 0 6px; color: #fff; }
+  p { margin: 0; }
+  .prose { max-width: var(--measure); color: rgba(255, 255, 255, 0.72); }
+  .prose + .prose { margin-top: 14px; }
+  .prose b { color: #fff; font-weight: 600; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 255, 229, 0.08);
+    border: 1px solid rgba(0, 255, 229, 0.14);
+    color: #9ffff2;
+    white-space: nowrap;
+  }
+
+  /* Scoped to the page's own sections. Unscoped, this hit `<section
+     class="side">` inside every mocked card and pushed each side 64px down
+     its own grid row — the collision the mock exists to catch. */
+  .wrap > section { margin-top: 64px; scroll-margin-top: 76px; }
+  .rule { height: 1px; background: linear-gradient(90deg, rgba(0, 255, 229, 0.5), rgba(255, 255, 255, 0.08) 40%, transparent); }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; flex-wrap: wrap; }
+  .sec-head .eyebrow { margin-left: auto; }
+
+  /* ---------------------------------------------------------- diagnosis */
+  .cards {
+    display: grid;
+    gap: 14px;
+    margin-top: 26px;
+    grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  }
+  .card {
+    padding: 16px 17px 17px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+  .card p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .card__tag {
+    display: inline-block;
+    margin-bottom: 9px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--active);
+    background: rgba(0, 255, 229, 0.09);
+    border: 1px solid rgba(0, 255, 229, 0.22);
+  }
+  .card--warn .card__tag { color: var(--amber); background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.28); }
+
+  /* -------------------------------------------------------------- options */
+  .opt { margin-top: 76px; scroll-margin-top: 76px; }
+  .opt__head { display: flex; align-items: flex-start; gap: 14px; }
+  .opt__letter {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 3px 0 var(--edge-active),
+      0 8px 18px -6px rgba(0, 255, 229, 0.45);
+  }
+  .opt--alt .opt__letter {
+    color: rgba(255, 255, 255, 0.8);
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.22), 0 3px 0 var(--edge);
+  }
+  .opt__thesis { margin-top: 5px; font-size: 15px; color: rgba(255, 255, 255, 0.6); max-width: var(--measure); }
+  .opt__body { display: grid; gap: 16px; margin-top: 22px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .opt__body { grid-template-columns: 1fr 1fr; } }
+  .note h3 { display: flex; align-items: center; gap: 7px; }
+  .note h3::before {
+    content: "";
+    width: 3px;
+    height: 13px;
+    border-radius: 2px;
+    background: var(--active);
+    box-shadow: 0 0 8px rgba(0, 255, 229, 0.7);
+  }
+  .note--cost h3::before { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, 0.6); }
+  .note p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .note p + p { margin-top: 10px; }
+
+  .price {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    white-space: nowrap;
+  }
+  .price--good { color: var(--active); background: rgba(0, 255, 229, 0.09); border-color: rgba(0, 255, 229, 0.28); }
+
+  /* --------------------------------------------------- the mock enclosure */
+  .screen {
+    margin-top: 26px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    background: var(--app-bg);
+    box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+  }
+  .screen__tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.34);
+  }
+  .screen__tab b { color: rgba(0, 255, 229, 0.8); font-weight: 600; }
+  .screen__stage { padding: 22px; overflow-x: auto; }
+
+  /* Two benches: the phone, which is the width the complaint came from and
+     the only one where the sides stack, and a laptop beside it. Both are
+     shown because a separation that only works at one width is not one. */
+  .benches { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+  .bench { min-width: 0; }
+  .bench--phone { width: 373px; flex: none; }
+  .bench--wide { flex: 1 1 420px; min-width: 400px; }
+  .stage-cap {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 8px;
+  }
+
+  /* =========================================================== THE CARD ===
+     Every value below is copied out of src/app/globals.css so the mock and
+     the app are the same part — `.lab-slab`, `.lab-slab-face`,
+     `.lab-plate-sm` + `.lab-plate-brushed`, `.lab-groove`, `.lab-readout` +
+     `.lab-lens`, `.lab-billet-rail`. What each option changes, it changes
+     as an override under `.v-x`, so the diff you are reading is the diff
+     that would be written.
+     ======================================================================= */
+
+  .list { display: flex; flex-direction: column; }
+  .slab-wrap { position: relative; }
+  .leader { display: none; }
+  /* The gap lives as padding *inside* each item, the way TradesList carries
+     it — a gap the virtualizer doesn't know about drifts down the list. */
+  .list > * { padding-bottom: 12px; }
+  .list > *:last-child { padding-bottom: 0; }
+
+  .slab {
+    padding: 0 5px 5px 0;
+    background: linear-gradient(128deg, #14545c 0%, #0a2b33 38%, var(--edge) 76%);
+    clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+    filter:
+      drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 10px 16px rgba(0, 0, 0, 0.75))
+      drop-shadow(0 0 20px rgba(0, 255, 229, 0.1));
+  }
+  .face {
+    position: relative;
+    padding: 10px;
+    clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+    background:
+      repeating-linear-gradient(101deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(168deg, #1b3245 0%, #122534 46%, #0a1723 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 2.5px 0 -1px rgba(255, 255, 255, 0.14),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
+      inset 0 -20px 38px -22px rgba(0, 0, 0, 0.9),
+      inset -8px 0 16px -10px rgba(0, 0, 0, 0.75);
+  }
+  .face::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(106deg, transparent 20%, rgba(255, 255, 255, 0.055) 44%, transparent 60%);
+  }
+
+  /* ------------------------------------------------------------ the header */
+  .tc-head { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; padding: 0 4px 10px; }
+  .tc-rail {
+    flex: none;
+    width: 2px;
+    height: 16px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #c8fff9, #00b0a0);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+      inset -1.5px 0 3px rgba(0, 60, 55, 0.75),
+      3px 0 14px rgba(0, 255, 229, 0.5);
+  }
+  .tc-league {
+    margin: 0;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.12), 0 -1px 1px rgba(0, 0, 0, 0.9);
+  }
+  .tc-when {
+    flex: none;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.6);
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.85),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+
+  /* ------------------------------------------------------------- the sides */
+  .tc-sides { position: relative; z-index: 1; display: grid; gap: 8px; }
+  .bench--wide .tc-sides { grid-template-columns: 1fr 1fr; }
+  .bench--wide .side--odd { grid-column: 1 / -1; }
+
+  .side {
+    margin: 0;
+    min-width: 0;
+    padding: 10px;
+    border-radius: 8px;
+    background:
+      repeating-linear-gradient(101deg, rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 3px),
+      linear-gradient(165deg, #224054 0%, #14293a 58%, #0c1d29 100%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -18px 34px -24px rgba(0, 0, 0, 0.85),
+      0 2px 0 var(--edge),
+      0 10px 20px -12px rgba(0, 0, 0, 0.8);
+  }
+  .side-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6), 0 2px 0 rgba(255, 255, 255, 0.06);
+  }
+  .ava {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: #06131d;
+    background: linear-gradient(160deg, #7fd7ff, #2b7fa8);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 3px rgba(0, 0, 0, 0.6);
+  }
+  .ava--b { background: linear-gradient(160deg, #ffc98a, #c26a2e); }
+  .ava--c { background: linear-gradient(160deg, #ff9ec4, #b03e73); }
+  .ava--d { background: linear-gradient(160deg, #b7a4ff, #5b45b8); }
+  .side-name {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  /* -------------------------------------------------- the total, as shipped */
+  .tot {
+    flex: none;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.9),
+      inset 0 -1px 0 rgba(0, 255, 229, 0.18),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.24),
+      inset 0 0 14px -4px rgba(0, 255, 229, 0.42);
+  }
+  .tot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(112deg, rgba(255, 255, 255, 0.1) 0 32%, transparent 52%);
+  }
+  .tot__label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: rgba(255, 255, 255, 0.35); }
+  .tot__num { font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.85); }
+  .tot__num--none { color: rgba(255, 255, 255, 0.25); }
+
+  /* -------------------------------------------------------------- the lines */
+  .tracks { display: grid; gap: 8px; }
+  .bench--wide .tracks--paired { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); }
+  .track { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; min-width: 0; }
+  .track--in { gap: 6px; }
+  .track--out {
+    gap: 4px;
+    padding: 6px;
+    border-radius: 6px;
+    background: linear-gradient(180deg, #050e17, #081722);
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.95),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.05);
+  }
+  .line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 0 10px;
+    line-height: 1.35;
+  }
+  .track--in .line { font-size: 13px; }
+  .track--out .line { font-size: 12px; }
+  .line__name { min-width: 0; overflow-wrap: break-word; }
+  .track--in .line__name { color: rgba(255, 255, 255, 0.85); }
+  .track--out .line__name { color: rgba(255, 255, 255, 0.5); text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9); }
+  .sign { display: inline-block; width: 0.7em; margin-right: 4px; font-variant-numeric: tabular-nums; }
+  .track--in .sign { color: rgba(0, 255, 229, 0.5); }
+  .track--out .sign { color: rgba(255, 255, 255, 0.25); }
+  .meta { margin-left: 6px; font-size: 11px; white-space: nowrap; }
+  .track--in .meta { color: rgba(255, 255, 255, 0.45); }
+  .track--out .meta { color: rgba(255, 255, 255, 0.25); }
+  .line__val { flex: none; font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .track--in .line__val { color: rgba(255, 255, 255, 0.6); }
+  .track--out .line__val { color: rgba(255, 255, 255, 0.3); }
+  .dash { color: rgba(255, 255, 255, 0.25); }
+  .track--out .dash { color: rgba(255, 255, 255, 0.2); }
+  .nothing { font-size: 13px; color: rgba(255, 255, 255, 0.4); }
+
+  /* ======================================================== OPTION A ======
+     One face, two zones. The side plate is deleted: a side becomes a region
+     of the card's own face, and what separates two of them is a milled seam
+     running the full width. The card is then the only object in the list.
+     The value is a lamp — Orbitron in the accent, lit inside its lens.
+     ======================================================================= */
+  .v-a .slab { padding: 0 6px 6px 0; }
+  .v-a .face { padding: 10px 0 0; }
+  .v-a .tc-head { padding: 0 12px 9px; }
+  .v-a .tc-sides { gap: 0; }
+  .v-a .side {
+    padding: 10px 12px 11px;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+  /* The seam: a dark cut with a lit far lip, full-bleed so it reads as a
+     line milled across the card rather than as a border on a box. */
+  .v-a .side + .side { box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.75), inset 0 2px 0 rgba(255, 255, 255, 0.07); }
+  /* Side by side, the seam is the cut *between* the columns — a horizontal one
+     there would draw a line across the middle of a card whose sides are not
+     stacked. Same part, rotated with the layout. */
+  .bench--wide .v-a .side + .side {
+    box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.75), inset 2px 0 0 rgba(255, 255, 255, 0.07);
+  }
+  .v-a .side-head { box-shadow: none; padding-bottom: 0; margin-bottom: 7px; }
+  .v-a .tot {
+    padding: 3px 9px;
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.9),
+      inset 0 -1px 0 rgba(0, 255, 229, 0.3),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.36),
+      inset 0 0 16px -4px rgba(0, 255, 229, 0.6);
+  }
+  .v-a .tot__label { color: rgba(0, 255, 229, 0.45); }
+  .v-a .tot__num {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: #b9fff7;
+    text-shadow: 0 0 10px rgba(0, 255, 229, 0.55);
+  }
+  .v-a .tot__num--none { color: rgba(255, 255, 255, 0.22); text-shadow: none; }
+  .v-a .line__val { font-family: var(--display); font-size: 10.5px; font-weight: 500; letter-spacing: 0.01em; }
+  .v-a .track--in .line__val { color: rgba(154, 255, 243, 0.72); }
+  .v-a .track--out { margin-top: 2px; }
+  .v-a .list > * { padding-bottom: 22px; }
+
+  /* ======================================================== OPTION B ======
+     A chassis band and a ledger. The card grows a full-bleed recessed header
+     spanning edge to edge — nothing *inside* a card looks like that, so the
+     band is where a card begins. The sides drop into a trough milled in the
+     face. The lines rule across to their numbers the way a ledger does, and
+     the total sits in a totalizer window at the same right edge.
+     ======================================================================= */
+  .v-b .face { padding: 0 0 10px; }
+  .v-b .tc-head {
+    padding: 7px 12px 7px;
+    margin-bottom: 10px;
+    background: linear-gradient(180deg, #04101a, #0a1a26);
+    box-shadow:
+      inset 0 3px 7px rgba(0, 0, 0, 0.9),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.08),
+      0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  .v-b .tc-when { background: none; box-shadow: none; padding: 0; color: rgba(255, 255, 255, 0.5); }
+  /* The trough the sides are seated in. */
+  .v-b .tc-sides {
+    margin: 0 8px;
+    padding: 8px;
+    border-radius: 9px;
+    background: linear-gradient(180deg, #060f18, #0a1926);
+    box-shadow:
+      inset 0 3px 8px rgba(0, 0, 0, 0.85),
+      inset 0 -2px 6px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.07);
+  }
+  .v-b .tot {
+    padding: 3px 9px;
+    box-shadow:
+      inset 0 2px 8px rgba(0, 0, 0, 0.95),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.09),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.2);
+  }
+  .v-b .tot__num { font-family: var(--display); font-size: 13px; font-weight: 700; color: #fff; }
+  /* The ledger rule: a dotted leader running from the name out to its number.
+     A flex filler rather than an absolutely positioned line — it has to stop
+     where the name actually ends, and a wrapped name has to be able to push
+     it onto the next line rather than have it strike through the wrap. */
+  .v-b .line__name { display: flex; align-items: baseline; flex-wrap: nowrap; }
+  /* `flex: 1 1 0` with `min-width: 0` on both items is what makes this safe in
+     a narrow track: the name keeps its own wrapping and the leader shrinks to
+     nothing when there is no room left, rather than winning the first line and
+     pushing the name onto the second — which is what a growing, non-shrinking
+     leader did in the paired tracks at laptop width. */
+  /* `min-content`, not 0: shrunk to zero the name broke *inside words* in the
+     narrow paired track — "Max Kla / re" — because the base row allows
+     `overflow-wrap: break-word`. Floored at its longest word, the name wraps
+     at spaces the way it always did and the leader collapses instead. */
+  .v-b .name-txt { min-width: min-content; }
+  .v-b .leader {
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+    margin-left: 8px;
+    transform: translateY(-3px);
+    border-bottom: 1px dotted rgba(255, 255, 255, 0.22);
+  }
+  .v-b .track--out .leader { border-bottom-color: rgba(255, 255, 255, 0.12); }
+  .v-b .line__val { font-family: var(--display); font-size: 10.5px; font-weight: 600; }
+  .v-b .track--in .line__val { color: rgba(255, 255, 255, 0.72); }
+  .v-b .side { background: linear-gradient(165deg, #1d3849, #16293a 62%); }
+  .v-b .track--out { background: linear-gradient(180deg, #050e17, #071420); }
+  .v-b .list > * { padding-bottom: 18px; }
+
+  /* ======================================================== OPTION C ======
+     Head to head. A milled spine runs between the two sides and carries the
+     difference, so the sides are physically joined and cannot be read as two
+     cards. The value is a score: Orbitron at 17px in a sunken well.
+     ======================================================================= */
+  .v-c .tc-sides { gap: 0; }
+  .v-c .spine {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 26px;
+    margin: 3px 6px;
+    border-radius: 5px;
+    background: linear-gradient(180deg, #040e17, #081521);
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.95),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.08);
+  }
+  .bench--wide .v-c .tc-sides { grid-template-columns: 1fr auto 1fr; align-items: stretch; }
+  .bench--wide .v-c .spine { height: auto; width: 30px; margin: 0 4px; flex-direction: column; }
+  .spine__delta {
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    color: #b9fff7;
+    text-shadow: 0 0 9px rgba(0, 255, 229, 0.5);
+  }
+  .spine__mark { font-size: 11px; color: rgba(255, 255, 255, 0.3); }
+  .bench--wide .v-c .spine__delta { writing-mode: vertical-rl; }
+  .v-c .side-head { flex-wrap: wrap; }
+  /* Scoped to the side head, not to every `.tot`: the full-width well is a
+     fact about C's side layout, and unscoped it made the type specimen's
+     inline sample 318px wide and pushed the page sideways at 390px. */
+  .v-c .side-head .tot {
+    order: 3;
+    width: 100%;
+    margin-top: 7px;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 10px 5px;
+    border-radius: 6px;
+    box-shadow:
+      inset 0 3px 9px rgba(0, 0, 0, 0.95),
+      inset 0 -1px 0 rgba(0, 255, 229, 0.22),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.26),
+      inset 0 0 18px -5px rgba(0, 255, 229, 0.45);
+  }
+  .v-c .tot__label { font-size: 9px; letter-spacing: 0.14em; color: rgba(0, 255, 229, 0.5); }
+  .v-c .tot__num {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.005em;
+    color: #d6fffa;
+    text-shadow: 0 0 12px rgba(0, 255, 229, 0.45), 0 1px 0 rgba(0, 0, 0, 0.8);
+  }
+  .v-c .tot__num--none { color: rgba(255, 255, 255, 0.25); text-shadow: none; }
+  .v-c .line__val { font-family: var(--display); font-size: 10.5px; font-weight: 500; }
+  .v-c .list > * { padding-bottom: 20px; }
+
+  /* ======================================================== OPTION D ======
+     A nameplate riding the top edge. The league name is half-sunk into the
+     card's own edge — a part rising out of a card is the strongest mark for
+     "one object" available, and it costs no interior height. The sides lose
+     their wall and become flush inlays; the value is engraved rather than
+     lit.
+     ======================================================================= */
+  .v-d .slab-wrap { position: relative; padding-top: 9px; }
+  .v-d .plate {
+    position: absolute;
+    top: 0;
+    left: 14px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    max-width: calc(100% - 40px);
+    padding: 3px 11px 3px 9px;
+    border-radius: 5px;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.28),
+      0 2px 0 var(--edge),
+      0 5px 10px -4px rgba(0, 0, 0, 0.8);
+  }
+  .v-d .plate .tc-league { font-size: 11px; letter-spacing: 0.14em; }
+  .v-d .face { padding: 16px 10px 10px; }
+  /* The header row is gone, not hidden: the nameplate carries the league *and*
+     the instant, so the face opens straight onto the sides. Leaving the row in
+     to hold the timestamp spent a line of card height and gave back the
+     vertical saving the nameplate exists for. */
+  .v-d .tc-head { display: none; }
+  .v-d .plate .tc-when {
+    padding: 0;
+    background: none;
+    box-shadow: none;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+  }
+  .v-d .plate .tc-sep { color: rgba(255, 255, 255, 0.25); font-size: 10px; }
+  /* Flush inlay: a different grain in the same face, cut in with a hairline
+     rather than standing on a wall. */
+  .v-d .side {
+    padding: 9px 10px 10px;
+    border-radius: 6px;
+    background:
+      repeating-linear-gradient(101deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 3px),
+      linear-gradient(168deg, #1a3143 0%, #142838 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+  }
+  .v-d .tot {
+    padding: 3px 9px;
+    background: linear-gradient(180deg, #1d3648, #14293a);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -1px 3px rgba(0, 0, 0, 0.6),
+      0 1px 0 rgba(0, 0, 0, 0.5);
+  }
+  .v-d .tot::after { background: none; }
+  .v-d .tot__label { color: rgba(255, 255, 255, 0.32); }
+  /* Engraved: a dark shadow above and a light one below is a cut into metal.
+     No glow — the decoration here is the surface, not a lamp. */
+  .v-d .tot__num {
+    font-family: var(--display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 -1px 1px rgba(0, 0, 0, 0.95), 0 1px 0 rgba(255, 255, 255, 0.16);
+  }
+  .v-d .tot__num--none { color: rgba(255, 255, 255, 0.25); text-shadow: none; }
+  .v-d .line__val {
+    font-family: var(--display);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-shadow: 0 -1px 1px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  .v-d .track--in .line__val { color: rgba(255, 255, 255, 0.68); }
+  .v-d .list > * { padding-bottom: 20px; }
+
+  /* ------------------------------------------------------- type specimen */
+  .spec {
+    display: grid;
+    gap: 12px;
+    margin-top: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  }
+  .spec__cell {
+    padding: 15px 16px 17px;
+    border-radius: 11px;
+    background: linear-gradient(168deg, #1b3245 0%, #122534 46%, #0a1723 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 10px 20px -12px rgba(0, 0, 0, 0.9);
+  }
+  .spec__name { font-family: var(--mono); font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase; color: rgba(255, 255, 255, 0.34); margin-bottom: 12px; }
+  .spec__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .spec__cap { font-size: 12px; color: rgba(255, 255, 255, 0.4); margin-top: 12px; }
+
+  /* --------------------------------------------------------- comparison */
+  .compare { overflow-x: auto; margin-top: 24px; }
+  table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 14px; }
+  th, td { text-align: left; padding: 11px 13px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); vertical-align: top; }
+  thead th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    border-bottom-color: rgba(0, 255, 229, 0.25);
+  }
+  tbody th { font-family: var(--display); font-size: 13px; font-weight: 600; color: var(--active); width: 1%; white-space: nowrap; }
+  td { color: rgba(255, 255, 255, 0.68); }
+
+  .verdict {
+    margin-top: 26px;
+    padding: 20px 22px 22px;
+    border-radius: 13px;
+    background: linear-gradient(168deg, rgba(0, 255, 229, 0.08), rgba(0, 255, 229, 0.02));
+    border: 1px solid rgba(0, 255, 229, 0.22);
+  }
+  .verdict h3 { font-family: var(--display); font-size: 15px; margin-bottom: 10px; }
+
+  .truths { display: grid; gap: 14px; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<nav class="bar" aria-label="Options">
+  <span class="bar__mark">THE LAB · TRADE CARD</span>
+  <span class="bar__keys">
+    <a class="bar__key" href="#now">As it stands</a>
+    <a class="bar__key" href="#a">A · Zones</a>
+    <a class="bar__key" href="#b">B · Chassis</a>
+    <a class="bar__key" href="#c">C · Spine</a>
+    <a class="bar__key" href="#d">D · Nameplate</a>
+    <a class="bar__key" href="#pick">Pick</a>
+  </span>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Trades board · the card · four treatments</p>
+    <h1>The values are the quietest thing on a card about value</h1>
+    <p class="lede">
+      Two complaints, and they turn out to be one. The numbers are set in the
+      body face at the smallest size on the card, so the page's whole subject
+      reads last — and a side plate is built like a card, so the card it is
+      inside stops reading as an object. <b>Both are hierarchy: the card is not
+      more of a thing than its parts are, and the value is not more of a thing
+      than the names around it.</b> Four ways to fix it, each shown at the width
+      the complaint came from.
+    </p>
+  </header>
+
+  <section id="now">
+    <div class="rule"></div>
+    <div class="sec-head" style="margin-top:22px">
+      <h2>What is actually going wrong</h2>
+      <span class="eyebrow">Read first</span>
+    </div>
+    <div class="cards"><div class="card"><span class="card__tag">Read</span><h3>The numbers are the quietest type on the card</h3><p>The league name is Orbitron at 13px, uppercase, tracked. The manager's name is 13px bold. The value — the thing the page is <i>for</i> — is 12px bold body face at 85%, and the per-asset numbers are 11px at 60%. The card's subject is priced lowest in its own hierarchy.</p></div><div class="card card--warn"><span class="card__tag">Cost</span><h3>A side is built exactly like a card</h3><p>Raised, walled, brushed, rounded, with an avatar, a name and a readout on it. That is the card's own construction one step down — and one step is not enough to read as containment, so on a phone the list looks like eight manager plates rather than four trades.</p></div><div class="card"><span class="card__tag">Read</span><h3>The spacing is already right, which is the tell</h3><p>8px between sides against roughly 32px between the nearest plates of two cards is a 4:1 ratio, and it still doesn't read. When proximity is correct and grouping still fails, the problem is weight — so the fix has to be material, and more air alone will not buy it.</p></div></div>
+
+    
+    <div class="screen">
+      <div class="screen__tab">As it stands · <b>today's card</b></div>
+      
+      <div class="screen__stage">
+        <div class="benches">
+          <div class="bench bench--phone">
+            <p class="stage-cap">Phone · 373px · the width the sides stack at</p>
+            <div class="v-base"><div class="list"><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">2026 COB PRE DRAFT</h4><span class="tc-when">Aug 6, 2026 · 2:17 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava " aria-hidden="true">j</span><span class="side-name">jakewright0909</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,617</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">DJ Moore<span class="meta">WR · BUF</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Dallas Goedert</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,600</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Ja'Kobi Lane</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,518</span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--b" aria-hidden="true">R</span><span class="side-name">Rellis19858</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">5,118</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Dallas Goedert<span class="meta">TE · PHI</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,600</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Ja'Kobi Lane<span class="meta">WR · BAL</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,518</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">DJ Moore</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section></div></article></div></div><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">FFL (FANTASY FOOTBALL LEAGUE)</h4><span class="tc-when">Aug 6, 2026 · 1:47 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava ava--c" aria-hidden="true">W</span><span class="side-name">WiscoMick11</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Jonas Sanker<span class="meta">DB · NO</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Max Klare<span class="meta">TE · LAR</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Brenton Strange</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--d" aria-hidden="true">S</span><span class="side-name">SpicyRice1</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,688</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Brenton Strange<span class="meta">TE · JAX</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Jonas Sanker</span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Max Klare</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul></div></section></div></article></div></div></div></div>
+          </div>
+          <div class="bench bench--wide">
+            <p class="stage-cap">Laptop · sides side by side</p>
+            <div class="v-base"><div class="list"><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">FFL (FANTASY FOOTBALL LEAGUE)</h4><span class="tc-when">Aug 6, 2026 · 1:47 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava ava--c" aria-hidden="true">W</span><span class="side-name">WiscoMick11</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Jonas Sanker<span class="meta">DB · NO</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Max Klare<span class="meta">TE · LAR</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Brenton Strange</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--d" aria-hidden="true">S</span><span class="side-name">SpicyRice1</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,688</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Brenton Strange<span class="meta">TE · JAX</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Jonas Sanker</span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Max Klare</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul></div></section></div></article></div></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="rule"></div>
+    <div class="sec-head" style="margin-top:22px">
+      <h2>The four numerals, at size</h2>
+      <span class="eyebrow">Type first</span>
+    </div>
+    <p class="prose" style="margin-top:14px">
+      Every option moves the value onto Orbitron — the face the app already uses
+      for instruments and names. What differs is what the face is asked to do:
+      light up, tie a ledger together, keep score, or sit stamped in metal.
+    </p>
+    <div class="spec"><div class="spec__cell"><p class="spec__name">As shipped</p><div class=""><div class="spec__row"><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span><span class="line__val">2,047</span></div></div><p class="spec__cap">12px bold, body face, 85% white. Dimmer than the manager's name beside it and quieter than the league name above it.</p></div><div class="spec__cell"><p class="spec__name">A · lit</p><div class="v-a"><div class="spec__row"><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span><span class="line__val">2,047</span></div></div><p class="spec__cap">Orbitron 700 in the accent, glowing inside its lens. The card's brightest element.</p></div><div class="spec__cell"><p class="spec__name">B · ledger</p><div class="v-b"><div class="spec__row"><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span><span class="line__val">2,047</span></div></div><p class="spec__cap">Orbitron 700 in white, in a plainer window. The decoration is the rule running to it, not the number itself.</p></div><div class="spec__cell"><p class="spec__name">C · score</p><div class="v-c"><div class="spec__row"><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span><span class="line__val">2,047</span></div></div><p class="spec__cap">Orbitron 800 at 17px in a deep well. Reads as a score before it reads as a price.</p></div><div class="spec__cell"><p class="spec__name">D · engraved</p><div class="v-d"><div class="spec__row"><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span><span class="line__val">2,047</span></div></div><p class="spec__cap">Orbitron 700, cut into the plate with a dark shadow above and a light one below. Decorative without a second accent.</p></div></div>
+  </section>
+
+  
+  <section class="opt" id="a">
+    <div class="opt__head">
+      <span class="opt__letter" aria-hidden="true">A</span>
+      <div>
+        <h2>One face, two zones</h2>
+        <p class="opt__thesis">Delete the side plate. A side becomes a region of the card's own face, and what parts two of them is a seam milled across the full width. The card is then the only object in the list — nothing inside it is built like a card, because nothing inside it is built at all.</p>
+      </div>
+    </div>
+    
+    <div class="screen">
+      <div class="screen__tab">Option A · <b>zones and a seam</b> · the value is a lamp</div>
+      
+      <div class="screen__stage">
+        <div class="benches">
+          <div class="bench bench--phone">
+            <p class="stage-cap">Phone · 373px · the width the sides stack at</p>
+            <div class="v-a"><div class="list"><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">2026 COB PRE DRAFT</h4><span class="tc-when">Aug 6, 2026 · 2:17 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava " aria-hidden="true">j</span><span class="side-name">jakewright0909</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,617</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">DJ Moore<span class="meta">WR · BUF</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Dallas Goedert</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,600</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Ja'Kobi Lane</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,518</span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--b" aria-hidden="true">R</span><span class="side-name">Rellis19858</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">5,118</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Dallas Goedert<span class="meta">TE · PHI</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,600</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Ja'Kobi Lane<span class="meta">WR · BAL</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,518</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">DJ Moore</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section></div></article></div></div><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">FFL (FANTASY FOOTBALL LEAGUE)</h4><span class="tc-when">Aug 6, 2026 · 1:47 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava ava--c" aria-hidden="true">W</span><span class="side-name">WiscoMick11</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Jonas Sanker<span class="meta">DB · NO</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Max Klare<span class="meta">TE · LAR</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Brenton Strange</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--d" aria-hidden="true">S</span><span class="side-name">SpicyRice1</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,688</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Brenton Strange<span class="meta">TE · JAX</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Jonas Sanker</span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Max Klare</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul></div></section></div></article></div></div></div></div>
+          </div>
+          <div class="bench bench--wide">
+            <p class="stage-cap">Laptop · sides side by side</p>
+            <div class="v-a"><div class="list"><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">FFL (FANTASY FOOTBALL LEAGUE)</h4><span class="tc-when">Aug 6, 2026 · 1:47 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava ava--c" aria-hidden="true">W</span><span class="side-name">WiscoMick11</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Jonas Sanker<span class="meta">DB · NO</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Max Klare<span class="meta">TE · LAR</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Brenton Strange</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--d" aria-hidden="true">S</span><span class="side-name">SpicyRice1</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,688</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Brenton Strange<span class="meta">TE · JAX</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Jonas Sanker</span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Max Klare</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul></div></section></div></article></div></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt__body">
+      <div class="note">
+        <h3>Why it fits</h3>
+        <p>It fixes the hierarchy at the root rather than compensating for it. A side stopped looking like a card because it stopped being an object: no wall, no bloom, no rounded box, no second lit face. On the phone, where the sides stack, the list becomes four cards instead of eight plates you have to pair up.</p><p>The seam is the app's own device — the parting line already under the manager row, run full-bleed. A cut that reaches both edges reads as machining in one part; a rounded box reads as a second part.</p><p>The value goes to the accent, on the display face, lit inside its lens. It becomes the brightest thing on the card, which is what a page called <i>trades</i> priced by a column called <i>value</i> is for.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p>The take/give grammar loses one level of contrast. The give groove used to be a cut in a <i>lit plate</i>; now it is a cut in the card face, so the drop from take to give is smaller. It survives (the groove is still darker than the face) but it is worth checking on a real haul.</p><p>A lit cyan number per side is two accents per card and up to fifty on screen. The app's own rule is that boldness gets spent in one place — if this reads as a christmas tree, the answer is A's structure with D's engraved numerals.</p>
+        <span class="price price--good">Cheapest to build: deletes classes</span>
+      </div>
+    </div>
+  </section>
+  <section class="opt opt--alt" id="b">
+    <div class="opt__head">
+      <span class="opt__letter" aria-hidden="true">B</span>
+      <div>
+        <h2>A chassis band and a ledger</h2>
+        <p class="opt__thesis">Give the card a full-bleed recessed header spanning edge to edge, and seat the sides in a trough milled into the face. Nothing inside a card can look like that band, so the band is unmistakably where a card begins. The lines then rule out to their numbers the way a ledger does.</p>
+      </div>
+    </div>
+    
+    <div class="screen">
+      <div class="screen__tab">Option B · <b>chassis band + trough</b> · the value is arithmetic</div>
+      
+      <div class="screen__stage">
+        <div class="benches">
+          <div class="bench bench--phone">
+            <p class="stage-cap">Phone · 373px · the width the sides stack at</p>
+            <div class="v-b"><div class="list"><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">2026 COB PRE DRAFT</h4><span class="tc-when">Aug 6, 2026 · 2:17 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava " aria-hidden="true">j</span><span class="side-name">jakewright0909</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,617</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">DJ Moore<span class="meta">WR · BUF</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Dallas Goedert</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,600</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Ja'Kobi Lane</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,518</span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--b" aria-hidden="true">R</span><span class="side-name">Rellis19858</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">5,118</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Dallas Goedert<span class="meta">TE · PHI</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,600</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Ja'Kobi Lane<span class="meta">WR · BAL</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,518</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">DJ Moore</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section></div></article></div></div><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">FFL (FANTASY FOOTBALL LEAGUE)</h4><span class="tc-when">Aug 6, 2026 · 1:47 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava ava--c" aria-hidden="true">W</span><span class="side-name">WiscoMick11</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Jonas Sanker<span class="meta">DB · NO</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Max Klare<span class="meta">TE · LAR</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Brenton Strange</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--d" aria-hidden="true">S</span><span class="side-name">SpicyRice1</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,688</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Brenton Strange<span class="meta">TE · JAX</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Jonas Sanker</span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Max Klare</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul></div></section></div></article></div></div></div></div>
+          </div>
+          <div class="bench bench--wide">
+            <p class="stage-cap">Laptop · sides side by side</p>
+            <div class="v-b"><div class="list"><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">FFL (FANTASY FOOTBALL LEAGUE)</h4><span class="tc-when">Aug 6, 2026 · 1:47 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava ava--c" aria-hidden="true">W</span><span class="side-name">WiscoMick11</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Jonas Sanker<span class="meta">DB · NO</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Max Klare<span class="meta">TE · LAR</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Brenton Strange</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--d" aria-hidden="true">S</span><span class="side-name">SpicyRice1</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,688</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Brenton Strange<span class="meta">TE · JAX</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Jonas Sanker</span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Max Klare</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul></div></section></div></article></div></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt__body">
+      <div class="note">
+        <h3>Why it fits</h3>
+        <p>The band is the single most legible "a card starts here" mark available, because it is the one shape the card's contents never take. You do not have to compare weights to find the boundary — you look for the dark stripe.</p><p>The leader dots do something the current card does not: they tie each name to its number across the gap, so four numbers stop reading as a loose column. On this data they also visibly sum — 2,726 + 4,171 + 2,047 <i>is</i> 8,944 — which is the one thing a reader most wants to check and currently has to do in their head.</p><p>The sides keep their plates, so nothing about the take/give grammar or the seated-part material has to be re-argued.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p>The trough costs about 16px of width and 16px of height per card, which over a windowed list of forty thousand is real scrolling.</p><p>Dotted leaders are texture, and this card already has a groove, a brushed face and a specular sweep. At 13px they are close to the noise floor — worth testing at the smallest size before committing.</p><p>The lines only sum when the metric covers every one of them. Jonas Sanker is unpriced, so WiscoMick's column does <i>not</i> add up and the leader invites the reader to try. That needs the total's hover to keep saying <i>3 of 4 priced</i>.</p>
+        <span class="price">Costs ~16px of width per card</span>
+      </div>
+    </div>
+  </section>
+  <section class="opt opt--alt" id="c">
+    <div class="opt__head">
+      <span class="opt__letter" aria-hidden="true">C</span>
+      <div>
+        <h2>Head to head</h2>
+        <p class="opt__thesis">Run a milled spine between the two sides and let it carry the difference. The sides are then physically joined — you cannot read them as two cards, because something bridges them. The value becomes a score: Orbitron at 17px in a sunken well, one per side.</p>
+      </div>
+    </div>
+    
+    <div class="screen">
+      <div class="screen__tab">Option C · <b>a spine and a delta</b> · the value is a score</div>
+      
+      <div class="screen__stage">
+        <div class="benches">
+          <div class="bench bench--phone">
+            <p class="stage-cap">Phone · 373px · the width the sides stack at</p>
+            <div class="v-c"><div class="list"><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">2026 COB PRE DRAFT</h4><span class="tc-when">Aug 6, 2026 · 2:17 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava " aria-hidden="true">j</span><span class="side-name">jakewright0909</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,617</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">DJ Moore<span class="meta">WR · BUF</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Dallas Goedert</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,600</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Ja'Kobi Lane</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,518</span></li></ul></div></section><div class="spine" aria-hidden="true"><span class="spine__delta">+1,501</span></div><section class="side"><div class="side-head"><span class="ava ava--b" aria-hidden="true">R</span><span class="side-name">Rellis19858</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">5,118</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Dallas Goedert<span class="meta">TE · PHI</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,600</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Ja'Kobi Lane<span class="meta">WR · BAL</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,518</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">DJ Moore</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section></div></article></div></div><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">FFL (FANTASY FOOTBALL LEAGUE)</h4><span class="tc-when">Aug 6, 2026 · 1:47 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava ava--c" aria-hidden="true">W</span><span class="side-name">WiscoMick11</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Jonas Sanker<span class="meta">DB · NO</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Max Klare<span class="meta">TE · LAR</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Brenton Strange</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section><div class="spine" aria-hidden="true"><span class="spine__mark">⇄</span></div><section class="side"><div class="side-head"><span class="ava ava--d" aria-hidden="true">S</span><span class="side-name">SpicyRice1</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,688</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Brenton Strange<span class="meta">TE · JAX</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Jonas Sanker</span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Max Klare</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul></div></section></div></article></div></div></div></div>
+          </div>
+          <div class="bench bench--wide">
+            <p class="stage-cap">Laptop · sides side by side</p>
+            <div class="v-c"><div class="list"><div class="slab-wrap"><div class="slab"><article class="face"><header class="tc-head"><span class="tc-rail" aria-hidden="true"></span><h4 class="tc-league">FFL (FANTASY FOOTBALL LEAGUE)</h4><span class="tc-when">Aug 6, 2026 · 1:47 PM</span></header><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava ava--c" aria-hidden="true">W</span><span class="side-name">WiscoMick11</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Jonas Sanker<span class="meta">DB · NO</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Max Klare<span class="meta">TE · LAR</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Brenton Strange</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section><div class="spine" aria-hidden="true"><span class="spine__mark">⇄</span></div><section class="side"><div class="side-head"><span class="ava ava--d" aria-hidden="true">S</span><span class="side-name">SpicyRice1</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,688</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Brenton Strange<span class="meta">TE · JAX</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Jonas Sanker</span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Max Klare</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul></div></section></div></article></div></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt__body">
+      <div class="note">
+        <h3>Why it fits</h3>
+        <p>Separation by connection rather than by containment. The spine only makes sense <i>between</i> two things, so a reader never has to judge which plates belong together — the part between them says so.</p><p>It is the most decorative answer by a distance, and it answers a question the card currently makes you do arithmetic for: which side came out ahead, and by how much.</p><p>The big numeral gives the side head a shape at a glance. Scrolling past, you read two scores and a name, which is roughly how anyone actually skims a trade feed.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p><b>The delta is a new claim, and the app has been careful not to make it.</b> It is only honest when both sides priced everything they took — KTC covers about 500 players, so an unpriced rookie or a kicker makes the difference a lie. The second card here shows the fallback: no number, just the exchange mark.</p><p>A three-way trade has no spine and no delta — three sides do not have a difference — so the card has two layouts rather than one, and the three-way falls back to something closer to A.</p><p>17px numerals plus a 26px spine is the tallest option here, on the page whose whole performance story is how many cards fit in a window.</p>
+        <span class="price">Tallest card; two layouts to maintain</span>
+      </div>
+    </div>
+  </section>
+  <section class="opt opt--alt" id="d">
+    <div class="opt__head">
+      <span class="opt__letter" aria-hidden="true">D</span>
+      <div>
+        <h2>A nameplate on the edge</h2>
+        <p class="opt__thesis">Sink the league name half into the card's top edge, the way the manager plate's filters key rides its bottom edge. A part rising out of a card is the strongest "one object" mark there is, and it costs no interior height. Inside, the sides lose their wall and become flush inlays; the value is engraved rather than lit.</p>
+      </div>
+    </div>
+    
+    <div class="screen">
+      <div class="screen__tab">Option D · <b>nameplate + flush inlays</b> · the value is stamped</div>
+      
+      <div class="screen__stage">
+        <div class="benches">
+          <div class="bench bench--phone">
+            <p class="stage-cap">Phone · 373px · the width the sides stack at</p>
+            <div class="v-d"><div class="list"><div class="slab-wrap"><div class="plate"><span class="tc-rail" aria-hidden="true"></span><span class="tc-league">2026 COB PRE DRAFT</span><span class="tc-sep" aria-hidden="true">·</span><span class="tc-when">Aug 6, 2026 · 2:17 PM</span></div><div class="slab"><article class="face"><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava " aria-hidden="true">j</span><span class="side-name">jakewright0909</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,617</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">DJ Moore<span class="meta">WR · BUF</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Dallas Goedert</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,600</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Ja'Kobi Lane</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,518</span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--b" aria-hidden="true">R</span><span class="side-name">Rellis19858</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">5,118</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Dallas Goedert<span class="meta">TE · PHI</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,600</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Ja'Kobi Lane<span class="meta">WR · BAL</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,518</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">DJ Moore</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section></div></article></div></div><div class="slab-wrap"><div class="plate"><span class="tc-rail" aria-hidden="true"></span><span class="tc-league">FFL (FANTASY FOOTBALL LEAGUE)</span><span class="tc-sep" aria-hidden="true">·</span><span class="tc-when">Aug 6, 2026 · 1:47 PM</span></div><div class="slab"><article class="face"><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava ava--c" aria-hidden="true">W</span><span class="side-name">WiscoMick11</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Jonas Sanker<span class="meta">DB · NO</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Max Klare<span class="meta">TE · LAR</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Brenton Strange</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--d" aria-hidden="true">S</span><span class="side-name">SpicyRice1</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,688</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Brenton Strange<span class="meta">TE · JAX</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Jonas Sanker</span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Max Klare</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul></div></section></div></article></div></div></div></div>
+          </div>
+          <div class="bench bench--wide">
+            <p class="stage-cap">Laptop · sides side by side</p>
+            <div class="v-d"><div class="list"><div class="slab-wrap"><div class="plate"><span class="tc-rail" aria-hidden="true"></span><span class="tc-league">FFL (FANTASY FOOTBALL LEAGUE)</span><span class="tc-sep" aria-hidden="true">·</span><span class="tc-when">Aug 6, 2026 · 1:47 PM</span></div><div class="slab"><article class="face"><div class="tc-sides"><section class="side"><div class="side-head"><span class="ava ava--c" aria-hidden="true">W</span><span class="side-name">WiscoMick11</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">8,944</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Jonas Sanker<span class="meta">DB · NO</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Max Klare<span class="meta">TE · LAR</span></span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Brenton Strange</span><span class="leader" aria-hidden="true"></span></span></li></ul></div></section><section class="side"><div class="side-head"><span class="ava ava--d" aria-hidden="true">S</span><span class="side-name">SpicyRice1</span><span class="tot"><span class="tot__label">KTC</span><span class="tot__num">3,688</span></span></div><div class="tracks tracks--paired"><ul class="track track--in"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">+</span><span class="name-txt">Brenton Strange<span class="meta">TE · JAX</span></span><span class="leader" aria-hidden="true"></span></span></li></ul><ul class="track track--out"><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Jonas Sanker</span><span class="leader" aria-hidden="true"></span></span><span class="line__val"><span class="dash">—</span></span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">Max Klare</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,726</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 2nd</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">4,171</span></li><li class="line"><span class="line__name"><span class="sign" aria-hidden="true">−</span><span class="name-txt">2027 4th</span><span class="leader" aria-hidden="true"></span></span><span class="line__val">2,047</span></li></ul></div></section></div></article></div></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt__body">
+      <div class="note">
+        <h3>Why it fits</h3>
+        <p>The nameplate reads as a card's own label, so the top edge is found before anything inside is read — and it is <i>free</i> vertically, since it occupies margin the list was already spending as a gap.</p><p>It is the app's existing device, not a new one. The manager header already has a part straddling its edge, and re-using that grammar is what keeps the trades page from reading as a different product.</p><p>Engraved numerals are decoration without a second accent: the number is cut into the plate rather than lit on it, so fifty of them on screen stay calm. This is the option that scales to a long scroll.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p>It is the quietest of the four. If the complaint is really "this is not decorative enough", D under-delivers on its own and wants A's lit lens for the total.</p><p><b>The overhang has to sit inside the measured box.</b> <code>TradesList</code> measures each item and carries the gap as padding inside it, so the nameplate's margin must be part of that box or every card below it drifts.</p><p>Flush inlays are a third material between raised and recessed. It works here, but it is a new word in a vocabulary the codebase documents carefully, and it wants writing down.</p>
+        <span class="price price--good">Free vertically; smallest visual change</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="pick">
+    <div class="rule"></div>
+    <div class="sec-head" style="margin-top:22px">
+      <h2>Side by side</h2>
+      <span class="eyebrow">Four ways</span>
+    </div>
+    
+    <div class="compare">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Option</th>
+            <th scope="col">How a card separates</th>
+            <th scope="col">How a value reads</th>
+            <th scope="col">Best at</th>
+            <th scope="col">Pays with</th>
+          </tr>
+        </thead>
+        <tbody><tr><th>A</th><td>Deletes the side plate; sides become zones parted by a full-bleed seam.</td><td>Orbitron, accent, lit in the lens.</td><td>Strongest hierarchy fix, least code.</td><td>Take/give contrast narrows; two lit accents per card.</td></tr><tr><th>B</th><td>Full-bleed chassis band; sides seated in a trough.</td><td>Orbitron, white, with ledger leaders to each number.</td><td>The boundary is a shape, not a weight — impossible to miss.</td><td>~16px of card in both directions; leaders are texture.</td></tr><tr><th>C</th><td>A spine bridges the two sides and carries the difference.</td><td>Orbitron 17px in a sunken well.</td><td>Most decorative; answers "who won" outright.</td><td>The delta is a claim KTC can't always support; two layouts.</td></tr><tr><th>D</th><td>Nameplate straddles the card's top edge; sides become flush inlays.</td><td>Orbitron, engraved, no glow.</td><td>Free vertically; re-uses a device the app already has.</td><td>Quietest; overhang has to live inside the measured box.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="verdict">
+      <h3>Pick A, and take D's numerals if it reads hot</h3>
+      <p class="prose" style="max-width:none">
+        A is the only option that fixes the cause rather than compensating for
+        it: a side stops looking like a card because it stops being an object.
+        It is also the smallest diff — it deletes classes — and the cheapest to
+        scroll. Its one risk is two lit cyan numbers per card over a long list,
+        and the hedge for that is already drawn here: keep A's structure and
+        swap in D's engraved numeral. B is the right answer if the boundary has
+        to be findable without comparing anything at all, and C is the right
+        answer if this page should be a scoreboard — but C's delta is a claim
+        KTC cannot always support, and that is a product decision before it is a
+        design one.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="rule"></div>
+    <div class="sec-head" style="margin-top:22px">
+      <h2>True whichever is chosen</h2>
+      <span class="eyebrow">Constraints</span>
+    </div>
+    <div class="truths"><div class="card"><h3>The em dash never becomes a zero</h3><p>However decorative the numeral gets, an unpriced player is <code>—</code> and a side that priced part of itself still says so. Jonas Sanker is on every card above for exactly that reason: KTC prices about 500 dynasty skill players, so a blank is a fact about the board and a zero would be a claim about the player.</p></div><div class="card"><h3>Orbitron is wider, so a number on it steps down a size</h3><p>The same rule the league rows already follow — <code>text-sm</code> on the display face where the body face was 15px. Every option above sets the line values at 10–10.5px against the current 11px, and keeps <code>tabular-nums</code> so a column of them still lines up.</p></div><div class="card"><h3>The gap between cards has to beat the gap inside one</h3><p>It already does on the geometry — 8px between sides against roughly 32px between the nearest plates of two cards. That is why the fix here is material and not air. Every option still nudges <code>CARD_GAP</code> from 12px to 18–22px, because it is free and it helps.</p></div><div class="card"><h3>Whatever the card grows, the virtualizer measures it</h3><p><code>TradesList</code> measures each card and carries the inter-card gap as padding <i>inside</i> the measured box. A nameplate on the edge, a taller spine or a trough are all fine — as long as they are inside that box, and not a margin outside it.</p></div><div class="card"><h3>The picker stays in the header, never on a card</h3><p>The value column is a list-wide selection, so the control that aims it belongs above the list. None of these options put a menu on a card, and forty thousand cards each holding one is the reason.</p></div><div class="card"><h3>A three-way still has to draw</h3><p>Some leagues run them, and the odd side already takes the full row rather than leaving an empty cell. A and D handle it unchanged; B needs the trough to hold three; C has no spine for it and falls back.</p></div></div>
+  </section>
+</div>
