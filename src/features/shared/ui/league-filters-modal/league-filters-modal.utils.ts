@@ -1,5 +1,5 @@
 import type { ActiveFilter, FilterRule } from "../../league-filters";
-import type { RuleKeyOption } from "./league-filters-modal.types.ts";
+import type { RuleKeyOption, SegmentKey } from "./league-filters-modal.types.ts";
 
 /**
  * The decisions the dialog's markup used to make inline.
@@ -154,4 +154,59 @@ export function parseRuleValue(raw: string): number | null {
   if (raw.trim() === "") return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Which segment row is open after pressing `key` — one at a time, and pressing
+ * the open one closes it.
+ *
+ * It is the rule behind every row's `aria-expanded`, which is why it is a
+ * function rather than a ternary inside the state setter: two rows reporting
+ * themselves expanded is a claim the markup can make and no type can catch.
+ */
+export function nextOpenGroup(
+  current: SegmentKey | null,
+  key: SegmentKey,
+): SegmentKey | null {
+  return current === key ? null : key;
+}
+
+/**
+ * What Escape means, given whether a segment row is floating over the panel.
+ *
+ * **Escape closes the innermost thing that is up** — the drawer's rule one
+ * folder over, and the reason the dialog's own `cancel` is preventDefaulted
+ * rather than left to the platform: a row's options float *over* the panel, so
+ * one keypress taking both is one press too many. The dialog is the answer only
+ * once nothing is floating.
+ */
+export type EscapeTarget = "group" | "dialog";
+
+export function escapeTarget(openGroup: SegmentKey | null): EscapeTarget {
+  return openGroup === null ? "dialog" : "group";
+}
+
+/**
+ * Whether a completed press was a press on the backdrop.
+ *
+ * The backdrop is the dialog's own pseudo-element, so what a press outside the
+ * panel actually lands on is the `<dialog>` box itself — the gesture the
+ * platform doesn't wire up for you. What it *also* doesn't tell you is where the
+ * press began, and that is why this takes both ends: a `click` fires on the
+ * nearest common ancestor of where the pointer went down and where it came up,
+ * so selecting text inside the panel and releasing past its edge reports the
+ * dialog as the target and used to close the modal — discarding the draft the
+ * reader was in the middle of editing. Requiring the press to have *started*
+ * there is what separates the two.
+ *
+ * `unknown` rather than `EventTarget`, so this stays free of the DOM like the
+ * rest of the module; identity is the whole of what it reads.
+ */
+export function isBackdropPress(
+  dialog: unknown,
+  pressedTarget: unknown,
+  releasedTarget: unknown,
+): boolean {
+  if (dialog === null || dialog === undefined) return false;
+  return pressedTarget === dialog && releasedTarget === dialog;
 }

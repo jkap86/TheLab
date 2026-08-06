@@ -31,8 +31,24 @@ import type { TradeCardProps } from "./trade-card.types.ts";
  * beside it in this folder — the header, one side's plate, and the asset tracks
  * inside it.
  *
- * Memoised, because the list re-renders on every scroll frame: without it ~26
- * cards re-ran their exchange assembly and whole subtree at 60Hz.
+ * **Memoised, and it is worth being exact about why — the note here used to say
+ * "the list re-renders on every scroll frame", which is not what happens.**
+ * `@tanstack/react-virtual` only calls back into React when
+ * `[isScrolling, startIndex, endIndex]` changes, so `TradesList` re-renders when
+ * the window crosses a card boundary and when a scroll gesture starts and stops
+ * — not at 60Hz. What the memo is actually for survives that correction intact,
+ * because the re-render it prevents is *wide* rather than frequent: every one of
+ * those renders re-renders all ~26 windowed cards, and on a boundary crossing at
+ * most one of them is a card that changed. The `isScrolling` flips are the pure
+ * case — the whole list, twice a gesture, with every prop identical.
+ *
+ * It pays off only because the props really are stable, which is a property of
+ * the callers and not of this file: `players`, `managers`, `ktc`, `pickKtc` and
+ * `pickSlots` are one `useMemo` over the loaded pages (`use-trades`),
+ * `leaguesById` is another (`use-trade-leagues`), `metric` is an entry in a
+ * module-level catalogue, and a `trade` is an object off a cached page. Nothing
+ * here is built at the call site, so the default shallow comparison is enough
+ * and a custom `areEqual` would be a second definition of the same fact.
  */
 export const TradeCard = memo(function TradeCard({
   trade,

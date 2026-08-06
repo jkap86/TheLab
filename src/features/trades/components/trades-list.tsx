@@ -117,9 +117,12 @@ export function TradesList({
   // The header is that thing, so this now fires when the header actually
   // rewraps — a handful of times in a session instead of once per card measured.
   //
-  // Deliberately not re-measured every render. This component re-renders on
-  // every scroll frame, and `getBoundingClientRect` in a layout effect forces a
-  // reflow — per frame, that is the whole cost virtualising was for.
+  // Deliberately not re-measured every render. This component re-renders
+  // whenever the window crosses a card boundary and at both ends of every scroll
+  // gesture (the virtualizer notifies React on
+  // `[isScrolling, startIndex, endIndex]`, not per frame), and
+  // `getBoundingClientRect` in a layout effect forces a synchronous reflow — at
+  // that rate, on a list this long, that is the cost virtualising was for.
   useLayoutEffect(() => {
     const measure = () => {
       const el = listRef.current;
@@ -161,10 +164,11 @@ export function TradesList({
   // costs no extra DOM and no second observer, and the virtualizer has already
   // computed the number.
   //
-  // The effect is the right place despite this component re-rendering per scroll
-  // frame: `lastIndex` only changes when the window moves past a card boundary,
-  // so the dependency array is what throttles it. `onLoadMore` no-ops while a
-  // page is in flight, so a fast scroll asks repeatedly and fetches once.
+  // The effect is the right place despite this component re-rendering through a
+  // scroll: `lastIndex` only changes when the window moves past a card boundary,
+  // so the dependency array is what throttles it — the `isScrolling` renders
+  // carry the same value and cost nothing. `onLoadMore` no-ops while a page is
+  // in flight, so a fast scroll asks repeatedly and fetches once.
   const lastIndex = items.length ? items[items.length - 1].index : -1;
   useEffect(() => {
     if (!hasMore || loadingMore) return;

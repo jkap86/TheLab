@@ -1312,9 +1312,17 @@ stops holding, a comment saying it does would not have caught it.
     traffic could say anything — what moves the list down the page is what is
     above it. Card heights are measured, not computed, and the gap between cards
     is padding *inside* each measured item, since a gap the virtualizer doesn't
-    know about drifts down the list. `TradeCard` is `memo`'d, because the list
-    re-renders on every scroll frame and without it ~26 cards re-ran their
-    exchange assembly and whole subtree at 60Hz.
+    know about drifts down the list. `TradeCard` is `memo`'d, and the reason is
+    *width* rather than frequency — the note used to say "every scroll frame",
+    which is not what the virtualizer does: it notifies React on
+    `[isScrolling, startIndex, endIndex]`, so the list re-renders when the window
+    crosses a card boundary and at both ends of a gesture. Each of those renders
+    is the whole window though — ~26 cards, of which at most one changed — so
+    without the memo every one of them re-ran its exchange assembly and subtree.
+    It works because the props are stable by construction (the lookup maps and
+    `leaguesById` are `useMemo`s, `metric` is a catalogue entry, a `trade` is an
+    object off a cached page), which is why the default shallow comparison is
+    enough and a custom `areEqual` would only restate it.
   - **`useInfiniteQuery`, with a bounded page count.** The cursor is the query's
     own state, so it survives a remount and a navigation away and back; a filter
     change is a *different key* rather than an invalidation, so widening back

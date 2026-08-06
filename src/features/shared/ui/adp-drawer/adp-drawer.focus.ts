@@ -182,6 +182,7 @@ export type RestoreTarget = {
   readonly isConnected: boolean;
   focus: () => void;
   matches: (selectors: string) => boolean;
+  getClientRects: () => { length: number };
 };
 
 /**
@@ -189,23 +190,91 @@ export type RestoreTarget = {
  * every real case. Returns whether it landed, which is what the tests read.
  *
  * A saved element is a reference held across the whole life of the drawer, so by
- * the time it is used it may be none of the things it was. Three refusals, and
+ * the time it is used it may be none of the things it was. Five refusals, and
  * each is a state that really occurs: the element is **gone** (a re-render or a
  * navigation dropped it, and focusing a detached node silently drops the reader
  * on `<body>` — worse than leaving focus where it is), it is **disabled** (the
- * trigger is disabled while its own data reloads), or the call **throws**.
- * Focus is a courtesy; a target that refuses it must not send an exception back
- * up through the keydown handler that asked.
+ * trigger is disabled while its own data reloads), it is **inert** or inside an
+ * inert subtree, it is **not displayed** (the app bar's seat is emptied at some
+ * widths, and `display: none` reads from the outside as having no client rects),
+ * or the call **throws**. Focus is a courtesy; a target that refuses it must not
+ * send an exception back up through the keydown handler that asked.
+ *
+ * The refusals deliberately mirror {@link isTabbable}'s, minus the tabindex one:
+ * a trigger carrying `tabindex="-1"` is somewhere Tab may not land and still a
+ * perfectly good place to *put* focus programmatically, which is the whole
+ * difference between a tab stop and a focus target.
  */
 export function restoreFocus(target: RestoreTarget | null): boolean {
   if (target === null || !target.isConnected) return false;
   try {
     if (target.matches(":disabled")) return false;
+    if (target.matches("[inert], [inert] *")) return false;
+    if (target.getClientRects().length === 0) return false;
     target.focus();
     return true;
   } catch {
     return false;
   }
+}
+
+/** A mutable slot holding an element — `useRef`'s shape, and nothing more. */
+export type FocusSlot<T> = { current: T | null };
+
+/**
+ * The handback, as three moves over two slots.
+ *
+ * They exist because **the drawer stops being open a beat before it stops being
+ * on screen**, and the handback belongs to the second event rather than the
+ * first. Restored when `open` went false the reader was dropped on the page
+ * behind while a panel still carrying `role="dialog"` and `aria-modal="true"`
+ * was mid-exit and fully visible — focus outside a modal that is still up, which
+ * is precisely the state the trap exists to make impossible. So the opener is
+ * *moved* to a second slot when closing begins and only spent once the exit has
+ * played out.
+ *
+ * Two slots rather than one flag because the two questions are asked at
+ * different times by different effects, and a reopen has to be able to answer
+ * "no longer owed" without knowing what the answer used to be.
+ */
+
+/**
+ * Closing has begun: the handback is owed but must not happen yet, so the
+ * captured opener moves to the pending slot. Emptying `opener` is what makes the
+ * move idempotent — a second call finds nothing and cannot overwrite a pending
+ * target with `null`.
+ */
+export function deferFocusRestore<T>(
+  opener: FocusSlot<T>,
+  pending: FocusSlot<T>,
+): void {
+  if (opener.current === null) return;
+  pending.current = opener.current;
+  opener.current = null;
+}
+
+/**
+ * The drawer reopened before the exit finished, so nothing is owed: the reader
+ * is inside the dialog again and handing focus to the old trigger would be the
+ * background flash this whole arrangement exists to prevent.
+ */
+export function cancelFocusRestore<T>(pending: FocusSlot<T>): void {
+  pending.current = null;
+}
+
+/**
+ * The exit has played out and the drawer is off screen: spend the slot.
+ *
+ * It empties before it focuses, so the two callers that can both reach it — the
+ * off-screen transition and the unmount — cannot restore twice, and a target
+ * that refuses focus is not retried by the second.
+ */
+export function releaseFocusRestore<T extends RestoreTarget>(
+  pending: FocusSlot<T>,
+): boolean {
+  const target = pending.current;
+  pending.current = null;
+  return restoreFocus(target);
 }
 
 /** What {@link lockScroll} writes to — `document.body`, in the one real caller. */
