@@ -14,12 +14,18 @@ export {
   DEFAULT_TRADE_PAGE_SIZE,
   MAX_LEAGUE_IDS,
   MAX_TRADE_PAGE_SIZE,
+  MAX_TRADE_SIDES,
   hasTradeNarrowing,
   isUnnarrowed,
   leagueScopeQuery,
   parseTradeQuery,
 } from "./params";
-export type { TradeCircle, TradeMatchMode, TradeQuery } from "./params";
+export type {
+  TradeCircle,
+  TradeMatchMode,
+  TradeQuery,
+  TradeSideQuery,
+} from "./params";
 export { draftOrderKey, pickSlotKey } from "./pick-slots";
 export {
   countTradeTotals,

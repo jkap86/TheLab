@@ -1,5 +1,5 @@
 import type { TradeCircleScope } from "./circle.ts";
-import type { TradeQuery } from "./params.ts";
+import type { TradeQuery, TradeSideQuery } from "./params.ts";
 
 /**
  * The SQL the trades board is read through, as fragments rather than as
@@ -261,54 +261,122 @@ function tradeNarrowingClauses(query: TradeQuery, params: unknown[]): string[] {
     clauses.push(`(${at} IS NOT NULL AND ${at} < ${bind(query.to)})`);
   }
 
-  const selections: string[] = [];
-  const all = query.match === "all";
-
-  if (query.players.length > 0) {
-    // jsonb key existence: `adds` is player id → the roster that received them,
-    // so the keys *are* the players who moved, pooled across the sides the way
-    // `tradeAssets` pools them. `transactions_trade_adds_idx` answers both.
-    const op = all ? "?&" : "?|";
-    selections.push(`t.adds ${op} ${bind(query.players)}::text[]`);
-  }
-
-  if (query.picks.length > 0) {
-    const tokens = bind(query.picks);
-    const matched = `
-      SELECT count(DISTINCT ${PICK_TOKEN_SQL})
-        FROM jsonb_array_elements(${asArray("t.draft_picks")}) p
-       WHERE ${PICK_TOKEN_SQL} = ANY(${tokens}::text[])`;
-    selections.push(
-      all
-        ? // Every token present, counted distinctly so a trade carrying two
-          // 2026 firsts doesn't satisfy a two-token selection on its own.
-          `(${matched}) = ${bind(query.picks.length)}`
-        : `EXISTS (SELECT 1 FROM jsonb_array_elements(${asArray("t.draft_picks")}) p
-                    WHERE ${PICK_TOKEN_SQL} = ANY(${tokens}::text[]))`,
-    );
-  }
-
-  if (query.managers.length > 0) {
-    const owners = bind(query.managers);
-    selections.push(
-      all
-        ? // Counted distinctly because unnesting can hand back the same roster
-          // twice: a trade Sleeper filed with a repeated roster id would
-          // otherwise satisfy a two-manager selection on one manager.
-          `(${tradedByOwnersSql(owners, "count(DISTINCT r.owner_id)")}) = ${bind(query.managers.length)}`
-        : `EXISTS (${tradedByOwnersSql(owners, "1")})`,
-    );
-  }
-
-  if (selections.length > 0) {
-    clauses.push(
-      selections.length === 1
-        ? selections[0]
-        : `(${selections.join(all ? " AND " : " OR ")})`,
-    );
+  if (query.sides.length > 0) {
+    // The index-friendly half first, so the planner still has something
+    // selective to walk before any of the per-side work below runs. See
+    // {@link playersPresentSql}.
+    const present = playersPresentSql(query, bind);
+    if (present !== null) clauses.push(present);
+    clauses.push(sidesSql(query.sides, query.match === "all", bind));
   }
 
   return clauses;
+}
+
+/**
+ * Every named player is in `adds`, whichever side took them —
+ * `transactions_trade_adds_idx` answers this and nothing below it can.
+ *
+ * **It is redundant with the side predicates and it is what makes them
+ * affordable.** The side check compares `adds->>'<id>'` to a roster id, which is
+ * a per-row expression the GIN index cannot serve: on its own it would take the
+ * whole population and filter it. This narrows to the trades that name the
+ * players at all — usually a handful out of a season — and the sides then decide
+ * which way they went.
+ *
+ * The operator follows the match mode for the same reason the sides do: under
+ * `all` every named player has to be present, so `?&` is exact; under `any` a
+ * side needs only one of its own, so the necessary condition across the whole
+ * selection is `?|`. Null where no side named a player, since a filter of
+ * `?& '{}'` is a tautology with a cost.
+ */
+function playersPresentSql(
+  query: TradeQuery,
+  bind: (value: unknown) => string,
+): string | null {
+  const players = query.sides.flatMap((side) => side.players);
+  if (players.length === 0) return null;
+  const op = query.match === "all" ? "?&" : "?|";
+  return `t.adds ${op} ${bind([...new Set(players)])}::text[]`;
+}
+
+/**
+ * The sides, as one nested `EXISTS` per side.
+ *
+ * Each level binds a roster of the trade and asks everything that side claims
+ * against it: the assets it received, and whose it is. Nesting rather than
+ * `AND`ing separate subqueries is what makes the sides *distinct* — two
+ * independent `EXISTS` cannot compare their rosters to each other, so
+ * `[jkap] ⇄ [Nabers]` would happily match a trade where jkap received Nabers.
+ *
+ * **It is driven off the trade's own columns, and that is the planner decision
+ * the managers filter already learned.** `roster_ids` unnested, `adds` read as
+ * jsonb, `rosters` touched only by primary key when a name is involved — so the
+ * subquery is a function of `t` and cannot be pulled up, the board's `ORDER BY`
+ * stays on `transactions_trade_keyset_idx`, and a page stays an ordered index
+ * walk. Written the other way round — `FROM rosters WHERE league_id = t.league_id`
+ * — it decorrelates, the planner hash-joins the season and top-N heapsorts it,
+ * and every page costs the same as page forty. That shape measured 205ms against
+ * 9ms on the identical question; see {@link tradedByOwnersSql}.
+ *
+ * Three details in the level itself:
+ *
+ * - **Comparisons are text, so nothing is cast.** `jsonb_array_elements_text`
+ *   flattens Sleeper's roster ids whether it sent numbers or strings, and
+ *   `adds->>` and `p->>'owner_id'` come back in the same form. The one cast is
+ *   the roster lookup, and it keeps the house regex guard so a junk id yields
+ *   null and matches nothing rather than failing the board.
+ * - **A side with a manager and no assets is exactly the old managers filter** —
+ *   "a roster of this trade is owned by this person" — which is why that filter
+ *   is gone rather than kept beside this.
+ * - **Distinctness is against every previous side**, not just the one before, so
+ *   a third side cannot quietly be the first one again.
+ */
+function sidesSql(
+  sides: readonly TradeSideQuery[],
+  all: boolean,
+  bind: (value: unknown) => string,
+): string {
+  const level = (index: number): string => {
+    const side = sides[index];
+    const alias = `ri${index + 1}`;
+    const conditions: string[] = [];
+
+    const assets: string[] = [
+      ...side.players.map((id) => `t.adds->>${bind(id)} = ${alias}`),
+      ...side.picks.map(
+        (token) => `EXISTS (
+        SELECT 1 FROM jsonb_array_elements(${asArray("t.draft_picks")}) p
+         WHERE ${PICK_TOKEN_SQL} = ${bind(token)}
+           AND p->>'owner_id' = ${alias})`,
+      ),
+    ];
+    if (assets.length > 0) {
+      conditions.push(
+        assets.length === 1 ? assets[0] : `(${assets.join(all ? " AND " : " OR ")})`,
+      );
+    }
+
+    if (side.manager !== null) {
+      conditions.push(`EXISTS (
+        SELECT 1 FROM rosters r
+         WHERE r.league_id = t.league_id
+           AND r.roster_id = (CASE WHEN ${alias} ~ '^[0-9]+$' THEN ${alias}::int END)
+           AND r.owner_id = ${bind(side.manager)})`);
+    }
+
+    for (let prior = 0; prior < index; prior++) {
+      conditions.push(`${alias} <> ri${prior + 1}`);
+    }
+
+    if (index + 1 < sides.length) conditions.push(level(index + 1));
+
+    return `EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(${asArray("t.roster_ids")}) ${alias}
+       WHERE ${conditions.join(" AND ")})`;
+  };
+
+  return level(0);
 }
 
 /**

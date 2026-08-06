@@ -4,8 +4,8 @@ import { describe, test } from "node:test";
 import type { ManagerLeague } from "@/shared/manager";
 
 import { DEFAULT_LEAGUE_FILTERS } from "../shared/league-filters/defaults.ts";
-import { DEFAULT_TRADE_FILTERS } from "./filters.ts";
-import type { TradeFilters } from "./filters.ts";
+import { DEFAULT_TRADE_FILTERS, EMPTY_SIDE } from "./filters.ts";
+import type { TradeFilters, TradeSideFilter } from "./filters.ts";
 import {
   MAX_LEAGUE_IDS,
   resolveLeagueScope,
@@ -13,6 +13,12 @@ import {
   tradeQueryParams,
 } from "./trade-query.ts";
 import type { LeagueScope } from "./trade-query.ts";
+
+/** A bay, with only what the case under test cares about spelled out. */
+const side = (over: Partial<TradeSideFilter> = {}): TradeSideFilter => ({
+  ...EMPTY_SIDE,
+  ...over,
+});
 
 const league = (id: string, over: Partial<ManagerLeague> = {}): ManagerLeague => ({
   league_id: id,
@@ -120,9 +126,10 @@ describe("tradeQueryParams", () => {
       request({
         scope: { kind: "include", ids: ["b", "a"] },
         filters: {
-          players: ["p2", "p1"],
-          picks: ["2027-1"],
-          managers: ["u1"],
+          sides: [
+            side({ manager: "u1", players: ["p2", "p1"] }),
+            side({ picks: ["2027-1"] }),
+          ],
           match: "any",
         },
         bounds: { from: 100, to: 200 },
@@ -131,9 +138,11 @@ describe("tradeQueryParams", () => {
     assert.equal(params.get("leagues"), "a,b");
     assert.equal(params.get("from"), "100");
     assert.equal(params.get("to"), "200");
-    assert.equal(params.get("players"), "p1,p2");
-    assert.equal(params.get("picks"), "2027-1");
-    assert.equal(params.get("managers"), "u1");
+    // Indexed by bay, so which side a thing is on survives the wire — the whole
+    // point of the parameters being spelled this way rather than encoded.
+    assert.equal(params.get("s1manager"), "u1");
+    assert.equal(params.get("s1players"), "p1,p2");
+    assert.equal(params.get("s2picks"), "2027-1");
     assert.equal(params.get("match"), "any");
   });
 
@@ -173,13 +182,42 @@ describe("tradeQueryParams", () => {
     assert.equal(noCircle.get("user"), null);
   });
 
-  test("the match mode is only sent when it can change an answer", () => {
-    const one = tradeQueryParams(
-      request({ filters: { players: ["p1"], match: "any" } }),
+  test("an empty bay contributes no parameter at all", () => {
+    // The server drops empty sides anyway, so a parameter saying a bay is empty
+    // would split the cache between two identical boards.
+    const params = tradeQueryParams(
+      request({ filters: { sides: [side({ players: ["p1"] }), EMPTY_SIDE] } }),
     );
-    assert.equal(one.get("match"), null, "one selection reads the same either way");
+    assert.equal(params.get("s1players"), "p1");
+    assert.equal(params.get("s2players"), null);
+    assert.equal(params.get("s2manager"), null);
+  });
+
+  test("the match mode is only sent when it can change an answer", () => {
+    // It reads *within* a bay, so what makes it matter is one bay holding two
+    // assets — not two on the board, which across the bays is a relation.
+    const one = tradeQueryParams(
+      request({
+        filters: { sides: [side({ players: ["p1"] }), EMPTY_SIDE], match: "any" },
+      }),
+    );
+    assert.equal(one.get("match"), null, "one asset reads the same either way");
+    const split = tradeQueryParams(
+      request({
+        filters: {
+          sides: [side({ players: ["p1"] }), side({ players: ["p2"] })],
+          match: "any",
+        },
+      }),
+    );
+    assert.equal(split.get("match"), null, "one asset a bay is still one asset");
     const two = tradeQueryParams(
-      request({ filters: { players: ["p1"], managers: ["u1"], match: "any" } }),
+      request({
+        filters: {
+          sides: [side({ players: ["p1"], picks: ["2027-1"] }), EMPTY_SIDE],
+          match: "any",
+        },
+      }),
     );
     assert.equal(two.get("match"), "any");
   });
@@ -192,13 +230,13 @@ describe("tradeQueryKey", () => {
     const a = tradeQueryKey(
       request({
         scope: { kind: "include", ids: ["b", "a"] },
-        filters: { players: ["p2", "p1"] },
+        filters: { sides: [side({ players: ["p2", "p1"] }), EMPTY_SIDE] },
       }),
     );
     const b = tradeQueryKey(
       request({
         scope: { kind: "include", ids: ["a", "b"] },
-        filters: { players: ["p1", "p2"] },
+        filters: { sides: [side({ players: ["p1", "p2"] }), EMPTY_SIDE] },
       }),
     );
     assert.equal(a, b);
@@ -207,7 +245,9 @@ describe("tradeQueryKey", () => {
   test("a different narrowing is a different key", () => {
     assert.notEqual(
       tradeQueryKey(request()),
-      tradeQueryKey(request({ filters: { players: ["p1"] } })),
+      tradeQueryKey(
+        request({ filters: { sides: [side({ players: ["p1"] }), EMPTY_SIDE] } }),
+      ),
     );
     assert.notEqual(
       tradeQueryKey(request()),

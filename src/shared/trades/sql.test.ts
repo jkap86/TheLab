@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 
 import type { TradeCircleScope } from "./circle.ts";
-import type { TradeQuery } from "./params.ts";
+import type { TradeQuery, TradeSideQuery } from "./params.ts";
 import {
   PICK_TOKEN_SQL,
   STARTUP_DRAFT_CTE,
@@ -42,12 +42,18 @@ const query = (overrides: Partial<TradeQuery> = {}): TradeQuery => ({
   circle: "all",
   from: null,
   to: null,
-  players: [],
-  picks: [],
-  managers: [],
+  sides: [],
   match: "all",
   limit: 200,
   cursor: null,
+  ...overrides,
+});
+
+/** A bay, with only what the case under test cares about spelled out. */
+const side = (overrides: Partial<TradeSideQuery> = {}): TradeSideQuery => ({
+  manager: null,
+  players: [],
+  picks: [],
   ...overrides,
 });
 
@@ -83,9 +89,10 @@ describe("tradeFilterSql", () => {
       query({
         leagues: [hostile],
         excludeLeagues: [`${hostile}/exclude`],
-        players: [`${hostile}/player`],
-        picks: [`${hostile}/pick`],
-        managers: [`${hostile}/manager`],
+        sides: [
+          side({ players: [`${hostile}/player`], picks: [`${hostile}/pick`] }),
+          side({ manager: `${hostile}/manager` }),
+        ],
         from: 1_700_000_000_000,
         to: 1_800_000_000_000,
       }),
@@ -115,9 +122,10 @@ describe("tradeFilterSql", () => {
         excludeLeagues: ["l2"],
         from: 1,
         to: 2,
-        players: ["p1"],
-        picks: ["2026-1", "2027-2"],
-        managers: ["u1"],
+        sides: [
+          side({ manager: "u1", players: ["p1"], picks: ["2026-1"] }),
+          side({ picks: ["2027-2"] }),
+        ],
       }),
       { kind: "leagues", ids: ["l3"] },
     );
@@ -128,97 +136,136 @@ describe("tradeFilterSql", () => {
       assert.ok(n >= 2, `$${n} would collide with the season at $1`);
       assert.ok(n <= params.length, `$${n} has no value pushed for it`);
     }
-    // The counts a distinct-match compares against are bound too, not written in.
-    assert.ok(params.includes(2), "the pick token count is a parameter");
+    // Including every pick token, which is compared one at a time against the
+    // side's own roster rather than counted.
+    assert.ok(params.some((v) => Array.isArray(v) === false && v === "2027-2"));
   });
 
-  test("a selection of one is not wrapped, and several are", () => {
-    // The fragments are `AND`-joined by the caller, so an `OR` between selections
-    // has to carry its own parentheses or it would bind looser than the joins
-    // around it and quietly widen the board.
-    const one = build(query({ players: ["p1"], match: "any" })).sql;
-    assert.ok(!one.includes("("), "a lone selection needs no grouping");
+  test("a bay of one is not wrapped, and several are", () => {
+    // The assets in a bay are joined by the mode and the bays are `AND`ed
+    // around them, so a group of alternatives has to carry its own parentheses
+    // or an `OR` would bind looser than the joins outside it and quietly widen
+    // the board.
+    const one = build(query({ sides: [side({ players: ["p1"] })], match: "any" })).sql;
+    const lone = one.slice(one.indexOf("EXISTS"));
+    assert.ok(
+      !lone.includes(" OR "),
+      "a bay holding one asset needs no alternation",
+    );
 
     const many = build(
-      query({ players: ["p1"], picks: ["2026-1"], match: "any" }),
+      query({
+        sides: [side({ players: ["p1"], picks: ["2026-1"] })],
+        match: "any",
+      }),
     ).sql;
-    const selection = many.slice(many.indexOf("AND ") + 4).trim();
-    assert.ok(
-      selection.startsWith("(") && selection.endsWith(")"),
-      "an OR of selections is parenthesised",
-    );
+    assert.ok(many.includes("("), "an OR of assets is parenthesised");
+    assert.ok(many.includes(" OR "));
   });
 
-  describe("all and any are two different questions", () => {
-    test("players: every key present, or any of them", () => {
-      // jsonb key existence: `?&` is all, `?|` is any.
-      assert.match(build(query({ players: ["a", "b"] })).sql, /\?&/);
+  describe("a bay is a side, and two bays are two sides", () => {
+    test("everything in a bay is checked against that bay's roster", () => {
+      // The whole model in one assertion: a bay binds one of the trade's own
+      // rosters and asks everything it holds against *that* id, which is what
+      // makes "same bay, same side" true rather than a convention.
+      const { sql } = build(
+        query({ sides: [side({ players: ["p1"], picks: ["2026-1"] })] }),
+      );
+      assert.match(sql, /jsonb_array_elements_text\(CASE WHEN jsonb_typeof\(t\.roster_ids\)/);
+      assert.match(sql, /t\.adds->>\$\d+ = ri1/);
+      assert.match(sql, /p->>'owner_id' = ri1/);
+    });
+
+    test("two bays are different sides, and a third differs from both", () => {
+      // Nested rather than `AND`ed, because two independent EXISTS cannot
+      // compare their rosters — without this, "jkap ⇄ Nabers" would happily
+      // match the trade where jkap *received* him.
+      const two = build(
+        query({ sides: [side({ players: ["p1"] }), side({ players: ["p2"] })] }),
+      ).sql;
+      assert.match(two, /ri2 <> ri1/);
+
+      const three = build(
+        query({
+          sides: [
+            side({ players: ["p1"] }),
+            side({ players: ["p2"] }),
+            side({ players: ["p3"] }),
+          ],
+        }),
+      ).sql;
+      assert.match(three, /ri3 <> ri1/);
+      assert.match(three, /ri3 <> ri2/);
+    });
+
+    test("one bay claims nothing about any other side", () => {
+      // An empty bay is "don't care", so a lone side must emit no distinctness
+      // at all — otherwise the board would quietly require a second party to
+      // have taken something.
+      const { sql } = build(query({ sides: [side({ players: ["p1"] })] }));
+      assert.doesNotMatch(sql, /<>/);
+    });
+
+    test("a named manager is a primary-key lookup correlated to the trade", () => {
+      // `rosters` is keyed `(league_id, roster_id)` and both come from `t`, so
+      // the subquery is a function of the trade and cannot be pulled up — the
+      // planner decision `tradedByOwnersSql` documents, where the decorrelatable
+      // spelling measured 205ms against 9ms.
+      const { sql } = build(query({ sides: [side({ manager: "u1" })] }));
+      assert.match(sql, /FROM rosters r\s+WHERE r\.league_id = t\.league_id/);
+      assert.match(sql, /r\.roster_id = \(CASE WHEN ri1 ~ '\^\[0-9\]\+\$' THEN ri1::int END\)/);
+      assert.match(sql, /r\.owner_id = \$\d+/);
+    });
+
+    test("the players are pre-filtered through the index they have one for", () => {
+      // The side check is a per-row expression the GIN index cannot serve, so
+      // on its own it would take the whole population and filter it. This is
+      // the selective half, and it follows the mode for the same reason the
+      // bays do: under `all` every named player must be present, under `any`
+      // only one across the whole selection is guaranteed.
       assert.match(
-        build(query({ players: ["a", "b"], match: "any" })).sql,
-        /\?\|/,
+        build(query({ sides: [side({ players: ["a"] }), side({ players: ["b"] })] })).sql,
+        /t\.adds \?& \$\d+::text\[\]/,
+      );
+      assert.match(
+        build(
+          query({
+            sides: [side({ players: ["a"] }), side({ players: ["b"] })],
+            match: "any",
+          }),
+        ).sql,
+        /t\.adds \?\| \$\d+::text\[\]/,
+      );
+      // Nothing to pre-filter on where no bay named a player: `?& '{}'` is a
+      // tautology with a cost.
+      assert.doesNotMatch(
+        build(query({ sides: [side({ picks: ["2026-1"] })] })).sql,
+        /\?&|\?\|/,
       );
     });
 
-    test("picks: all counts distinctly, any merely exists", () => {
-      // The documented rule: a trade carrying two 2026 firsts must not satisfy a
-      // two-token selection on its own, so the match is counted DISTINCT and
-      // compared to the number of tokens asked for.
-      const all = build(query({ picks: ["2026-1", "2027-1"] }));
-      assert.match(all.sql, /count\(DISTINCT/);
-      assert.ok(all.bound.includes(2), "compared against the token count");
-
-      const any = build(query({ picks: ["2026-1", "2027-1"], match: "any" }));
-      assert.match(any.sql, /EXISTS/);
-      assert.doesNotMatch(any.sql, /count\(DISTINCT/);
-    });
-
-    test("managers: all counts distinct owners, any merely exists", () => {
-      const all = build(query({ managers: ["u1", "u2"] }));
-      assert.match(all.sql, /count\(DISTINCT r\.owner_id\)/);
-      assert.ok(all.bound.includes(2));
-
-      const any = build(query({ managers: ["u1", "u2"], match: "any" }));
-      assert.match(any.sql, /EXISTS/);
-      assert.doesNotMatch(any.sql, /count\(DISTINCT/);
-    });
-
-    test("the mode joins the categories, not just the values inside one", () => {
-      // Probed with players and picks, which emit no `OR` of their own, so the
-      // one being asserted can only have come from the mode.
-      const all = build(query({ players: ["p"], picks: ["2026-1"] })).sql;
-      const any = build(
-        query({ players: ["p"], picks: ["2026-1"], match: "any" }),
+    test("the mode joins the assets inside a bay", () => {
+      const all = build(
+        query({ sides: [side({ players: ["p"], picks: ["2026-1"] })] }),
       ).sql;
-      assert.ok(all.includes(" AND ") && !all.includes(" OR "));
+      const any = build(
+        query({
+          sides: [side({ players: ["p"], picks: ["2026-1"] })],
+          match: "any",
+        }),
+      ).sql;
+      assert.ok(!all.includes(" OR "));
       assert.ok(any.includes(" OR "));
     });
 
-    test("a manager is matched whether Sleeper wrote the roster id as a number or a string", () => {
+    test("a roster id is matched whether Sleeper wrote it as a number or a string", () => {
       // `assembleTrade` carries the same defensiveness, and a filter that only
       // read one spelling would silently miss half the trades in a league stored
-      // under the other. It is `jsonb_array_elements_text` that provides it here
-      // — it flattens a number and a string to the same text — which is also
-      // what keeps the subquery a function of `t`; see `tradedByOwnersSql`.
-      for (const q of [query({ managers: ["u"] }), query({ managers: ["u"], match: "any" })]) {
-        const sql = build(q).sql;
-        assert.match(sql, /jsonb_array_elements_text\(CASE WHEN jsonb_typeof\(t\.roster_ids\)/);
-        assert.match(sql, /CASE WHEN ri ~ '\^\[0-9\]\+\$' THEN ri::int END/);
-      }
-    });
-
-    test("the managers filter and the traders circle are one fragment", () => {
-      // They ask the identical question of different id lists, and two
-      // spellings of it is exactly the drift this module exists to prevent —
-      // the managers filter was the copy that stayed decorrelatable, which made
-      // it the slowest narrowing on the board. Compared with the bound index
-      // normalised away, since that is the only thing that legitimately differs.
-      const strip = (s: string) => s.replace(/\$\d+/g, "$n").replace(/\s+/g, " ").trim();
-      const filter = strip(build(query({ managers: ["u"], match: "any" })).sql);
-      const circle = strip(build(query(), { kind: "traders", ids: ["u"] }).sql);
-      assert.ok(
-        filter.includes(circle.replace(/^AND /, "")),
-        "the managers filter no longer reads the traders circle's fragment",
-      );
+      // under the other. `jsonb_array_elements_text` provides it — it flattens a
+      // number and a string to the same text — which is also what keeps the
+      // subquery a function of `t`.
+      const { sql } = build(query({ sides: [side({ manager: "u" })] }));
+      assert.match(sql, /jsonb_array_elements_text\(CASE WHEN jsonb_typeof\(t\.roster_ids\)/);
     });
   });
 
@@ -232,18 +279,22 @@ describe("tradeFilterSql", () => {
       // is not one of the things being chosen between. Inside the OR group it
       // would stop bounding anything the moment a selection matched.
       const { sql } = build(
-        query({ players: ["a"], picks: ["2026-1"], match: "any", from: 1 }),
+        query({
+          sides: [side({ players: ["a"], picks: ["2026-1"] })],
+          match: "any",
+          from: 1,
+        }),
       );
-      // Selections are pushed last, so the trailing group is that OR.
-      const group = sql.slice(sql.lastIndexOf(" AND (") + " AND ".length);
-      assert.ok(group.includes(" OR "), "the selection is an OR group");
+      // The sides are pushed last, so the trailing EXISTS is the selection.
+      const selection = sql.slice(sql.indexOf("EXISTS"));
+      assert.ok(selection.includes(" OR "), "the bay's assets are an OR group");
       assert.ok(
-        !group.includes("IS NOT NULL"),
+        !selection.includes("IS NOT NULL"),
         "and the window is not inside it",
       );
       assert.ok(
-        sql.indexOf("IS NOT NULL") < sql.lastIndexOf(" AND ("),
-        "the window is its own conjunct, ahead of the group",
+        sql.indexOf("IS NOT NULL") < sql.indexOf("EXISTS"),
+        "the window is its own conjunct, ahead of the sides",
       );
     });
 
@@ -328,7 +379,10 @@ describe("tradeFilterSql", () => {
       // and a selection together — the circle is where the reader is standing,
       // not one of the things they picked.
       const { sql } = build(
-        query({ players: ["a"], picks: ["2026-1"], match: "any" }),
+        query({
+          sides: [side({ players: ["a"], picks: ["2026-1"] })],
+          match: "any",
+        }),
         { kind: "leagues", ids: ["l1"] },
       );
       const circleAt = sql.indexOf("t.league_id = ANY");
@@ -352,12 +406,23 @@ describe("the scope and narrowing halves", () => {
     ["window only", { from: 1, to: 2 }, null],
     [
       "everything, all",
-      { leagues: ["a"], excludeLeagues: ["b"], from: 1, to: 2, players: ["p"], picks: ["2026-1"], managers: ["u"] },
+      {
+        leagues: ["a"],
+        excludeLeagues: ["b"],
+        from: 1,
+        to: 2,
+        sides: [side({ manager: "u", players: ["p"] }), side({ picks: ["2026-1"] })],
+      },
       { kind: "members", ids: ["u2"] },
     ],
     [
       "everything, any",
-      { leagues: ["a"], from: 1, players: ["p", "q"], picks: ["2026-1"], managers: ["u"], match: "any" as const },
+      {
+        leagues: ["a"],
+        from: 1,
+        sides: [side({ manager: "u", players: ["p", "q"], picks: ["2026-1"] })],
+        match: "any" as const,
+      },
       { kind: "leagues", ids: ["l1"] },
     ],
   ];
@@ -382,7 +447,10 @@ describe("the scope and narrowing halves", () => {
   test("a bare narrowing is a legal FILTER predicate", () => {
     // Not merely non-empty: a leading `AND` here is a syntax error rather than
     // a wrong answer, which is the one failure mode this shape adds.
-    const sql = tradeNarrowingSql(query({ from: 1, players: ["p"] }), ["2026"]);
+    const sql = tradeNarrowingSql(
+      query({ from: 1, sides: [side({ players: ["p"] })] }),
+      ["2026"],
+    );
     assert.ok(sql.length > 0);
     assert.ok(!sql.trimStart().startsWith("AND"));
   });

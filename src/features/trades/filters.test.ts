@@ -5,22 +5,47 @@ import { PICK_TOKEN_SQL } from "../../shared/trades/sql.ts";
 import {
   DEFAULT_TRADE_FILTERS,
   DEFAULT_TRADE_RANGE,
+  EMPTY_SIDE,
   TRADE_CIRCLES,
   TRADE_RANGE_PRESETS,
   activeTradeFilterCount,
   pickLabel,
   pickToken,
+  setSideManager,
+  swapSides,
+  toggleSideAsset,
   tradeCircleSummary,
   tradeFilterSummary,
   tradeRangeBounds,
   tradeRangeLabel,
 } from "./filters.ts";
-import type { TradeFilters, TradeRange } from "./filters.ts";
+import type {
+  TradeFilters,
+  TradeNames,
+  TradeRange,
+  TradeSideFilter,
+} from "./filters.ts";
 
 const filters = (over: Partial<TradeFilters> = {}): TradeFilters => ({
   ...DEFAULT_TRADE_FILTERS,
   ...over,
 });
+
+/** A bay, with only what the case under test cares about spelled out. */
+const side = (over: Partial<TradeSideFilter> = {}): TradeSideFilter => ({
+  ...EMPTY_SIDE,
+  ...over,
+});
+
+/**
+ * The page's own lookups, as the summary sees them: two ids it can name and
+ * everything else falling through to itself.
+ */
+const NAMES: TradeNames = {
+  player: (id) => (id === "p1" ? "Malik Nabers" : id),
+  manager: (id) =>
+    id === "u1" ? "jkap" : id === "u2" ? "DarksideEmperors" : id,
+};
 
 /** An unbounded window — both halves open. */
 const OPEN = { from: null, to: null };
@@ -139,48 +164,158 @@ describe("tradeRangeLabel", () => {
 
 describe("tradeFilterSummary", () => {
   test("names the window alone when nothing is selected", () => {
-    assert.equal(tradeFilterSummary(DEFAULT_TRADE_FILTERS), "all time");
+    assert.equal(tradeFilterSummary(DEFAULT_TRADE_FILTERS, NAMES), "all time");
   });
 
-  test("names the match mode and each category it applies to", () => {
+  test("reads the bays out rather than counting them", () => {
+    // The whole point of the sides: "all of 1 manager, 1 player" described the
+    // shape of a selection where this describes the question.
     assert.equal(
       tradeFilterSummary(
         filters({
           range: { preset: "30d", from: null, to: null },
-          managers: ["a", "b"],
-          picks: ["2026-1"],
-          match: "any",
+          sides: [side({ manager: "u1" }), side({ players: ["p1"] })],
         }),
+        NAMES,
       ),
-      "last 30 days · any of 2 managers, 1 pick",
+      "last 30 days · jkap gave Malik Nabers",
+    );
+  });
+
+  test("a manager on each side is two clauses, each under its own name", () => {
+    assert.equal(
+      tradeFilterSummary(
+        filters({
+          sides: [
+            side({ manager: "u1", players: ["p1"] }),
+            side({ manager: "u2", picks: ["2027-1"] }),
+          ],
+        }),
+        NAMES,
+      ),
+      "all time · jkap got Malik Nabers · DarksideEmperors got 2027 1st",
+    );
+  });
+
+  test("with nobody named the sides are named by their places", () => {
+    assert.equal(
+      tradeFilterSummary(
+        filters({
+          sides: [side({ players: ["p1"] }), side({ picks: ["2027-1"] })],
+        }),
+        NAMES,
+      ),
+      "all time · one side got Malik Nabers · the other side got 2027 1st",
+    );
+  });
+
+  test("managers with no assets are a sentence about the people", () => {
+    // Naming the bays here would be describing sides that hold nothing.
+    assert.equal(
+      tradeFilterSummary(filters({ sides: [side({ manager: "u1" }), EMPTY_SIDE] }), NAMES),
+      "all time · jkap traded",
+    );
+    assert.equal(
+      tradeFilterSummary(
+        filters({ sides: [side({ manager: "u1" }), side({ manager: "u2" })] }),
+        NAMES,
+      ),
+      "all time · jkap traded with DarksideEmperors",
+    );
+  });
+
+  test("the mode joins the assets inside a bay", () => {
+    const both = filters({
+      sides: [side({ players: ["p1"], picks: ["2027-1"] }), EMPTY_SIDE],
+    });
+    assert.match(tradeFilterSummary(both, NAMES), /Malik Nabers and 2027 1st/);
+    assert.match(
+      tradeFilterSummary({ ...both, match: "any" }, NAMES),
+      /Malik Nabers or 2027 1st/,
+    );
+  });
+
+  test("an unresolved id is the id, never a count", () => {
+    // The board's maps only carry what its loaded pages named, and a summary
+    // reading "1 player" beside a bay drawing a name was the old shape's tell.
+    assert.match(
+      tradeFilterSummary(filters({ sides: [side({ players: ["p9"] }), EMPTY_SIDE] }), NAMES),
+      /p9/,
     );
   });
 });
 
+describe("the side mutations", () => {
+  test("an asset moves between bays rather than being held by both", () => {
+    // Both sides receiving one player is unsatisfiable, so honouring it
+    // literally would empty the board with nothing on screen saying why.
+    const left = toggleSideAsset(DEFAULT_TRADE_FILTERS, 0, "player", "p1");
+    const moved = toggleSideAsset(left, 1, "player", "p1");
+    assert.deepEqual(moved.sides[0].players, []);
+    assert.deepEqual(moved.sides[1].players, ["p1"]);
+  });
+
+  test("toggling an asset in its own bay takes it out", () => {
+    const left = toggleSideAsset(DEFAULT_TRADE_FILTERS, 0, "player", "p1");
+    assert.deepEqual(toggleSideAsset(left, 0, "player", "p1").sides[0].players, []);
+  });
+
+  test("a manager moves too, for a sharper reason", () => {
+    // Naming one person on both sides asks for a trade they made with
+    // themselves.
+    const left = setSideManager(DEFAULT_TRADE_FILTERS, 0, "u1");
+    const moved = setSideManager(left, 1, "u1");
+    assert.equal(moved.sides[0].manager, null);
+    assert.equal(moved.sides[1].manager, "u1");
+  });
+
+  test("swapping is the two bays, exchanged", () => {
+    const set = filters({
+      sides: [side({ manager: "u1" }), side({ players: ["p1"] })],
+    });
+    const swapped = swapSides(set);
+    assert.deepEqual(swapped.sides[0], set.sides[1]);
+    assert.deepEqual(swapped.sides[1], set.sides[0]);
+  });
+});
+
 describe("activeTradeFilterCount", () => {
-  test("counts each selection and a bounded window as one", () => {
+  test("counts each thing named and a bounded window as one", () => {
     assert.equal(activeTradeFilterCount(DEFAULT_TRADE_FILTERS), 0);
     assert.equal(
       activeTradeFilterCount(
         filters({
           range: { preset: "30d", from: null, to: null },
-          players: ["a", "b"],
-          managers: ["c"],
+          sides: [side({ manager: "u1", players: ["a", "b"] }), EMPTY_SIDE],
         }),
       ),
       4,
     );
   });
 
+  test("a named manager counts wherever the bay is", () => {
+    // Both are one thing the reader picked, however differently the two are
+    // stored — a bay saying "jkap got Nabers" is two narrowings.
+    assert.equal(
+      activeTradeFilterCount(
+        filters({ sides: [EMPTY_SIDE, side({ manager: "u1" })] }),
+      ),
+      1,
+    );
+  });
+
   test("a circle is one narrowing, and the widest one is none", () => {
-    // The trigger's badge is the only thing outside the dialog that says a
+    // The trigger's badge is the only thing outside the panel that says a
     // circle is on, so a circle that didn't reach this count would be a board
     // narrowed to one account with nothing on screen admitting it.
     assert.equal(activeTradeFilterCount(filters({ circle: "all" })), 0);
     assert.equal(activeTradeFilterCount(filters({ circle: "mine" })), 1);
     assert.equal(
       activeTradeFilterCount(
-        filters({ circle: "leaguemate-leagues", players: ["a"] }),
+        filters({
+          circle: "leaguemate-leagues",
+          sides: [side({ players: ["a"] }), EMPTY_SIDE],
+        }),
       ),
       2,
     );

@@ -21,8 +21,8 @@ import type { LeagueFilters } from "@/features/shared";
 import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
-import { DEFAULT_TRADE_FILTERS, tradeRangeBounds } from "../filters";
-import type { TradeFilters } from "../filters";
+import { DEFAULT_TRADE_FILTERS, hasSideSelection, tradeRangeBounds } from "../filters";
+import type { TradeFilters, TradeNames } from "../filters";
 import { useFilteredTrades } from "../hooks/use-filtered-trades";
 import { useTradeLeagues } from "../hooks/use-trade-leagues";
 import { useTrades } from "../hooks/use-trades";
@@ -30,6 +30,7 @@ import type { Verdict } from "../incremental";
 import { DEFAULT_TRADE_COLUMNS, TRADE_METRICS } from "../trade-metrics";
 import { resolveLeagueScope, tradeQueryKey } from "../trade-query";
 import { TradeFiltersLedge } from "./trade-filters-ledge";
+import { TradeSearch } from "./trade-search";
 import { TradeValuePicker } from "./trade-value";
 import { TradesList } from "./trades-list";
 
@@ -255,6 +256,17 @@ export function TradesHome({ season }: { season: string }) {
   const pickKtc = data?.pickKtc ?? EMPTY_MAP;
   const pickSlots = data?.pickSlots ?? EMPTY_MAP;
 
+  // How the scope line names what the bays hold. The page's own lookup maps are
+  // the only names it has; a token for someone off the loaded pages falls back
+  // to the id, which is the one true thing available and better than a count.
+  const names: TradeNames = useMemo(
+    () => ({
+      player: (id) => players[id]?.name ?? id,
+      manager: (id) => managers[id]?.display_name ?? id,
+    }),
+    [players, managers],
+  );
+
   return (
     <>
       {/* The board's trigger, seated in the app bar rather than the ledge
@@ -283,16 +295,31 @@ export function TradesHome({ season }: { season: string }) {
             heading was a trade card, so the name it dropped is kept where only
             a heading outline can see it. */}
         <h1 className="sr-only">Trades</h1>
+
+        {/* The page's front door, above the settings that used to hide it. Two
+            bays wearing the trade card's own side plate: things in the same bay
+            were on the same side of the trade, so a manager and a player
+            together means he received him and on opposite sides means he gave
+            him. It leads because it is what a reader arrives wanting — the
+            ledge below says where they are standing, which is chosen once. */}
+        <TradeSearch
+          filters={tradeFilters}
+          onChange={setTradeFilters}
+          season={season}
+          scope={scope}
+          account={account}
+          bounds={bounds}
+          players={players}
+          managers={managers}
+        />
+
         <TradeFiltersLedge
           filters={tradeFilters}
           onChange={setTradeFilters}
           leagueFilters={leagueFilters}
           season={season}
-          scope={scope}
           account={account}
-          players={players}
-          managers={managers}
-          today={today}
+          names={names}
           trailing={
             <>
               {/* The board's size, which is what the deleted heading's slot is
@@ -418,14 +445,12 @@ export function TradesHome({ season }: { season: string }) {
   );
 }
 
-/** Whether anything in the trade ledge is narrowing — for the empty state's wording. */
+/** Whether anything the reader set is narrowing — for the empty state's wording. */
 function activeTradeSelection(filters: TradeFilters): boolean {
   return (
     filters.range.preset !== "all" ||
     filters.circle !== "all" ||
-    filters.players.length > 0 ||
-    filters.picks.length > 0 ||
-    filters.managers.length > 0
+    hasSideSelection(filters)
   );
 }
 
@@ -438,7 +463,10 @@ function activeTradeSelection(filters: TradeFilters): boolean {
  */
 /** Stable empties, so a render before the first page doesn't change identity. */
 const EMPTY_TRADES: readonly never[] = [];
-const EMPTY_MAP = {};
+// Typed as a lookup rather than left as `{}`, which is not indexable: the scope
+// line reads names out of these maps, and a bare object literal makes that a
+// type error at the one call site that needed it.
+const EMPTY_MAP: Record<string, never> = {};
 
 function Note({
   children,

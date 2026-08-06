@@ -138,16 +138,23 @@ export function tradeQueryParams(request: TradeRequest): URLSearchParams {
   if (from !== null) params.set("from", String(from));
   if (to !== null) params.set("to", String(to));
 
-  const { players, picks, managers, match } = request.filters;
-  if (players.length) params.set("players", join(players));
-  if (picks.length) params.set("picks", join(picks));
-  if (managers.length) params.set("managers", join(managers));
-  // Only sent when it can change an answer — one selection reads the same under
-  // either mode, and a parameter that never varies is a key segment that never
-  // varies.
-  if (players.length + picks.length + managers.length > 1) {
-    params.set("match", match);
-  }
+  // The bays, indexed. An empty one contributes nothing at all — the server
+  // drops empty sides anyway, and a parameter that says "this bay is empty" is a
+  // key segment that splits the cache between two identical boards.
+  request.filters.sides.forEach((side, index) => {
+    const prefix = `s${index + 1}`;
+    if (side.manager) params.set(`${prefix}manager`, side.manager);
+    if (side.players.length) params.set(`${prefix}players`, join(side.players));
+    if (side.picks.length) params.set(`${prefix}picks`, join(side.picks));
+  });
+
+  // Only sent when it can change an answer. The mode reads *within* a bay, so
+  // what makes it matter is one bay holding two assets — not two assets on the
+  // board, which under the sides is a relation rather than a set.
+  const graded = request.filters.sides.some(
+    (side) => side.players.length + side.picks.length > 1,
+  );
+  if (graded) params.set("match", request.filters.match);
 
   return params;
 }

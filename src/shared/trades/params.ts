@@ -38,6 +38,45 @@ import { integer, list } from "../query/parse.ts";
 export type TradeMatchMode = "all" | "any";
 
 /**
+ * One side of the trade a reader is describing: whose it is, and what it
+ * received.
+ *
+ * **A side is a roster, so `manager` is one name and never a list.** Two people
+ * cannot own one side of a trade, which is what makes this shape honest where a
+ * flat `managers[]` was not: that list could only ever ask "was this person in
+ * it", and the question readers actually arrive with is "what did *he* give *her*".
+ *
+ * **Everything in it is what that side received**, which is where the direction
+ * comes from — there is no `gave` field anywhere in this vocabulary. What a side
+ * gave up is what the *other* side received, so a reader asking "what did jkap
+ * give up" names jkap on one side and puts the player on the other. That is the
+ * same rule `assembleTrade` follows for storage (a side holds only its takes,
+ * because holding both halves is one edit away from them disagreeing), applied
+ * to the question instead of to the answer.
+ *
+ * A side with nothing in it narrows nothing at all — see {@link parseTradeQuery}.
+ */
+export type TradeSideQuery = {
+  /** The user id whose side this is, or null for "anyone". */
+  manager: string | null;
+  /** Player ids that side received. */
+  players: string[];
+  /** `season-round` pick tokens that side received. */
+  picks: string[];
+};
+
+/**
+ * How many sides a query will read.
+ *
+ * Two is the control's shape and three is a real trade — the board carries
+ * three-way trades and the card draws them — so the *vocabulary* is a list and
+ * only the UI is a pair. The cap exists because the parameters are indexed and
+ * an unbounded loop over a hostile query string is a way to make this route
+ * build arbitrarily large SQL.
+ */
+export const MAX_TRADE_SIDES = 4;
+
+/**
  * How close to the reader a trade has to be — the board's population, read as a
  * distance from one account rather than as a property of a league.
  *
@@ -118,11 +157,25 @@ export type TradeQuery = {
   from: number | null;
   /** Exclusive upper bound on `completed_at`, epoch ms; null for an open end. */
   to: number | null;
-  players: string[];
-  /** `season-round` tokens, e.g. `"2026-1"`. */
-  picks: string[];
-  /** User ids party to the trade. */
-  managers: string[];
+  /**
+   * The sides the reader described, in the order they were sent — see
+   * {@link TradeSideQuery}. Empty sides are dropped by the parser, so a side
+   * present here always narrows something.
+   *
+   * **Two sides mean "on opposite sides", never "this trade had exactly two".**
+   * A three-way where a third roster took something still matches, which is the
+   * reading the card already takes and the only one that doesn't silently hide
+   * trades.
+   */
+  sides: TradeSideQuery[];
+  /**
+   * Whether a side has to have received *all* of its assets or any one of them.
+   *
+   * It applies **within** a side and has nothing left to say across them: which
+   * side each asset went to is the whole of what the sides express, so an `any`
+   * spanning them would be asking for a trade to satisfy one of two structural
+   * claims — a question nobody has.
+   */
   match: TradeMatchMode;
   limit: number;
   /** The opaque page token, passed through to {@link decodeTradeCursor}. */
@@ -198,13 +251,41 @@ export function parseTradeQuery(
     circle,
     from: epoch(params, "from"),
     to: epoch(params, "to"),
-    players: list(params, "players"),
-    picks: list(params, "picks"),
-    managers: list(params, "managers"),
+    sides: sides(params),
     match: params.get("match") === "any" ? "any" : "all",
     limit: limit.ok && limit.value !== null ? limit.value : DEFAULT_TRADE_PAGE_SIZE,
     cursor: params.get("cursor"),
   };
+}
+
+/**
+ * The sides, read off `s1manager` / `s1players` / `s1picks` and their `s2…`
+ * siblings.
+ *
+ * **Indexed parameters rather than one encoded blob**, because the whole point of
+ * a query string here is that it is the cache key and the shareable link: a
+ * reader can see which side a player is on without a decoder, and an unreadable
+ * value falls back to its neutral form the way every other field does.
+ *
+ * **Empty sides are dropped, and the index is kept only as an ordering.** A bay a
+ * reader emptied is not a claim that some side received nothing — it is "don't
+ * care" — so it must not reach the SQL as a constraint. Which also means the
+ * numbering is not identity: `?s2players=…` alone is one side, the same query as
+ * `?s1players=…`, and the client is free to leave either bay empty.
+ */
+function sides(params: URLSearchParams): TradeSideQuery[] {
+  const out: TradeSideQuery[] = [];
+  for (let index = 1; index <= MAX_TRADE_SIDES; index++) {
+    const side = {
+      manager: params.get(`s${index}manager`)?.trim() || null,
+      players: list(params, `s${index}players`),
+      picks: list(params, `s${index}picks`),
+    };
+    if (side.manager !== null || side.players.length || side.picks.length) {
+      out.push(side);
+    }
+  }
+  return out;
 }
 
 /**
@@ -240,9 +321,7 @@ export function isUnnarrowed(query: TradeQuery): boolean {
     query.excludeLeagues === null &&
     query.from === null &&
     query.to === null &&
-    query.players.length === 0 &&
-    query.picks.length === 0 &&
-    query.managers.length === 0
+    query.sides.length === 0
   );
 }
 
@@ -264,7 +343,7 @@ export function isUnnarrowed(query: TradeQuery): boolean {
  * league would state a fraction of a board they never asked to see.
  */
 export function leagueScopeQuery(query: TradeQuery): TradeQuery {
-  return { ...query, from: null, to: null, players: [], picks: [], managers: [] };
+  return { ...query, from: null, to: null, sides: [] };
 }
 
 /**
@@ -273,11 +352,5 @@ export function leagueScopeQuery(query: TradeQuery): TradeQuery {
  * the query's own, so only one of the two is run.
  */
 export function hasTradeNarrowing(query: TradeQuery): boolean {
-  return (
-    query.from !== null ||
-    query.to !== null ||
-    query.players.length > 0 ||
-    query.picks.length > 0 ||
-    query.managers.length > 0
-  );
+  return query.from !== null || query.to !== null || query.sides.length > 0;
 }

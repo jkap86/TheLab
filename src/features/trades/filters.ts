@@ -128,27 +128,73 @@ export const TRADE_CIRCLES: {
   },
 ];
 
+/**
+ * One side of the trade a reader is describing: whose it is, and what it took.
+ *
+ * **Everything in it is what that side received, and there is no `gave`.** What a
+ * side gave up is what the other side received, so "what did jkap give up" is
+ * jkap on one side and the player on the other — which is how a direction gets
+ * into this vocabulary without a single directional field. `assembleTrade` stores
+ * a trade the same way and for the same reason: two halves that can disagree
+ * eventually do.
+ *
+ * **`manager` is one name because a side is one roster.** Two people cannot own
+ * one side, which is the thing the old flat `managers[]` could not say — it could
+ * only ask "was this person in it", never "what did *he* give *her*".
+ *
+ * Spelled identically to `shared/trades/params`' `TradeSideQuery`, which the
+ * compiler does not check: the standing arrangement between these two ends, and
+ * the reason both are pure modules with tests.
+ */
+export type TradeSideFilter = {
+  /** The user id whose side this is, or null for "anyone". */
+  manager: string | null;
+  /** Player ids that side received. */
+  players: string[];
+  /** Pick tokens that side received, e.g. `"2026-1"`. */
+  picks: string[];
+};
+
+/** Which bay a mutation is aimed at. Two on screen; the wire takes more. */
+export type SideIndex = 0 | 1;
+
 export type TradeFilters = {
   range: TradeRange;
   /** How close to the reader's account — see {@link TradeCircle}. */
   circle: TradeCircle;
-  /** Player ids that must have moved — on either side, see {@link tradeMatches}. */
-  players: string[];
-  /** Pick assets as `season-round` tokens, e.g. `"2026-1"`. */
-  picks: string[];
-  /** User ids that must be party to the trade. */
-  managers: string[];
   /**
-   * Whether a trade has to carry *every* selection or just one of them.
+   * The two bays, always both present and usually mostly empty.
    *
-   * Both are real questions and neither is a safe default for the other: "did
-   * these two managers trade with each other" and "what have my two rookies
-   * been traded for" are `all`, while "show me anything involving any of these
-   * three players" is `any`. One control over the whole selection rather than
-   * one per category, because a per-category mix ("all of these managers, any of
-   * these players") is a sentence nobody can read off a filter bar.
+   * **A fixed pair here where the wire takes a list**, and the asymmetry is
+   * deliberate: the control is two side plates, so the client always has exactly
+   * two to render and never has to reason about an absent one, while
+   * `shared/trades/params` parses up to `MAX_TRADE_SIDES` so a third bay is a UI
+   * change and not a protocol change. A three-way trade is a real thing this
+   * board carries; two is what a reader asks about.
+   *
+   * **An empty side narrows nothing.** One bay filled is the board this page had
+   * before the second one existed — a player named there is "some side received
+   * him", which every trade he moved in satisfies.
+   */
+  sides: readonly [TradeSideFilter, TradeSideFilter];
+  /**
+   * Whether a side has to have received *all* of the assets named in it or any
+   * one of them.
+   *
+   * It applies **within** a side, which is all it has left to say: which side an
+   * asset went to is what the bays express, so there is no across-sides reading
+   * of `any` that anybody wants. Drawn only when some bay holds two assets, for
+   * the reason `MatchToggle` is drawn only on a second subject — a mode over a
+   * set of one has one answer.
    */
   match: "all" | "any";
+};
+
+/** A bay with nothing in it, which is the neutral form of the whole control. */
+export const EMPTY_SIDE: TradeSideFilter = {
+  manager: null,
+  players: [],
+  picks: [],
 };
 
 export const DEFAULT_TRADE_FILTERS: TradeFilters = {
@@ -157,11 +203,92 @@ export const DEFAULT_TRADE_FILTERS: TradeFilters = {
   // are a fraction of the trades worth reading, and narrowing back to them is
   // one press away.
   circle: "all",
-  players: [],
-  picks: [],
-  managers: [],
+  sides: [EMPTY_SIDE, EMPTY_SIDE],
   match: "all",
 };
+
+/** Nothing named and nothing asked — the state that narrows nothing. */
+export function isSideEmpty(side: TradeSideFilter): boolean {
+  return (
+    side.manager === null && side.players.length === 0 && side.picks.length === 0
+  );
+}
+
+/** How many assets a bay holds — what the match mode is drawn against. */
+export function sideAssetCount(side: TradeSideFilter): number {
+  return side.players.length + side.picks.length;
+}
+
+/** Replace one bay, leaving the other and everything around it alone. */
+export function withSide(
+  filters: TradeFilters,
+  index: SideIndex,
+  side: TradeSideFilter,
+): TradeFilters {
+  const sides: [TradeSideFilter, TradeSideFilter] = [...filters.sides];
+  sides[index] = side;
+  return { ...filters, sides };
+}
+
+/**
+ * Put an asset in a bay, or take it out of one.
+ *
+ * **An asset moves rather than being duplicated**: naming it on one side and then
+ * on the other is a reader changing their mind about which way it went, not a
+ * claim that two sides both received it — which is unsatisfiable, so honouring it
+ * literally would empty the board with no way to see why.
+ */
+export function toggleSideAsset(
+  filters: TradeFilters,
+  index: SideIndex,
+  kind: "player" | "pick",
+  id: string,
+): TradeFilters {
+  const key = kind === "player" ? "players" : "picks";
+  const held = filters.sides[index][key].includes(id);
+  const sides = filters.sides.map((side, at) => {
+    if (at === index) {
+      return {
+        ...side,
+        [key]: held ? side[key].filter((v) => v !== id) : [...side[key], id],
+      };
+    }
+    // The other bay gives it up whichever way this went — removing an id it
+    // doesn't hold is a no-op, so this needs no condition of its own.
+    return { ...side, [key]: side[key].filter((v) => v !== id) };
+  }) as [TradeSideFilter, TradeSideFilter];
+  return { ...filters, sides };
+}
+
+/**
+ * Name the manager whose bay this is, or clear it with null.
+ *
+ * The same move rule as an asset, for a sharper reason: a manager is one *side*,
+ * so naming them in both bays asks for a trade someone made with themselves.
+ */
+export function setSideManager(
+  filters: TradeFilters,
+  index: SideIndex,
+  manager: string | null,
+): TradeFilters {
+  const sides = filters.sides.map((side, at) =>
+    at === index
+      ? { ...side, manager }
+      : { ...side, manager: side.manager === manager ? null : side.manager },
+  ) as [TradeSideFilter, TradeSideFilter];
+  return { ...filters, sides };
+}
+
+/**
+ * Flip the two bays.
+ *
+ * "Did Darkside give Nabers to jkap" and the reverse are different questions with
+ * the same four tokens, so this has to be cheaper than re-picking them — which is
+ * the whole argument for the key between the bays.
+ */
+export function swapSides(filters: TradeFilters): TradeFilters {
+  return { ...filters, sides: [filters.sides[1], filters.sides[0]] };
+}
 
 /** The window in epoch milliseconds; null on a side it doesn't bound. */
 export type TradeBounds = { from: number | null; to: number | null };
@@ -231,15 +358,68 @@ export function pickLabel(token: string): string {
   return `${season} ${ordinal(Number(round))}`;
 }
 
-/** How many filters are narrowing the list — the count on the modal's trigger. */
+/**
+ * How many filters are narrowing the list — the count on the ledge's trigger.
+ *
+ * A named manager counts as one, exactly as an asset does: both are one thing the
+ * reader picked, and a bay that says "jkap got Nabers" is two narrowings however
+ * differently the two are stored.
+ */
 export function activeTradeFilterCount(filters: TradeFilters): number {
   return (
     (filters.range.preset === "all" ? 0 : 1) +
     (filters.circle === "all" ? 0 : 1) +
-    filters.players.length +
-    filters.picks.length +
-    filters.managers.length
+    filters.sides.reduce(
+      (count, side) =>
+        count + (side.manager === null ? 0 : 1) + sideAssetCount(side),
+      0,
+    )
   );
+}
+
+/** Whether either bay says anything — what the empty state's wording turns on. */
+export function hasSideSelection(filters: TradeFilters): boolean {
+  return filters.sides.some((side) => !isSideEmpty(side));
+}
+
+/**
+ * How to say what a thing in a bay is called. Ids are all this module holds, and
+ * the names live in the page's own lookup maps.
+ *
+ * A missing name falls back to the id rather than to a placeholder: it is the
+ * only true thing available, and a summary reading "1 player" while the bay
+ * beside it draws a name was the old shape's tell that it was counting rather
+ * than reading.
+ */
+export type TradeNames = {
+  player: (id: string) => string;
+  manager: (id: string) => string;
+};
+
+/**
+ * What a bay is called in prose — the label table, resolved from whoever is
+ * standing in *either* bay.
+ *
+ * Three states and a reader crosses all of them in one search: nobody named
+ * reads "one side got", one manager reads "jkap got" on their own bay and
+ * "jkap gave" on the other, and a manager in each reads "<name> got" twice.
+ *
+ * **The bays themselves print `who got` and never `gave`**, because each one
+ * carries a who-slot: a bay whose slot says "anyone" cannot also claim to be
+ * jkap's giving. This is the *sentence* over both bays at once, where the
+ * relation is the thing being described rather than a slot's own contents, and
+ * "jkap gave Nabers" is what that relation is called.
+ */
+export function sideLabel(
+  filters: TradeFilters,
+  index: SideIndex,
+  names: TradeNames,
+): string {
+  const side = filters.sides[index];
+  if (side.manager !== null) return `${names.manager(side.manager)} got`;
+  const other = filters.sides[index === 0 ? 1 : 0];
+  if (other.manager !== null) return `${names.manager(other.manager)} gave`;
+  return index === 0 ? "one side got" : "the other side got";
 }
 
 /** A circle in words, lower case — see {@link tradeFilterSummary}. */
@@ -286,21 +466,57 @@ export function tradeRangeLabel(range: TradeRange): string {
  * the literal "every crawled league" used to do in that slot before a reader
  * could change it. See {@link tradeCircleSummary}.
  */
-export function tradeFilterSummary(filters: TradeFilters): string {
-  const chosen = (
-    [
-      [filters.managers.length, "manager"],
-      [filters.players.length, "player"],
-      [filters.picks.length, "pick"],
-    ] as const
-  )
-    .filter(([count]) => count > 0)
-    .map(([count, noun]) => `${count} ${noun}${count === 1 ? "" : "s"}`);
-
+export function tradeFilterSummary(
+  filters: TradeFilters,
+  names: TradeNames,
+): string {
   const window = tradeRangeLabel(filters.range).toLowerCase();
-  if (chosen.length === 0) return window;
-  const mode = filters.match === "all" ? "all of" : "any of";
-  return `${window} · ${mode} ${chosen.join(", ")}`;
+  const selection = sidesSummary(filters, names);
+  return selection === null ? window : `${window} · ${selection}`;
+}
+
+/**
+ * The two bays as one phrase, or null where neither says anything.
+ *
+ * It reads the bays rather than counting them, which is the whole change: "all of
+ * 1 manager, 1 player" described the shape of a selection where "jkap gave Malik
+ * Nabers" describes the question. The old wording could not do better — a flat
+ * list of ids has no relation in it to spell out.
+ *
+ * Two shapes, and which one applies is decided by whether any asset was named:
+ *
+ * - **Nobody named an asset**, so the sentence is about the people: "jkap traded",
+ *   or "jkap traded with DarksideEmperors". Naming the bays here would be
+ *   describing sides that hold nothing.
+ * - **Something was named**, so each bay carrying assets says what it took, under
+ *   the label its relation earns it. A bay holding only a manager contributes no
+ *   clause of its own — it is already spoken by the other bay's "gave".
+ */
+function sidesSummary(filters: TradeFilters, names: TradeNames): string | null {
+  const [a, b] = filters.sides;
+  if (isSideEmpty(a) && isSideEmpty(b)) return null;
+
+  if (sideAssetCount(a) + sideAssetCount(b) === 0) {
+    const who = [a.manager, b.manager]
+      .filter((id): id is string => id !== null)
+      .map(names.manager);
+    return who.length === 2
+      ? `${who[0]} traded with ${who[1]}`
+      : `${who[0]} traded`;
+  }
+
+  const join = filters.match === "all" ? " and " : " or ";
+  return filters.sides
+    .map((side, index) => {
+      if (sideAssetCount(side) === 0) return null;
+      const assets = [
+        ...side.players.map(names.player),
+        ...side.picks.map(pickLabel),
+      ].join(join);
+      return `${sideLabel(filters, index as SideIndex, names)} ${assets}`;
+    })
+    .filter((clause): clause is string => clause !== null)
+    .join(" · ");
 }
 
 /** One selectable value in a filter list, with how many trades carry it. */

@@ -973,9 +973,11 @@
     <div class="cards">
       <div class="card">
         <span class="card__tag">Both ends is free</span>
-        <p>One <code>rosters</code> lookup per bay, keyed on <code>owner_id</code> and compared to
-          the roster <code>adds</code> names — the fast, decorrelatable shape the circle filter
-          already uses. Two bays is two of them and <code>r1.roster_id &lt;&gt; r2.roster_id</code>.</p>
+        <p>Each bay binds one of the trade's own <code>roster_ids</code> and asks everything it
+          holds against that id; a named manager adds a primary-key lookup in <code>rosters</code>.
+          <b>Correlated, not decorrelatable</b> — the shape that measured 9ms where writing it
+          <code>FROM rosters</code> inwards measured 205ms, because only this one leaves the board's
+          <code>ORDER BY</code> on its index.</p>
       </div>
       <div class="card">
         <span class="card__tag">Two managers, one bay</span>
@@ -1527,9 +1529,11 @@
         it is needed and B the rest of the time.</p>
       <ol class="steps">
         <li><b>Say which</b> — a letter, or “B with a set in the who-slot”.</li>
-        <li><b>One lookup per named side</b> — <code>rosters.owner_id</code> against the roster
-          <code>adds</code> names, plus <code>r1.roster_id &lt;&gt; r2.roster_id</code>. The same
-          decorrelatable shape the circle filter measured at 9ms.</li>
+        <li><b>One nested <code>EXISTS</code> per named side</b>, each binding a roster off the
+          trade's own <code>roster_ids</code>, with <code>ri2 &lt;&gt; ri1</code> between them —
+          nested rather than <code>AND</code>ed because two independent subqueries cannot compare
+          their rosters to each other. Driven off <code>t</code> throughout, which is the 9ms shape
+          rather than the 205ms one.</li>
         <li><b>The scope line reads it out</b> — “Darkside gave Malik Nabers to jkap for a 2027 1st”
           is the first sentence this page has been able to write about itself.</li>
       </ol>

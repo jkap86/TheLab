@@ -50,12 +50,7 @@ export async function GET(request: Request) {
   const query = parseTradeQuery(url.searchParams, season);
 
   try {
-    const facets = await getTradeFacets({
-      ...query,
-      players: [],
-      picks: [],
-      managers: [],
-    });
+    const facets = await getTradeFacets({ ...query, sides: [] });
 
     // Only the ids the menus will actually show need names. Picks need none —
     // their label is a pure formatting of the token beside it, and the client

@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   DEFAULT_TRADE_PAGE_SIZE,
   MAX_TRADE_PAGE_SIZE,
+  MAX_TRADE_SIDES,
   hasTradeNarrowing,
   isUnnarrowed,
   leagueScopeQuery,
@@ -47,10 +48,36 @@ describe("parseTradeQuery", () => {
     }
   });
 
-  test("selections accept repeated and comma-joined values, de-duplicated", () => {
-    assert.deepEqual(parse("players=p1,p2&players=p1").players, ["p1", "p2"]);
-    assert.deepEqual(parse("picks=2026-1").picks, ["2026-1"]);
-    assert.deepEqual(parse("managers=u1").managers, ["u1"]);
+  test("a side collects its manager and what it received", () => {
+    const [side] = parse(
+      "s1manager=u1&s1players=p1,p2&s1players=p1&s1picks=2026-1",
+    ).sides;
+    assert.equal(side.manager, "u1");
+    assert.deepEqual(side.players, ["p1", "p2"]);
+    assert.deepEqual(side.picks, ["2026-1"]);
+  });
+
+  test("two sides are two sides, in the order they were indexed", () => {
+    const sides = parse("s1manager=u1&s2players=p1").sides;
+    assert.equal(sides.length, 2);
+    assert.equal(sides[0].manager, "u1");
+    assert.deepEqual(sides[1].players, ["p1"]);
+  });
+
+  test("an empty bay is dropped, so the index is an ordering and not identity", () => {
+    // A bay the reader emptied is "don't care", never a claim that some side
+    // received nothing — so it must not reach the SQL as a constraint at all.
+    assert.deepEqual(parse("s1players=&s1manager=").sides, []);
+    // Which means a lone `s2` is one side, the same query as a lone `s1`.
+    assert.deepEqual(parse("s2players=p1").sides, parse("s1players=p1").sides);
+  });
+
+  test("sides past the cap are ignored rather than growing the SQL", () => {
+    const query = new URLSearchParams();
+    for (let index = 1; index <= MAX_TRADE_SIDES + 3; index++) {
+      query.set(`s${index}players`, `p${index}`);
+    }
+    assert.equal(parse(query.toString()).sides.length, MAX_TRADE_SIDES);
   });
 
   test("match is `all` unless `any` is asked for by name", () => {
@@ -111,9 +138,10 @@ describe("what counts as narrowed", () => {
       "xleagues=a",
       "from=1",
       "to=1",
-      "players=p1",
-      "picks=2026-1",
-      "managers=u1",
+      "s1players=p1",
+      "s1picks=2026-1",
+      "s1manager=u1",
+      "s2players=p1",
       "circle=mine&user=u1",
     ]) {
       assert.equal(isUnnarrowed(parse(query)), false, query);
@@ -126,7 +154,7 @@ describe("what counts as narrowed", () => {
 
   test("the league scope is what the headline's `of M` is counted over", () => {
     const query = parse(
-      "leagues=a,b&from=1&players=p1&managers=u1&picks=2026-1&circle=mine&user=u1",
+      "leagues=a,b&from=1&s1manager=u1&s1players=p1&s2picks=2026-1&circle=mine&user=u1",
     );
     const scope = leagueScopeQuery(query);
     assert.deepEqual(scope.leagues, ["a", "b"]);
@@ -135,9 +163,7 @@ describe("what counts as narrowed", () => {
     assert.equal(scope.circle, "mine");
     assert.equal(scope.user, "u1");
     assert.equal(scope.from, null);
-    assert.deepEqual(scope.players, []);
-    assert.deepEqual(scope.picks, []);
-    assert.deepEqual(scope.managers, []);
+    assert.deepEqual(scope.sides, []);
   });
 
   test("with only league filters the two counts are the same query", () => {
@@ -145,6 +171,6 @@ describe("what counts as narrowed", () => {
     assert.equal(hasTradeNarrowing(parse("leagues=a")), false);
     assert.equal(hasTradeNarrowing(parse("circle=mine&user=u1")), false);
     assert.equal(hasTradeNarrowing(parse("leagues=a&from=1")), true);
-    assert.equal(hasTradeNarrowing(parse("players=p1")), true);
+    assert.equal(hasTradeNarrowing(parse("s1players=p1")), true);
   });
 });

@@ -13,17 +13,18 @@ import {
   tradeCircleSummary,
   tradeFilterSummary,
 } from "../filters";
-import type { TradeFilters } from "../filters";
-import type { LeagueScope } from "../trade-query";
-import type { PlayerSummary, TradeManager } from "../types";
+import type { TradeFilters, TradeNames } from "../filters";
 
 /**
  * The panel, loaded on demand.
  *
  * The ledge is closed on arrival and most readers leave it that way, so what is
- * split off is everything behind the press: the option picker, the three lists
- * and the facets query. The trigger and the summary are static, because they are
- * what a reader who never opens it still reads.
+ * split off is everything behind the press. The trigger and the summary are
+ * static, because they are what a reader who never opens it still reads.
+ *
+ * It is a smaller split than it was — the three facet lists and the season-wide
+ * aggregate behind them moved out to `./trade-search`, where the reader was
+ * always trying to get to.
  *
  * `ssr: false` because there is nothing to prerender — a panel that only exists
  * after a press has no server-rendered state worth having, and rendering it
@@ -81,11 +82,8 @@ export function TradeFiltersLedge({
   onChange,
   leagueFilters,
   season,
-  scope,
   account,
-  players,
-  managers,
-  today,
+  names,
   trailing,
 }: {
   filters: TradeFilters;
@@ -93,12 +91,14 @@ export function TradeFiltersLedge({
   /** Only to spell the scope out — this control does not edit them. */
   leagueFilters: LeagueFilters;
   season: string;
-  scope: LeagueScope;
   /** The reader's stored account, or null — what the circle is drawn around. */
   account: UserInfo | null;
-  players: Record<string, PlayerSummary>;
-  managers: Record<string, TradeManager>;
-  today: string;
+  /**
+   * How to name what the bays hold. The summary reads the selection out rather
+   * than counting it, which is what the sides bought — and this control holds no
+   * ids of its own, so the page's own lookups come in.
+   */
+  names: TradeNames;
   /** The page's own controls, seated on the same row. */
   trailing?: React.ReactNode;
 }) {
@@ -148,7 +148,7 @@ export function TradeFiltersLedge({
               it names the population, and the two summaries after it are what
               cut that population down. */}
           {season} · {tradeCircleSummary(filters.circle)} ·{" "}
-          {filterSummary(leagueFilters)} · {tradeFilterSummary(filters)}
+          {filterSummary(leagueFilters)} · {tradeFilterSummary(filters, names)}
         </p>
 
         {active > 0 && (
@@ -171,12 +171,7 @@ export function TradeFiltersLedge({
           <TradeFiltersPanel
             filters={filters}
             onChange={onChange}
-            season={season}
-            scope={scope}
             account={account}
-            players={players}
-            managers={managers}
-            today={today}
           />
         )}
       </div>
