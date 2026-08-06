@@ -444,11 +444,18 @@ body {
 
      It is the app bar's construction rather than `.lab-plate`'s, and the reason
      is what the two walls say. A plate extrudes 4px straight down, which reads
-     as a surface lit from directly above; this one runs 5px down **and** right,
+     as a surface lit from directly above; this one runs 6px down **and** right,
      so two faces of the wall are visible and the card is an object standing on
      the page. That is the whole of the difference between a card with a shadow
      under it and a card you could pick up, and it is why the trade card no
      longer wears `LIST_ROW_SURFACE`'s glass with the league and share rows.
+
+     **The wall went 5px → 6px when the sides stopped being plates**, which is
+     not a tuning. While a side was a seated plate the card was one object among
+     three, and its wall only had to outrank theirs; now it is the *only* object
+     in the list — everything inside it is a region of this face — so the wall
+     is carrying the whole of that claim on its own. Trimming it back is how the
+     card quietly stops reading as a container again.
 
      Four things are load-bearing, each a way of getting it wrong:
 
@@ -471,7 +478,7 @@ body {
      Hover lifts the card and raises the bloom, the same payoff `LIST_ROW_HOVER`
      gives the other two lists — spelled here as a filter because of the clip. */
   .lab-slab {
-    padding: 0 5px 5px 0;
+    padding: 0 6px 6px 0;
     background: linear-gradient(128deg, #14545c 0%, #0a2b33 38%, var(--edge) 76%);
     filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
       drop-shadow(0 10px 16px rgba(0, 0, 0, 0.75))
@@ -517,17 +524,66 @@ body {
       transparent 60%
     );
   }
-  /* The seated plate's own grain, worn *with* `.lab-plate-sm` — the modifier
-     precedent `.lab-plate-sm` itself follows. It only lifts the fill enough to
-     hold the brushing; everything else about the part stays that class's. */
-  .lab-plate-brushed {
-    background:
-      repeating-linear-gradient(
-        101deg,
-        rgba(255, 255, 255, 0.012) 0 1px,
-        transparent 1px 3px
-      ),
-      linear-gradient(165deg, #224054 0%, #14293a 58%, #0c1d29 100%);
+  /* The trade card's own label, riding its top edge.
+
+     A part rising out of a card is the strongest "this is one object" mark
+     available, and it is the device the manager plate's filters key already
+     uses on its bottom edge — so the trades board gets it rather than a second
+     invention. What it buys beyond the mark is height: the league's name is off
+     the face entirely, in margin the list was already spending as a gap.
+
+     Three things are load-bearing:
+
+     - **It is a plate, not a chip.** Rectangular, no press travel, no bloom.
+       "Raised means press me" is about keys and pills, so a nameplate wearing
+       `.lab-chip`'s rounded pill would invite a press that does nothing; a
+       plate with a lit top edge reads as a label stamped on a part.
+     - **Its wall is 2px, `.lab-row`'s and not a chip's.** There is one of these
+       per card down a windowed list of forty thousand, and thickness has to
+       fall with count or a scroll reads as mud.
+     - **It must live outside `.lab-slab`, never in it.** `clip-path` clips its
+       whole subtree, so a plate rendered inside the notched face would be cut
+       off at the exact edge it exists to straddle. */
+  .lab-nameplate {
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.28),
+      0 2px 0 var(--edge),
+      0 5px 10px -4px rgba(0, 0, 0, 0.8);
+  }
+
+  /* A numeral cut into the surface rather than lit on top of it.
+
+     A dark shadow above the stroke and a light one below is what the eye reads
+     as an incision, because the light in this app comes from the top — the same
+     reading `.lab-readout`'s own lit bottom lip relies on, at type scale.
+
+     **Why the trade card's values are engraved and not lit** is arithmetic
+     rather than taste. There are two side totals and up to a dozen line values
+     on a card, times the couple of dozen cards in the virtualiser's window: a
+     numeral in the accent is a signal, and fifty signals are wallpaper. Cut
+     into the plate it is a *finish*, so it stays calm at any count while still
+     being unmistakably more considered than body-face text — which is the whole
+     of what the card needed. It leaves the accent unspent, and this page has
+     exactly one thing worth spending it on.
+
+     `-faint` is the same cut at line scale, and it is a separate class rather
+     than an opacity because the highlight is a fixed 1px whatever the type
+     size: at 10px the full-strength lower lip is half the stroke weight and
+     reads as a blur. Thickness falls with size, the same rule `.lab-row`'s 2px
+     wall answers for count.
+
+     Material only, per the layer's rule: the display face, the size and the
+     colour are utilities at the call site. */
+  .lab-engraved {
+    text-shadow:
+      0 -1px 1px rgba(0, 0, 0, 0.95),
+      0 1px 0 rgba(255, 255, 255, 0.16);
+  }
+  .lab-engraved-faint {
+    text-shadow:
+      0 -1px 1px rgba(0, 0, 0, 0.8),
+      0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   /* `.lab-channel` at list scale: the cut a trade card's give column sits in.
@@ -542,7 +598,13 @@ body {
 
      Recessed is the right side of the grammar here. What a side received is
      acted on — those are the players you look up — and what it gave is context
-     for them, so the take sits on the lit face and the give sits in a cut. */
+     for them, so the take sits on the lit face and the give sits in a cut.
+
+     **That cut is in the card's own face now, not in a side plate**, which
+     narrows the drop from take to give by one surface and is the price the
+     card's new hierarchy was bought at. It survives because the groove is the
+     darkest thing on the card either way; if it ever stops reading, deepen the
+     groove rather than giving the side its plate back. */
   .lab-groove {
     background: linear-gradient(180deg, #050e17, #081722);
     box-shadow:
@@ -557,8 +619,16 @@ body {
      something over it, which is one diagonal gloss and a hairline of cyan around
      the rim. It is finish rather than state — deliberately **not**
      `.lab-readout-live`, which is the housing lighting up because the number
-     inside it is running. A KTC total is a constant, and spending the live face
-     on a constant is the same mistake as tinting a trigger that is always set.
+     inside it is running. A window's day count is a constant, and spending the
+     live face on a constant is the same mistake as tinting a trigger that is
+     always set.
+
+     **The trade card's totals wore this and don't now**, which is worth knowing
+     before reaching for it: a rim of cyan around every number reads as one
+     control per side over a list of forty thousand, and the card spends its
+     decoration on `.lab-engraved` instead. Two lenses left, both in the lookback
+     panel, where there are exactly two of them on screen and each is a field
+     being edited. That is the count this finish holds up at.
 
      It carries `position`/`overflow` for the same reason `.lab-billet-face`
      does: the gloss is a pseudo-element and has to be clipped by the part it
