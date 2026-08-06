@@ -6,6 +6,16 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Avatar, PositionBadge } from "@/features/shared";
 import type { UserInfo } from "@/shared/contract";
 
+// Reached directly rather than through the card's barrel, which exports only
+// `TradeCard` — deliberately, so no *other* page can pull a card's parts into
+// its graph. This is the same page, and what it takes is two strings with no
+// imports behind them: the geometry of a side, read once so the control and the
+// card cannot come to different views of it.
+import {
+  SIDE_SEAM_COLUMN,
+  SIDE_ZONE,
+} from "./trade-card/trade-card.constants";
+
 import {
   pickLabel,
   setSideManager,
@@ -159,10 +169,15 @@ export function TradeSearch({
 
   return (
     <div ref={boxRef} className="relative mb-3">
-      {/* Two bays either side of the swap from `sm` up, stacked below it — which
-          is what the card's own sides do at that width, and for the same reason:
-          a bay is ~150px on a phone and every name in it would wrap. */}
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+      {/* One part holding two regions, which is the card's own construction and
+          not a resemblance to it: `SIDE_ZONE` and `SIDE_SEAM_COLUMN` come from
+          the card itself, so the control cannot drift from the thing it filters.
+          No gap — what separates two sides is a cut, not the ground showing
+          between two objects — and they stack below `sm` exactly as the card's
+          do, which is what the seam's two spellings are already for.
+          `.lab-plate` rather than the card's `.lab-slab`: this is the page's
+          instrument, not a row in the list. */}
+      <div className="lab-plate relative grid rounded-xl sm:grid-cols-2">
         <SideBay
           index={0}
           filters={filters}
@@ -173,6 +188,20 @@ export function TradeSearch({
           onChange={onChange}
         />
 
+        <SideBay
+          index={1}
+          seam
+          filters={filters}
+          nameOf={nameOf}
+          open={open}
+          panelId={panelId}
+          onOpen={setOpen}
+          onChange={onChange}
+        />
+
+        {/* On the seam rather than in a column of its own: a middle track would
+            put the cut to one side of the key, which reads as the key belonging
+            to the bay on its left. */}
         <SwapKey
           inert={empty}
           onClick={() => {
@@ -181,16 +210,6 @@ export function TradeSearch({
             // now aimed at the other's contents. Closing is the honest answer.
             close();
           }}
-        />
-
-        <SideBay
-          index={1}
-          filters={filters}
-          nameOf={nameOf}
-          open={open}
-          panelId={panelId}
-          onOpen={setOpen}
-          onChange={onChange}
         />
       </div>
 
@@ -225,15 +244,23 @@ export function TradeSearch({
 }
 
 /**
- * One bay: the card's seated side plate, with a who-slot for a head and what that
- * side took underneath.
+ * One bay: a region of the control's face, with a who-slot for a head and what
+ * that side took underneath.
  *
- * The materials are the card's own (`lab-plate-sm lab-plate-brushed`, the milled
- * parting line under the head), because looking like the thing it filters is the
- * feature rather than a flourish.
+ * **It is the card's side, built the way the card builds one** — `SIDE_ZONE` for
+ * the inset, the seam for where it starts, and the same head of avatar, name and
+ * a flush-right tag. Not a plate: the card stopped drawing one inside itself
+ * because a part inside a part is one step too many to read as containment, and
+ * a bay is in exactly that position here.
+ *
+ * The one thing that is not the card's is the trailing tag. A side of a card puts
+ * its *value* there under a readout; this puts the word `got`, which is a
+ * constant — and spending an instrument face on a constant is the mistake the
+ * kickoff timer's note already names.
  */
 function SideBay({
   index,
+  seam = false,
   filters,
   nameOf,
   open,
@@ -242,6 +269,8 @@ function SideBay({
   onChange,
 }: {
   index: SideIndex;
+  /** Whether this bay is cut off the one before it — the trailing one is. */
+  seam?: boolean;
   filters: TradeFilters;
   nameOf: (id: string) => PickedName;
   open: SearchSlot | null;
@@ -255,11 +284,11 @@ function SideBay({
     open?.side === index && open.kind === kind;
 
   return (
-    <div className="lab-plate-sm lab-plate-brushed flex flex-col rounded-lg px-2.5 py-2.5">
-      {/* The head, and the parting line under it is the card's — a dark cut with
-          a lit far lip rather than a border, so the two parts read as milled from
-          one piece. */}
-      <div className="mb-2 flex items-center gap-2 pb-2 shadow-[0_1px_0_rgba(0,0,0,0.6),0_2px_0_rgba(255,255,255,0.06)]">
+    <div className={`${SIDE_ZONE} ${seam ? SIDE_SEAM_COLUMN : ""}`}>
+      {/* No parting line under the head, for the card's own reason: with the bay
+          no longer a plate, the seam beside it is the only cut this block gets
+          and a second one two lines down would be back to drawing a box. */}
+      <div className="mb-2 flex items-center gap-2">
         <button
           type="button"
           onClick={() => onOpen({ side: index, kind: "who" })}
@@ -378,22 +407,22 @@ function AssetToken({
  * loses its wall rather than only dimming.
  */
 function SwapKey({ inert, onClick }: { inert: boolean; onClick: () => void }) {
-  if (inert) {
-    return (
-      <span
-        aria-hidden="true"
-        className="hidden select-none self-center text-sm text-foreground/20 sm:block"
-      >
-        ⇄
-      </span>
-    );
-  }
+  // Nothing to flip, so nothing to press — and the app's rule is that a part
+  // which does nothing when pressed must not look pressable. It goes entirely
+  // rather than sitting inert on the seam, since the seam already says where the
+  // boundary is and a dead key on it would be the only ornament on the control.
+  if (inert) return null;
+
   return (
     <button
       type="button"
       onClick={onClick}
       title="Swap the sides"
-      className="lab-chip lab-chip-sm mx-auto flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-full text-sm text-active"
+      // Centred on the part, which is where the seam is: the two bays are equal
+      // tracks and each holds a head and a row, so the cut runs through the
+      // middle in both geometries — beside the bays from `sm` up, between them
+      // stacked.
+      className="lab-chip lab-chip-sm absolute left-1/2 top-1/2 z-10 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-sm text-active"
     >
       {/* Two glyphs rather than one rotated, because the bays are side by side
           from `sm` up and stacked below it — an arrow pair has to point the way
