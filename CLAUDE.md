@@ -2409,6 +2409,23 @@ stops holding, a comment saying it does would not have caught it.
     is content, so it takes a second line down there; the caption is the one part
     a phone can lose, since the trigger reads "Player or leaguemate" until
     something is picked.
+  - **The search is the storey's only channel; the two shares keys are raised
+    pills at its trailing end.** All three were `.lab-ledge-slot` in one adjacent
+    run — same material, same size, no divider — which is a segmented text input
+    in every respect a reader judges by, so the two doors onto a whole ranked list
+    were being offered as somewhere else to type. The fix is the app's own
+    grammar rather than three parts told apart: a channel is what *becomes* a
+    field (this trigger does, a frame after it is pressed) and a pill is what
+    opens something (`lab-chip lab-chip-sm rounded-full`, the ADP drawer's
+    smallest key, borrowed rather than reinvented). **Material and seating are
+    two halves and only one survives a phone.** The seating is real — the count
+    and the two keys all describe the *population* where the field is the reader's
+    own input, the argument that put the ADP block beside Tools — but the storey
+    wraps down there and the two ends become two lines, so material is what
+    carries it at the width the confusion is worst. The seating has one
+    consequence worth spelling: they are **one flex item**, because `ml-auto`
+    resolves per flex line, and loose they sat right on the first line and hard
+    against the *left* of the second.
 
   Two knock-ons worth keeping. **The heading storey is what's conditional, never
   the rail** — `ColumnsBar` takes `headings`, and the tab decides, because what

@@ -111,6 +111,17 @@ const RESULT_LIMIT = 8;
  * — a subject picked by browsing leaves exactly the token one picked by typing
  * does.
  *
+ * **They are drawn as raised keys at the trailing end, where the search is a
+ * channel at the leading one, and both halves of that were one bug.** All three
+ * used to be `.lab-ledge-slot` in one adjacent run, which is a segmented text
+ * input in every respect a reader judges by — same material, same size, no
+ * divider — so the two that throw a sheet over the page were being offered as
+ * somewhere else to type. Material says what a part *is* (a channel becomes a
+ * field, a pill is pressed) and seating says what it belongs *with* (the count
+ * and the keys describe the population; the field is the reader's own input).
+ * Material is the half that survives a phone, since the storey wraps down there
+ * and the two ends become two lines.
+ *
  * **There is a key per kind, where the search is one field over both.** Those are
  * opposite halves of one argument rather than an inconsistency. A reader *typing*
  * a name already knows which kind it is, so making them pick a field first is a
@@ -248,7 +259,19 @@ export function SubjectRail({
 
             {/* The trigger is a slot cut into the storey's face — the same
                 channel the headings below sit in, which is this app's answer to
-                making a small label read as a part rather than as text. */}
+                making a small label read as a part rather than as text.
+
+                **It is the only part of this storey that keeps the channel, and
+                that is the material rule rather than a leftover.** Recessed is
+                what this app draws for a field or a readout; this trigger
+                *becomes* a text field a frame after it is pressed, so a slot is
+                the honest thing for it to look like beforehand. The two keys
+                below open a dialog and are never fields, so they wear the raised
+                pill — see the note on them. All three used to wear this class,
+                which made the row read as one segmented input with three cells:
+                the eye groups by material before it reads a word, so the two
+                doors onto a whole ranked list were being offered as somewhere
+                else to type. */}
             <button
               ref={searchTrigger}
               type="button"
@@ -270,57 +293,98 @@ export function SubjectRail({
               {count > 0 ? "Add" : "Player or leaguemate"}
             </button>
 
-            {/* The other two doors: the whole ranked list of each kind, over the
-                page, with what is worth knowing about every name on it. The
-                panel closes behind either — two floating things over one list,
-                one of them covering the other, is two answers to "where am I".
+            {/* The trailing end: what the rail answers, and the two doors onto
+                the lists behind that answer.
 
-                The label spells out what the sheet holds at rest and contracts
-                once there are tokens crowding the row, exactly as the search
-                trigger beside it does: the icon is what still tells the pair
-                apart, and this storey wraps rather than compresses. */}
-            <button
-              type="button"
-              onClick={() => {
-                close();
-                setSheet("player");
-              }}
-              aria-haspopup="dialog"
-              className="lab-ledge-slot flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[10px] font-semibold text-foreground/70 transition-colors hover:text-active"
-            >
-              <SharesIcon />
-              {count > 0 ? "Players" : "Player shares"}
-            </button>
+                **They are one flex item, and that is what keeps them at the
+                trailing edge on a line they had to wrap onto.** An `ml-auto` is
+                resolved per flex line, so leaving these loose put them at the
+                right of the first line and hard against the *left* of the second
+                — where the storey wraps below `sm`, which is the width the
+                grouping matters at most. Wrapped whole, the group carries its own
+                auto margin down with it. It wraps internally rather than
+                compressing, for the storey's own reason.
 
-            <button
-              type="button"
-              onClick={() => {
-                close();
-                setSheet("leaguemate");
-              }}
-              aria-haspopup="dialog"
-              className="lab-ledge-slot flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[10px] font-semibold text-foreground/70 transition-colors hover:text-active"
-            >
-              <MatesIcon />
-              {count > 0 ? "Leaguemates" : "Leaguemate shares"}
-            </button>
+                **What they have in common is that all three describe the
+                population**, where the field before them is the reader's own
+                input: the count says how many leagues are left, and the keys are
+                the two ranked lists of who is in them. That is what earns the
+                seating — the same argument that put the ADP block beside Tools
+                rather than beside the page chip. */}
+            <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
+              {/* The rail's own answer. Dimmed while the maps behind a selection
+                  are still being read, since the number is briefly zero and a
+                  confident zero is worse than an obviously pending one. */}
+              {/* The rail commits live, so this number is the whole feedback a
+                  press on a result gives. `sr-only` says what it counts: on
+                  screen the list under it is the context, and read aloud on its
+                  own "19 of 121" names nothing. */}
+              <span
+                role="status"
+                className={`shrink-0 pl-1 font-mono text-[10px] tabular-nums ${
+                  view.subjectsLoading ? "text-foreground/25" : "text-foreground/55"
+                }`}
+              >
+                {count > 0 ? `${view.filtered.length} of ${total}` : `${total}`}
+                <span className="sr-only"> leagues</span>
+              </span>
 
-            {/* The rail's own answer. Dimmed while the maps behind a selection
-                are still being read, since the number is briefly zero and a
-                confident zero is worse than an obviously pending one. */}
-            {/* The rail commits live, so this number is the whole feedback a
-                press on a result gives. `sr-only` says what it counts: on
-                screen the list under it is the context, and read aloud on its
-                own "19 of 121" names nothing. */}
-            <span
-              role="status"
-              className={`ml-auto shrink-0 pr-1 font-mono text-[10px] tabular-nums ${
-                view.subjectsLoading ? "text-foreground/25" : "text-foreground/55"
-              }`}
-            >
-              {count > 0 ? `${view.filtered.length} of ${total}` : `${total}`}
-              <span className="sr-only"> leagues</span>
-            </span>
+              {/* A groove between the readout and the parts pressed beside it —
+                  the seam's rule stood on end, dark cut with a lit far wall. Both
+                  halves are spelled here because there is no vertical spelling of
+                  `.lab-ledge-seam`, and one shadow alone is a border rather than
+                  machining. */}
+              <span
+                aria-hidden="true"
+                className="h-3.5 w-px shrink-0 bg-[rgba(0,0,0,0.5)] shadow-[1px_0_0_rgba(255,255,255,0.09)]"
+              />
+
+              {/* The other two doors: the whole ranked list of each kind, over
+                  the page, with what is worth knowing about every name on it. The
+                  panel closes behind either — two floating things over one list,
+                  one of them covering the other, is two answers to "where am I".
+
+                  **A raised pill, not the search's channel**, and it is the
+                  app's own grammar rather than a way of telling three parts
+                  apart: raised is what a control that opens something wears
+                  everywhere else here. `lab-chip lab-chip-sm rounded-full` is the
+                  ADP drawer's smallest key, so this borrows a spelling rather
+                  than inventing one, and the pair picks up the press travel a
+                  channel has none of. The text hover is the chips' own
+                  (`hover:text-foreground`, with the face lightening under it) and
+                  deliberately not the slots' `hover:text-active` — the accent
+                  belongs to a control that is *narrowing* something, which a
+                  door onto a list never is.
+
+                  The label spells out what the sheet holds at rest and contracts
+                  once there are tokens crowding the row, exactly as the search
+                  trigger does: the icon is what still tells the pair apart. */}
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  setSheet("player");
+                }}
+                aria-haspopup="dialog"
+                className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[10px] font-semibold text-foreground/75 transition-colors hover:text-foreground"
+              >
+                <SharesIcon />
+                {count > 0 ? "Players" : "Player shares"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  setSheet("leaguemate");
+                }}
+                aria-haspopup="dialog"
+                className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[10px] font-semibold text-foreground/75 transition-colors hover:text-foreground"
+              >
+                <MatesIcon />
+                {count > 0 ? "Leaguemates" : "Leaguemate shares"}
+              </button>
+            </div>
           </>
         }
         panel={
