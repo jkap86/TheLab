@@ -1,6 +1,14 @@
-<title>Trades search — four ways onto the page</title>
+<title>Which way did he go? — four ways to put a side on the trades search</title>
 
 <style>
+  /* ------------------------------------------------------------------
+     Fifth in the series and a follow-up to `trades-search-on-the-page`,
+     so the palette, the faces and the section grammar are that file's
+     unchanged — which took them from src/app/globals.css. What is added
+     at the end is only the direction vocabulary: the clause on a token,
+     the verb chip, the sentence strip and the two bays.
+     ------------------------------------------------------------------ */
+
   /* ------------------------------------------------------------------
      Fourth in the series, so the palette, the faces and the section
      grammar are lifted from `shares-keys-in-the-rail.html` — which took
@@ -665,16 +673,121 @@
     * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
   }
 
+
+  /* ------------------------------------------------ the direction parts */
+  /* A clause on a token: the direction in words, with a cut between it and
+     the name so the token still reads as one part with two fields. */
+  .token--dir { background: rgba(0, 255, 229, 0.15); border-color: rgba(0, 255, 229, 0.4); }
+  .token__dir {
+    padding-left: 6px;
+    margin-left: 1px;
+    border-left: 1px solid rgba(0, 255, 229, 0.32);
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.62);
+  }
+
+  /* The two side keys on a result row, and the same key stacked below the row
+     where a phone has no width beside the name. */
+  .res__sides { display: inline-flex; gap: 4px; flex: none; }
+  .res--sides { display: flex; gap: 4px; margin-top: 4px; padding: 0 9px 2px; }
+  .dirkey {
+    padding: 2px 7px 3px;
+    border-radius: 999px;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.72);
+    white-space: nowrap;
+    background: linear-gradient(170deg, #35596f, #17303e);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 2px 0 var(--edge);
+  }
+  .dirkey--on { color: var(--on-active); background: linear-gradient(180deg, #a8fff4, #00ddc6); box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 2px 0 var(--edge-active); }
+  .panel__hint { padding: 7px 4px 2px; margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: rgba(255,255,255,0.42); }
+
+  /* The verb chip: a select in everything but markup, so it wears the app's
+     smallest raised pill rather than a bare word. */
+  .verb {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px 2px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 1px 0 var(--edge-active);
+  }
+  .verb--lg { font-size: 11px; padding: 2px 9px 3px; border-radius: 6px; }
+
+  /* Option C's strip: a groove under the field, the selection spoken aloud. */
+  .sentence {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #050e17, #081722);
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.95),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.06);
+  }
+  .sentence__asset { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: rgba(255,255,255,0.9); }
+  .sentence__and { font-size: 12px; color: rgba(255,255,255,0.38); }
+
+  /* Option D's two bays. `1fr auto 1fr` so the swap glyph sits between two
+     equal halves however full either is — the trade card's own geometry. */
+  .bays { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; }
+  .bays--stacked { grid-template-columns: 1fr; }
+  .bay { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .bay__label {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(0, 255, 229, 0.7);
+    padding-left: 3px;
+  }
+  .bay--empty .bay__label { color: rgba(255, 255, 255, 0.32); }
+  .bay__box {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.85),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .bay__add { font-size: 11px; font-weight: 600; color: rgba(0, 255, 229, 0.6); white-space: nowrap; }
+  .bay__ph { font-size: 12px; color: rgba(255, 255, 255, 0.26); }
+  .swap { display: grid; place-items: center; font-size: 15px; color: rgba(0, 255, 229, 0.55); padding-top: 14px; }
+  .swap--dim { color: rgba(255, 255, 255, 0.2); }
+  .swap--flip { padding: 0; }
 </style>
 
 <nav class="bar">
-  <span class="bar__mark">THE LAB · TRADES SEARCH</span>
+  <span class="bar__mark">THE LAB · WHICH WAY</span>
   <span class="bar__keys">
-    <a class="bar__key" href="#now">Today</a>
-    <a class="bar__key" href="#a">A · Slot in the row</a>
-    <a class="bar__key" href="#b">B · Its own storey</a>
-    <a class="bar__key" href="#c">C · Omnibox</a>
-    <a class="bar__key" href="#d">D · Field takes the row</a>
+    <a class="bar__key" href="#data">What the data knows</a>
+    <a class="bar__key" href="#a">A · On the token</a>
+    <a class="bar__key" href="#b">B · On the manager</a>
+    <a class="bar__key" href="#c">C · A sentence</a>
+    <a class="bar__key" href="#d">D · Two sides</a>
     <a class="bar__key" href="#shared">Either way</a>
     <a class="bar__key" href="#compare">Compare</a>
   </span>
@@ -683,132 +796,65 @@
 <div class="wrap">
 
   <header>
-    <p class="eyebrow">Trades board · the player / manager search · four seatings</p>
-    <h1>The search is two presses deep and asks you to know the answer first</h1>
+    <p class="eyebrow">Trades board · the omnibox, settled · four ways to ask which way</p>
+    <h1>Nabers moved. The board won't say who sold him.</h1>
     <p class="lede">
-      Looking a player up on the trades board takes a press on <b>Filters</b>, a scroll past the
-      scope keys, the window and the match mode, and then a choice between three separate search
-      boxes — <b>you have to know whether the name you are typing is a player, a manager or a
-      pick before you can type it</b>. That is the one thing on this page every reader arrives
-      wanting, sitting behind the control built for the things they don't.
+      The search finds every trade an asset appears in, which is the right default and half an
+      answer: <b>“did jkap sell Nabers” and “did jkap buy Nabers” are the same query today.</b>
+      Four ways to put a direction on the selection, all seated in the omnibox you picked.
     </p>
     <p class="lede" style="margin-top:14px">
-      Four ways to put it on the page, drawn in the app's own faces over the real board. Each is
-      shown at laptop width and at 390px, because the ledge's row is already carrying five things
-      and <b>the crowding only shows up at the width it happens at</b>. Every height quoted below is
-      measured off these renders, not estimated — which is how the cheapest-looking option turned
-      out to be the expensive one on a phone.
+      One thing decides the shape of all four. <b>A direction is a fact about a pair, not about a
+      token.</b> Every trade with Nabers in it has somebody giving him and somebody getting him, so
+      “received” on its own narrows nothing — it only means something once there is a manager for it
+      to be relative to. Every option below is a different answer to <em>where that pairing is
+      written down</em>.
     </p>
   </header>
 
-  <!-- ========================================================== DIAGNOSIS -->
-  <section id="now">
+  <!-- =========================================================== THE DATA -->
+  <section id="data">
     <div class="sec-head">
-      <h2>What the search costs today</h2>
+      <h2>The database already knows, and one column has never been read</h2>
       <span class="eyebrow">Read first</span>
     </div>
     <div class="rule"></div>
 
     <p class="prose" style="margin-top:20px">
-      The ledge is right about most of what it holds. The window, the circle and the match mode are
-      settings — chosen once, read afterwards — and a control that expands in place is the honest
-      seat for them. <b>The three facet lists are not settings.</b> They are the question, and they
-      are filed with the settings because that is where the dialog they came from put them.
+      Sleeper stores both halves of every move and the sync has been writing both since the first
+      migration. <code>adds</code> is player → the roster that <em>received</em> him, and the board's
+      filter reads its keys — which is exactly why the filter is directionless: a key is present
+      whichever way the player went. <code>drops</code> is the mirror, player → the roster that
+      <em>gave</em> him, and it is written by <code>manager/persist</code>, stored on every trade,
+      and read by nothing in this app.
     </p>
-
-    <div class="screen">
-      <div class="screen__tab"><b>Today</b> · <span>after one press on Filters</span></div>
-      <div class="screen__stage">
-        <div class="stage-inner">
-          <div class="trough">
-            <div class="trow">
-              <span class="chip chip--held">Filters <span class="caret">▴</span></span>
-              <span class="scope">2026 · every crawled league · all leagues · all time</span>
-              <span class="tally"><b>50,102</b><span>trades</span></span>
-              <span class="chip chip--sm">KTC value</span>
-              <span class="chip chip--sm">Leagues</span>
-            </div>
-
-            <div class="oldpanel">
-              <p class="cap">Scope</p>
-              <div class="keys">
-                <span class="chip chip--sm chip--on">Every league</span>
-                <span class="chip chip--sm">My leagues</span>
-                <span class="chip chip--sm">Leaguemate trades</span>
-                <span class="chip chip--sm">Leaguemate leagues</span>
-              </div>
-              <div style="display:flex;gap:34px;flex-wrap:wrap;margin-top:16px">
-                <div>
-                  <p class="cap">Completed</p>
-                  <div class="keys">
-                    <span class="chip chip--sm">7 days</span>
-                    <span class="chip chip--sm">30 days</span>
-                    <span class="chip chip--sm">90 days</span>
-                    <span class="chip chip--sm chip--on">All time</span>
-                  </div>
-                </div>
-                <div>
-                  <p class="cap">Match</p>
-                  <div class="keys">
-                    <span class="chip chip--sm chip--on">All selected</span>
-                    <span class="chip chip--sm">Any selected</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="pickers">
-                <div>
-                  <p class="picker__lab">Managers</p>
-                  <p class="picker__in">Search managers…</p>
-                  <div class="picker__list">
-                    <p class="picker__row"><span class="box"></span>DarksideEmperors<span class="n">412</span></p>
-                    <p class="picker__row"><span class="box"></span>ShooterMcGavin<span class="n">388</span></p>
-                    <p class="picker__row"><span class="box"></span>jkap<span class="n">341</span></p>
-                  </div>
-                </div>
-                <div>
-                  <p class="picker__lab">Players</p>
-                  <p class="picker__in">Search players…</p>
-                  <div class="picker__list">
-                    <p class="picker__row"><span class="box"></span>Brian Thomas Jr.<span class="n">1,204</span></p>
-                    <p class="picker__row"><span class="box"></span>Malik Nabers<span class="n">1,097</span></p>
-                    <p class="picker__row"><span class="box"></span>Bijan Robinson<span class="n">986</span></p>
-                  </div>
-                </div>
-                <div>
-                  <p class="picker__lab">Picks</p>
-                  <p class="picker__in">Search picks…</p>
-                  <div class="picker__list">
-                    <p class="picker__row"><span class="box"></span>2027 1st<span class="n">8,140</span></p>
-                    <p class="picker__row"><span class="box"></span>2027 2nd<span class="n">6,022</span></p>
-                    <p class="picker__row"><span class="box"></span>2028 1st<span class="n">4,915</span></p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <p class="pin"><b>↑</b> Three fields, three lists, one question. And the panel expands in
-            place, so reaching it pushes the board down by ~300px — the reader looks up a name and
-            the trades they were reading leave the screen.</p>
-        </div>
-      </div>
-    </div>
+    <p class="prose">
+      <code>assemble.ts</code> says <em>“drops is its mirror and carries nothing extra”</em>, and for
+      building a card's sides that is true — what a roster gave is what the others received. This is
+      the case where it does carry something, and the three-way trade is where you can see it:
+      <b>the card declines to draw a give column at three sides because nothing in the sides says
+      which participant an asset came through, and <code>drops</code> says exactly that.</b> The
+      filter can answer a question the card cannot display.
+    </p>
 
     <div class="cards">
       <div class="card">
-        <span class="card__tag">The gesture</span>
-        <p>Press Filters, find the right one of three boxes, type, press the row, press Filters again
-          to get the board back. Five actions to answer “what has Nabers gone for”.</p>
+        <span class="card__tag">Players</span>
+        <p><code>drops-&gt;&gt;player</code> is the giving roster, <code>adds-&gt;&gt;player</code>
+          the receiving one. Join to <code>rosters.owner_id</code> — the same hop
+          <code>tradedByOwnersSql</code> already makes.</p>
       </div>
       <div class="card">
-        <span class="card__tag">The categories</span>
-        <p>A reader types a name, not a category. <em>Jaylen Waddle</em> and <em>ShooterMcGavin</em>
-          are the same gesture; only this page makes you sort them first.</p>
+        <span class="card__tag">Picks</span>
+        <p>Each entry in <code>draft_picks</code> carries <code>owner_id</code> and
+          <code>previous_owner_id</code> — who holds it now and who handed it over. Already in the
+          stored JSONB.</p>
       </div>
-      <div class="card card--warn">
-        <span class="card__tag">The cost of a press</span>
-        <p>Opening the panel moves the list. Whatever replaces this should float over the board or
-          sit in the height the ledge already occupies — never push the cards down to be used.</p>
+      <div class="card">
+        <span class="card__tag">Cost</span>
+        <p>None. Keep <code>t.adds ?| array[…]</code> as the selective predicate so the GIN index
+          still does the narrowing, and add the roster comparison as a filter on the rows it
+          returns.</p>
       </div>
     </div>
   </section>
@@ -818,109 +864,77 @@
     <div class="opt__head">
       <span class="opt__letter">A</span>
       <div>
-        <h2>A slot in the row it already has</h2>
-        <p class="opt__thesis">The search becomes one more part on the ledge's existing line — the
-          milled slot the manager tool's subject rail already wears — and the results float over
-          the board. No new height anywhere.</p>
+        <h2>The direction rides on the asset, in words</h2>
+        <p class="opt__thesis">Pick it where you are already looking: with a manager selected, a
+          result row offers three ways to take it, and the token spells out which one you took.</p>
       </div>
     </div>
 
     <div class="split">
       <div class="screen">
-        <div class="screen__tab"><b>Option A</b> · <span>laptop · resting, then two picked</span></div>
+        <div class="screen__tab"><b>Option A</b> · <span>laptop · picking a side from the results</span></div>
         <div class="screen__stage">
           <div class="stage-inner">
-            <div class="trough">
-              <div class="trow">
-                <span class="chip">Filters <span class="caret">▾</span></span>
-                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Player, manager or pick</span>
-                <span class="scope">2026 · every crawled league · all leagues · all time</span>
-                <span class="tally"><b>50,102</b><span>trades</span></span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
+            <p class="stage-cap">jkap is selected, so a player row can be taken three ways</p>
+            <div class="field field--wide field--lit float">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--active)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="token"><span class="ava">J</span>jkap<span class="token__x">×</span></span>
+              <span class="field__typed">nab<span class="caretbar"></span></span>
+              <div class="panel panel--wide" style="left:0">
+                <p class="panel__group" style="padding-top:2px">Players</p>
+                <p class="res"><span class="pos pos--wr">WR</span><span class="res__name">Malik Nabers</span><span class="res__note">NYG</span>
+                  <span class="res__sides"><span class="dirkey">to jkap</span><span class="dirkey">from jkap</span></span>
+                  <span class="res__n">1,097</span></p>
+                <p class="res"><span class="pos pos--wr">WR</span><span class="res__name">Josh Nabers</span><span class="res__note">CIN</span>
+                  <span class="res__sides"><span class="dirkey">to jkap</span><span class="dirkey">from jkap</span></span>
+                  <span class="res__n">12</span></p>
+                <p class="panel__group">Managers</p>
+                <p class="res"><span class="ava">N</span><span class="res__name">nabersnation</span><span class="res__note">41 leagues</span><span class="res__n">96</span></p>
+                <p class="panel__hint">Press the name for either way, or a side to say which.</p>
               </div>
             </div>
-            <div class="trades">
-              <div class="trade"><div class="trade__face">
-                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
-                <div class="trade__sides">
-                  <div class="side">
-                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
-                    <p class="side__take"><span class="pos pos--wr">WR</span>Malik Nabers<span class="v">6,904</span></p>
-                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 2nd<span class="v">1,508</span></p>
-                  </div>
-                  <div class="side">
-                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
-                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
-                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 1.03<span class="v">2,250</span></p>
-                  </div>
-                </div>
-              </div></div>
-            </div>
-            <p class="pin pin--good"><b>↑</b> The row grows by one part and by nothing else — 68px
-              of chrome above the first card, which is exactly what the ledge costs today.</p>
+            <div style="height:250px"></div>
+            <p class="pin pin--good"><b>↑</b> The row press still means what it means today — either
+              way. The two keys beside it are the new answer, and they are only drawn because a
+              manager is in the field.</p>
           </div>
 
           <div class="stage-inner">
-            <p class="stage-cap">Two subjects picked · the panel floating over the board</p>
-            <div class="trough float">
+            <p class="stage-cap">Taken as “from jkap” · the token says so, and says it in words</p>
+            <div class="field field--wide float">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="token"><span class="ava">J</span>jkap<span class="token__x">×</span></span>
+              <span class="token token--dir"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__dir">from jkap ▾</span><span class="token__x">×</span></span>
+              <span class="token token--dir"><span class="pos pos--pick">PK</span>2027 1st<span class="token__dir">to jkap ▾</span><span class="token__x">×</span></span>
+            </div>
+            <div class="trough" style="margin-top:10px">
               <div class="trow">
-                <span class="chip chip--on">Filters <span class="chip__badge">2</span><span class="caret">▾</span></span>
-                <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
-                <span class="token"><span class="ava">D</span>DarksideEmperors<span class="token__x">×</span></span>
-                <span class="slotkey slotkey--lit"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Add</span>
-                <span class="clear">Clear</span>
-                <span class="tally"><b>18</b><span>of 50,102 trades</span></span>
+                <span class="chip chip--on">Filters <span class="chip__badge">3</span><span class="caret">▾</span></span>
+                <span class="scope">2026 · every crawled league · all leagues · all time</span>
+                <span class="tally"><b>4</b><span>of 50,102 trades</span></span>
                 <span class="chip chip--sm">KTC value</span>
                 <span class="chip chip--sm">Leagues</span>
               </div>
-              <div class="panel" style="left:200px">
-                <p class="panel__field"><svg class="icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>nab<span class="caretbar"></span></p>
-                <p class="panel__group">Players</p>
-                <p class="res res--on"><span class="pos pos--wr">WR</span><span class="res__name">Malik Nabers</span><span class="res__note">NYG</span><span class="res__n">1,097</span></p>
-                <p class="res"><span class="pos pos--wr">WR</span><span class="res__name">Josh Nabers</span><span class="res__note">CIN</span><span class="res__n">12</span></p>
-                <p class="panel__group">Managers</p>
-                <p class="res"><span class="ava">N</span><span class="res__name">nabersnation</span><span class="res__note">41 leagues</span><span class="res__n">96</span></p>
-                <div class="panel__foot">
-                  <span class="cap">Match</span>
-                  <span class="chip chip--sm chip--on">all</span>
-                  <span class="chip chip--sm">any</span>
-                </div>
-              </div>
             </div>
             <div class="trades">
-              <div class="trade"><div class="trade__face">
-                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
-                <div class="trade__sides">
-                  <div class="side">
-                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
-                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
-                  </div>
-                  <div class="side">
-                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
-                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
-                  </div>
-                </div>
-              </div></div>
               <div class="trade"><div class="trade__face">
                 <div class="trade__head"><span class="trade__league">SFB Dynasty · Home of the Brave</span><span class="trade__when">Aug 4, 2026 · 4:41 PM</span></div>
                 <div class="trade__sides">
                   <div class="side">
                     <div class="side__head"><span class="ava">J</span><span class="side__who">jkap</span><span class="side__val">9,120</span></div>
-                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
+                    <p class="side__take"><span class="pos pos--pick">PK</span><span class="hit">2027 1.04</span><span class="v">2,510</span></p>
                     <p class="side__take"><span class="pos pos--te">TE</span>Brock Bowers<span class="v">2,216</span></p>
                   </div>
                   <div class="side">
                     <div class="side__head"><span class="ava">T</span><span class="side__who">TheCommish</span><span class="side__val">8,890</span></div>
-                    <p class="side__take"><span class="pos pos--qb">QB</span>Jayden Daniels<span class="v">6,640</span></p>
-                    <p class="side__take"><span class="pos pos--pick">PK</span>2028 1st<span class="v">2,250</span></p>
+                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
                   </div>
                 </div>
               </div></div>
             </div>
-            <p class="pin"><b>↑</b> The panel paints over the board rather than moving it — but the
-              tokens live on the same line as the controls, so a third and fourth subject push the
-              count and both triggers onto a second row.</p>
+            <p class="pin pin--good"><b>↑</b> Per-asset, so “what did he get for Nabers” is one
+              selection: Nabers <em>from</em> jkap and a first <em>to</em> him. The dropdown on the
+              token is how you change your mind without retyping the name.</p>
           </div>
         </div>
       </div>
@@ -929,33 +943,21 @@
         <div class="screen__tab"><b>A</b> · <span>390px</span></div>
         <div class="screen__stage">
           <div class="stage-inner">
-            <div class="trough">
-              <div class="trow">
-                <span class="chip">Filters <span class="caret">▾</span></span>
-                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Player, manager or pick</span>
-                <span class="scope">2026 · every crawled league · all leagues · all time</span>
-                <span class="tally"><b>50,102</b><span>trades</span></span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
-              </div>
+            <div class="field field--wide">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="token"><span class="ava">J</span>jkap<span class="token__x">×</span></span>
+              <span class="token token--dir"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__dir">from jkap ▾</span><span class="token__x">×</span></span>
             </div>
-            <p class="pin">Three lines at rest — one more than today. <b>120px.</b></p>
-            <div class="trough" style="margin-top:14px">
-              <div class="trow">
-                <span class="chip chip--on">Filters <span class="chip__badge">2</span><span class="caret">▾</span></span>
-                <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
-                <span class="token"><span class="ava">D</span>Darkside…<span class="token__x">×</span></span>
-                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Add</span>
-                <span class="scope">2026 · every crawled league · all time</span>
-                <span class="tally"><b>18</b><span>of 50,102</span></span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
-              </div>
+            <p class="pin">The clause is 74px of token width — a directional Nabers is 206px against
+              a plain 132px, so this pair still shares a line and a second one wouldn't.</p>
+            <div class="panel" style="width:100%;margin-top:14px">
+              <p class="panel__group" style="padding-top:2px">Players</p>
+              <p class="res"><span class="pos pos--wr">WR</span><span class="res__name">Malik Nabers</span><span class="res__n">1,097</span></p>
+              <p class="res--sides"><span class="dirkey">to jkap</span><span class="dirkey">from jkap</span><span class="dirkey dirkey--on">either way</span></p>
             </div>
-            <p class="pin"><b>↑</b> Four lines and <b>153px</b> with two subjects picked, the tokens
-              wedged between the Filters key and the sentence. Free on a laptop, and the most
-              expensive of the four here — which is the option's whole cost, landing on the width
-              with the least room.</p>
+            <p class="pin"><b>↑</b> The two side keys don't fit beside a name at this width, so the
+              row grows a second line — which is the honest cost, and it only appears once a manager
+              is picked.</p>
           </div>
         </div>
       </div>
@@ -964,116 +966,72 @@
     <div class="opt__body">
       <div class="note">
         <h3>What it buys</h3>
-        <p><b>It is a port, not an invention.</b> The slot, the token, the floating panel and the
-          grouped results are all shipping parts of the manager tool's subject rail — the same
-          gesture, so a reader who has used one has used both.</p>
-        <p>Costs the board nothing: the ledge stays exactly as tall as it is, and the panel floats
-          rather than pushing the cards down.</p>
-        <span class="price price--good">+0px at rest</span>
+        <p><b>It is unambiguous.</b> The token reads “Malik Nabers · from jkap”, which is the whole
+          question in words — no arrow to decode and no model to learn.</p>
+        <p>Per-asset, so a selection can mix directions: <em>gave Nabers, got a first</em> is one
+          query rather than two searches and a squint.</p>
+        <p>Nothing new appears until it can mean something — with no manager selected, the side keys
+          simply aren't drawn.</p>
+        <span class="price price--good">no new chrome · reads as a sentence</span>
       </div>
       <div class="note note--cost">
         <h3>What it costs</h3>
-        <p>The row is carrying six things before a single token lands, and the tokens are
-          interleaved with the controls rather than grouped with each other — so the selection grows
-          by pushing the count and both triggers around.</p>
-        <p><b>Free on a laptop and the dearest on a phone</b>: 120px at rest and 153px with two
-          picked, against C's 133 and 136. The height it saves is saved at the width that has it.</p>
-        <p>The search is the same size as everything beside it, so nothing says it is the part most
-          readers came for.</p>
-        <span class="price">153px at 390px with 2 picked — the worst of the four</span>
+        <p>A result row grows two keys, and at 390px that pushes it to two lines. Tokens get wider —
+          one per line on a phone.</p>
+        <p>The direction is relative to “the selected manager”, so with two managers picked the
+          clause has to name one of them, and the token gets longer still.</p>
+        <p>It cannot ask the question with no manager at all — <em>what went for a 2027 1st</em> is
+          still out of reach. See D.</p>
+        <span class="price">two-line result rows at 390px</span>
       </div>
     </div>
   </section>
 
   <!-- =========================================================== OPTION B -->
-  <section class="opt" id="b">
+  <section class="opt opt--alt" id="b">
     <div class="opt__head">
       <span class="opt__letter">B</span>
       <div>
-        <h2>Its own storey above the controls</h2>
-        <p class="opt__thesis">Two lines in one part: <em>who you are looking for</em> on top,
-          <em>how the board is cut</em> underneath. The manager tool's two-storey billet, applied to
-          the trades ledge.</p>
+        <h2>One verb, on the manager</h2>
+        <p class="opt__thesis">The manager token carries a single word that governs the whole
+          selection: everything picked was <em>given by</em> them, or <em>received by</em> them, or
+          neither.</p>
       </div>
     </div>
 
     <div class="split">
       <div class="screen">
-        <div class="screen__tab"><b>Option B</b> · <span>laptop · resting, then three picked</span></div>
+        <div class="screen__tab"><b>Option B</b> · <span>laptop · the verb and its three keys</span></div>
         <div class="screen__stage">
           <div class="stage-inner">
-            <div class="trough">
-              <div class="trow">
-                <span class="cap">Who's in it</span>
-                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Player, manager or pick</span>
-                <span class="tally" style="margin-left:auto"><b>50,102</b><span>trades</span></span>
-              </div>
-              <div class="trow trow--sub">
-                <span class="chip">Filters <span class="caret">▾</span></span>
-                <span class="scope">2026 · every crawled league · all leagues · all time</span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
+            <div class="field field--wide float">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="token token--dir"><span class="ava">J</span>jkap<span class="verb">gave ▾</span><span class="token__x">×</span></span>
+              <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+              <span class="token"><span class="pos pos--te">TE</span>Brock Bowers<span class="token__x">×</span></span>
+              <div class="panel" style="left:34px;width:186px">
+                <p class="res">either way</p>
+                <p class="res res--on">gave</p>
+                <p class="res">received</p>
               </div>
             </div>
-            <div class="trades">
-              <div class="trade"><div class="trade__face">
-                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
-                <div class="trade__sides">
-                  <div class="side">
-                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
-                    <p class="side__take"><span class="pos pos--wr">WR</span>Malik Nabers<span class="v">6,904</span></p>
-                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 2nd<span class="v">1,508</span></p>
-                  </div>
-                  <div class="side">
-                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
-                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
-                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 1.03<span class="v">2,250</span></p>
-                  </div>
-                </div>
-              </div></div>
-            </div>
-            <p class="pin pin--good"><b>↑</b> The count moves up beside the search, where the number
-              a press is meant to move sits next to the control that moves it.</p>
+            <div style="height:150px"></div>
+            <p class="pin pin--good"><b>↑</b> One control for the whole selection, and the shortest
+              tokens of the four — the assets say nothing about direction because the manager already
+              did.</p>
           </div>
 
           <div class="stage-inner">
-            <p class="stage-cap">Three subjects picked · the storey absorbs them, the controls don't move</p>
-            <div class="trough">
-              <div class="trow">
-                <span class="cap">Who's in it</span>
-                <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
-                <span class="token"><span class="pos pos--pick">PK</span>2027 1st<span class="token__x">×</span></span>
-                <span class="token"><span class="ava">D</span>DarksideEmperors<span class="token__x">×</span></span>
-                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Add</span>
-                <span class="divider"></span>
-                <span class="chip chip--sm chip--on">any</span>
-                <span class="tally" style="margin-left:auto"><b>63</b><span>of 50,102 trades</span></span>
-              </div>
-              <div class="trow trow--sub">
-                <span class="chip chip--on">Filters <span class="chip__badge">1</span><span class="caret">▾</span></span>
-                <span class="scope">2026 · my leagues · dynasty, superflex · all time</span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
-              </div>
+            <p class="stage-cap">What it can't say</p>
+            <div class="field field--wide">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="token token--dir"><span class="ava">J</span>jkap<span class="verb">gave ▾</span><span class="token__x">×</span></span>
+              <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+              <span class="token"><span class="pos pos--pick">PK</span>2027 1st<span class="token__x">×</span></span>
             </div>
-            <div class="trades">
-              <div class="trade"><div class="trade__face">
-                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
-                <div class="trade__sides">
-                  <div class="side">
-                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
-                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
-                  </div>
-                  <div class="side">
-                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
-                    <p class="side__take"><span class="pos pos--pick">PK</span><span class="hit">2027 1.03</span><span class="v">2,250</span></p>
-                  </div>
-                </div>
-              </div></div>
-            </div>
-            <p class="pin pin--good"><b>↑</b> The all/any key has somewhere to live: it belongs to the
-              selection, and here it is on the selection's own line rather than buried in the
-              settings panel.</p>
+            <p class="pin"><b>↑</b> This asks for trades where jkap gave <em>both</em> Nabers and a
+              2027 1st. <b>“What did he get for Nabers” is unaskable</b> — the one verb applies to
+              everything in the field, and that is the question this page exists for.</p>
           </div>
         </div>
       </div>
@@ -1082,37 +1040,13 @@
         <div class="screen__tab"><b>B</b> · <span>390px</span></div>
         <div class="screen__stage">
           <div class="stage-inner">
-            <div class="trough">
-              <div class="trow">
-                <span class="cap">Who's in it</span>
-                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Player, manager or pick</span>
-                <span class="tally" style="margin-left:auto"><b>50,102</b><span>trades</span></span>
-              </div>
-              <div class="trow trow--sub">
-                <span class="chip">Filters <span class="caret">▾</span></span>
-                <span class="scope">2026 · every crawled league · all time</span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
-              </div>
+            <div class="field field--wide">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="token token--dir"><span class="ava">J</span>jkap<span class="verb">gave ▾</span><span class="token__x">×</span></span>
+              <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
             </div>
-            <p class="pin">Four lines at rest, <b>171px</b> — the tallest of the four down here.</p>
-            <div class="trough" style="margin-top:14px">
-              <div class="trow">
-                <span class="cap">Who's in it</span>
-                <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
-                <span class="token"><span class="ava">D</span>Darkside…<span class="token__x">×</span></span>
-                <span class="slotkey"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>Add</span>
-                <span class="tally" style="margin-left:auto"><b>18</b><span>of 50,102</span></span>
-              </div>
-              <div class="trow trow--sub">
-                <span class="chip chip--on">Filters <span class="chip__badge">1</span><span class="caret">▾</span></span>
-                <span class="scope">2026 · my leagues · all time</span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
-              </div>
-            </div>
-            <p class="pin pin--good"><b>↑</b> Growing the selection grows the storey. The controls
-              underneath stay exactly where they were.</p>
+            <p class="pin pin--good"><b>↑</b> Cheapest at every width — the verb adds ~38px to one
+              token and nothing to any other.</p>
           </div>
         </div>
       </div>
@@ -1121,22 +1055,20 @@
     <div class="opt__body">
       <div class="note">
         <h3>What it buys</h3>
-        <p><b>Tokens stop competing with controls.</b> The selection has a line of its own, so
-          picking a fourth player pushes nothing off the board — the filter triggers never move.</p>
-        <p>It says something true about the page: one line is <em>who</em>, one line is
-          <em>where and when</em>. And it gives the count and the all/any key their honest seats,
-          beside the thing they are about.</p>
-        <span class="price price--good">stable controls at any selection</span>
+        <p><b>The smallest thing that answers the question asked.</b> One three-key float on one
+          token, no change to the result rows, no change to any other token.</p>
+        <p>It is also the easiest to read at a glance: the direction is stated once, next to the
+          person it is about.</p>
+        <span class="price price--good">one control · smallest build</span>
       </div>
       <div class="note note--cost">
         <h3>What it costs</h3>
-        <p><b>49px of permanent height</b> above a list that is the page's whole subject — the most
-          of the four, and the same currency the page heading was deleted to save. 171px on a phone
-          before anything is picked.</p>
-        <p>Two storeys in a trough is new material here. The billet in the manager tool does exactly
-          this, but the trades ledge is a recessed trough, so the seam is a small piece of work
-          rather than a class swap.</p>
-        <span class="price">+49px always · 171px on a phone</span>
+        <p>One verb for every asset, so mixed directions are unrepresentable — and “what did he get
+          for Nabers” is a mixed direction. That is the page's own headline question, which makes
+          this the option most likely to be replaced within a month.</p>
+        <p>With two managers selected it also has to decide whether the verb is per manager or
+          shared, and per manager is A with extra steps.</p>
+        <span class="price">can't ask “what for”</span>
       </div>
     </div>
   </section>
@@ -1146,99 +1078,52 @@
     <div class="opt__head">
       <span class="opt__letter">C</span>
       <div>
-        <h2>An omnibox leading the page</h2>
-        <p class="opt__thesis">A real field, full width, above everything — tokens sit inside it and
-          the results drop under it. The board reads as a search result rather than as a list with
-          a filter on it.</p>
+        <h2>The selection restated as a sentence</h2>
+        <p class="opt__thesis">The field keeps plain tokens; a strip under it spells the whole
+          selection out as an editable phrase, with a verb slot per asset.</p>
       </div>
     </div>
 
     <div class="split">
       <div class="screen">
-        <div class="screen__tab"><b>Option C</b> · <span>laptop · resting, then typing</span></div>
+        <div class="screen__tab"><b>Option C</b> · <span>laptop · the strip appears with a manager</span></div>
         <div class="screen__stage">
           <div class="stage-inner">
             <div class="field field--wide">
               <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
-              <span class="field__ph">Search a player, a manager or a pick…</span>
+              <span class="token"><span class="ava">J</span>jkap<span class="token__x">×</span></span>
+              <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+              <span class="token"><span class="pos pos--pick">PK</span>2027 1st<span class="token__x">×</span></span>
+            </div>
+            <div class="sentence">
+              <span class="cap">jkap</span>
+              <span class="verb verb--lg">gave ▾</span>
+              <span class="sentence__asset"><span class="pos pos--wr">WR</span>Malik Nabers</span>
+              <span class="sentence__and">and</span>
+              <span class="verb verb--lg">got ▾</span>
+              <span class="sentence__asset"><span class="pos pos--pick">PK</span>2027 1st</span>
             </div>
             <div class="trough" style="margin-top:10px">
               <div class="trow">
-                <span class="chip">Filters <span class="caret">▾</span></span>
+                <span class="chip chip--on">Filters <span class="chip__badge">3</span><span class="caret">▾</span></span>
                 <span class="scope">2026 · every crawled league · all leagues · all time</span>
-                <span class="tally"><b>50,102</b><span>trades</span></span>
+                <span class="tally"><b>4</b><span>of 50,102 trades</span></span>
                 <span class="chip chip--sm">KTC value</span>
                 <span class="chip chip--sm">Leagues</span>
               </div>
             </div>
-            <div class="trades">
-              <div class="trade"><div class="trade__face">
-                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
-                <div class="trade__sides">
-                  <div class="side">
-                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
-                    <p class="side__take"><span class="pos pos--wr">WR</span>Malik Nabers<span class="v">6,904</span></p>
-                  </div>
-                  <div class="side">
-                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
-                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
-                  </div>
-                </div>
-              </div></div>
-            </div>
-            <p class="pin"><b>↑</b> 41px of chrome above the ledge, on a page that deleted its own
-              title to get that height back.</p>
+            <p class="pin pin--good"><b>↑</b> The most legible of the four: it is the query written
+              out, and each verb is a two-key press away from its opposite.</p>
           </div>
 
           <div class="stage-inner">
-            <p class="stage-cap">Two picked, typing a third · results drop under the field</p>
-            <div class="field field--wide field--lit float">
-              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--active)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+            <p class="stage-cap">With no manager · the strip has nothing to say and isn't drawn</p>
+            <div class="field field--wide">
+              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
               <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
-              <span class="token"><span class="ava">D</span>DarksideEmperors<span class="token__x">×</span></span>
-              <span class="field__typed">gib<span class="caretbar"></span></span>
-              <div class="panel panel--wide" style="left:0">
-                <p class="panel__group" style="padding-top:2px">Players</p>
-                <p class="res"><span class="pos pos--rb">RB</span><span class="res__name">Jahmyr Gibbs</span><span class="res__note">DET</span><span class="res__n">874</span></p>
-                <p class="res"><span class="pos pos--te">TE</span><span class="res__name">Brenton Gibson</span><span class="res__note">LV</span><span class="res__n">31</span></p>
-                <p class="panel__group">Managers</p>
-                <p class="res"><span class="ava">G</span><span class="res__name">GibbsMeThatRing</span><span class="res__note">17 leagues</span><span class="res__n">44</span></p>
-                <div class="panel__foot">
-                  <span class="cap">Match</span>
-                  <span class="chip chip--sm chip--on">all</span>
-                  <span class="chip chip--sm">any</span>
-                  <span class="tally" style="margin-left:auto"><b>18</b><span>of 50,102 trades</span></span>
-                </div>
-              </div>
             </div>
-            <div class="trough" style="margin-top:10px">
-              <div class="trow">
-                <span class="chip chip--on">Filters <span class="chip__badge">2</span><span class="caret">▾</span></span>
-                <span class="scope">2026 · every crawled league · all leagues · all time</span>
-                <span class="tally"><b>18</b><span>of 50,102 trades</span></span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
-              </div>
-            </div>
-            <div class="trades">
-              <div class="trade"><div class="trade__face">
-                <div class="trade__head"><span class="trade__league">SFB Dynasty · Home of the Brave</span><span class="trade__when">Aug 4, 2026 · 4:41 PM</span></div>
-                <div class="trade__sides">
-                  <div class="side">
-                    <div class="side__head"><span class="ava">J</span><span class="side__who">jkap</span><span class="side__val">9,120</span></div>
-                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
-                    <p class="side__take"><span class="pos pos--te">TE</span>Brock Bowers<span class="v">2,216</span></p>
-                  </div>
-                  <div class="side">
-                    <div class="side__head"><span class="ava">T</span><span class="side__who">TheCommish</span><span class="side__val">8,890</span></div>
-                    <p class="side__take"><span class="pos pos--qb">QB</span>Jayden Daniels<span class="v">6,640</span></p>
-                    <p class="side__take"><span class="pos pos--pick">PK</span>2028 1st<span class="v">2,250</span></p>
-                  </div>
-                </div>
-              </div></div>
-            </div>
-            <p class="pin pin--good"><b>↑</b> The field holds any number of tokens without touching a
-              single control, and the panel covers the board rather than moving it.</p>
+            <p class="pin"><b>↑</b> Which is right, and is also the tell: a control that appears and
+              disappears as tokens land is a row of chrome whose height nobody can predict.</p>
           </div>
         </div>
       </div>
@@ -1249,27 +1134,17 @@
           <div class="stage-inner">
             <div class="field field--wide">
               <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
-              <span class="field__ph">Player, manager or pick…</span>
-            </div>
-            <div class="trough" style="margin-top:10px">
-              <div class="trow">
-                <span class="chip">Filters <span class="caret">▾</span></span>
-                <span class="scope">2026 · every crawled league · all time</span>
-                <span class="tally"><b>50,102</b><span>trades</span></span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
-              </div>
-            </div>
-            <p class="pin">Three lines and <b>133px</b> at rest — 13px more than A, and the field is
-              the one thing a phone reader can't miss.</p>
-            <div class="field field--wide field--lit" style="margin-top:14px">
-              <svg class="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--active)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="token"><span class="ava">J</span>jkap<span class="token__x">×</span></span>
               <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
-              <span class="token"><span class="ava">D</span>Darkside…<span class="token__x">×</span></span>
             </div>
-            <p class="pin pin--good"><b>↑</b> Tokens wrap inside the field, so the controls below are
-              untouched however many are picked — <b>136px against A's 153px</b> for the same two
-              subjects. The option that costs the most at a laptop costs the least here.</p>
+            <div class="sentence">
+              <span class="cap">jkap</span>
+              <span class="verb verb--lg">gave ▾</span>
+              <span class="sentence__asset"><span class="pos pos--wr">WR</span>Malik Nabers</span>
+            </div>
+            <p class="pin"><b>↑</b> A second 36px block for one asset, wrapping into a paragraph as
+              the selection grows — and every word of it is restating tokens already on screen a few
+              pixels above.</p>
           </div>
         </div>
       </div>
@@ -1278,115 +1153,129 @@
     <div class="opt__body">
       <div class="note">
         <h3>What it buys</h3>
-        <p><b>Nobody has to be told it is there.</b> A field is the one control that explains itself,
-          and this is the only option where the search is unmistakably the page's front door.</p>
-        <p>Unlimited room for tokens, no control ever moves, and it is the shape a reader arriving
-          from any other site already expects.</p>
-        <p><b>On a phone it is the cheapest of the four</b> — 133px at rest and 136px with two
-          subjects picked, because tokens wrap inside the field instead of pushing controls onto new
-          lines. A costs 153px for the same selection.</p>
-        <span class="price price--good">obvious at first paint · flat as the selection grows</span>
+        <p><b>Nobody can misread it.</b> The query is written out in the order it is spoken, and the
+          verbs are the only things you can press — so there is no state hidden in a token.</p>
+        <p>It scales to mixed directions as naturally as A does, with more room to spell them.</p>
+        <span class="price price--good">unmissable, unmisreadable</span>
       </div>
       <div class="note note--cost">
         <h3>What it costs</h3>
-        <p><b>41px of masthead on a laptop</b> — close to the height the page deleted its own
-          <em>Trades</em> heading to reclaim — and it puts two stacked blocks of chrome over a list
-          of cards.</p>
-        <p>It also outranks the filters visually, which is only right if the search really is the
-          more common gesture. On a board whose default is every crawled league, it probably is.</p>
-        <span class="price">+41px on a laptop · two chrome blocks</span>
+        <p>A second block of chrome that appears and vanishes with the selection, on the page that
+          deleted its own heading for 40px — and the list under it moves every time.</p>
+        <p>It restates the tokens: every asset is on screen twice, once as a token and once in the
+          sentence, and removing it in one place has to remove it in the other.</p>
+        <span class="price">+34–70px, and it moves the board</span>
       </div>
     </div>
   </section>
 
   <!-- =========================================================== OPTION D -->
-  <section class="opt opt--alt" id="d">
+  <section class="opt" id="d">
     <div class="opt__head">
       <span class="opt__letter">D</span>
       <div>
-        <h2>The field takes the row; the scope drops below it</h2>
-        <p class="opt__thesis">A real field, but seated <em>in</em> the ledge — it takes the width
-          the scope sentence was spending, and the sentence moves to a dim second line where it can
-          be read instead of truncated. The one option where the search shares the control row.</p>
+        <h2>The field has two sides, like the card does</h2>
+        <p class="opt__thesis">One rule instead of a vocabulary: <b>things in the same bay were on
+          the same side of the trade.</b> Put a manager in a bay and that bay is their side — so the
+          other bay is what they gave.</p>
       </div>
     </div>
 
     <div class="split">
       <div class="screen">
-        <div class="screen__tab"><b>Option D</b> · <span>laptop · resting, then two picked</span></div>
+        <div class="screen__tab"><b>Option D</b> · <span>laptop · a manager in a bay names both bays</span></div>
         <div class="screen__stage">
           <div class="stage-inner">
-            <div class="trough">
-              <div class="trow">
-                <span class="chip">Filters <span class="caret">▾</span></span>
-                <div class="field">
-                  <svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
-                  <span class="field__ph">Player, manager or pick…</span>
+            <div class="bays">
+              <div class="bay">
+                <span class="bay__label">jkap got</span>
+                <div class="bay__box">
+                  <span class="token"><span class="ava">J</span>jkap<span class="token__x">×</span></span>
+                  <span class="token"><span class="pos pos--pick">PK</span>2027 1st<span class="token__x">×</span></span>
+                  <span class="bay__add">+ add</span>
                 </div>
-                <span class="tally"><b>50,102</b><span>trades</span></span>
+              </div>
+              <span class="swap" aria-hidden="true">⇄</span>
+              <div class="bay">
+                <span class="bay__label">jkap gave</span>
+                <div class="bay__box">
+                  <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+                  <span class="bay__add">+ add</span>
+                </div>
+              </div>
+            </div>
+            <div class="trough" style="margin-top:10px">
+              <div class="trow">
+                <span class="chip chip--on">Filters <span class="chip__badge">3</span><span class="caret">▾</span></span>
+                <span class="scope">2026 · every crawled league · all leagues · all time</span>
+                <span class="tally"><b>4</b><span>of 50,102 trades</span></span>
                 <span class="chip chip--sm">KTC value</span>
                 <span class="chip chip--sm">Leagues</span>
-              </div>
-              <div class="trow trow--sub">
-                <span class="scope scope--wrap">2026 · every crawled league · all leagues · all time</span>
               </div>
             </div>
             <div class="trades">
               <div class="trade"><div class="trade__face">
-                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
+                <div class="trade__head"><span class="trade__league">SFB Dynasty · Home of the Brave</span><span class="trade__when">Aug 4, 2026 · 4:41 PM</span></div>
                 <div class="trade__sides">
                   <div class="side">
-                    <div class="side__head"><span class="ava">D</span><span class="side__who">DarksideEmperors</span><span class="side__val">8,412</span></div>
-                    <p class="side__take"><span class="pos pos--wr">WR</span>Malik Nabers<span class="v">6,904</span></p>
-                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 2nd<span class="v">1,508</span></p>
+                    <div class="side__head"><span class="ava">J</span><span class="side__who">jkap</span><span class="side__val">9,120</span></div>
+                    <p class="side__take"><span class="pos pos--pick">PK</span><span class="hit">2027 1.04</span><span class="v">2,510</span></p>
                   </div>
                   <div class="side">
-                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
-                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
-                    <p class="side__take"><span class="pos pos--pick">PK</span>2027 1.03<span class="v">2,250</span></p>
+                    <div class="side__head"><span class="ava">T</span><span class="side__who">TheCommish</span><span class="side__val">8,890</span></div>
+                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
                   </div>
                 </div>
               </div></div>
             </div>
-            <p class="pin"><b>↑</b> The sentence stops truncating — it is the one thing on the row
-              that has to be read rather than pressed, and it never had room to be.</p>
+            <p class="pin pin--good"><b>↑</b> The control is the card. Two bays, two columns, and the
+              labels resolve themselves the moment a manager lands in one.</p>
           </div>
 
           <div class="stage-inner">
-            <p class="stage-cap">Two picked · tokens ride inside the field</p>
-            <div class="trough">
-              <div class="trow">
-                <span class="chip chip--on">Filters <span class="chip__badge">2</span><span class="caret">▾</span></span>
-                <div class="field field--lit">
-                  <svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--active)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+            <p class="stage-cap">With no manager at all · the question this page was built to answer</p>
+            <div class="bays">
+              <div class="bay">
+                <span class="bay__label">one side got</span>
+                <div class="bay__box">
+                  <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
+                  <span class="bay__add">+ add</span>
+                </div>
+              </div>
+              <span class="swap" aria-hidden="true">⇄</span>
+              <div class="bay">
+                <span class="bay__label">the other side got</span>
+                <div class="bay__box">
+                  <span class="token"><span class="pos pos--pick">PK</span>2027 1st<span class="token__x">×</span></span>
+                  <span class="bay__add">+ add</span>
+                </div>
+              </div>
+            </div>
+            <p class="pin pin--good"><b>↑</b> <em>“What has a 2027 first been going for?”</em> —
+              Nabers <b>for</b> a first, not Nabers <b>and</b> a first. No option above can ask this,
+              and it is the sentence the tools page uses to describe why this board exists.</p>
+          </div>
+
+          <div class="stage-inner">
+            <p class="stage-cap">One bay only · exactly today's behaviour, unchanged</p>
+            <div class="bays">
+              <div class="bay">
+                <span class="bay__label">in the trade</span>
+                <div class="bay__box">
                   <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
                   <span class="token"><span class="ava">D</span>DarksideEmperors<span class="token__x">×</span></span>
+                  <span class="bay__add">+ add</span>
                 </div>
-                <span class="tally"><b>18</b><span>of 50,102</span></span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
               </div>
-              <div class="trow trow--sub">
-                <span class="scope scope--wrap">2026 · every crawled league · all leagues · all time · all of 1 manager, 1 player</span>
+              <span class="swap swap--dim" aria-hidden="true">⇄</span>
+              <div class="bay bay--empty">
+                <span class="bay__label">the other side</span>
+                <div class="bay__box"><span class="bay__ph">anything</span></div>
               </div>
             </div>
-            <div class="trades">
-              <div class="trade"><div class="trade__face">
-                <div class="trade__head"><span class="trade__league">Dynasty Warriors XII</span><span class="trade__when">Aug 4, 2026 · 9:12 PM</span></div>
-                <div class="trade__sides">
-                  <div class="side">
-                    <div class="side__head"><span class="ava">D</span><span class="side__who"><span class="hit">DarksideEmperors</span></span><span class="side__val">8,412</span></div>
-                    <p class="side__take"><span class="pos pos--wr">WR</span><span class="hit">Malik Nabers</span><span class="v">6,904</span></p>
-                  </div>
-                  <div class="side">
-                    <div class="side__head"><span class="ava">S</span><span class="side__who">ShooterMcGavin</span><span class="side__val">8,050</span></div>
-                    <p class="side__take"><span class="pos pos--rb">RB</span>Jahmyr Gibbs<span class="v">5,800</span></p>
-                  </div>
-                </div>
-              </div></div>
-            </div>
-            <p class="pin"><b>↑</b> Tokens inside the field push it wider, so the count and the two
-              trailing chips are what give way as the selection grows.</p>
+            <p class="pin"><b>↑</b> The second bay is what makes the model cost nothing to ignore: an
+              empty one means “don't care”, so a reader who never uses it has the board they have
+              today.</p>
           </div>
         </div>
       </div>
@@ -1395,40 +1284,26 @@
         <div class="screen__tab"><b>D</b> · <span>390px</span></div>
         <div class="screen__stage">
           <div class="stage-inner">
-            <div class="trough">
-              <div class="trow">
-                <span class="chip">Filters <span class="caret">▾</span></span>
-                <div class="field">
-                  <svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
-                  <span class="field__ph">Player, manager or pick…</span>
+            <div class="bays bays--stacked">
+              <div class="bay">
+                <span class="bay__label">jkap got</span>
+                <div class="bay__box">
+                  <span class="token"><span class="pos pos--pick">PK</span>2027 1st<span class="token__x">×</span></span>
+                  <span class="bay__add">+ add</span>
                 </div>
-                <span class="tally"><b>50,102</b><span>trades</span></span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
               </div>
-              <div class="trow trow--sub">
-                <span class="scope scope--wrap">2026 · every crawled league · all leagues · all time</span>
-              </div>
-            </div>
-            <p class="pin">Four lines at rest, and the field is on the first one.</p>
-            <div class="trough" style="margin-top:14px">
-              <div class="trow">
-                <span class="chip chip--on">Filters <span class="chip__badge">2</span><span class="caret">▾</span></span>
-                <div class="field field--lit">
-                  <svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--active)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+              <span class="swap swap--flip" aria-hidden="true">⇅</span>
+              <div class="bay">
+                <span class="bay__label">jkap gave</span>
+                <div class="bay__box">
                   <span class="token"><span class="pos pos--wr">WR</span>Malik Nabers<span class="token__x">×</span></span>
-                  <span class="token"><span class="ava">D</span>Darkside…<span class="token__x">×</span></span>
+                  <span class="bay__add">+ add</span>
                 </div>
-                <span class="tally"><b>18</b><span>of 50,102</span></span>
-                <span class="chip chip--sm">KTC value</span>
-                <span class="chip chip--sm">Leagues</span>
-              </div>
-              <div class="trow trow--sub">
-                <span class="scope scope--wrap">2026 · every crawled league · all time · all of 1 manager, 1 player</span>
               </div>
             </div>
-            <p class="pin"><b>↑</b> The field wraps to a line of its own down here, which is the right
-              thing to happen — but it means the phone layout is B with the storeys swapped.</p>
+            <p class="pin"><b>↑</b> The bays stack, which is what the trade card's own sides do at
+              this width — so the control still looks like the thing it filters. <b>160px</b> here
+              against a single field's 36.</p>
           </div>
         </div>
       </div>
@@ -1437,26 +1312,26 @@
     <div class="opt__body">
       <div class="note">
         <h3>What it buys</h3>
-        <p><b>A real field without a block of chrome of its own</b> — it spends the width the scope
-          sentence was truncating in, and hands the sentence a full line where it can finally be
-          read rather than clipped to <em>2026 · every crawle…</em></p>
-        <p>Tokens are contained: they widen the field rather than landing loose among the controls,
-          so the row keeps its order however many are picked.</p>
-        <p><b>There is a free version of this</b>, and it is worth deciding on rather than
-          defaulting into: drop the scope sentence altogether. Between the Filters badge, the
-          Leagues key and the tokens themselves, everything it says is already on screen — and
-          without it D is the only option that adds a real field for 0px.</p>
-        <span class="price price--good">0px if the scope line goes</span>
+        <p><b>One rule covers every question on this page.</b> Same bay, same side. Manager and
+          player together means he received him; on opposite sides means he gave him; two assets
+          opposed with nobody named means one went for the other.</p>
+        <p>It is the only option that answers <em>“what did a 2027 first go for”</em>, which is the
+          question the board's own description leads with — and it does it without an account, a
+          manager or a name.</p>
+        <p>The control looks like the card: two bays over two columns, stacking together at the same
+          width. Nothing to learn that the list below isn't already teaching.</p>
+        <span class="price price--good">answers the page's headline question</span>
       </div>
       <div class="note note--cost">
         <h3>What it costs</h3>
-        <p>The field and three controls fight for one row. Below ~700px it takes a line of its own
-          anyway — measured at 390px this is <b>171px, the same as B</b>, which is B with the two
-          storeys in the other order and B's version is the tidier one.</p>
-        <p>Keeping the sentence costs 39px, which is most of what C costs for a field half the
-          width — so the honest comparison is <em>D-without-the-sentence against A</em>, and
-          <em>D-with-it against C</em>.</p>
-        <span class="price">+39px with the sentence · crowded 500–700px</span>
+        <p>The biggest build of the four. The selection stops being three flat lists and becomes two
+          bags with a relation, which changes the query type, the SQL, the facet counts and the URL
+          — where A and B are a field added to what is already there.</p>
+        <p>160px on a phone against a single field’s 36, and it is chrome whether or not the second
+          bay is used.</p>
+        <p>A three-way trade makes “the other side” mean “any other side”, which is coherent and
+          still needs saying somewhere.</p>
+        <span class="price">new selection model · 160px on a phone</span>
       </div>
     </div>
   </section>
@@ -1465,46 +1340,45 @@
   <section id="shared">
     <div class="sec-head">
       <h2>True in all four</h2>
-      <span class="eyebrow">Decisions that don't depend on the seat</span>
+      <span class="eyebrow">Decisions that don't depend on the shape</span>
     </div>
     <div class="rule"></div>
 
     <div class="shared">
       <div>
-        <h3>One field over all three kinds</h3>
-        <p>Players, managers and picks in one box, results grouped under captions. A reader types a
-          name, not a category — and the group heading still says which it found. This is what the
-          manager tool's rail already does across players and leaguemates.</p>
+        <h3>Either way stays the default</h3>
+        <p>The current rule — <em>the filters ask what moved, not who ended up with it</em> — is
+          right for a reader who doesn't yet know which way it went. Direction is something you add,
+          never something you have to clear.</p>
       </div>
       <div>
-        <h3>Picks come out too, or they become the lost one</h3>
-        <p>If two of the three lists move onto the page and picks stays in the modal, picks is the
-          filter nobody finds again. <code>2027 1st</code> matching by round and season is one line
-          of matching over the same facet list.</p>
+        <h3>A direction needs two things to be about</h3>
+        <p>Every trade with Nabers has a giver and a getter, so “received” alone matches everything
+          it would have matched anyway. The control appears when the pair exists and not before.</p>
       </div>
       <div>
-        <h3>The panel floats; it never pushes the board</h3>
-        <p>The ledge sits inside the element the virtualizer measures, so anything that expands in
-          place moves every card. Floating over the list is what the manager rail's panel and both
-          ADP floats already do.</p>
+        <h3>The facet counts are still counted without the selection</h3>
+        <p>Which keeps them stable under a press — but a count next to a name now means “trades this
+          player moved in”, not “trades matching the side you're about to pick”. Worth leaving as
+          is: the alternative re-runs a season-wide aggregate per keystroke.</p>
       </div>
       <div>
-        <h3>It commits live — no draft, no Apply</h3>
-        <p>Each result carries how many trades name it, counted <em>without</em> the current
-          selection, so pressing one can't move the number beside it. That is what makes committing
-          on press safe here and not in the league filters.</p>
+        <h3>The card can't always show what the filter matched</h3>
+        <p>On a three-way the give column isn't drawn, because the sides don't say who an asset came
+          through — so a trade matched on “gave” will show the player on somebody else's side with
+          nothing pointing at why. The matched asset should be marked on the card.</p>
       </div>
       <div>
-        <h3>Facets are still fetched on open</h3>
-        <p>The season-wide grouped aggregate behind those counts costs ~850ms. Mount the panel on
-          press, exactly as the ledge does today, so arriving at the page still costs one page of
-          cards and nothing else.</p>
+        <h3>It rides the same query string</h3>
+        <p>A directional selection has to survive a reload and a back button like every other filter
+          here — so the token's clause is part of the board's cache key, and two directions of one
+          player are two different boards.</p>
       </div>
       <div>
-        <h3>The all/any key travels with the selection</h3>
-        <p>It belongs to the subjects, not to the window or the circle — so it goes where the tokens
-          go: the panel's footer (A, C, D) or the storey's trailing end (B). What stays in Filters is
-          the window and the circle.</p>
+        <h3>The scope line has to say it</h3>
+        <p>The ledge's summary is what says out loud what the board is showing. <em>“all of 1
+          manager, 1 player”</em> stops being true the moment a direction is on it — it wants to read
+          <em>“jkap gave Malik Nabers”</em>.</p>
       </div>
     </div>
   </section>
@@ -1522,61 +1396,61 @@
         <thead>
           <tr>
             <th></th>
-            <th>A · Slot in the row</th>
-            <th>B · Its own storey</th>
-            <th>C · Omnibox</th>
-            <th>D · Field takes the row</th>
+            <th>A · On the token</th>
+            <th>B · On the manager</th>
+            <th>C · A sentence</th>
+            <th>D · Two sides</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <th>Laptop · chrome above the board</th>
-            <td class="yes">68px — today's</td>
-            <td class="no">117px <span class="mid">(+49)</span></td>
-            <td class="mid">109px <span class="mid">(+41)</span></td>
-            <td class="mid">107px <span class="mid">(+39)</span>, or 68 without the scope line</td>
+            <th>“jkap gave Nabers”</th>
+            <td class="yes">yes</td>
+            <td class="yes">yes</td>
+            <td class="yes">yes</td>
+            <td class="yes">yes</td>
           </tr>
           <tr>
-            <th>390px · at rest</th>
-            <td class="yes">120px · 3 lines</td>
-            <td class="no">171px · 4 lines</td>
-            <td class="mid">133px · 3 lines</td>
-            <td class="no">171px · 4 lines</td>
+            <th>“what did he get for Nabers”</th>
+            <td class="yes">yes — per asset</td>
+            <td class="no">no — one verb for all</td>
+            <td class="yes">yes — per asset</td>
+            <td class="yes">yes — it is the shape</td>
           </tr>
           <tr>
-            <th>390px · two subjects picked</th>
-            <td class="no">153px · tokens shove the controls</td>
-            <td class="no">203px</td>
-            <td class="yes">136px · controls never move</td>
-            <td class="mid">195px</td>
+            <th>“what has a 2027 1st gone for” <span class="no">(no manager)</span></th>
+            <td class="no">no</td>
+            <td class="no">no</td>
+            <td class="no">no</td>
+            <td class="yes">yes</td>
           </tr>
           <tr>
-            <th>Reads as a search</th>
-            <td class="no">a small slot among six parts</td>
-            <td class="mid">captioned, but still a slot</td>
-            <td class="yes">unmistakable</td>
-            <td class="yes">a real field, sharing a row</td>
+            <th>Chrome added</th>
+            <td class="yes">none — wider tokens</td>
+            <td class="yes">none — one verb chip</td>
+            <td class="no">a strip that comes and goes</td>
+            <td class="mid">a second bay, always</td>
           </tr>
           <tr>
-            <th>Room for tokens</th>
-            <td class="no">shares the control row</td>
-            <td class="yes">its own line</td>
-            <td class="yes">inside the field</td>
-            <td class="mid">widens the field, squeezes the row</td>
+            <th>390px</th>
+            <td class="mid">2-line result rows</td>
+            <td class="yes">unchanged</td>
+            <td class="no">a second block, wrapping</td>
+            <td class="mid">bays stack · 160px</td>
           </tr>
           <tr>
-            <th>New material</th>
-            <td class="yes">none — ports the rail's parts</td>
-            <td class="mid">a seam in the trough</td>
-            <td class="mid">a page-level field</td>
-            <td class="mid">a field inside the row</td>
+            <th>Build</th>
+            <td class="yes">a clause on a token</td>
+            <td class="yes">smallest</td>
+            <td class="mid">a second renderer of the selection</td>
+            <td class="no">new selection model, SQL and key</td>
           </tr>
           <tr>
-            <th>Board keeps its place</th>
-            <td class="yes">panel floats</td>
-            <td class="yes">panel floats</td>
-            <td class="yes">panel floats</td>
-            <td class="yes">panel floats</td>
+            <th>Reads without being taught</th>
+            <td class="yes">it is words</td>
+            <td class="yes">it is words</td>
+            <td class="yes">it is a sentence</td>
+            <td class="mid">a model — but the card teaches it</td>
           </tr>
         </tbody>
       </table>
@@ -1584,40 +1458,38 @@
 
     <div class="reco">
       <h2>If you want a recommendation</h2>
-      <p class="prose"><b>C.</b> This page's default is every crawled league and 50,000 trades —
-        nobody reads that; they arrive with a name. A control that has to be discovered is the wrong
-        shape for the gesture that is the page's whole purpose, and C is the only one of the four a
-        reader cannot fail to see.</p>
-      <p class="prose" style="margin-top:14px"><b>Building it changed the argument against it.</b>
-        The case for A was that it is free, and it is — on a laptop. At 390px A is 120px at rest and
-        153px once two subjects are picked, because tokens land among the controls and shove them
-        onto new lines; C is 133px and 136px, because they wrap inside the field and nothing else
-        moves. So the 41px C costs on a laptop is <em>bought back</em> on the width that has the
-        least room, and the option that looked like the cheap one is the one that grows.</p>
-      <p class="prose" style="margin-top:14px">D is the interesting second, and only in its free
-        spelling — a real field on the existing row with the scope sentence deleted rather than
-        rehoused. Keep the sentence and it costs 39px for a field half of C's width. B is the most
-        disciplined shape and the tallest thing here (117px, 171px on a phone); it is the answer if
-        the selection should be able to run to six or seven tokens. A is the cheapest to build and
-        the easiest to miss.</p>
+      <p class="prose"><b>D, and A if the build is too much this week.</b> The question you asked —
+        is this manager giving or receiving this player — is answered by all four. What separates
+        them is the question one row down: <em>what did he get for him</em>, which B cannot ask at
+        all, and <em>what has a 2027 first been going for</em>, which only D can ask. That second one
+        is the sentence this board's own description leads with, and it needs no manager, no account
+        and no name — it is the whole market answering at once.</p>
+      <p class="prose" style="margin-top:14px">D's cost is real and it is a build cost, not a
+        legibility one: two bays with a relation is a different selection type from three flat lists,
+        so the query, the SQL, the cache key and the scope line all move together. <b>A is the same
+        feature at a quarter of the work</b> and its token clause (“Malik Nabers · from jkap”) is the
+        one spelling nobody can misread — and it is a strict subset of D, so building A first
+        forecloses nothing.</p>
+      <p class="prose" style="margin-top:14px">B is the trap. It is the smallest and it reads
+        perfectly, and the first time someone asks what a player <em>went for</em> it has to be
+        replaced rather than extended.</p>
       <ol class="steps">
-        <li><b>Pick a seat</b> — reply with a letter, or a hybrid (C's field seated in B's storey is
-          a real fifth option).</li>
-        <li><b>Lift the parts</b> — the search panel, the token and the grouped results come from
-          <code>SubjectRail</code>; the facet counts come from <code>/api/trades/facets</code>
-          unchanged.</li>
-        <li><b>Leave Filters holding the window and the circle</b>, and the ledge keeps its trigger,
-          its summary and its Clear.</li>
+        <li><b>Say which</b> — a letter, or “A now, D later”.</li>
+        <li><b>Read <code>drops</code></b> — stored on every trade since the first migration, read by
+          nothing. Players resolve through it, picks through
+          <code>draft_picks[].previous_owner_id</code>.</li>
+        <li><b>Keep the GIN index doing the work</b> — <code>t.adds ?| array[…]</code> stays the
+          selective predicate; the direction is a filter on the rows it hands back.</li>
       </ol>
     </div>
   </section>
 
   <footer>
-    Fourth in the mockups series, drawn in the app's own faces from
-    <code>src/app/globals.css</code> — so a part shown here is the part that ships. The trade cards,
-    the trough, the chips and the floating panel are the real materials at their real sizes; the
-    names and counts are representative. Every layout above is a real flex row at the width its frame
-    says, which is why the phone column is worth reading first.
+    Fifth in the mockups series, and a follow-up to <em>Trades search — four ways onto the page</em>:
+    the omnibox is settled, and this is only about how a direction is written on the selection inside
+    it. Drawn in the app's own faces from <code>src/app/globals.css</code>. The claims about what the
+    database can answer are read off <code>db/migrations</code>, <code>manager/persist</code> and
+    <code>shared/trades/sql</code>; the names and counts are representative.
   </footer>
 
 </div>
