@@ -32,16 +32,24 @@ export function TradeNameplate({
   name: string;
 }) {
   return (
-    <div className="lab-nameplate absolute left-3.5 top-0 z-10 flex max-w-[calc(100%-3rem)] items-center gap-2 rounded-[5px] py-[3px] pl-2 pr-2.5">
+    <div className="lab-nameplate absolute left-3.5 top-0 z-10 flex max-w-[calc(100%-3rem)] items-center gap-2 rounded-[5px] py-1 pl-2 pr-3">
       <span
         aria-hidden="true"
-        className="lab-billet-rail h-3.5 w-0.5 shrink-0 rounded-sm"
+        className="lab-billet-rail h-4 w-0.5 shrink-0 rounded-sm"
       />
       {/* `h2`: the page's own title is a visually-hidden `h1` (the ledge is what
           leads it on screen), so a card is the next level down and a 3 here
-          skipped one. A step down in size from the 13px it wore on the face,
-          since the plate is sized to the name rather than to the card. */}
-      <h2 className="min-w-0 truncate font-display text-[11px] font-bold uppercase tracking-[0.14em] text-foreground/85 [text-shadow:0_1px_0_rgba(255,255,255,0.12),0_-1px_1px_rgba(0,0,0,0.9)]">
+          skipped one.
+
+          It is set at 12px rather than the 13px it wore on the card's face — one
+          step down for the plate, not two. At 11px, tracked out to `0.14em` and
+          dimmed to 85%, the name was the hardest thing on the card to read: the
+          plate is small, so the letters were doing the work the surface should,
+          and a display face at that size loses more to tracking than it gains.
+          `leading-4` is spelled rather than inherited because `truncate` clips
+          what overflows, and a line box that depends on an ancestor is a
+          clipped ascender waiting for someone to set one. */}
+      <h2 className="min-w-0 truncate font-display text-xs font-bold uppercase leading-4 tracking-[0.1em] text-foreground [text-shadow:0_1px_0_rgba(255,255,255,0.14),0_-1px_1px_rgba(0,0,0,0.9)]">
         {name}
       </h2>
     </div>

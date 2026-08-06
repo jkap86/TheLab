@@ -97,7 +97,7 @@ export const TradeCard = memo(function TradeCard({
     // The nameplate hangs off the top edge, so it is a sibling of the slab and
     // the overhang is this wrapper's padding — inside the box `TradesList`
     // measures, which a negative margin would not be.
-    <div className="relative pt-2.5">
+    <div className="relative pt-3">
       <TradeNameplate name={league?.name ?? trade.league_id} />
 
       {/* The wall, and the face standing on it. Both carry the chamfer: a wall
@@ -105,7 +105,10 @@ export const TradeCard = memo(function TradeCard({
           follow it. The face is padded at the top only — its regions run edge
           to edge so their seams can reach both walls. */}
       <div className="lab-slab lab-notch-lg">
-        <article className="lab-slab-face lab-notch-lg pt-3.5">
+        {/* `pt-4` clears the plate: it is 24px tall against the wrapper's 12px
+            of overhang, so 12px of it hangs into the card and the first line
+            has to start below that. */}
+        <article className="lab-slab-face lab-notch-lg pt-4">
           <TradeInstant completedAt={trade.completed_at} />
 
           {/* No gap: the sides are regions of one face, so what separates them

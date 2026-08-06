@@ -543,11 +543,18 @@ body {
        fall with count or a scroll reads as mud.
      - **It must live outside `.lab-slab`, never in it.** `clip-path` clips its
        whole subtree, so a plate rendered inside the notched face would be cut
-       off at the exact edge it exists to straddle. */
+       off at the exact edge it exists to straddle.
+     - **Its darkest stop stays above the card's lightest**, which is
+       `.lab-ledge`'s rule — a face that carries a label has to be lighter than
+       what it labels. It shipped a step too dark (`#2a4a60 → #12242f`, bottoming
+       out *below* the card face's own mid-tone and barely above the page
+       ground), and the plate read as a hole rather than a part: half the name
+       sat over the gap with nothing behind it, which is what "fix the league
+       name" was about. The whole gradient now clears the card at every stop. */
   .lab-nameplate {
-    background: linear-gradient(170deg, #2a4a60, #12242f);
+    background: linear-gradient(172deg, #4d7d9c 0%, #2f566f 55%, #1f3b50 100%);
     box-shadow:
-      inset 0 1.5px 0 rgba(255, 255, 255, 0.28),
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.4),
       0 2px 0 var(--edge),
       0 5px 10px -4px rgba(0, 0, 0, 0.8);
   }
