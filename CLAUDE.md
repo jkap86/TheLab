@@ -806,20 +806,36 @@ the line: it is I/O and nothing else, so there is nothing in it to test.
 **A fourth entry point, `getWeekLineups`, is what that extraction was for.** The
 lineup checker asks the same question of *one* week that the other three ask of
 the rest of the season — what a roster is starting against what it could be —
-and adding it cost a `readBatchInputs` parameter (`only`, the caller's own week
-instead of the horizon query) plus a loop that hands each team to
-`compareLineup`. Nothing about candidacy, projectability or slots was retyped,
-which is the whole of the claim above: the gap a lineup row prints and the gap
-the expanded league panel prints are one rule, including the one that matters
-most as advice — a starter with no projection scores zero rather than being
-quietly dropped from the lineup he is actually in. Two things it inherits rather
-than decides. `listPlayerWeekStats` drops a game that has already kicked off, so
-mid-week the comparison names swaps Sleeper would no longer accept; the tool is
-for setting a lineup before the week runs, which is when the two readings agree.
-And it solves **every team it is handed**, `getOptimalLineups`' own contract —
-which is why `/api/user/[username]/matchups` hands it the two rosters in each
-game and not the league, turning a hundred-league account's ~1,200 solves into
-~200.
+and adding it cost a loop that hands each team to `compareLineup`. Nothing about
+candidacy, projectability or slots was retyped, which is the whole of the claim
+above: the gap a lineup row prints and the gap the expanded league panel prints
+are one rule, including the one that matters most as advice — a starter with no
+projection scores zero rather than being quietly dropped from the lineup he is
+actually in. It solves **every team it is handed**, `getOptimalLineups`' own
+contract, which is why `/api/user/[username]/matchups` hands it the two rosters
+in each game and not the league, turning a hundred-league account's ~1,200 solves
+into ~200.
+
+**It does not go through `readBatchInputs`, and the reason is the one decision
+this entry point makes for itself: a played game is kept, not dropped.** The
+horizon reads filter `game_date >= TODAY_ET` because those points cannot be
+scored again — right for a rest-of-season total, and the exact wrong reading of a
+lineup. Dropped, a Thursday starter is absent from the candidates, so he scores
+zero in the current lineup *and* his slot reads empty for the solver, which
+seats a Sunday player in it and reports a gap for a swap Sleeper will refuse. It
+is not a Sunday-night edge case: `game_date` is a `DATE`, so the row disappears
+the moment the *date* rolls over, and the tool spends every Friday, Saturday and
+Sunday morning telling a manager to fill a slot that is already settled.
+`listLineupWeekStats` therefore reads the week whole and marks each row `locked`,
+and `compareLineup` takes that set — holding those slots as they stand *and*
+keeping those players out of the pool for every other slot, since either half
+alone still produces an impossible move. What is left is the best lineup
+reachable *from here*, which is the only version of "points left" a manager can
+act on. Two limits worth knowing: it is day-accurate rather than kickoff-accurate
+(a finished 1pm game stays movable until midnight ET — locking at kickoff needs
+the schedule's `start_time`, a read this does not make), and an empty lock set is
+asserted to be exactly the unlocked answer, so the three horizon callers are
+unaffected by construction.
 
 Test the property the code rests on, not just its outputs. The rest-of-season
 totals are only correct because scoring is linear, so `aggregate.test` asserts

@@ -188,6 +188,44 @@ function total(lineup: readonly LineupSlot[]): number {
 }
 
 /**
+ * The best lineup reachable from the one already set: every slot held by a
+ * locked player stays exactly as it is, and the rest are solved from the players
+ * who can still be moved.
+ *
+ * With nothing locked this is `optimalLineup` over the whole roster, which is
+ * why the horizon callers see no change at all. With something locked it is
+ * still one solve rather than a slot-by-slot fill — the matroid argument on
+ * {@link optimalLineup} holds over any subset of the slots, so handing it the
+ * free ones and the movable players gives the best completion of what is left.
+ *
+ * The result is re-seated in the original slot order, because a caller reading
+ * `optimal` beside `current` is reading them index by index.
+ */
+function solveAround(
+  slots: readonly string[],
+  current: readonly LineupSlot[],
+  players: readonly RosterPlayer[],
+  locked?: ReadonlySet<string>,
+): LineupSlot[] {
+  if (!locked || locked.size === 0) return optimalLineup(slots, players);
+
+  // `current` is built by walking the same recognised slots in the same order,
+  // so index `i` is one slot in both. An empty slot holds no id and is never
+  // held — `locked` cannot contain the empty string, since a candidate with no
+  // id never reaches the pool.
+  const held = slots.map((_, i) => locked.has(current[i]?.player_id ?? ""));
+
+  const free = slots.filter((_, i) => !held[i]);
+  const movable = players.filter((player) => !locked.has(player.player_id));
+  const solved = optimalLineup(free, movable);
+
+  let next = 0;
+  return slots.map((slot, i) =>
+    held[i] ? current[i] : (solved[next++] ?? { slot, player_id: null, points: 0 }),
+  );
+}
+
+/**
  * What this roster is starting versus what it should be.
  *
  * `starters` is Sleeper's array, which lines up with the starting slots of
@@ -198,15 +236,30 @@ function total(lineup: readonly LineupSlot[]): number {
  * A player in `starters` who isn't in `players` scores zero rather than being
  * dropped — that is a player whose projection is missing, and silently removing
  * them from the current lineup would overstate what the roster is scoring.
+ *
+ * **`locked` is what makes this answerable part-way through a week.** A player
+ * whose game has been played is still in the lineup and still scoring, but he is
+ * no longer a *choice* — so the slot he occupies is held as it stands and he is
+ * kept out of the pool for every other slot. Both halves are needed and each
+ * fails on its own: leave the slot open and the optimiser seats somebody who
+ * hasn't played over a player who is already scoring, and leave him in the pool
+ * and it can move him somewhere he can no longer be moved. What is left is the
+ * only honest reading of the difference — the best lineup reachable *from here*
+ * — so `points_left` names points a manager can still go and get. Omitted, every
+ * slot is free, which is the rest-of-season question and the reading the horizon
+ * callers want.
  */
 export function compareLineup({
   rosterPositions,
   starters,
   players,
+  locked,
 }: {
   rosterPositions: readonly string[];
   starters: readonly string[];
   players: readonly RosterPlayer[];
+  /** Players whose games have been played — see the note above. */
+  locked?: ReadonlySet<string>;
 }): LineupComparison {
   const slots = startingSlots(rosterPositions);
   const known = recognisedSlots(rosterPositions);
@@ -228,7 +281,7 @@ export function compareLineup({
     });
   });
 
-  const optimal = optimalLineup(known, players);
+  const optimal = solveAround(known, current, players, locked);
 
   const startingNow = new Set(current.map((s) => s.player_id).filter(Boolean));
   const startingBest = new Set(optimal.map((s) => s.player_id).filter(Boolean));

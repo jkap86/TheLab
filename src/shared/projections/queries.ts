@@ -126,6 +126,61 @@ export async function listPlayerWeekStats({
   return rows;
 }
 
+/** One player's week, with whether his game is already behind us. */
+export type LineupWeekStats = PlayerWeekStats & {
+  /**
+   * True where the game's date has passed: the slot he is in is settled, and
+   * neither he nor it can be part of a lineup decision any more.
+   *
+   * **Day-accurate, because a day is all `game_date` holds.** Sleeper sends a
+   * bare date and the column is a `DATE`, so a player whose 1pm game finished
+   * hours ago still reads as unlocked until the date rolls over in ET. Locking
+   * at kickoff would need the schedule's own `start_time`, which is a different
+   * read; what this gets right is the case that actually bites — a Thursday
+   * starter, still sitting in his slot on Sunday morning.
+   */
+  locked: boolean;
+};
+
+/**
+ * One week's stat lines for these players — **all of them**, including games
+ * already played, each marked with whether it is still ahead.
+ *
+ * The counterpart to {@link listPlayerWeekStats} rather than a variant of it,
+ * and the difference is the question. A rest-of-season total wants the played
+ * games *gone*: they cannot be scored again, so counting them would inflate what
+ * a roster has left. A lineup decision for one week wants them **present but
+ * settled** — a starter whose game is over still contributes his points to what
+ * this lineup scores, and dropping him would read as an empty slot for the
+ * optimiser to fill with somebody who has not played, which is advice to make a
+ * swap the platform will refuse.
+ *
+ * A row with no `game_date` is kept and left unlocked. The week list drops those
+ * because it cannot tell whether they are ahead; here the forgiving reading is
+ * the safe one, since the cost of a wrong guess is a frozen slot rather than a
+ * doubled total.
+ */
+export async function listLineupWeekStats({
+  season,
+  week,
+  playerIds,
+}: {
+  season: string;
+  week: number;
+  playerIds: string[];
+}): Promise<LineupWeekStats[]> {
+  if (playerIds.length === 0) return [];
+
+  const { rows } = await pool.query<LineupWeekStats>(
+    `SELECT player_id, week, COALESCE(stats, '{}'::jsonb) AS stats,
+            (game_date IS NOT NULL AND game_date < ${TODAY_ET}) AS locked
+       FROM projections
+      WHERE season = $1 AND week = $2 AND player_id = ANY($3::varchar[])`,
+    [season, week, playerIds],
+  );
+  return rows;
+}
+
 /**
  * Every stat key the feed publishes for these weeks — the vocabulary
  * `score.unprojectedScoring` measures a league's scoring settings against.

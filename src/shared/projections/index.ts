@@ -11,9 +11,10 @@ export {
   getRemainingWeeks,
   getUpcomingWeek,
   listPlayerWeekStats,
+  listLineupWeekStats,
   getProjectedStatKeys,
 } from "./queries";
-export type { RankedProjection } from "./queries";
+export type { LineupWeekStats, RankedProjection } from "./queries";
 export { aggregateWeeklyStats } from "./aggregate";
 export type { AggregatedProjection, PlayerWeekStats } from "./aggregate";
 export {

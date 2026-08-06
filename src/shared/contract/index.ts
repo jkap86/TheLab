@@ -507,11 +507,21 @@ export type MatchupOpponentPayload = {
  * on needs the totals it came out of.
  */
 export type MatchupProjectionPayload = {
-  /** The best legal lineup available from the roster, in the league's scoring. */
+  /**
+   * The best lineup still *reachable* from this roster, in the league's own
+   * scoring — slots held by a player whose game has been played stay as they
+   * are, the rest are solved. Part-way through a week that is a different
+   * number from the best lineup outright, and it is the one worth sending: the
+   * other names moves the platform will refuse.
+   */
   optimal: number;
   /** What the lineup currently set projects for the same week. */
   current: number;
-  /** `optimal − current` — the points the current lineup leaves on the bench. */
+  /**
+   * `optimal − current` — points the manager can still go and get by moving
+   * somebody. Zero is a real answer and a good one: the lineup is already the
+   * best one available.
+   */
   points_left: number;
 };
 

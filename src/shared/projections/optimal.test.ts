@@ -244,6 +244,121 @@ describe("compareLineup", () => {
   });
 });
 
+/**
+ * A week that is part-way played, which is the case the rest of this module
+ * deliberately knows nothing about.
+ *
+ * Every test above asks "what is the best lineup from this roster"; these ask
+ * "what is the best lineup still *reachable*", which is the only answerable
+ * question once some of the games are behind you. The failure being pinned is
+ * not an arithmetic one — it is advice to make a move the platform will refuse,
+ * which reads as a perfectly plausible number.
+ */
+describe("compareLineup with played games locked", () => {
+  const roster = [
+    p("qb1", "QB", 20),
+    p("rb1", "RB", 15),
+    p("rb2", "RB", 14),
+    p("wr1", "WR", 12),
+    p("te1", "TE", 4),
+  ];
+
+  test("holds a played starter's slot instead of upgrading it", () => {
+    // te1 played Thursday and scored his 4. rb2 is on the bench with 14 and has
+    // not played. Without the lock this reads `+10, start rb2` — a swap for a
+    // slot that is settled.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: ["qb1", "rb1", "te1"],
+      players: roster,
+      locked: new Set(["te1"]),
+    });
+
+    assert.equal(result.points_left, 0);
+    assert.deepEqual(result.start, []);
+    assert.deepEqual(result.sit, []);
+    // He is still in the lineup and still scoring — locked is not benched.
+    assert.equal(result.current_points, 39);
+    assert.equal(result.optimal_points, 39);
+    assert.deepEqual(result.optimal[2], { slot: "FLEX", player_id: "te1", points: 4 });
+  });
+
+  test("a played bench player cannot be started", () => {
+    // rb2 is the better player and is sitting on the bench, but his game is
+    // over: there is nothing to be done about it this week.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "BN"],
+      starters: ["qb1", "te1"],
+      players: roster,
+      locked: new Set(["rb2"]),
+    });
+
+    assert.deepEqual(result.start, ["rb1"]);
+    assert.equal(result.optimal_points, 35);
+  });
+
+  test("still moves what is movable into the slots that are still open", () => {
+    // The lock holds one slot; the rest of the lineup is solved as usual.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: ["qb1", "te1", "wr1"],
+      players: roster,
+      locked: new Set(["te1"]),
+    });
+
+    // te1 keeps the RB slot he is somehow in; FLEX is open and takes the best
+    // movable player left.
+    assert.equal(result.current[1].player_id, "te1");
+    assert.equal(result.optimal[1].player_id, "te1");
+    assert.deepEqual(result.start, ["rb1"]);
+    assert.deepEqual(result.sit, ["wr1"]);
+    assert.equal(result.points_left, 3);
+  });
+
+  test("an empty slot stays open even while another is locked", () => {
+    // A settled slot must not make the rest of the lineup settled with it.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX"],
+      starters: ["qb1", "0", "te1"],
+      players: roster,
+      locked: new Set(["te1"]),
+    });
+
+    assert.deepEqual(result.start, ["rb1"]);
+    assert.equal(result.optimal[1].player_id, "rb1");
+  });
+
+  test("an empty lock set is the unlocked answer, to the point", () => {
+    // The horizon callers pass nothing at all, and a caller mid-week may find
+    // nothing played yet; both have to be the question this module already
+    // answers rather than a near-miss of it.
+    const args = {
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: ["qb1", "rb1", "te1"],
+      players: roster,
+    };
+
+    assert.deepEqual(
+      compareLineup({ ...args, locked: new Set() }),
+      compareLineup(args),
+    );
+  });
+
+  test("locking everything leaves the lineup exactly as it stands", () => {
+    // Monday night, nothing left to play: the gap is zero whatever the bench
+    // holds, because there is no move left to make.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: ["qb1", "rb1", "te1"],
+      players: roster,
+      locked: new Set(roster.map((player) => player.player_id)),
+    });
+
+    assert.equal(result.points_left, 0);
+    assert.deepEqual(result.optimal, result.current);
+  });
+});
+
 describe("optimalLineup vs brute force", () => {
   test("matches an exhaustive search on 400 random rosters", () => {
     // The greedy is only optimal because of an argument about matroids; this is

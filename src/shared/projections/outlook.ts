@@ -8,6 +8,7 @@ import type { LineupComparison } from "./optimal";
 import {
   getProjectedStatKeys,
   getRemainingWeeks,
+  listLineupWeekStats,
   listPlayerWeekStats,
 } from "./queries";
 import { derivedScoring, scoreProjection, unprojectedScoring } from "./score";
@@ -254,35 +255,36 @@ export type LeagueTeamsInput = {
 };
 
 /**
- * The reads the batch entry points below share: which leagues can be projected
- * at all, the horizon, and — for the union of every roster across them — the
- * stat lines and the positions.
+ * The reads {@link getWeeklyTeamPoints} and {@link getOptimalLineups} share:
+ * which leagues can be projected at all, the horizon, and — for the union of
+ * every roster across them — the stat lines and the positions.
  *
- * One pass for the whole account, which is the reason those exist rather than a
- * loop over {@link getLeagueOutlook}: these reads cost the same whether one
- * league asks or a hundred do, so a per-league loop would repeat them a hundred
- * times. What genuinely differs per league is the scoring and the solve, and
- * that stays with each caller.
+ * One pass for the whole account, which is the reason those two exist rather
+ * than a loop over {@link getLeagueOutlook}: these reads cost the same whether
+ * one league asks or a hundred do, so a per-league loop would repeat them a
+ * hundred times. What genuinely differs per league is the scoring and the solve,
+ * and that stays with each caller.
  *
  * Null when there is nothing to project — no projectable league, or nothing left
- * on the schedule — so no caller has to spell out the two ways that happens
+ * on the schedule — so neither caller has to spell out the two ways that happens
  * before returning its own empty shape.
  *
- * `only` is for a caller answering about **one** week rather than the rest of
- * the season ({@link getWeekLineups}). It skips the horizon query, which is the
- * point: that caller already knows its week, and re-deriving it here would both
- * cost a query and let the two disagree about which week is being answered for.
- * It is still a list, because everything downstream of here is written over one.
+ * {@link getWeekLineups} deliberately does *not* come through here, though it
+ * opens with the same two lines: it reads one named week and it needs the games
+ * already played, which is the opposite of what `listPlayerWeekStats` is for.
+ * What the three still share is every *rule* — `isProjectable`,
+ * `rosterPlayerIds`, `lineupCandidates`, the slot vocabulary — which is what the
+ * extraction into `./candidates` was actually for. This is I/O, and two
+ * genuinely different reads are two reads.
  */
 async function readBatchInputs(
   season: string,
   leagues: readonly LeagueTeamsInput[],
-  only?: readonly number[],
 ) {
   const projectable = leagues.filter(isProjectable);
   if (projectable.length === 0) return null;
 
-  const weeks = only ? [...only] : await getRemainingWeeks(season);
+  const weeks = await getRemainingWeeks(season);
   if (weeks.length === 0) return null;
 
   const playerIds = rosterPlayerIds(projectable.flatMap((l) => l.teams));
@@ -451,9 +453,12 @@ export async function getOptimalLineups({
   return { weeks, lineups };
 }
 
-/** What one team is starting this week against what it could be starting. */
+/** What one team is starting this week against what it could still be starting. */
 export type TeamWeekLineup = {
-  /** The best legal lineup this roster could set for the week. */
+  /**
+   * The best lineup this roster can still reach: slots held by a player whose
+   * game has been played stay as they are, the rest are solved.
+   */
   optimal_points: number;
   /** What the lineup Sleeper currently holds projects for it. */
   current_points: number;
@@ -494,13 +499,16 @@ export type WeekLineups = {
  * keeps: a caller that only needs the two rosters in a matchup should pass those
  * two, not the league.
  *
- * Mid-week it covers only the games still to be played, like every other total
- * here — {@link listPlayerWeekStats} drops a game that has kicked off. That is
- * the right reading for a lineup you can still change and the wrong one for a
- * lineup you can't: a starter whose game is over stops counting toward
- * `current_points` and frees his slot in `optimal_points`, so a Sunday-evening
- * gap names swaps Sleeper would no longer accept. The tool is for setting a
- * lineup before the week runs, which is when the two readings agree.
+ * **It reads the week whole and locks what has been played**, which is the one
+ * place it parts company with everything else here. The horizon reads drop a
+ * played game because those points cannot be scored again; drop them from a
+ * lineup decision and a starter who has already played reads as an empty slot,
+ * so the solver seats a Sunday player over a Thursday one and the gap names a
+ * swap Sleeper will refuse. {@link listLineupWeekStats} keeps those rows and
+ * marks them, and {@link compareLineup} holds their slots — so what comes back
+ * is the best lineup reachable *from here*, and `points_left` is points a
+ * manager can still go and get. It is day-accurate, since `game_date` is a date:
+ * a finished early game stays movable until the date rolls over in ET.
  */
 export async function getWeekLineups({
   season,
@@ -511,9 +519,21 @@ export async function getWeekLineups({
   week: number;
   leagues: readonly LeagueTeamsInput[];
 }): Promise<WeekLineups> {
-  const input = await readBatchInputs(season, leagues, [week]);
-  if (!input) return { week, teams: new Map() };
-  const { projectable, stats, positions } = input;
+  const projectable = leagues.filter(isProjectable);
+  if (projectable.length === 0) return { week, teams: new Map() };
+
+  const playerIds = rosterPlayerIds(projectable.flatMap((l) => l.teams));
+
+  const [stats, positions] = await Promise.all([
+    listLineupWeekStats({ season, week, playerIds }),
+    getFantasyPositions(playerIds),
+  ]);
+
+  // One set for the account: whether a game has been played is a fact about the
+  // schedule, so it is the same answer in every league the player is rostered in.
+  const locked = new Set(
+    stats.filter((row) => row.locked).map((row) => row.player_id),
+  );
 
   // Bucketed by player once, so each league scores its own rosters' rows rather
   // than re-scanning the whole account's union per league.
@@ -552,6 +572,7 @@ export async function getWeekLineups({
         rosterPositions: league.rosterPositions,
         starters: team.starters,
         players: candidates,
+        locked,
       });
 
       byTeam.set(team.roster_id, {

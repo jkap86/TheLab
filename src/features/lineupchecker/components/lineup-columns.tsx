@@ -78,10 +78,13 @@ export function LineupStatColumns({
  *
  * - **`+12.34` in amber where there is something to do.** Amber is this app's
  *   needs-attention tone, and this is the one number in the row that is a verdict
- *   rather than a count.
+ *   rather than a count. It only ever names a move that can still be made: a
+ *   slot whose game has been played is held rather than re-solved (see
+ *   {@link getWeekLineups}), so the number never asks for a swap Sleeper would
+ *   refuse.
  * - **`set` where the gap is zero**, not `+0.00`. Zero here is a real answer and
- *   a good one — the team is already starting its best lineup — where a run of
- *   `+0.00` down a list reads as numbers that failed to arrive.
+ *   a good one — the team is already starting the best lineup available to it —
+ *   where a run of `+0.00` down a list reads as numbers that failed to arrive.
  * - **An em dash where there is no projection at all**, which is a different
  *   thing again: a league with no slots or scoring on file, or a week nothing is
  *   stored for. Absent is never zero.
@@ -185,9 +188,15 @@ export function LineupStatHeadings() {
  */
 const BENCH_GAP_LABEL = "Bench gap";
 
-/** What the column measures, spelled out where there is room to hover. */
+/**
+ * What the column measures, spelled out where there is room to hover.
+ *
+ * "Still" is load-bearing rather than filler: part-way through a week the number
+ * is the best lineup *reachable* from here — slots whose games have been played
+ * are held — so what it names is always a move that can still be made.
+ */
 const BENCH_GAP_TITLE =
-  "Points the best available lineup would add over what this team is starting today";
+  "Points you could still add by moving somebody, over what this lineup is starting now";
 
 /**
  * The three columns still to be filled, as slot indices rather than a count so
