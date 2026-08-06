@@ -1,8 +1,11 @@
-import { Avatar } from "@/features/shared";
+import type { UserInfo } from "@/shared/contract";
 
+// The module rather than the barrel: this card is *in* `features/shared`, so
+// reaching its own index would be a cycle.
+import { Avatar } from "../avatar";
 import { formatRecord } from "../../format";
 import type { OverallRecord } from "../../record";
-import type { LeaguesResult } from "../../types";
+
 import { HeaderReadout } from "./header-readout.tsx";
 import { recordBarParts } from "./manager-header.utils.ts";
 
@@ -22,13 +25,16 @@ export function ManagerSummary({
   record,
   scope,
   leagueCount,
+  countdown,
   padding,
 }: {
-  user: LeaguesResult["user"];
+  user: UserInfo;
   season: string;
   record: OverallRecord;
   scope: string | null;
   leagueCount: number;
+  /** Whether the readout may run a clock — see {@link ManagerHeaderProps}. */
+  countdown: boolean;
   /** The seam under the row — see `bodyPadding`, which is what sizes it. */
   padding: string;
 }) {
@@ -51,7 +57,7 @@ export function ManagerSummary({
         <RecordBar record={record} />
       </div>
 
-      <HeaderReadout season={season} pct={record.pct} />
+      <HeaderReadout season={season} pct={record.pct} countdown={countdown} />
     </div>
   );
 }

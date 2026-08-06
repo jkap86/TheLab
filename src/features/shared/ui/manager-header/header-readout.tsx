@@ -1,6 +1,7 @@
-import { firstKickoff } from "@/features/shared";
-
-import { useKickoff } from "../../hooks/use-kickoff";
+// Both the module rather than the barrel, for `manager-summary`'s reason: this
+// card lives inside `features/shared`, so its own index is a cycle from here.
+import { firstKickoff } from "../../nfl-calendar";
+import { useKickoff } from "../../use-kickoff";
 import { KickoffCountdown } from "./kickoff-countdown.tsx";
 import { resolveKickoff } from "./manager-header.utils.ts";
 import { useTick } from "./use-tick.ts";
@@ -22,14 +23,33 @@ import { WinPctGauge } from "./win-pct-gauge.tsx";
  * pinned under it does not jump when the season turns over. The dial is also
  * what stands in while the kickoff instant is still being resolved, which is
  * why nothing here renders a placeholder of its own.
+ *
+ * **That trade is about the record, so a page counting a different record opts
+ * out** (`countdown`, see {@link ManagerHeaderProps}). The lineup checker's is
+ * the week ahead as it stands, which Sleeper projects months before kickoff, so
+ * the em-dash premise simply does not hold there and the clock would be sitting
+ * on the one number that page is for.
  */
 export function HeaderReadout({
   season,
   pct,
+  countdown,
 }: {
   season: string;
   pct: number | null;
+  /** Whether the clock may take the slot. */
+  countdown: boolean;
 }) {
+  // A component boundary rather than a branch below the hooks, and that is what
+  // it buys: a page that never draws the clock never mounts the query behind it,
+  // so opting out costs no `/api/kickoff` request either.
+  if (!countdown) return <WinPctGauge pct={pct} />;
+
+  return <KickoffReadout season={season} pct={pct} />;
+}
+
+/** The readout where a clock is welcome — the half that has to ask the season. */
+function KickoffReadout({ season, pct }: { season: string; pct: number | null }) {
   const kickoff = resolveKickoff(useKickoff(season), firstKickoff(season));
   const now = useTick(kickoff);
 

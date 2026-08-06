@@ -73,7 +73,13 @@ const LeagueFiltersModal = dynamic(
     loading: () => <LeagueFiltersPlaceholder label="Filters" seat="corner" />,
   },
 );
-import { ManagerHeader, type HeaderStat } from "./manager-header";
+// The module path rather than `@/features/shared`: the plate is shared with the
+// lineup checker now, and it is deliberately kept off that barrel so the pages
+// with no plate don't carry it — see the folder's own index.
+import {
+  ManagerHeader,
+  type HeaderStat,
+} from "@/features/shared/ui/manager-header";
 import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
 import { SubjectRail } from "./subject-rail";
 import { PanelMessage } from "./ui";

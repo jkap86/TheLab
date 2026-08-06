@@ -799,9 +799,43 @@ varied between the copies. And `isProjectable` is a **type predicate**, so
 checked are gone, which is the compiler agreeing that the guard and the use are
 now the same fact.
 
-The shared *reads* behind those two batch entry points sit in `readBatchInputs`,
+The shared *reads* behind those batch entry points sit in `readBatchInputs`,
 still inside the composition file and private to it. That is the right side of
 the line: it is I/O and nothing else, so there is nothing in it to test.
+
+**A fourth entry point, `getWeekLineups`, is what that extraction was for.** The
+lineup checker asks the same question of *one* week that the other three ask of
+the rest of the season — what a roster is starting against what it could be —
+and adding it cost a loop that hands each team to `compareLineup`. Nothing about
+candidacy, projectability or slots was retyped, which is the whole of the claim
+above: the gap a lineup row prints and the gap the expanded league panel prints
+are one rule, including the one that matters most as advice — a starter with no
+projection scores zero rather than being quietly dropped from the lineup he is
+actually in. It solves **every team it is handed**, `getOptimalLineups`' own
+contract, which is why `/api/user/[username]/matchups` hands it the two rosters
+in each game and not the league, turning a hundred-league account's ~1,200 solves
+into ~200.
+
+**It does not go through `readBatchInputs`, and the reason is the one decision
+this entry point makes for itself: a played game is kept, not dropped.** The
+horizon reads filter `game_date >= TODAY_ET` because those points cannot be
+scored again — right for a rest-of-season total, and the exact wrong reading of a
+lineup. Dropped, a Thursday starter is absent from the candidates, so he scores
+zero in the current lineup *and* his slot reads empty for the solver, which
+seats a Sunday player in it and reports a gap for a swap Sleeper will refuse. It
+is not a Sunday-night edge case: `game_date` is a `DATE`, so the row disappears
+the moment the *date* rolls over, and the tool spends every Friday, Saturday and
+Sunday morning telling a manager to fill a slot that is already settled.
+`listLineupWeekStats` therefore reads the week whole and marks each row `locked`,
+and `compareLineup` takes that set — holding those slots as they stand *and*
+keeping those players out of the pool for every other slot, since either half
+alone still produces an impossible move. What is left is the best lineup
+reachable *from here*, which is the only version of "points left" a manager can
+act on. Two limits worth knowing: it is day-accurate rather than kickoff-accurate
+(a finished 1pm game stays movable until midnight ET — locking at kickoff needs
+the schedule's `start_time`, a read this does not make), and an empty lock set is
+asserted to be exactly the unlocked answer, so the three horizon callers are
+unaffected by construction.
 
 Test the property the code rests on, not just its outputs. The rest-of-season
 totals are only correct because scoring is linear, so `aggregate.test` asserts
@@ -885,7 +919,9 @@ stops holding, a comment saying it does would not have caught it.
     something to say before its content; skip it when the first control *is* the
     content's own description.
   - `LIST_ROW_SURFACE` / `LIST_ROW_HOVER` / `RowSheen` are the tool cards' glass
-    held to a row's height, worn by league cards, share cards and trade cards.
+    held to a row's height, worn by league cards and share cards. (Trade cards
+    wore it and don't now — they are machined rather than glass, which is argued
+    where the card is.)
     What they deliberately don't take is the **corner brackets** — those are a
     card-scale device, and four of them on each of a hundred-odd rows reads as
     noise rather than as an instrument. Two details in `RowSheen` are
@@ -1092,9 +1128,26 @@ stops holding, a comment saying it does would not have caught it.
   `adp-controls` still hands out `todayIso` and `shiftDays`, `manager/format`
   still hands out `ordinal` — so one canonical definition is read under two names
   rather than a sweep through a dozen call sites. And what moves is only what a
-  second tool actually reads: `manager/format` keeps the records, points and week
-  horizons only that tool renders, because a shared module that collects a
-  feature's whole vocabulary is just the feature again under another name.
+  second tool actually reads: `manager/format` keeps the KTC values, the week
+  horizons and the contracted player name only that tool renders, because a
+  shared module that collects a feature's whole vocabulary is just the feature
+  again under another name.
+
+  **The manager plate is the largest thing that rule has moved, and it took four
+  modules with it.** The lineup checker draws the same card, so
+  `components/manager-header/` is `features/shared/ui/manager-header/`, and what
+  it reads went with it: `record.ts` (the record's shape and the two rules that
+  sum one), the four formatters the plate is written in plus `formatPoints`, and
+  `useKickoff` with the key and TTL it reads (`schedule-query.ts` — the instant
+  was never manager-scoped, it is a fact about a season). Each leaves the usual
+  re-export behind. Two details worth keeping. The card is **not** on
+  `features/shared/index.ts`: it pulls in a countdown, a dial and a query hook,
+  and from that barrel it would join the graph of every page that imports
+  anything shared — so both call sites name the module path, the rule the ADP
+  drawer and the league filters dialog already keep. And the three sync-state
+  props are **optional**, because the second page has no leagues stream behind
+  it: a page with nothing transient to report passes none rather than threading
+  three nulls through to say so.
 - **The trades page carries two filter sets, like the manager tabs, and for the
   same reason.** The league filters say *which leagues' trades are in the list at
   all*; the trade filters say *which of those trades* — circle, window, players,
@@ -1434,6 +1487,33 @@ stops holding, a comment saying it does would not have caught it.
     the manager tool's heading rail: that works because every card puts its
     numbers at one x, where a trade's value belongs to a *side* and the sides
     stack or split by width and count, so the number wears its own label.
+  - **Those numbers are on the display face and cut into what they sit on**
+    (`.lab-engraved`, `.lab-engraved-faint`). The page's subject used to be the
+    quietest type on its own card: the league name was Orbitron at 13px tracked,
+    the manager's name 13px bold, and the *value* 12px bold body face at 85% with
+    the per-asset numbers at 11px/60%. Three rules in the correction:
+    - **Engraved rather than lit, and the argument is arithmetic.** There are two
+      side totals and up to a dozen line values per card, times the couple of
+      dozen cards in the virtualiser's window. A numeral in the accent is a
+      signal and fifty signals are wallpaper; cut into the plate it is a
+      *finish*, calm at any count and still unmistakably more considered than
+      body-face text. It also leaves the accent unspent, and this page has
+      exactly one thing worth spending it on.
+    - **A size step down comes with the face**, the rule the named list rows
+      already follow: Orbitron is wider, so a line value holding 11px would push
+      a four-digit price into the name beside it. `tabular-nums` is what keeps
+      the column lining up once the face changes under it.
+    - **Two strengths, and an em dash gets neither.** `-faint` is the same cut at
+      line scale, because the highlight is a fixed 1px whatever the type size —
+      at 10px the full-strength lower lip is half the stroke weight and reads as
+      a blur. The give track gets no cut at all, since its lines sit in the
+      groove whose own lit lip is a millimetre away. And an unpriced line stays
+      flat: cutting an *absence* into the plate would give it more presence than
+      the numbers that are actually there.
+    The totals dropped `.lab-lens` with the same change. A rim of cyan around
+    every number is one apparent control per side over forty thousand rows;
+    `.lab-readout` alone is the housing, and recessed is right because a readout
+    is read and not pressed.
   - **KTC's two boards both travel on the stream, and the card picks one.** The
     board is a fact about the *league* a trade happened in and this stream spans
     every crawled league, so a chunk sends `{sf, oneqb}` per player and the card
@@ -1487,10 +1567,13 @@ stops holding, a comment saying it does would not have caught it.
     list of forty thousand is actually read, rather than by finding the
     counterparty's column and inverting it. Four things keep the cost paid:
     - **It is paid in material, not in height.** The gives sit in a groove
-      milled into the side plate (`.lab-groove`), dimmer and a step smaller,
-      where the takes sit on the plate's lit face — recessed is what a card
+      milled into the card's face (`.lab-groove`), dimmer and a step smaller,
+      where the takes sit on that face itself — recessed is what a card
       already says for "read this, don't act on it". So the card still reads
-      take-first at a glance.
+      take-first at a glance. The groove used to be cut into a *side plate*, and
+      losing that surface narrowed the drop from take to give by one step; it is
+      the price the card's hierarchy was bought at (see below), and the fix if it
+      ever stops reading is a deeper groove, never the plate back.
     - **`givenBundle` answers exactly where `counterpartyRoster` does.** With
       two participants a side's give *is* the other side's take, so there is one
       stored fact read from two directions and the halves cannot disagree. At
@@ -1518,13 +1601,57 @@ stops holding, a comment saying it does would not have caught it.
     `.lab-slab` — the app bar's corner-lit block at card scale. What buys the
     divergence is that a trade card is not a row that opens into something: it is
     the whole of what it has to say, four columns deep, and the depth is what
-    sorts those columns into an order. Four countable z-levels and no more —
-    plate (`.lab-slab`), side plate (`.lab-plate-sm` + `.lab-plate-brushed`),
-    groove, lens — since a fifth flattens the other four, the same arithmetic
-    `.lab-row`'s 2px wall already answers. The cyan rail, the hover lift and the
-    bloom all survive, so the card still answers the pointer the way its
-    neighbours do; the lift is spelled as a `filter` because `clip-path` cuts a
-    `box-shadow` off.
+    sorts those columns into an order. Three countable z-levels and no more —
+    plate (`.lab-slab`), groove, readout — since a fourth flattens the other
+    three, the same arithmetic `.lab-row`'s 2px wall already answers. The cyan
+    rail, the hover lift and the bloom all survive, so the card still answers the
+    pointer the way its neighbours do; the lift is spelled as a `filter` because
+    `clip-path` cuts a `box-shadow` off.
+  - **The card is the only object in the list, and four decisions follow from
+    that one.** It used to be four z-levels, and the level that went is the one
+    that was wrong: a *side* wore `.lab-plate-sm` + `.lab-plate-brushed`, which
+    is this card's own construction one step down — raised, walled, brushed,
+    rounded, carrying an avatar, a name and a readout. One step is not enough to
+    read as containment, so on a phone, where the sides stack, the list showed a
+    column of manager plates a reader had to pair up rather than four trades. The
+    spacing was never the problem and is the part worth remembering: 8px between
+    sides against roughly 32px between the nearest plates of two cards is already
+    4:1. **When proximity is right and grouping still fails, the answer is
+    weight, and more air buys nothing.** What replaced it:
+    - **A side is a region of the card's face** (`SIDE_ZONE`) — no fill, no wall,
+      no radius. Nothing inside the card is built like a card because nothing
+      inside it is built at all.
+    - **What parts two of them is a full-bleed seam** (`SIDE_SEAM_ROW` /
+      `SIDE_SEAM_COLUMN`): a dark line with a lit far lip, reaching both walls.
+      Reaching them is what makes it machining in one part — the same line inset
+      from the edges is a border, a border draws a box, and a box is the plate
+      this just stopped drawing. Which way it runs is arithmetic on the index
+      rather than a flag, since the sides stack below `sm` and split above it: a
+      side in the trailing column (`i % 2 === 1`) is cut on its leading edge and
+      one that starts a row is cut along its top, which is what puts a horizontal
+      seam above the odd side of a three-way — that one spans both columns rather
+      than sitting beside either. The face is therefore padded at the **top
+      only**, and each region holds its own inset off the walls.
+    - **The league's name rides the top edge on a nameplate** (`.lab-nameplate`),
+      the device the manager plate's filters key already uses on its bottom edge.
+      A part rising out of a card is the strongest "one object" mark there is,
+      and it is nearly free vertically — it occupies margin the list was already
+      spending as a gap. It is a *plate* and not a chip (rectangular, no press
+      travel), because "raised means press me" is about keys and pills. It must
+      be a sibling of `.lab-slab`: `clip-path` clips its whole subtree, so a
+      plate inside the notched face would be severed at the edge it straddles.
+      The overhang is padding on the wrapper, never a negative margin, so it
+      stays inside the box `TradesList` measures.
+    - **`CARD_GAP` went 12 → 18 for the nameplate, not for separation.** At 12
+      the plate sat almost exactly between two cards and could be read as
+      belonging to either; at 18 there is visibly more ground above it than
+      below. Check that before moving it.
+  - **The instant keeps a line of its own, and folding it into the nameplate was
+    tried and rejected.** One part carrying both facts costs nothing vertically
+    and is the obvious economy — but a league name long enough to truncate takes
+    the timestamp with it, and the instant is the card's answer to which of an
+    afternoon's five deals landed first. Right-aligned, diagonally opposite the
+    plate, so the two facts hold the card's corners.
   - **The value column reads one asset at a time as well as the side total, and
     only where that says something the total doesn't** (`TradeMetric.asset`,
     `bundleAssets`). A total says which haul was bigger and nothing about which
@@ -2083,10 +2210,36 @@ stops holding, a comment saying it does would not have caught it.
   `inline-flex` itself — a shared component that hard-codes one is a component
   no caller can hide, and the failure is silent in both the class list and the
   compiler. Source order in the `class` attribute never enters into it.
-- **Every `/manager/[searched]/…` view renders one `ManagerHeader`.** Who is
-  being looked at, the season, the sync state and the manager's record are the
-  same facts on all of them; only the headline count differs, which is what
-  `stat` is. **It is pinned under the app bar and it carries no tabs** — those
+- **Every `/manager/[searched]/…` view renders one `ManagerHeader`, and so does
+  the lineup checker.** Who is being looked at, the season, the sync state and
+  the manager's record are the same facts on all of them; only the headline count
+  differs, which is what `stat` is. The fourth page swaps the *aggregation*
+  behind `record` — `projectedRecord` over this week's matchups rather than
+  `aggregateRecord` over the season — because the two are one shape
+  counted by the same two rules (the denominator is what contributed; zero and
+  absent are different answers), and a second card drawn to say that would be a
+  second chance for one of them to drift. Its week goes in `scope`, which is the
+  slot that names what a record was counted over, and its league filters are the
+  manager tabs' own dialog in the same corner of the same plate — held in local
+  `useState` rather than a provider, since a provider is what three *routes*
+  sharing one selection need and this tool is one page.
+
+  **The one thing that aggregation changes on the card is which instrument the
+  readout wears, and that is a prop rather than something the readout works
+  out.** The countdown takes the slot on a claim about the *record* beside it:
+  before kickoff every league reports `0-0`, so the dial is an em dash by rule
+  and the clock is the only moving number on the plate. That claim is the
+  manager tabs', not the card's — a projected week is live months before
+  kickoff, since Sleeper publishes those projections that far out, so all
+  offseason the timer was sitting on the one figure the lineup checker exists to
+  produce. `countdown={false}` keeps the dial there. Nothing in the header can
+  see the difference for itself: both records arrive as the same `OverallRecord`
+  and only the page knows which question it counted. The branch is a **component
+  boundary** inside `HeaderReadout` rather than a conditional below its hooks, so
+  a page that never draws the clock never mounts `useKickoff` and costs no
+  `/api/kickoff` request either.
+
+  **It is pinned under the app bar and it carries no tabs** — those
   two go together: a card that stays on screen is paying for its height out of
   the list behind it, so navigation left the card entirely (first to a tab strip
   in the bar, then to the bar's tools menu, which listed the three views anyway)
@@ -2233,7 +2386,10 @@ stops holding, a comment saying it does would not have caught it.
     two-todays rule), starts only after mount (the account store's hydration
     rule, applied to a clock), and past kickoff renders nothing rather than a
     zero — the interval retires itself too, so a header left open across
-    kickoff stops re-rendering a hidden timer.
+    kickoff stops re-rendering a hidden timer. **That whole trade is about the
+    record beside it**, so a page whose record is already live before kickoff
+    passes `countdown={false}` and keeps the dial — see the lineup checker,
+    above.
   - **A modal hides its own state, so the state is repeated outside it — when
     there is a state to repeat.** The trigger wears the count of active filters
     and the record line names the selection in words (`filterSummary`, lower case

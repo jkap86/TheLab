@@ -46,12 +46,17 @@ export type AssetToneStyle = {
 /**
  * The two tracks' material, in one table.
  *
- * The give track is a groove milled into the side plate, dimmer and a step
- * smaller; the take track sits on the plate's own lit face. That is the whole of
- * the difference between them, and holding it here is what lets one set of
+ * The give track is a groove milled into the card's face, dimmer and a step
+ * smaller; the take track sits on that face itself. That is the whole of the
+ * difference between them, and holding it here is what lets one set of
  * components draw both — the tone used to be re-derived as a `tone === "out"`
  * ternary in five places, which is five chances for the give track to end up a
  * step brighter than the take track it must never outrank.
+ *
+ * **Only the take track's value is engraved.** The give's sits in the groove,
+ * where the cut's own lit lower lip is already a millimetre away, and a second
+ * incision inside it reads as a smudge rather than as machining — the same
+ * argument as the tones' brightness, applied to their finish.
  *
  * **The two are deliberately not equally lit.** The take is the thing being
  * read, so its sign carries the accent, where the give's is the dimmest mark in
@@ -66,7 +71,7 @@ export const ASSET_TONES: Record<AssetTone, AssetToneStyle> = {
     name: "text-foreground/85",
     meta: "text-foreground/45",
     bullet: "text-active/50",
-    value: "text-foreground/60",
+    value: "lab-engraved-faint text-foreground/70",
     dash: "text-foreground/25",
     playerDetail: true,
   },
@@ -100,14 +105,68 @@ export const ASSET_ROW =
 /** The name track, which is the half allowed to wrap. */
 export const ASSET_NAME = "min-w-0 break-words";
 
-/** The value track, flush right on the same edge as the side's own total. */
-export const ASSET_VALUE = "shrink-0 text-[11px] font-medium tabular-nums";
+/**
+ * The value track, flush right on the same edge as the side's own total.
+ *
+ * On the display face, a size step down from the 11px it wore in the body face
+ * — Orbitron is wider, so holding the size would push a four-digit price into
+ * the name beside it. That is the rule the named list rows already follow, and
+ * `tabular-nums` is what keeps a column of them lining up once the face changes
+ * under them. Each tone decides its own colour and whether the numeral is cut
+ * into what it sits on (see `ASSET_TONES`).
+ */
+export const ASSET_VALUE =
+  "shrink-0 font-display text-[10px] font-medium tracking-[0.02em] tabular-nums";
 
 /**
  * The sign's box: a hair over its own width, so names in both tracks start at
  * one x whichever mark precedes them.
  */
 export const ASSET_BULLET = "mr-1 inline-block w-[0.7em] tabular-nums";
+
+/**
+ * One side's own box.
+ *
+ * **A region of the card's face, not a plate seated on it** — no fill, no wall,
+ * no radius, nothing that makes it an object. That is the whole correction the
+ * card was rebuilt for: a side used to wear `.lab-plate-sm` and the card's own
+ * construction one step down, and one step is not enough to read as
+ * containment, so a phone showed a column of manager plates rather than a list
+ * of trades. Nothing inside the card is built like a card because nothing
+ * inside it is built at all.
+ *
+ * The inset is the side's, not the face's: the face runs its regions edge to
+ * edge so a seam between two of them can reach both walls, and each region
+ * holds its own padding back off them.
+ */
+export const SIDE_ZONE = "min-w-0 px-3 py-2.5";
+
+/**
+ * The cut between two sides, in the two directions they can be adjacent in.
+ *
+ * A dark line with a lit far lip — the app's own milled seam, run **full
+ * bleed**. Reaching both edges is what makes it machining in one part; the same
+ * line inset from the edges is a border, and a border is what draws a box, and
+ * a box is the plate this card just stopped drawing.
+ *
+ * Two spellings because the sides stack below `sm` and split above it, so a
+ * seam that is horizontal on a phone is vertical on a laptop — the same
+ * geometry the tracks flip on, one level out. Which side gets which is
+ * arithmetic on the index rather than a flag: a side in the trailing column
+ * (`i % 2 === 1`) is cut on its leading edge, and one that starts a row
+ * (`i % 2 === 0`) is cut along its top. That is what puts a horizontal seam
+ * above the odd side of a three-way, which spans both columns and so is under
+ * both of them rather than beside either.
+ *
+ * Written as `inset` shadows on a box with no background, which paint fine —
+ * and as whole literals, since a class Tailwind cannot read is a class it does
+ * not emit.
+ */
+export const SIDE_SEAM_ROW =
+  "shadow-[inset_0_1px_0_rgba(0,0,0,0.75),inset_0_2px_0_rgba(255,255,255,0.07)]";
+
+export const SIDE_SEAM_COLUMN =
+  "shadow-[inset_0_1px_0_rgba(0,0,0,0.75),inset_0_2px_0_rgba(255,255,255,0.07)] sm:shadow-[inset_1px_0_0_rgba(0,0,0,0.75),inset_2px_0_0_rgba(255,255,255,0.07)]";
 
 /**
  * Two tracks side by side from `sm` up and stacked below it, which is the same

@@ -116,10 +116,14 @@ export const leagueQueryKeys = {
     [...leagueQueryKeys.league(leagueId), normalizeAdpQuery(board)] as const,
 };
 
-/** `/api/kickoff` — the header countdown's instant, per season. */
-export const scheduleQueryKeys = {
-  kickoff: (season: string) => ["kickoff", season] as const,
-};
+// `/api/kickoff`'s key went to `features/shared/schedule-query.ts` with the
+// header that reads it — the lineup checker wears the same plate, and a key
+// built in a tool that a shared component has to call is a key that tool can no
+// longer own. It was never manager-scoped in the first place (the instant is a
+// fact about a season), so nothing about its shape changed; it is re-exported
+// here for the consumers, this module's tests among them, that already read it
+// from here.
+export { scheduleQueryKeys } from "../shared/schedule-query.ts";
 
 /**
  * What a *material* change to a manager's leagues makes stale.

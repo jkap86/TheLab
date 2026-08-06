@@ -498,6 +498,33 @@ export type MatchupOpponentPayload = {
   avatar_url: string | null;
 };
 
+/**
+ * What a roster is starting this week against what it could be starting.
+ *
+ * The three travel together because two of them are only meaningful beside the
+ * third: a gap of 12 points is a different report on a 90-point week than on a
+ * 190-point one, and a reader who wants to know whether the gap is worth acting
+ * on needs the totals it came out of.
+ */
+export type MatchupProjectionPayload = {
+  /**
+   * The best lineup still *reachable* from this roster, in the league's own
+   * scoring — slots held by a player whose game has been played stay as they
+   * are, the rest are solved. Part-way through a week that is a different
+   * number from the best lineup outright, and it is the one worth sending: the
+   * other names moves the platform will refuse.
+   */
+  optimal: number;
+  /** What the lineup currently set projects for the same week. */
+  current: number;
+  /**
+   * `optimal − current` — points the manager can still go and get by moving
+   * somebody. Zero is a real answer and a good one: the lineup is already the
+   * best one available.
+   */
+  points_left: number;
+};
+
 /** One league's matchup for the manager: their roster, and who it is playing. */
 export type LeagueMatchupPayload = {
   roster_id: number;
@@ -508,15 +535,38 @@ export type LeagueMatchupPayload = {
    * says the week has not been fetched for it.
    */
   opponent: MatchupOpponentPayload | null;
+  /**
+   * The manager's own lineup for the week, or null where the league can't be
+   * projected — no slots or scoring on file, nothing stored for the week, or the
+   * projections read failed outright. Null is "no answer" and never a zero, the
+   * rule every projected number here keeps.
+   */
+  projection: MatchupProjectionPayload | null;
+  /**
+   * What the opponent's *current* lineup projects — the other half of a
+   * projected result.
+   *
+   * Their current lineup rather than their best one, because the question this
+   * answers is "am I winning this week as things stand", and crediting an
+   * opponent with a lineup they have not set would answer a question nobody
+   * asked. Null on a bye, and on the same terms {@link LeagueMatchupPayload.projection}
+   * is.
+   */
+  opponent_projection: number | null;
 };
 
 /**
  * `GET /api/user/[username]/matchups` — who the manager plays this week in each
- * of their leagues.
+ * of their leagues, and what both sides project.
  *
  * Read-only like its siblings: it answers from the matchups the league crawler
  * has stored, so a league the crawler has not reached this week is simply absent
  * rather than fetched on demand.
+ *
+ * The projections ride on the same payload rather than on a route of their own
+ * because they are the *same* question asked of the same rows: which week, whose
+ * roster, and whose roster on the other side. Two routes would each resolve the
+ * week and the rosters, and could disagree about them.
  *
  * The **week travels with the answer** because the caller cannot derive it: it is
  * read off stored game dates rather than a clock (see `getUpcomingWeek`), so a

@@ -8,6 +8,7 @@ import type { LineupComparison } from "./optimal";
 import {
   getProjectedStatKeys,
   getRemainingWeeks,
+  listLineupWeekStats,
   listPlayerWeekStats,
 } from "./queries";
 import { derivedScoring, scoreProjection, unprojectedScoring } from "./score";
@@ -267,6 +268,14 @@ export type LeagueTeamsInput = {
  * Null when there is nothing to project — no projectable league, or nothing left
  * on the schedule — so neither caller has to spell out the two ways that happens
  * before returning its own empty shape.
+ *
+ * {@link getWeekLineups} deliberately does *not* come through here, though it
+ * opens with the same two lines: it reads one named week and it needs the games
+ * already played, which is the opposite of what `listPlayerWeekStats` is for.
+ * What the three still share is every *rule* — `isProjectable`,
+ * `rosterPlayerIds`, `lineupCandidates`, the slot vocabulary — which is what the
+ * extraction into `./candidates` was actually for. This is I/O, and two
+ * genuinely different reads are two reads.
  */
 async function readBatchInputs(
   season: string,
@@ -442,4 +451,138 @@ export async function getOptimalLineups({
   }
 
   return { weeks, lineups };
+}
+
+/** What one team is starting this week against what it could still be starting. */
+export type TeamWeekLineup = {
+  /**
+   * The best lineup this roster can still reach: slots held by a player whose
+   * game has been played stay as they are, the rest are solved.
+   */
+  optimal_points: number;
+  /** What the lineup Sleeper currently holds projects for it. */
+  current_points: number;
+  /** `optimal − current`: the points the current lineup leaves on the bench. */
+  points_left: number;
+};
+
+export type WeekLineups = {
+  /** The week every number here is for — the caller's own, echoed back. */
+  week: number;
+  /**
+   * League id → roster id → that team's week. A league that can't be projected
+   * (no slots or scoring on file, no rosters) is absent, as is every league when
+   * the week has no stored projections left to read.
+   */
+  teams: Map<string, Map<number, TeamWeekLineup>>;
+};
+
+/**
+ * One week's current-versus-optimal lineup for every team across many leagues —
+ * the lineup checker's whole question, asked once for a hundred-odd leagues.
+ *
+ * The fourth batch entry point beside {@link getLeagueOutlook},
+ * {@link getWeeklyTeamPoints} and {@link getOptimalLineups}, and it differs from
+ * all three in the same way: they answer over the *rest of the season*, where a
+ * lineup being set this Sunday is a fact about one week. Summing a horizon
+ * answers a roster-shape question; this answers "what does today's lineup cost
+ * you", which is a different number and the only one a lineup checker can act
+ * on.
+ *
+ * It re-uses {@link compareLineup} rather than re-deriving the comparison, so
+ * the gap a row prints and the gap the expanded league panel prints are one
+ * rule — including the one that matters most as advice, that a starter with no
+ * projection scores zero rather than being quietly dropped from the lineup he is
+ * actually in.
+ *
+ * **Every team passed is solved**, the same contract {@link getOptimalLineups}
+ * keeps: a caller that only needs the two rosters in a matchup should pass those
+ * two, not the league.
+ *
+ * **It reads the week whole and locks what has been played**, which is the one
+ * place it parts company with everything else here. The horizon reads drop a
+ * played game because those points cannot be scored again; drop them from a
+ * lineup decision and a starter who has already played reads as an empty slot,
+ * so the solver seats a Sunday player over a Thursday one and the gap names a
+ * swap Sleeper will refuse. {@link listLineupWeekStats} keeps those rows and
+ * marks them, and {@link compareLineup} holds their slots — so what comes back
+ * is the best lineup reachable *from here*, and `points_left` is points a
+ * manager can still go and get. It is day-accurate, since `game_date` is a date:
+ * a finished early game stays movable until the date rolls over in ET.
+ */
+export async function getWeekLineups({
+  season,
+  week,
+  leagues,
+}: {
+  season: string;
+  week: number;
+  leagues: readonly LeagueTeamsInput[];
+}): Promise<WeekLineups> {
+  const projectable = leagues.filter(isProjectable);
+  if (projectable.length === 0) return { week, teams: new Map() };
+
+  const playerIds = rosterPlayerIds(projectable.flatMap((l) => l.teams));
+
+  const [stats, positions] = await Promise.all([
+    listLineupWeekStats({ season, week, playerIds }),
+    getFantasyPositions(playerIds),
+  ]);
+
+  // One set for the account: whether a game has been played is a fact about the
+  // schedule, so it is the same answer in every league the player is rostered in.
+  const locked = new Set(
+    stats.filter((row) => row.locked).map((row) => row.player_id),
+  );
+
+  // Bucketed by player once, so each league scores its own rosters' rows rather
+  // than re-scanning the whole account's union per league.
+  const rowsByPlayer = new Map<string, PlayerWeekStats[]>();
+  for (const row of stats) {
+    let rows = rowsByPlayer.get(row.player_id);
+    if (!rows) rowsByPlayer.set(row.player_id, (rows = []));
+    rows.push(row);
+  }
+
+  const teams = new Map<string, Map<number, TeamWeekLineup>>();
+  for (const league of projectable) {
+    const scoring = league.scoringSettings;
+    // One week asked for, so the grouping holds one entry — read through the
+    // same helper the horizon path uses rather than a second spelling of it.
+    const points =
+      groupWeeklyPoints(
+        rosterPlayerIds(league.teams).flatMap((id) => rowsByPlayer.get(id) ?? []),
+        (s) => scoreProjection(s, scoring),
+      ).get(week) ?? new Map<string, number>();
+
+    const byTeam = new Map<number, TeamWeekLineup>();
+    for (const team of league.teams) {
+      const candidates = lineupCandidates(
+        team,
+        positions,
+        // Zero for a player this week doesn't project, which is what
+        // `compareLineup` needs: he can only ever fill a slot nobody else
+        // wanted, and dropping him would overstate what the current lineup is
+        // scoring. (The horizon path omits him instead, because there the
+        // distinction is a bye rather than a zero — see `./weekly`.)
+        (id) => points.get(id) ?? 0,
+      );
+
+      const comparison = compareLineup({
+        rosterPositions: league.rosterPositions,
+        starters: team.starters,
+        players: candidates,
+        locked,
+      });
+
+      byTeam.set(team.roster_id, {
+        optimal_points: comparison.optimal_points,
+        current_points: comparison.current_points,
+        points_left: comparison.points_left,
+      });
+    }
+    teams.set(league.league_id, byTeam);
+  }
+
+  return { week, teams };
 }

@@ -55,7 +55,7 @@ export function LineupRow({
 
         {/* Numbers only, at every width — the billet above the list is what
             names these columns, exactly as it is on the leagues page. */}
-        <LineupStatColumns />
+        <LineupStatColumns matchup={matchup} />
       </div>
     </li>
   );

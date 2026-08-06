@@ -51,6 +51,17 @@ import { SyncStateLine } from "./sync-state.tsx";
  * Every `/manager/[searched]/…` view renders this. The identity, the season, the
  * sync state and the record are the same facts on all of them; only `stat`
  * differs, which is why it is a prop rather than three copies of this card.
+ *
+ * **The lineup checker renders it too, which is why the card is in
+ * `features/shared`.** What it swaps is the *aggregation* behind `record` — the
+ * season so far there, the week ahead here — and the plate draws both the same
+ * way because they are the same shape, counted by the same two rules (see
+ * {@link aggregateRecord}). The one thing that aggregation changes on the card
+ * is which instrument the readout slot wears: a projected week is a live number
+ * before kickoff where a season record is not, so that page passes
+ * `countdown={false}` and keeps the dial. What it brings none of is the leagues
+ * stream's sync state, so those three props are optional and the transient line
+ * is simply never drawn.
  */
 export function ManagerHeader({
   user,
@@ -65,6 +76,7 @@ export function ManagerHeader({
   stat,
   filters,
   columns,
+  countdown = true,
   pinned = true,
 }: ManagerHeaderProps) {
   const hasFilters = Boolean(filters);
@@ -139,6 +151,7 @@ export function ManagerHeader({
             record={record}
             scope={scope}
             leagueCount={leagueCount}
+            countdown={countdown}
             padding={bodyPadding(hasFilters)}
           />
 

@@ -2,6 +2,7 @@ import type {
   LeagueMatchupPayload,
   ManagerMatchupsPayload,
   MatchupOpponentPayload,
+  MatchupProjectionPayload,
 } from "@/shared/contract";
 
 /**
@@ -13,6 +14,7 @@ export type {
   LeagueMatchupPayload,
   ManagerMatchupsPayload,
   MatchupOpponentPayload,
+  MatchupProjectionPayload,
 };
 
 /** One league's matchup, under the name the components read it by. */
@@ -20,3 +22,6 @@ export type LeagueMatchup = LeagueMatchupPayload;
 
 /** The team on the other side of it. */
 export type MatchupOpponent = MatchupOpponentPayload;
+
+/** What a roster is starting this week against what it could be starting. */
+export type MatchupProjection = MatchupProjectionPayload;

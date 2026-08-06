@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { LeaguesResult, SyncProgress } from "../../types";
+import type { HeaderProgress, HeaderSyncSummary } from "./manager-header.types.ts";
 import { refreshingSuffix } from "./manager-header.utils.ts";
 
 /**
@@ -21,9 +21,9 @@ export function SyncStateLine({
   refreshError,
   padding,
 }: {
-  refreshing: boolean;
-  progress: SyncProgress | null;
-  summary: LeaguesResult["summary"];
+  refreshing?: boolean;
+  progress?: HeaderProgress | null;
+  summary?: HeaderSyncSummary;
   refreshError?: string | null;
   /** The seam under the row — see `statePadding`, which is what sizes it. */
   padding: string;
@@ -61,7 +61,7 @@ function Warning({ children }: { children: ReactNode }) {
   );
 }
 
-function RefreshingPill({ progress }: { progress: SyncProgress | null }) {
+function RefreshingPill({ progress }: { progress?: HeaderProgress | null }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-active/30 bg-active/10 px-2.5 py-0.5 text-active">
       <span

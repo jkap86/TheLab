@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { OverallRecord } from "../../record";
-import type { LeaguesResult, SyncProgress } from "../../types";
+import type {
+  HeaderProgress,
+  HeaderSyncSummary,
+} from "./manager-header.types.ts";
 import {
   bodyPadding,
   hasSyncState,
@@ -23,12 +26,12 @@ const record = (over: Partial<OverallRecord> = {}): OverallRecord => ({
 });
 
 const summary = (
-  over: Partial<NonNullable<LeaguesResult["summary"]>> = {},
-): LeaguesResult["summary"] =>
-  ({ failed: 0, locked: false, ...over }) as LeaguesResult["summary"];
+  over: Partial<NonNullable<HeaderSyncSummary>> = {},
+): HeaderSyncSummary =>
+  ({ failed: 0, locked: false, ...over }) as HeaderSyncSummary;
 
-const progress = (over: Partial<SyncProgress> = {}): SyncProgress =>
-  ({ type: "progress", phase: "refresh", loaded: 4, total: 12, failed: 0, ...over }) as SyncProgress;
+const progress = (over: Partial<HeaderProgress> = {}): HeaderProgress =>
+  ({ type: "progress", phase: "refresh", loaded: 4, total: 12, failed: 0, ...over }) as HeaderProgress;
 
 describe("the plate's two seams", () => {
   // The key sits in the bottom-right corner, so whichever row is the plate's

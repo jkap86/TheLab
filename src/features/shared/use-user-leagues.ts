@@ -11,6 +11,18 @@ import { takeLines } from "./ndjson";
 
 export type UserLeaguesState = {
   leagues: ManagerLeague[] | null;
+  /**
+   * The season those leagues are for, as the route resolved it — null until the
+   * first `result` lands.
+   *
+   * It rides on the stream and was simply discarded here, which was fine while
+   * the only consumer was a menu of league names. The lineup checker's plate
+   * states the season it is reading, and the honest source for that is the
+   * answer itself: re-deriving it on the client would be a guess about when
+   * Sleeper rolls a league year over, and reading it off a *second* payload
+   * would be two answers to one question.
+   */
+  season: string | null;
   loading: boolean;
   error: string | null;
 };
@@ -32,6 +44,7 @@ export type UserLeaguesState = {
  */
 export function useUserLeagues(userId: string | null): UserLeaguesState {
   const [leagues, setLeagues] = useState<ManagerLeague[] | null>(null);
+  const [season, setSeason] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +56,7 @@ export function useUserLeagues(userId: string | null): UserLeaguesState {
       // Clear the previous account up front so a slow fetch never leaves the
       // last one's leagues in the menu underneath a newly resolved id.
       setLeagues(null);
+      setSeason(null);
       setError(null);
       if (!userId) {
         setLoading(false);
@@ -73,6 +87,7 @@ export function useUserLeagues(userId: string | null): UserLeaguesState {
             const message = JSON.parse(line) as LeaguesStreamMessage;
             if (message.type === "result") {
               setLeagues(message.leagues);
+              setSeason(message.season);
               setLoading(false);
             } else if (message.type === "error") {
               // Keep the first error: later ones are usually knock-on effects.
@@ -96,5 +111,5 @@ export function useUserLeagues(userId: string | null): UserLeaguesState {
     };
   }, [userId]);
 
-  return { leagues, loading, error };
+  return { leagues, season, loading, error };
 }
