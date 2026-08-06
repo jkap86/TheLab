@@ -2259,7 +2259,8 @@ stops holding, a comment saying it does would not have caught it.
   stops following the scroll. `relative` rather than nothing, because the fade
   below the header is an `::after` on that box.
 - **An open league card is one screen: pulled to the top, capped there, and
-  scrolling inside itself.** The panel is several hundred rows in a deep dynasty
+  scrolling inside itself** (in two places — see the bullet after this one). The
+  panel is several hundred rows in a deep dynasty
   league, so left to run it pushed its own card's head off the top of the screen
   and the rest of the list several screens down. Four pieces hold the correction
   up, and each is easy to undo by treating the cap as styling:
@@ -2282,14 +2283,48 @@ stops holding, a comment saying it does would not have caught it.
     it had to say. `min-h-0` is what allows the shrink at all, and the card's
     head is `shrink-0` because the league's name is what says which panel this
     is.
-  - **The cap is `svh`, and the scroll box repeats the card's radius.** `svh` is
-    the viewport *with* the browser's own chrome showing, which is the only unit
-    that keeps the promise on a phone; `dvh` would grow and shrink the card as
-    that chrome hides, which on a scrolling panel reads as the page fighting the
-    finger. A scroll container clips, so without `rounded-b-xl` the last roster
-    row paints square across the card's rounded corners — and `overscroll-contain`
-    keeps a flick at the end of the panel from carrying on into the list behind
-    it.
+  - **The cap is `svh`, and the box under the head repeats the card's radius.**
+    `svh` is the viewport *with* the browser's own chrome showing, which is the
+    only unit that keeps the promise on a phone; `dvh` would grow and shrink the
+    card as that chrome hides, which on a scrolling panel reads as the page
+    fighting the finger. That box clips, so without `rounded-b-xl` the last
+    roster row paints square across the card's rounded corners.
+- **What scrolls under that cap is each half of the panel, not the card's
+  contents.** One scroll box over the whole panel is the obvious spelling and it
+  takes the wrong things with it. The telemetry strip states the *selected*
+  team's rank and totals and the row that selects one is in the table below, so
+  scrolling the roster left three numbers on screen with nothing naming whose
+  they were; each half's column headings are what say which metric its value
+  columns are pointed at, so a list past its own heading is a column of
+  unlabelled numbers — and those headings are the pickers, so the panel's only
+  controls were the first thing to leave. And the two lists are wildly unequal
+  (a forty-row roster beside a twelve-team table), which is the case for
+  scrolling them separately rather than together: finding a player took the
+  standings with him. Four things hold it up:
+  - **It is a height chain, not an `overflow` class.** Card → animation wrapper →
+    clip box → panel → body → the grid → each half → its own list, and every link
+    is `0 1 auto` with `min-h-0`. Nothing is `flex-1`, which is what keeps a short
+    panel exactly as tall as its contents; `min-h-0` at each link is what lets an
+    overrunning one shrink, since a flex item's floor is its own content
+    otherwise. A single missing `min-h-0` anywhere on that chain doesn't error, it
+    just puts the scrollbar back on the page.
+  - **The grid holding the two halves needs `grid-rows-[minmax(0,1fr)]`.** A bare
+    `1fr` row is `minmax(auto,1fr)`, and that auto minimum is the taller half's
+    full height — the row refuses to be smaller than the list it is supposed to be
+    scrolling, so the panel overruns the cap with no scrollbar anywhere.
+  - **A picker cannot live inside the box it scrolls.** Its menu is absolutely
+    positioned and overhangs the rows under it, so a scroll box clips it the
+    moment it opens *and* scrolls it away from its own trigger. The standings'
+    heading row was already above its `<ul>`; the roster's were inside each
+    section, drawing the same two labels twice for one shared selection, so they
+    are one `ColumnRail` above the scroll box now — the leagues list's own rule
+    about naming a list-wide selection once above the list.
+  - **What stays fixed is what qualifies the numbers.** The standings' week range
+    is a footer outside its scroll box, and the outlook caveat sits outside both;
+    the roster's value footnote and draft picks scroll *with* the list, because
+    they are its tail rather than a note over it. `overscroll-contain` moved onto
+    the two lists with the scrolling, so a flick at the end of either doesn't
+    carry on into the page behind the card.
 - **The header is one plate with the filters' key seated in its bottom edge, and
   it got there in two moves worth reading together.** It was one card stacking
   identity, the season, the record and both control pills, which on a phone was
@@ -3403,9 +3438,11 @@ stops holding, a comment saying it does would not have caught it.
   quarterback projected 361 points behind two better starters is worth *nothing* —
   none of it reaches a lineup — while one projected 398 is worth only the 46 he
   scores in the two weeks he is the better start, and a single total calls those
-  the same. The columns are labelled once per section (`RosterSection` takes
-  `columns`, sized to match the cells so the headings stay over them) rather than
-  on every row. IR and taxi are no longer a section of their own: a stashed player
+  the same. The columns are labelled once for the whole half (`ColumnRail`, laid
+  on the sections' own `SectionLayout` grid so the headings stay over the cells)
+  rather than on every row — and once rather than per section, since the
+  selection is shared and one of the two labels was always a copy of the other.
+  IR and taxi are no longer a section of their own: a stashed player
   is treated as bench depth that could be started, so it sits in the bench list
   with the same `start`/`bench` split as the rest of it (the user chose this over
   keeping them unstartable — Sleeper needs a roster move to seat one).

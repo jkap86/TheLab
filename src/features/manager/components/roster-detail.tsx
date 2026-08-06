@@ -42,9 +42,16 @@ type SlotRow = { slot: string; player_id: string };
  *
  * The two value columns beside each player are slots the reader points at a
  * player-level metric — the projected start/bench split to start with, swappable
- * to the season total or to this player's KTC and ADP value from the heading's
- * picker. Which metric each shows is held above this panel so the two sections'
+ * to the season total or to this player's KTC and ADP value from the rail above
+ * the list. Which metric each shows is held above this panel so the two sections'
  * columns line up and one picker moves the whole column.
+ *
+ * **The head is fixed and the two sections scroll under it.** This half scrolls
+ * on its own (see {@link LeagueDetailPanel}), and what is above the scroll box is
+ * what a scrolled roster can't do without: the moves to make, and the rail naming
+ * the two number columns — which is also the control that aims them, and which
+ * could not stay inside the box in any case, since its menu overhangs the rows
+ * it would be clipped by.
  *
  * It names no team of its own. The plate that used to head it — avatar, team name
  * and record — restated the standings row that is already highlighted a few pixels
@@ -139,73 +146,135 @@ export function RosterDetail({
     // field of standings beside it. `.lab-plate-sm` is the panel body's own face
     // at half the thickness — two surfaces at equal thickness read as two
     // instruments that happen to be adjacent rather than as a part seated in one.
+    //
+    // A flex column, because this half scrolls on its own inside the card's cap
+    // (see `LeagueDetailPanel`): the lineup summary and the column rail are the
+    // head it scrolls under, and only the list below them moves.
     <div
-      className={`lab-plate lab-plate-sm rounded-lg p-1.5 @lg:p-4 ${
+      className={`lab-plate lab-plate-sm flex min-h-0 flex-col rounded-lg p-1.5 @lg:p-4 ${
         elevated ? "relative z-30" : ""
       }`}
     >
       {teamOutlook && <LineupSummary teamOutlook={teamOutlook} players={players} />}
 
-      <RosterSection
-        title="Starters"
+      <ColumnRail
         layout={lineupLayout}
         valueColumns={valueColumns}
-        sectionKey="starters"
         openPicker={openPicker}
         onTogglePicker={onTogglePicker}
         onSelectColumn={onSelectColumn}
-      >
-        {starters.map((row, i) => (
-          <PlayerRow
-            key={`s-${i}`}
-            player={players[row.player_id]}
-            playerId={row.player_id}
-            slot={row.slot}
-            outlook={outlook?.players[row.player_id]}
-            split={teamOutlook?.weekly_split[row.player_id]}
-            layout={lineupLayout}
-            columns={valueColumns}
-            values={values}
-            horizon={horizon}
-            promoted={teamOutlook?.start.includes(row.player_id)}
-          />
-        ))}
-      </RosterSection>
+      />
 
-      {bench.length > 0 && (
-        <RosterSection
-          title="Bench"
-          layout={lineupLayout}
-          valueColumns={valueColumns}
-          sectionKey="bench"
-          openPicker={openPicker}
-          onTogglePicker={onTogglePicker}
-          onSelectColumn={onSelectColumn}
-        >
-          {bench.map((id) => (
+      {/* One scroll box over both sections rather than one each, because the
+          bench is where a reader is heading when they scroll at all and a
+          starters list that held its own scrollbar would put a boundary in the
+          middle of one lineup. The footnote and the picks travel with it: they
+          are the tail of this list, not a fixed footer over it — where the
+          standings' week range is fixed because it qualifies numbers that are
+          on screen the whole time. */}
+      <div className="min-h-0 overflow-y-auto overscroll-contain">
+        <RosterSection title="Starters" layout={lineupLayout}>
+          {starters.map((row, i) => (
             <PlayerRow
-              key={id}
-              player={players[id]}
-              playerId={id}
-              outlook={outlook?.players[id]}
-              split={teamOutlook?.weekly_split[id]}
+              key={`s-${i}`}
+              player={players[row.player_id]}
+              playerId={row.player_id}
+              slot={row.slot}
+              outlook={outlook?.players[row.player_id]}
+              split={teamOutlook?.weekly_split[row.player_id]}
               layout={lineupLayout}
               columns={valueColumns}
               values={values}
               horizon={horizon}
-              benched={teamOutlook?.sit.includes(id)}
+              promoted={teamOutlook?.start.includes(row.player_id)}
             />
           ))}
         </RosterSection>
-      )}
 
-      <ValueFootnote columns={valueColumns} values={values} />
+        {bench.length > 0 && (
+          <RosterSection title="Bench" layout={lineupLayout}>
+            {bench.map((id) => (
+              <PlayerRow
+                key={id}
+                player={players[id]}
+                playerId={id}
+                outlook={outlook?.players[id]}
+                split={teamOutlook?.weekly_split[id]}
+                layout={lineupLayout}
+                columns={valueColumns}
+                values={values}
+                horizon={horizon}
+                benched={teamOutlook?.sit.includes(id)}
+              />
+            ))}
+          </RosterSection>
+        )}
 
-      <DraftPicks
-        picks={team.picks}
-        rosterId={team.roster_id}
-        teamsById={teamsById}
-      />
+        <ValueFootnote columns={valueColumns} values={values} />
+
+        <DraftPicks
+          picks={team.picks}
+          rosterId={team.roster_id}
+          teamsById={teamsById}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The two value columns' headings, once for the whole half.
+ *
+ * They used to sit in each section's own heading, which drew the same two labels
+ * twice — one selection, two places claiming it, since a pick in either moves
+ * both — and put a control inside the box that scrolls. Both matter now that this
+ * half scrolls: a picker carried off the top takes the only thing naming those
+ * columns with it, and its menu (absolutely positioned, overhanging the rows
+ * under it) would be clipped by the scroll box the moment it opened. Hoisted, it
+ * is the same rail the leagues list draws above its cards, for the same reason —
+ * a list-wide selection named once above the list rather than on every row.
+ *
+ * Laid on the sections' own grid so each label sits over the numbers it names.
+ * The name track is left empty rather than captioned: the section titles under
+ * it already say what the rows are, and a second heading word stacked on the
+ * first would be the duplication this just removed.
+ */
+function ColumnRail({
+  layout,
+  valueColumns,
+  openPicker,
+  onTogglePicker,
+  onSelectColumn,
+}: {
+  layout: SectionLayout;
+  /** The two value columns' metric keys — empty when the half shows no numbers. */
+  valueColumns: string[];
+  openPicker: string | null;
+  onTogglePicker: (key: string) => void;
+  onSelectColumn: (slot: number, key: string) => void;
+}) {
+  // Nothing to name, so no rail: a league with no projections and nothing priced
+  // would otherwise spend a line on two empty tracks.
+  if (valueColumns.length === 0) return null;
+
+  return (
+    <div className={`mb-1.5 grid shrink-0 ${layout.grid} items-baseline gap-x-2`}>
+      <span />
+      <span />
+      {valueColumns.map((key, slot) => (
+        <ColumnPicker
+          key={slot}
+          // Paired with the layout's grid template and the rows' own cells: the
+          // second column appears only once this half is wide enough.
+          wrapperClassName={slot === 0 ? "inline-flex" : "hidden @xl:inline-flex"}
+          className="text-[0.6rem]"
+          options={PLAYER_METRIC_OPTIONS}
+          activeKey={key}
+          open={openPicker === `roster-${slot}`}
+          onToggle={() => onTogglePicker(`roster-${slot}`)}
+          onSelect={(metricKey) => onSelectColumn(slot, metricKey)}
+        />
+      ))}
     </div>
   );
 }
@@ -237,7 +306,10 @@ function LineupSummary({
   if (!moves && teamOutlook.unknown_slots.length === 0) return null;
 
   return (
-    <div className="space-y-1.5">
+    // `mb-3` rather than the section below taking `mt-3`: the rail sits between
+    // the two now, and this half's head has to hold its own gap since only what
+    // is under it scrolls.
+    <div className="mb-3 shrink-0 space-y-1.5">
       {moves && (
         <p className="text-[0.7rem] leading-relaxed text-foreground/50">
           {teamOutlook.start.length > 0 && (
@@ -267,38 +339,25 @@ function LineupSummary({
 }
 
 /**
- * A titled group of rows, with the numeric columns labelled once at the top
- * rather than on every row.
+ * A titled group of rows.
  *
- * Laid out on the same grid as its rows, so the headings sit over the numbers they
- * name. The first cell is the empty slot gutter — the headings start where the
- * names do. Each value column's heading is a picker: clicking it swaps the whole
- * column (in both sections at once) to another metric.
+ * Laid out on the same grid as its rows, so the title starts where the names do —
+ * the first cell is the empty slot gutter. It names the *rows*; what names the
+ * numbers beside them is {@link ColumnRail}, once for both sections, above the
+ * box this scrolls in.
  */
 function RosterSection({
   title,
   layout,
-  valueColumns,
-  sectionKey,
-  openPicker,
-  onTogglePicker,
-  onSelectColumn,
   children,
 }: {
   title: string;
   layout: SectionLayout;
-  /** The two value columns' metric keys — empty when the section shows no numbers. */
-  valueColumns: string[];
-  /** Distinguishes this section's open picker from the other's; selection is shared. */
-  sectionKey: string;
-  openPicker: string | null;
-  onTogglePicker: (key: string) => void;
-  onSelectColumn: (slot: number, key: string) => void;
   children: React.ReactNode;
 }) {
   return (
-    // `first:mt-0` because the lineup summary above is conditional: with nothing
-    // to say about the bench, the Starters heading is the panel's first line.
+    // `first:mt-0` because this is the first thing in the scroll box: the head
+    // above holds its own bottom gap, so a top margin here would double it.
     <div className="mt-3 first:mt-0">
       <div className={`mb-1.5 grid ${layout.grid} items-baseline gap-x-2`}>
         <span />
@@ -312,22 +371,6 @@ function RosterSection({
         <h3 className="min-w-0 truncate text-[0.65rem] font-medium uppercase tracking-wide text-foreground/35 @lg:text-xs">
           {title}
         </h3>
-        {valueColumns.map((key, slot) => (
-          <ColumnPicker
-            key={slot}
-            // Paired with the layout's grid template and the rows' own cells:
-            // the second column appears only once this half is wide enough.
-            wrapperClassName={
-              slot === 0 ? "inline-flex" : "hidden @xl:inline-flex"
-            }
-            className="text-[0.6rem]"
-            options={PLAYER_METRIC_OPTIONS}
-            activeKey={key}
-            open={openPicker === `${sectionKey}-${slot}`}
-            onToggle={() => onTogglePicker(`${sectionKey}-${slot}`)}
-            onSelect={(metricKey) => onSelectColumn(slot, metricKey)}
-          />
-        ))}
       </div>
       <ul className="flex flex-col divide-y divide-foreground/5">{children}</ul>
     </div>

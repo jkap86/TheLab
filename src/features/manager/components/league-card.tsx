@@ -52,9 +52,12 @@ import { Chevron } from "./ui";
  * state.** Expanding pulls the card up under the app bar, pins it there, unpins
  * the manager plate above it (see {@link ManagerHeader}) and caps the panel at
  * the viewport so the detail scrolls inside the card rather than running off the
- * bottom of a page several screens long. Every one of those is a claim only one
- * card can make at a time, so which league is open is held in
- * {@link ManagerLeagues} and arrives here as a prop.
+ * bottom of a page several screens long. What scrolls under that cap is each of
+ * the panel's two halves on its own, not the card's whole contents — the strip
+ * naming the selected team's rank and totals and each list's column headings
+ * stay put, which is the point of capping it in the first place. Every one of
+ * those is a claim only one card can make at a time, so which league is open is
+ * held in {@link ManagerLeagues} and arrives here as a prop.
  *
  * **It opens and closes as a movement, which is why the panel outlives the press
  * that closed it.** A card appearing and vanishing at full height moved the rows
@@ -325,20 +328,26 @@ export function LeagueCard({
           across one. The padding under it belongs to the panel, which is where
           the container query that sizes it can see a width.
 
-          This is the box that scrolls. It takes no `flex-1`: a flex item's
-          default is `0 1 auto`, so a short panel — a league still loading, or a
-          shallow one — is exactly as tall as its contents, and only one that
-          would run past the card's ceiling shrinks into it and scrolls. `flex-1`
-          would stretch every open card to the full screen whatever it had to
-          say. `min-h-0` is what lets that shrink happen at all, since a flex
-          item's floor is its content size otherwise.
+          This is the box the card's ceiling is spent through, and it takes no
+          `flex-1`: a flex item's default is `0 1 auto`, so a short panel — a
+          league still loading, or a shallow one — is exactly as tall as its
+          contents, and only one that would run past the card's ceiling shrinks
+          into it. `flex-1` would stretch every open card to the full screen
+          whatever it had to say. `min-h-0` is what lets that shrink happen at
+          all, since a flex item's floor is its content size otherwise.
 
-          The radius is repeated here because a scroll container clips: without
-          it the last roster row paints square across the card's rounded bottom
-          corners. `overscroll-contain` keeps a flick at the end of the panel
-          from carrying on into the page behind it — the card is the thing being
-          read, and scroll chaining out of it is the list moving under a reader
-          who was pulling on a roster. */}
+          **It clips; it no longer scrolls.** One scroll box over the whole panel
+          carried the readout strip and both column headings away with the rows,
+          so the numbers a reader had scrolled to were unlabelled and the team
+          the roster belongs to unnamed. The scrolling moved down into the two
+          halves, which each keep their own heading fixed over their own list
+          (see {@link LeagueDetailPanel}) — so what is left here is the clip the
+          collapse animation needs, since a `0fr` grid row only hides what its
+          item is willing to cut off.
+
+          The radius is repeated here for the same reason it always was: a
+          clipping box squares its corners otherwise, and the last roster row
+          would paint across the card's rounded bottom. */}
       {/* The height is animated through `grid-template-rows`, 0fr to 1fr, which
           is the one way to transition to a height nobody knows: the panel's is
           whatever the league's standings and rosters come to, and it changes
@@ -359,7 +368,7 @@ export function LeagueCard({
             open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
           }`}
         >
-          <div className="relative min-h-0 overflow-y-auto overscroll-contain rounded-b-xl">
+          <div className="relative flex min-h-0 flex-col overflow-hidden rounded-b-xl">
             <LeagueDetailPanel leagueId={league.league_id} />
           </div>
         </div>

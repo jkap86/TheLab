@@ -23,6 +23,33 @@ import { PanelLoading, PanelMessage } from "./ui";
  * The expanded contents of a league card: standings on the left, the selected
  * team's roster on the right. Loads its own data the first time it mounts,
  * which is when its card is expanded.
+ *
+ * **The panel is a fixed head over two independently scrolling halves.** The
+ * card caps itself at the viewport, and the whole panel used to scroll inside
+ * that cap as one box — which carried away the two things a reader needs in
+ * order to read what is left. The telemetry strip states the *selected* team's
+ * rank and totals, so scrolling the roster out from under it left the numbers
+ * describing a team the panel no longer named; and each half's column headings
+ * are what say which metric its value columns are pointed at, so a list scrolled
+ * past its own heading is a column of unlabelled numbers. Both are also the
+ * panel's only controls (the headings are the column pickers), and a control
+ * that scrolls away is one you have to go back for.
+ *
+ * The two halves scroll separately rather than together for the reason they are
+ * side by side at all: reading one against the other is the point, and a roster
+ * forty rows deep beside a twelve-team table means one list runs out long before
+ * the other. Scrolled as one box, finding a player meant taking the standings
+ * with him.
+ *
+ * That takes a height chain rather than a `overflow` class, and every link in it
+ * is `0 1 auto` on purpose — nothing here is `flex-1`, so a short panel is still
+ * exactly as tall as its contents and only one that would run past the card's
+ * ceiling shrinks into it. `min-h-0` at each link is what allows that shrink,
+ * since a flex item's floor is its own content otherwise, and the grid holding
+ * the two halves needs `grid-rows-[minmax(0,1fr)]` for the same reason one step
+ * over: a bare `1fr` row is `minmax(auto,1fr)`, whose auto minimum is the taller
+ * half's full height — the row would refuse to be smaller than the list it is
+ * supposed to be scrolling.
  */
 export function LeagueDetailPanel({ leagueId }: { leagueId: string }) {
   // The same board the collapsed card above is priced on, read from the same
@@ -40,8 +67,13 @@ export function LeagueDetailPanel({ leagueId }: { leagueId: string }) {
   // in nothing (the padding belongs to what is drawn on the card's face, not to
   // the act of expanding). It holds no box of its own, per the rule an
   // `@container` has to keep: an element is never its own query container.
+  //
+  // The flex column is the first link of the height chain the two halves scroll
+  // through, and it is not a box in that sense: none of these classes is a
+  // `@`-prefixed variant, so nothing here is measured against the container it
+  // declares.
   return (
-    <div className="@container">
+    <div className="@container flex min-h-0 flex-col">
       {loading && !data ? (
         <PanelState>
           <PanelLoading>Loading rosters…</PanelLoading>
@@ -179,11 +211,13 @@ function Panel({ data }: { data: LeagueDetailResult }) {
   // one level up, around every state this panel can be in; this div holds only
   // the ref the pickers' outside-click test reads.
   return (
-    <div ref={panelRef}>
+    <div ref={panelRef} className="flex min-h-0 flex-col">
       {/* Outside the inset on purpose: the readout is the card's head
           continuing, so it runs the full width under its own seam rather than
           sitting in the body as a third object between the name and the
-          detail. */}
+          detail. It is also the line that must not move — it names the team
+          both halves are about — which is what `shrink-0` on its own root says
+          now that the halves below it are what scroll. */}
       {data.outlook && (
         <PanelTelemetry
           outlook={data.outlook}
@@ -192,8 +226,8 @@ function Panel({ data }: { data: LeagueDetailResult }) {
           )}
         />
       )}
-      <div className="pb-3 pl-3 pr-2 pt-2 @lg:pb-5 @lg:pl-5 @lg:pr-4 @lg:pt-3">
-        <div className="grid grid-cols-2 gap-1.5 @lg:gap-4">
+      <div className="flex min-h-0 flex-col pb-3 pl-3 pr-2 pt-2 @lg:pb-5 @lg:pl-5 @lg:pr-4 @lg:pt-3">
+        <div className="grid min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-1.5 @lg:gap-4">
           <Standings
             teams={teams}
             outlook={data.outlook}
@@ -238,7 +272,8 @@ function Panel({ data }: { data: LeagueDetailResult }) {
  * that pays for them, and there is nothing to gate on.
  *
  * League-level facts, so they are stated once under the panel rather than on each
- * team.
+ * team — and outside the halves' scroll boxes, so a caveat about the numbers
+ * stays on screen with the numbers it is about.
  */
 function OutlookCaveat({ data }: { data: LeagueDetailResult }) {
   const missing = data.outlook?.unprojected_scoring.length ?? 0;
@@ -249,7 +284,7 @@ function OutlookCaveat({ data }: { data: LeagueDetailResult }) {
   if (derived.length === 0 && (missing === 0 || !startsDefence)) return null;
 
   return (
-    <div className="mt-2 space-y-1 text-[0.7rem] leading-relaxed text-foreground/40">
+    <div className="mt-2 shrink-0 space-y-1 text-[0.7rem] leading-relaxed text-foreground/40">
       {derived.length > 0 && (
         <p>
           This league scores {derived.join(", ")}, which Sleeper publishes as a
