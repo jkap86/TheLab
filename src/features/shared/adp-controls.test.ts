@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import {
   ADP_PEAK,
+  DEFAULT_ADP_ROUNDS,
   DEFAULT_ADP_STEEPNESS,
   adpBoardRows,
   adpNarrowingCount,
@@ -53,13 +54,26 @@ const params = (query: string) =>
   Object.fromEntries(new URLSearchParams(query).entries());
 
 describe("adpQueryString", () => {
-  test("the default board sends one whole season, snake+linear, and nothing else", () => {
+  test("the default board sends one whole season of startups, snake+linear, and nothing else", () => {
+    // The rounds bound is the one filter the board opens *with*: pooling rookie
+    // drafts into a startup average prices every rookie off two different games.
     const query = params(adpQueryString(defaultAdpControls(SEASON), TODAY));
     assert.deepEqual(query, {
       limit: "1000",
       season: "2026",
       draft_type: "snake,linear",
+      rounds_min: "12",
     });
+  });
+
+  test("the default board is the startup bucket, not a second spelling of it", () => {
+    // Pinned through the exported constant rather than the literal, so the
+    // default and what the trigger measures departure from cannot drift apart.
+    assert.equal(defaultAdpControls(SEASON).rounds, DEFAULT_ADP_ROUNDS);
+    assert.equal(
+      adpQueryString(defaultAdpControls(SEASON), TODAY),
+      adpQueryString({ ...defaultAdpControls(SEASON), rounds: "full" }, TODAY),
+    );
   });
 
   test("season is always sent, narrowed window or not", () => {
@@ -104,6 +118,7 @@ describe("adpQueryString", () => {
         limit: "1000",
         season: "2026",
         draft_type: "snake,linear",
+        rounds_min: "12",
         start_after: "2026-06-01",
         start_before: "2026-07-31",
       },
@@ -612,6 +627,16 @@ describe("adpNarrowingCount", () => {
     // its days-less spelling bounds nothing and must not light the trigger.
     assert.equal(range({ preset: "lookback", from: null, to: null, days: 45 }), 1);
     assert.equal(range({ preset: "lookback", from: null, to: null }), 0);
+  });
+
+  test("the rounds bucket counts against its default, not against 'all'", () => {
+    // The board opens on startups, so that is the board everybody else is
+    // reading and it must leave the trigger dark; widening to every draft is a
+    // real departure from it even though it narrows less.
+    const base = defaultAdpControls(SEASON);
+    assert.equal(adpNarrowingCount({ ...base, rounds: DEFAULT_ADP_ROUNDS }, SEASON), 0);
+    assert.equal(adpNarrowingCount({ ...base, rounds: "all" }, SEASON), 1);
+    assert.equal(adpNarrowingCount({ ...base, rounds: "rookie" }, SEASON), 1);
   });
 
   test("a season other than the default counts", () => {

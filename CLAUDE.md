@@ -1761,6 +1761,40 @@ stops holding, a comment saying it does would not have caught it.
   than what market it priced, and left the startup-against-rookie cut spelled out
   as `≤5 rds` in a second chip.
 
+  **That chip is the one filter the board *opens* narrowed
+  (`DEFAULT_ADP_ROUNDS`), and "unnarrowed" was the wrong default because the
+  population is two games.** It used to open on "All drafts", on the reasoning
+  that a default should cut nothing and let the reader choose — which reads as
+  neutral and isn't: a dynasty rookie goes in the first round or two of a rookie
+  draft and somewhere in the middle of a startup, so pooling the two averages
+  two markets, and the rookies are the rows it is wrong about, which are the rows
+  a dynasty board is most often opened for. It is the same call `draft_type`
+  already made one rule down — a board is never over auctions — and it stops
+  short of that call for the same reason it stayed a chip: a rookie draft's 1.01
+  *is* a draft position, so the rookie board is one somebody can want, it is just
+  not what the panel opens on. The bucket is `full` (12+ rounds), the one
+  labelled "Startup", so the ambiguous 6–11 round middle the two buckets
+  deliberately leave to `all` stays out of a board named for startups too.
+
+  Two knock-ons, and they pull in opposite directions on purpose. The trigger's
+  `adpNarrowingCount` compares every field to **its default** rather than to
+  "all" — the season already worked that way and this is the precedent it set —
+  or the bars would light for every reader on every page and stop meaning "your
+  board differs from theirs". The drawer's own closed filter row keeps comparing
+  to `"all"` (`narrowingFilters`), so the Startup chip is on it from the start:
+  that row says what the population in front of the reader is cut by, and a
+  startup-only board saying nothing would leave its largest fact about itself
+  unsaid — the chip is also the only way back to every draft. Two questions, two
+  comparisons; collapsing them to one is how either the badge lies or the cut
+  goes unmentioned.
+
+  What this deliberately does **not** touch is the Leagues tab's team value:
+  `adpBoardFor` leaves rounds broad on purpose (matching too many axes trades a
+  little pick-scale smearing for a lot of noise), and it is a server-side board
+  the drawer does not drive at all. The same rookie-pooling argument applies to
+  it and is a larger change than this one — it moves every league card's number,
+  where this moves a panel a reader is looking at.
+
   **The pinned block is four rows, and each one it lost was a row reporting that
   nothing was set.** It was six — a header, a labelled season row, a labelled
   window row, three wrapped rows of filter chips and a two-line curve — at

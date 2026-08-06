@@ -420,7 +420,11 @@ describe("what the controls do", () => {
     const closed = elements(
       AdpFilterBar({ ...filterBarProps, controls, filters, open: false }),
     ).filter((el) => typeof el.props.ariaLabel === "string");
-    assert.deepEqual(closed.map((el) => el.props.ariaLabel), ["Scoring"]);
+    // The kind-of-draft chip is on the closed row untouched, because the board
+    // opens on startups: this row says what the population in front of the
+    // reader is cut by, and a startup-only board saying nothing would leave its
+    // largest fact about itself unsaid. It is also the way back to every draft.
+    assert.deepEqual(closed.map((el) => el.props.ariaLabel), ["Kind of draft", "Scoring"]);
 
     const open = elements(
       AdpFilterBar({ ...filterBarProps, controls, filters, open: true }),
