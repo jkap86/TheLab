@@ -9,6 +9,7 @@ export {
   listWeekProjections,
   getLatestStoredWeek,
   getRemainingWeeks,
+  getUpcomingWeek,
   listPlayerWeekStats,
   getProjectedStatKeys,
 } from "./queries";
