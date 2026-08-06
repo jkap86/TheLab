@@ -25,6 +25,7 @@ export function ManagerSummary({
   record,
   scope,
   leagueCount,
+  countdown,
   padding,
 }: {
   user: UserInfo;
@@ -32,6 +33,8 @@ export function ManagerSummary({
   record: OverallRecord;
   scope: string | null;
   leagueCount: number;
+  /** Whether the readout may run a clock — see {@link ManagerHeaderProps}. */
+  countdown: boolean;
   /** The seam under the row — see `bodyPadding`, which is what sizes it. */
   padding: string;
 }) {
@@ -54,7 +57,7 @@ export function ManagerSummary({
         <RecordBar record={record} />
       </div>
 
-      <HeaderReadout season={season} pct={record.pct} />
+      <HeaderReadout season={season} pct={record.pct} countdown={countdown} />
     </div>
   );
 }

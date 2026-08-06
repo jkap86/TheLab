@@ -82,6 +82,24 @@ export type ManagerHeaderProps = {
   /** The view's own headline count, worn as the plate's top-right corner tab. */
   stat: HeaderStat;
   /**
+   * Whether the readout may give its slot to the kickoff countdown while there
+   * is one to run. It normally may — the argument is on {@link HeaderReadout} —
+   * and it rests on a claim about the *record* beside it: before kickoff every
+   * league reports `0-0`, so the dial is an em dash by rule and the clock is the
+   * only moving number on the card.
+   *
+   * That claim is the manager tabs', not the card's. The lineup checker's record
+   * is the week ahead as it currently stands, and Sleeper publishes those
+   * projections months out — so its dial reads a real number all offseason, and
+   * the clock was covering the one figure that page exists to produce. A page
+   * whose record is live before kickoff passes false and keeps the dial.
+   *
+   * It is a prop rather than something the readout works out for itself because
+   * nothing in the header can see the difference: both records arrive as the same
+   * {@link OverallRecord}, and only the page knows which question it counted.
+   */
+  countdown?: boolean;
+  /**
    * The filters' trigger, seated in the plate's bottom-right corner. Omitted
    * where a view has nothing to filter (e.g. a manager with no leagues) — which
    * is also what returns the bottom padding holding the key clear of the dial,

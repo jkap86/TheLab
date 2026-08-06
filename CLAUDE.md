@@ -2214,12 +2214,32 @@ stops holding, a comment saying it does would not have caught it.
   the lineup checker.** Who is being looked at, the season, the sync state and
   the manager's record are the same facts on all of them; only the headline count
   differs, which is what `stat` is. The fourth page swaps the *aggregation*
-  behind `record` and nothing else — `projectedRecord` over this week's matchups
-  rather than `aggregateRecord` over the season — because the two are one shape
+  behind `record` — `projectedRecord` over this week's matchups rather than
+  `aggregateRecord` over the season — because the two are one shape
   counted by the same two rules (the denominator is what contributed; zero and
   absent are different answers), and a second card drawn to say that would be a
   second chance for one of them to drift. Its week goes in `scope`, which is the
-  slot that names what a record was counted over. **It is pinned under the app bar and it carries no tabs** — those
+  slot that names what a record was counted over, and its league filters are the
+  manager tabs' own dialog in the same corner of the same plate — held in local
+  `useState` rather than a provider, since a provider is what three *routes*
+  sharing one selection need and this tool is one page.
+
+  **The one thing that aggregation changes on the card is which instrument the
+  readout wears, and that is a prop rather than something the readout works
+  out.** The countdown takes the slot on a claim about the *record* beside it:
+  before kickoff every league reports `0-0`, so the dial is an em dash by rule
+  and the clock is the only moving number on the plate. That claim is the
+  manager tabs', not the card's — a projected week is live months before
+  kickoff, since Sleeper publishes those projections that far out, so all
+  offseason the timer was sitting on the one figure the lineup checker exists to
+  produce. `countdown={false}` keeps the dial there. Nothing in the header can
+  see the difference for itself: both records arrive as the same `OverallRecord`
+  and only the page knows which question it counted. The branch is a **component
+  boundary** inside `HeaderReadout` rather than a conditional below its hooks, so
+  a page that never draws the clock never mounts `useKickoff` and costs no
+  `/api/kickoff` request either.
+
+  **It is pinned under the app bar and it carries no tabs** — those
   two go together: a card that stays on screen is paying for its height out of
   the list behind it, so navigation left the card entirely (first to a tab strip
   in the bar, then to the bar's tools menu, which listed the three views anyway)
@@ -2366,7 +2386,10 @@ stops holding, a comment saying it does would not have caught it.
     two-todays rule), starts only after mount (the account store's hydration
     rule, applied to a clock), and past kickoff renders nothing rather than a
     zero — the interval retires itself too, so a header left open across
-    kickoff stops re-rendering a hidden timer.
+    kickoff stops re-rendering a hidden timer. **That whole trade is about the
+    record beside it**, so a page whose record is already live before kickoff
+    passes `countdown={false}` and keeps the dial — see the lineup checker,
+    above.
   - **A modal hides its own state, so the state is repeated outside it — when
     there is a state to repeat.** The trigger wears the count of active filters
     and the record line names the selection in words (`filterSummary`, lower case
