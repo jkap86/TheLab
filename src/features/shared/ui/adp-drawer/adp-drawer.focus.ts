@@ -234,8 +234,11 @@ export type FocusSlot<T> = { current: T | null };
  * played out.
  *
  * Two slots rather than one flag because the two questions are asked at
- * different times by different effects, and a reopen has to be able to answer
- * "no longer owed" without knowing what the answer used to be.
+ * different times by different effects — and because the pending slot has to
+ * hold the *target*, not merely the fact that one is owed. A reopen mid-exit
+ * takes it back (see {@link resumeFocusRestore}), which a flag could not have
+ * answered: by then the element that opened the drawer is no longer the one
+ * holding focus.
  */
 
 /**
@@ -254,12 +257,35 @@ export function deferFocusRestore<T>(
 }
 
 /**
- * The drawer reopened before the exit finished, so nothing is owed: the reader
- * is inside the dialog again and handing focus to the old trigger would be the
- * background flash this whole arrangement exists to prevent.
+ * The drawer reopened before the exit finished: nothing is owed *yet*, and the
+ * trigger that is owed it is the one already in the pending slot. So the move is
+ * a promotion rather than a discard — the pending target goes back to `opener`,
+ * where the next close will defer it again.
+ *
+ * **Cancelling outright was the bug this replaced, and it was invisible because
+ * the cancel itself was right.** Handing focus to the old trigger mid-exit is
+ * the background flash the two slots exist to prevent, so emptying the slot on
+ * reopen is correct; what was wrong was what the caller did *beside* it. The
+ * opener is captured from `document.activeElement`, and during an interrupted
+ * exit the reader is still inside the closing drawer — so the capture stored a
+ * chip or a key from the drawer's own panel, the cancel threw the real trigger
+ * away, and the eventual close handed focus to an element that unmounts with the
+ * drawer. `restoreFocus` then refuses it for being disconnected (correctly), the
+ * handback silently does nothing, and the reader is left on `<body>`.
+ *
+ * Returning whether it promoted anything is what lets the caller order the two
+ * correctly: **ask this first, and capture the active element only when it says
+ * no.** A false means the drawer is genuinely opening fresh — nothing was owed —
+ * and whatever holds focus really is the trigger that opened it.
  */
-export function cancelFocusRestore<T>(pending: FocusSlot<T>): void {
+export function resumeFocusRestore<T>(
+  opener: FocusSlot<T>,
+  pending: FocusSlot<T>,
+): boolean {
+  if (pending.current === null) return false;
+  opener.current = pending.current;
   pending.current = null;
+  return true;
 }
 
 /**
