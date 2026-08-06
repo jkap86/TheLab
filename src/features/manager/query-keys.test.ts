@@ -108,17 +108,51 @@ test("the ADP board's key, as this feature re-exports it", async (t) => {
 });
 
 test("leagueQueryKeys", async (t) => {
+  const BOARD = "steepness=4&board_season=2026";
+
   await t.test("two leagues are two entries under one prefix", () => {
     // The panel mounts on expand and clears on change, so a key shared between
     // two leagues would show one league's rosters under the other's name.
-    assert.notEqual(hash(leagueQueryKeys.detail("123")), hash(leagueQueryKeys.detail("124")));
-    assert.deepEqual(leagueQueryKeys.detail("123").slice(0, 1), [...leagueQueryKeys.all]);
+    assert.notEqual(
+      hash(leagueQueryKeys.detail("123", BOARD)),
+      hash(leagueQueryKeys.detail("124", BOARD)),
+    );
+    assert.deepEqual(leagueQueryKeys.detail("123", BOARD).slice(0, 1), [
+      ...leagueQueryKeys.all,
+    ]);
+  });
+
+  await t.test("two boards of one league are two entries", () => {
+    // The rosters don't depend on the board, but the two value columns do and
+    // they arrive on the same payload — so a narrowed drawer served from the
+    // previous board's entry would show the old prices against the new board.
+    assert.notEqual(
+      hash(leagueQueryKeys.detail("123", BOARD)),
+      hash(leagueQueryKeys.detail("123", `${BOARD}&rounds_min=12`)),
+    );
+    // …and one board written two ways is still one entry.
+    assert.equal(
+      hash(leagueQueryKeys.detail("123", "steepness=4&board_season=2026")),
+      hash(leagueQueryKeys.detail("123", "board_season=2026&steepness=4")),
+    );
+  });
+
+  await t.test("every board hangs under its own league's prefix", () => {
+    // What lets the hook tell "another board of this league" (keep the rows on
+    // screen) from "another league" (clear them) — it compares this prefix.
+    const prefix = leagueQueryKeys.league("123");
+    const one = leagueQueryKeys.detail("123", BOARD);
+    assert.deepEqual(one.slice(0, prefix.length), [...prefix]);
+    assert.notDeepEqual(
+      leagueQueryKeys.detail("124", BOARD).slice(0, prefix.length),
+      [...prefix],
+    );
   });
 
   await t.test("it is not manager-scoped, since a league belongs to all its members", () => {
     // Two managers expanding the same league read one answer; filing it under
     // the searched name would fetch the same standings once per reader.
-    assert.ok(!hash(leagueQueryKeys.detail("123")).includes(managerQueryKeys.all[0]));
+    assert.ok(!hash(leagueQueryKeys.detail("123", BOARD)).includes(managerQueryKeys.all[0]));
   });
 });
 

@@ -21,7 +21,7 @@
 
 import { isSuperflexLineup } from "../ktc/roster.ts";
 import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../projections/slots.ts";
-import { ADP_FILTER_DEFAULTS } from "./adp-filters.ts";
+import { ADP_FILTER_DEFAULTS, parseAdpFilters } from "./adp-filters.ts";
 import type { AdpFilters, ScoringFormat } from "./adp-filters.ts";
 
 /**
@@ -275,9 +275,8 @@ export type AdpBoardChoices = Pick<
 
 /**
  * The board a reader has chosen nothing about: this season, whole, every kind of
- * draft. What {@link adpBoardFor} falls back to when no board is supplied — a
- * caller that has no drawer behind it (the league detail route) rather than one
- * whose reader left the defaults alone.
+ * draft. What {@link adpBoardFor} falls back to when no board is supplied, and
+ * what {@link parseAdpBoardChoices} answers for an empty query string.
  */
 export function defaultBoardChoices(season: string): AdpBoardChoices {
   return {
@@ -289,6 +288,69 @@ export function defaultBoardChoices(season: string): AdpBoardChoices {
     rounds_max: null,
     teams_min: null,
     teams_max: null,
+  };
+}
+
+/**
+ * The reader's board off a query string, for the two routes the ADP drawer
+ * prices things on: the collapsed card's team value and the expanded panel's own
+ * two value columns.
+ *
+ * It validates through {@link parseAdpFilters} rather than reading the eight
+ * parameters itself, so `/api/adp` and these two share one definition of what a
+ * board *is* — a second parser is the drift the contract rule exists to stop, and
+ * it would show up as a filter that quietly stops narrowing rather than as a type
+ * error.
+ *
+ * **The season is renamed on the way in**, which is the only awkward part and is
+ * load-bearing. `?season` belongs to `resolveManagerRequest` on every route under
+ * `/api/user/[username]`, where it means *which season's leagues are on screen*
+ * and picks the rosters being priced; a board reusing that name would make moving
+ * the drawer to 2024 swap the card list out from under itself. So the drawer
+ * sends {@link ADP_VALUE_PARAMS.boardSeason} and this maps it back. The league
+ * detail route has no `?season` of its own to collide with, and still reads the
+ * same name — one spelling for one question beats a second that is only
+ * accidentally free.
+ *
+ * `defaultSeason` is what an empty query string resolves to: the page's season
+ * for the batch route, the league's own for the panel. `parseAdpFilters` reads it
+ * only when the caller bounded the board neither by season nor by date, which a
+ * live drawer never does.
+ */
+export function parseAdpBoardChoices(
+  params: URLSearchParams,
+  defaultSeason: string,
+): { ok: true; board: AdpBoardChoices } | { ok: false; error: string } {
+  const boardParams = new URLSearchParams(params);
+  boardParams.delete("season");
+  const boardSeason = boardParams.get(ADP_VALUE_PARAMS.boardSeason);
+  if (boardSeason) boardParams.set("season", boardSeason);
+
+  const parsed = parseAdpFilters(boardParams, defaultSeason);
+  if (!parsed.ok) return parsed;
+
+  const {
+    seasons,
+    start_after,
+    start_before,
+    best_ball,
+    rounds_min,
+    rounds_max,
+    teams_min,
+    teams_max,
+  } = parsed.filters;
+  return {
+    ok: true,
+    board: {
+      seasons,
+      start_after,
+      start_before,
+      best_ball,
+      rounds_min,
+      rounds_max,
+      teams_min,
+      teams_max,
+    },
   };
 }
 

@@ -12,7 +12,7 @@ import {
   getLeagueAdpBoards,
   getManagerLeagueRosters,
   leagueAdpPool,
-  parseAdpFilters,
+  parseAdpBoardChoices,
   parseSteepness,
   rankOf,
   rosterAdpValue,
@@ -48,8 +48,9 @@ export const dynamic = "force-dynamic";
  * The population *inside* that match is the reader's, sent by the ADP drawer —
  * the window, the kind of draft, the league size and the format. See
  * {@link AdpBoardChoices} for why those cross the wire and `scoring`/`superflex`
- * deliberately don't, and {@link readerBoard} for why the season arrives under a
- * name of its own.
+ * deliberately don't, and {@link parseAdpBoardChoices} for why the season arrives
+ * under a name of its own. The expanded panel this card opens prices its own two
+ * value columns off the same board, through the same parser.
  */
 export async function GET(
   request: Request,
@@ -69,7 +70,7 @@ export async function GET(
   // unparseable date has no nearest sane value to fall back to. The same answer
   // `/api/adp` gives the same vocabulary, and this string is one the client
   // builds from its own controls — a 400 here is a bug on this side of the wire.
-  const board = readerBoard(searchParams, season);
+  const board = parseAdpBoardChoices(searchParams, season);
   if (!board.ok) return NextResponse.json({ error: board.error }, { status: 400 });
 
   try {
@@ -78,64 +79,6 @@ export async function GET(
     console.error("[adp-value] query failed:", error);
     return readFailureResponse(error, "Failed to load ADP values");
   }
-}
-
-/**
- * The reader's board off the query string, validated by the one ADP parser
- * rather than a second spelling of the same vocabulary.
- *
- * The season is renamed on the way in, which is the only awkward part and is
- * load-bearing. `?season` belongs to `resolveManagerRequest` on all six routes
- * under this prefix, where it means *which season's leagues are on screen* — it
- * chooses the rosters to price and the weeks to project. So the drawer sends its
- * board's season as {@link ADP_VALUE_PARAMS.boardSeason}, and this maps it back
- * onto the name `parseAdpFilters` reads — one spelling for both ends, since a
- * query string is invisible to the compiler and a rename on one side alone would
- * leave the board quietly unapplied rather than failing. Sharing the name would have made moving the drawer to
- * 2024 swap the card list's rosters out from under it; keeping a separate parser
- * would have made the two ends of the vocabulary drift, which is the failure the
- * contract rule exists to stop.
- *
- * `parseAdpFilters` needs a default season for a caller that bounded the board
- * neither way. The drawer always sends one, so the fallback is only reached by a
- * caller that sent no board at all — and the page's own season is the right
- * answer there, since that is the board this route has always used.
- */
-function readerBoard(
-  searchParams: URLSearchParams,
-  season: string,
-): { ok: true; board: AdpBoardChoices } | { ok: false; error: string } {
-  const boardParams = new URLSearchParams(searchParams);
-  boardParams.delete("season");
-  const boardSeason = boardParams.get(ADP_VALUE_PARAMS.boardSeason);
-  if (boardSeason) boardParams.set("season", boardSeason);
-
-  const parsed = parseAdpFilters(boardParams, season);
-  if (!parsed.ok) return parsed;
-
-  const {
-    seasons,
-    start_after,
-    start_before,
-    best_ball,
-    rounds_min,
-    rounds_max,
-    teams_min,
-    teams_max,
-  } = parsed.filters;
-  return {
-    ok: true,
-    board: {
-      seasons,
-      start_after,
-      start_before,
-      best_ball,
-      rounds_min,
-      rounds_max,
-      teams_min,
-      teams_max,
-    },
-  };
 }
 
 async function adpValuePayload(

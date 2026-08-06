@@ -97,7 +97,23 @@ export const managerQueryKeys = {
 /** `/api/league/[leagueId]` — the expanded card's standings and rosters. */
 export const leagueQueryKeys = {
   all: ["league"] as const,
-  detail: (leagueId: string) => [...leagueQueryKeys.all, leagueId] as const,
+
+  /**
+   * Every board of one league's detail — the prefix, not an entry. It is what
+   * lets {@link leagueQueryKeys.detail}'s consumer tell "a different board of the
+   * league already on screen" from "a different league": the first keeps its rows
+   * while the next answer lands, the second must not.
+   */
+  league: (leagueId: string) => [...leagueQueryKeys.all, leagueId] as const,
+
+  /**
+   * One board of it. The rosters and standings don't depend on the board at all
+   * — only the two value columns do — but they arrive on one payload, so the
+   * board has to reach the key or a narrowed drawer would be served the previous
+   * board's prices.
+   */
+  detail: (leagueId: string, board: string) =>
+    [...leagueQueryKeys.league(leagueId), normalizeAdpQuery(board)] as const,
 };
 
 /** `/api/kickoff` — the header countdown's instant, per season. */

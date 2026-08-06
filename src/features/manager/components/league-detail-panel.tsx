@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { adpValueQueryString, todayIso } from "@/features/shared";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 // Both imported directly rather than through their barrels, which would pull
 // `pg`-backed code into the client bundle — see `slots.ts` and `rank.ts`.
 import { orderByProjectedPoints } from "@/shared/manager/rank";
 import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 
+import { useAdpControls } from "../filters-context";
 import { useLeagueDetail } from "../hooks/use-league-detail";
 import { DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS } from "../roster-metrics";
 import { DEFAULT_TEAM_COLUMNS, TEAM_METRICS } from "../standings-metrics";
@@ -23,7 +25,14 @@ import { PanelLoading, PanelMessage } from "./ui";
  * which is when its card is expanded.
  */
 export function LeagueDetailPanel({ leagueId }: { leagueId: string }) {
-  const { data, loading, error } = useLeagueDetail(leagueId);
+  // The same board the collapsed card above is priced on, read from the same
+  // store — this panel has no controls of its own, so a selection made in the
+  // drawer is the only thing that can move its two value columns, and being
+  // driven by a *different* selection from the card that opened it is what this
+  // replaced.
+  const { controls } = useAdpControls();
+  const board = useMemo(() => adpValueQueryString(controls, todayIso()), [controls]);
+  const { data, loading, error } = useLeagueDetail(leagueId, board);
 
   // The query container is here rather than around the loaded panel alone, so
   // every state this can be in is measured against one width — including the

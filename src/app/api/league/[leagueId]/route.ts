@@ -12,15 +12,17 @@ import {
 } from "@/shared/ktc";
 import type { KtcValueSet } from "@/shared/ktc";
 import {
-  DEFAULT_STEEPNESS,
+  ADP_VALUE_PARAMS,
   adpBoardFor,
   adpValue,
   getDraftAdpForPlayers,
   getLeagueAdpBoards,
   getLeagueDetail,
   leagueAdpPool,
+  parseAdpBoardChoices,
+  parseSteepness,
 } from "@/shared/manager";
-import type { AdpBoardType, PlayerBoardAdp } from "@/shared/manager";
+import type { AdpBoardChoices, AdpBoardType, PlayerBoardAdp } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 import { getLeagueOutlook } from "@/shared/projections";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
@@ -50,9 +52,20 @@ async function priceRosters(args: {
   playerIds: string[];
   rosterPositions: string[] | null;
   scoringSettings: Record<string, number> | null;
+  /** The ADP drawer's board and curve — see {@link GET}. */
+  board: AdpBoardChoices;
+  halvings: number;
 }): Promise<LeagueRosterValues> {
-  const { leagueId, season, teams, playerIds, rosterPositions, scoringSettings } =
-    args;
+  const {
+    leagueId,
+    season,
+    teams,
+    playerIds,
+    rosterPositions,
+    scoringSettings,
+    board: chosenBoard,
+    halvings,
+  } = args;
   const superflex = isSuperflexLineup(rosterPositions);
 
   const [ktcSet, adpBoards] = await Promise.all([
@@ -79,7 +92,12 @@ async function priceRosters(args: {
 
   // The fetch answers both league-type boards; this league reads its own side.
   const boardType = adpBoards.get(leagueId) ?? "redraft";
-  const board = adpBoardFor({ season, rosterPositions, scoringSettings });
+  const board = adpBoardFor({
+    season,
+    rosterPositions,
+    scoringSettings,
+    board: chosenBoard,
+  });
   const adpResult = await getDraftAdpForPlayers(board, playerIds).catch(
     (error): {
       draft_count: number;
@@ -92,10 +110,11 @@ async function priceRosters(args: {
     },
   );
 
-  // This panel offers no steepness control, so it reads the default the
-  // collapsed card's ADP metric also starts from.
+  // The pool is this league's own — teams × its starting slots — where the curve
+  // applied across it is the reader's. Both halves matter: two leagues on one
+  // board are still priced on their own size, and a panel and the card that
+  // opened it are priced on one curve.
   const pool = leagueAdpPool(teams, rosterPositions);
-  const halvings = DEFAULT_STEEPNESS;
 
   const adp: Record<string, number> = {};
   const adp_position: Record<string, number> = {};
@@ -126,27 +145,50 @@ async function priceRosters(args: {
  *   {"league_id":"...","teams":[...],"players":{id:{…}},"outlook":{"teams":[…]}}
  *
  * 404s when the league isn't cached (the manager's leagues must be synced first).
+ *
+ * Its two value columns are priced off the ADP drawer, exactly as the collapsed
+ * card above it is — the same query string, the same parser, the same curve. The
+ * panel used to read `DEFAULT_STEEPNESS` and an unnarrowed board on the grounds
+ * that it offers no controls of its own, which was true and stopped being the
+ * point once the drawer started driving the card: a rookie's ADP in this list
+ * would read off a pool of rookie drafts while the card that opened it was
+ * priced off startups. A panel driven by a selection has to be driven by the
+ * *same* selection.
+ *
+ * The board's season still arrives as `board_season` though nothing here reads
+ * `?season` — see {@link parseAdpBoardChoices} for why one spelling beats a
+ * second that is only accidentally free. With no board sent at all this answers
+ * exactly as it did before: the league's own season, whole, at the default curve.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ leagueId: string }> },
 ) {
   const { leagueId } = await params;
+  const searchParams = new URL(request.url).searchParams;
 
   try {
-    return await leaguePayload(leagueId);
+    return await leaguePayload(leagueId, searchParams);
   } catch (error) {
     console.error(`[league] query failed for ${leagueId}:`, error);
     return readFailureResponse(error, "Failed to load league");
   }
 }
 
-async function leaguePayload(leagueId: string) {
+async function leaguePayload(leagueId: string, searchParams: URLSearchParams) {
   const detail = await getLeagueDetail(leagueId);
   if (!detail) {
     const error: ApiErrorPayload = { error: "League not found" };
     return NextResponse.json(error, { status: 404 });
   }
+
+  // Resolved after the league, because the league's own season is what an
+  // unbounded board falls back to. Rejected rather than defaulted, the answer
+  // `/api/adp` gives the same vocabulary — this string is one the client builds
+  // from its own controls, so a 400 is a bug on that side of the wire.
+  const board = parseAdpBoardChoices(searchParams, detail.season);
+  if (!board.ok) return NextResponse.json({ error: board.error }, { status: 400 });
+  const halvings = parseSteepness(searchParams.get(ADP_VALUE_PARAMS.steepness));
 
   const playerIds = [...new Set(detail.teams.flatMap((t) => t.players))];
 
@@ -170,6 +212,8 @@ async function leaguePayload(leagueId: string) {
       playerIds,
       rosterPositions: detail.roster_positions,
       scoringSettings: detail.scoring_settings,
+      board: board.board,
+      halvings,
     }),
   ]);
 

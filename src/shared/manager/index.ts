@@ -63,6 +63,7 @@ export {
   boardSignature,
   defaultBoardChoices,
   leagueAdpPool,
+  parseAdpBoardChoices,
   parseSteepness,
   rosterAdpValue,
   startingSlotCount,

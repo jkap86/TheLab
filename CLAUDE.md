@@ -3073,27 +3073,44 @@ stops holding, a comment saying it does would not have caught it.
   arrow between a league and those two runs the other way; that is what
   `seedFromLeague` is.
 
-  Two details in the plumbing. The season travels as **`board_season`**, because
-  `?season` belongs to `resolveManagerRequest` on all six routes under that
-  prefix, where it means *which season's leagues are on screen* and picks the
-  rosters to price — sharing the name would have made moving the drawer to 2024
-  swap the card list out from under itself. The route maps it back onto the ADP
-  vocabulary and validates through `parseAdpFilters`, so there is still exactly
-  one parser for these parameters rather than a second spelling to drift. And
-  `boardSignature` names **every** axis the board carries, not only the two that
-  vary within a request: the reader's choices are constant across one call, so
-  this changes no grouping today, but a signature standing for less than its
-  board is a silent collision the moment a caller varies one — leagues priced off
-  somebody else's window with nothing in the payload to say so.
+  **The expanded panel reads the same board, and that is the point rather than a
+  tidy-up.** `/api/league/[leagueId]` used to call `adpBoardFor` with no choices
+  and read `DEFAULT_STEEPNESS`, on the honest grounds that the panel offers no
+  controls of its own — true, and beside the point once the drawer started
+  driving the card: a rookie's ADP in the roster list would read off a pool of
+  rookie drafts while the card that opened it was priced off startups. **A panel
+  driven by a selection has to be driven by the *same* selection**, which is the
+  roster panel's own rule about not restating the selection, run one level up.
+  So both routes take one query string (`adpValueQueryString`) through one parser
+  (`parseAdpBoardChoices`), and the panel reads the drawer's curve too — its pool
+  is still the league's own, since two leagues on one board are priced on their
+  own size.
 
-  **The expanded panel is the one surface left on the unnarrowed board**, and it
-  is a deliberate hole rather than an oversight: `/api/league/[leagueId]` calls
-  `adpBoardFor` with no choices at all and reads `DEFAULT_STEEPNESS`, which its
-  own comment already owned for the curve before the population joined it. So a
-  rookie's raw ADP in the roster list can read off a pool of rookie drafts while
-  the card that opened it was priced off startups. Closing it means threading the
-  same board and curve through a second route and key; it is worth doing, and it
-  is worth doing as its own change.
+  Three details in the plumbing. The season travels as **`board_season`**,
+  because `?season` belongs to `resolveManagerRequest` on all six routes under
+  that prefix, where it means *which season's leagues are on screen* and picks
+  the rosters to price — sharing the name would have made moving the drawer to
+  2024 swap the card list out from under itself. `/api/league/[leagueId]` reads
+  no `?season` at all and *still* uses that name: one spelling for one question
+  beats a second that is only accidentally free. Both map it back and validate
+  through `parseAdpFilters`, so there is exactly one parser for these parameters
+  rather than a second spelling to drift. And `boardSignature` names **every**
+  axis the board carries, not only the two that vary within a request: the
+  reader's choices are constant across one call, so this changes no grouping
+  today, but a signature standing for less than its board is a silent collision
+  the moment a caller varies one — leagues priced off somebody else's window with
+  nothing in the payload to say so.
+
+  **`useLeagueDetail` clears on a new league and holds through a new board, and
+  that is one rule rather than two exceptions.** It is the one read on these
+  pages whose previous answer can be *about something else*, which is why it
+  never took `keepPreviousData`: a new league id must show nothing rather than
+  leave the last league's rosters on screen under the new name. A new board of
+  the same league is the opposite case — the rows are right and two columns are
+  about to move — so blanking several hundred of them is the flash every other
+  hook here refuses. The placeholder is therefore kept only when the previous
+  key names this same league, which is what `leagueQueryKeys.league` is: a
+  prefix to compare against, since the whole key is what just changed.
 - **A list of managers is labelled by username, a team by team name.** `ui.tsx`
   has both — `managerLabel` (display_name → team_name → roster number) and
   `teamLabel` (the reverse) — and the column heading says which one it is.

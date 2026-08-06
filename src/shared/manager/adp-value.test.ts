@@ -6,10 +6,12 @@ import {
   DEFAULT_STEEPNESS,
   STEEPNESS_RANGE,
   TYPICAL_STARTING_SLOTS,
+  ADP_VALUE_PARAMS,
   adpBoardFor,
   adpValue,
   boardSignature,
   defaultBoardChoices,
+  parseAdpBoardChoices,
   leagueAdpPool,
   parseSteepness,
   rosterAdpValue,
@@ -343,6 +345,88 @@ describe("adpBoardFor", () => {
     });
     assert.equal(board.superflex, true);
     assert.deepEqual(board.scoring, ["ppr"]);
+  });
+
+  test("an empty query string is the board this route always used", () => {
+    // What both routes answer for a caller that sends nothing: the season they
+    // supply, whole. A change that made the no-board case narrow anything would
+    // move numbers for readers who never opened the drawer.
+    const parsed = parseAdpBoardChoices(new URLSearchParams(), "2025");
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.board, defaultBoardChoices("2025"));
+  });
+
+  test("the season arrives as `board_season`, and plain `season` is ignored", () => {
+    // `?season` belongs to `resolveManagerRequest` on the batch route, where it
+    // picks which leagues' rosters are being priced — so a board that read it
+    // would swap the card list out from under itself. The two names are two
+    // questions, and this is the whole of that separation.
+    const parsed = parseAdpBoardChoices(
+      new URLSearchParams({ season: "2024", [ADP_VALUE_PARAMS.boardSeason]: "2026" }),
+      "2025",
+    );
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.board.seasons, ["2026"]);
+
+    // A `?season` with no board season beside it narrows nothing: the caller's
+    // default stands, which is the page's own season on one route and the
+    // league's on the other.
+    const pageOnly = parseAdpBoardChoices(new URLSearchParams({ season: "2024" }), "2025");
+    assert.ok(pageOnly.ok);
+    assert.deepEqual(pageOnly.board.seasons, ["2025"]);
+  });
+
+  test("it reads the whole board vocabulary, through the one parser", () => {
+    const parsed = parseAdpBoardChoices(
+      new URLSearchParams({
+        [ADP_VALUE_PARAMS.boardSeason]: "2026",
+        start_after: "2026-06-01",
+        start_before: "2026-07-31",
+        rounds_min: "12",
+        teams_min: "12",
+        teams_max: "12",
+        best_ball: "0",
+      }),
+      "2025",
+    );
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.board, {
+      seasons: ["2026"],
+      start_after: "2026-06-01",
+      start_before: "2026-07-31",
+      best_ball: false,
+      rounds_min: 12,
+      rounds_max: null,
+      teams_min: 12,
+      teams_max: 12,
+    });
+  });
+
+  test("an all-seasons board is `null` seasons, not the default", () => {
+    const parsed = parseAdpBoardChoices(
+      new URLSearchParams({ [ADP_VALUE_PARAMS.boardSeason]: "all" }),
+      "2025",
+    );
+    assert.ok(parsed.ok);
+    assert.equal(parsed.board.seasons, null);
+  });
+
+  test("a malformed bound is refused, never quietly dropped", () => {
+    // The failure that matters is the silent one: a board that ignored a bad
+    // date would answer with a wider population than the reader asked for and
+    // nothing on screen would say so.
+    const bounds: Record<string, string>[] = [
+      { start_after: "2026-02-31" },
+      { start_after: "2026-07-01", start_before: "2026-06-01" },
+      { rounds_min: "2.5" },
+    ];
+    for (const bad of bounds) {
+      const parsed = parseAdpBoardChoices(
+        new URLSearchParams({ [ADP_VALUE_PARAMS.boardSeason]: "2026", ...bad }),
+        "2025",
+      );
+      assert.equal(parsed.ok, false);
+    }
   });
 
   test("the signature names every axis of the board, not only the varying two", () => {
