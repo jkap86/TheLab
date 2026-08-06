@@ -17,7 +17,7 @@ import {
   rankOf,
   rosterAdpValue,
 } from "@/shared/manager";
-import type { AdpBoardChoices, AdpFilters } from "@/shared/manager";
+import type { AdpBoardChoices, AdpBoardType, AdpFilters } from "@/shared/manager";
 import { getOptimalLineups } from "@/shared/projections";
 import { collectWithConcurrency, errorMessage } from "@/shared/util";
 
@@ -40,10 +40,18 @@ export const dynamic = "force-dynamic";
  *
  * ADP pooled across different games is meaningless, so each league is priced
  * against the board most like it: superflex and scoring pick the fetch, and the
- * fetch answers the redraft and dynasty markets side by side, with each league
- * reading the side matching its own type. Leagues that share a fetch share a
- * single query: the boards are grouped by {@link boardSignature} and fetched
- * once each, not once per league.
+ * fetch answers the redraft and dynasty markets side by side. Leagues that share
+ * a fetch share a single query: the boards are grouped by {@link boardSignature}
+ * and fetched once each, not once per league.
+ *
+ * **Both league-type boards are priced for every league**, where this used to
+ * read only the side matching the league's own type. One reading made a column
+ * of these incomparable down a list holding leagues of both kinds, and the other
+ * side is not a mistake to be guarded against but a second lens on the same
+ * roster — a dynasty team's redraft value is what a win-now market would pay for
+ * it. It costs no extra query: the values for both markets are already in the
+ * fetch, so what doubles is a curve and a sum over ids already in memory. The
+ * league's own market still travels, as `board`, to say which column is native.
  *
  * The population *inside* that match is the reader's, sent by the ADP drawer —
  * the window, the kind of draft, the league size and the format. See
@@ -175,43 +183,67 @@ async function adpValuePayload(
   for (const league of withOwn) {
     const own = league.teams.find((t) => t.owner_id === userId)!;
     const board = boardValues.get(leagueBoard.get(league.league_id)!)!;
-    // Which side of the fetch this league reads: its own market, not the pool
-    // of both — a dynasty roster priced off redraft drafts is wrong at every
-    // rookie, and the other way round at every veteran.
-    const boardType = adpBoards.get(league.league_id) ?? "redraft";
-
     const pool = leagueAdpPool(league.teams.length, league.roster_positions);
+    const lineup = lineups?.lineups.get(league.league_id) ?? null;
 
-    // Curve this board's ADP into values for this league's pool. The pool is per
-    // league, so two leagues sharing a board are still priced on their own size.
-    const values = new Map<string, number>();
-    for (const [id, boardAdp] of board.values) {
-      const entry = boardAdp[boardType];
-      if (entry) values.set(id, adpValue(entry.adp, pool, halvings));
-    }
+    /**
+     * This league's rosters read off one side of the fetch. Both sides are
+     * priced now rather than only the league's own market: a column mixing a
+     * dynasty league's total with a redraft league's is two markets under one
+     * heading, so the payload answers both and the column chooses. The other
+     * market is a real reading of the same roster — what a win-now market would
+     * pay for those players — not a mistake to be guarded against.
+     */
+    const priceOn = (boardType: AdpBoardType) => {
+      // Curve this board's ADP into values for this league's pool. The pool is
+      // per league, so two leagues sharing a fetch are priced on their own size.
+      const values = new Map<string, number>();
+      for (const [id, boardAdp] of board.values) {
+        const entry = boardAdp[boardType];
+        if (entry) values.set(id, adpValue(entry.adp, pool, halvings));
+      }
 
-    // Every team's starter value, so the manager's can be ranked against them;
-    // the manager's own full value is kept aside for the payload.
-    const starterValue = new Map<number, number>();
-    let ownValue = null as ReturnType<typeof rosterAdpValue> | null;
-    for (const team of league.teams) {
-      const value = rosterAdpValue({
-        players: team.players,
-        starters:
-          lineups?.lineups.get(league.league_id)?.get(team.roster_id) ?? null,
-        values,
-      });
-      if (value.split) starterValue.set(team.roster_id, value.split.starters);
-      if (team.roster_id === own.roster_id) ownValue = value;
-    }
+      // Every team's starter value, so the manager's can be ranked against them;
+      // the manager's own full value is kept aside for the payload. The rank is
+      // per board for the same reason the total is — a roster can be third by
+      // win-now value and eighth by dynasty value, and those are the two facts
+      // the split exists to tell apart.
+      const starterValue = new Map<number, number>();
+      let ownValue = null as ReturnType<typeof rosterAdpValue> | null;
+      for (const team of league.teams) {
+        const value = rosterAdpValue({
+          players: team.players,
+          starters: lineup?.get(team.roster_id) ?? null,
+          values,
+        });
+        if (value.split) starterValue.set(team.roster_id, value.split.starters);
+        if (team.roster_id === own.roster_id) ownValue = value;
+      }
+
+      const { rostered, ...rest } = ownValue!;
+      return {
+        rostered,
+        value: {
+          ...rest,
+          draft_count:
+            boardType === "dynasty" ? board.dynasty_drafts : board.redraft_drafts,
+          starters_rank: rankOf(starterValue, own.roster_id),
+        },
+      };
+    };
+
+    const redraft = priceOn("redraft");
+    const dynasty = priceOn("dynasty");
 
     priced[league.league_id] = {
-      ...ownValue!,
       superflex: isSuperflexLineup(league.roster_positions),
-      board: boardType,
-      draft_count:
-        boardType === "dynasty" ? board.dynasty_drafts : board.redraft_drafts,
-      starters_rank: rankOf(starterValue, own.roster_id),
+      // Which market the league itself plays in. It gates neither reading now —
+      // it says which of the two columns is this league's native answer.
+      board: adpBoards.get(league.league_id) ?? "redraft",
+      // The same roster on both sides, so either count answers for it.
+      rostered: redraft.rostered,
+      redraft: redraft.value,
+      dynasty: dynasty.value,
     };
   }
 

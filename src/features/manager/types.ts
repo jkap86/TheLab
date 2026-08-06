@@ -3,6 +3,7 @@ import type {
   AdpPayload,
   AdpPlayerPayload,
   KickoffPayload,
+  LeagueAdpBoardValue,
   LeagueAdpEntry,
   LeagueDetailPayload,
   LeagueKtcEntry,
@@ -21,6 +22,7 @@ import type {
 } from "@/shared/contract";
 import type {
   AdpBoardStats,
+  AdpBoardType,
   DraftDensityMonth,
   DraftPickAsset,
   LeagueRank,
@@ -45,10 +47,12 @@ import type {
  */
 export type {
   AdpBoardStats,
+  AdpBoardType,
   AdpPayload,
   AdpPlayerPayload,
   DraftDensityMonth,
   DraftPickAsset,
+  LeagueAdpBoardValue,
   LeagueAdpEntry,
   LeagueKtcEntry,
   LeagueKtcValue,
