@@ -8,6 +8,10 @@ import type { ManagerLeague } from "@/shared/manager";
 import { TRADE_METRICS } from "../../trade-metrics";
 import type { KtcValue, PlayerSummary, Trade, TradeManager } from "../../types";
 import { TradeCard } from "./trade-card";
+import {
+  SIDE_SEAM_COLUMN,
+  SIDE_SEAM_ROW,
+} from "./trade-card.constants.ts";
 
 /**
  * The card without a DOM.
@@ -140,19 +144,44 @@ describe("the card's material", () => {
     assert.match(html, /class="lab-slab-face lab-notch-lg/);
   });
 
-  test("each side is a plate seated in that face", () => {
-    assert.equal(count(card(), "lab-plate-sm lab-plate-brushed"), 2);
-    assert.equal(count(card({ trade: threeSided }), "lab-plate-sm lab-plate-brushed"), 3);
+  test("no side is a plate: the card is the only object in the list", () => {
+    // The correction the card was rebuilt for. A side wearing this card's own
+    // construction one step down read as a card of its own, which is what made
+    // a phone show a column of manager plates rather than a list of trades.
+    const html = card({ trade: threeSided });
+    assert.doesNotMatch(html, /lab-plate/);
+    assert.doesNotMatch(html, /lab-slab-face[^"]*lab-slab/);
   });
 
-  test("the leading edge carries the accent rail, and it is decoration", () => {
+  test("every side after the first is cut off the one before it", () => {
+    // Two sides: the second is in the trailing column, so its seam is vertical
+    // from `sm` up. Three: the odd one spans the row and takes a horizontal cut
+    // along its top, since it is under both columns rather than beside either.
+    assert.equal(count(card(), SIDE_SEAM_COLUMN), 1);
+    assert.equal(count(card(), SIDE_SEAM_ROW), 1); // the column seam contains it
+    const three = card({ trade: threeSided });
+    assert.equal(count(three, SIDE_SEAM_COLUMN), 1);
+    assert.equal(count(three, SIDE_SEAM_ROW), 2);
+  });
+
+  test("the nameplate rides the edge, outside the clip that would cut it", () => {
+    // `clip-path` clips its whole subtree, so a plate inside the notched face
+    // would be severed at the exact edge it exists to straddle.
+    const html = card();
+    assert.match(html, /class="relative pt-2\.5"><div class="lab-nameplate/);
+    assert.doesNotMatch(html, /lab-slab-face[\s\S]*lab-nameplate/);
+  });
+
+  test("the nameplate carries the accent rail, and it is decoration", () => {
     assert.match(card(), /<span aria-hidden="true" class="lab-billet-rail/);
   });
 
-  test("the header's instant and each side's total are under glass", () => {
+  test("the instant and each side's total are readouts, and none is a lens", () => {
+    // A lens is glass with a cyan rim — the *lit* reading the card trades away
+    // for an engraved one, so nothing here wears it.
     const html = card();
-    assert.match(html, /class="lab-readout ml-auto/);
-    assert.match(html, /class="lab-readout lab-lens ml-auto/);
+    assert.equal(count(html, "lab-readout"), 3);
+    assert.doesNotMatch(html, /lab-lens/);
   });
 });
 
@@ -178,7 +207,7 @@ describe("what the header says", () => {
 });
 
 describe("the two tracks", () => {
-  test("the give track is a groove; the take track is the plate's own face", () => {
+  test("the give track is a groove; the take track is the card's own face", () => {
     // One per side on a two-sided trade: each side's give is the other's take.
     assert.equal(count(card(), "lab-groove"), 2);
   });
@@ -301,8 +330,10 @@ describe("what a value column says", () => {
 });
 
 describe("how the sides are laid out", () => {
-  test("two sides share the row from `sm` up", () => {
-    assert.match(card(), /class="grid gap-2 sm:grid-cols-2"/);
+  test("two sides share the row from `sm` up, with no gap between them", () => {
+    // No gap: the sides are regions of one face, so what parts them is a cut
+    // and not the ground showing between two objects.
+    assert.match(card(), /class="grid sm:grid-cols-2"/);
   });
 
   test("the odd side of a three-way spans the row", () => {

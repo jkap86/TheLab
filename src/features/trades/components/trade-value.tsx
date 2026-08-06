@@ -34,6 +34,12 @@ import type { TradeMetric, TradeSideContext } from "../trade-metrics";
  * x. It costs four characters per side and buys a number that says what it is on
  * a card read in isolation, which is how a windowed list of forty thousand is
  * always read.
+ *
+ * **The number is on the display face and cut into its readout** — the page's
+ * subject used to be the quietest type on the card, set in the body face at a
+ * smaller size than the manager's name beside it and the league's above it.
+ * Engraved rather than lit because there are two of these per card times the
+ * couple of dozen cards in the window; see `.lab-engraved` for that arithmetic.
  */
 export function TradeValueTag({
   metric,
@@ -57,9 +63,13 @@ export function TradeValueTag({
         {metric.label}
       </span>
       {text ? (
-        <span className="text-xs font-bold text-foreground/85">{text}</span>
+        <span className="lab-engraved font-display text-xs font-bold tracking-[0.02em] text-foreground/90">
+          {text}
+        </span>
       ) : (
-        // The em dash the whole catalogue rests on: unpriced is not zero.
+        // The em dash the whole catalogue rests on: unpriced is not zero. It is
+        // left flat on purpose — an absence cut into the plate would be given
+        // more presence than the numbers that are actually there.
         <span className="text-xs font-bold text-foreground/25">—</span>
       )}
     </span>

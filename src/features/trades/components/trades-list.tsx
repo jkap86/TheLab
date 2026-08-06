@@ -9,8 +9,18 @@ import type { TradeMetric } from "../trade-metrics";
 import type { KtcValue, PlayerSummary, Trade, TradeManager } from "../types";
 import { TradeCard } from "./trade-card";
 
-/** The gap between cards, in px — `gap-3`, which absolute layout can't apply. */
-const CARD_GAP = 12;
+/**
+ * The gap between cards, in px — absolute layout can't apply a `gap`.
+ *
+ * It was 12, and the extra six are not for separation: at 12 the ground already
+ * beat the space inside a card four to one, which is why the card's own
+ * hierarchy is what got fixed rather than the air around it. What the six buy is
+ * the **nameplate**, which hangs into this gap from the card below. At 12 the
+ * plate sat almost exactly between two cards and could be read as belonging to
+ * either; at 18 there is visibly more ground above it than below, so it reads as
+ * rising out of its own card. Move this and check that first.
+ */
+const CARD_GAP = 18;
 
 /**
  * A first guess at a card's height, replaced by a real measurement the moment

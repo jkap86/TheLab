@@ -6,7 +6,11 @@ import { memo } from "react";
 // component, and the barrel re-exports the `pg`-backed queries beside it.
 import { isSuperflexLineup } from "@/shared/ktc/roster";
 
-import { TradeCardHeader } from "./trade-header";
+import {
+  SIDE_SEAM_COLUMN,
+  SIDE_SEAM_ROW,
+} from "./trade-card.constants.ts";
+import { TradeInstant, TradeNameplate } from "./trade-header";
 import { TradeSideColumn } from "./trade-side";
 import type { TradeCardProps } from "./trade-card.types.ts";
 
@@ -24,6 +28,22 @@ import type { TradeCardProps } from "./trade-card.types.ts";
  * has to say, four columns deep, and the depth is what sorts those columns into
  * an order. The cyan rail, the hover lift and the bloom all survive, so the card
  * still answers the pointer the way its neighbours do.
+ *
+ * **The card is the only object in the list, and everything else here follows
+ * from that.** A side used to be a plate seated in this face — raised, walled,
+ * brushed, carrying an avatar, a name and a readout, which is this card's own
+ * construction one step down. One step is not enough to read as containment, so
+ * on a phone, where the sides stack, the list showed a column of manager plates
+ * that a reader had to pair up rather than four trades. The spacing was never
+ * the problem and is worth recording: 8px between sides against roughly 32px
+ * between the nearest plates of two cards is already 4:1, and it still didn't
+ * read. When proximity is right and grouping still fails, the answer is weight.
+ *
+ * So a side is a *region* of this face (`SIDE_ZONE`), what parts two of them is
+ * a full-bleed seam (`SIDE_SEAM_*`), the nameplate rides the top edge, and the
+ * values are cut into the surface rather than lit on it (`.lab-engraved`). The
+ * one thing none of it spends is the accent, which this page has exactly one
+ * use for.
  *
  * This file is the composition root and holds only what the whole card shares:
  * which board the trade is priced on, and the two bundles every level below
@@ -74,35 +94,49 @@ export const TradeCard = memo(function TradeCard({
   };
 
   return (
-    // The wall, and the face standing on it. Both carry the chamfer: a wall that
-    // turns two corners shows a square one wherever the clip doesn't follow it.
-    <div className="lab-slab lab-notch-lg">
-      <article className="lab-slab-face lab-notch-lg p-2.5 sm:p-3">
-        <TradeCardHeader
-          name={league?.name ?? trade.league_id}
-          completedAt={trade.completed_at}
-        />
+    // The nameplate hangs off the top edge, so it is a sibling of the slab and
+    // the overhang is this wrapper's padding — inside the box `TradesList`
+    // measures, which a negative margin would not be.
+    <div className="relative pt-2.5">
+      <TradeNameplate name={league?.name ?? trade.league_id} />
 
-        {/* Gaps rather than the old `gap-px` hairline: the sides are seated
-            plates now, so what separates them is the ground showing between two
-            objects and there is no rule to draw. */}
-        <div className="grid gap-2 sm:grid-cols-2">
-          {trade.sides.map((side, i) => (
-            <TradeSideColumn
-              key={side.roster_id}
-              side={side}
-              // The odd side of a three-way takes the whole row rather than
-              // leaving the cell beside it empty: an empty cell in a grid of
-              // sides reads as a participant who came away with nothing, which
-              // is a real state this card draws in words.
-              wide={trade.sides.length % 2 === 1 && i === trade.sides.length - 1}
-              trade={trade}
-              lookups={lookups}
-              pricing={pricing}
-            />
-          ))}
-        </div>
-      </article>
+      {/* The wall, and the face standing on it. Both carry the chamfer: a wall
+          that turns two corners shows a square one wherever the clip doesn't
+          follow it. The face is padded at the top only — its regions run edge
+          to edge so their seams can reach both walls. */}
+      <div className="lab-slab lab-notch-lg">
+        <article className="lab-slab-face lab-notch-lg pt-3.5">
+          <TradeInstant completedAt={trade.completed_at} />
+
+          {/* No gap: the sides are regions of one face, so what separates them
+              is a cut and not the ground showing between two objects. */}
+          <div className="grid sm:grid-cols-2">
+            {trade.sides.map((side, i) => (
+              <TradeSideColumn
+                key={side.roster_id}
+                side={side}
+                // Which way this side is cut off the one before it. The first
+                // is cut off nothing; a side in the trailing column takes the
+                // seam on its leading edge, and one that starts a row takes it
+                // along its top — which is what puts a horizontal seam above
+                // the odd side of a three-way, since that one spans both
+                // columns rather than sitting beside either.
+                seam={
+                  i === 0 ? "" : i % 2 === 1 ? SIDE_SEAM_COLUMN : SIDE_SEAM_ROW
+                }
+                // The odd side of a three-way takes the whole row rather than
+                // leaving the cell beside it empty: an empty cell in a grid of
+                // sides reads as a participant who came away with nothing, which
+                // is a real state this card draws in words.
+                wide={trade.sides.length % 2 === 1 && i === trade.sides.length - 1}
+                trade={trade}
+                lookups={lookups}
+                pricing={pricing}
+              />
+            ))}
+          </div>
+        </article>
+      </div>
     </div>
   );
 });
