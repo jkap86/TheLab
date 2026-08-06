@@ -168,7 +168,7 @@ describe("the card's material", () => {
     // `clip-path` clips its whole subtree, so a plate inside the notched face
     // would be severed at the exact edge it exists to straddle.
     const html = card();
-    assert.match(html, /class="relative pt-2\.5"><div class="lab-nameplate/);
+    assert.match(html, /class="relative pt-3"><div class="lab-nameplate/);
     assert.doesNotMatch(html, /lab-slab-face[\s\S]*lab-nameplate/);
   });
 
