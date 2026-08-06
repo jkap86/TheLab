@@ -25,6 +25,7 @@ export {
   getManagerLeagueRosters,
   getManagerLeaguemates,
   getManagerLeagues,
+  getManagerMatchups,
   getManagerRosters,
   getManagerSyncedAt,
 } from "./queries";
@@ -36,6 +37,8 @@ export type {
   LeagueTeam,
   ManagerLeague,
   ManagerLeaguemates,
+  ManagerMatchup,
+  MatchupOpponent,
 } from "./types";
 export { orderByProjectedPoints, projectedRank, rankOf, standingScore } from "./rank";
 export type { LeagueRank, ProjectedRank } from "./rank";

@@ -479,6 +479,57 @@ export type ManagerRanksPayload = {
   ranks: Record<string, LeagueRankSet>;
 };
 
+/**
+ * The team on the other side of a matchup, as sent to the client — the database
+ * stores an avatar *id*, so the route resolves it and drops the raw id, exactly
+ * as {@link LeaguematePayload} does.
+ *
+ * Both names travel, because the reader picks: a list spanning a manager's whole
+ * portfolio labels an opponent by their Sleeper username, so the same person
+ * reads as the same person in every league they turn up in, and the team name is
+ * the nickname behind it.
+ */
+export type MatchupOpponentPayload = {
+  roster_id: number;
+  /** Null for an orphan team — one nobody currently holds. */
+  user_id: string | null;
+  display_name: string | null;
+  team_name: string | null;
+  avatar_url: string | null;
+};
+
+/** One league's matchup for the manager: their roster, and who it is playing. */
+export type LeagueMatchupPayload = {
+  roster_id: number;
+  /**
+   * Null where the league scheduled the manager nobody to play — a bye in an
+   * odd-sized league, or a week with no matchup set. Distinct from the league
+   * being absent from {@link ManagerMatchupsPayload.matchups} altogether, which
+   * says the week has not been fetched for it.
+   */
+  opponent: MatchupOpponentPayload | null;
+};
+
+/**
+ * `GET /api/user/[username]/matchups` — who the manager plays this week in each
+ * of their leagues.
+ *
+ * Read-only like its siblings: it answers from the matchups the league crawler
+ * has stored, so a league the crawler has not reached this week is simply absent
+ * rather than fetched on demand.
+ *
+ * The **week travels with the answer** because the caller cannot derive it: it is
+ * read off stored game dates rather than a clock (see `getUpcomingWeek`), so a
+ * season with nothing synced ahead of today answers `week: null` and no matchups
+ * — which is a different thing from a week in which nobody has a game.
+ */
+export type ManagerMatchupsPayload = {
+  season: string;
+  week: number | null;
+  /** League id → that league's matchup. Absent = the week isn't stored for it. */
+  matchups: Record<string, LeagueMatchupPayload>;
+};
+
 /** One league's roster priced on KeepTradeCut, and how that value is split. */
 export type LeagueKtcValue = KtcRosterValue & {
   /**

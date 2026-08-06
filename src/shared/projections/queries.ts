@@ -58,6 +58,37 @@ export async function getRemainingWeeks(season: string): Promise<number[]> {
 }
 
 /**
+ * The week a lineup is being set for: the earliest stored week with a game still
+ * to be played, or null when nothing ahead of today is stored.
+ *
+ * The head of {@link getRemainingWeeks}, asked as its own question and answered
+ * by its own query so a caller that wants one week doesn't read eighteen. The
+ * derivation is deliberately identical — a week stays current until its *last*
+ * game, so this still names week 1 on the Monday night of week 1, which is when
+ * a lineup for it can still be changed.
+ *
+ * **Not `manager`'s `getCurrentWeek`, which reads `state/nfl`.** That one is for
+ * the sync path, where a Sleeper call is the point; a cache-backed route never
+ * waits on Sleeper for something the database can already answer. The cost of
+ * that is honesty rather than accuracy: this can only name a week whose
+ * projections are actually stored, so a season nothing is synced for answers null
+ * and the routes above it come back empty rather than guessing at a calendar.
+ */
+export async function getUpcomingWeek(season: string): Promise<number | null> {
+  const { rows } = await pool.query<{ week: number }>(
+    `SELECT week
+       FROM projections
+      WHERE season = $1
+      GROUP BY week
+     HAVING max(game_date) >= ${TODAY_ET}
+      ORDER BY week
+      LIMIT 1`,
+    [season],
+  );
+  return rows[0]?.week ?? null;
+}
+
+/**
  * Raw stat lines for these players over these weeks — the input to
  * {@link aggregateWeeklyStats}.
  *

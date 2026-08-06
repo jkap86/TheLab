@@ -306,8 +306,19 @@ resolve.
 manager's leagues, filter by type and format, and expand any league for
 standings and full rosters.
 
-**Pick Tracker**, **Trades**, and **Lineup Checker** are listed on the tools
-grid but not built. Their pages render a shared `ToolPlaceholder` that reads the
-title and blurb from [`tools.data.ts`](src/features/tools/tools.data.ts), so
-there is one description per tool. To build one, add a
-`src/features/<tool>/` folder and point its page at that instead.
+**Pick Tracker** and **Trades** are built too — the first follows a draft that
+uses kickers as rookie-pick placeholders, the second reads every crawled
+league's trades.
+
+**Lineup Checker** is started: it lists the leagues of the account resolved on
+`/tools` with this week's opponent in each, over four stat columns that are
+reserved and blank until there is something to grade a lineup with. The
+opponent comes from `GET /api/user/[username]/matchups`, a cache-backed read of
+the matchups the league crawler has stored, for the week
+`getUpcomingWeek` derives from stored game dates.
+
+A tool still on the grid and not built points its page at the shared
+`ToolPlaceholder`, which reads the title and blurb from
+[`tools.ts`](src/features/shared/tools.ts) so there is one description per tool.
+To build one, add a `src/features/<tool>/` folder and point its page at that
+instead.

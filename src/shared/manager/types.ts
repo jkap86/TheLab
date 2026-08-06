@@ -30,6 +30,40 @@ export type ManagerLeague = {
 };
 
 /**
+ * The team on the other side of a week's matchup — the roster, and whoever owns
+ * it as `league_users` has them.
+ *
+ * `owner_id` is null for an orphan team, and the three name fields are null with
+ * it: a roster nobody holds still plays a game, and the row is what says so.
+ */
+export type MatchupOpponent = {
+  roster_id: number;
+  owner_id: string | null;
+  display_name: string | null;
+  team_name: string | null;
+  /** Avatar id (not a URL); null when the manager has no avatar. */
+  avatar: string | null;
+};
+
+/**
+ * One league's matchup for a manager in a given week, as read by
+ * {@link getManagerMatchups}.
+ *
+ * **A null `opponent` is a real answer and not a missing one.** Sleeper returns a
+ * *side* per roster, and the two sides of a game share a `matchup_id` that is
+ * null for a roster with nobody to play — a bye in an odd-sized league, or a week
+ * the league hasn't scheduled. A league with nothing stored for the week is
+ * absent from the read entirely, which is the other answer: not that there is no
+ * opponent, but that we have not fetched one.
+ */
+export type ManagerMatchup = {
+  league_id: string;
+  /** The manager's own roster in that league. */
+  roster_id: number;
+  opponent: MatchupOpponent | null;
+};
+
+/**
  * A league member as read from `league_users` — identity only, no roster.
  * Read by {@link getManagerLeaguemates}.
  */

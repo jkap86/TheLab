@@ -11,6 +11,8 @@ import type {
   LeagueTeam,
   ManagerLeague,
   ManagerLeaguemates,
+  ManagerMatchup,
+  MatchupOpponent,
 } from "./types";
 
 export type {
@@ -20,6 +22,8 @@ export type {
   LeagueTeam,
   ManagerLeague,
   ManagerLeaguemates,
+  ManagerMatchup,
+  MatchupOpponent,
 };
 
 /**
@@ -353,6 +357,78 @@ export async function getManagerRosters(
     out[r.league_id] = [...(out[r.league_id] ?? []), ...(r.players ?? [])];
   }
   return out;
+}
+
+/**
+ * Who the manager plays in each of their leagues in one week — the lineup
+ * checker's list, read from what the crawler has stored and nothing else.
+ *
+ * **The two sides are the same table read twice.** Sleeper returns a *side* per
+ * roster rather than a game, so the opponent is the other row sharing this one's
+ * `matchup_id`, and the join is `LEFT` because that pairing legitimately fails:
+ * a null `matchup_id` never equals anything, which is exactly how a bye or an
+ * unscheduled week arrives. That case comes back as a row with a null
+ * `opponent`, where a league whose week isn't stored comes back as no row at all
+ * — see {@link ManagerMatchup} for why those must not collapse into one answer.
+ *
+ * It needs no {@link FIELDED_A_TEAM_SQL}, for {@link getManagerRosters}' reason:
+ * it joins on `owner_id`, which is that predicate's first half. A manager who
+ * left a league holds no roster there and so has no side of its games.
+ *
+ * The opponent's name is resolved through the roster's owner rather than carried
+ * on the matchup, because the matchup knows only roster ids — and an orphan team
+ * resolves to a roster with no manager, which is a team you still play.
+ */
+export async function getManagerMatchups(
+  userId: string,
+  season: string,
+  week: number,
+): Promise<ManagerMatchup[]> {
+  const { rows } = await pool.query<{
+    league_id: string;
+    roster_id: number;
+    opponent_roster_id: number | null;
+    opponent_owner_id: string | null;
+    opponent_display_name: string | null;
+    opponent_team_name: string | null;
+    opponent_avatar: string | null;
+  }>(
+    `SELECT m.league_id,
+            m.roster_id,
+            o.roster_id     AS opponent_roster_id,
+            opp.owner_id    AS opponent_owner_id,
+            lu.display_name AS opponent_display_name,
+            lu.team_name    AS opponent_team_name,
+            lu.avatar       AS opponent_avatar
+       FROM rosters r
+       JOIN leagues l ON l.league_id = r.league_id
+       JOIN matchups m
+         ON m.league_id = r.league_id AND m.roster_id = r.roster_id AND m.week = $3
+       LEFT JOIN matchups o
+         ON o.league_id = m.league_id AND o.week = m.week
+        AND o.matchup_id = m.matchup_id AND o.roster_id <> m.roster_id
+       LEFT JOIN rosters opp
+         ON opp.league_id = o.league_id AND opp.roster_id = o.roster_id
+       LEFT JOIN league_users lu
+         ON lu.league_id = opp.league_id AND lu.user_id = opp.owner_id
+      WHERE r.owner_id = $1 AND l.season = $2`,
+    [userId, season, week],
+  );
+
+  return rows.map((r) => ({
+    league_id: r.league_id,
+    roster_id: r.roster_id,
+    opponent:
+      r.opponent_roster_id === null
+        ? null
+        : ({
+            roster_id: r.opponent_roster_id,
+            owner_id: r.opponent_owner_id,
+            display_name: r.opponent_display_name,
+            team_name: r.opponent_team_name,
+            avatar: r.opponent_avatar,
+          } satisfies MatchupOpponent),
+  }));
 }
 
 /**
