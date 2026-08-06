@@ -50,27 +50,39 @@ test("managerQueryKeys", async (t) => {
       managerQueryKeys.leaguemates("alice"),
       managerQueryKeys.ranks("alice"),
       managerQueryKeys.ktc("alice"),
-      managerQueryKeys.adpValue("alice", undefined, 4),
+      managerQueryKeys.adpValue("alice", undefined, "steepness=4"),
     ].map(hash);
     assert.equal(new Set(keys).size, keys.length);
   });
 
-  await t.test("two steepness values are two valuations", () => {
+  await t.test("two boards are two valuations", () => {
+    // The curve is one axis of the board and the population is the rest: both
+    // change every card's number, so both have to reach the key. Keying on the
+    // steepness alone is what let a drawer narrowed to startup drafts sit above
+    // cards still priced off every draft crawled.
+    const key = (board: string) => hash(managerQueryKeys.adpValue("alice", undefined, board));
+    assert.notEqual(key("steepness=4"), key("steepness=4.5"));
+    assert.notEqual(key("steepness=4"), key("steepness=4&rounds_min=12"));
     assert.notEqual(
-      hash(managerQueryKeys.adpValue("alice", undefined, 4)),
-      hash(managerQueryKeys.adpValue("alice", undefined, 4.5)),
-    );
-    // …and the same one twice is one entry, which is what makes dragging the
-    // slider back to a curve already read cost nothing.
-    assert.equal(
-      hash(managerQueryKeys.adpValue("alice", undefined, 4)),
-      hash(managerQueryKeys.adpValue("alice", undefined, "4")),
+      key("steepness=4&start_after=2026-06-01"),
+      key("steepness=4&start_after=2026-07-01"),
     );
   });
 
-  await t.test("every curve hangs under the valuation prefix", () => {
+  await t.test("one board assembled two ways is one entry", () => {
+    // Normalised like the ADP board's own key, so a re-ordered query string
+    // doesn't cost a second request holding an identical payload — which is what
+    // makes dragging the steepness back to a curve already read free.
+    const key = (board: string) => hash(managerQueryKeys.adpValue("alice", undefined, board));
+    assert.equal(
+      key("steepness=4&rounds_min=12"),
+      key("rounds_min=12&steepness=4"),
+    );
+  });
+
+  await t.test("every board hangs under the valuation prefix", () => {
     const prefix = managerQueryKeys.adpValues("alice");
-    const one = managerQueryKeys.adpValue("alice", undefined, 4);
+    const one = managerQueryKeys.adpValue("alice", undefined, "steepness=4");
     assert.deepEqual(one.slice(0, prefix.length), [...prefix]);
   });
 });

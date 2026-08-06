@@ -1649,9 +1649,11 @@ stops holding, a comment saying it does would not have caught it.
   independent for that reason. Both are now provided from the same place —
   `AdpControlsProvider` sits beside `LeagueFiltersProvider` in the manager layout,
   reset per manager by the same subtree key — because the ADP controls stopped
-  being a Players-tab thing: their board filters drive that tab's per-player ADP
-  *and* their steepness drives the Leagues tab's team value, so a curve chosen on
-  one tab has to survive the trip to the other.
+  being a Players-tab thing: they drive that tab's per-player ADP *and* the
+  Leagues tab's team value, so a board chosen on one tab has to survive the trip
+  to the other. It used to be only the *steepness* that reached the Leagues tab,
+  which was the smaller half of that and left the drawer able to say one thing
+  while the cards under it said another — see `adpValueQueryString`.
 
   **The provider is per *tool*, not per app, and the trades page mounts a second
   one.** That page reads the same board (`app/trades/page.tsx` wraps `TradesHome`
@@ -1788,12 +1790,8 @@ stops holding, a comment saying it does would not have caught it.
   comparisons; collapsing them to one is how either the badge lies or the cut
   goes unmentioned.
 
-  What this deliberately does **not** touch is the Leagues tab's team value:
-  `adpBoardFor` leaves rounds broad on purpose (matching too many axes trades a
-  little pick-scale smearing for a lot of noise), and it is a server-side board
-  the drawer does not drive at all. The same rookie-pooling argument applies to
-  it and is a larger change than this one — it moves every league card's number,
-  where this moves a panel a reader is looking at.
+  It reaches the Leagues tab's team value too, which took a second change and is
+  the rule below.
 
   **The pinned block is four rows, and each one it lost was a row reporting that
   nothing was set.** It was six — a header, a labelled season row, a labelled
@@ -3060,6 +3058,42 @@ stops holding, a comment saying it does would not have caught it.
   population, the same lesson as KTC's two boards. So each league is priced
   against the board most like it and leagues sharing a `boardSignature` share one
   query — grouped and fetched once per board, never once per league.
+
+  **Which axes a *reader* may set and which a league answers for itself is the
+  whole design of `adpBoardFor`, so it is a type (`AdpBoardChoices`) and not a
+  convention.** The drawer drives this route now — it used to send only the
+  steepness, which let the panel be narrowed to startup drafts while every card
+  under it went on being priced off every draft crawled, two answers to one
+  question a few pixels apart. What crosses is the *population*: the season, the
+  window, the kind of draft, the league size and the format, all of which
+  `adpBoardFor` previously hard-nulled. What does **not** cross is `scoring` and
+  `superflex`, and the reason is not tidiness — the drawer's default for both is
+  "all", so honouring them would *widen* every league's board back into one pool
+  and misprice a superflex roster at every position, not just at quarterback. The
+  arrow between a league and those two runs the other way; that is what
+  `seedFromLeague` is.
+
+  Two details in the plumbing. The season travels as **`board_season`**, because
+  `?season` belongs to `resolveManagerRequest` on all six routes under that
+  prefix, where it means *which season's leagues are on screen* and picks the
+  rosters to price — sharing the name would have made moving the drawer to 2024
+  swap the card list out from under itself. The route maps it back onto the ADP
+  vocabulary and validates through `parseAdpFilters`, so there is still exactly
+  one parser for these parameters rather than a second spelling to drift. And
+  `boardSignature` names **every** axis the board carries, not only the two that
+  vary within a request: the reader's choices are constant across one call, so
+  this changes no grouping today, but a signature standing for less than its
+  board is a silent collision the moment a caller varies one — leagues priced off
+  somebody else's window with nothing in the payload to say so.
+
+  **The expanded panel is the one surface left on the unnarrowed board**, and it
+  is a deliberate hole rather than an oversight: `/api/league/[leagueId]` calls
+  `adpBoardFor` with no choices at all and reads `DEFAULT_STEEPNESS`, which its
+  own comment already owned for the curve before the population joined it. So a
+  rookie's raw ADP in the roster list can read off a pool of rookie drafts while
+  the card that opened it was priced off startups. Closing it means threading the
+  same board and curve through a second route and key; it is worth doing, and it
+  is worth doing as its own change.
 - **A list of managers is labelled by username, a team by team name.** `ui.tsx`
   has both — `managerLabel` (display_name → team_name → roster number) and
   `teamLabel` (the reverse) — and the column heading says which one it is.

@@ -1,6 +1,7 @@
 import { isSuperflexLineup } from "../../shared/ktc/roster.ts";
 import {
   ADP_PEAK,
+  ADP_VALUE_PARAMS,
   DEFAULT_STEEPNESS,
   STEEPNESS_RANGE,
   TYPICAL_STARTING_SLOTS,
@@ -661,6 +662,63 @@ export function adpQueryString(controls: AdpControls, today: string): string {
   if (controls.superflex !== "all") {
     params.set("superflex", controls.superflex === "yes" ? "1" : "0");
   }
+  if (controls.bestBall !== "all") {
+    params.set("best_ball", controls.bestBall === "yes" ? "1" : "0");
+  }
+  if (controls.teams !== "all") {
+    params.set("teams_min", controls.teams);
+    params.set("teams_max", controls.teams);
+  }
+  if (controls.rounds !== "all") {
+    const { min, max } = ROUNDS_BOUNDS[controls.rounds];
+    if (min !== undefined) params.set("rounds_min", String(min));
+    if (max !== undefined) params.set("rounds_max", String(max));
+  }
+
+  return params.toString();
+}
+
+/**
+ * The `/api/user/[username]/adp-value` query string: the same board, minus the
+ * axes that are facts about a league rather than choices about a market.
+ *
+ * The Leagues tab's team value used to take only the steepness off this drawer,
+ * so the panel could be narrowed to startup drafts while every card went on
+ * being priced off every draft crawled. It reads the whole board now — but not
+ * by sending {@link adpQueryString}, because two of those parameters must not
+ * cross:
+ *
+ *   - **`scoring` and `superflex` stay per league**, resolved server-side by
+ *     `adpBoardFor` from the league's own settings. A superflex roster priced
+ *     off 1QB drafts is wrong at *every* position, not just at quarterback (the
+ *     lesson KTC's two boards already taught), and the drawer's default for both
+ *     is `"all"` — so honouring them would mean pooling superflex and 1QB drafts
+ *     for every reader who never opens the drawer. The arrow between a league
+ *     and these two runs the other way, which is what {@link seedFromLeague} is.
+ *   - **The season travels as `board_season`**, not `season`. Every route under
+ *     `/api/user/[username]` reads `?season` as *which season's leagues are on
+ *     screen* — it picks the rosters to price and the weeks to project — so the
+ *     board reusing that name would mean moving the drawer to 2024 silently
+ *     swapped the card list's rosters out from under it. Two questions, two
+ *     names; the route maps one back onto the ADP vocabulary so there is still
+ *     only one parser. The name itself comes from `ADP_VALUE_PARAMS`, since a
+ *     query string is invisible to the compiler and a rename on one side alone
+ *     would leave the board quietly unapplied rather than failing.
+ *
+ * Everything left is the population the reader chose, and `adpBoardFor` left all
+ * of it broad: the window, the kind of draft, the league size and the format.
+ * `draft_type`, `min_picks` and the statuses aren't sent because they are the
+ * route's own constants, the same ones `adpQueryString` spells as literals.
+ */
+export function adpValueQueryString(controls: AdpControls, today: string): string {
+  const params = new URLSearchParams();
+  params.set(ADP_VALUE_PARAMS.steepness, String(controls.steepness));
+  params.set(ADP_VALUE_PARAMS.boardSeason, controls.season);
+
+  const { from, to } = rangeBounds(controls.range, today);
+  if (from) params.set("start_after", from);
+  if (to) params.set("start_before", to);
+
   if (controls.bestBall !== "all") {
     params.set("best_ball", controls.bestBall === "yes" ? "1" : "0");
   }

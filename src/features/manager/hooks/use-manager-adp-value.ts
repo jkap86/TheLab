@@ -17,31 +17,32 @@ export type ManagerAdpValueState = ManagerResourceState<ManagerAdpValueResult>;
  * fetching a value would undo that. See {@link useManagerResource} for why it
  * takes the leagues and reads only whether there are any.
  *
- * `steepness` rides in the path so a change to the value curve re-fetches the
- * whole board — it changes every roster's number, not which leagues are read,
- * and the route re-prices them all with the new curve. It is a number of
- * halvings rather than a preset name, so the slider that sets it re-fetches per
- * notch it lands on and not per pixel it is dragged across.
+ * `board` is the ADP drawer's whole selection as a query string
+ * (`adpValueQueryString`): the value curve, and the population it is applied to
+ * — the season, the window, the kind of draft, the league size and the format.
+ * It used to be the steepness alone, which left the panel narrowable to startup
+ * drafts while every card went on being priced off every draft crawled.
  *
- * It rides in the **key** for the same reason, which is what makes the slider
- * cheap to explore: every curve already read is still in the cache, so dragging
- * back to one costs nothing. That is also why a change here invalidates nothing
- * — the curves are separate entries, not versions of one.
+ * It rides in the **key** as well as the path, which is what makes the drawer
+ * cheap to explore: every board already read is still in the cache, so dragging
+ * the steepness back a notch or widening a window and narrowing it again costs
+ * nothing. That is also why a change here invalidates nothing — the boards are
+ * separate entries, not versions of one.
  */
 export function useManagerAdpValue(
   searched: string,
   leagues: ManagerLeague[] | null,
-  steepness: number,
+  board: string,
 ): ManagerAdpValueState {
   const queryKey = useMemo(
-    () => managerQueryKeys.adpValue(searched, undefined, steepness),
-    [searched, steepness],
+    () => managerQueryKeys.adpValue(searched, undefined, board),
+    [searched, board],
   );
   return useManagerResource<ManagerAdpValueResult>(
     queryKey,
     searched,
     leagues,
-    `adp-value?steepness=${steepness}`,
+    `adp-value?${board}`,
     "Failed to load draft values",
     STALE_TIMES.adpValue,
   );

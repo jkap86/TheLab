@@ -34,7 +34,11 @@ const managerKey = (searched: string): string => searched.toLowerCase();
 // started reading the same board — it was never manager-scoped to begin with
 // (see `boardQueryKeys`'s own note), so a second feature reading it is the
 // mover's rule applying to a key rather than a component. Re-exported under
-// its old name for this feature's own consumers.
+// its old name for this feature's own consumers, and *imported* beside that
+// because the ADP valuation's own key normalises with it: a re-export puts a
+// name on this module's surface without putting it in scope.
+import { normalizeAdpQuery } from "../shared/adp-query.ts";
+
 export {
   boardQueryKeys,
   normalizeAdpQuery,
@@ -63,20 +67,31 @@ export const managerQueryKeys = {
     [...managerQueryKeys.manager(searched), "ktc", seasonKey(season)] as const,
 
   /**
-   * Every steepness of one manager's ADP valuation — the prefix, not an entry.
-   * Dependent invalidation addresses the board as a whole; a single curve is
-   * {@link managerQueryKeys.adpValue}, which appends the number.
+   * Every board of one manager's ADP valuation — the prefix, not an entry.
+   * Dependent invalidation addresses the valuation as a whole; a single board is
+   * {@link managerQueryKeys.adpValue}, which appends it.
    */
   adpValues: (searched: string, season?: string) =>
     [...managerQueryKeys.manager(searched), "adp-value", seasonKey(season)] as const,
 
   /**
-   * One curve of it. Steepness is in the key rather than being a reason to
-   * invalidate: every notch is a different valuation of the same rosters, so
-   * dragging the slider back to a value already read should cost no request.
+   * One board of it — the drawer's whole selection, curve included, as the
+   * `/api/user/[username]/adp-value` query string.
+   *
+   * In the key rather than a reason to invalidate: every board is a different
+   * valuation of the same rosters, so returning to one already read — dragging
+   * the steepness slider back a notch, widening the window and narrowing it
+   * again — should cost no request. It used to be the steepness alone, because
+   * that was the only thing the route took; now that the board narrows the
+   * population too, a key holding less than the request does is a key that
+   * serves one board's answer for another.
+   *
+   * Normalised the same way `boardQueryKeys.adp` normalises its own, so two
+   * assemblies of one board land on a single entry rather than on two holding
+   * identical payloads.
    */
-  adpValue: (searched: string, season: string | undefined, steepness: number | string) =>
-    [...managerQueryKeys.adpValues(searched, season), String(steepness)] as const,
+  adpValue: (searched: string, season: string | undefined, board: string) =>
+    [...managerQueryKeys.adpValues(searched, season), normalizeAdpQuery(board)] as const,
 };
 
 /** `/api/league/[leagueId]` — the expanded card's standings and rosters. */

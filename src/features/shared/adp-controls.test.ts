@@ -9,6 +9,7 @@ import {
   adpNarrowingCount,
   adpQueryString,
   adpRangePresets,
+  adpValueQueryString,
   boardLabel,
   defaultAdpControls,
   deriveScoring,
@@ -26,6 +27,9 @@ import {
   type AdpControls,
   type AdpRange,
 } from "./adp-controls.ts";
+// Relative with the extension, like `adp-controls` own import of this module:
+// Node's test runner strips types but does not know the `@/*` aliases.
+import { ADP_VALUE_PARAMS } from "../../shared/manager/adp-value.ts";
 import type { ManagerLeague } from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
@@ -215,6 +219,100 @@ describe("adpQueryString", () => {
       );
       assert.equal(query.draft_type, "snake,linear");
     }
+  });
+});
+
+describe("adpValueQueryString", () => {
+  test("the default board is the curve, the season and the startup bound", () => {
+    assert.deepEqual(params(adpValueQueryString(defaultAdpControls(SEASON), TODAY)), {
+      steepness: String(DEFAULT_ADP_STEEPNESS),
+      board_season: "2026",
+      rounds_min: "12",
+    });
+  });
+
+  test("scoring and superflex never cross — they are the league's, not the reader's", () => {
+    // A superflex roster priced off 1QB drafts is wrong at every position, so
+    // `adpBoardFor` matches both per league. The drawer's default for each is
+    // "all", so sending them would *widen* every card's board rather than narrow
+    // it — which is why this is asserted against a board that sets them.
+    const query = params(
+      adpValueQueryString(
+        { ...defaultAdpControls(SEASON), scoring: "ppr", superflex: "no" },
+        TODAY,
+      ),
+    );
+    assert.equal("scoring" in query, false);
+    assert.equal("superflex" in query, false);
+  });
+
+  test("the names are the server's own, not a second spelling of them", () => {
+    // A query string is invisible to the compiler, so renaming one end and not
+    // the other is a filter that silently stops applying rather than an error —
+    // the route would fall back to the unnarrowed board and every card would go
+    // on answering with the wrong number. One definition, read from both sides.
+    const query = params(adpValueQueryString(defaultAdpControls(SEASON), TODAY));
+    assert.ok(ADP_VALUE_PARAMS.boardSeason in query);
+    assert.ok(ADP_VALUE_PARAMS.steepness in query);
+  });
+
+  test("the season travels under its own name, never as `season`", () => {
+    // `?season` belongs to `resolveManagerRequest` on every route under that
+    // prefix, where it picks which leagues' rosters are being priced. Sharing the
+    // name would make moving the drawer to 2024 swap the card list out from
+    // under itself.
+    const query = params(
+      adpValueQueryString({ ...defaultAdpControls(SEASON), season: "2024" }, TODAY),
+    );
+    assert.equal(query.board_season, "2024");
+    assert.equal("season" in query, false);
+  });
+
+  test("the population axes are the ones `adpBoardFor` left broad", () => {
+    const query = params(
+      adpValueQueryString(
+        {
+          ...defaultAdpControls(SEASON),
+          range: { preset: "custom", from: "2026-06-01", to: "2026-07-31" },
+          rounds: "rookie",
+          teams: "10",
+          bestBall: "yes",
+        },
+        TODAY,
+      ),
+    );
+    assert.deepEqual(query, {
+      steepness: String(DEFAULT_ADP_STEEPNESS),
+      board_season: "2026",
+      start_after: "2026-06-01",
+      start_before: "2026-07-31",
+      rounds_max: "5",
+      teams_min: "10",
+      teams_max: "10",
+      best_ball: "1",
+    });
+  });
+
+  test("the display-only selection is not on it, the same as the board query", () => {
+    // Which of the two markets is drawn is the drawer's business; the route
+    // reads each league's own type (`getLeagueAdpBoards`) to pick a side.
+    assert.equal(
+      adpValueQueryString(defaultAdpControls(SEASON), TODAY),
+      adpValueQueryString({ ...defaultAdpControls(SEASON), boards: "dynasty" }, TODAY),
+    );
+  });
+
+  test("the curve is on this one, where the board query refuses it", () => {
+    // The mirror of `adpQueryString`'s own rule: steepness converts an averaged
+    // ADP into value, so it means nothing to `/api/adp` and everything here.
+    const steep = params(
+      adpValueQueryString({ ...defaultAdpControls(SEASON), steepness: 6 }, TODAY),
+    );
+    assert.equal(steep.steepness, "6");
+    assert.equal(
+      "steepness" in params(adpQueryString({ ...defaultAdpControls(SEASON), steepness: 6 }, TODAY)),
+      false,
+    );
   });
 });
 

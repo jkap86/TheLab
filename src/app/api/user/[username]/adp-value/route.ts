@@ -4,6 +4,7 @@ import type { ManagerAdpValuePayload } from "@/shared/contract";
 import { databaseBudget } from "@/shared/db";
 import { isSuperflexLineup } from "@/shared/ktc";
 import {
+  ADP_VALUE_PARAMS,
   adpBoardFor,
   adpValue,
   boardSignature,
@@ -11,11 +12,12 @@ import {
   getLeagueAdpBoards,
   getManagerLeagueRosters,
   leagueAdpPool,
+  parseAdpFilters,
   parseSteepness,
   rankOf,
   rosterAdpValue,
 } from "@/shared/manager";
-import type { AdpFilters } from "@/shared/manager";
+import type { AdpBoardChoices, AdpFilters } from "@/shared/manager";
 import { getOptimalLineups } from "@/shared/projections";
 import { collectWithConcurrency, errorMessage } from "@/shared/util";
 
@@ -42,6 +44,12 @@ export const dynamic = "force-dynamic";
  * reading the side matching its own type. Leagues that share a fetch share a
  * single query: the boards are grouped by {@link boardSignature} and fetched
  * once each, not once per league.
+ *
+ * The population *inside* that match is the reader's, sent by the ADP drawer —
+ * the window, the kind of draft, the league size and the format. See
+ * {@link AdpBoardChoices} for why those cross the wire and `scoring`/`superflex`
+ * deliberately don't, and {@link readerBoard} for why the season arrives under a
+ * name of its own.
  */
 export async function GET(
   request: Request,
@@ -54,14 +62,80 @@ export async function GET(
   // The steepness of the value curve, chosen on the ADP drawer's slider and sent
   // as a number of halvings; junk falls back to the default and an out-of-range
   // value clamps rather than being trusted.
-  const halvings = parseSteepness(searchParams.get("steepness"));
+  const halvings = parseSteepness(searchParams.get(ADP_VALUE_PARAMS.steepness));
+
+  // Rejected rather than clamped, unlike the steepness beside it: an
+  // out-of-range curve is a caller asking for more of something real, where an
+  // unparseable date has no nearest sane value to fall back to. The same answer
+  // `/api/adp` gives the same vocabulary, and this string is one the client
+  // builds from its own controls — a 400 here is a bug on this side of the wire.
+  const board = readerBoard(searchParams, season);
+  if (!board.ok) return NextResponse.json({ error: board.error }, { status: 400 });
 
   try {
-    return await adpValuePayload(username, userId, season, halvings);
+    return await adpValuePayload(username, userId, season, halvings, board.board);
   } catch (error) {
     console.error("[adp-value] query failed:", error);
     return readFailureResponse(error, "Failed to load ADP values");
   }
+}
+
+/**
+ * The reader's board off the query string, validated by the one ADP parser
+ * rather than a second spelling of the same vocabulary.
+ *
+ * The season is renamed on the way in, which is the only awkward part and is
+ * load-bearing. `?season` belongs to `resolveManagerRequest` on all six routes
+ * under this prefix, where it means *which season's leagues are on screen* — it
+ * chooses the rosters to price and the weeks to project. So the drawer sends its
+ * board's season as {@link ADP_VALUE_PARAMS.boardSeason}, and this maps it back
+ * onto the name `parseAdpFilters` reads — one spelling for both ends, since a
+ * query string is invisible to the compiler and a rename on one side alone would
+ * leave the board quietly unapplied rather than failing. Sharing the name would have made moving the drawer to
+ * 2024 swap the card list's rosters out from under it; keeping a separate parser
+ * would have made the two ends of the vocabulary drift, which is the failure the
+ * contract rule exists to stop.
+ *
+ * `parseAdpFilters` needs a default season for a caller that bounded the board
+ * neither way. The drawer always sends one, so the fallback is only reached by a
+ * caller that sent no board at all — and the page's own season is the right
+ * answer there, since that is the board this route has always used.
+ */
+function readerBoard(
+  searchParams: URLSearchParams,
+  season: string,
+): { ok: true; board: AdpBoardChoices } | { ok: false; error: string } {
+  const boardParams = new URLSearchParams(searchParams);
+  boardParams.delete("season");
+  const boardSeason = boardParams.get(ADP_VALUE_PARAMS.boardSeason);
+  if (boardSeason) boardParams.set("season", boardSeason);
+
+  const parsed = parseAdpFilters(boardParams, season);
+  if (!parsed.ok) return parsed;
+
+  const {
+    seasons,
+    start_after,
+    start_before,
+    best_ball,
+    rounds_min,
+    rounds_max,
+    teams_min,
+    teams_max,
+  } = parsed.filters;
+  return {
+    ok: true,
+    board: {
+      seasons,
+      start_after,
+      start_before,
+      best_ball,
+      rounds_min,
+      rounds_max,
+      teams_min,
+      teams_max,
+    },
+  };
 }
 
 async function adpValuePayload(
@@ -69,6 +143,7 @@ async function adpValuePayload(
   userId: string,
   season: string,
   halvings: number,
+  chosenBoard: AdpBoardChoices,
 ) {
   const leagues = await getManagerLeagueRosters(userId, season);
   const withOwn = leagues.filter((league) =>
@@ -94,17 +169,18 @@ async function adpValuePayload(
       season,
       rosterPositions: league.roster_positions,
       scoringSettings: league.scoring_settings,
+      board: chosenBoard,
     });
     const signature = boardSignature(filters);
     leagueBoard.set(league.league_id, signature);
 
-    let board = boards.get(signature);
-    if (!board) {
-      board = { filters, playerIds: new Set() };
-      boards.set(signature, board);
+    let grouped = boards.get(signature);
+    if (!grouped) {
+      grouped = { filters, playerIds: new Set() };
+      boards.set(signature, grouped);
     }
     for (const team of league.teams) {
-      for (const id of team.players) if (id) board.playerIds.add(id);
+      for (const id of team.players) if (id) grouped.playerIds.add(id);
     }
   }
 

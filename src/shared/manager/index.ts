@@ -54,18 +54,20 @@ export type {
 } from "./adp";
 export {
   ADP_PEAK,
+  ADP_VALUE_PARAMS,
   DEFAULT_STEEPNESS,
   STEEPNESS_RANGE,
   TYPICAL_STARTING_SLOTS,
   adpBoardFor,
   adpValue,
   boardSignature,
+  defaultBoardChoices,
   leagueAdpPool,
   parseSteepness,
   rosterAdpValue,
   startingSlotCount,
 } from "./adp-value";
-export type { AdpRosterValue } from "./adp-value";
+export type { AdpBoardChoices, AdpRosterValue } from "./adp-value";
 export {
   parseAdpFilters,
   usesDefaultSeason,

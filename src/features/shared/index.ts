@@ -52,12 +52,14 @@ export { firstKickoff, nflMarkers, nflMarkersIn } from "./nfl-calendar";
 export type { NflMarker, NflMarkerKind } from "./nfl-calendar";
 export {
   ADP_PEAK,
+  DEFAULT_ADP_ROUNDS,
   DEFAULT_ADP_STEEPNESS,
   DEFAULT_STEEPNESS,
   STEEPNESS_RANGE,
   adpNarrowingCount,
   adpQueryString,
   adpRangePresets,
+  adpValueQueryString,
   boardLabel,
   defaultAdpControls,
   isUnboundedRange,
