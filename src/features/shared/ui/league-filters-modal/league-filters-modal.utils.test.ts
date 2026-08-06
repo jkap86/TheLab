@@ -5,8 +5,11 @@ import type { ActiveFilter, FilterRule } from "../../league-filters/index.ts";
 import {
   appendRule,
   chipKey,
+  escapeTarget,
   hasRule,
+  isBackdropPress,
   matchShare,
+  nextOpenGroup,
   parseRuleValue,
   removeRule,
   replaceRule,
@@ -206,5 +209,89 @@ describe("parseRuleValue", () => {
     assert.equal(parseRuleValue("abc"), null);
     assert.equal(parseRuleValue("Infinity"), null);
     assert.equal(parseRuleValue("1e999"), null);
+  });
+});
+
+describe("which segment row is open", () => {
+  test("pressing a closed row opens it, and closes whichever was", () => {
+    // One at a time: a second popover floating over the first is two panels
+    // covering the rule bays, which is the crowding the collapse was for.
+    assert.equal(nextOpenGroup(null, "status"), "status");
+    assert.equal(nextOpenGroup("type", "status"), "status");
+  });
+
+  test("pressing the open row closes it", () => {
+    assert.equal(nextOpenGroup("status", "status"), null);
+  });
+
+  test("every row is reachable from every state", () => {
+    // The rule behind `aria-expanded`: exactly one key can be expanded, and the
+    // answer is never two.
+    for (const key of ["status", "type", "format"] as const) {
+      for (const current of [null, "status", "type", "format"] as const) {
+        const next = nextOpenGroup(current, key);
+        assert.equal(next, current === key ? null : key);
+      }
+    }
+  });
+});
+
+describe("what Escape means in the dialog", () => {
+  test("with a row floating, the row goes first and the dialog survives", () => {
+    // The nested rule: a row's options float *over* the panel, so one keypress
+    // taking both is one press too many. This is what the dialog's own `cancel`
+    // is preventDefaulted on.
+    for (const key of ["status", "type", "format"] as const) {
+      assert.equal(escapeTarget(key), "group");
+    }
+  });
+
+  test("with nothing floating, Escape is the dialog's", () => {
+    assert.equal(escapeTarget(null), "dialog");
+  });
+
+  test("the two answers are exhaustive, so `cancel` is never left undecided", () => {
+    // A third answer would mean a keypress the handler neither prevents nor
+    // passes on, which is a dialog that ignores Escape.
+    const answers = new Set(
+      ([null, "status", "type", "format"] as const).map(escapeTarget),
+    );
+    assert.deepEqual([...answers].sort(), ["dialog", "group"]);
+  });
+});
+
+describe("whether a press dismissed the dialog", () => {
+  // Stand-ins for the two elements identity is compared against; nothing here
+  // reads a property off them.
+  const dialog = { id: "dialog" };
+  const inside = { id: "panel" };
+
+  test("a press that began and ended on the backdrop closes it", () => {
+    assert.equal(isBackdropPress(dialog, dialog, dialog), true);
+  });
+
+  test("a press inside the panel does not", () => {
+    assert.equal(isBackdropPress(dialog, inside, inside), false);
+  });
+
+  test("a selection dragged out of the panel does not", () => {
+    // The bug this exists for: `click` fires on the common ancestor of its two
+    // ends, so selecting text in the panel and releasing past its edge reports
+    // the dialog as the target — and used to close the modal, discarding the
+    // draft mid-edit.
+    assert.equal(isBackdropPress(dialog, inside, dialog), false);
+  });
+
+  test("a click with no press before it does not", () => {
+    // Enter or Space on a control inside the panel: the recorded near end is
+    // null, so the pair can never read as a backdrop press.
+    assert.equal(isBackdropPress(dialog, null, dialog), false);
+  });
+
+  test("no dialog is no press, whatever the two ends agree on", () => {
+    // Both ends are null before the ref is attached, and identity alone would
+    // call that a match.
+    assert.equal(isBackdropPress(null, null, null), false);
+    assert.equal(isBackdropPress(undefined, undefined, undefined), false);
   });
 });

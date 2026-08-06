@@ -4,10 +4,13 @@ import { describe, test } from "node:test";
 import { ADP_DRAWER_ENTER_MS, ADP_DRAWER_EXIT_MS } from "./adp-drawer.constants.ts";
 import {
   TABBABLE_SELECTOR,
+  cancelFocusRestore,
+  deferFocusRestore,
   drawerKeyAction,
   drawerKeydownHandler,
   isTabbable,
   lockScroll,
+  releaseFocusRestore,
   restoreFocus,
   tabWrap,
   tabbableStops,
@@ -34,6 +37,17 @@ import {
  * its setup. The drawer's *markup* contract (dialog role, modal flag, accessible
  * name, and that the panel really does contain tab stops for the trap to find)
  * is asserted in `adp-drawer.render.test.ts`, which does render it.
+ *
+ * **The focus handback is the case that pushed hardest on that line, and where
+ * it ended up is worth knowing.** *When* it happens is a fact about the hook's
+ * effects and is out of reach here; *what happens at each step* is the three
+ * slot moves below, and those are the whole of the arithmetic. The last suite
+ * drives them in the orders the hook drives them in — close, close-then-reopen,
+ * unmount-while-open, and a cycle repeated — so the property that matters
+ * (nothing is focused until the drawer is off screen, and a cancelled handback
+ * stays cancelled) is asserted rather than described. What is genuinely left to
+ * a browser is that the hook calls them on those transitions and not others,
+ * and the exit timer's own `clearTimeout`.
  */
 
 type FakeState = {
@@ -346,11 +360,174 @@ describe("handing focus back on the way out", () => {
     assert.equal(off.focusCount, 0);
   });
 
+  test("an inert element is left alone", () => {
+    // Inertness inherits, so this covers a trigger whose whole subtree went
+    // inert under it as well as one wearing the attribute itself.
+    const inert = fake("under-a-modal", { inert: true });
+    assert.equal(restoreFocus(inert), false);
+    assert.equal(inert.focusCount, 0);
+  });
+
+  test("an element that is no longer displayed is left alone", () => {
+    // The app bar's seat empties at some widths, and focusing a `display: none`
+    // element is a call that silently does nothing — which reads to the caller
+    // as a handback that landed.
+    const hidden = fake("collapsed", { rects: 0 });
+    assert.equal(restoreFocus(hidden), false);
+    assert.equal(hidden.focusCount, 0);
+  });
+
+  test("a negative tabindex is not a refusal — a focus target is not a tab stop", () => {
+    // The one check `isTabbable` makes that this must not: a trigger opting out
+    // of the tab sequence is still exactly where focus belongs on the way out.
+    const target = fake("programmatic", { tabindex: "-1" });
+    assert.equal(isTabbable(target), false);
+    assert.equal(restoreFocus(target), true);
+    assert.equal(target.focusCount, 1);
+  });
+
   test("a refusal is swallowed rather than thrown at the caller", () => {
     // This runs inside a keydown handler; an exception here would take the
     // Escape that asked for it with it.
     const hostile = fake("hostile", { throwOnFocus: true });
     assert.equal(restoreFocus(hostile), false);
+  });
+});
+
+describe("when the handback happens, which is not when the drawer closes", () => {
+  /**
+   * The two slots the lifecycle hook holds, as the hook holds them: `opener`
+   * while the drawer is up, `pending` from the moment closing begins until the
+   * exit has played out. The bug these replaced was one slot spent in the
+   * `open` effect's cleanup — which runs the instant `open` goes false, while
+   * the panel is still mounted, still visible and still `aria-modal="true"`.
+   */
+  const slots = () => ({
+    opener: { current: null as Fake | null },
+    pending: { current: null as Fake | null },
+  });
+
+  test("closing owes the handback; it does not pay it", () => {
+    const { opener, pending } = slots();
+    const trigger = fake("trigger");
+    opener.current = trigger;
+
+    deferFocusRestore(opener, pending);
+    // The whole of the fix: the trigger has been *recorded*, and nothing on the
+    // page behind has been focused while the drawer is still on screen.
+    assert.equal(trigger.focusCount, 0);
+    assert.equal(opener.current, null, "the open slot is emptied as it hands over");
+    assert.equal(pending.current, trigger);
+  });
+
+  test("the exit finishing is what pays it", () => {
+    const { opener, pending } = slots();
+    const trigger = fake("trigger");
+    opener.current = trigger;
+
+    deferFocusRestore(opener, pending);
+    assert.equal(releaseFocusRestore(pending), true);
+    assert.equal(trigger.focusCount, 1);
+  });
+
+  test("reopening during the exit cancels it outright", () => {
+    const { opener, pending } = slots();
+    const first = fake("trigger");
+    opener.current = first;
+    deferFocusRestore(opener, pending);
+
+    // The reader pressed the trigger again mid-slide. The hook captures the new
+    // opener and cancels what was owed, so the exit timer finding its way to
+    // the release below has nothing to spend — no focus lands on the page
+    // behind, which is the flash this prevents.
+    const second = fake("trigger-again");
+    opener.current = second;
+    cancelFocusRestore(pending);
+
+    assert.equal(pending.current, null);
+    assert.equal(releaseFocusRestore(pending), false);
+    assert.equal(first.focusCount, 0);
+    assert.equal(second.focusCount, 0, "the reopened drawer focuses its own panel");
+    assert.equal(opener.current, second, "and the new opener survives the cancel");
+  });
+
+  test("paying twice is a no-op — the off-screen beat and the unmount share a slot", () => {
+    // Both the `onScreen` effect and the mount-lifetime cleanup can reach the
+    // release, and on an ordinary close both do. The second must not re-focus a
+    // trigger the reader has since moved away from.
+    const { opener, pending } = slots();
+    const trigger = fake("trigger");
+    opener.current = trigger;
+    deferFocusRestore(opener, pending);
+
+    assert.equal(releaseFocusRestore(pending), true);
+    assert.equal(releaseFocusRestore(pending), false);
+    assert.equal(trigger.focusCount, 1);
+  });
+
+  test("deferring twice cannot lose the target", () => {
+    // The `open` effect's cleanup runs once per close, but a drawer unmounted
+    // while open runs it beside the mount-lifetime cleanup — and an unguarded
+    // move would overwrite the pending trigger with the empty opener slot.
+    const { opener, pending } = slots();
+    const trigger = fake("trigger");
+    opener.current = trigger;
+
+    deferFocusRestore(opener, pending);
+    deferFocusRestore(opener, pending);
+    assert.equal(pending.current, trigger);
+  });
+
+  test("an unmount while open still hands focus back", () => {
+    // Nothing transitions `onScreen` here — the component is gone — so the
+    // focused element goes with it and the reader is left on `<body>`. The
+    // mount-lifetime cleanup is what covers it.
+    const { opener, pending } = slots();
+    const trigger = fake("trigger");
+    opener.current = trigger;
+
+    deferFocusRestore(opener, pending); // the `open` effect's cleanup
+    releaseFocusRestore(pending); // the mount-lifetime cleanup, declared after it
+    assert.equal(trigger.focusCount, 1);
+  });
+
+  test("nothing owed is nothing paid, so a drawer that never opened is silent", () => {
+    const { pending } = slots();
+    assert.equal(releaseFocusRestore(pending), false);
+  });
+
+  test("an opener that has gone, gone disabled or gone inert is not focused", () => {
+    for (const state of [
+      { isConnected: false },
+      { disabled: true },
+      { inert: true },
+      { rects: 0 },
+    ]) {
+      const { opener, pending } = slots();
+      const trigger = fake("trigger", state);
+      opener.current = trigger;
+      deferFocusRestore(opener, pending);
+      // Still consumed: the slot empties whether or not the target took it, so
+      // a refused handback is not retried on the next close.
+      assert.equal(releaseFocusRestore(pending), false);
+      assert.equal(trigger.focusCount, 0);
+      assert.equal(pending.current, null);
+    }
+  });
+
+  test("repeated open/close cycles keep no stale opener", () => {
+    const { opener, pending } = slots();
+    const triggers = [fake("t0"), fake("t1"), fake("t2")];
+    for (const trigger of triggers) {
+      opener.current = trigger; // the `open` effect's setup
+      cancelFocusRestore(pending);
+      deferFocusRestore(opener, pending); // its cleanup, on close
+      releaseFocusRestore(pending); // the exit finishing
+      assert.equal(opener.current, null);
+      assert.equal(pending.current, null);
+    }
+    // Each cycle handed focus back to its *own* trigger, exactly once.
+    assert.deepEqual(triggers.map((t) => t.focusCount), [1, 1, 1]);
   });
 });
 

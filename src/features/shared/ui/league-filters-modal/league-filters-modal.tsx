@@ -105,6 +105,7 @@ export function LeagueFiltersModal({
     close,
     apply,
     reset,
+    onBackdropPointerDown,
     onBackdropClick,
     onCancel,
   } = useLeagueFiltersModal(filters, onChange);
@@ -147,6 +148,9 @@ export function LeagueFiltersModal({
         // The rule the whole dialog encodes, stated on arrival — the same line
         // the footer draws where the rail isn't beside the controls.
         aria-describedby={hintId}
+        // Both ends of the press, because only the pair says whether it was a
+        // press on the backdrop — see `isBackdropPress`.
+        onPointerDown={onBackdropPointerDown}
         onClick={onBackdropClick}
         onCancel={onCancel}
         className="m-auto w-[min(1040px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"

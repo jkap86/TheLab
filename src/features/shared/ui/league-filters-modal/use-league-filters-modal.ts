@@ -2,6 +2,10 @@
 
 import {
   type MouseEvent,
+  // Aliased, because the document listener further down takes the *DOM*
+  // `PointerEvent` and React's synthetic one would shadow it — two types with
+  // one name, where the compiler's complaint names neither.
+  type PointerEvent as ReactPointerEvent,
   type SyntheticEvent,
   useCallback,
   useEffect,
@@ -11,6 +15,11 @@ import {
 
 import { DEFAULT_LEAGUE_FILTERS, type LeagueFilters } from "../../league-filters";
 import type { SegmentKey } from "./league-filters-modal.types.ts";
+import {
+  escapeTarget,
+  isBackdropPress,
+  nextOpenGroup,
+} from "./league-filters-modal.utils.ts";
 
 /**
  * Everything the dialog *is* over time: the draft being edited, which segment
@@ -23,11 +32,14 @@ import type { SegmentKey } from "./league-filters-modal.types.ts";
  * across the sections that render them, those two facts would be read in three
  * places and written in one.
  *
- * **Nothing here is reachable without a document**, which is the same line
- * `use-adp-drawer-lifecycle` draws: `showModal`, the focus move, the outside
- * press and `cancel` all need a real dialog element, so the folder's tests cover
- * what the sections *render* and what their handlers *do*, and this module is
- * covered by the four behaviours being documented rather than asserted.
+ * **The calls are unreachable without a document; the decisions behind them are
+ * not**, which is the same line `use-adp-drawer-lifecycle` draws. `showModal`,
+ * the focus move onto the panel and the `close` that four paths share all need a
+ * real dialog element and are covered by the manual checklist. What each of them
+ * is *conditioned on* — which row a press toggles to, whether Escape means the
+ * row or the dialog, and whether a completed press was on the backdrop — is in
+ * `league-filters-modal.utils` and tested there, because those are the parts
+ * that can be wrong while the DOM calls stay right.
  */
 export function useLeagueFiltersModal(
   filters: LeagueFilters,
@@ -48,7 +60,7 @@ export function useLeagueFiltersModal(
   const [openGroup, setOpenGroup] = useState<SegmentKey | null>(null);
   const closeGroup = useCallback(() => setOpenGroup(null), []);
   const toggleGroup = useCallback(
-    (key: SegmentKey) => setOpenGroup((current) => (current === key ? null : key)),
+    (key: SegmentKey) => setOpenGroup((current) => nextOpenGroup(current, key)),
     [],
   );
 
@@ -59,7 +71,15 @@ export function useLeagueFiltersModal(
   const open = useCallback(() => {
     setDraft(filters);
     setOpenGroup(null);
-    dialogRef.current?.showModal();
+    // **`showModal` on a dialog that is already open throws**, where `close` on
+    // one already closed is a spec'd no-op — so this is the one of the pair that
+    // needs asking first. A modal makes everything outside it inert, so the
+    // trigger cannot ordinarily be pressed twice; what this covers is the paths
+    // that don't go through the trigger at all — a caller opening it
+    // programmatically, or a re-entrant press on an engine that delivers one.
+    // An `InvalidStateError` here would take down the render that asked.
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
     // `showModal` autofocuses the first focusable descendant, which here is the
     // close button — so the dialog opened with an X wearing a focus ring, which
     // reads as a pressed or selected control rather than as the way out (and on
@@ -70,12 +90,16 @@ export function useLeagueFiltersModal(
   }, [filters]);
 
   // Closing discards the draft on exactly the terms Escape does, since the draft
-  // is reseeded on open.
+  // is reseeded on open. No `open` check to match the one in `open` above:
+  // `close` on a dialog with no `open` attribute returns without doing anything,
+  // so the asymmetry is the platform's rather than an oversight.
   const close = useCallback(() => dialogRef.current?.close(), []);
 
   // A press anywhere outside the trough dismisses an open row. Pointer-down
-  // rather than click, so dragging out of the popover doesn't leave it up, and
-  // on the dialog itself rather than the document — the page behind is inert.
+  // rather than click, so dragging out of the popover doesn't leave it up. The
+  // listener is on the document because that is where a press on the dialog's
+  // own backdrop is heard; the page *behind* is inert while a modal is up, so
+  // the wide target costs nothing — there is nothing back there to hear.
   useEffect(() => {
     if (!openGroup) return;
     const dismiss = (event: PointerEvent) => {
@@ -92,19 +116,39 @@ export function useLeagueFiltersModal(
 
   const reset = useCallback(() => setDraft(DEFAULT_LEAGUE_FILTERS), []);
 
-  // The backdrop is the dialog's own pseudo-element, so a click that lands on
-  // the dialog box itself (padding-free, panel-sized) is a click outside the
-  // panel — the gesture the platform doesn't wire up for you.
+  // Where a press outside the panel began. The backdrop is the dialog's own
+  // pseudo-element, so such a press lands on the `<dialog>` box itself — but so
+  // does the *click* ending a text selection that started inside the panel and
+  // ran past its edge, since a click fires on the common ancestor of its two
+  // ends. Recording the near end is what tells those apart; see
+  // {@link isBackdropPress}.
+  const pressedTarget = useRef<EventTarget | null>(null);
+
+  const onBackdropPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDialogElement>) => {
+      pressedTarget.current = event.target;
+    },
+    [],
+  );
+
   const onBackdropClick = useCallback((event: MouseEvent<HTMLDialogElement>) => {
-    if (event.target === dialogRef.current) dialogRef.current?.close();
+    // Cleared whichever way this goes, so a click with no pointer press before
+    // it — Enter or Space on a control inside — can never inherit an earlier
+    // gesture's answer.
+    const began = pressedTarget.current;
+    pressedTarget.current = null;
+    if (isBackdropPress(dialogRef.current, began, event.target))
+      dialogRef.current?.close();
   }, []);
 
   // Escape closes the innermost thing that is up: an open segment row first, the
   // dialog only once nothing is floating over it. The platform fires `cancel`
-  // before it closes, which is the one hook for that.
+  // before it closes, which is the one hook for that — and `cancel` is not
+  // delegated by React, so the listener is on the element itself and this
+  // `preventDefault` is the real one.
   const onCancel = useCallback(
     (event: SyntheticEvent<HTMLDialogElement>) => {
-      if (!openGroup) return;
+      if (escapeTarget(openGroup) === "dialog") return;
       event.preventDefault();
       setOpenGroup(null);
     },
@@ -124,6 +168,7 @@ export function useLeagueFiltersModal(
     close,
     apply,
     reset,
+    onBackdropPointerDown,
     onBackdropClick,
     onCancel,
   };

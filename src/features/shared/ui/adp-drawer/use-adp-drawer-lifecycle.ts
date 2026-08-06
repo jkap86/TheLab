@@ -5,9 +5,11 @@ import { type RefObject, useEffect, useRef, useState } from "react";
 import { ADP_DRAWER_EXIT_MS } from "./adp-drawer.constants.ts";
 import {
   TABBABLE_SELECTOR,
+  cancelFocusRestore,
+  deferFocusRestore,
   drawerKeydownHandler,
   lockScroll,
-  restoreFocus,
+  releaseFocusRestore,
   tabbableStops,
 } from "./adp-drawer.focus.ts";
 import type { AdpDrawerPanel } from "./adp-drawer.types.ts";
@@ -33,7 +35,11 @@ export type AdpDrawerLifecycle = {
  * Everything about the drawer being on screen, in one place: the beat it stays
  * mounted for its exit, the page's scroll lock, the modal's keyboard contract —
  * the focus move on open, Escape, Tab held inside the dialog, and focus handed
- * back to the opener on the way out — and which of its floating panels is up.
+ * back to the opener once the exit has played — and which of its floating panels
+ * is up.
+ *
+ * **The handback keys on `onScreen`, not on `open`, and the two are not the same
+ * moment.** See the two slots below.
  *
  * The panel selection is here rather than in the component because **Escape
  * closes the innermost thing that is up**, so the key handler has to know
@@ -117,23 +123,43 @@ export function useAdpDrawerLifecycle({
     return lockScroll(document.body);
   }, [onScreen]);
 
-  // Where focus goes when the drawer closes. Captured on open rather than passed
-  // in, because the drawer is rendered by a layout and pressed from the app bar
-  // — the two are far enough apart that threading a ref between them would be a
-  // prop on every caller for a fact the platform already has.
+  // Where focus goes when the drawer closes, in two slots. Captured on open
+  // rather than passed in, because the drawer is rendered by a layout and
+  // pressed from the app bar — the two are far enough apart that threading a ref
+  // between them would be a prop on every caller for a fact the platform already
+  // has.
+  //
+  // **Two slots, because the drawer stops being open a beat before it stops
+  // being on screen.** `opener` holds the trigger while the drawer is up;
+  // `pendingRestore` holds it through the exit, once the handback is owed and
+  // before it may be paid. Restoring on `open` alone put the reader on the page
+  // behind while a panel still carrying `role="dialog"` and `aria-modal="true"`
+  // was mid-slide and fully visible — background focus under a live modal, which
+  // is the one state the trap exists to make impossible. The three moves between
+  // the slots are `adp-drawer.focus`'s, and tested there.
   const opener = useRef<HTMLElement | null>(null);
+  const pendingRestore = useRef<HTMLElement | null>(null);
 
   // The modal's whole keyboard contract, in one listener on `open`: Escape (the
-  // innermost thing first), Tab held inside the dialog, and focus handed back on
-  // the way out. It keys on `open` alone — a drawer playing its exit is not a
-  // dialog any more, which is the same line `closing` draws for pointer events —
-  // and the two callbacks it needs are read through refs above so a fresh arrow
-  // from the caller cannot re-run it and steal focus mid-keystroke.
+  // innermost thing first), Tab held inside the dialog, and the focus move on
+  // arrival. It keys on `open` alone — a drawer playing its exit answers no
+  // keys, which is the same line `closing` draws for pointer events — and the
+  // two callbacks it needs are read through refs above so a fresh arrow from the
+  // caller cannot re-run it and steal focus mid-keystroke.
+  //
+  // What it no longer does is *restore* focus: its cleanup only records that the
+  // handback is owed. Paying it here would land the reader on the page behind
+  // while the panel is still up and still `aria-modal`.
   useEffect(() => {
     if (!open) return;
 
     opener.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Opening cancels a handback still owed from the last close, which is the
+    // reopen-during-exit case: the reader is inside the dialog again — the focus
+    // move below sees to that — so sending them to the old trigger a beat later
+    // is exactly the background flash the two slots exist to prevent.
+    cancelFocusRestore(pendingRestore);
 
     // Every dependency is a thunk, so the stops are re-read per press: opening
     // the filter tray or the lookback panel adds controls the reader must be
@@ -159,16 +185,36 @@ export function useAdpDrawerLifecycle({
     return () => {
       document.removeEventListener("keydown", onKey);
       // Closing, or unmounted while open. Either way the focused element is
-      // inside a dialog that is going, so it goes back where it came from —
-      // unless the opener is gone or disabled, which `restoreFocus` judges. A
-      // drawer reopened before this settles is no exception to worry about: the
-      // setup above runs straight after and focuses the panel, so the reopened
-      // drawer wins the last word.
-      const target = opener.current;
-      opener.current = null;
-      restoreFocus(target);
+      // inside a dialog that is going, so the handback becomes *owed* here — and
+      // is paid by one of the two effects below, neither of which can run while
+      // the panel is still on screen. This is the whole of the fix: the dialog
+      // keeps the focus for the beat it keeps `aria-modal`.
+      deferFocusRestore(opener, pendingRestore);
     };
   }, [open]);
+
+  // The handback itself, on the transition the reader can actually see: the
+  // panel has finished its exit and is no longer rendered, so there is nothing
+  // left for focus to be trapped inside and the trigger can have it back.
+  // Keyed on `onScreen`, so a reopen mid-exit — which never lets it reach false
+  // — simply never fires, and the cancel above has already emptied the slot.
+  useEffect(() => {
+    if (onScreen) return;
+    releaseFocusRestore(pendingRestore);
+  }, [onScreen]);
+
+  // The one case the effect above cannot see: unmounted while still on screen,
+  // where `onScreen` never transitions because the component is gone. The
+  // focused element goes with it and the browser drops the reader on `<body>`,
+  // so the handback is owed exactly as it is on an ordinary close. Declared
+  // last, so its cleanup runs after the `open` effect's has filled the slot;
+  // spending the slot empties it, so an ordinary close cannot pay twice.
+  useEffect(
+    () => () => {
+      releaseFocusRestore(pendingRestore);
+    },
+    [],
+  );
 
   return { onScreen, closing, panelRef, openPanel, togglePanel, closePanel };
 }

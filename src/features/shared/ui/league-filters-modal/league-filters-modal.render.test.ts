@@ -15,6 +15,8 @@ import {
   type LeagueFilters,
   SLOT_GROUPS,
   STATUS_OPTIONS,
+  activeFilterCount,
+  matchesFilters,
   matchesSlotRule,
 } from "../../league-filters/index.ts";
 import type { ManagerLeague } from "@/shared/manager";
@@ -28,6 +30,7 @@ import type { SegmentKey } from "./league-filters-modal.types.ts";
 import { RuleBay } from "./rule-bay.tsx";
 import { SegmentRow } from "./segment-row.tsx";
 import { SegmentTrough } from "./segment-trough.tsx";
+import { useLeagueFiltersModal } from "./use-league-filters-modal.ts";
 
 /**
  * The dialog without a DOM.
@@ -555,5 +558,142 @@ describe("what the controls do", () => {
     });
     press(elements(tree).filter((el) => el.type === "button")[0], "onClick")();
     assert.equal(opened, 1);
+  });
+});
+
+/**
+ * The hook's own state, reached the one way it can be without a document.
+ *
+ * `renderToStaticMarkup` runs React's hook dispatcher — `useState`, `useRef`,
+ * `useCallback` and `useId` all resolve — so a probe component can hand back
+ * what `useLeagueFiltersModal` returned. Effects never run, and no setter is
+ * called here (a state update outside a render has nothing to re-render on the
+ * server), so what this reaches is exactly the seeding and the callbacks that
+ * read the draft as it stands.
+ */
+function mountHook(
+  filters: LeagueFilters,
+  onChange: (next: LeagueFilters) => void = () => {},
+) {
+  const captured: ReturnType<typeof useLeagueFiltersModal>[] = [];
+  function Probe() {
+    captured.push(useLeagueFiltersModal(filters, onChange));
+    return null;
+  }
+  renderToStaticMarkup(createElement(Probe));
+  assert.equal(captured.length, 1, "expected the probe to have run the hook once");
+  return captured[0];
+}
+
+describe("the draft the dialog edits", () => {
+  test("it is seeded from the applied filters", () => {
+    // Seeded on mount and re-seeded on open, rather than synced by an effect:
+    // the page behind is inert while the dialog is up, so the only moment the
+    // two can disagree is the moment it opens.
+    const applied: LeagueFilters = {
+      ...DEFAULT_LEAGUE_FILTERS,
+      type: "2",
+      slots: [superflex],
+    };
+    assert.deepEqual(mountHook(applied).draft, applied);
+  });
+
+  test("nothing is floating on arrival", () => {
+    // A row left open from last time would cover the rule bays the moment the
+    // dialog reappeared.
+    assert.equal(mountHook(DEFAULT_LEAGUE_FILTERS).openGroup, null);
+  });
+
+  test("Apply emits the draft as it stands, and nothing else does", () => {
+    const applied: LeagueFilters = { ...DEFAULT_LEAGUE_FILTERS, status: "in_season" };
+    const emitted: LeagueFilters[] = [];
+    const hook = mountHook(applied, (next) => emitted.push(next));
+
+    // Closing and resetting are the two paths that must *not* reach the page:
+    // the draft is discarded on close precisely because it is reseeded on open.
+    hook.close();
+    hook.reset();
+    assert.deepEqual(emitted, [], "only Apply commits");
+
+    hook.apply();
+    assert.deepEqual(emitted, [applied]);
+  });
+
+  test("Reset's target is the selection the trigger reads as unnarrowed", () => {
+    // What "reset" means is `DEFAULT_LEAGUE_FILTERS`, and the claim worth
+    // pinning is that those defaults narrow nothing — a default that filtered
+    // would leave the trigger badged with a count nobody chose.
+    assert.equal(activeFilterCount(DEFAULT_LEAGUE_FILTERS), 0);
+    assert.equal(leagues.filter((l) => matchesFilters(l, DEFAULT_LEAGUE_FILTERS)).length, leagues.length);
+  });
+
+  test("editing the draft leaves the applied selection untouched", () => {
+    // The controls write through `setDraft`, so what reaches them is a fresh
+    // object per edit — an in-place write would apply the filter the moment it
+    // was picked, which is the whole point of committing on Apply.
+    const applied: LeagueFilters = { ...DEFAULT_LEAGUE_FILTERS, slots: [superflex] };
+    const before = structuredClone(applied);
+    const edits: LeagueFilters[] = [];
+
+    const tree = SegmentTrough({
+      troughRef: { current: null },
+      draft: applied,
+      onChange: (next) => edits.push(next),
+      leagues,
+      openGroup: null,
+      onToggle: () => {},
+      onClose: () => {},
+    });
+    const [status] = elements(tree).filter((el) => typeof el.props.probe === "function");
+    press(status, "onPick")("in_season");
+
+    assert.equal(edits.length, 1);
+    const [edited] = edits;
+    assert.deepEqual(applied, before, "the applied selection is not written through");
+    assert.notEqual(edited, applied, "and the edit is a new object");
+    assert.equal(edited.status, "in_season");
+    assert.deepEqual(edited.slots, applied.slots);
+  });
+});
+
+describe("two of these dialogs on one page", () => {
+  // A real state: the manager Leagues tab renders one in the header plate's
+  // corner and the shares sheet opened from its rail renders a second.
+  test("no id is written twice, and every reference still resolves", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        "div",
+        null,
+        createElement(LeagueFiltersModal, {
+          key: "a",
+          filters: DEFAULT_LEAGUE_FILTERS,
+          onChange: () => {},
+          leagues,
+        }),
+        createElement(LeagueFiltersModal, {
+          key: "b",
+          filters: { ...DEFAULT_LEAGUE_FILTERS, type: "2" },
+          onChange: () => {},
+          leagues,
+          label: "Leagues",
+        }),
+      ),
+    );
+
+    const ids = Array.from(html.matchAll(/ id="([^"]*)"/g), (m) => m[1]);
+    assert.ok(ids.length >= 4, "expected both dialogs to carry a title and a hint");
+    assert.equal(new Set(ids).size, ids.length, "ids must be unique across both");
+
+    // Two dialogs, two distinct labels, each landing on a heading of its own.
+    const labelled = Array.from(html.matchAll(/aria-labelledby="([^"]*)"/g), (m) => m[1]);
+    assert.equal(labelled.length, 2);
+    assert.notEqual(labelled[0], labelled[1]);
+    for (const target of labelled) {
+      assert.ok(ids.includes(target), `aria-labelledby ${target} resolves to nothing`);
+    }
+
+    const described = Array.from(html.matchAll(/aria-describedby="([^"]*)"/g), (m) => m[1]);
+    assert.equal(described.length, 2);
+    assert.notEqual(described[0], described[1]);
   });
 });
