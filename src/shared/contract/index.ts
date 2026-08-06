@@ -595,40 +595,69 @@ export type ManagerKtcPayload = {
   leagues: Record<string, LeagueKtcEntry>;
 };
 
-/** One league's roster priced on ADP-derived draft value, and how it splits. */
-export type LeagueAdpValue = AdpRosterValue & {
+/**
+ * One league's roster priced on **one** league-type board, and how it splits.
+ *
+ * `rostered` is not here: how many players a roster holds is a fact about the
+ * roster, not about the board reading it, and two copies of it are one edit away
+ * from disagreeing. `priced` is per board and genuinely differs — a rookie is on
+ * the dynasty board and absent from the redraft one — which is the whole reason
+ * this is a shape rather than a number.
+ */
+export type LeagueAdpBoardValue = Omit<AdpRosterValue, "rostered"> & {
+  /**
+   * How many crawled drafts stood behind this board — this side of the fetch,
+   * not both. Shipped with the number the way `/api/adp` reports what it
+   * averaged: a thin board is a noisy one, and a board of zero is why a roster
+   * can come back unpriced.
+   */
+  draft_count: number;
+  /**
+   * The manager's place among their leaguemates by starter ADP value *on this
+   * board* — the `split.starters` half, ranked across every team. Null on the
+   * same terms as the KTC rank: no lineup to draw starters from, or every roster
+   * prices at zero (a board with no matching drafts, or a pre-draft league).
+   */
+  starters_rank: LeagueRank | null;
+};
+
+/**
+ * A league's roster priced on both league-type boards, side by side.
+ *
+ * It used to carry one reading — whichever board matched the league's own type —
+ * and that made a column of these incomparable down a list holding both kinds of
+ * league: 38,400 in a dynasty league and 38,400 in a redraft one are two markets'
+ * numbers under one heading. So the payload answers both and the *column* chooses,
+ * exactly as `/api/adp` does for a player row.
+ *
+ * Both sides are real readings of any roster, which is why neither is an em dash
+ * outside its own league type: a dynasty roster's redraft value is what a win-now
+ * market would pay for the same players, and the gap between the two is the
+ * clearest thing on the card about whether a team is built to win now or later.
+ */
+export type LeagueAdpEntry = {
   /**
    * Which ADP board priced it: superflex where the league starts more than one
    * quarterback, 1QB otherwise. A quarterback goes far earlier in superflex
    * drafts, so the same roster is worth a different total on the two — the board
    * travels with the number rather than being assumed by whoever reads it, the
-   * same rule the KTC value follows.
+   * same rule the KTC value follows. It applies to both readings below, since it
+   * is a fact about the league's lineup rather than about either market.
    */
   superflex: boolean;
   /**
-   * The league-type board whose crawled drafts priced this roster — a dynasty
-   * startup drafts rookies a redraft never sees, so pooling them would misprice
-   * both. The fetch answers both boards; this says which side the league read.
+   * The market this league actually plays in — dynasty for Sleeper `settings.type`
+   * 2, redraft for everything else, keeper included. Neither reading is gated on
+   * it; it is what tells a reader which of the two columns is their league's
+   * native answer and which is the comparison.
    */
   board: AdpBoardType;
-  /**
-   * How many crawled drafts stood behind that board — the side named by
-   * `board`, not the whole fetch. Shipped with the number the way `/api/adp`
-   * reports what it averaged: a thin board is a noisy one, and a board of zero
-   * is why a roster can come back unpriced.
-   */
-  draft_count: number;
-};
-
-/** A league's ADP value plus where its starter value ranks league-wide. */
-export type LeagueAdpEntry = LeagueAdpValue & {
-  /**
-   * The manager's place among their leaguemates by starter ADP value — the
-   * `split.starters` half, ranked across every team. Null on the same terms as
-   * the KTC rank: no lineup to draw starters from, or every roster prices at zero
-   * (a board with no matching drafts, or a pre-draft league).
-   */
-  starters_rank: LeagueRank | null;
+  /** Distinct players held, valued or not — the same roster on either board. */
+  rostered: number;
+  /** This roster read off the redraft board's crawled drafts. */
+  redraft: LeagueAdpBoardValue;
+  /** The same roster read off the dynasty board's. */
+  dynasty: LeagueAdpBoardValue;
 };
 
 /**
@@ -650,9 +679,11 @@ export type ManagerAdpValuePayload = {
    */
   weeks: number[];
   /**
-   * League id → that roster's ADP value and its starter-value rank. Absent for a
+   * League id → that roster priced on both league-type boards. Absent for a
    * league the manager holds no roster in; present with a zero total and
-   * `priced: 0` where no rostered player is on the matching board.
+   * `priced: 0` on a board no rostered player appears on — a real, empty answer
+   * rather than a gap, and the usual one for the board the league doesn't play in
+   * when the drawer's window holds only the other market's drafts.
    */
   leagues: Record<string, LeagueAdpEntry>;
 };

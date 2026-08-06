@@ -3059,6 +3059,30 @@ stops holding, a comment saying it does would not have caught it.
   against the board most like it and leagues sharing a `boardSignature` share one
   query — grouped and fetched once per board, never once per league.
 
+  **The league-type half of that is answered by *both* boards and chosen by the
+  column, which is the one axis where matching the league was the wrong call.**
+  Superflex and scoring pick the fetch, and getting either wrong misprices a
+  roster; the league type doesn't, because both readings of a roster are true —
+  a dynasty team's redraft value is what a win-now market would pay for the same
+  players, and the gap between the two is the clearest thing on a card about
+  whether it is built to win now or later. Reading only the league's own market
+  cost that *and* made a column dishonest: a stat column is scanned down a list
+  holding leagues of both kinds, so one `ADP value` heading sat over two markets'
+  numbers with nothing saying which row was which. `LeagueAdpEntry` therefore
+  carries `redraft` and `dynasty` side by side — the shape `/api/adp` already
+  answers a player row in — and `league-metrics` offers one value and one rank
+  per board (`adp_total_dynasty`, `adp_rank_redraft`, …). It costs no query: both
+  markets are already in `getDraftAdpForPlayers`'s answer, so what doubles is a
+  curve and a sum over ids in memory. `board` still travels, saying which market
+  the league itself plays in — it gates neither reading now, it tells a reader
+  which of the two columns is native and the other column's hover says so.
+  Two consequences worth keeping. `priced` is **per board** and `rostered` is
+  hoisted out of both, since how many players a roster holds is a fact about the
+  roster while what a board prices genuinely differs (a rookie is on one and
+  absent from the other). And a heading is 76px, so those four columns are
+  labelled `Dynasty` / `Redraft` and `Dynasty #` / `Redraft #`: `Dynasty value`
+  measures 90px and a truncated heading is the only name its column has.
+
   **Which axes a *reader* may set and which a league answers for itself is the
   whole design of `adpBoardFor`, so it is a type (`AdpBoardChoices`) and not a
   convention.** The drawer drives this route now — it used to send only the

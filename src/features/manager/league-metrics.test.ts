@@ -46,14 +46,23 @@ const ktc: LeagueKtcEntry = {
 };
 
 const adp: LeagueAdpEntry = {
-  total: 38400,
-  priced: 14,
-  rostered: 16,
-  split: { starters: 26100, bench: 12300 },
   superflex: true,
   board: "dynasty",
-  draft_count: 37,
-  starters_rank: { rank: 5, of: 12 },
+  rostered: 16,
+  redraft: {
+    total: 21800,
+    priced: 11,
+    split: { starters: 17400, bench: 4400 },
+    draft_count: 512,
+    starters_rank: { rank: 9, of: 12 },
+  },
+  dynasty: {
+    total: 38400,
+    priced: 14,
+    split: { starters: 26100, bench: 12300 },
+    draft_count: 37,
+    starters_rank: { rank: 5, of: 12 },
+  },
 };
 
 const ctx = (over: Partial<MetricContext> = {}): MetricContext => ({
@@ -176,30 +185,88 @@ describe("value metrics", () => {
     assert.equal(total.kind === "value" && total.text, null);
   });
 
-  test("ADP value prints the whole priced total", () => {
-    const total = cell("adp_total");
-    assert.equal(total.kind === "value" && total.text, "38,400");
+  test("ADP value prints the whole priced total, per board", () => {
+    const dynasty = cell("adp_total_dynasty");
+    const redraft = cell("adp_total_redraft");
+    assert.equal(dynasty.kind === "value" && dynasty.text, "38,400");
+    assert.equal(redraft.kind === "value" && redraft.text, "21,800");
   });
 
   test("ADP value is an em dash when nothing on the roster is priced", () => {
-    const total = cell("adp_total", {
-      adp: { ...adp, total: 0, priced: 0, split: null },
+    const total = cell("adp_total_redraft", {
+      adp: {
+        ...adp,
+        redraft: { ...adp.redraft, total: 0, priced: 0, split: null },
+      },
     });
     assert.equal(total.kind === "value" && total.text, null);
     assert.equal(metricPreview(total), "—");
   });
 });
 
-describe("ADP rank metric", () => {
-  test("places the roster by its starter value", () => {
-    const rank = cell("adp_rank");
-    assert.equal(rank.kind, "rank");
-    assert.equal(rank.kind === "rank" && rank.rank?.rank, 5);
-    assert.equal(metricPreview(rank), "#5");
+describe("ADP market metrics", () => {
+  // The whole point of the split: one column per market, so a column scanned
+  // down a list of dynasty and redraft leagues is one market's numbers.
+  test("the two markets are separate columns and read separate boards", () => {
+    for (const key of [
+      "adp_total_redraft",
+      "adp_total_dynasty",
+      "adp_rank_redraft",
+      "adp_rank_dynasty",
+    ]) {
+      assert.ok(LEAGUE_METRICS_BY_KEY[key], `missing ADP metric ${key}`);
+    }
+    // The pooled columns they replaced are gone, so a stored selection naming
+    // one falls back per slot rather than reading a market it can't name.
+    assert.equal(LEAGUE_METRICS_BY_KEY["adp_total"], undefined);
+    assert.equal(LEAGUE_METRICS_BY_KEY["adp_rank"], undefined);
   });
 
-  test("is null before the ADP values land", () => {
-    const rank = cell("adp_rank", { adp: null });
+  test("a rank places the roster by its starter value on that board", () => {
+    const dynasty = cell("adp_rank_dynasty");
+    assert.equal(dynasty.kind, "rank");
+    assert.equal(dynasty.kind === "rank" && dynasty.rank?.rank, 5);
+    assert.equal(metricPreview(dynasty), "#5");
+
+    const redraft = cell("adp_rank_redraft");
+    assert.equal(redraft.kind === "rank" && redraft.rank?.rank, 9);
+  });
+
+  test("both markets answer for a league that plays in only one of them", () => {
+    // A dynasty league's redraft value is what a win-now market would pay for
+    // the same players — a comparison, not a mistake, so it is never blanked.
+    assert.equal(adp.board, "dynasty");
+    const redraft = cell("adp_total_redraft");
+    assert.equal(redraft.kind === "value" && redraft.text, "21,800");
+    assert.match(redraft.title, /this league is a dynasty league/);
+  });
+
+  test("the native column doesn't say which market the league is in", () => {
+    // It is the column's own market, so the line would be restating the heading.
+    assert.doesNotMatch(cell("adp_total_dynasty").title, /this league is a/);
+  });
+
+  test("a board with no drafts behind it says so rather than reading as zero", () => {
+    const empty = cell("adp_total_redraft", {
+      adp: {
+        ...adp,
+        redraft: {
+          total: 0,
+          priced: 0,
+          split: null,
+          draft_count: 0,
+          starters_rank: null,
+        },
+      },
+    });
+    assert.equal(empty.kind === "value" && empty.text, null);
+    assert.match(empty.title, /0 crawled drafts/);
+  });
+
+  test("are null before the ADP values land", () => {
+    const rank = cell("adp_rank_dynasty", { adp: null });
+    const total = cell("adp_total_redraft", { adp: null });
     assert.equal(rank.kind === "rank" && rank.rank, null);
+    assert.equal(total.kind === "value" && total.text, null);
   });
 });
