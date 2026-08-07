@@ -36,6 +36,7 @@ const adp: AdpPlayerPayload = {
   name: "Patrick Mahomes",
   position: "QB",
   team: "KC",
+  rookie: false,
   redraft: { adp: 34.2, min_pick: 18, max_pick: 60, picks: 41, stdev: 8.1 },
   dynasty: { adp: 14.6, min_pick: 3, max_pick: 41, picks: 88, stdev: 6.4 },
 };

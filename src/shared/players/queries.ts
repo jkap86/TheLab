@@ -49,6 +49,46 @@ export async function getPlayersByIds(
 }
 
 /**
+ * Which of `ids` are in their first NFL season — Sleeper's `years_exp` of 0.
+ *
+ * It exists for one caller and one question: `/api/adp` marks the rookies on a
+ * board so the trades page can rank them into a **rookie-pick ladder**, where
+ * the k-th rookie off the board is rookie pick k. That is what puts a traded
+ * pick and a traded player on one scale, which no board of player prices can do
+ * on its own.
+ *
+ * **Absent is "not known to be a rookie", never "veteran".** `years_exp` is null
+ * for a team defence and for anyone Sleeper hasn't filled it in for, and the
+ * ladder is an *ordering* — one wrongly-included name shifts every pick below it
+ * by one. So the test is an equality against 0 rather than anything looser, and
+ * a null simply doesn't match.
+ *
+ * **It names the class that is a rookie *now*, which is the only one the cache
+ * can name.** The players map is replaced daily and carries no history, so a
+ * board for a past season finds none of today's rookies in it and hands back an
+ * empty ladder — which reads as picks being unpriced on that board, the honest
+ * answer rather than a ladder built from prices those players never had.
+ *
+ * Narrowed by id rather than returning every rookie, so this is an index lookup
+ * on the primary key and the caller can't accidentally rank a player its board
+ * never averaged.
+ */
+export async function getRookiePlayerIds(
+  ids: string[],
+): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+
+  const { rows } = await pool.query<{ player_id: string }>(
+    `SELECT player_id
+       FROM players
+      WHERE player_id = ANY($1)
+        AND years_exp = 0`,
+    [ids],
+  );
+  return new Set(rows.map((r) => r.player_id));
+}
+
+/**
  * Ids of every cached player at one of `positions` (Sleeper's spelling — "WR",
  * "DEF", "OLB").
  *

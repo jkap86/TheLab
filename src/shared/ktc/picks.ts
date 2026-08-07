@@ -26,11 +26,15 @@
  *   lookup states a preference rather than a key, and says which row it landed
  *   on — {@link ktcPickPrice}.
  *
- * Pure and free of runtime imports, so both ends read it: the route deep-imports
- * it to key the rows it sends (the module owning `ktc_values` is what queries
- * them), and the client deep-imports it to look one up — the way it already
- * reaches `@/shared/ktc/roster` for {@link isSuperflexLineup}.
+ * Pure and free of runtime imports beyond {@link ktcBoardValue} — which arrives
+ * relatively with a `.ts` extension, the mechanism the pure modules already use
+ * between themselves — so both ends read it: the route deep-imports it to send
+ * the board (the module owning `ktc_values` is what queries it), and the client
+ * deep-imports it to look a pick up, the way it already reaches
+ * `@/shared/ktc/roster` for {@link isSuperflexLineup}.
  */
+
+import { ktcBoardValue } from "./roster.ts";
 
 /**
  * Which third of a draft's order a pick falls in — KTC's own carve-up of a
@@ -227,4 +231,90 @@ export function ktcPickPrice(
     if (price) return { price, tier: row, exact: row === tier };
   }
   return null;
+}
+
+/**
+ * The earliest season this board prices a pick for — the nearest rookie draft
+ * KTC still has an opinion about.
+ *
+ * It is the reference a future pick is discounted against, and it has to be read
+ * off the board rather than off a calendar, because *which* seasons KTC carries
+ * moves through the year: a season's rows come off the board once its draft has
+ * happened, so through most of a season the nearest priced draft is next year's.
+ * Reading it from the board is what makes the discount below mean the same thing
+ * in February and in August without anything being told what month it is.
+ *
+ * Null for a board with no parseable pick rows at all, which is a real state
+ * (KTC unsynced, or a rename the parser hasn't learned) and the one case where
+ * no pick can be discounted at all.
+ */
+export function ktcPickBaseSeason(
+  board: Readonly<Record<string, KtcPickPrice>>,
+): string | null {
+  let earliest: string | null = null;
+  for (const key of Object.keys(board)) {
+    const season = key.slice(0, key.indexOf("|"));
+    if (!season) continue;
+    if (earliest === null || season < earliest) earliest = season;
+  }
+  return earliest;
+}
+
+/** How much less a future pick is worth than the nearest one — see below. */
+export type KtcPickDiscount = {
+  /** The pick's KTC price as a fraction of the same pick in {@link base}. */
+  factor: number;
+  /** The season the fraction is measured against — {@link ktcPickBaseSeason}. */
+  base: string;
+  /** False where either side of the ratio came off a stand-in row. */
+  exact: boolean;
+};
+
+/**
+ * What a pick in a future season is worth as a fraction of the same pick in the
+ * nearest season KTC prices.
+ *
+ * **This is the only thing KTC is asked for once the value column is ADP's**, and
+ * it is asked because ADP genuinely cannot answer it. A rookie-pick ladder is
+ * built from the players a draft would return, so it prices *a* 1.05 — it has
+ * nothing to say about waiting three years to use one, since the class that pick
+ * will spend is not a class anybody can name yet. KTC publishes exactly that
+ * opinion, one row per season, and a ratio between two of its rows carries it
+ * across to the ADP scale without either board's units coming with it. That is
+ * what makes this a legitimate mixing of the two where summing them is not: a
+ * ratio is dimensionless.
+ *
+ * A pick at or before the base season is undiscounted (`factor: 1`), which is
+ * also how a current-year pick is priced — the ladder *is* the current class, so
+ * there is nothing to discount it by. Everything later reads KTC's own rows for
+ * both ends, through {@link ktcPickPrice}, so the tier preference and its
+ * fallbacks are the same ones the KTC column uses rather than a second spelling.
+ *
+ * Null where the ratio cannot be formed — no board, no row for the pick's
+ * season, no row for the base at that round, or a base priced at zero. Null is
+ * what leaves a far-future pick **unpriced** rather than quoting it at a nearby
+ * pick's value, which is the one wrong answer here that would look like a
+ * working one: a 2032 4th is not worth what next year's 4th is.
+ */
+export function ktcPickDiscount(
+  board: Readonly<Record<string, KtcPickPrice>>,
+  pick: { season: string; round: number },
+  tier: KtcPickTier | null,
+  /** Which of KTC's two boards both ends of the ratio are read on. */
+  superflex: boolean,
+): KtcPickDiscount | null {
+  const base = ktcPickBaseSeason(board);
+  if (base === null) return null;
+  // Seasons are four-digit years, so a string compare is the numeric one.
+  if (pick.season <= base) return { factor: 1, base, exact: true };
+
+  const future = ktcPickPrice(board, pick, tier);
+  const nearest = ktcPickPrice(board, { season: base, round: pick.round }, tier);
+  if (!future || !nearest) return null;
+
+  const value = ktcBoardValue(superflex, future.price);
+  const anchor = ktcBoardValue(superflex, nearest.price);
+  if (value === null || anchor === null || anchor <= 0) return null;
+
+  return { factor: value / anchor, base, exact: future.exact && nearest.exact };
 }

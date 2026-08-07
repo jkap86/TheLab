@@ -799,6 +799,7 @@ describe("adpBoardRows", () => {
     name: player_id,
     position: null,
     team: null,
+    rookie: false,
     redraft:
       redraft === null
         ? null

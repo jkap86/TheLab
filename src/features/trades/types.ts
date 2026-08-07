@@ -1,5 +1,6 @@
-import type { LeaguematePayload } from "@/shared/contract";
+import type { AdpPlayerPayload, LeaguematePayload } from "@/shared/contract";
 import type { KtcValue } from "@/shared/ktc";
+import type { AdpBoardStats, AdpBoardType } from "@/shared/manager";
 import type { PlayerSummary } from "@/shared/players";
 import type { Trade, TradePickAsset, TradeSide } from "@/shared/trades";
 
@@ -17,4 +18,13 @@ import type { Trade, TradePickAsset, TradeSide } from "@/shared/trades";
 /** A manager as a trade names them: id, display name, resolved avatar. */
 export type TradeManager = LeaguematePayload;
 
-export type { KtcValue, PlayerSummary, Trade, TradePickAsset, TradeSide };
+export type {
+  AdpBoardStats,
+  AdpBoardType,
+  AdpPlayerPayload,
+  KtcValue,
+  PlayerSummary,
+  Trade,
+  TradePickAsset,
+  TradeSide,
+};

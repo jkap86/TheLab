@@ -322,14 +322,18 @@ export type TradesPagePayload = {
    * these rows sat unread in `ktc_values` while the card said draft picks
    * weren't on KTC's board at all.
    *
-   * **All three tiers travel, plus the untiered row where KTC publishes one.**
-   * Which third a pick falls in needs the league's draft order *and* its size,
-   * and the size is on the league list the client already holds — so the tier is
-   * resolved there and this sends what it could resolve to. That is four small
-   * entries per `(season, round)` the page names rather than one per pick, and
-   * it is what keeps a busy league's page from re-sending the same price forty
-   * times. {@link ktcPickPrice} is the lookup, and it is what decides the
-   * fallback for a pick whose draft doesn't exist yet.
+   * **The whole board travels, not the rows this page's picks land on.** Two
+   * reasons, and the second is why it is no longer narrowed. Which third of a
+   * round a pick falls in needs the league's draft order *and* its size, and the
+   * size is on the league list the client already holds — so the tier is
+   * resolved there, and every tier of a row has to be here for it to resolve
+   * against ({@link ktcPickPrice} is that lookup, and what decides the fallback
+   * for a pick whose draft doesn't exist yet). Beyond that, the ADP column
+   * discounts a future pick by the ratio of its row to the **nearest priced
+   * season's**, which is a fact about the board rather than about any pick on
+   * the page: a page naming no 2027 pick could not have asked for the row that
+   * answers it. The board is a few dozen rows, so it is sent whole rather than
+   * narrowed to a superset nobody can compute.
    */
   pickKtc: Record<string, KtcValue>;
   /**
@@ -765,6 +769,21 @@ export type AdpPlayerPayload = {
   name: string;
   position: string | null;
   team: string | null;
+  /**
+   * Whether he is in his first NFL season — Sleeper's `years_exp` of 0.
+   *
+   * It travels because ranking the rookies on a board *is* the rookie-pick
+   * ladder: the first rookie off it is the 1.01, the second the 1.02, and so on,
+   * which is what lets the trades board price a traded pick on the same scale as
+   * a traded player. Sent per row rather than as a side list because the ladder
+   * is a reading of these rows and nothing else — a rookie the board didn't
+   * average is not a rung.
+   *
+   * The players cache carries no history, so this always names the class that is
+   * a rookie *now*: a board for a past season simply contains none of them, and
+   * the ladder there is empty rather than wrong.
+   */
+  rookie: boolean;
   /** His average over the redraft board's drafts (redraft + keeper leagues). */
   redraft: AdpBoardStats | null;
   /** His average over the dynasty board's drafts. */

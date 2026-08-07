@@ -849,6 +849,36 @@ body {
       0 1px 0 var(--edge-active),
       0 3px 9px -5px rgba(0, 255, 229, 0.4);
   }
+  /* The lit pill at the *thin* wall, for the parts that wear both classes.
+
+     `.lab-chip-sm` thins the wall and `.lab-chip-on` re-declares it, and the lit
+     rule is the later of the two — so a small chip stood a pixel prouder the
+     moment it started narrowing something. On one control that could pass for
+     emphasis; these are worn in *rows* (the subject rail's three keys, the trade
+     search panel's results, the filters' quick-adds), and one part of a row
+     standing prouder than the parts beside it reads as machining seated wrong
+     rather than as a state. The lit face, its glow and its hover are the signal
+     and are untouched here — thickness is not one of the things being said.
+
+     Written as the intersection rather than by reordering the two: it outranks
+     both on specificity, so neither has to move and neither can be undone by a
+     later edit to the other. It overrides the wall and the press travel and
+     nothing else, exactly as `.lab-chip-sm` overrides `.lab-chip`. */
+  .lab-chip-on.lab-chip-sm {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      inset 0 -5px 9px -8px rgba(0, 90, 82, 0.9),
+      0 2px 0 var(--edge-active),
+      0 4px 10px -4px rgba(0, 255, 229, 0.35);
+  }
+  .lab-chip-on.lab-chip-sm:active {
+    transform: translateY(1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      inset 0 -4px 8px -8px rgba(0, 90, 82, 0.9),
+      0 1px 0 var(--edge-active),
+      0 2px 6px -4px rgba(0, 255, 229, 0.35);
+  }
 
   /* The stat columns' heading rail: one machined billet the list scrolls under.
 

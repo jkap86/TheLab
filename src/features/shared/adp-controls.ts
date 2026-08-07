@@ -15,7 +15,7 @@ import {
   shiftMonths,
   todayIso,
 } from "./date-range.ts";
-import { deriveScoring } from "./league-filters/predicates.ts";
+import { deriveScoring, leagueAdpBoard } from "./league-filters/predicates.ts";
 import type { AdpBoardType, ManagerLeague } from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
@@ -100,12 +100,13 @@ export type AdpControls = {
    */
   rounds: "all" | "rookie" | "full";
   /**
-   * How top-heavy the ADP → team-value curve is on the Leagues tab, as the
-   * number of times value halves across a league's startable pool. Unlike every
-   * field above it, this doesn't narrow *which drafts* are averaged — it sets how
-   * a player's ADP converts into value once averaged, so it rides on the
-   * per-player board (which is a raw number) doing nothing and drives the
-   * league-card team value instead.
+   * How top-heavy the ADP → value curve is, as the number of times value halves
+   * across a league's startable pool. Unlike every field above it, this doesn't
+   * narrow *which drafts* are averaged — it sets how a player's ADP converts
+   * into value once averaged, so it rides on the per-player board (which is a
+   * raw number) doing nothing and drives the two places a *roster's* worth of
+   * ADP is summed: the Leagues tab's team value, and the trades board's own
+   * value column, where a haul is priced on the league it was traded in.
    *
    * A number rather than one of three preset names, because it is a single
    * scalar with an obvious ordering and the three names were only ever three
@@ -513,8 +514,8 @@ export function boardLabel(range: AdpRange, season: string): string {
  * against a default of 2026 is reading a different market, which is a larger
  * departure than any filter here, not a smaller one. The **steepness** does not,
  * because it narrows nothing — it converts an ADP into value once averaged, so
- * it changes the Leagues tab's team value and leaves the population the trigger
- * describes untouched. `boards` follows the steepness for the same reason: which
+ * it changes what the Leagues tab's cards and the trades board's value column
+ * say while leaving the population the trigger describes untouched. `boards` follows the steepness for the same reason: which
  * of the two markets is drawn is a display choice over an unchanged population,
  * the same kind of selection as which stat column a league card shows.
  */
@@ -584,16 +585,16 @@ export function seedFromLeague(
   league: ManagerLeague,
 ): AdpControls {
   const settings = league.settings ?? {};
-  // Sleeper omits `type` for standard redraft leagues; a non-number is redraft.
-  // Type 2 is dynasty and everything else — keeper included — reads the redraft
-  // board, the same bucketing the server's `ADP_BOARDS` documents.
-  const typeRaw = settings.type;
-  const typeNum = typeof typeRaw === "number" ? typeRaw : 0;
 
   return {
     ...controls,
     season: league.season,
-    boards: typeNum === 2 ? "dynasty" : "redraft",
+    // Type 2 is dynasty and everything else — keeper included — reads the
+    // redraft board, the bucketing the server's `ADP_BOARDS` documents. Read
+    // through `leagueAdpBoard` rather than off `settings.type` here, because the
+    // trade cards price a haul on the same question and two spellings of it is
+    // how one of them ends up reading the wrong market.
+    boards: leagueAdpBoard(league),
     scoring: deriveScoring(league.scoring_settings),
     superflex: isSuperflexLineup(league.roster_positions) ? "yes" : "no",
     bestBall: settings.best_ball === 1 ? "yes" : "no",

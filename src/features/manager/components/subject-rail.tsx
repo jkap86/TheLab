@@ -3,7 +3,12 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
-import { Avatar, PositionBadge, useReturnFocus } from "@/features/shared";
+import {
+  Avatar,
+  LeagueFiltersPlaceholder,
+  PositionBadge,
+  useReturnFocus,
+} from "@/features/shared";
 
 import { useSubjectFilters } from "../filters-context";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
@@ -56,6 +61,34 @@ const LeaguemateSharesSheet = dynamic(
 );
 
 /**
+ * The league filters, loaded the first time this rail renders a list to narrow.
+ *
+ * It moved here from {@link LeaguesViewLayout}, where it was seated in the
+ * header plate's bottom-right corner. Nothing about the split changed with it:
+ * the component *is* a trigger and a `<dialog>`, so the seam is the whole of it,
+ * and the fallback holds the key's exact box until the chunk lands — which
+ * matters more on this row than it did in that corner, since everything to the
+ * right of the key is laid out against its width.
+ *
+ * The module path is named directly rather than the `@/features/shared` barrel,
+ * which is the half of this that is invisible in review: re-exported from there
+ * the dialog joins the static graph of every page importing anything from that
+ * barrel, and this `dynamic()` would be deferring bytes the browser had already
+ * been sent. The *placeholder* comes off the barrel, which is the whole point of
+ * their being two modules.
+ */
+const LeagueFiltersModal = dynamic(
+  () =>
+    import("@/features/shared/ui/league-filters-modal").then(
+      (m) => m.LeagueFiltersModal,
+    ),
+  {
+    ssr: false,
+    loading: () => <LeagueFiltersPlaceholder label="Filters" seat="rail" />,
+  },
+);
+
+/**
  * How many results a panel over the list can show without becoming the list.
  *
  * Becoming the list is what the *shares* key is for, and that is now a sheet
@@ -64,7 +97,31 @@ const LeaguemateSharesSheet = dynamic(
 const RESULT_LIMIT = 8;
 
 /**
- * The *who is in it* filter, as a part of its own above the column headings.
+ * The page's filter row: what these leagues *are*, then who is *in* them, then
+ * what survives — as a part of its own above the column headings.
+ *
+ * **It carries both selections now, and the league filters' key leading it is
+ * the change.** That key was machined into the header plate's bottom-right
+ * corner: 20px tall, at the smallest type on the card, under the countdown, in
+ * the corner diagonally furthest from the list it narrows. What made it hard to
+ * find was not its size but its company — three of that plate's four corners are
+ * readouts, so the one control on it was seated among facts, while the row
+ * directly below was already a filter row with an obvious hole at its leading
+ * end. The two questions are siblings ("dynasty superflex leagues" / "leagues
+ * holding Bijan"), they are applied one after the other in
+ * {@link useFilteredLeagues}, and the plate's own scope line has always named
+ * them in that order. So the row now reads in it too.
+ *
+ * They stay **two controls** rather than becoming one dialog with two tabs, for
+ * the reason the ADP board is a third control elsewhere again: a league rule is
+ * an attribute of the league and a subject is a person or player in it, and one
+ * dialog over both would suggest a single selection. What is shared is the
+ * *surface*, which is what a reader was looking for.
+ *
+ * A seam parts the key from the subjects, the same groove that already parts the
+ * count from the two doors — three groups on one face, told apart by machining
+ * rather than by spacing, since the row wraps below `sm` and spacing does not
+ * survive a wrap.
  *
  * **It used to be the upper storey of the headings billet, and what it cost
  * there was legibility rather than pixels.** One billet pays for one wall, one
@@ -234,7 +291,23 @@ export function SubjectRail({ view }: { view: FilteredLeagues }) {
   }, [open, close]);
 
   const count = subjects.subjects.length;
-  const total = view.leagueFiltered.length;
+  /**
+   * What the row is counted against, and it is the *account* rather than the
+   * league-filtered list it used to be.
+   *
+   * With only the subject filter on this rail, `N of M` meant "of the leagues
+   * the other control left" — honest, and it named a population stated nowhere
+   * on screen. Both controls sit here now, so the denominator is the whole
+   * account and the numerator is what the two of them leave between them: one
+   * number answering the row it is on. The plate's corner tab states the same
+   * total, which is where a reader sees what this is out of.
+   */
+  const total = view.data?.leagues.length ?? 0;
+  const narrowed = view.filtered.length !== total;
+  // The unfiltered list, which the dialog's per-option counts are over — and the
+  // condition the key is drawn under, which is the one the header plate applied
+  // when it held the key: an account with no leagues has nothing to narrow.
+  const allLeagues = view.data?.leagues ?? null;
 
   return (
     <div ref={boxRef}>
@@ -254,10 +327,59 @@ export function SubjectRail({ view }: { view: FilteredLeagues }) {
               the row is content rather than chrome — so it takes a second line
               down there instead of pushing the count off the end of the part. */}
           <div className="lab-slab-face lab-slab-face-rail lab-notch-all flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5">
+            {/* The first group: what these leagues *are*.
+
+                It leads because that is the order the two narrowings are
+                applied in and the order the plate's scope line names them — and
+                because it is the only one of the two that answers on a cold
+                page, before any roster or membership map has been read.
+
+                `seat="rail"` is the two keys at the other end of this row,
+                exactly: same pill, same 10px, same thin wall. A filter key a
+                step larger than the parts beside it would be the only thing on
+                this face claiming a rank, which is a claim about *controls*
+                where the row's own hierarchy is about *questions*. */}
+            {allLeagues && allLeagues.length > 0 && (
+              <>
+                {/* **The wrapper is what closes the search panel, and it is
+                    needed because the key moved *inside* this rail's box.** The
+                    panel dismisses on a pointer-down outside `boxRef`, which is
+                    how every other control on the page takes it down; the two
+                    shares keys sit inside that box too and call `close()`
+                    themselves for the same reason. Without this the dialog would
+                    open over a panel still mounted underneath it — two floating
+                    things over one list, which is the state this rail is careful
+                    not to reach.
+
+                    Pointer-down rather than click, matching the gesture the
+                    dismissal itself listens for, so the panel is gone before the
+                    dialog arrives rather than a frame after it.
+
+                    A wrapper rather than a callback on the dialog because that
+                    component owns its own open state and exposes no `onOpen` —
+                    and adding one would be a prop the trades page has no use
+                    for. It shrink-wraps the key, so the row's layout is what it
+                    would be with the key loose in it. */}
+                <span className="flex shrink-0" onPointerDown={close}>
+                  <LeagueFiltersModal
+                    filters={view.filters}
+                    onChange={view.setFilters}
+                    leagues={allLeagues}
+                    seat="rail"
+                  />
+                </span>
+                <RailSeam />
+              </>
+            )}
+
             {/* Dropped below `sm`, where the row is already wrapping: the
                 trigger beside it says "Player or leaguemate" until something is
                 picked, so the caption is the one part of the row a phone can
-                lose without it stopping making sense. */}
+                lose without it stopping making sense.
+
+                It sits *after* the key rather than opening the row, which is
+                what makes it true: it captions the group it introduces, and the
+                group before it has a key naming itself. */}
             <span className="hidden shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/55 sm:inline">
               Who&apos;s in it
             </span>
@@ -348,25 +470,20 @@ export function SubjectRail({ view }: { view: FilteredLeagues }) {
                   press on a result gives. `sr-only` says what it counts: on
                   screen the list under it is the context, and read aloud on its
                   own "19 of 121" names nothing. */}
+              {/* Narrowed by *either* control, since both are on this row now.
+                  Unnarrowed it is the bare total: a denominator restating its own
+                  numerator is the thing the plate keeps having to relearn. */}
               <span
                 role="status"
                 className={`shrink-0 pl-1 font-mono text-[10px] tabular-nums ${
                   view.subjectsLoading ? "text-foreground/25" : "text-foreground/55"
                 }`}
               >
-                {count > 0 ? `${view.filtered.length} of ${total}` : `${total}`}
+                {narrowed ? `${view.filtered.length} of ${total}` : `${total}`}
                 <span className="sr-only"> leagues</span>
               </span>
 
-              {/* A groove between the readout and the parts pressed beside it —
-                  the seam's rule stood on end, dark cut with a lit far wall. Both
-                  halves are spelled here because there is no vertical spelling of
-                  `.lab-ledge-seam`, and one shadow alone is a border rather than
-                  machining. */}
-              <span
-                aria-hidden="true"
-                className="h-3.5 w-px shrink-0 bg-[rgba(0,0,0,0.5)] shadow-[1px_0_0_rgba(255,255,255,0.09)]"
-              />
+              <RailSeam />
 
               {/* The other two doors: the whole ranked list of each kind, over
                   the page, with what is worth knowing about every name on it. The
@@ -453,6 +570,25 @@ export function SubjectRail({ view }: { view: FilteredLeagues }) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * A groove between two groups of parts on the rail's face — the ledge seam's
+ * rule stood on end, a dark cut with a lit far wall.
+ *
+ * Both halves are spelled out because there is no vertical spelling of
+ * `.lab-ledge-seam`, and one shadow alone is a border rather than machining. It
+ * is a component rather than two copies of that pair because the row now has two
+ * of them, and two spellings of one piece of machining is one edit away from a
+ * face with a groove on one side and a rule on the other.
+ */
+function RailSeam() {
+  return (
+    <span
+      aria-hidden="true"
+      className="h-3.5 w-px shrink-0 bg-[rgba(0,0,0,0.5)] shadow-[1px_0_0_rgba(255,255,255,0.09)]"
+    />
   );
 }
 

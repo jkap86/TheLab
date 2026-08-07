@@ -13,6 +13,7 @@ import { LEAGUE_METRICS, type MetricContext } from "../league-metrics";
 import type {
   LeagueAdpEntry,
   LeagueKtcEntry,
+  LeagueRank,
   LeagueRankSet,
   ManagerLeague,
 } from "../types";
@@ -40,8 +41,14 @@ import { Chevron } from "./ui";
  * What it does *not* copy is anything about the trade card's contents: this card
  * ranks a league where that one prices a haul. The stat columns are unchanged.
  *
- * The record line names where this manager stands in the league — the one ranking
- * the card states outright, because it is what the record beside it means.
+ * **Its top edge carries two plates, and that is the one place it goes further
+ * than the trade card.** That card puts its name on a plate and its second fact
+ * on the face below, having weighed the pair and found a plate carrying both
+ * would take the timestamp down with a truncating name. Here the second fact is
+ * the manager's record and where it places them, which is what the whole card is
+ * *about* — so it gets a plate of its own on the trailing corner
+ * ({@link RecordLedge}) rather than a line inside the face, and the negotiation
+ * that card was avoiding is handled by laying the two out as one row.
  *
  * The four stat columns across it are each a slot the reader points at a metric —
  * where this manager stands by points, by KTC starter value and by projected
@@ -253,7 +260,7 @@ export function LeagueCard({
   const surface = mounted ? OPEN : REST;
 
   return (
-    // The nameplate hangs off the card's top edge, so it is a sibling of the
+    // The plates hang off the card's top edge, so they are siblings of the
     // surface and the overhang is this element's padding — a part reaching
     // outside the box would be clipped by nothing here and measured by nobody,
     // which is not true one list over (see {@link Nameplate}).
@@ -261,17 +268,39 @@ export function LeagueCard({
       ref={ref}
       className={`${SCROLL_OFFSET} pt-3 ${mounted ? OPEN_BOX : "relative"}`}
     >
-      <LeagueNameplate
-        name={league.name}
-        status={league.status}
-        expanded={expanded}
-        // Only while the panel is in the tree: it is mounted on expand and
-        // unmounted a beat after the collapse, and a reference to an id that
-        // isn't in the document is a broken relationship rather than an absent
-        // one.
-        panelId={mounted ? panelId : undefined}
-        onToggle={onToggle}
-      />
+      {/* **The top edge is one row rather than two placed parts**, which is what
+          lets the name give way to the ledge instead of to a guess. A plate that
+          positions itself can only cap its own width, and what the name may take
+          is whatever the record beside it doesn't — a number whose width is its
+          own contents (`11th` against `2nd`, a tie against none). As two items of
+          one row the negotiation is the layout's, and it holds at 390px where it
+          matters.
+
+          `pointer-events-none` is what keeps the row from eating the card: it
+          spans the whole edge and sits over the head's top inset, so without it
+          every press landing between the two plates would hit this instead of the
+          toggle underneath. Each plate takes them back.
+
+          The trailing inset is per-state for the same reason the head's is: a
+          slab spends 6px of that gutter on its wall and the open plate spends 1px
+          on a border, so one number lands the ledge in two places (see
+          {@link REST}). */}
+      <div
+        className={`pointer-events-none absolute left-3.5 top-0 z-10 flex items-start justify-between gap-2.5 ${surface.edge}`}
+      >
+        <LeagueNameplate
+          name={league.name}
+          status={league.status}
+          expanded={expanded}
+          // Only while the panel is in the tree: it is mounted on expand and
+          // unmounted a beat after the collapse, and a reference to an id that
+          // isn't in the document is a broken relationship rather than an absent
+          // one.
+          panelId={mounted ? panelId : undefined}
+          onToggle={onToggle}
+        />
+        <RecordLedge record={record} standing={standing} />
+      </div>
 
       {/* The wall, and the face standing on it — the trade card's construction,
           and the chamfer goes on both layers because a wall that turns two
@@ -317,34 +346,15 @@ export function LeagueCard({
             onClick={onToggle}
             className={`relative flex w-full shrink-0 cursor-pointer flex-col items-stretch gap-3 pb-3 pt-4 text-left sm:flex-row sm:items-center sm:gap-4 ${surface.head}`}
           >
+            {/* The chevron and the space it holds. **Both facts that used to
+                stand here are on the edge now** ({@link RecordLedge}), which
+                leaves this cluster as the disclosure mark and the flex spacer
+                that pushes the columns to the trailing edge — thin, and
+                deliberately so: the head's left half was the one place on the
+                card that had to stay quiet, since the four columns beside it are
+                what the list is scanned on. */}
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <Chevron open={expanded} size="md" />
-              {/* In a readout, because it is read and not pressed — the trade
-                  card's own treatment for the one number its header states. Not
-                  engraved with it: a cut inside a cut is a smudge rather than
-                  machining, which is why that card engraves only what sits on
-                  its face. */}
-              {record && (
-                <span className="lab-readout shrink-0 rounded px-2 py-0.5 text-[13px] font-semibold tabular-nums text-foreground/75">
-                  {formatRecord(record)}
-                </span>
-              )}
-              {/* The standing rides with the record rather than occupying one of
-                  the four stat slots: it is what the record *means* in its
-                  league, so reading it anywhere else is reading half the fact.
-                  That is why it is no longer in the metric catalogue — a slot
-                  pointed at it would be a second copy of what this line already
-                  says. Absent, not zeroed, before a game is played, the same
-                  rule the rank cells keep. */}
-              {standing && (
-                <span
-                  title={`#${standing.rank} of ${standing.of} by record`}
-                  className="shrink-0 text-xs font-medium tabular-nums text-foreground/45"
-                >
-                  {ordinal(standing.rank)}
-                  <span className="text-foreground/30"> of {standing.of}</span>
-                </span>
-              )}
             </div>
 
             {/* Numbers only, at every width: the heading rail pinned above the
@@ -432,12 +442,23 @@ const PANEL_MS = 280;
  * card opens: below `sm` they divide the head's own width, so the two insets
  * have to sum to the same 32px as well as landing the trailing edge in the same
  * place.
+ *
+ * **`edge` is that same arithmetic for the top edge**, and it is the reason the
+ * record ledge's inset is not simply the nameplate's 14px mirrored. The plates
+ * are siblings of the *card*, so the offset is measured from the card's box
+ * while the ledge has to land against the *face's* trailing edge — 6px in from
+ * the card at rest, since that gutter is the slab's wall, and 1px in when the
+ * card is open and the face is a bordered box at full width. The leading edge
+ * needs no such pair: a slab's padding is bottom and trailing only, so the left
+ * edge is flush in both states.
  */
 export const REST = {
   /** The wall — 6px down and right, chamfered on both layers with the face. */
   wall: "lab-slab lab-notch-lg",
   face: "lab-slab-face lab-notch-lg",
   head: "pl-[21px] pr-[11px]",
+  /** 14px inside the face, which is 20px inside the card the wall belongs to. */
+  edge: "right-5",
 } as const;
 
 export const OPEN = {
@@ -456,6 +477,8 @@ export const OPEN = {
    */
   face: "lab-plate group rounded-xl border border-active/25",
   head: "pl-5 pr-4",
+  /** The same 14px, against a bordered box that runs the card's full width. */
+  edge: "right-[15px]",
 } as const;
 
 /**
@@ -547,7 +570,10 @@ function LeagueNameplate({
   onToggle: () => void;
 }) {
   return (
-    <Nameplate trailing={<StatusLamp status={status} />}>
+    // `row`, because this edge carries a second part: the plate is an item of
+    // the row the card positions, so the name truncates against the record ledge
+    // rather than against a width guessed ahead of it.
+    <Nameplate seat="row" trailing={<StatusLamp status={status} />}>
       <button
         type="button"
         onClick={onToggle}
@@ -559,6 +585,87 @@ function LeagueNameplate({
         {name}
       </button>
     </Nameplate>
+  );
+}
+
+/**
+ * The manager's record here, and where that record places them — on a plate
+ * holding the card's trailing corner, opposite the name.
+ *
+ * **It is the same plate as the nameplate and it is not a second name**, which
+ * is the whole of what its construction is for. Both facts sat in the head,
+ * between the chevron and the stat columns, which is the one part of the card
+ * that has to stay quiet: the columns are what a list a hundred rows long is
+ * scanned on, and two numbers in front of them were being read as a fifth. On
+ * the edge they are what they are — the card's two corners holding its two
+ * identities, which league this is and how it is going.
+ *
+ * What keeps it from reading as a second label is the material rather than the
+ * size. The record keeps the `.lab-readout` cut it already wore in the head, so
+ * the move costs a reader nothing to relearn, and a cut into the plate's lit
+ * face is machining: the plate is a *housing* around an instrument rather than a
+ * plate with a name on it. The standing beside it is engraved — the finish the
+ * trade card's values take, and for the same arithmetic, since there is one of
+ * these per card all the way down the list and a numeral in the accent at that
+ * count is wallpaper. Neither part is a chip: nothing here is pressed, and the
+ * press that opens this card is the name on the other plate and the head under
+ * both.
+ *
+ * **The standing is the rank alone.** `2nd` rather than `2nd of 12` — the
+ * denominator is what a stat column's rank cell spends its width on, and here it
+ * would come straight out of the league name's own truncation budget for a fact
+ * the four columns beside it state four times. It survives where it costs
+ * nothing: on the hover, and for a screen reader, where a bare ordinal is a rank
+ * out of nothing.
+ *
+ * Two rules carry over from the head unchanged, and they are the card's own.
+ * The standing rides *with* the record rather than occupying one of the four
+ * stat slots, because it is what the record means in its league — reading it
+ * anywhere else is reading half the fact, which is why it is not in the metric
+ * catalogue. And **absent is not zero**: a league with no record renders no
+ * plate rather than an empty housing, and a preseason league renders the record
+ * without a standing, since `0-0` is a true count where a rank there would place
+ * a season nobody has played.
+ */
+function RecordLedge({
+  record,
+  standing,
+}: {
+  record: ManagerLeague["record"];
+  /** Where this manager places by record — null before a game is played. */
+  standing: LeagueRank | null;
+}) {
+  // No housing rather than an empty one: a league this manager holds no roster
+  // in has neither fact, and a plate there would be the card reporting that it
+  // has nothing to report.
+  if (!record && !standing) return null;
+  return (
+    // `.lab-nameplate` rather than {@link Nameplate}: what is shared is the
+    // plate's *material*, and that component is the plate with a heading in it —
+    // an `h2` around a record would be announcing a card's second name. The box
+    // is the call site's per the rule the whole `.lab-*` layer keeps, which is
+    // what lets this one size to its contents while the name's is sized to sit
+    // under a 12px display face.
+    <div className="lab-nameplate pointer-events-auto flex shrink-0 items-center gap-2 rounded-[5px] py-0.5 pl-1 pr-2.5">
+      {record && (
+        <span className="lab-readout rounded px-1.5 py-px text-[12.5px] font-semibold leading-4 tabular-nums text-foreground/85">
+          {formatRecord(record)}
+        </span>
+      )}
+      {standing && (
+        <span
+          title={`#${standing.rank} of ${standing.of} by record`}
+          className="lab-engraved text-[11px] font-semibold leading-4 tabular-nums text-foreground/80"
+        >
+          {ordinal(standing.rank)}
+          {/* The denominator the ordinal is out of. Dropped from the plate
+              because the width belongs to the league's name, kept here because
+              "2nd" with nothing to be 2nd of is a rank a reader can't place —
+              and this is the one reading of the card that has no hover. */}
+          <span className="sr-only"> of {standing.of} by record</span>
+        </span>
+      )}
+    </div>
   );
 }
 

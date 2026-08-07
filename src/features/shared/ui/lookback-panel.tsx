@@ -172,14 +172,37 @@ export function LookbackPanel({
         className="absolute -left-3 bottom-[12%] top-[12%] w-[3px] rounded-full bg-[linear-gradient(180deg,transparent,rgba(0,255,229,0.7)_30%,rgba(0,255,229,0.7)_70%,transparent)] shadow-[0_0_10px_rgba(0,255,229,0.4)]"
       />
 
-      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-        <div className="flex items-start gap-1.5">
+      {/* **The two lenses and the keys are three peers of one wrap**, which is
+          what decides *where* a panel too narrow for the row breaks it. Grouped
+          as [days] and [date + keys] the second item is 271px wide and cannot
+          sit beside the first at any phone width, so the break fell between the
+          lenses — "last N days" on one line and "ending" on the next, the two
+          halves of one sentence read as two controls. Split this way the lenses
+          hold the line and the **keys** take the second one, which is the part
+          that can afford it: they move the end date rather than state it, and
+          the lens above states where it landed either way.
+
+          The widths behind that are measured rather than judged, at 2×. The
+          panel is the viewport below 512, so a 390px screen leaves this row
+          332px and the pair at full size is 326 — six pixels, which is not
+          margin: the date lens is a **native control**, and its width moves
+          ~6px per step of device pixel ratio (144/150/156 at 1×/2×/3×) and
+          again with whatever the platform makes of a date field. At 360 there
+          was no room at all. So the instrument runs **compact below `@md`** —
+          the housing shrinks, the lens and the two gaps, while every digit
+          stays the size it was — which brings the pair to 282 and holds the
+          line down to 360 at every ratio. Above `@md` nothing moves: the three
+          parts come to 451 of the 454 a full-width drawer leaves, today's
+          arithmetic exactly, which is what the gap of 3 rather than 4 pays
+          for. */}
+      <div className="flex flex-wrap items-start gap-x-2 gap-y-2 @md:gap-x-3">
+        <div className="flex items-start gap-1 @md:gap-1.5">
           <StepKey label="One day less" onClick={() => step(-1)}>
             −
           </StepKey>
           <label className="flex flex-col items-center gap-1">
             <span
-              className={`lab-readout lab-lens block h-[46px] w-[92px] rounded-lg transition-shadow ${
+              className={`lab-readout lab-lens block h-[46px] w-[64px] rounded-lg transition-shadow @md:w-[92px] ${
                 editing ? "lab-readout-live" : ""
               }`}
             >
@@ -226,56 +249,57 @@ export function LookbackPanel({
           </StepKey>
         </div>
 
-        <div className="flex items-start gap-2">
-          <label className="flex flex-col items-center gap-1">
-            <span className="lab-readout lab-lens flex h-[46px] items-center rounded-lg px-1">
-              <input
-                type="date"
-                min={domain.from}
-                max={today}
-                aria-label="Window ends"
-                value={dateDraft ?? view.end}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setDateDraft(value);
-                  // Commit only a whole date the window can end on; the years a
-                  // keyboard passes through on its way to one stay local.
-                  if (/^\d{4}-\d{2}-\d{2}$/.test(value) && value <= today && value >= "2000-01-01") {
-                    commit(shown.days, value);
-                  }
-                }}
-                onBlur={() => setDateDraft(null)}
-                // Unlike the day counter beside it this lens does not light on
-                // focus, so removing the outline left it with nothing at all.
-                className="bg-transparent px-2 font-display text-[0.68rem] font-bold tabular-nums text-active [color-scheme:dark] [text-shadow:0_0_10px_rgba(0,255,229,0.4)] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active"
-              />
-            </span>
-            <LensUnit>Ending</LensUnit>
-          </label>
-
-          <span className="mt-[11px] flex flex-wrap gap-1.5">
-            <PanelKey
-              on={view.endsToday}
-              label="End the window today and keep it rolling forward"
-              onClick={() => commit(shown.days, today)}
-            >
-              Today
-            </PanelKey>
-            {anchor !== null && (
-              <PanelKey
-                on={onDraft}
-                label={`Start the window at the ${anchor.label}`}
-                onClick={() => onChange(sinceDraftRange(anchor.date, view))}
-              >
-                <span
-                  aria-hidden
-                  className="inline-block h-1.5 w-1.5 rotate-45 rounded-[1px] bg-fuchsia-400 shadow-[0_0_5px_rgba(232,121,249,0.7)]"
-                />
-                Draft
-              </PanelKey>
-            )}
+        <label className="flex flex-col items-center gap-1">
+          <span className="lab-readout lab-lens flex h-[46px] items-center rounded-lg px-1">
+            <input
+              type="date"
+              min={domain.from}
+              max={today}
+              aria-label="Window ends"
+              value={dateDraft ?? view.end}
+              onChange={(e) => {
+                const value = e.target.value;
+                setDateDraft(value);
+                // Commit only a whole date the window can end on; the years a
+                // keyboard passes through on its way to one stay local.
+                if (/^\d{4}-\d{2}-\d{2}$/.test(value) && value <= today && value >= "2000-01-01") {
+                  commit(shown.days, value);
+                }
+              }}
+              onBlur={() => setDateDraft(null)}
+              // Unlike the day counter beside it this lens does not light on
+              // focus, so removing the outline left it with nothing at all.
+              className="bg-transparent px-1 font-display text-[0.68rem] font-bold tabular-nums text-active [color-scheme:dark] [text-shadow:0_0_10px_rgba(0,255,229,0.4)] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active @md:px-2"
+            />
           </span>
-        </div>
+          <LensUnit>Ending</LensUnit>
+        </label>
+
+        {/* `mt-[11px]` centres the keys on the 46px lens while they share its
+            line; on the line of their own a narrow panel gives them, it is the
+            gap under the lens's unit label. */}
+        <span className="mt-[11px] flex flex-wrap gap-1.5">
+          <PanelKey
+            on={view.endsToday}
+            label="End the window today and keep it rolling forward"
+            onClick={() => commit(shown.days, today)}
+          >
+            Today
+          </PanelKey>
+          {anchor !== null && (
+            <PanelKey
+              on={onDraft}
+              label={`Start the window at the ${anchor.label}`}
+              onClick={() => onChange(sinceDraftRange(anchor.date, view))}
+            >
+              <span
+                aria-hidden
+                className="inline-block h-1.5 w-1.5 rotate-45 rounded-[1px] bg-fuchsia-400 shadow-[0_0_5px_rgba(232,121,249,0.7)]"
+              />
+              Draft
+            </PanelKey>
+          )}
+        </span>
       </div>
 
       {/* The density, standing in a milled slot. A readout, not a control: the

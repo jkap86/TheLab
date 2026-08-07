@@ -1578,6 +1578,112 @@ stops holding, a comment saying it does would not have caught it.
     the manager tool's heading rail: that works because every card puts its
     numbers at one x, where a trade's value belongs to a *side* and the sides
     stack or split by width and count, so the number wears its own label.
+  - **That column opens on ADP now, read off the board the panel in the app bar
+    is showing** (`TRADE_METRICS`'s `adp` entry, `DEFAULT_TRADE_COLUMNS`). The
+    drawer was already seated here and narrowed *nothing* on the page: a reader
+    could cut the market to 2024 startups, or to 10-team half-PPR drafts, or
+    flatten the value curve, and every card under it went on quoting one
+    national dynasty board — the same two-answers-to-one-question that moved the
+    manager tool's team value onto `adpValueQueryString`, arriving on the page
+    whose whole premise is that it spans leagues playing different games. So the
+    season, the window, the draft kind, the size, the format *and* the steepness
+    reach these numbers, and the panel's slider reprices the board rather than
+    only its own preview column. Four things hold it up:
+    - **Which market a card reads is the league's, not the reader's**, the same
+      split `adpBoardFor` draws: `/api/adp` answers redraft and dynasty side by
+      side, and `leagueAdpBoard` picks the half the league actually plays in —
+      a rookie is a first-round asset in one and undrafted in the other. That
+      predicate had been spelled three times before this (`DYNASTY_BOARD_SQL`,
+      `getLeagueTypes`, `seedFromLeague`) and is now one function the two client
+      readers share. An unanswered league is redraft, the broader market, on the
+      same terms an unsynced lineup falls to KTC's 1QB board.
+    - **The curve is anchored to the league's own startable pool**
+      (`leagueAdpPool` off `total_rosters` and `roster_positions`), which is what
+      makes a late first worth the same in a 10- and a 14-team league. The team
+      count needs a fallback of its own where the league list hasn't answered:
+      `adpValue` floors a pool of zero at one pick, so every player but the 1.01
+      would round to nothing — a card of zeroes rather than a shortfall a reader
+      can see.
+    - **The board is fetched whether or not the drawer is open**, unlike the
+      manager tool's Leagues and Leaguemates tabs — the value column is on
+      screen either way, which is the Players tab's own rule. It costs nothing
+      extra when the drawer *is* opened: both consumers share one query key.
+    - **KTC stays in the picker as the other lens, not the other half.** It
+      prices the same assets off a *national dynasty* board where this reads
+      whichever population the reader selected, on whichever market the league
+      plays in. Neither total is the other's units, so they are two columns and
+      never one blended number: a haul summing a player's KTC price and a pick's
+      ADP value would claim a scale this app nowhere says exists. Moving
+      `DEFAULT_TRADE_COLUMNS` is the whole of the migration — `resolveColumns`
+      keeps a selection that still names a live metric, so a reader who
+      explicitly picked KTC keeps it and everyone else gets the board their own
+      panel is set to.
+  - **ADP prices the draft picks too, and it does it without a row for one —
+    which is the whole idea.** The first cut of this column left picks blank on
+    the grounds that a board of player prices has no pick on it, true and beside
+    the point on a board where a first is routinely the whole trade (the same
+    correction the KTC column had already been through). A rookie pick is a
+    *place in a queue*, and the queue is on the board already: rank the rookies
+    the selected drafts averaged and the first of them is what the 1.01 returns.
+    So a pick is priced by the player it buys, on the same curve, in the same
+    units, out of the same population — which is what makes a haul of players
+    and picks one sum where summing an ADP value and a KTC price would be a
+    scale nobody has defined. `features/trades/pick-value.ts` is the ladder and
+    the six decisions in it:
+    - **Two markets, two ladders** (`rookieLadder(players, board)`). A rookie
+      goes in the first round of a dynasty startup and the middle of a redraft,
+      so the queues are different queues; a league reads the one it plays in.
+      Rookie picks come out cheap in a redraft league, which is correct rather
+      than a shortfall.
+    - **A rookie the board never averaged is not a rung.** The ladder is an
+      *ordering*, so a place invented for a player those drafts didn't take
+      shifts every pick below him by one — the one error here that propagates.
+    - **Which rung** is `(round − 1) × teams + slot`, so the league's size is
+      what makes the same 2.01 a different pick. An unplaced pick takes the
+      middle of its round and is marked a stand-in, the same fallback (and the
+      same `mid` tier) the KTC column already makes for a draft that doesn't
+      exist yet.
+    - **KTC is asked for exactly one thing: what waiting costs**
+      (`ktcPickDiscount`). The ladder prices a pick as if it were being spent
+      now, and it cannot do better — the class a 2029 first will spend is not a
+      class anybody can name. KTC publishes that opinion one row per season, so
+      the *ratio* between its rows carries it onto the ADP scale. A ratio is
+      dimensionless, which is what makes this one crossing between the two
+      boards sound where a sum would not be.
+    - **The anchor is read off KTC's board, not off a calendar**
+      (`ktcPickBaseSeason` — the earliest season it prices). Which seasons KTC
+      carries moves through the year, since a season's rows come off once its
+      draft has happened; reading the base from the board is what makes the
+      discount mean the same thing in February and in August with nothing being
+      told what month it is. A pick at or before that season is undiscounted,
+      which is also how a current-year pick is priced.
+    - **Three refusals, not one null** (`PickAdpMiss`). No rookies on this board,
+      deeper than the class it priced, or too far out for KTC to have a row —
+      and the difference matters to a reader, because the first two are facts
+      about the board the panel is showing and widening it fixes them. A pick
+      KTC can't reach stays **blank rather than quoted at the nearest draft's
+      price**: a 2032 4th is not worth what next year's 4th is, which is the one
+      wrong answer here that would look like a working one.
+  - **Naming the rookie class took a column out of the players blob, and the
+    whole feature rests on it.** `players.years_exp` is promoted from `data`
+    (backfilled in the migration, so no re-download), read by
+    `getRookiePlayerIds`, and sent as `AdpPlayerPayload.rookie`. Two rules travel
+    with it. **Absent is "not known to be a rookie", never "veteran"** — it is
+    null for a team defence and for anyone Sleeper hasn't filled in, and one
+    wrongly-included name shifts the whole ladder. And **the cache carries no
+    history, so this always names the class that is a rookie *now***: a board
+    for a past season contains none of them and gets an empty ladder, which
+    reads as picks being unpriced there rather than as a ladder built from
+    prices those players never had.
+  - **`/api/trades` sends KTC's pick board whole**, where it used to send the
+    four rows per `(season, round)` the page's picks could land on. The tier is
+    still resolved client-side (it needs the league's size, which is on the
+    league list the browser already holds), so every tier of a row has to travel
+    either way; what ended the narrowing is that the discount needs the board's
+    *nearest priced season*, which is a fact about the board rather than about
+    any pick on the page — a page naming no 2027 pick could never have asked for
+    the row that answers it. It is a few dozen rows, so `lookupKtcPickBoard`
+    caches it as one value rather than a row at a time.
   - **Those numbers are on the display face and cut into what they sit on**
     (`.lab-engraved`, `.lab-engraved-faint`). The page's subject used to be the
     quietest type on its own card: the league name was Orbitron at 13px tracked,
@@ -1728,7 +1834,8 @@ stops holding, a comment saying it does would not have caught it.
       than sitting beside either. The face is therefore padded at the **top
       only**, and each region holds its own inset off the walls.
     - **The league's name rides the top edge on a nameplate** (`.lab-nameplate`),
-      the device the manager plate's filters key already uses on its bottom edge.
+      the device the lineup checker's plate already uses on its bottom edge for
+      its filters key.
       A part rising out of a card is the strongest "one object" mark there is,
       and it is nearly free vertically — it occupies margin the list was already
       spending as a gap. It is a *plate* and not a chip (rectangular, no press
@@ -2358,9 +2465,16 @@ stops holding, a comment saying it does would not have caught it.
   absent are different answers), and a second card drawn to say that would be a
   second chance for one of them to drift. Its week goes in `scope`, which is the
   slot that names what a record was counted over, and its league filters are the
-  manager tabs' own dialog in the same corner of the same plate — held in local
-  `useState` rather than a provider, since a provider is what three *routes*
-  sharing one selection need and this tool is one page.
+  manager tabs' own dialog, seated in this plate's bottom-right corner — held in
+  local `useState` rather than a provider, since a provider is what three
+  *routes* sharing one selection need and this tool is one page.
+  **It is the only page in that corner now, which makes it the reason the seat
+  exists rather than a second user of it.** The manager tabs moved their key onto
+  the subject rail, where it leads the row that also asks who is in these
+  leagues; this page has no such rail — one list, one filter — so the corner is
+  still the right seat here for the reason it was built. Keep `SEATS.corner` and
+  `FilterSeat` alive for it, and read the plate's own note for what holds them
+  up.
 
   **The one thing that aggregation changes on the card is which instrument the
   readout wears, and that is a prop rather than something the readout works
@@ -2403,8 +2517,41 @@ stops holding, a comment saying it does would not have caught it.
   this card's too: a league card is not a line of a table, it is the whole of
   what one league has to say with four ranked columns across it, and depth is
   what sorts those columns into an order. The two lists read as one instrument
-  now, which is what a reader crossing between the two tools experiences. Four
+  now, which is what a reader crossing between the two tools experiences. Five
   things in it are decisions rather than styling:
+  - **The top edge carries two plates, which is the one place this card goes
+    further than the trade card.** That readout was in the *head*, between the
+    chevron and the stat columns — the one part of the card that has to stay
+    quiet, since the columns are what a list a hundred rows long is scanned on,
+    and two numbers in front of them were read as a fifth. So the record and the
+    standing hold the trailing corner on a plate of their own (`RecordLedge`),
+    opposite the name: the card's two corners holding its two identities, which
+    league this is and how it is going. Four things hold it up:
+    - **It is a housing, not a second name.** Same plate, but the record keeps
+      the `.lab-readout` cut it already wore, and a cut into a lit face is
+      machining — so the part reads as an instrument label rather than a label
+      with a name on it. The standing beside it is `.lab-engraved`, the trade
+      card's own finish and for its arithmetic: one of these per card down the
+      whole list, where a numeral in the accent at that count is wallpaper.
+    - **The standing is the rank alone** — `2nd`, not `2nd of 12`. The
+      denominator is what a stat column's rank cell spends its width on, and here
+      it would come straight out of the league name's truncation budget for a
+      fact the four columns state four times over. It survives on the hover and
+      in an `sr-only`, where it costs no width: a bare ordinal is a rank out of
+      nothing, and this is the one reading of the card with no hover to fall back
+      on.
+    - **The edge is one flex row, not two placed parts.** A plate that positions
+      itself can only cap its own width, and what the name may take is whatever
+      the ledge doesn't — a width that is its own contents. As two items of one
+      row the negotiation is the layout's, which is what holds at 390px. The row
+      is `pointer-events-none` and each plate takes them back, or a press landing
+      between the two hits the row instead of the toggle underneath. This is what
+      `Nameplate`'s `seat` prop is: `edge` is a plate alone on an edge (the trade
+      card), `row` is one sharing it.
+    - **Absent is not zero**, the card's existing rule surviving the move: no
+      record and no standing draws no plate rather than an empty housing, and a
+      preseason league draws the record without a rank, since `0-0` is a true
+      count where a rank there would place a season nobody has played.
   - **An expanded card is still `.lab-plate`, and the slab makes that swap read
     better rather than making it redundant.** A slab is an *object in a list* —
     a wall you could pick it up by, a static specular sweep — and none of that
@@ -2425,6 +2572,13 @@ stops holding, a comment saying it does would not have caught it.
     same two edges, which is also what keeps the columns from stepping sideways
     as a card opens — and below `sm` the columns divide the head's own width, so
     the two insets have to *sum* the same as well as ending in the same place.
+    **The ledge's own trailing inset is that arithmetic one edge up**, and it is
+    per-state for the same reason: the plates are siblings of the *card*, so the
+    offset is measured from the card's box while the ledge has to land against
+    the *face's* trailing edge — `right-5` at rest, where 6px of that gutter is
+    the wall, and `right-[15px]` open, where the face is a bordered box at full
+    width. The leading edge needs no pair, since a slab's padding is bottom and
+    trailing only.
   - **The name is the button and the head carries no `role`.** `role="button"`
     on the head takes presentational children, which flattened four stat columns
     and their screen-reader labels into one string; the nameplate's real
@@ -2518,8 +2672,9 @@ stops holding, a comment saying it does would not have caught it.
     they are its tail rather than a note over it. `overscroll-contain` moved onto
     the two lists with the scrolling, so a flick at the end of either doesn't
     carry on into the page behind the card.
-- **The header is one plate with the filters' key seated in its bottom edge, and
-  it got there in two moves worth reading together.** It was one card stacking
+- **The header is one plate with a seat for a filters' key in its bottom edge,
+  and it got there in three moves worth reading together.** It was one card
+  stacking
   identity, the season, the record and both control pills, which on a phone was
   ~590px of a 700px screen — the controls wrapping onto their own lines because
   they shared a flex row with the season. The first move split it by what a thing
@@ -2527,7 +2682,24 @@ stops holding, a comment saying it does would not have caught it.
   triggers. The second retired the dock, because once the board's trigger went up
   into the app bar it was a ~50px trough seating a single control — and this card
   is *pinned*, so that was 50px of league rows covered on all three tabs for a
-  part pressed once a session. Four things hold up what is left:
+  part pressed once a session.
+
+  **The third move took the key off this plate on the manager tabs, and what it
+  says about the two before it is that they were solving the wrong problem.**
+  Both were about finding the key a *cheaper* home; neither asked whether the
+  plate was its home at all. Three of the plate's four corners are readouts, so
+  the one control on it was seated among facts — and the subject rail directly
+  below was already a filter row with an obvious hole at its leading end. The
+  key leads that rail now (see {@link SubjectRail}), the plate keeps its three
+  readout corners, and the 16px the seat cost — 12 of body padding, 4 of overhang
+  margin — goes back to a list this card is pinned over.
+
+  **The seat itself stays, because the lineup checker still uses it**: that page
+  has one list, no subject rail and nothing else to seat a key on, so the corner
+  is right there for the same reason it was ever built. What follows is why it is
+  built the way it is, and it is live code rather than history — the rules below
+  are what a second page in that shape would have to keep. Four things hold it
+  up:
   - **The material says which part is which**, the same raised/recessed grammar
     as the app bar: the plate is a milled face (a specular sweep, the cyan rail),
     its corner tabs are wells because they are readouts, and the filters' key is
@@ -2556,10 +2728,11 @@ stops holding, a comment saying it does would not have caught it.
     gutter beside them: a right-hand reserve wide enough for the key left ~190px
     of a 390px screen for two pills that fit on one line before it.
 - **The plate's record readout is where the filter bar used to be.** The two rows
-  of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger is
-  the key in the plate's bottom edge — it sat in the dock, beside `AdpTrigger`,
-  until the board moved into the app bar and the dock followed it out — and the
-  space they freed carries the manager's season across the
+  of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger has
+  moved twice since — into the dock beside `AdpTrigger`, into this plate's own
+  bottom edge when the board went up to the app bar and the dock followed it out,
+  and finally off the plate altogether on the manager tabs, to the head of the
+  subject rail — and the space they freed carries the manager's season across the
   filtered leagues: a dial for the win percentage, a proportion bar for the wins
   and losses behind it. The `Rostered` cell that used to stand in a rail of its
   own is folded onto the record's line, since how many of the leagues on screen
@@ -2763,6 +2936,44 @@ stops holding, a comment saying it does would not have caught it.
     the question wrongly first. The two payloads are the other tabs' resources
     behind a shared cache, fetched when the panel opens or a subject is selected —
     both naming the same query keys, so the two gates cost one request.
+- **The league filters lead that rail, which is what makes it the page's filter
+  row rather than one of two.** The key was machined into the header plate's
+  bottom-right corner — 20px, the smallest type on the card, under the countdown,
+  diagonally furthest from the list it narrows — and what made it hard to find
+  was its *company* rather than its size: it was the one control among three
+  readouts, while the row below already asked the sibling question and had a hole
+  at its leading end. The two are applied one after the other in
+  `useFilteredLeagues` and the plate's scope line has always named them in that
+  order, so the row now reads in it: **what these leagues are · who is in them ·
+  what survives.** Five things hold it up:
+  - **They stay two controls, not one dialog with two tabs.** A league rule is an
+    attribute of the league (`qb+sf ≥ 2`); a subject is a person or player in it.
+    One dialog over both would suggest a single selection, which is the same
+    argument that keeps the ADP board a third control elsewhere again. What is
+    shared is the *surface* — which is what a reader was looking for.
+  - **`SEATS.rail` is the two shares keys' exact box, and it reaches past shape
+    to do it.** Every other seat differs only in the edge it meets, because
+    everywhere else the key is the only part of its kind in view; here it is the
+    first of three on one milled face, so it takes their 10px type, their padding
+    *and* their `.lab-chip-sm` wall. A key standing a pixel prouder than its
+    neighbours is the same fault as a corner key that overhangs.
+  - **`.lab-chip-on.lab-chip-sm` is what keeps that true when it lights.**
+    `.lab-chip-sm` thins the wall and `.lab-chip-on` re-declares it, and the lit
+    rule is the later of the two — so every small chip in the app stood proud the
+    moment it started narrowing something. Written as the intersection, it
+    outranks both, so neither has to move. It fixes four call sites that already
+    had the flaw and were never noticed, which is the tell for how a row hides
+    it: one part seated wrong reads as a state.
+  - **A seam parts the groups, not spacing.** The row wraps below `sm`, and
+    spacing does not survive a wrap — the same reason the count and the two doors
+    are one flex item. `RailSeam` is that groove written once, since the row now
+    has two of them.
+  - **The count is against the account, not the league-filtered list.** With one
+    control on the rail, `N of M` named a population stated nowhere on screen;
+    with both, the denominator is the whole account and the numerator is what the
+    two leave between them — one number answering the row it is on. Unnarrowed it
+    is the bare total, since a denominator restating its numerator is the thing
+    the plate keeps having to relearn.
 - **That control is a `.lab-slab` of its own above the heading billet, and it
   spent a while as a second storey *of* that billet — which is the cheaper
   construction and the wrong one here.** The economics of the storey are real and

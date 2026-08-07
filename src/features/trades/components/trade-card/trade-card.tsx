@@ -2,9 +2,12 @@
 
 import { memo } from "react";
 
-// The pure module directly, never the `@/shared/ktc` barrel: this is a client
-// component, and the barrel re-exports the `pg`-backed queries beside it.
+import { leagueAdpBoard } from "@/features/shared/league-filters";
+// The pure modules directly, never the `@/shared/ktc` or `@/shared/manager`
+// barrels: this is a client component, and both re-export the `pg`-backed
+// queries beside them.
 import { isSuperflexLineup } from "@/shared/ktc/roster";
+import { leagueAdpPool } from "@/shared/manager/adp-value";
 
 import {
   SIDE_SEAM_COLUMN,
@@ -75,11 +78,13 @@ import type { TradeCardProps } from "./trade-card.types.ts";
  *
  * It pays off only because the props really are stable, which is a property of
  * the callers and not of this file: `players`, `managers`, `ktc`, `pickKtc` and
- * `pickSlots` are one `useMemo` over the loaded pages (`use-trades`),
- * `leaguesById` is another (`use-trade-leagues`), `metric` is an entry in a
- * module-level catalogue, and a `trade` is an object off a cached page. Nothing
- * here is built at the call site, so the default shallow comparison is enough
- * and a custom `areEqual` would be a second definition of the same fact.
+ * `pickSlots` are one `useMemo` over the loaded pages (`use-trades`), `adp` is
+ * another over the ADP panel's board, `leaguesById` is a third
+ * (`use-trade-leagues`), `metric` is an entry in a module-level catalogue,
+ * `steepness` is a number off the panel's store, and a `trade` is an object off
+ * a cached page. Nothing here is built at the call site, so the default shallow
+ * comparison is enough and a custom `areEqual` would be a second definition of
+ * the same fact.
  */
 export const TradeCard = memo(function TradeCard({
   trade,
@@ -89,6 +94,9 @@ export const TradeCard = memo(function TradeCard({
   metric,
   ktc,
   pickKtc,
+  adp,
+  adpLadders,
+  steepness,
   pickSlots,
   onOpenLeague,
 }: TradeCardProps) {
@@ -103,6 +111,25 @@ export const TradeCard = memo(function TradeCard({
     // `isSuperflexLineup` answers for an unknown one.
     superflex: isSuperflexLineup(league?.roster_positions ?? null),
     teams: league?.total_rosters ?? null,
+    adp,
+    steepness,
+    // The same question one board over: which *market* this league plays in,
+    // since the panel's fetch answers redraft and dynasty side by side and a
+    // rookie is a first-round asset in one and undrafted in the other.
+    adpBoard: leagueAdpBoard(league),
+    // The ladder for that market, chosen rather than built: it is a reading of
+    // the whole board, so the page memoises both and a card takes one.
+    adpLadder: adpLadders[leagueAdpBoard(league)],
+    // The pool the value curve is anchored to. `leagueAdpPool` already falls
+    // back to a typical lineup depth for a league with no slots on file; the
+    // team count needs a fallback of its own, since `adpValue` floors a pool of
+    // zero at one pick and every player but the 1.01 would round to nothing —
+    // a whole card of zeroes rather than a shortfall a reader can see. Twelve
+    // teams is what the drawer's own preview assumes, for the same reason.
+    adpPool: leagueAdpPool(
+      league?.total_rosters || 12,
+      league?.roster_positions ?? null,
+    ),
   };
 
   return (

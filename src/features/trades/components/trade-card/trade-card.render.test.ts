@@ -6,7 +6,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ManagerLeague } from "@/shared/manager";
 
 import { TRADE_METRICS } from "../../trade-metrics";
-import type { KtcValue, PlayerSummary, Trade, TradeManager } from "../../types";
+import type {
+  AdpPlayerPayload,
+  KtcValue,
+  PlayerSummary,
+  Trade,
+  TradeManager,
+} from "../../types";
 import { TradeCard } from "./trade-card";
 import {
   SIDE_SEAM_COLUMN,
@@ -30,7 +36,11 @@ import {
  * every pick would all typecheck.
  */
 
-const ktcMetric = TRADE_METRICS[0];
+// Named rather than indexed: the catalogue's order is a *display* decision (the
+// column a card opens with moved from KTC to ADP), and these tests are about
+// what each metric draws.
+const ktcMetric = TRADE_METRICS.find((m) => m.key === "ktc")!;
+const adpMetric = TRADE_METRICS.find((m) => m.key === "adp")!;
 const playersMetric = TRADE_METRICS.find((m) => m.key === "players")!;
 
 const players: Record<string, PlayerSummary> = {
@@ -58,6 +68,46 @@ const ktc: Record<string, KtcValue> = {
 const pickKtc: Record<string, KtcValue> = {
   "2027|1|early": { sf: 6000, oneqb: 5200 },
   "2027|1|": { sf: 4700, oneqb: 4000 },
+};
+
+/**
+ * The ADP panel's board. The league below starts five and drafts twelve, so the
+ * pool is 60 and the default four halvings make value `10000 · 2^(−(adp−1)/15)`
+ * — 16 is half the peak and 31 a quarter of it. The kicker is absent from the
+ * map entirely, which is how a player past the board's tail arrives.
+ */
+const adp: Record<string, AdpPlayerPayload> = {
+  p1: {
+    player_id: "p1",
+    name: "Christian McCaffrey",
+    position: "RB",
+    team: "SF",
+    rookie: false,
+    redraft: { picks: 30, adp: 31, min_pick: 20, max_pick: 44, stdev: 5.5 },
+    dynasty: { picks: 25, adp: 16, min_pick: 8, max_pick: 30, stdev: 4.4 },
+  },
+  p2: {
+    player_id: "p2",
+    name: "Ja'Marr Chase",
+    position: "WR",
+    team: "CIN",
+    rookie: false,
+    redraft: { picks: 30, adp: 16, min_pick: 4, max_pick: 26, stdev: 3.3 },
+    dynasty: { picks: 25, adp: 31, min_pick: 12, max_pick: 48, stdev: 6.6 },
+  },
+};
+
+/**
+ * The same board's rookie class in draft order. The league below starts five and
+ * drafts twelve, so rung 3 — where roster 2's 2027 first lands — is an ADP of 31
+ * and a quarter of the peak. Twelve rungs, so a second-rounder runs off the end.
+ */
+const adpLadders = {
+  dynasty: [1, 16, 31, 46, 61, 76, 91, 106, 121, 136, 151, 166].map((adp, i) => ({
+    adp,
+    name: `Rookie ${i + 1}`,
+  })),
+  redraft: [],
 };
 
 /** Roster 2's 2027 pick has a place; nothing else does. */
@@ -125,6 +175,9 @@ function card(over: Partial<Parameters<typeof TradeCard>[0]> = {}): string {
       metric: ktcMetric,
       ktc,
       pickKtc,
+      adp,
+      adpLadders,
+      steepness: 4,
       pickSlots,
       // The card's one handler. Nothing here presses it — `renderToStaticMarkup`
       // has no DOM to press with — so it is a stub, and what these tests are
@@ -393,6 +446,66 @@ describe("what a value column says", () => {
     );
     // An unsynced lineup falls to 1QB rather than guessing the richer board.
     assert.match(card({ league: null }), /1QB board/);
+  });
+});
+
+describe("what the ADP column says", () => {
+  const adpCard = (over: Partial<Parameters<typeof TradeCard>[0]> = {}) =>
+    card({ metric: adpMetric, ...over });
+
+  test("a side's total is the panel's board, priced on this league's pool", () => {
+    // Roster 1 took McCaffrey (dynasty ADP 16, half the peak over a pool of 60),
+    // a kicker the board has never heard of, a placed 2027 first (rung 3, a
+    // quarter of the peak) and a 2028 second past the class the board priced.
+    const html = adpCard();
+    assert.match(html, /5,000/);
+    assert.match(html, /7,500/);
+    // Players and picks in one denominator, since the ladder puts them on one
+    // scale; FAAB is on no board and so is in neither half of it.
+    assert.match(html, /2 of 4 assets priced/);
+  });
+
+  test("the market follows the league's type, not the card's first payload half", () => {
+    assert.match(adpCard(), /dynasty ADP/);
+    // Keeper and redraft both read the redraft board; so does a league the list
+    // hasn't answered for, which is the broader market rather than a guess.
+    const redraft = { ...league, settings: { type: 0 } };
+    assert.match(adpCard({ league: redraft }), /redraft ADP/);
+    assert.match(adpCard({ league: null }), /redraft ADP/);
+  });
+
+  test("an ADP line states the sample its average came off", () => {
+    assert.match(adpCard(), /title="ADP 16\.0 on the dynasty board · picks 8–30 over 25 drafts"/);
+  });
+
+  test("a player the board never took is an em dash, never a zero", () => {
+    const html = adpCard();
+    assert.match(html, /Not on the dynasty ADP board/);
+    assert.doesNotMatch(html, />0<\/span>/);
+  });
+
+  test("a pick is priced by the rookie its rung names", () => {
+    // Roster 2's 2027 first is placed at slot 3, so it is rung 3 of the ladder —
+    // 2,500 — and the hover names the rookie the number is standing on rather
+    // than leaving a reader to take it on trust.
+    const html = adpCard();
+    assert.match(html, /2027 1\.03/);
+    assert.match(html, /Rookie pick 3 ≈ Rookie 3 on the dynasty board/);
+    assert.match(html, /2,500/);
+  });
+
+  test("a pick KTC can't reach is an em dash, and says which wall it hit", () => {
+    // The 2028 second is off both ends: rung 18 of a twelve-rung class, and no
+    // KTC row to discount it by either. The class is the nearer wall.
+    assert.match(adpCard(), /Deeper than the rookie class/);
+  });
+
+  test("FAAB is on no board, so it carries no cell on either column", () => {
+    // KTC's own pick title is what the pick half is checked against; the FAAB
+    // line has no `title` under either metric.
+    assert.match(card(), /2027 Early 1st/);
+    assert.doesNotMatch(adpCard(), /2027 Early 1st/);
+    assert.match(adpCard(), /\$55 FAAB/);
   });
 });
 
