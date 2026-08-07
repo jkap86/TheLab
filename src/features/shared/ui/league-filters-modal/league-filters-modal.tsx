@@ -80,10 +80,10 @@ export function LeagueFiltersModal({
   /**
    * What the trigger says. `Filters` on the manager tabs, where these are the
    * page's only filters and the leagues are what the page is *about*; `Leagues`
-   * on the trades board, where the trade ledge beside it is the control called
-   * Filters and two parts wearing that word would be two answers to the same
-   * question. The dialog behind it is identical either way — what varies is only
-   * which of two filter sets a reader is being pointed at.
+   * on the trades board, where the trade filters sit on the page beside it and
+   * `Filters` would name one of two filter sets without saying which. The dialog
+   * behind it is identical either way — what varies is only which of two filter
+   * sets a reader is being pointed at.
    */
   label?: string;
   /**

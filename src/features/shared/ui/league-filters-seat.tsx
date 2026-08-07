@@ -6,7 +6,7 @@
  * `dynamic()` at both its call sites — it is a trigger and a `<dialog>`, and
  * nobody has opened the dialog at first paint — but something has to occupy the
  * trigger's box until the chunk arrives, or the header plate's corner and the
- * trades ledge's row both reflow when it lands. A fallback that lived in the
+ * trades board's controls row both reflow when it lands. A fallback that lived in the
  * dialog's own module would pull that module back into the static graph and
  * split nothing, which is the trap `AdpTrigger` was moved out of `AdpDrawer`'s
  * file to avoid.
@@ -27,8 +27,8 @@
  * (`.lab-chip` / `.lab-chip-on`), the icon, the word and the count are the same
  * part in both. What differs is the edge it is seated against.
  *
- * `free` stands on a page — the trades ledge, where nothing bounds it, so it is
- * the pill `.lab-chip` was written for. `corner` is machined into the bottom
+ * `free` stands on a page — the trades board's controls row, where nothing
+ * bounds it, so it is the pill `.lab-chip` was written for. `corner` is machined into the bottom
  * right of the manager header's plate: two of its corners are square because
  * they meet the plate's own edges, the outer one takes the plate's `rounded-2xl`
  * so it traces that corner exactly, and the inner one is the small return the
