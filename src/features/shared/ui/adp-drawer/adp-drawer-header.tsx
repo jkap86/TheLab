@@ -13,6 +13,7 @@ export function AdpDrawerHeader({
   seasons,
   season,
   draftCount,
+  stale = false,
   onSeasonChange,
   onClose,
 }: {
@@ -21,6 +22,13 @@ export function AdpDrawerHeader({
   season: string;
   /** Null until the first load lands. */
   draftCount: number | null;
+  /**
+   * The count on screen belongs to the board on its way out. Dimmed rather
+   * than blanked — the trades board's own rule for its held total — because
+   * the count is the number a filter press is made to move, and showing the
+   * old one undimmed is the one place the lag would read as an answer.
+   */
+  stale?: boolean;
   onSeasonChange: (season: string) => void;
   onClose: () => void;
 }) {
@@ -36,7 +44,9 @@ export function AdpDrawerHeader({
           </KeyChip>
         ))}
       </div>
-      <span className="lab-readout ml-auto flex items-baseline gap-1.5 rounded-[5px] px-2.5 py-[3px]">
+      <span
+        className={`lab-readout ml-auto flex items-baseline gap-1.5 rounded-[5px] px-2.5 py-[3px] transition-opacity duration-200 ${stale ? "opacity-40" : ""}`}
+      >
         {/* The count rolls to its new value rather than swapping — it is
             the needle the window control moves, and a digit that travels
             is what says the two are connected. */}

@@ -13,6 +13,15 @@ export type AdpState = {
   data: AdpPayload | null;
   error: string | null;
   loading: boolean;
+  /**
+   * The rows in `data` belong to a *previous* filter set, held on screen by
+   * `keepPreviousData` while the newly-selected board loads. Distinct from
+   * `loading`, which is also true during a background refetch of the *same*
+   * board — where the rows on screen are the right answer and nothing should
+   * dim. This is the trades board's own `stale` flag, for the same reason: the
+   * one dishonest state is old rows passing as the new selection's answer.
+   */
+  stale: boolean;
 };
 
 /**
@@ -62,5 +71,6 @@ export function useAdp(
     data: board.data ?? null,
     error: board.error ? errorMessage(board.error, "Something went wrong") : null,
     loading: board.isFetching,
+    stale: board.isPlaceholderData,
   };
 }

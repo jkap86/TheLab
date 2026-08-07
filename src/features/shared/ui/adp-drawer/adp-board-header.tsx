@@ -29,6 +29,7 @@ export function AdpBoardHeader({
   redraftDrafts,
   dynastyDrafts,
   teams,
+  refreshing = false,
   onToggleBoard,
 }: {
   both: boolean;
@@ -38,6 +39,13 @@ export function AdpBoardHeader({
   redraftDrafts: number | null;
   dynastyDrafts: number | null;
   teams: AdpControls["teams"];
+  /**
+   * The rows under this head belong to a previous filter set still on screen
+   * while the new board loads. Said here, in the one part of the list that
+   * never scrolls away and is always at the top the filter press just reset
+   * the scroll to — the dimmed rows say something is off, this says what.
+   */
+  refreshing?: boolean;
   onToggleBoard: (board: AdpBoardType) => void;
 }) {
   return (
@@ -58,6 +66,17 @@ export function AdpBoardHeader({
           drafts={dynastyDrafts}
           onToggle={onToggleBoard}
         />
+        {refreshing && (
+          // `role="status"` announces the refresh politely; the pulse is
+          // decoration and steps aside under reduced motion, where the words
+          // still carry the state.
+          <span
+            role="status"
+            className="ml-auto text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-active/70 motion-safe:animate-pulse"
+          >
+            Updating…
+          </span>
+        )}
       </div>
       {both ? (
         <div className={`grid ${BOARD_COLUMNS_BOTH} items-center gap-2 px-2 pb-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/35`}>

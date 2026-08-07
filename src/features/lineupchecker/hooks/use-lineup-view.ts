@@ -145,7 +145,13 @@ export function useLineupView(user: UserInfo | null): LineupView {
     subjects,
     setSubjects,
     subjectDisplay,
-    subjectsLoading: narrowing && !rosters.data && !members.data,
+    // Until each map has settled, not until either lands: a leaguemate rule
+    // judged with only the rosters in reads as a settled empty answer while
+    // the membership it needs is still in flight. An errored read counts as
+    // settled, so a failure doesn't dim the count forever.
+    subjectsLoading:
+      narrowing &&
+      ((!rosters.data && !rosters.error) || (!members.data && !members.error)),
     /** The season the leagues route resolved — null until the first result. */
     season: stream.season,
     /** True only on a cold load; a background refresh leaves the list up. */

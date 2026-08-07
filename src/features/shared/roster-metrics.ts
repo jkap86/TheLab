@@ -1,4 +1,5 @@
 import { formatPoints, formatValue, weekCount } from "./format.ts";
+import type { ColumnPreset, Metric } from "./metric-cell.ts";
 import type { PlayerOutlook, PlayerSplit } from "@/shared/projections";
 
 /**
@@ -58,19 +59,28 @@ export type PlayerMetricContext = {
  * a projection-based metric wants and only past a week's shortfall.
  */
 export type PlayerMetricCell = {
+  /**
+   * Always a value — a player's number has no field to be placed in, the way a
+   * league card's rank does. Spelling it is what makes a {@link PlayerMetric} a
+   * {@link Metric} the shared columns editor can preview without an adapter; the
+   * two flags below are this catalogue's own and the editor ignores them.
+   */
+  kind: "value";
   text: string | null;
   title: string;
   muted?: boolean;
   short?: boolean;
 };
 
-/** One selectable player metric: its key, its short column label, and how to read it. */
-export type PlayerMetric = {
-  /** Stable id, stored as a column's selection and keyed in the picker. */
-  key: string;
-  /** The uppercase column heading — kept short enough to sit in a number column. */
-  label: string;
-  /** Reads this metric off one player's context into a renderable cell. */
+/**
+ * One selectable player metric: its key, its short column label, and how to read
+ * it.
+ *
+ * A {@link Metric} at this catalogue's grain, narrowed to the cell shape it
+ * returns — see {@link TeamMetric}, which is the same construction for the same
+ * two reasons, `Omit` included.
+ */
+export type PlayerMetric = Omit<Metric<PlayerMetricContext>, "cell"> & {
   cell: (ctx: PlayerMetricContext) => PlayerMetricCell;
 };
 
@@ -88,14 +98,16 @@ function isShort(outlook: PlayerOutlook, horizon: number): boolean {
 export const PLAYER_METRICS: PlayerMetric[] = [
   {
     key: "start",
+    group: "Projection",
     label: "Start",
     cell: ({ outlook, split, horizon }) => {
-      if (!outlook) return { text: null, title: "No projection" };
+      if (!outlook) return { kind: "value", text: null, title: "No projection" };
       // A projected player with no split was never a lineup candidate this
       // horizon; zero is the honest reading — none of it reaches a starting slot.
       const points = split?.starting_points ?? 0;
       const weeks = split?.starting_weeks ?? 0;
       return {
+        kind: "value",
         text: formatPoints(points),
         title:
           weeks === 0
@@ -107,12 +119,14 @@ export const PLAYER_METRICS: PlayerMetric[] = [
   },
   {
     key: "bench",
+    group: "Projection",
     label: "Bench",
     cell: ({ outlook, split }) => {
-      if (!outlook) return { text: null, title: "No projection" };
+      if (!outlook) return { kind: "value", text: null, title: "No projection" };
       const points = split?.bench_points ?? 0;
       const weeks = split?.bench_weeks ?? 0;
       return {
+        kind: "value",
         text: formatPoints(points),
         // A real 0.00 — never out of the lineup — is dimmed but printed, not an
         // em dash: it is a claim worth making, unlike a missing projection.
@@ -126,10 +140,12 @@ export const PLAYER_METRICS: PlayerMetric[] = [
   },
   {
     key: "proj",
+    group: "Projection",
     label: "Proj",
     cell: ({ outlook, horizon }) => {
-      if (!outlook) return { text: null, title: "No projection" };
+      if (!outlook) return { kind: "value", text: null, title: "No projection" };
       return {
+        kind: "value",
         text: formatPoints(outlook.points),
         title: `${formatPoints(outlook.points)} projected over ${outlook.weeks} of ${weekCount(horizon)}`,
         short: isShort(outlook, horizon),
@@ -138,10 +154,14 @@ export const PLAYER_METRICS: PlayerMetric[] = [
   },
   {
     key: "ktc",
+    group: "Value",
     label: "KTC",
     cell: ({ ktc, superflex }) => {
-      if (ktc === null) return { text: null, title: "not priced on KeepTradeCut" };
+      if (ktc === null) {
+        return { kind: "value", text: null, title: "not priced on KeepTradeCut" };
+      }
       return {
+        kind: "value",
         text: formatValue(ktc),
         title: `${formatValue(ktc)} KeepTradeCut dynasty ${
           superflex ? "superflex" : "1QB"
@@ -151,10 +171,14 @@ export const PLAYER_METRICS: PlayerMetric[] = [
   },
   {
     key: "adp",
+    group: "Value",
     label: "ADP",
     cell: ({ adp, adpPosition, superflex, draftCount }) => {
-      if (adp === null) return { text: null, title: "no ADP on the matching board" };
+      if (adp === null) {
+        return { kind: "value", text: null, title: "no ADP on the matching board" };
+      }
       return {
+        kind: "value",
         text: formatValue(adp),
         title: [
           adpPosition !== null && `ADP ${adpPosition.toFixed(1)}`,
@@ -179,3 +203,18 @@ export const PLAYER_METRICS_BY_KEY: Record<string, PlayerMetric> =
  * showed before the slots were made selectable, so the default view is unchanged.
  */
 export const DEFAULT_PLAYER_COLUMNS: string[] = ["start", "bench"];
+
+/**
+ * The named pairs the columns editor offers as one press each.
+ *
+ * One question per preset, as in the standings catalogue beside this one.
+ * `Lineup` is the split the panel opens on — what a player earns in the lineup
+ * against what he leaves outside it — where `Season` is the total and the share
+ * of it that actually reaches a starting slot, which is the pair that separates a
+ * productive player from a startable one.
+ */
+export const PLAYER_COLUMN_PRESETS: ColumnPreset[] = [
+  { name: "Lineup", columns: ["start", "bench"] },
+  { name: "Season", columns: ["proj", "start"] },
+  { name: "Value", columns: ["ktc", "adp"] },
+];

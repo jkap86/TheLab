@@ -41,9 +41,14 @@ export type OpenLeague = {
  * the panel itself sits on an opaque plate, since a standings table read over a
  * hundred cards drifting behind it is the one thing the effect must not buy. And
  * **a native `<dialog>`**, so the top layer, the focus trap, Escape and a press
- * outside are the platform's rather than three listeners of our own — the column
- * pickers inside the panel open as ordinary menus and never leave this box, so
- * the backdrop test below can't fire under them.
+ * outside are the platform's rather than three listeners of our own.
+ *
+ * **Including the rule the shares sheet had to learn: `onClose` tests its
+ * target.** The panel inside opens a dialog of its own — the columns editor, one
+ * per table — and React walks its own tree for `close`, which does not bubble in
+ * the DOM, so an unguarded handler here would take this sheet down with the
+ * editor a reader had just dismissed. The backdrop test below needs no such
+ * guard: a press inside a nested dialog never reaches this box at all.
  *
  * The panel is mounted only while the sheet is open. That is what keeps
  * `focusRosterId` a seed rather than a prop to be watched: a second press always
@@ -96,7 +101,12 @@ export function LeagueSheet({
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      onClose={onClose}
+      // Guarded by target: the columns editors inside the panel are dialogs of
+      // their own, and React's `close` walks its tree rather than the DOM — see
+      // the note above.
+      onClose={(event) => {
+        if (event.target === ref.current) onClose();
+      }}
       // The backdrop is the dialog's own pseudo-element, so a click landing on
       // the dialog box itself is a click outside the panel.
       onClick={(event) => {

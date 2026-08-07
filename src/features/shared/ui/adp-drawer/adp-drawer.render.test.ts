@@ -126,6 +126,7 @@ const loaded = (over: Partial<AdpPayload> = {}): AdpState => ({
   data: payload(over),
   error: null,
   loading: false,
+  stale: false,
 });
 
 const leagues = [league("a", 12), league("b", 10)];
@@ -297,18 +298,18 @@ describe("what is on screen", () => {
 
 describe("the board's states", () => {
   test("a failed read says so and draws no list", () => {
-    const html = drawer({ board: { data: null, error: "boom", loading: false } });
+    const html = drawer({ board: { data: null, error: "boom", loading: false, stale: false } });
     assert.match(html, /ADP unavailable — boom/);
     assert.doesNotMatch(html, /<ul>/);
   });
 
   test("a first load says it is loading", () => {
-    const html = drawer({ board: { data: null, error: null, loading: true } });
+    const html = drawer({ board: { data: null, error: null, loading: true, stale: false } });
     assert.match(html, /Loading the board…/);
   });
 
   test("an empty board says the filters matched nothing", () => {
-    const html = drawer({ board: { data: null, error: null, loading: false } });
+    const html = drawer({ board: { data: null, error: null, loading: false, stale: false } });
     assert.match(html, /No crawled drafts match these filters\./);
   });
 
@@ -342,6 +343,30 @@ describe("the board's states", () => {
     const html = drawer({ board: { ...loaded(), loading: true } });
     assert.equal((html.match(/<li /g) ?? []).length, 3);
     assert.doesNotMatch(html, /Loading the board…/);
+  });
+
+  test("held rows from the previous filter set are dimmed and say so", () => {
+    // The other half of that rule: rows held through a *filter change* belong
+    // to the board on its way out, so passing them off undimmed as the new
+    // selection's answer is the one dishonest state `keepPreviousData` can
+    // produce. The rows stay mounted and readable — no flash, no empty state —
+    // dimmed, marked busy, with the sticky head saying "Updating" in words and
+    // the header's count (the number the press was made to move) dimmed too.
+    const html = drawer({ board: { ...loaded(), loading: true, stale: true } });
+    assert.equal((html.match(/<li /g) ?? []).length, 3, "the rows stay on screen");
+    assert.doesNotMatch(html, /Loading the board…/);
+    assert.match(html, /aria-busy="true"/);
+    assert.match(html, /opacity-40/);
+    assert.match(html, /role="status"[^>]*>Updating…</);
+  });
+
+  test("a background refetch of the same board dims nothing", () => {
+    // `loading` without `stale` is a fresh copy of the *same* answer on its
+    // way — the rows on screen are right, so nothing may dim or announce.
+    const html = drawer({ board: { ...loaded(), loading: true } });
+    assert.doesNotMatch(html, /aria-busy/);
+    assert.doesNotMatch(html, /opacity-40/);
+    assert.doesNotMatch(html, /Updating…/);
   });
 
   test("a board with drafts but nothing on the shown market says which", () => {
