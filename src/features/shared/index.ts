@@ -58,7 +58,6 @@ export {
   STEEPNESS_RANGE,
   adpNarrowingCount,
   adpQueryString,
-  adpRangePresets,
   adpValueQueryString,
   boardLabel,
   defaultAdpControls,
