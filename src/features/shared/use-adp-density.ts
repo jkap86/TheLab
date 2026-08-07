@@ -35,6 +35,16 @@ export type AdpDensityState = {
  * draft key need no density at all, so the channel degrades to an empty slot
  * and the caption says the activity is unavailable.
  */
+/**
+ * One frozen empty list, not a fresh `[]` per render: `months` feeds a chain of
+ * memos (the drawer's season row, the window channel's domain and bars), and a
+ * new identity every render while the read is loading — or permanently, after
+ * the failure this hook deliberately degrades to — re-ran all of them for
+ * nothing. The same rule as `EMPTY_LEAGUES`/`EMPTY_PLAYERS` in the drawer's
+ * constants.
+ */
+const EMPTY_MONTHS: DraftDensityMonth[] = [];
+
 export function useAdpDensity(enabled: boolean): AdpDensityState {
   const density = useQuery({
     queryKey: boardQueryKeys.density(),
@@ -49,7 +59,7 @@ export function useAdpDensity(enabled: boolean): AdpDensityState {
   });
 
   return {
-    months: density.data?.months ?? [],
+    months: density.data?.months ?? EMPTY_MONTHS,
     error: density.error
       ? errorMessage(density.error, "Something went wrong")
       : null,
