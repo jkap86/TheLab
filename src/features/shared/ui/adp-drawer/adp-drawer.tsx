@@ -90,7 +90,7 @@ export function AdpDrawer({
   /** Crawled drafts per month and season, for the window control's density. */
   density: AdpDensityState;
 }) {
-  const { onScreen, closing, panelRef, openPanel, togglePanel, closePanel } =
+  const { onScreen, closing, panelRef, openPanel, togglePanel } =
     useAdpDrawerLifecycle({ open, onClose });
 
   // The footer's premise line, as the dialog's description: a board priced on an
@@ -193,14 +193,22 @@ export function AdpDrawer({
         {/* Pinned: everything that changes the board stays on screen while the
             board itself scrolls under it.
 
-            It is three rows rather than six. The identity, the season and the
-            draft count are one line — a header stating a count the trigger
-            already carried, over a labelled row of two season keys, was two
-            lines saying what fits on one. The `DRAFTED` label and its segment
-            strip are gone into the strip's own caption, which was already
-            reporting the window. And the filter row shows only what is actually
-            narrowing the board: seven chips permanently reading "All" are seven
-            controls' worth of height reporting that nothing is set. */}
+            Three of its four parts are one line each, and every one of them got
+            there the same way — by not spending height on a control reporting
+            that nothing is set. The identity, the season and the draft count
+            share a line, where a header stating a count the trigger already
+            carried over a labelled row of season keys was two lines saying what
+            fits on one. The filter row draws only the filters actually narrowing
+            the board, since seven chips permanently reading "All" are seven
+            controls' worth of height saying nothing.
+
+            **The window is the deliberate exception, and it is the one part that
+            takes real height.** It was a line too — a trigger and a row of
+            presets, with the counter floating over the board on a press — and
+            what that bought in pixels it spent on the instrument, which is the
+            first thing the drawer is opened to set. It is expanded here for
+            good, so the block is taller than the arithmetic above would leave
+            it; the board below is what pays, and it scrolls. */}
         <div className="flex flex-col gap-2 border-b border-foreground/10 bg-foreground/[0.02] px-4 py-2">
           <AdpDrawerHeader
             seasons={seasons}
@@ -219,9 +227,6 @@ export function AdpDrawer({
             months={seasonMonths}
             density={density}
             today={todayIso()}
-            open={openPanel === "range"}
-            onToggle={() => togglePanel("range")}
-            onClose={closePanel}
             onChange={(range) => onChange({ ...controls, range })}
           />
 

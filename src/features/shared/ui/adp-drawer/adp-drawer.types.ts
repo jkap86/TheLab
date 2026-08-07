@@ -18,10 +18,18 @@ export type FilterSpec = {
 };
 
 /**
- * Which of the drawer's two expanding controls is up, as one selection rather
- * than two booleans. They can't both be: the window's panel *floats* over the
- * rows below it, so an open filter tray under it would be a control the reader
- * can see and can't reach — and one-open-at-a-time is what the league filters'
- * own floating rows do, for the same reason. `null` is neither.
+ * Which of the drawer's floating controls is up; `null` is none.
+ *
+ * There were two — the window's counter and the filter tray — and it was one
+ * selection rather than two booleans because they could not both be up: a panel
+ * that *floats* over the rows below it would leave an open tray underneath as a
+ * control the reader can see and cannot reach. The window is expanded in place
+ * now and floats over nothing, so this is a union of one.
+ *
+ * It stays a named slot rather than collapsing into a boolean because the
+ * question the lifecycle hook asks of it is *which* panel is up, not whether one
+ * is: that is what Escape's innermost-first rule is written against, and a
+ * second floating control arriving as its own boolean is exactly the
+ * two-at-once state this shape makes unrepresentable.
  */
-export type AdpDrawerPanel = "range" | "filters";
+export type AdpDrawerPanel = "filters";
