@@ -28,7 +28,6 @@ export type AdpDrawerLifecycle = {
   /** Which floating panel is up, if any. */
   openPanel: AdpDrawerPanel | null;
   togglePanel: (which: AdpDrawerPanel) => void;
-  closePanel: () => void;
 };
 
 /**
@@ -65,13 +64,12 @@ export function useAdpDrawerLifecycle({
   const [openPanel, setOpenPanel] = useState<AdpDrawerPanel | null>(null);
   const togglePanel = (which: AdpDrawerPanel) =>
     setOpenPanel((current) => (current === which ? null : which));
-  const closePanel = () => setOpenPanel(null);
 
   // The drawer is on its way out: closed as far as everything else is
   // concerned, still mounted so `adp-drawer-out` has something to play on.
   const [closing, setClosing] = useState(false);
 
-  // A drawer reopened is a drawer at rest: the window's panel floats over the
+  // A drawer reopened is a drawer at rest: the filter tray floats over the
   // board, so one left hanging open covers the thing the drawer was opened to
   // show. Adjusted during render against the previous `open` rather than in an
   // effect — the pattern `useFilteredTrades` and `ColumnsEditor` use, and the
@@ -175,9 +173,9 @@ export function useAdpDrawerLifecycle({
     }
 
     // Every dependency is a thunk, so the stops are re-read per press: opening
-    // the filter tray or the lookback panel adds controls the reader must be
-    // able to Tab into, and a list captured when the listener was attached
-    // would hold them outside it. See {@link drawerKeydownHandler}.
+    // the filter tray adds controls the reader must be able to Tab into, and a
+    // list captured when the listener was attached would hold them outside it.
+    // See {@link drawerKeydownHandler}.
     const onKey = drawerKeydownHandler<HTMLElement>({
       stops: () => {
         const container = panelRef.current;
@@ -229,5 +227,5 @@ export function useAdpDrawerLifecycle({
     [],
   );
 
-  return { onScreen, closing, panelRef, openPanel, togglePanel, closePanel };
+  return { onScreen, closing, panelRef, openPanel, togglePanel };
 }

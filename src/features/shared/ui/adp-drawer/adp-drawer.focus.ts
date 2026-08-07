@@ -107,9 +107,9 @@ export function tabWrap(
  * which the drawer has no opinion about.
  *
  * Escape's two answers are the reason this takes `panelOpen` at all: **Escape
- * closes the innermost thing that is up**, so a window panel or filter tray
- * floating over the board goes first and the drawer survives the press. Without
- * it one keystroke takes both.
+ * closes the innermost thing that is up**, so a filter tray floating over the
+ * board goes first and the drawer survives the press. Without it one keystroke
+ * takes both.
  */
 export type DrawerKeyAction =
   | { readonly type: "close-panel" }
@@ -141,10 +141,10 @@ export type DrawerKeyEvent = {
  * Its dependencies are thunks rather than values because **every one of them is
  * read at press time, not at wiring time**. The listener is attached once per
  * open, and between two presses the reader can open the filter tray (six more
- * stops), open the lookback panel (more again), or move focus anywhere at all —
- * so a handler closing over a snapshot would trap them outside the control they
- * had just opened. That is also what keeps the effect keyed on `open` alone:
- * nothing here has to be rebuilt when the drawer's contents change.
+ * stops) or move focus anywhere at all — so a handler closing over a snapshot
+ * would trap them outside the control they had just opened. That is also what
+ * keeps the effect keyed on `open` alone: nothing here has to be rebuilt when
+ * the drawer's contents change.
  */
 export function drawerKeydownHandler<T extends { focus: () => void }>(deps: {
   /** The dialog's tab stops, in order, as of this press. */

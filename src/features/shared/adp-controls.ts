@@ -226,62 +226,39 @@ export function adpBoardRows(
 }
 
 /**
- * The presets, in the order the drawer offers them. Two labels each: `label`
- * names the range where it stands alone (the trigger, the drawer's header), and
- * `chip` is what the row reads — dropping "Last" is what keeps that row on one
- * line at the drawer's width, and inside the row the word is implied by the
- * "Drafted" label anyway. `12 mo` is abbreviated a step further because the
- * four are laid out as equal segments: on a phone they are ~72px each, which
- * "12 months" wraps to two lines in and takes the whole row's height with it.
+ * What each named preset is *called*, which is all that is left of them.
  *
- * `custom` is deliberately **not** on this list, though it is still a preset
- * value — and so is `lookback`, for the same reason. Neither is a mode you
- * enter first: a custom window is what setting the counter's end date produces,
- * and a lookback is what typing any unnamed day count produces. The chips fill
- * the counter's fields, which is why the relative ones keep earning their place
- * — "Last 90 days" stays true tomorrow, where the dates behind it would not.
+ * They were a row of chips beside the window control, and a second, seasonal
+ * list (`adpRangePresets`) decided which of them a given board could honestly
+ * offer — a relative window means nothing on a season that cannot contain
+ * today. Both are gone: the window counter is expanded in place, so every one
+ * of these is a day count typed or stepped into its lens, and a chip row beside
+ * an open instrument is two controls for one selection.
+ *
+ * What survives is the **naming**, which is not the chips' leftovers: a preset
+ * keeps its name wherever a range is read alone ({@link rangeLabel}) precisely
+ * because the name stays true as time passes, where the dates behind it would
+ * have to be re-read. `30d` and `90d` are also still the storage
+ * `lookbackRange` writes those two counts into, so a board holding one of them
+ * is named from this table rather than from its day count — the same string
+ * either way, and one spelling of it.
+ *
+ * `custom` and `lookback` are deliberately absent, and always were: neither is
+ * a mode you enter first. A custom window is what setting the counter's end
+ * date produces, and a lookback is what any unnamed day count produces — both
+ * name themselves from the dates or the count they carry.
  */
 export const ADP_RANGE_PRESETS: AdpRangePresetOption[] = [
-  { value: "30d", label: "Last 30 days", chip: "30 days" },
-  { value: "90d", label: "Last 90 days", chip: "90 days" },
-  { value: "12m", label: "Last 12 months", chip: "12 mo" },
-  { value: "all", label: "All time", chip: "All time" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "90d", label: "Last 90 days" },
+  { value: "12m", label: "Last 12 months" },
+  { value: "all", label: "All time" },
 ];
 
 export type AdpRangePresetOption = {
   value: AdpRangePreset;
   label: string;
-  chip: string;
 };
-
-/**
- * The presets worth offering for a given season, which is not the same list
- * every time.
- *
- * A relative preset is measured back from today, so it only means something on a
- * board that can *contain* today: "the last 30 days" of the 2024 season is an
- * empty board, and offering a chip that reliably returns nothing is worse than
- * not offering it. Twelve months goes further — inside a single season it is
- * the whole season with extra steps, so it survives only on the all-seasons
- * board where it is a real cut.
- *
- * What is left for a past season is one chip, and a row of one is no choice at
- * all — the caller drops the row and lets the strip and its calendar markers be
- * the control, which is what they were for.
- */
-export function adpRangePresets(
-  season: string,
-  currentSeason: string,
-): AdpRangePresetOption[] {
-  const unbounded: AdpRangePresetOption =
-    season === "all"
-      ? { value: "all", label: "All time", chip: "All time" }
-      : { value: "all", label: `All of ${season}`, chip: `All ${season}` };
-
-  if (season === "all") return [...ADP_RANGE_PRESETS.slice(0, 3), unbounded];
-  const relative = ADP_RANGE_PRESETS.filter((p) => p.value === "30d" || p.value === "90d");
-  return season === currentSeason ? [unbounded, ...relative] : [unbounded];
-}
 
 /**
  * The seasons the drawer offers, newest first, with `"all"` last.

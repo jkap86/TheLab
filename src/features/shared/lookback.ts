@@ -61,9 +61,17 @@ export function lookbackView(range: AdpRange, today: string): LookbackView {
  *
  * Ending today (or later — a caller clamps, but a clock can disagree by a
  * midnight) stays relative: no days is the whole season, 30 and 90 land on the
- * *named* presets so the resting line's chips light exactly, and any other
- * count is a `lookback`. An earlier end freezes the window into `custom`, with
- * no days meaning "through the end" — a half-open historical cut.
+ * *named* presets, and any other count is a `lookback`. An earlier end freezes
+ * the window into `custom`, with no days meaning "through the end" — a
+ * half-open historical cut.
+ *
+ * The named-preset landing used to be what lit the resting line's chips
+ * exactly; there is no chip row now, and it is kept because those two counts
+ * are still the ones with names — `ADP_RANGE_PRESETS` is where "Last 30 days"
+ * is spelled, and a board holding `30d` reads its label from there rather than
+ * from the general lookback branch. The two spellings resolve to the same
+ * string and the same bounds, so this is about there being one table that names
+ * a window, not about behaviour.
  */
 export function lookbackRange(days: number | null, end: string, today: string): AdpRange {
   if (end >= today) {
