@@ -3,13 +3,10 @@ import { memo } from "react";
 import type { AdpBoardStats, AdpBoardType } from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
-import { ADP_PEAK, type AdpControls, previewAdpValue } from "../../adp-controls";
+import { type AdpControls, previewAdpValue } from "../../adp-controls";
 import { PositionBadge } from "../position-badge";
-import {
-  ADP_ROW_HEIGHT,
-  BOARD_COLUMNS_BOTH,
-  BOARD_COLUMNS_ONE,
-} from "./adp-drawer.constants.ts";
+import { AdpCell, ValueCell } from "./adp-board-cells";
+import { BOARD_ROW_CLASS, ADP_ROW_HEIGHT } from "./adp-drawer.constants.ts";
 import { adpCellTitle, takenShare } from "./adp-drawer.utils.ts";
 
 /**
@@ -67,11 +64,14 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   // it without re-asserting that.
   const sole = player[soleBoard];
 
+  const value = (entry: AdpBoardStats | null) =>
+    entry === null ? null : previewAdpValue(entry.adp, teams, steepness);
+
   return (
     <li
       aria-setsize={count}
       aria-posinset={rank}
-      className={`absolute inset-x-0 top-0 grid ${both ? BOARD_COLUMNS_BOTH : BOARD_COLUMNS_ONE} items-center gap-2 border-t border-foreground/[0.04] px-1 py-1.5 text-sm`}
+      className={BOARD_ROW_CLASS(both)}
       // Positioned by transform rather than `top`, so scrolling past a row
       // doesn't dirty layout for the rows that didn't move.
       style={{ height: ADP_ROW_HEIGHT, transform: `translateY(${offset}px)` }}
@@ -88,86 +88,37 @@ export const AdpBoardRow = memo(function AdpBoardRow({
       <PositionBadge position={player.position} />
       {both ? (
         <>
-          <AdpCell entry={player.redraft} board="redraft" drafts={redraftDrafts} />
-          <AdpCell entry={player.dynasty} board="dynasty" drafts={dynastyDrafts} />
-          <ValueCell entry={player.redraft} teams={teams} steepness={steepness} collapsible />
-          <ValueCell entry={player.dynasty} teams={teams} steepness={steepness} collapsible />
+          <AdpCell
+            adp={player.redraft?.adp ?? null}
+            title={playerAdpTitle(player.redraft, "redraft", redraftDrafts)}
+          />
+          <AdpCell
+            adp={player.dynasty?.adp ?? null}
+            title={playerAdpTitle(player.dynasty, "dynasty", dynastyDrafts)}
+          />
+          <ValueCell value={value(player.redraft)} collapsible />
+          <ValueCell value={value(player.dynasty)} collapsible />
         </>
       ) : (
         <>
-          <AdpCell entry={sole} board={soleBoard} drafts={soleDrafts} />
+          <AdpCell adp={sole?.adp ?? null} title={playerAdpTitle(sole, soleBoard, soleDrafts)} />
           {/* Of the drafts on this board, not of every draft crawled — which is
               what makes it readable beside the ADP. */}
           <span className="text-right text-xs tabular-nums text-foreground/40">
             {takenShare(sole, soleDrafts)}
           </span>
-          <ValueCell entry={sole} teams={teams} steepness={steepness} />
+          <ValueCell value={value(sole)} />
         </>
       )}
     </li>
   );
 });
 
-/**
- * One board's average for one row. Null is an em dash, never a zero — the
- * board took this player in too few drafts to average, which is a different
- * answer from a bad pick. The hover carries what the Taken column says in
- * single-board mode, so nothing is lost when both boards are up and that
- * column has stepped aside.
- */
-function AdpCell({
-  entry,
-  board,
-  drafts,
-}: {
-  entry: AdpBoardStats | null;
-  board: AdpBoardType;
-  drafts: number | null;
-}) {
-  if (!entry) {
-    return <span className="text-right text-xs text-foreground/25">—</span>;
-  }
-  return (
-    <span
-      className="text-right font-semibold tabular-nums"
-      title={adpCellTitle(entry, board, drafts)}
-    >
-      {entry.adp.toFixed(1)}
-    </span>
-  );
-}
-
-/**
- * The draft-capital preview for one board's average. The rail under the number
- * is what makes the slider legible: the shape of the whole column bends as the
- * curve does, where a row of digits only moves for the reader checking one.
- * `collapsible` is the both-boards spelling, seated only from `@md` up — see
- * `BOARD_COLUMNS_BOTH` for the arithmetic.
- */
-function ValueCell({
-  entry,
-  teams,
-  steepness,
-  collapsible = false,
-}: {
-  entry: AdpBoardStats | null;
-  teams: AdpControls["teams"];
-  steepness: number;
-  collapsible?: boolean;
-}) {
-  const seat = collapsible ? "hidden @md:block" : "";
-  if (!entry) {
-    return <span className={`${seat} text-right text-xs text-foreground/25`}>—</span>;
-  }
-  const value = previewAdpValue(entry.adp, teams, steepness);
-  return (
-    <span className={`${seat} relative text-right text-xs tabular-nums text-active/80`}>
-      {value.toLocaleString()}
-      <span
-        aria-hidden
-        className="absolute inset-x-0 -bottom-0.5 h-px bg-active/45"
-        style={{ transform: `scaleX(${value / ADP_PEAK})`, transformOrigin: "right" }}
-      />
-    </span>
-  );
+/** The spread and the sample behind an average, or nothing where there is none. */
+function playerAdpTitle(
+  entry: AdpBoardStats | null,
+  board: AdpBoardType,
+  drafts: number | null,
+): string | undefined {
+  return entry ? adpCellTitle(entry, board, drafts) : undefined;
 }

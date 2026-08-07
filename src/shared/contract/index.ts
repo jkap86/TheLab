@@ -806,6 +806,30 @@ export type AdpPayload = {
   /** Players in the full filtered set; 0 when the requested page is past its end. */
   player_count: number;
   players: AdpPlayerPayload[];
+  /**
+   * KTC's **rookie-pick** rows, whole — keyed by {@link ktcPickKey}, a season, a
+   * round and a third of that round.
+   *
+   * The board lists draft picks beside the players, and a pick is priced off the
+   * rookie it returns — which is a reading of {@link AdpPlayerPayload.rookie} and
+   * needs nothing from KTC. What ADP genuinely cannot answer is what *waiting*
+   * costs: the class a 2028 first will spend is not a class anybody can name, so
+   * a pick that far out has no rung to stand on. KTC publishes exactly that
+   * opinion one row per season, and the *ratio* between two of its rows carries
+   * it onto the ADP scale — a ratio being dimensionless is what makes this one
+   * crossing between the two boards sound where a sum would not be.
+   *
+   * **Whole rather than narrowed**, for the reason `/api/trades` sends it whole:
+   * the ratio's anchor is the *nearest season KTC still prices*, which is a fact
+   * about the board rather than about any pick, and which seasons those are moves
+   * through the year. It is also what says which seasons and rounds there are
+   * picks worth listing for at all. A few dozen rows.
+   *
+   * Empty where KTC is unsynced or its names stopped parsing, which reads as
+   * future picks being absent from the board rather than as picks priced off the
+   * wrong season.
+   */
+  pick_ktc: Record<string, KtcValue>;
 };
 
 /**

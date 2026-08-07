@@ -8,6 +8,7 @@ import {
   seedFromLeague,
   toggleAdpBoard,
 } from "../../adp-controls.ts";
+import type { AdpPickRow, AdpPickStats } from "../../adp-picks.ts";
 import type { FilterSpec } from "./adp-drawer.types.ts";
 
 /**
@@ -69,6 +70,50 @@ export function takenShare(
 ): string {
   if (!entry || !drafts) return "—";
   return `${Math.round((entry.picks / drafts) * 100)}%`;
+}
+
+/**
+ * One pick cell's hover: whose place on the board this is, and what the wait
+ * cost it.
+ *
+ * A pick has no sample of its own to report — it was never taken in any of these
+ * drafts — so what the cell owes a reader instead is the two things the number
+ * rests on. The rung, because a pick priced off a rookie the reader can see a
+ * few rows away is a claim they can check; and the discount, because a row
+ * reading the same average as a current-year pick but a smaller value is
+ * otherwise a contradiction on its face.
+ */
+export function pickCellTitle(stats: AdpPickStats, board: AdpBoardType): string {
+  const rung = `Pick ${stats.overall} of the ${board} rookie ladder · stands on ${stats.player}`;
+  if (stats.discount === 1) return rung;
+  const share = Math.round(stats.discount * 100);
+  const row = stats.discountExact ? "" : ", estimated from a broader KTC row";
+  return `${rung} · ${share}% of a ${stats.base} pick on KTC${row}`;
+}
+
+/**
+ * The Taken column for a pick: an em dash, always.
+ *
+ * Not a zero and not a blank cell. "Taken" is the share of this board's drafts a
+ * player went in, and a pick went in none of them — it isn't a player and was
+ * never on the board. The hover is what says so, since an em dash beside a real
+ * ADP otherwise reads as a gap in the data rather than as a column that doesn't
+ * apply.
+ */
+export const PICK_TAKEN_TITLE =
+  "A pick isn’t drafted in these drafts — it stands on the rookie its rung took";
+
+/**
+ * The value cell's hover on a pick row, which is the board's premise plus the
+ * one thing a pick adds to it.
+ */
+export function pickValueTitle(
+  teams: AdpControls["teams"],
+  pick: AdpPickRow,
+  stats: AdpPickStats,
+): string {
+  if (stats.discount === 1) return valueTitle(teams);
+  return `${valueTitle(teams)} · discounted to ${Math.round(stats.discount * 100)}% for a ${pick.season} draft`;
 }
 
 /**

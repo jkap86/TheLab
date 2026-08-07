@@ -16,7 +16,8 @@ import type {
   PickAdpResult,
   RookieLadderRung,
 } from "./pick-value.ts";
-import type { AdpBoardType, AdpPlayerPayload } from "./types";
+import type { AdpPlayerPayload } from "@/shared/contract";
+import type { AdpBoardType } from "@/shared/manager";
 
 /**
  * The rookie ladder and what a pick reads off it.
@@ -540,6 +541,38 @@ describe("pickAdpValue — what waiting costs", () => {
     assert.equal(past.discount, 1);
     assert.equal(past.value, 5000);
     assert.equal(past.discountEstimated, false);
+  });
+
+  /**
+   * `ladderSeason` is the caller saying "this pick is the class the ladder
+   * describes", and the case it exists for is the board being *gone*.
+   *
+   * With no rows at all there is no anchor, so every pick refuses as
+   * `no-discount` — right for a 2032 4th, which must stay blank rather than be
+   * quoted at a nearby pick's price, and wrong for a pick being spent now,
+   * which needs nothing from KTC. A caller that enumerates a class knows the
+   * difference; one that reads picks off leagues does not, so it passes nothing
+   * and every pick goes through the board as before.
+   */
+  test("a claim about the ladder's own class survives KTC being gone", () => {
+    const gone = { ktcPicks: {}, pick: { season: "2026", round: 1 }, slot: 2 };
+    assert.equal(price(gone).value, null);
+    assert.equal(price({ ...gone, ladderSeason: "2026" }).value, 5000);
+    // The claim reaches only as far as it is made: a later season is still
+    // unpriced, which is the whole reason the null is worth keeping.
+    assert.equal(
+      price({ ...gone, pick: { season: "2028", round: 1 }, ladderSeason: "2026" })
+        .value,
+      null,
+    );
+  });
+
+  // It short-circuits the board rather than overriding it: where KTC *can*
+  // answer, the two agree, so passing it changes no number that was already
+  // right.
+  test("it says what the board would have said anyway", () => {
+    const own = { pick: { season: "2026", round: 1 }, slot: 2 };
+    assert.deepEqual(price(own), price({ ...own, ladderSeason: "2026" }));
   });
 });
 

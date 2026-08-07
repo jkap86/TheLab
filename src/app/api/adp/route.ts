@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { AdpPayload, AdpPlayerPayload, ApiErrorPayload } from "@/shared/contract";
+import { getKtcPickBoard } from "@/shared/ktc";
 import { getDraftAdp, parseAdpFilters, usesDefaultSeason } from "@/shared/manager";
 import { getPlayersByIds, getRookiePlayerIds } from "@/shared/players";
 import { getActiveSeason } from "@/shared/season";
@@ -67,13 +68,18 @@ export async function GET(request: Request) {
   try {
     const result = await getDraftAdp(filters);
     const ids = result.rows.map((r) => r.player_id);
-    // Two reads of one table rather than one, and the second is what makes the
-    // trades board's pick column possible — see `getRookiePlayerIds`. They are
-    // independent, so neither waits on the other; both are primary-key lookups
-    // beside an aggregate that has already done the expensive work.
-    const [players, rookies] = await Promise.all([
+    // Three reads beside the aggregate that has already done the expensive work,
+    // none of which waits on another. The second is what makes a pick column
+    // possible at all — see `getRookiePlayerIds`, since ranking the rookies on
+    // this board *is* the pick ladder. The third is the only thing KTC is asked
+    // for: what waiting costs, which ADP cannot answer for a pick whose class
+    // nobody can name yet. It is a few dozen rows off a 500-row table, and it is
+    // read whole because the anchor the discount is measured against is a fact
+    // about the board rather than about any pick — see `AdpPayload.pick_ktc`.
+    const [players, rookies, pickKtc] = await Promise.all([
       getPlayersByIds(ids),
       getRookiePlayerIds(ids),
+      getKtcPickBoard(),
     ]);
 
     const payload: AdpPayload = {
@@ -94,6 +100,7 @@ export async function GET(request: Request) {
           dynasty: row.dynasty,
         };
       }),
+      pick_ktc: pickKtc,
     };
 
     return NextResponse.json(payload);

@@ -744,8 +744,11 @@ ends of the vocabulary that decides which of those trades a reader is looking at
 and `features/trades/filters` is what is left on the client once the *matching*
 moved into SQL — the shape of a selection, the pick token's spelling, and how a
 window resolves against today. `features/trades/pick-display` is the third of
-that shape and the smallest: what a pick is *called* and when its origin is worth
-printing, two rules the card had neither of. All are pure and tested, and the thin
+that shape and the smallest: when a pick's origin is worth printing, a rule the
+card had neither of. (What a pick is *called* was its other half and lives in
+`features/shared/pick-value` now, since the ADP board enumerates picks belonging
+to no trade and has to call them what the cards call them; this file re-exports
+`pickLabel` so its own callers keep one import.) All are pure and tested, and the thin
 I/O around them (`shared/trades/queries`, the routes, the page) has no rules of
 its own.
 
@@ -1711,8 +1714,10 @@ stops holding, a comment saying it does would not have caught it.
     So a pick is priced by the player it buys, on the same curve, in the same
     units, out of the same population — which is what makes a haul of players
     and picks one sum where summing an ADP value and a KTC price would be a
-    scale nobody has defined. `features/trades/pick-value.ts` is the ladder and
-    the decisions in it:
+    scale nobody has defined. `features/shared/pick-value.ts` is the ladder —
+    it was `features/trades/pick-value.ts` until the ADP drawer became its second
+    reader, and that path re-exports it under the mover's rule — and the
+    decisions in it:
     - **Two boards, because ordering and pricing are two questions**
       (`rookieLadder(ordering, pricing, board)`). *Which rookie does this pick
       take* is a fact about **rookie drafts**, whose ADP orders one class against
@@ -2022,7 +2027,8 @@ stops holding, a comment saying it does would not have caught it.
     line, which is a column of ones.
   - **A pick is named the way Sleeper names it: its slot where the order is set,
     its round where it isn't, and its origin only when that is a surprise**
-    (`features/trades/pick-display`). Once a league has set that draft's order the
+    (`features/trades/pick-display`, and `pickLabel` in
+    `features/shared/pick-value`). Once a league has set that draft's order the
     pick has a *place* — 1.05 rather than "a 1st" — which is the difference
     between the pick that takes the best rookie and the pick that takes the fifth;
     most picks on this board are seasons out, so the round is usually all there
@@ -2406,6 +2412,45 @@ stops holding, a comment saying it does would not have caught it.
     is a free consequence of the block above shrinking: the headings are what a
     column of bare numbers three hundred rows down needs, and there was no
     pinned surface to hang them under before.
+
+  **Draft picks are rows on that list, beside the players, and they read off the
+  board on screen** (`features/shared/adp-picks`). A board of player averages has
+  no row for a pick and doesn't need one: a rookie pick is a place in a queue and
+  the queue is on the board already, so the 1.01 stands where the best rookie
+  goes, the 1.02 where the second does, and a pick's ADP *is* a player's ADP —
+  which is what lets it sort into the list rather than sit in a table of its own.
+  Six decisions in it:
+  - **Both halves read the displayed board, which is the opposite call from
+    `pick-value`'s and deliberately so.** There the ordering comes from rookie
+    drafts and the price from startups, because a *valuation* must not follow a
+    display choice — that split is the whole of that module's argument. Here the
+    display **is** the question: "where do picks fall on the board in front of
+    me" has one answer per board, and on a board of rookie drafts the 1.01
+    genuinely is ADP ~1. A second population would make the pick rows describe
+    drafts the reader is not looking at.
+  - **The discount lands on the value and never on the ADP**, which is what
+    `pickAdpStand` was split out of `pickAdpValue` for. The curve is dragged a
+    notch at a time and reorders nothing (`adpListIdentity`'s own rule), so a
+    pick carries an average and a factor and the cell multiplies them — exactly
+    as a player row carries an average and prices it in the cell.
+  - **The numbered class asks KTC for nothing.** `ladderSeason` tells
+    `pickAdpStand` that a pick is the class the ladder describes, so an unsynced
+    KTC board costs the future rows and not the current ones. Without it a failed
+    scrape takes the whole feature, since `ktcPickDiscount` answers null with no
+    anchor to measure against — which is right for a 2032 4th and wrong for a
+    pick being spent now.
+  - **A future season is one row per round, assumed mid, and only where KTC
+    prices it** (`ktcPickBoardRows`). There is no class to number against, so
+    there is no honest slot; and a season KTC has no opinion about is a season
+    whose picks cannot be discounted, so it is absent rather than quoted at a
+    nearer pick's price.
+  - **The class season is the *active* one, not the board's.** `rookie` on a row
+    names the class that is a rookie now, so a board cut to a past season holds
+    none of them and lists no picks — empty rather than mislabelled.
+  - **`adpBoardEntries` decides where a pick goes among the players and nothing
+    else**: a merge of two ordered lists rather than one sort over both, so
+    `adpBoardRows`' own tiebreaks stay its business. A tie puts the player first,
+    since the pick is an annotation of the row above it.
 
   `draft_type` is a constant now (`snake,linear`)
   for the reason it always defaulted that way: an auction's `pick_no` is

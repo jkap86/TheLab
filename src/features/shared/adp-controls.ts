@@ -16,6 +16,7 @@ import {
   todayIso,
 } from "./date-range.ts";
 import { deriveScoring, leagueAdpBoard } from "./league-filters/predicates.ts";
+import { TYPICAL_DRAFT_TEAMS } from "./pick-value.ts";
 import type { AdpBoardType, ManagerLeague } from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
@@ -333,8 +334,23 @@ export function steepnessSummary(halvings: number): string {
  * the number beside a card is priced on that league's real slots.
  */
 export function previewAdpPool(teams: AdpControls["teams"]): number {
-  const count = teams === "all" ? 12 : Number(teams);
-  return (Number.isFinite(count) && count > 0 ? count : 12) * TYPICAL_STARTING_SLOTS;
+  return previewDraftTeams(teams) * TYPICAL_STARTING_SLOTS;
+}
+
+/**
+ * How many teams the drawer's board assumes are drafting: the size filter where
+ * one is set, and a typical twelve otherwise.
+ *
+ * Its own function because two things read it and they must agree. The pool
+ * above anchors the value curve; the pick rows enumerate a draft — a round's
+ * worth of slots, and which rung a `2.01` lands on. A board previewing a 10-team
+ * curve while numbering picks out of twelve would put the same pick in two
+ * places at once. The fallback is {@link TYPICAL_DRAFT_TEAMS}, the one the pick
+ * ladder already falls back to for a league with no size on file.
+ */
+export function previewDraftTeams(teams: AdpControls["teams"]): number {
+  const count = teams === "all" ? TYPICAL_DRAFT_TEAMS : Number(teams);
+  return Number.isInteger(count) && count > 0 ? count : TYPICAL_DRAFT_TEAMS;
 }
 
 /** A board row's draft-capital value under the drawer's current curve. */
