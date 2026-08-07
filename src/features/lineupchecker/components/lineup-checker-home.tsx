@@ -36,19 +36,18 @@ import { LineupStatHeadings } from "./lineup-columns";
  *
  * **It wears the manager tabs' plate, and the record on it is this week's.** The
  * card is the same component — identity, season, the record as digits, as a bar
- * and as a dial, the filter row and the columns rail pinned in its foot — because
- * what a reader wants to know before a list of a hundred lineups is exactly what
- * it wants to know before a list of a hundred leagues, and two cards drawn to say
- * that would be two chances for one of them to drift. What differs is the
- * aggregation behind `record`: {@link projectedRecord} rather than
- * {@link aggregateRecord}, the week ahead rather than the season so far. The week
- * itself is the plate's `scope` — the line that names what the record was counted
- * over — since that is exactly what it is here.
+ * and as a dial — because what a reader wants to know before a list of a hundred
+ * lineups is exactly what it wants to know before a list of a hundred leagues,
+ * and two cards drawn to say that would be two chances for one of them to drift.
+ * What differs is the aggregation behind `record`: {@link projectedRecord} rather
+ * than {@link aggregateRecord}, the week ahead rather than the season so far. The
+ * week itself is the plate's `scope` — the line that names what the record was
+ * counted over — since that is exactly what it is here.
  *
  * That plate is why there is no {@link PageHeading} above it any more: the app
- * bar names the tool, and a title over a pinned card would push the card off the
- * top it is pinned to. The no-account state keeps one, because down there the
- * card is what is missing.
+ * bar names the tool, and a second title over a card that already names the
+ * account is one heading too many. The no-account state keeps one, because down
+ * there the card is what is missing.
  *
  * **It narrows with the manager tabs' own filter row**, which is a change of seat
  * as well as of scope. The league filters' key used to be machined into this
@@ -128,10 +127,11 @@ export function LineupCheckerHome() {
   // first `result` lands, which is the cold load below.
   const season = view.season;
 
-  // A fragment rather than a wrapper, and it is load-bearing: the plate cancels
-  // `PageShell`'s own top padding with a negative margin so its resting place is
-  // its pinned one, and a box between the two is a box that margin has to
-  // collapse through.
+  // A fragment rather than a wrapper, and it is load-bearing: the heading rail
+  // below pins itself under the app bar, and a sticky part travels only as far as
+  // its own parent's box — so a box around these would scroll away and take the
+  // rail with it. With a fragment the parent is the page shell's `<main>`, which
+  // is the box the rows are in.
   return (
     <>
       {season !== null && (
@@ -163,33 +163,32 @@ export function LineupCheckerHome() {
           // only moving number on the card — is exactly inverted on this page:
           // all offseason the timer was covering the number the tool is for.
           countdown={false}
-          // The header keeps the top through an open league — the filter row and
-          // the heading rail below both ride in it, and losing them at the moment
-          // a reader goes a level deeper is what the plate letting go used to
-          // cost. What it gives up instead is the fade below itself: an open card
-          // pins flush against the plate, so those 64px of near-solid background
-          // land on the card's own head rather than on the page.
-          fade={open === null}
-          // The filter row and the heading rail ride in the plate for the reason
-          // they do on the leagues page: the card is pinned, so a rail left at
-          // the top of the list would scroll away and leave the numbers under it
-          // unlabelled — and the control that empties the list has to stay
-          // reachable when it does. Their 12px gap is the slab's own wall plus
-          // clearance, exactly as `ColumnsBar` spaces the same two parts.
-          columns={
-            all.length > 0 ? (
-              <div className="flex flex-col gap-3">
-                <SubjectRail view={view} />
-                {/* No rows is no billet: a heading rail with nothing to head is
-                    a lit face saying nothing, and the rail above it is where a
-                    reader who narrowed to zero goes to get back. */}
-                {rows.length > 0 && (
-                  <ListLedge headings={<LineupStatHeadings />} />
-                )}
-              </div>
-            ) : undefined
-          }
         />
+      )}
+
+      {/* The filter row and the heading rail, between the card and the rows and
+          belonging to neither — the manager tabs' own arrangement, and siblings
+          rather than children of either for the reason that matters there too: a
+          sticky part travels only as far as its own parent's box, and the box the
+          rail has to span is the one the rows are in.
+
+          The rail is what pins. It names the four columns the rows under it are
+          read on, so it holds the top through an open league as well — and gives
+          up its fade there, since an open card pins flush against it. */}
+      {all.length > 0 && (
+        <>
+          <SubjectRail view={view} />
+          {/* No rows is no billet: a heading rail with nothing to head is a lit
+              face saying nothing, and the rail above it is where a reader who
+              narrowed to zero goes to get back. */}
+          {rows.length > 0 && (
+            <ListLedge
+              headings={<LineupStatHeadings />}
+              pinned
+              fade={open === null}
+            />
+          )}
+        </>
       )}
 
       {/* Both failures are reported beside the list rather than instead of it:

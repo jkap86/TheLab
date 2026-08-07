@@ -1,7 +1,6 @@
 import type { ManagerHeaderProps } from "./manager-header.types.ts";
 import { hasSyncState } from "./manager-header.utils.ts";
 import { ManagerSummary } from "./manager-summary.tsx";
-import { usePinnedHeight } from "./pinned-height.ts";
 import { SeasonTab, StatTab } from "./plate-corners.tsx";
 import { SyncStateLine } from "./sync-state.tsx";
 
@@ -46,29 +45,27 @@ const STATE_PADDING = "px-5 py-2 sm:px-6";
  *
  * It carries no tabs, and neither does the bar any more: moving between Leagues,
  * Players and Leaguemates is three entries in the app bar's tools menu, which
- * already listed them. This card is pinned below that bar, so a row spent on
- * navigation is a row of the list it would cover.
+ * already listed them.
  *
- * **It holds the top for as long as it is on the page, including through an open
- * league.** It used to let go of it: an expanded card is capped at the viewport
- * and given the screen, so a plate pinned over it was spending a quarter of the
- * one thing being read on facts about the account. What that argument left out is
- * that the plate is where both filter rows and the whole heading rail live — so
- * a reader who opened a league lost the control that narrows the list, the names
- * of the four columns the row above was being read on, and the way back to the
- * account they were looking at, all at the moment they went a level deeper. The
- * panel pays the height instead, and it pays it in a region that scrolls.
+ * **It scrolls away, and only the list's heading rail stays.** This card was
+ * pinned under the app bar and the filter row and the heading rail rode inside
+ * it, so all three held the top together — which is a card's worth of facts
+ * about the account on screen permanently, paid for out of the list, to keep four
+ * column headings from scrolling off. The account, the season and the record are
+ * read once at the top of the page; what a reader still needs at row ninety is
+ * the names of the columns they are scanning. So the rail pins itself now (see
+ * {@link ListLedge}) and this is an ordinary card above the list — which is also
+ * why it paints no ground, bleeds to no gutter and fades into nothing: every one
+ * of those existed to cover a list scrolling underneath it.
  *
- * That makes this card's height an offset something else has to know:
- * {@link usePinnedHeight} publishes it, and the open card pins beneath it and
- * caps at the remainder. It is the only measurement of its kind here, and the
- * note on `columns` is still the rule — anything that belongs *with* the plate
- * rides inside it rather than being offset below it.
+ * It renders neither the filter row nor that rail any more, for the reason it can
+ * no longer render either: a sticky part travels only as far as its own parent's
+ * box, so a rail seated in this card would scroll away inside it. Both are the
+ * page's own children, beside the rows they belong to.
  *
  * Every `/manager/[searched]/…` view renders this. The identity, the season, the
- * sync state and the record are the same facts on all of them; only `stat` and
- * `columns` differ, which is why they are props rather than three copies of this
- * card.
+ * sync state and the record are the same facts on all of them; only `stat`
+ * differs, which is why it is a prop rather than three copies of this card.
  *
  * **The lineup checker renders it too, which is why the card is in
  * `features/shared`.** What it swaps is the *aggregation* behind `record` — the
@@ -92,45 +89,27 @@ export function ManagerHeader({
   scope,
   leagueCount,
   stat,
-  columns,
   countdown = true,
-  fade = true,
 }: ManagerHeaderProps) {
-  const ref = usePinnedHeight<HTMLElement>();
-
   return (
-    // Pinned directly under the app bar, so who you are looking at and how their
-    // season is going stay on screen while a several-hundred-row list scrolls
-    // past. The bleed (`-mx-4 px-4`) and the opaque background are what the
-    // header needs to cover that list rather than let it show through the gaps
-    // around its rounded corners; `PageShell`'s `wide` gutter is the 4 they match.
+    // A card at the top of the page and nothing more — the scroll takes it with
+    // everything else. What it used to carry, and why none of it is here:
+    // `sticky top-[var(--site-header-h)] z-40` held it under the app bar,
+    // `-mx-4 px-4` bled it to `PageShell`'s `wide` gutter and `bg-[…]` painted
+    // the ground, both so a list could pass behind it rather than through the
+    // gaps around its rounded corners, and an `::after` faded that paint into the
+    // ambient aurora rather than ending it against one. All five belong to a
+    // pinned surface, and the one part of this header that still is one has
+    // them ({@link ListLedge}).
     //
-    // `-mt-10` cancels that same shell's `py-10` top padding, so the header's
-    // resting place *is* its pinned one: without it the plate sat 40px lower
-    // until the first scroll and then jumped up under the app bar, which reads
-    // as the page shifting rather than as a card pinning.
+    // `-mt-10` went with them: it cancelled the shell's own top padding so that
+    // the card's resting place *was* its pinned one, and with nothing to pin to
+    // the page's ordinary breathing room above the card is the right answer.
     //
-    // That opaque paint fades out below the header rather than ending, the same
-    // `::after` the tools page's pinned plate carries and for the same reason: a
-    // flat fill butted straight against the ambient aurora draws a hard
-    // horizontal line across the page, so the glows look clipped at the header's
-    // edge instead of passing behind a pinned surface. Fading also lets a league
-    // card dim into the plate as it scrolls under rather than being cut mid-row.
-    // `pointer-events-none` because it overhangs the list — and see {@link fade}
-    // for the one state that has nothing under it to blend into.
-    //
-    // The gap under it closes when the heading rail is riding here: the rail is
-    // the list's own header, and 40px of background between a heading and the
-    // first row it heads is what makes the two read as separate things. With the
-    // rail absent the header is a card above a list and keeps the fuller gap.
-    <header
-      ref={ref}
-      className={`sticky top-[var(--site-header-h)] z-40 -mx-4 -mt-10 flex flex-col gap-1.5 bg-[var(--background)] px-4 pt-1.5 ${
-        fade
-          ? "after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent"
-          : ""
-      } ${columns ? "mb-3 pb-1.5" : "mb-6 pb-3"}`}
-    >
+    // 6px below, because what follows on every page that draws this is the filter
+    // rail — a lit face, held off this one's the same way the rail holds off the
+    // heading billet under it.
+    <header className="mb-1.5">
       {/* The plate keeps `overflow-hidden`: the accent rail and the specular
           sweep are square boxes drawn against its rounded corners. The wrapper
           around it is what a part seated *outside* that clip would need — the
@@ -176,8 +155,6 @@ export function ManagerHeader({
           )}
         </div>
       </div>
-
-      {columns}
     </header>
   );
 }
