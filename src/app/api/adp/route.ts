@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { AdpPayload, AdpPlayerPayload, ApiErrorPayload } from "@/shared/contract";
 import { getKtcPickBoard } from "@/shared/ktc";
 import { getDraftAdp, parseAdpFilters, usesDefaultSeason } from "@/shared/manager";
-import { getPlayersByIds, getRookiePlayerIds } from "@/shared/players";
+import { getPlayersByIds, getRookieClassIds } from "@/shared/players";
 import { getActiveSeason } from "@/shared/season";
 
 import { readFailureResponse } from "../read-failure";
@@ -70,15 +70,17 @@ export async function GET(request: Request) {
     const ids = result.rows.map((r) => r.player_id);
     // Three reads beside the aggregate that has already done the expensive work,
     // none of which waits on another. The second is what makes a pick column
-    // possible at all — see `getRookiePlayerIds`, since ranking the rookies on
-    // this board *is* the pick ladder. The third is the only thing KTC is asked
-    // for: what waiting costs, which ADP cannot answer for a pick whose class
-    // nobody can name yet. It is a few dozen rows off a 500-row table, and it is
-    // read whole because the anchor the discount is measured against is a fact
-    // about the board rather than about any pick — see `AdpPayload.pick_ktc`.
+    // possible at all — the *current* class through the rookie-class seam (see
+    // `shared/players/rookie-class` for what keeps historical classes out),
+    // since ranking the rookies on this board *is* the pick ladder. The third
+    // is the only thing KTC is asked for: what waiting costs, which ADP cannot
+    // answer for a pick whose class nobody can name yet. It is a few dozen rows
+    // off a 500-row table, and it is read whole because the anchor the discount
+    // is measured against is a fact about the board rather than about any pick
+    // — see `AdpPayload.pick_ktc`.
     const [players, rookies, pickKtc] = await Promise.all([
       getPlayersByIds(ids),
-      getRookiePlayerIds(ids),
+      getRookieClassIds(ids),
       getKtcPickBoard(),
     ]);
 

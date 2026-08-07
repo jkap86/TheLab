@@ -337,14 +337,7 @@ export async function getWeeklyTeamPoints({
   if (!input) return { weeks: [], points: new Map(), bench: new Map() };
   const { projectable, weeks, stats, positions } = input;
 
-  // Bucketed by player once, so each league scores its own rosters' rows rather
-  // than re-scanning the whole account's union per league.
-  const rowsByPlayer = new Map<string, PlayerWeekStats[]>();
-  for (const row of stats) {
-    let rows = rowsByPlayer.get(row.player_id);
-    if (!rows) rowsByPlayer.set(row.player_id, (rows = []));
-    rows.push(row);
-  }
+  const rowsByPlayer = bucketByPlayer(stats);
 
   const points = new Map<string, Map<number, number>>();
   const bench = new Map<string, Map<number, number>>();
@@ -529,20 +522,21 @@ export async function getWeekLineups({
     getFantasyPositions(playerIds),
   ]);
 
+  // The clause of the contract above that nothing else implements: a week with
+  // no stored projections for any of these rosters is *absence*, never a map of
+  // confident zeros. Without this, every league solved against nothing came
+  // back `{optimal: 0, current: 0, points_left: 0}`, and "0.0 points left"
+  // reads as "your lineup is already optimal" — the one wrong answer here that
+  // looks like a working one.
+  if (stats.length === 0) return { week, teams: new Map() };
+
   // One set for the account: whether a game has been played is a fact about the
   // schedule, so it is the same answer in every league the player is rostered in.
   const locked = new Set(
     stats.filter((row) => row.locked).map((row) => row.player_id),
   );
 
-  // Bucketed by player once, so each league scores its own rosters' rows rather
-  // than re-scanning the whole account's union per league.
-  const rowsByPlayer = new Map<string, PlayerWeekStats[]>();
-  for (const row of stats) {
-    let rows = rowsByPlayer.get(row.player_id);
-    if (!rows) rowsByPlayer.set(row.player_id, (rows = []));
-    rows.push(row);
-  }
+  const rowsByPlayer = bucketByPlayer(stats);
 
   const teams = new Map<string, Map<number, TeamWeekLineup>>();
   for (const league of projectable) {
@@ -585,4 +579,22 @@ export async function getWeekLineups({
   }
 
   return { week, teams };
+}
+
+/**
+ * The account's stat rows bucketed by player, so each league scores its own
+ * rosters' rows rather than re-scanning the whole union per league. Mechanical
+ * plumbing shared by the two batch readers above — it decides nothing, which is
+ * why it lives here rather than in a pure module.
+ */
+function bucketByPlayer(
+  stats: readonly PlayerWeekStats[],
+): Map<string, PlayerWeekStats[]> {
+  const rowsByPlayer = new Map<string, PlayerWeekStats[]>();
+  for (const row of stats) {
+    let rows = rowsByPlayer.get(row.player_id);
+    if (!rows) rowsByPlayer.set(row.player_id, (rows = []));
+    rows.push(row);
+  }
+  return rowsByPlayer;
 }

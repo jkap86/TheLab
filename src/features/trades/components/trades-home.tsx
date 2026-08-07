@@ -24,7 +24,11 @@ import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { focusRosterFor } from "../exchange";
-import { DEFAULT_TRADE_FILTERS, hasSideSelection, tradeSeekBounds } from "../filters";
+import {
+  DEFAULT_TRADE_FILTERS,
+  activeTradeFilterCount,
+  tradeSeekBounds,
+} from "../filters";
 import type { TradeFilters, TradeNames } from "../filters";
 import { useFilteredTrades } from "../hooks/use-filtered-trades";
 import { useTradeLeagues } from "../hooks/use-trade-leagues";
@@ -556,7 +560,11 @@ export function TradesHome({ season }: { season: string }) {
               // — which is a different problem from a filter set that is merely
               // narrow, and the only one the reader can do something about.
               "No trades match these filters. A circle is drawn from the leagues this database has synced for your account — look it up on the tools page if it has never been read."
-            : leagueFiltersActive || activeTradeSelection(tradeFilters)
+            : // The tested count, not a second predicate over the same fields:
+              // the empty state's wording and `Clear` have to agree about
+              // whether anything is narrowing, or a fourth filter dimension
+              // added to one leaves the other lying.
+              leagueFiltersActive || activeTradeFilterCount(tradeFilters) > 0
               ? "No trades match these filters."
               : // Transactions arrive with the league syncs, so a season nothing
                 // has been crawled for has none stored rather than none made.
@@ -624,15 +632,6 @@ export function TradesHome({ season }: { season: string }) {
         />
       )}
     </>
-  );
-}
-
-/** Whether anything the reader set is narrowing — for the empty state's wording. */
-function activeTradeSelection(filters: TradeFilters): boolean {
-  return (
-    filters.seek !== null ||
-    filters.circle !== "all" ||
-    hasSideSelection(filters)
   );
 }
 
