@@ -3307,8 +3307,9 @@ stops holding, a comment saying it does would not have caught it.
   - **A number still lives in exactly one place.** The gap moved here out of the
     roster half's prose, which used to carry `+41.72 on the bench` above the list
     it belongs to. It sits beside the two totals it is the difference between, and
-    what is left in the prose is the part neither the table nor the readout can
-    say — the names to start and sit. It takes amber, the app's existing
+    it is now the *only* place the panel states the distance from the lineup
+    Sleeper has seated — the names that used to follow it went with the rest of
+    that prose (see `roster-detail` below). It takes amber, the app's existing
     needs-attention tone, because it is the one figure here that is a verdict
     rather than a count.
   - **The dial's arc is the rank, not the points.** A full ring is the best roster
@@ -3590,9 +3591,10 @@ stops holding, a comment saying it does would not have caught it.
   says — at the cost of ~64px of a half that is ~155px wide on a phone, before a
   single player was listed. **A panel driven by a selection should not restate the
   selection**; the same reasoning took the `Optimal <total>` chip under it, which
-  is the number the standings are ranked on and states in the column beside it.
-  What is left in that summary is what the table can't say: the points on the
-  bench and who to move. Pass the same string to
+  is the number the standings are ranked on and states in the column beside it —
+  and, eventually, the `start … · sit …` line under that, which restated the two
+  lists it sat over rather than any one number. That head is now the coverage
+  caveat and nothing else. Pass the same string to
   `TeamAvatar`'s `label` so its fallback initial matches the name shown next to it.
 - **Rows in that panel give the name its own line.** Both lists inside it —
   `standings` and `roster-detail` — put the team or player name alone on the first
@@ -3662,11 +3664,25 @@ stops holding, a comment saying it does would not have caught it.
 - **`roster-detail` shows the optimal lineup only** — there is no current/optimal
   toggle. The current lineup is a click away in Sleeper; what this tool adds is
   the best lineup available, so the starters list *is* that lineup and the bench
-  follows it (promoted rows highlighted, sat rows dimmed). The gap against what
-  the team is actually starting is stated in words — `+X on the bench · start … ·
-  sit …` — rather than made something to find by toggling. `optimal.ts` still
-  computes `current` / `current_points`: `points_left`, `start` and `sit` are
-  differences against them, so they are load-bearing, not dead.
+  is everyone it doesn't seat. **The diff against what the team is actually
+  starting is not drawn at all**, which took two things that each looked like the
+  panel's own subject and were the *other* lineup wearing its clothes. The
+  `start … · sit …` prose above the list named players who were already on rows a
+  few pixels below, in the section that answers where each of them should be — the
+  same restatement the team plate and the `Optimal <total>` chip were removed for,
+  and the argument holds harder here because the sentence was a second spelling of
+  the two lists rather than of one number. And a tinted promoted starter beside a
+  dimmed sat bench player made a section's rows unequal on an axis the section
+  isn't about: this half is the lineup to hold, so which list a player is in is
+  the whole of the advice, and the marking only reported how far the team
+  currently is from taking it. What survives as a *number* is the gap, in the
+  readout strip, where it sits beside the two totals it is the difference between
+  — which is also why `optimal.ts` still computes `current` / `current_points`:
+  `points_left` is a difference against them and is on screen. `start` and `sit`
+  ride the contract still, computed and tested, with no client drawing them.
+  The one thing left above the list is `LineupCoverage`, the caveat naming slots
+  the solver didn't recognise — kept because nothing else on screen can raise it,
+  where everything else up there was already said below.
 - **Every roster row carries two numbers, not one: `start` and `bench`.** A
   season total answers the wrong question on both sides of the roster. A backup
   quarterback projected 361 points behind two better starters is worth *nothing* —
