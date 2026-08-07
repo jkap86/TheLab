@@ -10,7 +10,7 @@ import {
   SIDE_SEAM_COLUMN,
   SIDE_SEAM_ROW,
 } from "./trade-card.constants.ts";
-import { TradeInstant, TradeNameplate } from "./trade-header";
+import { TradeHeaderLine, TradeNameplate } from "./trade-header";
 import { TradeSideColumn } from "./trade-side";
 import type { TradeCardProps } from "./trade-card.types.ts";
 
@@ -129,7 +129,7 @@ export const TradeCard = memo(function TradeCard({
             of overhang, so 12px of it hangs into the card and the first line
             has to start below that. */}
         <article className="lab-slab-face lab-notch-lg pt-4">
-          <TradeInstant completedAt={trade.completed_at} />
+          <TradeHeaderLine league={league} completedAt={trade.completed_at} />
 
           {/* No gap: the sides are regions of one face, so what separates them
               is a cut and not the ground showing between two objects. */}

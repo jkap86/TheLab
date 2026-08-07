@@ -1523,6 +1523,47 @@ stops holding, a comment saying it does would not have caught it.
     a claim about what the NFL has played — and still spelled by hand rather
     than through `toLocaleTimeString`, so the punctuation matches the date it
     follows.
+  - **What kind of league it was shares that line, and none of it is a chip**
+    (`features/trades/league-specs.ts`, pure and tested). A second-round pick is
+    a different asset in a 10-team redraft from what it is in a 14-team
+    superflex dynasty, and this board spans every crawled league — so the card's
+    only answer to "which of those am I looking at" was a league name, which
+    helps nobody who doesn't already know the league. Six tokens now say it:
+    type, size, the QB and superflex slots, tight ends, TE premium where there
+    is one, and best ball where it is one. Five decisions in it:
+    - **They are readouts, not `.lab-chip`.** The bar's grammar is that raised
+      means press me, and six pills per card across the couple of dozen the
+      virtualiser keeps mounted is ~150 apparent controls that do nothing. The
+      recessed spelling is also the material the instant beside them and the
+      side totals below them already wear, so the run adds no fourth surface to
+      a card that deliberately counts three — and the accent stays unspent,
+      which is the same argument that engraved the values rather than lighting
+      them.
+    - **Every fact is read through the league filters' own predicates**
+      (`slotCount`, `scoringValue`, `leagueType`, and `isBestBall`, which was
+      inlined in `matchesFilters` and is exported for this). A card saying
+      "1QB + SF" over a filter for `qb+sf ≥ 2` that disagrees is the drift one
+      definition prevents, and it is what makes a new QB-eligible flex count
+      here the moment the solver learns it.
+    - **A fact that isn't known is omitted, never printed as zero.** An
+      unsynced `roster_positions` is not evidence a league starts no tight end,
+      so the lineup tokens simply aren't drawn — the rule that keeps `k = 0`
+      from sweeping in every unsynced league, applied to a label. A lineup that
+      is present and *empty* still says `0TE`, which is a different answer.
+    - **The always-present facts lead in a fixed order and the conditional ones
+      trail.** The run is read down a list rather than across one card, so type,
+      size, QB and TE hold the same positions on every card and TE premium and
+      best ball follow them; leading with best ball would move every other token
+      one place left on the minority of cards that carry it. Best ball prints
+      only when true for the same reason the filters' summary names a selection
+      and not the absence of one.
+    - **They stack above the instant below `sm` rather than sharing one
+      wrapping row.** The instant keeps the top-right corner it holds by rule,
+      so the line is `flex-row-reverse` at width with the DOM order that needs.
+      One wrapping row is the tempting spelling and lays the run out inside the
+      ~180px left beside the timestamp — three lines, with the space under the
+      timestamp empty — where stacked it gets the card's full width and fits on
+      one line at 390px. Zero added height from `sm` up.
   - **The value column is the league cards' pickable stat column at this page's
     grain** (`trade-metrics`, and `usePersistedColumns("trade-side", …)`). It is
     **one** slot rather than their four: a trade card is already a table of the

@@ -183,6 +183,68 @@ export const SIDE_SEAM_VERTICAL =
   "shadow-[inset_1px_0_0_rgba(0,0,0,0.75),inset_2px_0_0_rgba(255,255,255,0.07)]";
 
 /**
+ * The card's first interior line: what kind of league this was, and when it
+ * happened.
+ *
+ * **They share a line from `sm` up and stack below it, and the instant is what
+ * holds its place.** The timestamp is flush right, diagonally opposite the
+ * nameplate, so the two facts hold the card's top corners — that is a decision
+ * the header already made and this must not undo. So the row is `row-reverse`
+ * at width, which puts the instant on the trailing edge with the specs pushed
+ * left by their own `mr-auto`, and the DOM order is instant-then-specs to make
+ * that work.
+ *
+ * Below `sm` they are two lines rather than one crowded one. The alternative —
+ * one wrapping row — reads worse than it sounds: a flex item's wrap happens
+ * inside the width it was given, so the spec run would be laid out in the
+ * ~180px left over beside the instant and take three lines while the space
+ * under the timestamp sat empty. Stacked, the run gets the card's full width
+ * and fits on one line at 390px, which is the whole of what the second line
+ * buys.
+ */
+export const TRADE_HEADER_LINE =
+  "flex flex-col gap-1.5 px-3 pb-2 sm:flex-row-reverse sm:items-center sm:gap-2";
+
+/**
+ * The spec run itself. `min-w-0` so a long run wraps inside the line rather
+ * than pushing the instant off the card, and `mr-auto` is what parts the two in
+ * the reversed row above.
+ */
+export const SPEC_RUN =
+  "flex min-w-0 flex-wrap items-center gap-1 sm:mr-auto";
+
+/**
+ * One league spec, in the card's own recessed material.
+ *
+ * **A readout and never `.lab-chip`.** The app bar's grammar is that raised
+ * means press me and recessed means you are here, and these are read rather
+ * than pressed — six raised pills per card, across the couple of dozen the
+ * virtualiser keeps mounted, is a hundred and fifty apparent controls that do
+ * nothing. `.lab-readout` is also the material the instant beside them and the
+ * side totals below them already wear, so the run adds no fourth surface to a
+ * card that deliberately counts three.
+ *
+ * On the display face at 9px — a step under the 10px the asset values wear,
+ * which is the rule a named row already follows, since Orbitron is wide and
+ * these sit beside a timestamp that must not give way to them.
+ */
+export const SPEC_TOKEN =
+  "lab-readout shrink-0 rounded-[3px] px-1.5 py-px font-display text-[9px] font-semibold uppercase leading-[14px] tracking-[0.09em] tabular-nums";
+
+/**
+ * How brightly a token is drawn, per {@link LeagueSpec.tone}.
+ *
+ * One step between them and no more. What game this is — the type, best ball —
+ * changes what a trade means, so it reads first; the lineup and scoring detail
+ * describes the room it happened in. Both stay well under the manager's name
+ * below them, which is what the eye should reach next.
+ */
+export const SPEC_TONE: Record<"format" | "config", string> = {
+  format: "text-foreground/65",
+  config: "text-foreground/45",
+};
+
+/**
  * Two tracks side by side from `sm` up and stacked below it, which is the same
  * thing that happens to the sides themselves one level out — and for the same
  * reason. What breaks down at 390px is geometry, not the idea: a track is ~120px
