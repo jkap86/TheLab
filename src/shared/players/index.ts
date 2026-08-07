@@ -8,3 +8,5 @@ export {
   getRookiePlayerIds,
 } from "./queries";
 export type { PlayerSummary, MatchablePlayer } from "./queries";
+export { getRookieClassIds, CURRENT_ROOKIE_CLASS } from "./rookie-class";
+export type { RookieClass } from "./rookie-class";
