@@ -266,9 +266,62 @@ export type KtcPickDiscount = {
   factor: number;
   /** The season the fraction is measured against — {@link ktcPickBaseSeason}. */
   base: string;
-  /** False where either side of the ratio came off a stand-in row. */
+  /**
+   * The row **both** ends of the ratio were read on; null for the untiered row.
+   *
+   * One field rather than one per end, and that is the invariant rather than a
+   * saving: a ratio whose halves came off different rows is not a ratio of
+   * anything. See {@link ktcPickDiscount}. For a pick in the base class — where
+   * no rows are read at all — it is the pick's own tier, since nothing stood in
+   * for it.
+   */
+  tier: KtcPickTier | null;
+  /**
+   * False where {@link tier} is not the pick's own — the pair is still
+   * like-for-like, it is simply a broader row than the pick. A reader is told
+   * "estimated from the generic 1st-round market" rather than being told the
+   * draft order is unknown, which is a different fact entirely.
+   */
   exact: boolean;
 };
+
+/**
+ * The rows a discount may be measured on, in preference order — **both ends read
+ * the same one**, which is what the loop in {@link ktcPickDiscount} enforces.
+ *
+ * A placed pick asks for its own third first and falls back to the untiered row,
+ * which is the whole round; an unplaced one asks for the untiered row first,
+ * because that row *is* the price of a pick with no place, and takes the mid
+ * third as the stand-in every trade calculator uses for an unknown future pick.
+ *
+ * Deliberately no third step. Falling further — an early 1st measured against
+ * mid rows — would be a ratio between two things neither of which is this pick,
+ * and the honest answer at that point is no discount at all.
+ */
+function discountRows(tier: KtcPickTier | null): (KtcPickTier | null)[] {
+  return tier === null ? [null, "mid"] : [tier, null];
+}
+
+/**
+ * One row's price on the board a league reads, or null where the board has no
+ * such row — or has one carrying a value that can't scale anything.
+ *
+ * The finiteness check is not defensive noise: these numbers are scraped, and a
+ * NaN reaching the ratio below would propagate silently into every pick's value
+ * rather than failing anywhere a reader could see it.
+ */
+function rowValue(
+  board: Readonly<Record<string, KtcPickPrice>>,
+  season: string,
+  round: number,
+  tier: KtcPickTier | null,
+  superflex: boolean,
+): number | null {
+  const price = board[ktcPickKey(season, round, tier)];
+  if (!price) return null;
+  const value = ktcBoardValue(superflex, price);
+  return value !== null && Number.isFinite(value) ? value : null;
+}
 
 /**
  * What a pick in a future season is worth as a fraction of the same pick in the
@@ -286,15 +339,30 @@ export type KtcPickDiscount = {
  *
  * A pick at or before the base season is undiscounted (`factor: 1`), which is
  * also how a current-year pick is priced — the ladder *is* the current class, so
- * there is nothing to discount it by. Everything later reads KTC's own rows for
- * both ends, through {@link ktcPickPrice}, so the tier preference and its
- * fallbacks are the same ones the KTC column uses rather than a second spelling.
+ * there is nothing to discount it by.
  *
- * Null where the ratio cannot be formed — no board, no row for the pick's
- * season, no row for the base at that round, or a base priced at zero. Null is
+ * **Both ends are read on the same row, and that is the whole correctness
+ * argument.** Resolving each end through {@link ktcPickPrice} independently —
+ * which is what this used to do — lets the two fall back differently, and a
+ * ratio between two different kinds of pick is not a discount. KTC drops the
+ * tiered rows for a season it has less of an opinion about, so the mismatch was
+ * the *common* case rather than a corner: a 2028 1st has an untiered row and no
+ * early one, so an early 2028 first came out as `2028 generic / 2027 Early` —
+ * 3,000/6,000 where the like-for-like answer is 3,000/5,000. That is a 20%
+ * error on the most-traded asset on the board, in the direction that always
+ * understates a future first, and nothing about the number looks wrong.
+ *
+ * So the preference walks {@link discountRows} and takes the first row that
+ * prices *both* seasons. `exact` says whether that row is the pick's own tier
+ * rather than a broader one, and it is a different claim from "the draft order
+ * is unknown" — which is why the caller carries them as two flags.
+ *
+ * Null where no like-for-like pair exists — no board, no shared row for the
+ * pick's season and the base at that round, or an anchor priced at zero. Null is
  * what leaves a far-future pick **unpriced** rather than quoting it at a nearby
  * pick's value, which is the one wrong answer here that would look like a
- * working one: a 2032 4th is not worth what next year's 4th is.
+ * working one: a 2032 4th is not worth what next year's 4th is. Inventing a
+ * mismatched pair to avoid the null would be the same mistake wearing a number.
  */
 export function ktcPickDiscount(
   board: Readonly<Record<string, KtcPickPrice>>,
@@ -306,15 +374,17 @@ export function ktcPickDiscount(
   const base = ktcPickBaseSeason(board);
   if (base === null) return null;
   // Seasons are four-digit years, so a string compare is the numeric one.
-  if (pick.season <= base) return { factor: 1, base, exact: true };
+  if (pick.season <= base) return { factor: 1, base, tier, exact: true };
 
-  const future = ktcPickPrice(board, pick, tier);
-  const nearest = ktcPickPrice(board, { season: base, round: pick.round }, tier);
-  if (!future || !nearest) return null;
-
-  const value = ktcBoardValue(superflex, future.price);
-  const anchor = ktcBoardValue(superflex, nearest.price);
-  if (value === null || anchor === null || anchor <= 0) return null;
-
-  return { factor: value / anchor, base, exact: future.exact && nearest.exact };
+  for (const row of discountRows(tier)) {
+    const future = rowValue(board, pick.season, pick.round, row, superflex);
+    const anchor = rowValue(board, base, pick.round, row, superflex);
+    if (future === null || anchor === null) continue;
+    // An anchor of zero can't scale anything and a negative price is not one, so
+    // the row is unusable rather than a ratio to take — the next row down may
+    // still price both ends.
+    if (anchor <= 0 || future < 0) continue;
+    return { factor: future / anchor, base, tier: row, exact: row === tier };
+  }
+  return null;
 }

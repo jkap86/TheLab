@@ -178,6 +178,7 @@ test("ktcPickDiscount", async (t) => {
     assert.deepEqual(ktcPickDiscount(board, { season: "2027", round: 1 }, null, true), {
       factor: 1,
       base: "2027",
+      tier: null,
       exact: true,
     });
   });
@@ -187,7 +188,7 @@ test("ktcPickDiscount", async (t) => {
   await t.test("a pick before the nearest season is undiscounted too", () => {
     assert.deepEqual(
       ktcPickDiscount(board, { season: "2026", round: 1 }, null, true),
-      { factor: 1, base: "2027", exact: true },
+      { factor: 1, base: "2027", tier: null, exact: true },
     );
   });
 
@@ -202,14 +203,159 @@ test("ktcPickDiscount", async (t) => {
     );
   });
 
-  // Both ends go through `ktcPickPrice`, so the tier preference and its
-  // fallbacks are the KTC column's own rather than a second spelling of them.
-  await t.test("both ends are read at the pick's own tier where there is one", () => {
+  /**
+   * The like-for-like rule, which is the whole correctness argument here.
+   *
+   * A ratio between two different kinds of pick is not a discount — and the
+   * mismatch was the *common* case rather than a corner, because KTC drops the
+   * tiered rows for the seasons it has less of an opinion about. So each of
+   * these fixes both ends on one row and refuses rather than crossing them.
+   */
+  await t.test("an exact tier on both sides is used on both sides", () => {
+    const tiered: Record<string, KtcPickPrice> = {
+      [ktcPickKey("2027", 1, "early")]: price(6000),
+      [ktcPickKey("2027", 1, "mid")]: price(5000),
+      [ktcPickKey("2027", 1, "late")]: price(4000),
+      [ktcPickKey("2027", 1, null)]: price(5000),
+      [ktcPickKey("2028", 1, "early")]: price(4200),
+      [ktcPickKey("2028", 1, "mid")]: price(3500),
+      [ktcPickKey("2028", 1, "late")]: price(2800),
+      [ktcPickKey("2028", 1, null)]: price(3000),
+    };
+    const of = (tier: "early" | "mid" | "late") =>
+      ktcPickDiscount(tiered, { season: "2028", round: 1 }, tier, true);
+
+    assert.equal(of("early")?.factor, 4200 / 6000);
+    assert.equal(of("mid")?.factor, 3500 / 5000);
+    assert.equal(of("late")?.factor, 2800 / 4000);
+    for (const tier of ["early", "mid", "late"] as const) {
+      assert.equal(of(tier)?.tier, tier);
+      assert.equal(of(tier)?.exact, true);
+    }
+  });
+
+  /**
+   * The bug this replaced, in the numbers it produced. 2028 carries no early
+   * row, so resolving each end on its own gave `2028 generic / 2027 Early` —
+   * 3,000/6,000 — where the like-for-like answer is 3,000/5,000. A 20% error on
+   * the most-traded asset on the board, always understating a future first, and
+   * nothing about the number looked wrong.
+   */
+  await t.test("a tier missing on one side drops *both* sides to generic", () => {
     const early = ktcPickDiscount(board, { season: "2028", round: 1 }, "early", true);
-    // 2028 has only an untiered row, so the numerator is a stand-in for the
-    // early third and the ratio says so.
-    assert.equal(early?.factor, 3000 / 6000);
+    assert.equal(early?.factor, 3000 / 5000);
+    assert.notEqual(early?.factor, 3000 / 6000);
+    // Still a real answer, on a broader row than the pick's own — which is a
+    // different thing from the draft order being unknown, so it is said as
+    // "estimated from the generic row" and not as an unplaced pick.
+    assert.equal(early?.tier, null);
     assert.equal(early?.exact, false);
+  });
+
+  await t.test("it is the *base* side missing the tier too", () => {
+    // The mirror image: the future season carries the tier and the base doesn't.
+    // Crossing them would be `2028 Early / 2027 generic`, which flatters the
+    // future pick exactly as the other direction understates it.
+    const oneSided: Record<string, KtcPickPrice> = {
+      [ktcPickKey("2027", 1, null)]: price(5000),
+      [ktcPickKey("2028", 1, "early")]: price(4400),
+      [ktcPickKey("2028", 1, null)]: price(3600),
+    };
+    const early = ktcPickDiscount(oneSided, { season: "2028", round: 1 }, "early", true);
+    assert.equal(early?.factor, 3600 / 5000);
+    assert.notEqual(early?.factor, 4400 / 5000);
+    assert.equal(early?.exact, false);
+  });
+
+  await t.test("both sides missing the tier is still like-for-like", () => {
+    const late = ktcPickDiscount(board, { season: "2029", round: 1 }, "late", true);
+    assert.equal(late?.factor, 1500 / 5000);
+    assert.equal(late?.tier, null);
+    assert.equal(late?.exact, false);
+  });
+
+  /**
+   * No shared row is no discount. Inventing a pair to avoid the null would be
+   * the same mistake wearing a number — which is why this case, where each
+   * season prices exactly the row the other doesn't, has to come back empty.
+   */
+  await t.test("no comparable pair is no discount rather than a crossed one", () => {
+    const disjoint: Record<string, KtcPickPrice> = {
+      [ktcPickKey("2027", 1, "early")]: price(6000),
+      [ktcPickKey("2028", 1, "late")]: price(2800),
+    };
+    assert.equal(
+      ktcPickDiscount(disjoint, { season: "2028", round: 1 }, "early", true),
+      null,
+    );
+    assert.equal(
+      ktcPickDiscount(disjoint, { season: "2028", round: 1 }, "late", true),
+      null,
+    );
+    assert.equal(
+      ktcPickDiscount(disjoint, { season: "2028", round: 1 }, null, true),
+      null,
+    );
+  });
+
+  /**
+   * An unplaced pick prefers the untiered row — that row *is* the price of a
+   * pick with no place, so reading it is exact rather than a stand-in — and
+   * falls to mid on both ends where there isn't one.
+   */
+  await t.test("an unplaced pick reads the untiered row on both ends", () => {
+    const generic = ktcPickDiscount(board, { season: "2028", round: 1 }, null, true);
+    assert.equal(generic?.tier, null);
+    assert.equal(generic?.exact, true);
+
+    const midOnly: Record<string, KtcPickPrice> = {
+      [ktcPickKey("2027", 1, "mid")]: price(5000),
+      [ktcPickKey("2027", 1, "early")]: price(6000),
+      [ktcPickKey("2028", 1, "mid")]: price(3200),
+    };
+    const stood = ktcPickDiscount(midOnly, { season: "2028", round: 1 }, null, true);
+    assert.equal(stood?.factor, 3200 / 5000);
+    assert.equal(stood?.tier, "mid");
+    assert.equal(stood?.exact, false);
+  });
+
+  /**
+   * The arithmetic guards. These are scraped numbers, so a zero anchor or a
+   * negative price has to leave the row unusable rather than propagate an
+   * Infinity or a negative multiplier into every pick's value.
+   */
+  await t.test("a zero or negative price is not a ratio", () => {
+    const zeroed: Record<string, KtcPickPrice> = {
+      [ktcPickKey("2027", 1, null)]: price(0),
+      [ktcPickKey("2028", 1, null)]: price(3000),
+    };
+    assert.equal(
+      ktcPickDiscount(zeroed, { season: "2028", round: 1 }, null, true),
+      null,
+    );
+
+    const negative: Record<string, KtcPickPrice> = {
+      [ktcPickKey("2027", 1, null)]: price(5000),
+      [ktcPickKey("2028", 1, null)]: { sf: -100, oneqb: -100 },
+    };
+    assert.equal(
+      ktcPickDiscount(negative, { season: "2028", round: 1 }, null, true),
+      null,
+    );
+
+    // A board with a row present and unpriced on this league's board falls
+    // through to the next row rather than reading null as zero.
+    const halfPriced: Record<string, KtcPickPrice> = {
+      [ktcPickKey("2027", 1, "early")]: price(6000),
+      [ktcPickKey("2027", 1, null)]: price(5000),
+      [ktcPickKey("2028", 1, "early")]: { sf: null, oneqb: 4000 },
+      [ktcPickKey("2028", 1, null)]: price(3000),
+    };
+    assert.equal(
+      ktcPickDiscount(halfPriced, { season: "2028", round: 1 }, "early", true)
+        ?.factor,
+      3000 / 5000,
+    );
   });
 
   await t.test("the ratio is read on the league's own board", () => {

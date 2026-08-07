@@ -178,7 +178,17 @@ describe("sideContext", () => {
         },
       },
       adpBoard: "dynasty",
-      adpLadder: [{ adp: 4, name: "A Rookie" }],
+      adpLadder: [
+        {
+          player_id: "r1",
+          name: "A Rookie",
+          rookieAdp: 1,
+          rookiePicks: 20,
+          startupAdp: 4,
+          startupSource: "observed" as const,
+          startupPicks: 18,
+        },
+      ],
       adpPool: 60,
       steepness: 4,
     };

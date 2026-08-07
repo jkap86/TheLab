@@ -53,9 +53,9 @@ export async function getPlayersByIds(
  *
  * It exists for one caller and one question: `/api/adp` marks the rookies on a
  * board so the trades page can rank them into a **rookie-pick ladder**, where
- * the k-th rookie off the board is rookie pick k. That is what puts a traded
- * pick and a traded player on one scale, which no board of player prices can do
- * on its own.
+ * the k-th rookie off the *rookie-draft* board is rookie pick k. That is what
+ * puts a traded pick and a traded player on one scale, which no board of player
+ * prices can do on its own.
  *
  * **Absent is "not known to be a rookie", never "veteran".** `years_exp` is null
  * for a team defence and for anyone Sleeper hasn't filled it in for, and the
@@ -63,11 +63,26 @@ export async function getPlayersByIds(
  * by one. So the test is an equality against 0 rather than anything looser, and
  * a null simply doesn't match.
  *
- * **It names the class that is a rookie *now*, which is the only one the cache
- * can name.** The players map is replaced daily and carries no history, so a
- * board for a past season finds none of today's rookies in it and hands back an
- * empty ladder — which reads as picks being unpriced on that board, the honest
- * answer rather than a ladder built from prices those players never had.
+ * **It names the class that is a rookie *now*, and that is a known limitation
+ * rather than a design.** The players map is replaced daily and carries no
+ * history, so a board for a past season finds none of today's rookies in it and
+ * hands back an empty ladder — which reads as picks being unpriced on that
+ * board (`no-ladder` in `features/trades/pick-value`, whose wording says the
+ * board has no rookies to rank against), the honest answer rather than a ladder
+ * built from prices those players never had.
+ *
+ * **The obvious fix is not one, which is why this is deferred rather than
+ * done.** The only experience Sleeper gives is `years_exp`, which counts
+ * completed seasons *as of now*, so naming the 2024 class means computing
+ * `activeSeason − years_exp` — an inference, not a stored fact, and one that is
+ * wrong for anyone whose count didn't advance (a missed season, a
+ * practice-squad year, a return from out of the league). A wrong *inclusion*
+ * shifts every rung below it, which is the one error here that propagates, so a
+ * derivation that is right for most players is worse than an empty ladder that
+ * says so. Doing this properly wants a persisted `rookie_season` written at sync
+ * time — a column and a migration — and it wants a source better than
+ * `years_exp` to backfill it from. Until then, historical rookie-pick values are
+ * unavailable rather than approximate.
  *
  * Narrowed by id rather than returning every rookie, so this is an index lookup
  * on the primary key and the caller can't accidentally rank a player its board

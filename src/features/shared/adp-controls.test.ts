@@ -15,7 +15,9 @@ import {
   deriveScoring,
   previewAdpPool,
   previewAdpValue,
+  rookieOrderingBoard,
   shownAdpBoards,
+  startupPricingBoard,
   steepnessSummary,
   seasonOptions,
   rangeBounds,
@@ -219,6 +221,131 @@ describe("adpQueryString", () => {
       );
       assert.equal(query.draft_type, "snake,linear");
     }
+  });
+});
+
+/**
+ * The two boards a rookie *pick* is valued off, which are the panel's own
+ * population asked twice with the round bounds fixed.
+ *
+ * The property under test is a separation the compiler cannot hold: which board
+ * is on *display* is presentation state, and it must not reach a valuation. A
+ * reader switching the panel to "Rookie" was repricing every pick on the trades
+ * board off rookie-draft ADP, where the 1.01 sits at ~1 and the value curve
+ * reads it as the most valuable asset in dynasty football.
+ */
+describe("rookieOrderingBoard / startupPricingBoard", () => {
+  const rounds = (controls: AdpControls) =>
+    params(adpQueryString(controls, TODAY));
+
+  test("each fixes its own end of the round scale, whatever is displayed", () => {
+    for (const shown of ["all", "rookie", "full"] as const) {
+      const controls = { ...defaultAdpControls(SEASON), rounds: shown };
+      assert.deepEqual(
+        {
+          min: rounds(rookieOrderingBoard(controls)).rounds_min,
+          max: rounds(rookieOrderingBoard(controls)).rounds_max,
+        },
+        { min: undefined, max: "5" },
+        `displayed ${shown}`,
+      );
+      assert.deepEqual(
+        {
+          min: rounds(startupPricingBoard(controls)).rounds_min,
+          max: rounds(startupPricingBoard(controls)).rounds_max,
+        },
+        { min: "12", max: undefined },
+        `displayed ${shown}`,
+      );
+    }
+  });
+
+  test("the thresholds are the drawer's own, not a second spelling", () => {
+    // One definition of "a rookie draft" — the chip's and the valuation's. A
+    // second threshold here would drift silently, and the symptom would be a
+    // ladder built from a population the panel never describes.
+    const base = defaultAdpControls(SEASON);
+    assert.deepEqual(
+      rounds(rookieOrderingBoard(base)),
+      rounds({ ...base, rounds: "rookie" }),
+    );
+    assert.deepEqual(
+      rounds(startupPricingBoard(base)),
+      rounds({ ...base, rounds: "full" }),
+    );
+  });
+
+  /**
+   * Everything that describes *which market* has to survive, or the ordering
+   * and the pricing are about different leagues — an SF rookie order priced off
+   * a 1QB startup board is wrong at every quarterback on the ladder.
+   */
+  test("every other axis reaches both boards unchanged", () => {
+    const controls: AdpControls = {
+      ...defaultAdpControls(SEASON),
+      season: "2025",
+      range: { preset: "custom", from: "2025-05-01", to: "2025-06-30" },
+      scoring: "half_ppr",
+      superflex: "yes",
+      bestBall: "no",
+      teams: "14",
+      rounds: "all",
+    };
+    const shared = {
+      limit: "1000",
+      season: "2025",
+      draft_type: "snake,linear",
+      start_after: "2025-05-01",
+      start_before: "2025-06-30",
+      scoring: "half_ppr",
+      superflex: "1",
+      best_ball: "0",
+      teams_min: "14",
+      teams_max: "14",
+    };
+    assert.deepEqual(rounds(rookieOrderingBoard(controls)), {
+      ...shared,
+      rounds_max: "5",
+    });
+    assert.deepEqual(rounds(startupPricingBoard(controls)), {
+      ...shared,
+      rounds_min: "12",
+    });
+  });
+
+  /**
+   * The pricing board is the *displayed* board under the default, which is what
+   * makes the second fetch free in the common case: React Query keys on the
+   * query string, so the two resolve to one entry and one request.
+   */
+  test("the pricing board is the displayed one on the default board", () => {
+    const base = defaultAdpControls(SEASON);
+    assert.equal(DEFAULT_ADP_ROUNDS, "full");
+    assert.equal(
+      adpQueryString(startupPricingBoard(base), TODAY),
+      adpQueryString(base, TODAY),
+    );
+    // And the ordering board is genuinely a different one, or there would be no
+    // ordering to read.
+    assert.notEqual(
+      adpQueryString(rookieOrderingBoard(base), TODAY),
+      adpQueryString(base, TODAY),
+    );
+  });
+
+  test("neither reads the display-only fields", () => {
+    // `boards` and `steepness` narrow no population — they choose which columns
+    // are drawn and how an averaged ADP converts to value — so they leave the
+    // query strings alone here exactly as they do for the board itself.
+    const controls: AdpControls = {
+      ...defaultAdpControls(SEASON),
+      boards: "redraft",
+      steepness: 6,
+    };
+    assert.equal(
+      adpQueryString(rookieOrderingBoard(controls), TODAY),
+      adpQueryString(rookieOrderingBoard(defaultAdpControls(SEASON)), TODAY),
+    );
   });
 });
 

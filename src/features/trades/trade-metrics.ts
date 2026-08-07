@@ -6,7 +6,7 @@ import { pickSlotKey } from "../../shared/trades/pick-slots.ts";
 import { ordinal } from "../shared/format.ts";
 import type { Metric } from "../shared/metric-cell.ts";
 import type { TradeBundle } from "./exchange.ts";
-import { pickAdpValue } from "./pick-value.ts";
+import { pickAdpValue, pickEstimated } from "./pick-value.ts";
 import type {
   PickAdpMatch,
   PickAdpMiss,
@@ -119,33 +119,50 @@ export type TradeSideContext = {
    */
   steepness: number;
   /**
-   * The rookie class of the same board, in the order those drafts took them —
-   * which *is* the rookie-pick ladder, so a traded pick is priced by the player
-   * it buys. Built once per market for the whole page, since it is a fact about
-   * the board rather than about a trade; a card reads the one matching
-   * {@link adpBoard}. See `./pick-value`.
+   * The rookie-pick ladder for this trade's market: the class in the order the
+   * **rookie** drafts took them, each rung carrying what the **startup** drafts
+   * pay for that player. Two boards rather than the one above, because "which
+   * rookie does this pick take" and "what is he worth" are different questions —
+   * see `./pick-value`, which is where that argument lives.
+   *
+   * Built once per market for the whole page, since it is a fact about the
+   * boards rather than about a trade; a card reads the one matching
+   * {@link adpBoard}. Note it is deliberately **not** derived from
+   * {@link adp}: that map is whichever board the panel is displaying, and a
+   * reader switching the panel to rookie drafts must not reprice every pick on
+   * the page as though the 1.01 were the best asset in dynasty football.
    */
   adpLadder: readonly RookieLadderRung[];
 };
 
 /**
- * Which of KTC's rows prices one of this side's picks, or null where the board
- * has nothing for its season and round.
+ * Which third of its round a pick falls in, or null where the league's draft
+ * order isn't set — or where the league list hasn't said how many teams draft,
+ * which comes to the same thing.
  *
  * The two facts it needs are on the context rather than the pick, for the reason
  * the slot itself is: where a pick falls belongs to the league's draft, not to
  * the pick, so one map serves every trade naming that roster's pick.
  */
+function pickTierFor(
+  ctx: TradeSideContext,
+  pick: TradePickAsset,
+): KtcPickTier | null {
+  const slot =
+    ctx.pickSlots[pickSlotKey(ctx.leagueId, pick.season, pick.roster_id)] ??
+    null;
+  return slot === null || ctx.teams === null ? null : pickTier(slot, ctx.teams);
+}
+
+/**
+ * Which of KTC's rows prices one of this side's picks, or null where the board
+ * has nothing for its season and round.
+ */
 function pickMatch(
   ctx: TradeSideContext,
   pick: TradePickAsset,
 ): KtcPickMatch | null {
-  const slot =
-    ctx.pickSlots[pickSlotKey(ctx.leagueId, pick.season, pick.roster_id)] ??
-    null;
-  const tier =
-    slot === null || ctx.teams === null ? null : pickTier(slot, ctx.teams);
-  return ktcPickPrice(ctx.pickKtc, pick, tier);
+  return ktcPickPrice(ctx.pickKtc, pick, pickTierFor(ctx, pick));
 }
 
 /** `"2027 Mid 1st"` — the row a price was read off, as KTC names it. */
@@ -155,6 +172,24 @@ function pickRowName(
 ): string {
   const third = tier === null ? "" : `${tier[0].toUpperCase()}${tier.slice(1)} `;
   return `${pick.season} ${third}${ordinal(pick.round)}`;
+}
+
+/**
+ * Why the row above stands in for the pick, where it does — two different
+ * answers that were one sentence, and only one of them is about the league.
+ *
+ * An unset draft order is something the reader's league can fix; a third KTC
+ * simply doesn't publish is not. Saying the first when it is the second is the
+ * mislabelled-estimate bug the ADP column's flags were split to remove, and
+ * this is the same fix at the same grain.
+ */
+function pickRowNote(
+  ctx: TradeSideContext,
+  pick: TradePickAsset,
+  match: KtcPickMatch,
+): string {
+  if (pickTierFor(ctx, pick) === null) return " (draft order not set)";
+  return match.exact ? "" : " (KTC publishes no row for that third)";
 }
 
 /**
@@ -273,30 +308,79 @@ function adpPickMatch(
 }
 
 /**
- * What a pick's price rests on: the rung it read, and the discount that got it
- * from a pick spendable now to one several drafts out.
- *
- * The rookie is named because that is what the number *is* — a reader who sees
- * 4,800 against a 2028 1st has no way to judge it otherwise, and "≈ the 5th
- * rookie off this board" is the whole of the reasoning in four words.
+ * Why a pick has no number, in the reader's words — one line per way the answer
+ * ran out, because three of the five are things widening the board would fix and
+ * a shared "not priced" would tell a reader none of that. See `PickAdpMiss`.
  */
 const ADP_PICK_MISS: Record<PickAdpMiss, (market: string) => string> = {
   "no-ladder": (market) =>
-    `No rookies on the ${market} ADP board to rank this pick against`,
+    `No rookies in the ${market} rookie drafts on this board to rank this pick against`,
   "past-ladder": (market) =>
-    `Deeper than the rookie class the ${market} ADP board priced`,
-  "no-discount": () => "Too far out — KTC carries no row to discount it by",
+    `Deeper than the rookie class the ${market} board priced`,
+  "no-startup": (market) =>
+    `No ${market} startup ADP for this rookie class to price the pick against`,
+  "no-discount": () =>
+    "Too far out — KTC carries no like-for-like row to discount it by",
+  "bad-pick": () => "This pick doesn’t name a draft slot",
 };
 
-function adpPickTitle(match: PickAdpMatch, board: AdpBoardType): string {
+/**
+ * The assumptions behind a priced pick, in the reader's words — and only the
+ * ones that apply.
+ *
+ * They were a single `(draft order not set)`, which is the copy that made
+ * splitting the flag worth doing: it was printed for a pick whose slot was known
+ * perfectly well and whose *KTC row* had fallen back, telling the reader
+ * something plainly false about their own league. Three unrelated assumptions,
+ * three sentences, none of them shown when the number rests on nothing.
+ */
+function pickAssumptions(match: PickAdpMatch, round: number): string[] {
+  const notes: string[] = [];
+  if (match.slotEstimated) notes.push("projected mid-round slot");
+  if (match.startupAdpEstimated) {
+    notes.push(
+      match.startupSource === "interpolated"
+        ? "startup value interpolated from nearby rookies"
+        : "startup value taken from the nearest priced rookie",
+    );
+  }
+  if (match.discountEstimated) {
+    notes.push(
+      `future-year adjustment estimated from the ${
+        match.discountTier === null ? "generic" : match.discountTier
+      } ${ordinal(round)}-round market`,
+    );
+  }
+  return notes;
+}
+
+/**
+ * What a pick's price rests on: the rung it read, the *startup* average that
+ * rung is worth, and the discount that got it from a pick spendable now to one
+ * several drafts out.
+ *
+ * The rookie is named because that is what the number *is* — a reader who sees
+ * 4,800 against a 2028 1st has no way to judge it otherwise, and "≈ the 5th
+ * rookie off this board" is the whole of the reasoning in four words. The ADP
+ * beside him is the **startup** one, since that is the number the curve read;
+ * printing his rookie-draft ADP there would show a 3 against a value of 4,800
+ * and invite exactly the confusion this module was rebuilt to remove.
+ */
+function adpPickTitle(
+  match: PickAdpMatch,
+  board: AdpBoardType,
+  round: number,
+): string {
   const waiting =
     match.base === null
       ? ""
       : ` · ×${match.discount.toFixed(2)} against ${match.base} on KTC`;
-  const assumed = match.exact ? "" : " (draft order not set)";
-  return `Rookie pick ${match.overall} ≈ ${match.player} on the ${marketName(
-    board,
-  )} board${waiting}${assumed}`;
+  const notes = pickAssumptions(match, round);
+  return `Rookie pick ${match.overall} ≈ ${match.player}, startup ADP ${match.startupAdp.toFixed(
+    1,
+  )} on the ${marketName(board)} board${waiting}${
+    notes.length > 0 ? ` (${notes.join("; ")})` : ""
+  }`;
 }
 
 /**
@@ -319,10 +403,15 @@ function adpPickTitle(match: PickAdpMatch, board: AdpBoardType): string {
  * this column left them blank on the strength of that — on a board where a
  * first is routinely the whole trade, which is the same mistake the KTC column
  * had already been corrected for. It has no row because it doesn't need one:
- * a rookie pick is a *place in a queue*, and ranking the rookies the selected
- * drafts averaged puts the 1.01 on the first of them. `./pick-value` is that
- * ladder; KTC's rows are read for one thing only, the ratio that says what
- * waiting three drafts costs.
+ * a rookie pick is a *place in a queue*, so the **rookie** drafts say which
+ * rookie the 1.01 takes and the **startup** drafts say what he is worth against
+ * the whole player pool. `./pick-value` is that two-board ladder — and the
+ * reason it is two rather than one is that a rookie-draft ADP of 1 and a
+ * startup ADP of 1 are different claims, so reading the pick's value off the
+ * board the panel happens to be *displaying* priced the 1.01 as the best asset
+ * in dynasty football the moment a reader switched the panel to rookie drafts.
+ * KTC's rows are read for one thing only, the ratio that says what waiting three
+ * drafts costs.
  *
  * KTC stays in the picker beside it as the other lens rather than the other
  * half: it prices the same assets off a *national dynasty* board, where this
@@ -361,7 +450,10 @@ export const TRADE_METRICS: TradeMetric[] = [
         if (match.value === null) continue;
         total += match.value;
         priced += 1;
-        if (!match.exact) assumed += 1;
+        // Any of the three assumptions counts as a stand-in here — the total is
+        // one number, so what it owes the reader is *how much* of itself rests
+        // on one, not which of the three it was. The per-line hover says which.
+        if (pickEstimated(match)) assumed += 1;
       }
 
       // Players and picks together: the rookie ladder puts them on one scale, so
@@ -422,7 +514,7 @@ export const TRADE_METRICS: TradeMetric[] = [
         }
         return {
           text: match.value.toLocaleString(),
-          title: adpPickTitle(match, ctx.adpBoard),
+          title: adpPickTitle(match, ctx.adpBoard, asset.pick.round),
         };
       }
 
@@ -512,10 +604,16 @@ export const TRADE_METRICS: TradeMetric[] = [
           // was priced: a reader who sees "2027 Mid 1st" against a pick whose
           // draft has no order yet can tell the number is the middle of the
           // round and not a claim about where this one lands.
+          //
+          // **And why it is a stand-in is asked of the slot, not of the row** —
+          // the same split the ADP column's three flags draw, for the same
+          // reason. A placed pick whose own third KTC doesn't publish used to be
+          // reported as "(draft order not set)", which is a claim about the
+          // reader's own league and a false one.
           title: `Dynasty KTC, ${boardName(superflex)} · ${pickRowName(
             asset.pick,
             match.tier,
-          )}${match.exact ? "" : " (draft order not set)"}`,
+          )}${pickRowNote(ctx, asset.pick, match)}`,
         };
       }
 

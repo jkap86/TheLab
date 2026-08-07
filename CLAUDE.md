@@ -1624,20 +1624,54 @@ stops holding, a comment saying it does would not have caught it.
     the point on a board where a first is routinely the whole trade (the same
     correction the KTC column had already been through). A rookie pick is a
     *place in a queue*, and the queue is on the board already: rank the rookies
-    the selected drafts averaged and the first of them is what the 1.01 returns.
+    and the first of them is what the 1.01 returns.
     So a pick is priced by the player it buys, on the same curve, in the same
     units, out of the same population — which is what makes a haul of players
     and picks one sum where summing an ADP value and a KTC price would be a
     scale nobody has defined. `features/trades/pick-value.ts` is the ladder and
-    the six decisions in it:
-    - **Two markets, two ladders** (`rookieLadder(players, board)`). A rookie
-      goes in the first round of a dynasty startup and the middle of a redraft,
-      so the queues are different queues; a league reads the one it plays in.
-      Rookie picks come out cheap in a redraft league, which is correct rather
-      than a shortfall.
-    - **A rookie the board never averaged is not a rung.** The ladder is an
-      *ordering*, so a place invented for a player those drafts didn't take
-      shifts every pick below him by one — the one error here that propagates.
+    the decisions in it:
+    - **Two boards, because ordering and pricing are two questions**
+      (`rookieLadder(ordering, pricing, board)`). *Which rookie does this pick
+      take* is a fact about **rookie drafts**, whose ADP orders one class against
+      itself; *what is that rookie worth* is a fact about **startup drafts**,
+      where the class is priced against the whole dynasty player pool. A
+      rookie-draft ADP of 1 and a startup ADP of 1 are not one number in two
+      spellings, so the ladder is built from the short drafts and each rung
+      carries the long drafts' average, which is the only number the value curve
+      ever sees. Before this the ladder read whichever board the panel was
+      *displaying*, so switching the ADP drawer to "Rookie" repriced every pick
+      on the page — the 1.01 at ADP ~1, which the curve reads as the most
+      valuable asset in dynasty football. **Presentation state must not reach a
+      valuation**: `rookieOrderingBoard`/`startupPricingBoard` in
+      `features/shared/adp-controls` are the reader's own population with the
+      round bounds fixed, so the season, window, scoring, superflex, best ball
+      and size all still propagate and only `rounds` — the one control that *is*
+      the choice between these two populations — does not. Their thresholds are
+      `ROUNDS_BOUNDS`, the drawer's own, so there is no second definition of "a
+      rookie draft" to drift. It costs one extra fetch and not two: the pricing
+      board is the displayed board under the default, so React Query resolves it
+      to the entry already in flight.
+    - **Two markets, two ladders.** A rookie goes in the first round of a
+      dynasty startup and the middle of a redraft, so the queues are different
+      queues; a league reads the one it plays in. Rookie picks come out cheap in
+      a redraft league, which is correct rather than a shortfall — and a market
+      whose leagues run no rookie drafts at all has no ladder, which reads as
+      unpriced picks rather than as picks priced off the wrong queue.
+    - **The two boards are asymmetric about a missing player, and that is the
+      whole point of splitting them.** A rookie the *ordering* board never
+      averaged is not a rung: the ladder is an ordering, so a place invented for
+      a player those drafts didn't take shifts every pick below him by one. A
+      rookie the *pricing* board never averaged **keeps** his rung, for the same
+      reason read the other way — dropping him renumbers everyone under him, so
+      the 1.03 quietly becomes the fourth-best rookie. His price is interpolated
+      between the rookies either side of him in *rank* space (`startupSource:
+      "interpolated"`), or taken from the nearest priced one at either end
+      (`"nearest"`), and only a board that prices nobody leaves a rung with no
+      value at all. Interpolating the **ADP** rather than the value is
+      deliberate: the curve is exponential, so averaging two points on it lands
+      somewhere the board never suggested. This is also why the sample gate
+      stays where it is — a missing startup price is a hole to interpolate
+      across, not a reason to accept a one-draft average as consensus.
     - **Which rung** is `(round − 1) × teams + slot`, so the league's size is
       what makes the same 2.01 a different pick. An unplaced pick takes the
       middle of its round and is marked a stand-in, the same fallback (and the
@@ -1650,6 +1684,20 @@ stops holding, a comment saying it does would not have caught it.
       the *ratio* between its rows carries it onto the ADP scale. A ratio is
       dimensionless, which is what makes this one crossing between the two
       boards sound where a sum would not be.
+    - **Both ends of that ratio read the same row, and the mismatch it replaced
+      was the common case rather than a corner.** Resolving each end through
+      `ktcPickPrice` independently let them fall back differently, and KTC drops
+      its tiered rows for the seasons it has less of an opinion about — so an
+      early 2028 first came out as `2028 generic / 2027 Early`, 3,000 over 6,000
+      where the like-for-like answer is 3,000 over 5,000. A 20% error on the
+      most-traded asset on the board, always in the direction that understates a
+      future first, and nothing about the number looks wrong. The preference is
+      the pick's own third then the untiered row for a placed pick, and the
+      untiered row then `mid` for an unplaced one; **both ends take the first
+      row that prices both seasons**, and no shared row is *no discount* rather
+      than a crossed pair. `KtcPickDiscount.tier` is that row, so the card can
+      say "estimated from the generic 1st-round market" instead of implying
+      something about the league's draft order.
     - **The anchor is read off KTC's board, not off a calendar**
       (`ktcPickBaseSeason` — the earliest season it prices). Which seasons KTC
       carries moves through the year, since a season's rows come off once its
@@ -1657,13 +1705,25 @@ stops holding, a comment saying it does would not have caught it.
       discount mean the same thing in February and in August with nothing being
       told what month it is. A pick at or before that season is undiscounted,
       which is also how a current-year pick is priced.
-    - **Three refusals, not one null** (`PickAdpMiss`). No rookies on this board,
-      deeper than the class it priced, or too far out for KTC to have a row —
-      and the difference matters to a reader, because the first two are facts
-      about the board the panel is showing and widening it fixes them. A pick
-      KTC can't reach stays **blank rather than quoted at the nearest draft's
-      price**: a 2032 4th is not worth what next year's 4th is, which is the one
-      wrong answer here that would look like a working one.
+    - **Five refusals, not one null** (`PickAdpMiss`). No rookies on the rookie
+      board, deeper than the class it priced, no startup price anywhere on the
+      ladder, too far out for a like-for-like KTC pair, or a pick that doesn't
+      name a draft slot at all — and the difference matters to a reader, because
+      the first three are facts about the boards the panel describes and widening
+      them fixes those. A pick KTC can't reach stays **blank rather than quoted
+      at the nearest draft's price**: a 2032 4th is not worth what next year's
+      4th is, which is the one wrong answer here that would look like a working
+      one.
+    - **Three assumptions, three flags** (`slotEstimated`,
+      `startupAdpEstimated`, `discountEstimated`; `pickEstimated` is their `or`,
+      for the side total that only owes the reader *how much* of itself is a
+      stand-in). They were one boolean, printed as `(draft order not set)` —
+      so a pick whose slot was known perfectly well and whose KTC row had fallen
+      back told a reader something plainly false about their own league. They are
+      unrelated facts about unrelated parts of the calculation, and only the
+      reader can judge which matters: the first is fixed by the league setting
+      its draft order, the second by widening the board, the third by nothing at
+      all.
   - **Naming the rookie class took a column out of the players blob, and the
     whole feature rests on it.** `players.years_exp` is promoted from `data`
     (backfilled in the migration, so no re-download), read by
@@ -1674,7 +1734,14 @@ stops holding, a comment saying it does would not have caught it.
     history, so this always names the class that is a rookie *now***: a board
     for a past season contains none of them and gets an empty ladder, which
     reads as picks being unpriced there rather than as a ladder built from
-    prices those players never had.
+    prices those players never had. That last one is a **known limitation rather
+    than a design**, and the obvious fix is not one: the only experience Sleeper
+    gives is `years_exp`, a count of completed seasons *as of now*, so naming the
+    2024 class means inferring `activeSeason − years_exp` — wrong for anyone
+    whose count didn't advance, and a wrong *inclusion* shifts every rung below
+    it. A derivation right for most players is worse than an empty ladder that
+    says so. Doing it properly wants a persisted `rookie_season` and a source
+    better than `years_exp` to backfill it from.
   - **`/api/trades` sends KTC's pick board whole**, where it used to send the
     four rows per `(season, round)` the page's picks could land on. The tier is
     still resolved client-side (it needs the league's size, which is on the
