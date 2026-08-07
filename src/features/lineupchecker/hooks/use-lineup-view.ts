@@ -37,14 +37,17 @@ import { useManagerPlayers } from "@/features/shared/use-manager-players";
  *
  * Three things are worth knowing about the seams it sits on.
  *
- * **The leagues arrive on `useUserLeagues` and the sub-resources on the manager
- * keys, which is not the inconsistency it looks like.** The list comes off the
- * stream keyed by `user_id` — the id is what this page holds, and that hook is
- * already what the pick tracker's picker reads. The rosters and membership behind
- * the subject filter are keyed by `searched`, and `searched` is the account's
- * *username*, so those entries are the same ones the manager tool fills: a reader
- * who has looked themselves up over there pays nothing here, and vice versa. One
- * manager, one spelling, one entry — the rule `managerQueryKeys` exists for.
+ * **The leagues are keyed by `user_id` and the sub-resources by username, which
+ * is not the inconsistency it looks like.** Both are `managerQueryKeys` entries;
+ * what differs is the spelling of the subject each read actually asks about. The
+ * list comes off the stream keyed by the id, because the id is what this page
+ * holds — there is no name in its URL — and that is the same entry the pick
+ * tracker's picker fills, so the two tools share one stream rather than opening
+ * two. The rosters and membership behind the subject filter are keyed by
+ * `searched`, and `searched` is the account's *username*, so those entries are
+ * the ones the manager tool fills: a reader who has looked themselves up over
+ * there pays nothing here, and vice versa. One manager, one spelling, one entry —
+ * the rule `managerQueryKeys` exists for.
  *
  * **The two league lists are both kept**, for the reason the manager tool keeps
  * both: `leagueFiltered` is what the subject menus count over, since a menu

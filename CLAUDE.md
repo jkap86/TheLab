@@ -1220,9 +1220,32 @@ stops holding, a comment saying it does would not have caught it.
   `shared/query` primitives were consolidated to stop. Keeping two hooks does not
   mean keeping two of everything in them. It lives in `features/shared` rather
   than in the pick tracker that first wrote it, because `takeLines` is protocol
-  and belongs to neither. (The trades page was the second reader of the hook
+  and belongs to neither.
+
+  **That line moved, and where it had been drawn was costing the app its most
+  expensive read.** `takeLines` was the only thing shared, so `useUserLeagues`
+  carried its own decode loop *and its own storage* — `useState` behind a
+  `useEffect`, which is not a cache. `/api/user/[username]/leagues` is a manager
+  sync behind a blocking advisory lock at up to ~11 Sleeper requests a league, and
+  it was being re-streamed in full on every mount: out to `/tools` and back, a hop
+  between the two tools that read it, or a press of the back button. Both of them
+  are separate routes, so remounting *is* how they are used. The whole decoder is
+  `features/shared/leagues-stream.ts` now (`features/manager/query-fns.ts`
+  re-exports it, the mover's usual habit) and both hooks are queries over it, so
+  the read is one per `MANAGER_STALE_TIMES.leagues` window however many times it
+  is mounted, and two tools open on one account are one request. **Neither
+  guarantee changed** — that is what makes it the same rule rather than a
+  merge. The manager tool still reports per-league progress and a manual refresh;
+  the picker still fills at the first `result` rather than waiting out a
+  background refresh. Keeping the second of those is the subtle half: the fetcher
+  publishes each mid-stream state into the entry and only *resolves* at the end,
+  so `loading` is read off the published payload (`result === null`) and not off
+  `isPending` — which is wrong at both ends, since a disabled query is pending
+  forever and publishing *any* state settles the query, including a cold
+  account's `progress` message that carries no leagues yet.
+  (The trades page was the second reader of the hook
   itself for a while; it reads every crawled league now and asks about no
-  account, so the pick tracker is again the only one.)
+  account, so the pick tracker and the lineup checker are its two readers.)
 - **A piece read by a second tool moves to `features/shared`; it does not get
   imported across features.** The trades page needed the league-filter
   vocabulary, the modal that drives it, the date primitives and `ordinal`, and
