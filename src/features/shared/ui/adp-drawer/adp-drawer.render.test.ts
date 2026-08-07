@@ -34,7 +34,7 @@ import {
   BOARD_COLUMNS_ONE,
   FIXED_FILTERS,
 } from "./adp-drawer.constants.ts";
-import { leagueSizeFilter } from "./adp-drawer.utils.ts";
+import { PICK_TAKEN_TITLE, leagueSizeFilter } from "./adp-drawer.utils.ts";
 
 /**
  * The drawer without a DOM.
@@ -116,6 +116,9 @@ const payload = (over: Partial<AdpPayload> = {}): AdpPayload => ({
   dynasty_drafts: 304,
   player_count: 5000,
   players: [player("1"), player("2"), player("3")],
+  // No pick rows unless a case asks for them: the rookies are what a ladder is
+  // built from and none of these players is one, so the board is players only.
+  pick_ktc: {},
   ...over,
 });
 
@@ -459,6 +462,93 @@ describe("the board is windowed", () => {
     assert.ok(head !== -1 && list !== -1);
     assert.ok(head < list, "the board head should precede the list");
     assert.ok(!html.slice(list).includes("sticky top-0 z-10"));
+  });
+});
+
+describe("picks on the board", () => {
+  /**
+   * Twelve rookies, so a twelve-team round of numbered picks has a rung each and
+   * the middle of a round — where a future pick is assumed to fall — is the
+   * sixth of them.
+   */
+  const rookies = Array.from({ length: 12 }, (_, i) =>
+    player(`r${i + 1}`, {
+      rookie: true,
+      redraft: { picks: 9, adp: i + 1, min_pick: 1, max_pick: 30, stdev: 2 },
+      dynasty: { picks: 9, adp: i + 1, min_pick: 1, max_pick: 30, stdev: 2 },
+    }),
+  );
+  const withPicks = (over: Partial<AdpPayload> = {}) =>
+    loaded({
+      players: rookies,
+      pick_ktc: {
+        "2027|1|": { sf: 6000, oneqb: 5400 },
+        "2027|2|": { sf: 2000, oneqb: 1800 },
+        "2028|1|": { sf: 3000, oneqb: 2700 },
+      },
+      ...over,
+    });
+
+  test("the class is numbered slot by slot and the seasons past it by round", () => {
+    const html = drawer({ board: withPicks() });
+    assert.match(html, /2026 1\.01/);
+    assert.match(html, /2026 1\.12/);
+    // A future season has no class to number against, so it is one row per
+    // round, assumed mid — and named for the round rather than given a slot.
+    assert.match(html, /2027 1st/);
+    assert.match(html, /2028 1st/);
+    // Its rung would be the eighteenth rookie and this board averaged twelve:
+    // inventing one would price a pick against a player nobody drafted.
+    assert.doesNotMatch(html, /2027 2nd/);
+  });
+
+  test("a pick sits with the rookie it stands on, one row below", () => {
+    // The tie rule, and the whole reason a pick's ADP is the rung's own average:
+    // the two carry the same number for the same reason, so the pick reads as an
+    // annotation of the player above it.
+    const html = drawer({ board: withPicks() });
+    assert.ok(html.indexOf("Player r1") < html.indexOf("2026 1.01"));
+    assert.ok(html.indexOf("2026 1.01") < html.indexOf("Player r2"));
+  });
+
+  test("the position column carries the round, since a pick has no position", () => {
+    const html = drawer({ board: withPicks() });
+    const row = html.slice(html.indexOf("2026 1.01"));
+    assert.match(row.slice(0, 400), />1st</);
+  });
+
+  test("a pick's Taken cell is an em dash that says why", () => {
+    // "Taken" is the share of this board's drafts a player went in, and a pick
+    // went in none of them — it was never on the board. A bare em dash there
+    // would read as a gap in the data rather than as a column that can't apply.
+    const html = drawer({
+      board: withPicks(),
+      controls: { ...defaultAdpControls("2026"), boards: "redraft" },
+    });
+    assert.ok(html.includes(PICK_TAKEN_TITLE));
+  });
+
+  test("KTC gone costs the future rows and not the numbered ones", () => {
+    // The ladder *is* the current class, so its own picks need nothing from KTC
+    // — and a season KTC has no opinion about is one this cannot discount, which
+    // is why it is absent rather than quoted at a nearer pick's price.
+    const html = drawer({ board: withPicks({ pick_ktc: {} }) });
+    assert.match(html, /2026 1\.01/);
+    assert.doesNotMatch(html, /2027 1st/);
+  });
+
+  test("a board with no rookies lists no picks at all", () => {
+    const html = drawer({ board: withPicks({ players: [player("1"), player("2")] }) });
+    assert.doesNotMatch(html, /2026 1\.01/);
+    assert.doesNotMatch(html, /2027 1st/);
+  });
+
+  test("the count line still counts players, not the picks derived from them", () => {
+    // The denominator only ever counts players, so a numerator carrying the
+    // picks would sit above it — "showing 27 of 20" — for a list that is in fact
+    // showing all twenty.
+    const html = drawer({ board: withPicks({ player_count: 5000 }) });
+    assert.match(html, /Showing 12 of 5,000 players/);
   });
 });
 

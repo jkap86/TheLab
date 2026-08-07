@@ -1,5 +1,6 @@
 import type { AdpBoardType, ManagerLeague } from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
+import type { KtcValue } from "@/shared/ktc";
 
 import type { AdpControls } from "../../adp-controls";
 import type { FilterSpec } from "./adp-drawer.types.ts";
@@ -23,6 +24,19 @@ export const BOARD_COLUMNS_ONE =
   "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.5rem_3.25rem]";
 export const BOARD_COLUMNS_BOTH =
   "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.75rem] @md:grid-cols-[1.75rem_1fr_2rem_2.75rem_2.75rem_3.25rem_3.25rem]";
+
+/**
+ * The `<li>` every row of the board wears, whichever kind of row it is.
+ *
+ * Written once because a player row and a pick row sit in one windowed list at
+ * one fixed {@link ADP_ROW_HEIGHT}: a difference in the padding or the border
+ * between the two would drift the rows off the offsets the virtualizer places
+ * them at, which is a whole screen of drift a thousand rows down. The two grids
+ * are the constants above for the same reason the heading shares them — a header
+ * laid out separately drifts the moment a width changes.
+ */
+export const BOARD_ROW_CLASS = (both: boolean) =>
+  `absolute inset-x-0 top-0 grid ${both ? BOARD_COLUMNS_BOTH : BOARD_COLUMNS_ONE} items-center gap-2 border-t border-foreground/[0.04] px-1 py-1.5 text-sm`;
 
 /**
  * One board row's height in px, which the row is *given* rather than measured
@@ -72,6 +86,13 @@ export const EMPTY_LEAGUES: readonly ManagerLeague[] = [];
 
 /** Likewise for the board while nothing has loaded, so the rows memo holds. */
 export const EMPTY_PLAYERS: readonly AdpPlayerPayload[] = [];
+
+/**
+ * And for KTC's pick rows, which is also what a board answers with when KTC is
+ * unsynced — the pick rows then hold the current class and nothing beyond it,
+ * since a season KTC has no opinion about cannot be discounted.
+ */
+export const EMPTY_PICK_KTC: Readonly<Record<string, KtcValue>> = {};
 
 /**
  * The drawer's entrance and its exit, in milliseconds.

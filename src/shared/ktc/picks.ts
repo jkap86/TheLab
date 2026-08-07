@@ -260,6 +260,42 @@ export function ktcPickBaseSeason(
   return earliest;
 }
 
+/**
+ * Every `(season, round)` this board prices, deduplicated, in board order —
+ * season ascending, then round.
+ *
+ * Read off the keys rather than passed alongside them, for the reason
+ * {@link ktcPickBaseSeason} is: which seasons and rounds KTC carries moves
+ * through the year, and it is the only statement anywhere about *which* future
+ * picks are worth naming at all. The ADP board enumerates its future rows from
+ * this — a season KTC has no opinion about is a season whose picks it cannot
+ * discount, so listing one would be listing a pick with no honest number.
+ *
+ * The tier is dropped on purpose: a board carrying three tiers of a round and
+ * one carrying only the untiered row both price that round, and every caller of
+ * this asks about the round rather than about the third.
+ */
+export function ktcPickBoardRows(
+  board: Readonly<Record<string, KtcPickPrice>>,
+): { season: string; round: number }[] {
+  const seen = new Set<string>();
+  const rows: { season: string; round: number }[] = [];
+  for (const key of Object.keys(board)) {
+    const [season, round] = key.split("|");
+    // A key this doesn't understand is one `ktcPickKey` didn't write; skipping
+    // it beats inventing a season, the same call `parseKtcPickName` makes.
+    if (!season || !/^\d+$/.test(round ?? "")) continue;
+    const pair = `${season}|${round}`;
+    if (seen.has(pair)) continue;
+    seen.add(pair);
+    rows.push({ season, round: Number(round) });
+  }
+  // Seasons are four-digit years, so a string compare is the numeric one.
+  return rows.sort(
+    (a, b) => (a.season < b.season ? -1 : a.season > b.season ? 1 : 0) || a.round - b.round,
+  );
+}
+
 /** How much less a future pick is worth than the nearest one — see below. */
 export type KtcPickDiscount = {
   /** The pick's KTC price as a fraction of the same pick in {@link base}. */
