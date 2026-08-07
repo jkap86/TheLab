@@ -552,22 +552,24 @@ export function TradesHome({ season }: { season: string }) {
             is a few hundred pixels tall; here the parent is `PageShell`'s
             `<main>`, which spans the whole list, so the key stays reachable at
             any depth.
-          - **It is `h-0`**, so it takes no space in that flow and the list below
-            is laid out exactly as it was. What it costs instead is coverage: a
-            pinned part covers the top-right of whatever is under it, which on
-            this board is one card's instant ledge — a plate at the same corner,
-            so the two read as stacked rather than as one part. That is the trade
-            a position control makes for being reachable; it is why the key is
-            34px rather than the labelled field it replaced, and it is transient,
-            since the card carrying that ledge is whichever one the scroll has
-            put under the key.
+          - **It has its own height, so its resting position is above the
+            board.** It used to be `h-0` — no space in the flow, which reads as
+            free and is not: the key's *first* frame was already sitting on the
+            first card's instant ledge, a plate at the same corner, so a reader
+            met the two overlapping before scrolling at all. Given a band of its
+            own it covers nothing until it is pinned, which is the moment
+            covering something is what it is for, and the coverage is transient
+            from there on since the card under it is whichever one the scroll has
+            put there. The `mb-5` is the plate's overhang plus clearance, paid as
+            margin rather than as a negative offset — the trade card's own rule
+            for a part rising out of an edge.
           - **The wrapper takes no pointer events and the key takes them back**,
             or a zero-height box stretched across the column would swallow
             presses aimed at the cards beneath it.
           - **`z-30`, under the app bar's `z-50`**: the key pins *below* the bar,
             and a floating part that could cover the way home would be the one
             piece of chrome this page is not allowed to obscure. */}
-      <div className="pointer-events-none sticky top-[calc(var(--site-header-h)+0.5rem)] z-30 flex h-0 justify-end">
+      <div className="pointer-events-none sticky top-[calc(var(--site-header-h)+0.5rem)] z-30 mb-5 flex justify-end">
         <div className="pointer-events-auto">
           <SeekKey
             value={tradeFilters.seek}

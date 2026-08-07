@@ -28,6 +28,15 @@ import type { TradeSeek } from "../filters";
  * element only travels as far as its own parent's box and this one has to travel
  * the whole list.
  *
+ * **It rests above the board and only then travels over it**, which is the one
+ * thing about the seat that changed after it shipped. The wrapper was `h-0`, so
+ * the key's resting position was already *on* the first card — and what is at
+ * that corner is the card's own instant ledge, a plate at the same edge, so a
+ * reader met the two overlapping before scrolling at all. Given its own height
+ * above the list it covers nothing until it is pinned, which is the moment
+ * covering something is what it is for. The size follows from that: 40px rather
+ * than the 34 a part that floats from the first frame could afford.
+ *
  * **Its date rides the bottom edge on a nameplate** — the trade card's own
  * device, a part rising out of an edge to label what is inside it. That is what
  * keeps a travelled board from lying about where it is: an icon alone says a
@@ -120,7 +129,7 @@ export function SeekKey({
             : `Jump to a date — showing trades from ${plateDate(value)} back`
         }
         title="Jump to a date"
-        // The ADP block's material at 34px: the one part in the app that is a
+        // The ADP block's material at 40px: the one part in the app that is a
         // *solid* rather than a face, so it reads as an object floating over the
         // board rather than as a rectangle drawn on it. Lit once the board is
         // positioned, which is the same signal that trigger uses for a narrowed
@@ -130,7 +139,7 @@ export function SeekKey({
           value === null ? "" : "lab-billet-lit"
         }`}
       >
-        <span className="lab-billet-face lab-notch-all grid h-[34px] w-[34px] place-items-center">
+        <span className="lab-billet-face lab-notch-all grid h-[40px] w-[40px] place-items-center">
           <CalendarGlyph seeking={value !== null} />
         </span>
       </button>
@@ -141,7 +150,7 @@ export function SeekKey({
       {value !== null && (
         <span
           aria-hidden
-          className="lab-nameplate pointer-events-none absolute -bottom-[9px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[3px] px-1.5 pb-[2px] pt-[1.5px] font-display text-[8.5px] font-semibold uppercase tracking-[0.04em] text-foreground/90"
+          className="lab-nameplate pointer-events-none absolute -bottom-[10px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[3px] px-[7px] pb-[2.5px] pt-[2px] font-display text-[9px] font-semibold uppercase tracking-[0.045em] text-foreground/90"
         >
           {plateLabel(value, today)}
         </span>
@@ -208,7 +217,7 @@ export function SeekKey({
 /**
  * The plate's date, e.g. `JUN 30` — or with the year where it is not this one.
  *
- * Two lines of type at 8.5px is what the plate has room for, so the year is
+ * Two words of type at 9px is what the plate has room for, so the year is
  * spent only where it says something: a board positioned inside the season being
  * read needs a month and a day, and one positioned in a past season needs to say
  * which. `today` rather than a clock, so the plate renders the same on every
@@ -232,29 +241,117 @@ function plateDate(seek: string): string {
  * The marked day takes the accent only while the board is positioned, so the
  * lit key and its glyph say one thing rather than two — the block's own glow is
  * the signal at a glance and this is what it resolves into up close.
+ *
+ * **It is drawn as a machined part rather than as a line icon**, which is what
+ * the block around it has always been and what the flat outline version was the
+ * one thing on it that wasn't. Three details carry that, and each is the app's
+ * own grammar at 18px:
+ *
+ * - **The frame's stroke is graded, not a flat colour.** A lit top edge falling
+ *   to a dim bottom one is how every raised face here reads, and at this size an
+ *   even 1.2px outline is exactly what says "icon". It is the sanctioned
+ *   exception to the token rule — a gradient may hold literal colour — so the
+ *   two stops are spelled out and everything around them still takes a token.
+ * - **The head band is filled and clipped to the frame**, which is the two-tone
+ *   a real calendar tab has. Clipped rather than drawn as a second rounded rect,
+ *   or its lower corners round off inside a box that isn't rounded there.
+ * - **The days are a grid, and the marked one is the only lit thing in it.** The
+ *   old glyph had one square in an otherwise empty box, so the square read as
+ *   the whole subject; against five unlit days it reads as *a* day, which is
+ *   what a date control is pointing at. The glow is spent only while positioned.
+ *
+ * `useId` for the gradient and the clip, the rule every drawn part here keeps:
+ * two of these on one page must not collide over a hardcoded `id`.
  */
 function CalendarGlyph({ seeking }: { seeking: boolean }) {
+  const frameId = useId();
+  const clipId = useId();
   return (
     <svg
       aria-hidden
-      viewBox="0 0 16 16"
+      viewBox="0 0 20 20"
       fill="none"
-      stroke="currentColor"
-      strokeWidth={1.2}
-      className="h-4 w-4 text-foreground/85"
+      className="h-[18px] w-[18px] text-foreground"
     >
-      <rect x="1.5" y="3" width="13" height="11.5" rx="2" />
-      <path d="M1.5 6.5h13" />
-      <path d="M5 1.5v3M11 1.5v3" strokeLinecap="round" />
+      <defs>
+        <linearGradient id={frameId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#eafaff" stopOpacity="0.88" />
+          <stop offset="100%" stopColor="#7099ad" stopOpacity="0.42" />
+        </linearGradient>
+        <clipPath id={clipId}>
+          <rect x="2" y="3.7" width="16" height="14.3" rx="3" />
+        </clipPath>
+      </defs>
+
+      {/* The head band, clipped to the frame it sits inside. */}
       <rect
-        x="6.6"
-        y="9"
-        width="2.8"
-        height="2.8"
-        rx="0.6"
-        stroke="none"
-        className={seeking ? "fill-active" : "fill-foreground/45"}
+        x="2"
+        y="3.7"
+        width="16"
+        height="4.6"
+        clipPath={`url(#${clipId})`}
+        className="fill-foreground/[0.16]"
+      />
+
+      <rect
+        x="2"
+        y="3.7"
+        width="16"
+        height="14.3"
+        rx="3"
+        stroke={`url(#${frameId})`}
+        strokeWidth="1.05"
+      />
+      <path d="M2 8.3h16" className="stroke-foreground/20" strokeWidth="0.9" />
+      <path
+        d="M6.4 2.1v3M13.6 2.1v3"
+        stroke={`url(#${frameId})`}
+        strokeWidth="1.35"
+        strokeLinecap="round"
+      />
+
+      {/* Every day but the marked one — cut to the same cell so the mark reads
+          as *one of these, lit* rather than as the glyph's whole subject. Dots
+          were the first spelling and were wrong for that: a round day beside a
+          square one is two shapes, and the square stops being a date. */}
+      {DAY_CELLS.map(([x, y]) => (
+        <rect
+          key={`${x}-${y}`}
+          x={x}
+          y={y}
+          width="1.8"
+          height="1.8"
+          rx="0.55"
+          className="fill-foreground/25"
+        />
+      ))}
+
+      <rect
+        x="8.35"
+        y="9.55"
+        width="3.3"
+        height="3.3"
+        rx="1"
+        className={
+          seeking
+            ? "fill-active drop-shadow-[0_0_3px_rgba(0,255,229,0.9)]"
+            : "fill-foreground/45"
+        }
       />
     </svg>
   );
 }
+
+/**
+ * The unlit days, as top-left corners: two rows of three with the middle of the
+ * top row left out, because that cell is the marked one. Written out rather than
+ * generated — five pairs are shorter than the loop that would produce them, and
+ * the hole is the point rather than an exclusion to be reasoned about.
+ */
+const DAY_CELLS: readonly (readonly [number, number])[] = [
+  [4.4, 10.3],
+  [13.8, 10.3],
+  [4.4, 14.1],
+  [9.1, 14.1],
+  [13.8, 14.1],
+];

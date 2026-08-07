@@ -48,7 +48,7 @@ describe("the pinned seek key", () => {
   });
 
   test("the plate takes a year only when it is not this one", () => {
-    // Two characters at 8.5px are spent only where they say something: a board
+    // Two characters at 9px are spent only where they say something: a board
     // positioned inside the season being read needs a month and a day, and one
     // positioned in a past season needs to say which.
     assert.ok(!key("2026-06-30").includes("Jun 30 26"));
