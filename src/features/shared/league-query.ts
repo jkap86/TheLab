@@ -30,13 +30,25 @@ export const leagueQueryKeys = {
   league: (leagueId: string) => [...leagueQueryKeys.all, leagueId] as const,
 
   /**
-   * One board of it. The rosters and standings don't depend on the board at all
-   * — only the two value columns do — but they arrive on one payload, so the
-   * board has to reach the key or a narrowed drawer would be served the previous
-   * board's prices.
+   * One board of it, read as one week.
+   *
+   * The rosters and standings depend on neither — only the value columns read
+   * the board and only the week columns read the week — but all of it arrives on
+   * one payload, so both have to reach the key or a narrowed drawer would be
+   * served the previous board's prices and a stepped week the previous week's
+   * projections.
+   *
+   * `week` is `null` for a panel opened on a season, which is the leagues list
+   * and the trades board; spelling it out as a segment rather than dropping it
+   * is the `managerQueryKeys` habit — a dropped segment makes two different
+   * questions collide on one entry.
    */
-  detail: (leagueId: string, board: string) =>
-    [...leagueQueryKeys.league(leagueId), normalizeAdpQuery(board)] as const,
+  detail: (leagueId: string, board: string, week: number | null = null) =>
+    [
+      ...leagueQueryKeys.league(leagueId),
+      normalizeAdpQuery(board),
+      week ?? "season",
+    ] as const,
 };
 
 /**

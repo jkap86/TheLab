@@ -27,24 +27,33 @@ export type LeagueDetailState = {
  * on the card. The rosters themselves don't depend on it, but they arrive on one
  * payload, so it is part of the key.
  *
- * **It clears on a new league and holds through a new board**, which is one rule
- * rather than two exceptions. This is the read whose previous answer can be about
- * something else: a new id must show nothing rather than leave the last league's
- * rosters on screen under the new name. A new *board* of the same league is the
- * opposite case — the rows are right, two columns are about to move — and
- * blanking several hundred of them to redraw them nearly unchanged is the flash
- * every other hook here refuses. So the placeholder is kept only when the
- * previous key names this same league.
+ * `week` narrows the same payload to one week, which the lineup checker asks for
+ * and the leagues list and trades board do not: it adds each subject's
+ * projection for that week and its points per game coming into it, the two
+ * columns a panel opened on a *lineup* is read on. Null means "as a season",
+ * which is the answer those two want and the shape this route has always given.
+ *
+ * **It clears on a new league and holds through a new board or a new week**,
+ * which is one rule rather than three exceptions. This is the read whose previous
+ * answer can be about something else: a new id must show nothing rather than
+ * leave the last league's rosters on screen under the new name. A new board or
+ * week of the same league is the opposite case — the rows are right, two columns
+ * are about to move — and blanking several hundred of them to redraw them nearly
+ * unchanged is the flash every other hook here refuses. So the placeholder is
+ * kept only when the previous key names this same league, which is exactly what
+ * comparing against the *league* prefix buys.
  */
 export function useLeagueDetail(
   leagueId: string,
   board: string,
+  week: number | null = null,
 ): LeagueDetailState {
   const detail = useQuery({
-    queryKey: leagueQueryKeys.detail(leagueId, board),
+    queryKey: leagueQueryKeys.detail(leagueId, board, week),
     queryFn: ({ signal }) =>
       fetchJson<LeagueDetailPayload>(
-        `/api/league/${encodeURIComponent(leagueId)}?${board}`,
+        `/api/league/${encodeURIComponent(leagueId)}?${board}` +
+          (week === null ? "" : `&week=${week}`),
         "Failed to load league",
         signal,
       ),

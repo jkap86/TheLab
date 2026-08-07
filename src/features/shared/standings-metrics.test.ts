@@ -40,6 +40,11 @@ const ctx = (over: Partial<TeamMetricContext> = {}): TeamMetricContext => ({
   adpTotal: 38400,
   superflex: true,
   draftCount: 37,
+  // A season panel by default — see the roster catalogue's twin of this.
+  week: null,
+  weekProjection: null,
+  ppg: null,
+  ppgSource: null,
   ...over,
 });
 
@@ -107,5 +112,55 @@ describe("value-total metrics", () => {
   test("are an em dash when nothing on the roster is priced", () => {
     assert.equal(cell("ktc", { ktcTotal: null }).text, null);
     assert.equal(cell("adp", { adpTotal: null }).text, null);
+  });
+});
+
+describe("week metrics", () => {
+  const week = {
+    week: 5,
+    weekProjection: { optimal: 142.6, current: 131.2, points_left: 11.4 },
+    ppg: { average: 118.75, games: 4 },
+    ppgSource: { season: "2026", weeks: 4, prior: false },
+  };
+
+  test("week proj is the best lineup available, with the current one on the hover", () => {
+    const c = cell("week_proj", week);
+    assert.equal(c.text, "142.60");
+    assert.match(c.title, /week 5/);
+    assert.match(c.title, /131\.20 as currently set/);
+    assert.match(c.title, /11\.40 left on the bench/);
+  });
+
+  test("a lineup already optimal says nothing about points left", () => {
+    const c = cell("week_proj", {
+      ...week,
+      weekProjection: { optimal: 142.6, current: 142.6, points_left: 0 },
+    });
+    assert.doesNotMatch(c.title, /left on the bench/);
+  });
+
+  test("ppg carries its denominator and the season it came from", () => {
+    const c = cell("ppg", week);
+    assert.equal(c.text, "118.75");
+    assert.match(c.title, /4 games/);
+    assert.match(c.title, /this season/);
+  });
+
+  test("the prior-season fallback names the season", () => {
+    const c = cell("ppg", {
+      week: 1,
+      weekProjection: week.weekProjection,
+      ppg: { average: 121.4, games: 14 },
+      ppgSource: { season: "2025", weeks: 18, prior: true },
+    });
+    assert.match(c.title, /2025 season/);
+  });
+
+  test("on a season panel both read as not asked for", () => {
+    for (const key of ["week_proj", "ppg"]) {
+      const c = cell(key);
+      assert.equal(c.text, null);
+      assert.match(c.title, /opened on a week/);
+    }
   });
 });

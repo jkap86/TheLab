@@ -8,8 +8,8 @@
  * Migrations use `pg`/`node-pg-migrate`, which are Node.js-only, so the import
  * is guarded to the Node.js runtime and loaded dynamically — this keeps the DB
  * code out of the Edge bundle entirely. The same guard fronts the in-process
- * background loops (KeepTradeCut values, league crawl, weekly projections),
- * which are started once migrations have applied.
+ * background loops (KeepTradeCut values, league crawl, weekly projections and
+ * weekly stat lines), which are started once migrations have applied.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -55,4 +55,11 @@ export async function register(): Promise<void> {
   // the lineup tools read Postgres instead of a 5.6MB Sleeper response per visit.
   const { startProjectionsScheduler } = await import("@/shared/projections");
   startProjectionsScheduler();
+
+  // The other half of that: what players actually did, which is what a points-
+  // per-game average is made of. Two seasons rather than one — a PPG counts the
+  // weeks *before* the one on screen, so week 1 has nothing of its own to
+  // average and reads last season instead.
+  const { startStatsScheduler } = await import("@/shared/stats");
+  startStatsScheduler();
 }

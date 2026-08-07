@@ -22,6 +22,8 @@ export const LOCK_KEYS = {
   players: [8675309, 5],
   /** Precomputed trade-board counts (`shared/trades/stats.ts`). */
   tradeStats: [8675309, 6],
+  /** Weekly actual stat lines sync (`shared/stats/sync.ts`). */
+  playerStats: [8675309, 7],
 } as const satisfies Record<string, AdvisoryLockKey>;
 
 /**

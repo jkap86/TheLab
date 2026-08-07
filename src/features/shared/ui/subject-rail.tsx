@@ -1,7 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { SEARCH_FIELD } from "../control-type.ts";
 import {
@@ -203,7 +211,22 @@ const RESULT_LIMIT = 8;
  * board price), and several hundred players would bury several hundred people
  * whichever way it sorted.
  */
-export function SubjectRail({ view }: { view: SubjectView }) {
+export function SubjectRail({
+  view,
+  leading,
+}: {
+  view: SubjectView;
+  /**
+   * A control seated at the head of the row, ahead of the league filters key.
+   *
+   * For a tool that narrows on something before either of this rail's own two
+   * questions — today the lineup checker's week. It arrives as a node because
+   * the rail knows nothing about what that narrowing is; what it owns is the
+   * seat, and a part taking it is expected to wear the row's shape (10px type,
+   * `.lab-chip-sm` keys), which is `SEATS.rail`'s rule everywhere else here.
+   */
+  leading?: ReactNode;
+}) {
   const { subjects, setSubjects } = view;
   const [open, setOpen] = useState(false);
   /**
@@ -333,6 +356,21 @@ export function SubjectRail({ view }: { view: SubjectView }) {
               the row is content rather than chrome — so it takes a second line
               down there instead of pushing the count off the end of the part. */}
           <div className="lab-slab-face lab-slab-face-rail lab-notch-all flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5">
+            {/* A group ahead of the two this rail owns, for a tool that narrows
+                on something before either — the lineup checker's week, which is
+                the qualifier its whole page hangs off.
+
+                It leads for the same reason the filters key leads the two below:
+                that is the order the narrowings are applied, and the order the
+                plate's scope line names them. A caller with nothing to put here
+                passes nothing and the row is exactly what it was. */}
+            {leading && (
+              <>
+                <span className="flex shrink-0">{leading}</span>
+                <RailSeam />
+              </>
+            )}
+
             {/* The first group: what these leagues *are*.
 
                 It leads because that is the order the two narrowings are

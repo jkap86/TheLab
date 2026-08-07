@@ -1,6 +1,6 @@
 import { formatPoints, formatValue } from "./format.ts";
 import type { ColumnPreset, Metric } from "./metric-cell.ts";
-import type { LeagueTeamPayload } from "@/shared/contract";
+import type { LeagueTeamPayload, PpgPayload } from "@/shared/contract";
 import type { TeamOutlook } from "@/shared/projections";
 
 /**
@@ -43,6 +43,22 @@ export type TeamMetricContext = {
   superflex: boolean;
   /** How many crawled drafts stood behind the ADP board, for its hover. */
   draftCount: number;
+  /**
+   * The week this panel is being read as, when it is being read as one at all —
+   * null on the leagues list and the trades board, which open a league on a
+   * season. See the roster catalogue's twin of this field.
+   */
+  week: number | null;
+  /** This team's best and current lineup for {@link week}. */
+  weekProjection: {
+    optimal: number;
+    current: number;
+    points_left: number;
+  } | null;
+  /** What it has averaged coming into that week; null where it has played none. */
+  ppg: PpgPayload | null;
+  /** Which season and how many weeks that average was counted over. */
+  ppgSource: { season: string; weeks: number; prior: boolean } | null;
 };
 
 /**
@@ -122,6 +138,61 @@ const noProjection: TeamMetricCell = {
  * cell to place one in.
  */
 export const TEAM_METRICS: TeamMetric[] = [
+  {
+    key: "week_proj",
+    group: "Week",
+    label: "Wk Proj",
+    cell: ({ week, weekProjection }) => {
+      if (week === null) {
+        return {
+          kind: "value",
+          text: null,
+          title: "Only answered where a panel is opened on a week",
+        };
+      }
+      if (!weekProjection) {
+        return { kind: "value", text: null, title: `No projection for week ${week}` };
+      }
+      // The team's *best* lineup for the week, which is what the `proj` metric
+      // above means one grain up — each week's best lineup, read for one week.
+      // What it is currently starting rides on the hover rather than in a third
+      // column: the gap between the two is the lineup checker's whole subject,
+      // and it already has a readout of its own in the panel's telemetry.
+      const { optimal, current, points_left } = weekProjection;
+      return {
+        kind: "value",
+        text: formatPoints(optimal),
+        title:
+          `${formatPoints(optimal)} from the best lineup available in week ${week}` +
+          ` · ${formatPoints(current)} as currently set` +
+          (points_left > 0 ? ` · ${formatPoints(points_left)} left on the bench` : ""),
+      };
+    },
+  },
+  {
+    key: "ppg",
+    group: "Week",
+    label: "PPG",
+    cell: ({ ppg, ppgSource }) => {
+      if (!ppg || !ppgSource) {
+        return {
+          kind: "value",
+          text: null,
+          title: ppgSource
+            ? "No games scored in the weeks counted"
+            : "Only answered where a panel is opened on a week",
+        };
+      }
+      return {
+        kind: "value",
+        text: formatPoints(ppg.average),
+        title:
+          `${formatPoints(ppg.average)} a game over ${ppg.games} ` +
+          `game${ppg.games === 1 ? "" : "s"}` +
+          (ppgSource.prior ? `, ${ppgSource.season} season` : " this season"),
+      };
+    },
+  },
   {
     key: "proj",
     group: "Projection",
@@ -239,7 +310,20 @@ export const DEFAULT_TEAM_COLUMNS: string[] = ["proj", "bench"];
  * and the points already banked are the two halves of a whole year.
  */
 export const TEAM_COLUMN_PRESETS: ColumnPreset[] = [
+  { name: "Week", columns: ["week_proj", "ppg"] },
   { name: "Projection", columns: ["proj", "bench"] },
   { name: "Season", columns: ["optimal", "pf"] },
   { name: "Value", columns: ["ktc", "adp"] },
 ];
+
+/**
+ * The two columns the standings opens with **when the panel is opened on a
+ * week** — what each team can score in it, against what each has been averaging
+ * coming into it.
+ *
+ * Stored under a key of its own rather than sharing the season panel's, for the
+ * reason its roster-level twin is: the grain is a week rather than the rest of a
+ * season, so a reader who aims these columns on the lineup checker has not
+ * thereby re-aimed the leagues list's.
+ */
+export const DEFAULT_WEEK_TEAM_COLUMNS: string[] = ["week_proj", "ppg"];

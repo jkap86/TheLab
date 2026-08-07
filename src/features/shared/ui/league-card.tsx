@@ -93,6 +93,7 @@ export function LeagueCard({
   ledge,
   columns,
   focusRosterId,
+  week = null,
   expanded,
   onToggle,
 }: {
@@ -119,6 +120,16 @@ export function LeagueCard({
    * nobody asked. Omitted by the leagues list, which arrives at a league.
    */
   focusRosterId?: number;
+  /**
+   * Open the panel on a **week** rather than on the rest of the season — the
+   * lineup checker passes its selected week, the leagues list passes nothing.
+   *
+   * It is the same difference the ledge above already draws: a list about a
+   * season puts a record on the card and a list about one Sunday puts an
+   * opponent, and the panel behind them has the same two readings. See
+   * {@link LeagueDetailPanel}.
+   */
+  week?: number | null;
   /** Whether this is the league currently open — one at a time, list-wide. */
   expanded: boolean;
   /** Open this league, or close it if it is the one already open. */
@@ -403,6 +414,7 @@ export function LeagueCard({
                 <LeagueDetailPanel
                   leagueId={leagueId}
                   focusRosterId={focusRosterId}
+                  week={week}
                 />
               </div>
             </div>

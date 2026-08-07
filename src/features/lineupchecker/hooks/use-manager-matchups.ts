@@ -35,13 +35,21 @@ export type ManagerMatchupsState = {
  * reports an idle state: that is the whole no-account path here, the same shape
  * `useUserLeagues` takes for the pick tracker's picker.
  *
+ * `week` is which week to ask about, or null to let the route resolve the one
+ * the schedule is pointing at. Null is the page's opening state and a real
+ * answer rather than a missing one — the payload always says which week it
+ * settled on, so the caller reads that back instead of assuming.
+ *
  * A failure leaves the opponents unresolved and nothing else — the league list is
  * its own read, so the rows still draw. Ask what a read is load-bearing for
  * before letting its failure take a page down.
  */
-export function useManagerMatchups(userId: string | null): ManagerMatchupsState {
+export function useManagerMatchups(
+  userId: string | null,
+  week: number | null = null,
+): ManagerMatchupsState {
   const query = useQuery({
-    queryKey: lineupQueryKeys.matchups(userId ?? ""),
+    queryKey: lineupQueryKeys.matchups(userId ?? "", week),
     queryFn: ({ signal }) =>
       fetchJson<ManagerMatchupsPayload>(
         // The id rides the query string as well as the path segment, and that is
@@ -51,12 +59,20 @@ export function useManagerMatchups(userId: string | null): ManagerMatchupsState 
         // is pure Postgres costs no upstream request — see
         // `resolveManagerIdRequest`.
         `/api/user/${encodeURIComponent(userId ?? "")}/matchups` +
-          `?user_id=${encodeURIComponent(userId ?? "")}`,
+          `?user_id=${encodeURIComponent(userId ?? "")}` +
+          (week === null ? "" : `&week=${week}`),
         "Failed to load matchups",
         signal,
       ),
     enabled: userId !== null,
     staleTime: MATCHUPS_STALE_TIME,
+    // Stepping a week is a *different question*, so it is a different key — and
+    // without this every press would replace the whole list with a loading state
+    // and back. Holding the previous week's rows while the next lands is the
+    // same call the trades board and the four manager hooks make, and it matters
+    // more here: the rows either side of a step are the same hundred leagues in
+    // the same order, with two columns and a plate about to move.
+    placeholderData: (previous) => previous,
   });
 
   return {

@@ -4,6 +4,7 @@ import { PositionBadge } from "../position-badge";
 import type { SectionLayout } from "./roster-layout";
 import type {
   LeagueRosterValues,
+  LeagueWeekView,
   PlayerOutlook,
   PlayerSplit,
   PlayerSummary,
@@ -51,6 +52,7 @@ export function PlayerRow({
   layout,
   columns,
   values,
+  weekView,
   horizon = 0,
 }: {
   player: PlayerSummary | undefined;
@@ -75,6 +77,8 @@ export function PlayerRow({
   columns: string[];
   /** Per-player KTC and ADP values on this league's board, for the value columns. */
   values: LeagueRosterValues;
+  /** The week's numbers, or null on a panel opened on a season. */
+  weekView: LeagueWeekView;
   /** Weeks the projection covers, so a partial one can be marked as such. */
   horizon?: number;
 }) {
@@ -97,6 +101,10 @@ export function PlayerRow({
     adpPosition: values.adp_position[playerId] ?? null,
     superflex: values.superflex,
     draftCount: values.adp_draft_count,
+    week: weekView?.week ?? null,
+    weekProjection: weekView?.projection[playerId] ?? null,
+    ppg: weekView?.ppg[playerId] ?? null,
+    ppgSource: weekView?.ppg_source ?? null,
   };
 
   return (

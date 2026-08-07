@@ -721,3 +721,92 @@ export async function getLeagueDetail(
     teams,
   };
 }
+
+/** One roster's scored week, as the league itself recorded it. */
+export type RosterWeekPoints = {
+  roster_id: number;
+  week: number;
+  points: number | null;
+};
+
+/**
+ * What each roster in a league actually scored, over a set of weeks.
+ *
+ * Read from `matchups` rather than summed from stat lines, which is `teamPpg`'s
+ * own argument in query form: the league already applied its scoring *and* the
+ * lineup the manager actually set when it recorded the week, so this is the one
+ * number that needs neither re-scoring nor a solve. Summing a roster's players
+ * would answer a different question — what everyone on the roster scored,
+ * including the three the manager benched.
+ *
+ * `points` is nullable because Sleeper stores a matchup row before the week is
+ * played; the average drops those rather than counting a shutout.
+ */
+export async function listRosterWeekPoints({
+  leagueId,
+  weeks,
+}: {
+  leagueId: string;
+  weeks: number[];
+}): Promise<RosterWeekPoints[]> {
+  if (weeks.length === 0) return [];
+
+  const { rows } = await pool.query<RosterWeekPoints>(
+    `SELECT roster_id, week, points
+       FROM matchups
+      WHERE league_id = $1 AND week = ANY($2::int[])`,
+    [leagueId, weeks],
+  );
+  return rows;
+}
+
+/**
+ * What each *manager* in this league's predecessor scored last season, keyed by
+ * the owner rather than by a roster id.
+ *
+ * The season rollover is why this exists: Sleeper mints a new league id every
+ * year and links it back through `previous_league_id`, and roster ids are
+ * re-issued rather than following anybody. So carrying "what did this team
+ * average" across the boundary means joining on the owner, which is the only id
+ * that survives it.
+ *
+ * It is the team-level half of the week-1 fallback — a points-per-game average
+ * counts the weeks *before* the one on screen, so in week 1 there are none and
+ * last season is the honest stand-in.
+ *
+ * An empty map is the answer for an inaugural league and for one whose previous
+ * season was never crawled. Both are honest absences and the panel draws an em
+ * dash for them, rather than a number from nowhere.
+ */
+export async function getPreviousLeagueScores(
+  leagueId: string,
+): Promise<Map<string, RosterWeekPoints[]>> {
+  const { rows } = await pool.query<{ previous_league_id: string | null }>(
+    `SELECT previous_league_id FROM leagues WHERE league_id = $1`,
+    [leagueId],
+  );
+  const previous = rows[0]?.previous_league_id;
+  // Sleeper spells "no predecessor" both ways, the same pair the crawler's own
+  // startup-draft test folds together.
+  if (!previous || previous === "0") return new Map();
+
+  const { rows: scored } = await pool.query<
+    RosterWeekPoints & { owner_id: string | null }
+  >(
+    `SELECT r.owner_id, m.roster_id, m.week, m.points
+       FROM matchups m
+       JOIN rosters r
+         ON r.league_id = m.league_id AND r.roster_id = m.roster_id
+      WHERE m.league_id = $1 AND r.owner_id IS NOT NULL`,
+    [previous],
+  );
+
+  const byOwner = new Map<string, RosterWeekPoints[]>();
+  for (const row of scored) {
+    if (!row.owner_id) continue;
+    let weeks = byOwner.get(row.owner_id);
+    if (!weeks) byOwner.set(row.owner_id, (weeks = []));
+    weeks.push({ roster_id: row.roster_id, week: row.week, points: row.points });
+  }
+  return byOwner;
+}
