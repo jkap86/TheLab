@@ -5,7 +5,6 @@ import { type ReactNode, useMemo, useState } from "react";
 
 import {
   HeaderSlot,
-  LeagueFiltersPlaceholder,
   PageShell,
   activeFilterCount,
   adpNarrowingCount,
@@ -42,37 +41,6 @@ const AdpDrawer = dynamic(
   { ssr: false },
 );
 
-/**
- * The league filters, loaded the first time this tab renders a list to narrow.
- *
- * Unlike the board above there is no visible half to keep back: the component
- * *is* a trigger and a `<dialog>`, so the seam is the whole of it and the
- * fallback is what holds the key's box in the plate's corner until the chunk
- * lands. That box is load-bearing here — the plate carries the overhang's margin
- * only when it has a key to overhang — so a fallback of nothing would shift the
- * pinned header on hydration.
- *
- * The module path is named directly rather than the `@/features/shared` barrel,
- * which is the half of this split that is invisible in review: re-exported from
- * there the dialog joined the static graph of every page importing anything from
- * that barrel, and this `dynamic()` deferred bytes the browser had already been
- * sent.
- */
-const LeagueFiltersModal = dynamic(
-  () =>
-    import("@/features/shared/ui/league-filters-modal").then(
-      (m) => m.LeagueFiltersModal,
-    ),
-  {
-    ssr: false,
-    // "Filters" is this seat's own word — the modal's default, since the league
-    // filters are the only such control on a manager tab, where the trades ledge
-    // has to say "Leagues" to tell its two apart. The placeholder stands in for
-    // that key's box, so it has to wear the same word or the corner changes
-    // width when the chunk lands.
-    loading: () => <LeagueFiltersPlaceholder label="Filters" seat="corner" />,
-  },
-);
 // The module path rather than `@/features/shared`: the plate is shared with the
 // lineup checker now, and it is deliberately kept off that barrel so the pages
 // with no plate don't carry it — see the folder's own index.
@@ -109,11 +77,17 @@ import { PanelMessage } from "./ui";
  * tabs off the one per-manager store: the drawer, and a trigger rendered into
  * the app bar's seat. The two are still two controls and not one — the league
  * filters narrow *this manager's leagues*, the board narrows *the drafts in the
- * database* — and the split is now spatial as well: the filters are a key in the
- * header plate's own bottom-right corner, over the list they narrow, and the board sits
- * up in the chrome with the population it describes, which belongs to no manager
- * at all. The board names itself inside the drawer; no tab repeats that on the
- * page.
+ * database* — and the split is spatial: the filters lead the subject rail below,
+ * over the list they narrow and beside the other question asked of it, and the
+ * board sits up in the chrome with the population it describes, which belongs to
+ * no manager at all. The board names itself inside the drawer; no tab repeats
+ * that on the page.
+ *
+ * **What this layout no longer renders is the filters' key.** It was seated in
+ * the header plate's corner and is on the rail now ({@link SubjectRail}), which
+ * is why `filters` is destructured here for the scope line alone. The header's
+ * own `filters` prop stays — the lineup checker has no rail and still seats a
+ * key in that corner — so what changed is one call site, not the seat.
  */
 export function LeaguesViewLayout({
   view,
@@ -142,8 +116,10 @@ export function LeaguesViewLayout({
   /** The tab's content, rendered once at least one league passes the filters. */
   children: ReactNode;
 }) {
-  const { data, searched, progress, refreshing, error, filters, setFilters, filtered } =
-    view;
+  // `filters` is read for the scope line and nothing else now — the control that
+  // *writes* it is seated on the subject rail, which takes both halves off the
+  // view it is already handed.
+  const { data, searched, progress, refreshing, error, filters, filtered } = view;
   const { controls, setControls, resetControls, defaultSeason } = useAdpControls();
   const { subjects } = useSubjectFilters();
   const [boardOpen, setBoardOpen] = useState(false);
@@ -217,18 +193,14 @@ export function LeaguesViewLayout({
         scope={scope}
         leagueCount={filtered.length}
         stat={stat}
-        filters={
-          hasLeagues ? (
-            <LeagueFiltersModal
-              filters={filters}
-              onChange={setFilters}
-              leagues={data.leagues}
-              // Machined into the plate's bottom-right corner rather than
-              // standing free on the page — see `SEATS`.
-              seat="corner"
-            />
-          ) : undefined
-        }
+        // No key in the plate's corner: the league filters are seated at the
+        // leading end of the subject rail below, beside the *who is in it* half
+        // of the same question — see {@link SubjectRail}. The plate keeps its
+        // three readout corners, gives back the corner key's clearance, and this
+        // card is pinned over the list, so that clearance is league rows.
+        //
+        // The prop stays on the header for the lineup checker, which has no such
+        // rail and seats its own copy in the corner.
         // Drawn whenever there are leagues, and it is the *tab* that says
         // whether the heading billet under the subject rail has rows to head —
         // see `ColumnsBar`'s `headings`. What must not happen is this slot

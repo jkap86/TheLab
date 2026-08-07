@@ -1728,7 +1728,8 @@ stops holding, a comment saying it does would not have caught it.
       than sitting beside either. The face is therefore padded at the **top
       only**, and each region holds its own inset off the walls.
     - **The league's name rides the top edge on a nameplate** (`.lab-nameplate`),
-      the device the manager plate's filters key already uses on its bottom edge.
+      the device the lineup checker's plate already uses on its bottom edge for
+      its filters key.
       A part rising out of a card is the strongest "one object" mark there is,
       and it is nearly free vertically — it occupies margin the list was already
       spending as a gap. It is a *plate* and not a chip (rectangular, no press
@@ -2358,9 +2359,16 @@ stops holding, a comment saying it does would not have caught it.
   absent are different answers), and a second card drawn to say that would be a
   second chance for one of them to drift. Its week goes in `scope`, which is the
   slot that names what a record was counted over, and its league filters are the
-  manager tabs' own dialog in the same corner of the same plate — held in local
-  `useState` rather than a provider, since a provider is what three *routes*
-  sharing one selection need and this tool is one page.
+  manager tabs' own dialog, seated in this plate's bottom-right corner — held in
+  local `useState` rather than a provider, since a provider is what three
+  *routes* sharing one selection need and this tool is one page.
+  **It is the only page in that corner now, which makes it the reason the seat
+  exists rather than a second user of it.** The manager tabs moved their key onto
+  the subject rail, where it leads the row that also asks who is in these
+  leagues; this page has no such rail — one list, one filter — so the corner is
+  still the right seat here for the reason it was built. Keep `SEATS.corner` and
+  `FilterSeat` alive for it, and read the plate's own note for what holds them
+  up.
 
   **The one thing that aggregation changes on the card is which instrument the
   readout wears, and that is a prop rather than something the readout works
@@ -2518,8 +2526,9 @@ stops holding, a comment saying it does would not have caught it.
     they are its tail rather than a note over it. `overscroll-contain` moved onto
     the two lists with the scrolling, so a flick at the end of either doesn't
     carry on into the page behind the card.
-- **The header is one plate with the filters' key seated in its bottom edge, and
-  it got there in two moves worth reading together.** It was one card stacking
+- **The header is one plate with a seat for a filters' key in its bottom edge,
+  and it got there in three moves worth reading together.** It was one card
+  stacking
   identity, the season, the record and both control pills, which on a phone was
   ~590px of a 700px screen — the controls wrapping onto their own lines because
   they shared a flex row with the season. The first move split it by what a thing
@@ -2527,7 +2536,24 @@ stops holding, a comment saying it does would not have caught it.
   triggers. The second retired the dock, because once the board's trigger went up
   into the app bar it was a ~50px trough seating a single control — and this card
   is *pinned*, so that was 50px of league rows covered on all three tabs for a
-  part pressed once a session. Four things hold up what is left:
+  part pressed once a session.
+
+  **The third move took the key off this plate on the manager tabs, and what it
+  says about the two before it is that they were solving the wrong problem.**
+  Both were about finding the key a *cheaper* home; neither asked whether the
+  plate was its home at all. Three of the plate's four corners are readouts, so
+  the one control on it was seated among facts — and the subject rail directly
+  below was already a filter row with an obvious hole at its leading end. The
+  key leads that rail now (see {@link SubjectRail}), the plate keeps its three
+  readout corners, and the 16px the seat cost — 12 of body padding, 4 of overhang
+  margin — goes back to a list this card is pinned over.
+
+  **The seat itself stays, because the lineup checker still uses it**: that page
+  has one list, no subject rail and nothing else to seat a key on, so the corner
+  is right there for the same reason it was ever built. What follows is why it is
+  built the way it is, and it is live code rather than history — the rules below
+  are what a second page in that shape would have to keep. Four things hold it
+  up:
   - **The material says which part is which**, the same raised/recessed grammar
     as the app bar: the plate is a milled face (a specular sweep, the cyan rail),
     its corner tabs are wells because they are readouts, and the filters' key is
@@ -2556,10 +2582,11 @@ stops holding, a comment saying it does would not have caught it.
     gutter beside them: a right-hand reserve wide enough for the key left ~190px
     of a 390px screen for two pills that fit on one line before it.
 - **The plate's record readout is where the filter bar used to be.** The two rows
-  of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger is
-  the key in the plate's bottom edge — it sat in the dock, beside `AdpTrigger`,
-  until the board moved into the app bar and the dock followed it out — and the
-  space they freed carries the manager's season across the
+  of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger has
+  moved twice since — into the dock beside `AdpTrigger`, into this plate's own
+  bottom edge when the board went up to the app bar and the dock followed it out,
+  and finally off the plate altogether on the manager tabs, to the head of the
+  subject rail — and the space they freed carries the manager's season across the
   filtered leagues: a dial for the win percentage, a proportion bar for the wins
   and losses behind it. The `Rostered` cell that used to stand in a rail of its
   own is folded onto the record's line, since how many of the leagues on screen
@@ -2763,6 +2790,44 @@ stops holding, a comment saying it does would not have caught it.
     the question wrongly first. The two payloads are the other tabs' resources
     behind a shared cache, fetched when the panel opens or a subject is selected —
     both naming the same query keys, so the two gates cost one request.
+- **The league filters lead that rail, which is what makes it the page's filter
+  row rather than one of two.** The key was machined into the header plate's
+  bottom-right corner — 20px, the smallest type on the card, under the countdown,
+  diagonally furthest from the list it narrows — and what made it hard to find
+  was its *company* rather than its size: it was the one control among three
+  readouts, while the row below already asked the sibling question and had a hole
+  at its leading end. The two are applied one after the other in
+  `useFilteredLeagues` and the plate's scope line has always named them in that
+  order, so the row now reads in it: **what these leagues are · who is in them ·
+  what survives.** Five things hold it up:
+  - **They stay two controls, not one dialog with two tabs.** A league rule is an
+    attribute of the league (`qb+sf ≥ 2`); a subject is a person or player in it.
+    One dialog over both would suggest a single selection, which is the same
+    argument that keeps the ADP board a third control elsewhere again. What is
+    shared is the *surface* — which is what a reader was looking for.
+  - **`SEATS.rail` is the two shares keys' exact box, and it reaches past shape
+    to do it.** Every other seat differs only in the edge it meets, because
+    everywhere else the key is the only part of its kind in view; here it is the
+    first of three on one milled face, so it takes their 10px type, their padding
+    *and* their `.lab-chip-sm` wall. A key standing a pixel prouder than its
+    neighbours is the same fault as a corner key that overhangs.
+  - **`.lab-chip-on.lab-chip-sm` is what keeps that true when it lights.**
+    `.lab-chip-sm` thins the wall and `.lab-chip-on` re-declares it, and the lit
+    rule is the later of the two — so every small chip in the app stood proud the
+    moment it started narrowing something. Written as the intersection, it
+    outranks both, so neither has to move. It fixes four call sites that already
+    had the flaw and were never noticed, which is the tell for how a row hides
+    it: one part seated wrong reads as a state.
+  - **A seam parts the groups, not spacing.** The row wraps below `sm`, and
+    spacing does not survive a wrap — the same reason the count and the two doors
+    are one flex item. `RailSeam` is that groove written once, since the row now
+    has two of them.
+  - **The count is against the account, not the league-filtered list.** With one
+    control on the rail, `N of M` named a population stated nowhere on screen;
+    with both, the denominator is the whole account and the numerator is what the
+    two leave between them — one number answering the row it is on. Unnarrowed it
+    is the bare total, since a denominator restating its numerator is the thing
+    the plate keeps having to relearn.
 - **That control is a `.lab-slab` of its own above the heading billet, and it
   spent a while as a second storey *of* that billet — which is the cheaper
   construction and the wrong one here.** The economics of the storey are real and
