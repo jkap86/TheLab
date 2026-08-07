@@ -1608,17 +1608,82 @@ stops holding, a comment saying it does would not have caught it.
       manager tool's Leagues and Leaguemates tabs — the value column is on
       screen either way, which is the Players tab's own rule. It costs nothing
       extra when the drawer *is* opened: both consumers share one query key.
-    - **KTC stays in the picker, because the two decline in different places.**
-      ADP is an average of drafted players, so a draft pick is a category it was
-      never on — a pick gets no cell rather than an em dash, the standing FAAB
-      has on both — where KTC prices players *and* picks, but only ever as
-      dynasty and only ever nationally. Neither total is the other's units, so
-      they are two columns and never one blended number: a haul summing a
-      player's KTC price and a pick's ADP would claim a scale this app nowhere
-      says exists. Moving `DEFAULT_TRADE_COLUMNS` is the whole of the migration
-      — `resolveColumns` keeps a selection that still names a live metric, so a
-      reader who explicitly picked KTC keeps it and everyone else gets the board
-      their own panel is set to.
+    - **KTC stays in the picker as the other lens, not the other half.** It
+      prices the same assets off a *national dynasty* board where this reads
+      whichever population the reader selected, on whichever market the league
+      plays in. Neither total is the other's units, so they are two columns and
+      never one blended number: a haul summing a player's KTC price and a pick's
+      ADP value would claim a scale this app nowhere says exists. Moving
+      `DEFAULT_TRADE_COLUMNS` is the whole of the migration — `resolveColumns`
+      keeps a selection that still names a live metric, so a reader who
+      explicitly picked KTC keeps it and everyone else gets the board their own
+      panel is set to.
+  - **ADP prices the draft picks too, and it does it without a row for one —
+    which is the whole idea.** The first cut of this column left picks blank on
+    the grounds that a board of player prices has no pick on it, true and beside
+    the point on a board where a first is routinely the whole trade (the same
+    correction the KTC column had already been through). A rookie pick is a
+    *place in a queue*, and the queue is on the board already: rank the rookies
+    the selected drafts averaged and the first of them is what the 1.01 returns.
+    So a pick is priced by the player it buys, on the same curve, in the same
+    units, out of the same population — which is what makes a haul of players
+    and picks one sum where summing an ADP value and a KTC price would be a
+    scale nobody has defined. `features/trades/pick-value.ts` is the ladder and
+    the six decisions in it:
+    - **Two markets, two ladders** (`rookieLadder(players, board)`). A rookie
+      goes in the first round of a dynasty startup and the middle of a redraft,
+      so the queues are different queues; a league reads the one it plays in.
+      Rookie picks come out cheap in a redraft league, which is correct rather
+      than a shortfall.
+    - **A rookie the board never averaged is not a rung.** The ladder is an
+      *ordering*, so a place invented for a player those drafts didn't take
+      shifts every pick below him by one — the one error here that propagates.
+    - **Which rung** is `(round − 1) × teams + slot`, so the league's size is
+      what makes the same 2.01 a different pick. An unplaced pick takes the
+      middle of its round and is marked a stand-in, the same fallback (and the
+      same `mid` tier) the KTC column already makes for a draft that doesn't
+      exist yet.
+    - **KTC is asked for exactly one thing: what waiting costs**
+      (`ktcPickDiscount`). The ladder prices a pick as if it were being spent
+      now, and it cannot do better — the class a 2029 first will spend is not a
+      class anybody can name. KTC publishes that opinion one row per season, so
+      the *ratio* between its rows carries it onto the ADP scale. A ratio is
+      dimensionless, which is what makes this one crossing between the two
+      boards sound where a sum would not be.
+    - **The anchor is read off KTC's board, not off a calendar**
+      (`ktcPickBaseSeason` — the earliest season it prices). Which seasons KTC
+      carries moves through the year, since a season's rows come off once its
+      draft has happened; reading the base from the board is what makes the
+      discount mean the same thing in February and in August with nothing being
+      told what month it is. A pick at or before that season is undiscounted,
+      which is also how a current-year pick is priced.
+    - **Three refusals, not one null** (`PickAdpMiss`). No rookies on this board,
+      deeper than the class it priced, or too far out for KTC to have a row —
+      and the difference matters to a reader, because the first two are facts
+      about the board the panel is showing and widening it fixes them. A pick
+      KTC can't reach stays **blank rather than quoted at the nearest draft's
+      price**: a 2032 4th is not worth what next year's 4th is, which is the one
+      wrong answer here that would look like a working one.
+  - **Naming the rookie class took a column out of the players blob, and the
+    whole feature rests on it.** `players.years_exp` is promoted from `data`
+    (backfilled in the migration, so no re-download), read by
+    `getRookiePlayerIds`, and sent as `AdpPlayerPayload.rookie`. Two rules travel
+    with it. **Absent is "not known to be a rookie", never "veteran"** — it is
+    null for a team defence and for anyone Sleeper hasn't filled in, and one
+    wrongly-included name shifts the whole ladder. And **the cache carries no
+    history, so this always names the class that is a rookie *now***: a board
+    for a past season contains none of them and gets an empty ladder, which
+    reads as picks being unpriced there rather than as a ladder built from
+    prices those players never had.
+  - **`/api/trades` sends KTC's pick board whole**, where it used to send the
+    four rows per `(season, round)` the page's picks could land on. The tier is
+    still resolved client-side (it needs the league's size, which is on the
+    league list the browser already holds), so every tier of a row has to travel
+    either way; what ended the narrowing is that the discount needs the board's
+    *nearest priced season*, which is a fact about the board rather than about
+    any pick on the page — a page naming no 2027 pick could never have asked for
+    the row that answers it. It is a few dozen rows, so `lookupKtcPickBoard`
+    caches it as one value rather than a row at a time.
   - **Those numbers are on the display face and cut into what they sit on**
     (`.lab-engraved`, `.lab-engraved-faint`). The page's subject used to be the
     quietest type on its own card: the league name was Orbitron at 13px tracked,

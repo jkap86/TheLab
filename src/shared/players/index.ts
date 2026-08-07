@@ -5,5 +5,6 @@ export {
   getMatchablePlayers,
   getPlayerIdsByPosition,
   getFantasyPositions,
+  getRookiePlayerIds,
 } from "./queries";
 export type { PlayerSummary, MatchablePlayer } from "./queries";

@@ -6,6 +6,13 @@ import { pickSlotKey } from "../../shared/trades/pick-slots.ts";
 import { ordinal } from "../shared/format.ts";
 import type { Metric } from "../shared/metric-cell.ts";
 import type { TradeBundle } from "./exchange.ts";
+import { pickAdpValue } from "./pick-value.ts";
+import type {
+  PickAdpMatch,
+  PickAdpMiss,
+  PickAdpResult,
+  RookieLadderRung,
+} from "./pick-value.ts";
 import type {
   AdpBoardStats,
   AdpBoardType,
@@ -111,6 +118,14 @@ export type TradeSideContext = {
    * drawer's preview column.
    */
   steepness: number;
+  /**
+   * The rookie class of the same board, in the order those drafts took them —
+   * which *is* the rookie-pick ladder, so a traded pick is priced by the player
+   * it buys. Built once per market for the whole page, since it is a fact about
+   * the board rather than about a trade; a card reads the one matching
+   * {@link adpBoard}. See `./pick-value`.
+   */
+  adpLadder: readonly RookieLadderRung[];
 };
 
 /**
@@ -233,6 +248,58 @@ function adpSampleTitle(stats: AdpBoardStats, board: AdpBoardType): string {
 }
 
 /**
+ * One of this side's picks on the rookie ladder, priced against the same board
+ * and curve its players are — see `./pick-value` for why that is one scale and
+ * not two.
+ */
+function adpPickMatch(
+  ctx: TradeSideContext,
+  pick: TradePickAsset,
+): PickAdpResult {
+  return pickAdpValue({
+    ladder: ctx.adpLadder,
+    pick,
+    // The same map the card names the pick from, so the price and the label
+    // cannot disagree about which pick this is.
+    slot:
+      ctx.pickSlots[pickSlotKey(ctx.leagueId, pick.season, pick.roster_id)] ??
+      null,
+    teams: ctx.teams,
+    pool: ctx.adpPool,
+    steepness: ctx.steepness,
+    ktcPicks: ctx.pickKtc,
+    superflex: ctx.superflex,
+  });
+}
+
+/**
+ * What a pick's price rests on: the rung it read, and the discount that got it
+ * from a pick spendable now to one several drafts out.
+ *
+ * The rookie is named because that is what the number *is* — a reader who sees
+ * 4,800 against a 2028 1st has no way to judge it otherwise, and "≈ the 5th
+ * rookie off this board" is the whole of the reasoning in four words.
+ */
+const ADP_PICK_MISS: Record<PickAdpMiss, (market: string) => string> = {
+  "no-ladder": (market) =>
+    `No rookies on the ${market} ADP board to rank this pick against`,
+  "past-ladder": (market) =>
+    `Deeper than the rookie class the ${market} ADP board priced`,
+  "no-discount": () => "Too far out — KTC carries no row to discount it by",
+};
+
+function adpPickTitle(match: PickAdpMatch, board: AdpBoardType): string {
+  const waiting =
+    match.base === null
+      ? ""
+      : ` · ×${match.discount.toFixed(2)} against ${match.base} on KTC`;
+  const assumed = match.exact ? "" : " (draft order not set)";
+  return `Rookie pick ${match.overall} ≈ ${match.player} on the ${marketName(
+    board,
+  )} board${waiting}${assumed}`;
+}
+
+/**
  * Every metric a trade card's value column can show, in the order the picker
  * lists them: what the haul is worth, then what it is made of.
  *
@@ -247,20 +314,22 @@ function adpSampleTitle(stats: AdpBoardStats, board: AdpBoardType): string {
  * and the format all reach these numbers, and so does the value curve — the
  * drawer's slider reprices the board rather than only its own preview column.
  *
- * The two value metrics decline to answer in **different places**, which is the
- * reason KTC stays in the picker rather than being deleted with the default:
+ * **ADP prices the picks too, which is the half that makes it a whole answer.**
+ * A board of player prices has no row for a draft pick, and the first cut of
+ * this column left them blank on the strength of that — on a board where a
+ * first is routinely the whole trade, which is the same mistake the KTC column
+ * had already been corrected for. It has no row because it doesn't need one:
+ * a rookie pick is a *place in a queue*, and ranking the rookies the selected
+ * drafts averaged puts the 1.01 on the first of them. `./pick-value` is that
+ * ladder; KTC's rows are read for one thing only, the ratio that says what
+ * waiting three drafts costs.
  *
- * - **ADP prices players and has no opinion on picks.** It is an average of
- *   crawled draft positions, so a draft pick is not a row on it — a 2028 1st
- *   gets no cell rather than an em dash, the standing FAAB has on both.
- * - **KTC prices both**, players off its ~500-deep dynasty board and picks off
- *   its `RDP` rows, but only ever as *dynasty* and only ever nationally.
- *
- * Neither total is the other's units, which is why they are two columns and
- * never one blended number: KTC's board is a trade calculator's, ADP's is a
- * curve over draft position anchored to a league's own startable pool. A haul
- * summing one player's KTC price and one pick's ADP would be a scale this app
- * nowhere claims exists.
+ * KTC stays in the picker beside it as the other lens rather than the other
+ * half: it prices the same assets off a *national dynasty* board, where this
+ * reads whichever population the reader selected on whichever market the league
+ * plays in. Neither total is the other's units, which is why they are two
+ * columns and never one blended number — a haul summing a player's KTC price
+ * and a pick's ADP value would claim a scale this app nowhere says exists.
  *
  * A partly-priced haul says so in its hover either way — the same habit as the
  * league card's `priced` of `rostered`, and the reason a total is never a zero
@@ -275,6 +344,11 @@ export const TRADE_METRICS: TradeMetric[] = [
       const { received, adpBoard } = ctx;
       let total = 0;
       let priced = 0;
+      // How many priced lines rest on a stand-in — an unplaced pick taking the
+      // middle of its round, or a KTC row for a tier it doesn't publish.
+      // Counted rather than flagged so the hover can say how much of the total
+      // is an assumption, the same habit the KTC column keeps.
+      let assumed = 0;
 
       for (const id of received.players) {
         const value = adpPlayerValue(ctx, id);
@@ -282,51 +356,77 @@ export const TRADE_METRICS: TradeMetric[] = [
         total += value;
         priced += 1;
       }
+      for (const pick of received.picks) {
+        const match = adpPickMatch(ctx, pick);
+        if (match.value === null) continue;
+        total += match.value;
+        priced += 1;
+        if (!match.exact) assumed += 1;
+      }
 
-      // Players only, which is what makes the denominator honest — see the
-      // `asset` reader below for why a pick is not counted as an asset this
-      // board declined to price.
-      const of = received.players.length;
+      // Players and picks together: the rookie ladder puts them on one scale, so
+      // a haul is priced out of everything in it that could carry a price. FAAB
+      // is not — it is the league's own currency and no draft board has ever had
+      // an opinion on it.
+      const of = received.players.length + received.picks.length;
       const market = marketName(adpBoard);
       return {
         kind: "value",
-        // Zero priced players is not a value of zero, the rule the whole
+        // Zero priced assets is not a value of zero, the rule the whole
         // catalogue rests on: it is a haul these drafts have nothing to say
         // about.
         text: priced > 0 ? total.toLocaleString() : null,
         title:
           priced > 0
-            ? `Draft capital from crawled ${market} ADP · ${priced} of ${of} player${
+            ? `Draft capital from crawled ${market} ADP · ${priced} of ${of} asset${
                 of === 1 ? "" : "s"
-              } priced`
+              } priced${
+                assumed > 0
+                  ? ` · ${assumed} pick${assumed === 1 ? "" : "s"} priced off a stand-in`
+                  : ""
+              }`
             : of === 0
-              ? // A picks-and-FAAB haul. Saying the board holds no picks is more
-                // use than "nothing priced", which reads as a gap in a board
-                // these assets were never on.
-                "ADP prices drafted players; this side received none"
-              : `No player in this haul appears on the ${market} ADP board`,
+              ? // A FAAB-only haul, which no board covers at all. Saying so is
+                // more use than "nothing priced", which reads as a gap in a
+                // board this side's assets were never on.
+                "ADP prices players and rookie picks; this side received neither"
+              : `Nothing in this haul is priced on the ${market} ADP board`,
       };
     },
-    // Per line, on the same board the total was summed on. **Only a player gets
-    // a cell**, and picks join FAAB in returning null rather than an em dash:
-    // ADP is a board of drafted players, so a pick is a category it was never
-    // on, where an unpriced *player* is a genuine gap in a board he could have
-    // been on. Same distinction the KTC reader draws between an unpriced pick
-    // and FAAB, one asset kind further along.
+    // Per line, on the same board and ladder the total was summed on. A player
+    // and a pick each get a cell; **FAAB gets none**, since a dash against it
+    // would report a hole in a board it was never on, where the dash on an
+    // unpriced player or an unreachable pick is a genuine one.
     asset: (ctx, asset) => {
-      if (asset.kind !== "player") return null;
+      const market = marketName(ctx.adpBoard);
 
-      const stats = adpStats(ctx, asset.id);
-      if (stats === null) {
+      if (asset.kind === "player") {
+        const stats = adpStats(ctx, asset.id);
+        if (stats === null) {
+          return { text: null, title: `Not on the ${market} ADP board` };
+        }
         return {
-          text: null,
-          title: `Not on the ${marketName(ctx.adpBoard)} ADP board`,
+          text: adpValue(stats.adp, ctx.adpPool, ctx.steepness).toLocaleString(),
+          title: adpSampleTitle(stats, ctx.adpBoard),
         };
       }
-      return {
-        text: adpValue(stats.adp, ctx.adpPool, ctx.steepness).toLocaleString(),
-        title: adpSampleTitle(stats, ctx.adpBoard),
-      };
+
+      if (asset.kind === "pick") {
+        const match = adpPickMatch(ctx, asset.pick);
+        if (match.value === null) {
+          // The three ways a pick goes unpriced are worth telling apart: two are
+          // facts about the board the panel is showing, which widening it fixes,
+          // and one is a fact about how far out the pick is, which no filter
+          // will move.
+          return { text: null, title: ADP_PICK_MISS[match.reason](market) };
+        }
+        return {
+          text: match.value.toLocaleString(),
+          title: adpPickTitle(match, ctx.adpBoard),
+        };
+      }
+
+      return null;
     },
   },
   {

@@ -25,6 +25,9 @@ const pickKtc = {
   [ktcPickKey("2027", 1, "early")]: { sf: 6000, oneqb: 5400 },
   [ktcPickKey("2027", 1, "mid")]: { sf: 5000, oneqb: 4500 },
   [ktcPickKey("2027", 1, "late")]: { sf: 4000, oneqb: 3600 },
+  // A season further out, at half the early-first row above it — which is the
+  // whole of what KTC is asked for by the ADP column: the ratio, not the price.
+  [ktcPickKey("2028", 1, null)]: { sf: 3000, oneqb: 2700 },
   [ktcPickKey("2028", 3, null)]: { sf: 900, oneqb: 800 },
 };
 
@@ -54,6 +57,7 @@ const adp: Record<string, AdpPlayerPayload> = {
     name: "Joe Burrow",
     position: "QB",
     team: "CIN",
+    rookie: false,
     redraft: { picks: 40, adp: 82, min_pick: 60, max_pick: 108, stdev: 9.4 },
     dynasty: { picks: 30, adp: 28, min_pick: 12, max_pick: 44, stdev: 6.1 },
   },
@@ -62,6 +66,7 @@ const adp: Record<string, AdpPlayerPayload> = {
     name: "Ja'Marr Chase",
     position: "WR",
     team: "CIN",
+    rookie: false,
     redraft: { picks: 50, adp: 28, min_pick: 14, max_pick: 40, stdev: 4.2 },
     dynasty: { picks: 44, adp: 55, min_pick: 30, max_pick: 80, stdev: 7.7 },
   },
@@ -72,10 +77,20 @@ const adp: Record<string, AdpPlayerPayload> = {
     name: "Justin Tucker",
     position: "K",
     team: "BAL",
+    rookie: false,
     redraft: null,
     dynasty: null,
   },
 };
+
+/**
+ * Twelve rookies in the order the selected drafts took them — a 12-team league's
+ * whole first round, so a second-rounder runs off the end of the class the board
+ * priced. The first four sit on exact powers of two against {@link ADP_POOL}.
+ */
+const ladder = [1, 28, 55, 82, 109, 136, 150, 164, 178, 192, 206, 220].map(
+  (adp, i) => ({ adp, name: `Rookie ${i + 1}` }),
+);
 
 const ctx = (
   received: Partial<TradeSideContext["received"]>,
@@ -88,8 +103,16 @@ const ctx = (
   pickKtc,
   superflex,
   leagueId: LEAGUE,
+  // Both seasons, since roster 4's place in its league's draft order is the same
+  // fact whichever year's pick is being looked at, and the tests price picks in
+  // each.
   pickSlots:
-    slot === null ? {} : { [pickSlotKey(LEAGUE, "2027", 4)]: slot },
+    slot === null
+      ? {}
+      : {
+          [pickSlotKey(LEAGUE, "2027", 4)]: slot,
+          [pickSlotKey(LEAGUE, "2028", 4)]: slot,
+        },
   teams: 12,
   adp,
   // The market and the curve are overridden by spreading rather than by two more
@@ -98,6 +121,7 @@ const ctx = (
   adpBoard: "dynasty",
   adpPool: ADP_POOL,
   steepness: 4,
+  adpLadder: ladder,
 });
 
 const cell = (key: string, context: TradeSideContext) =>
@@ -135,31 +159,50 @@ test("TRADE_METRICS", async (t) => {
   await t.test("a haul the board has no average for is an em dash", () => {
     const none = cell("adp", ctx({ players: ["unpriced"] }));
     assert.equal(none.kind === "value" && none.text, null);
-    assert.match(none.title, /No player in this haul appears/);
+    assert.match(none.title, /Nothing in this haul is priced/);
   });
 
-  await t.test("a partly priced haul counts the players it priced", () => {
+  await t.test("a partly priced haul counts what it priced", () => {
     const partial = cell("adp", ctx({ players: ["qb", "unpriced"] }));
     assert.equal(metricPreview(partial), "5,000");
-    assert.match(partial.title, /1 of 2 players priced/);
+    assert.match(partial.title, /1 of 2 assets priced/);
   });
 
-  // ADP is an average of drafted *players*, so a pick is not a row on it. The
-  // denominator counts players alone, or a haul of one player and two picks
-  // would report itself a third priced when it is priced in full.
-  await t.test("picks are not counted as players the board declined", () => {
-    const withPick = cell(
+  // The rookie ladder is what puts a pick on the same scale as a player, so a
+  // haul of both is one sum rather than a player total beside a shrug.
+  await t.test("ADP sums the picks in a haul alongside its players", () => {
+    // Roster 4 picks 3rd, so its 2027 first is rung 3 — a quarter of the peak.
+    const both = cell(
       "adp",
-      ctx({ players: ["qb"], picks: [pick("2027", 1)], faab: 25 }),
+      ctx({ players: ["qb"], picks: [pick("2027", 1)], faab: 25 }, true, 3),
     );
-    assert.equal(metricPreview(withPick), "5,000");
-    assert.match(withPick.title, /1 of 1 player priced/);
+    assert.equal(metricPreview(both), "7,500");
+    // FAAB is on no board at all, so it is not in the denominator either.
+    assert.match(both.title, /2 of 2 assets priced/);
   });
 
-  await t.test("a haul of picks alone says the board holds no picks", () => {
-    const picksOnly = cell("adp", ctx({ picks: [pick("2027", 1)] }));
-    assert.equal(picksOnly.kind === "value" && picksOnly.text, null);
-    assert.match(picksOnly.title, /this side received none/);
+  await t.test("a haul of picks alone is priced, not shrugged at", () => {
+    const picksOnly = cell("adp", ctx({ picks: [pick("2027", 1)] }, true, 3));
+    assert.equal(metricPreview(picksOnly), "2,500");
+  });
+
+  // The class the board priced runs out before a 12-team league's second round.
+  await t.test("a pick deeper than the board's rookie class is unpriced", () => {
+    const deep = cell("adp", ctx({ picks: [pick("2027", 2)] }, true, 3));
+    assert.equal(deep.kind === "value" && deep.text, null);
+  });
+
+  await t.test("a FAAB-only haul says no board covers it", () => {
+    const faabOnly = cell("adp", ctx({ faab: 25 }));
+    assert.equal(faabOnly.kind === "value" && faabOnly.text, null);
+    assert.match(faabOnly.title, /this side received neither/);
+  });
+
+  // An unplaced pick takes the middle of its round and the untiered KTC row, so
+  // the number is real and is not this pick's own — which the hover says.
+  await t.test("a stand-in pick is counted and said out loud", () => {
+    const assumed = cell("adp", ctx({ picks: [pick("2027", 1)] }));
+    assert.match(assumed.title, /1 pick priced off a stand-in/);
   });
 
   await t.test("KTC sums the haul on the league's own board", () => {
@@ -285,11 +328,67 @@ test("per-asset values", async (t) => {
     assert.match(cell!.title, /Not on the dynasty ADP board/);
   });
 
-  // Never covered at all, the standing FAAB has on both value metrics: a dash
-  // against a pick would report a hole in a board picks were never on.
-  await t.test("a pick has no ADP cell rather than an empty one", () => {
+  // The rung is the answer, and naming the rookie is the whole of the reasoning
+  // behind the number — a reader has no other way to judge it.
+  await t.test("a pick is priced by the rookie its rung names", () => {
     const moved = pick("2027", 1);
-    assert.equal(read("adp", ctx({ picks: [moved] }), { kind: "pick", pick: moved }), null);
+    const cell = read("adp", ctx({ picks: [moved] }, true, 3), {
+      kind: "pick",
+      pick: moved,
+    });
+    assert.equal(cell?.text, "2,500");
+    assert.match(cell!.title, /Rookie pick 3 ≈ Rookie 3 on the dynasty board/);
+    assert.doesNotMatch(cell!.title, /draft order not set/);
+  });
+
+  // KTC's only job under this column: the ratio that says what waiting costs.
+  await t.test("a future pick is the same rung discounted by KTC", () => {
+    const moved = pick("2028", 1);
+    // Slot 4 of 12 is an early first, and KTC prices 2028 at half of 2027's
+    // early row — so rung 4's 1,250 comes back as 625.
+    const cell = read("adp", ctx({ picks: [moved] }, true, 4), {
+      kind: "pick",
+      pick: moved,
+    });
+    assert.equal(cell?.text, "625");
+    assert.match(cell!.title, /×0\.50 against 2027 on KTC/);
+  });
+
+  await t.test("an unplaced pick takes the middle of its round and says so", () => {
+    const moved = pick("2027", 1);
+    const cell = read("adp", ctx({ picks: [moved] }), { kind: "pick", pick: moved });
+    assert.match(cell!.title, /Rookie pick 6/);
+    assert.match(cell!.title, /draft order not set/);
+  });
+
+  await t.test("the three ways a pick goes unpriced read differently", () => {
+    const moved = pick("2027", 2);
+    const past = read("adp", ctx({ picks: [moved] }, true, 3), {
+      kind: "pick",
+      pick: moved,
+    });
+    assert.equal(past?.text, null);
+    assert.match(past!.title, /Deeper than the rookie class/);
+
+    const bare = read(
+      "adp",
+      { ...ctx({ picks: [moved] }), adpLadder: [] },
+      { kind: "pick", pick: moved },
+    );
+    assert.match(bare!.title, /No rookies on the dynasty ADP board/);
+
+    const far = pick("2032", 1);
+    const unknown = read("adp", ctx({ picks: [far] }, true, 3), {
+      kind: "pick",
+      pick: far,
+    });
+    assert.equal(unknown?.text, null);
+    assert.match(unknown!.title, /KTC carries no row/);
+  });
+
+  // Never covered at all, on either value column: a dash against FAAB would
+  // report a hole in a board it was never on.
+  await t.test("FAAB has no ADP cell rather than an empty one", () => {
     assert.equal(read("adp", ctx({ faab: 25 }), { kind: "faab", amount: 25 }), null);
   });
 

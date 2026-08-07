@@ -58,6 +58,7 @@ const context = (over: Partial<TradeSideContext> = {}): TradeSideContext => ({
   adpBoard: "redraft",
   adpPool: 108,
   steepness: 4,
+  adpLadder: [],
   ...over,
 });
 
@@ -171,11 +172,13 @@ describe("sideContext", () => {
           name: "A Player",
           position: "RB",
           team: "SF",
+          rookie: false,
           redraft: null,
           dynasty: { picks: 12, adp: 16, min_pick: 8, max_pick: 30, stdev: 4 },
         },
       },
       adpBoard: "dynasty",
+      adpLadder: [{ adp: 4, name: "A Rookie" }],
       adpPool: 60,
       steepness: 4,
     };
@@ -191,6 +194,7 @@ describe("sideContext", () => {
       teams: 10,
       adp: pricing.adp,
       adpBoard: "dynasty",
+      adpLadder: pricing.adpLadder,
       adpPool: 60,
       steepness: 4,
     });
@@ -206,6 +210,7 @@ describe("sideContext", () => {
         teams: null,
         adp: {},
         adpBoard: "redraft",
+        adpLadder: [],
         adpPool: 108,
         steepness: 4,
       },

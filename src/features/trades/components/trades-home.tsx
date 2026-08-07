@@ -28,6 +28,7 @@ import { useFilteredTrades } from "../hooks/use-filtered-trades";
 import { useTradeLeagues } from "../hooks/use-trade-leagues";
 import { useTrades } from "../hooks/use-trades";
 import type { Verdict } from "../incremental";
+import { rookieLadder } from "../pick-value";
 import { DEFAULT_TRADE_COLUMNS, TRADE_METRICS } from "../trade-metrics";
 import { resolveLeagueScope, tradeQueryKey } from "../trade-query";
 import type { AdpPlayerPayload, Trade } from "../types";
@@ -220,6 +221,19 @@ export function TradesHome({ season }: { season: string }) {
     for (const row of rows) byId[row.player_id] = row;
     return byId;
   }, [board.data]);
+
+  // The same board's rookie class in draft order — the ladder a traded pick is
+  // priced off, since a rookie pick is a place in that queue and nothing else
+  // (see `../pick-value`). Both markets, because a card reads the one its own
+  // league plays in and this page spans leagues of both kinds; built once for
+  // the list rather than per card, since it is a reading of the whole board.
+  const adpLadders = useMemo(
+    () => ({
+      redraft: rookieLadder(board.data?.players ?? [], "redraft"),
+      dynasty: rookieLadder(board.data?.players ?? [], "dynasty"),
+    }),
+    [board.data],
+  );
 
   // The one thing on this page that asks who is reading it, and it asks softly:
   // without an account the circle filter is inert and everything else is exactly
@@ -481,6 +495,7 @@ export function TradesHome({ season }: { season: string }) {
             ktc={ktc}
             pickKtc={pickKtc}
             adp={adpByPlayer}
+            adpLadders={adpLadders}
             steepness={adpControls.steepness}
             pickSlots={pickSlots}
             headerRef={headerRef}

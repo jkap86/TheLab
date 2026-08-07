@@ -82,6 +82,7 @@ const adp: Record<string, AdpPlayerPayload> = {
     name: "Christian McCaffrey",
     position: "RB",
     team: "SF",
+    rookie: false,
     redraft: { picks: 30, adp: 31, min_pick: 20, max_pick: 44, stdev: 5.5 },
     dynasty: { picks: 25, adp: 16, min_pick: 8, max_pick: 30, stdev: 4.4 },
   },
@@ -90,9 +91,23 @@ const adp: Record<string, AdpPlayerPayload> = {
     name: "Ja'Marr Chase",
     position: "WR",
     team: "CIN",
+    rookie: false,
     redraft: { picks: 30, adp: 16, min_pick: 4, max_pick: 26, stdev: 3.3 },
     dynasty: { picks: 25, adp: 31, min_pick: 12, max_pick: 48, stdev: 6.6 },
   },
+};
+
+/**
+ * The same board's rookie class in draft order. The league below starts five and
+ * drafts twelve, so rung 3 — where roster 2's 2027 first lands — is an ADP of 31
+ * and a quarter of the peak. Twelve rungs, so a second-rounder runs off the end.
+ */
+const adpLadders = {
+  dynasty: [1, 16, 31, 46, 61, 76, 91, 106, 121, 136, 151, 166].map((adp, i) => ({
+    adp,
+    name: `Rookie ${i + 1}`,
+  })),
+  redraft: [],
 };
 
 /** Roster 2's 2027 pick has a place; nothing else does. */
@@ -161,6 +176,7 @@ function card(over: Partial<Parameters<typeof TradeCard>[0]> = {}): string {
       ktc,
       pickKtc,
       adp,
+      adpLadders,
       steepness: 4,
       pickSlots,
       // The card's one handler. Nothing here presses it — `renderToStaticMarkup`
@@ -438,12 +454,15 @@ describe("what the ADP column says", () => {
     card({ metric: adpMetric, ...over });
 
   test("a side's total is the panel's board, priced on this league's pool", () => {
-    // Roster 1 took McCaffrey (dynasty ADP 16, half the peak over a pool of 60)
-    // and a kicker the board has never heard of; roster 2 took Chase at 31.
+    // Roster 1 took McCaffrey (dynasty ADP 16, half the peak over a pool of 60),
+    // a kicker the board has never heard of, a placed 2027 first (rung 3, a
+    // quarter of the peak) and a 2028 second past the class the board priced.
     const html = adpCard();
     assert.match(html, /5,000/);
-    assert.match(html, /2,500/);
-    assert.match(html, /1 of 2 players priced/);
+    assert.match(html, /7,500/);
+    // Players and picks in one denominator, since the ladder puts them on one
+    // scale; FAAB is on no board and so is in neither half of it.
+    assert.match(html, /2 of 4 assets priced/);
   });
 
   test("the market follows the league's type, not the card's first payload half", () => {
@@ -465,14 +484,28 @@ describe("what the ADP column says", () => {
     assert.doesNotMatch(html, />0<\/span>/);
   });
 
-  test("a pick gets no ADP cell at all, where KTC prices one", () => {
-    // ADP is an average of drafted players, so a pick is a category it was never
-    // on — the standing FAAB has on both columns. KTC's own pick title is what
-    // its absence is checked against.
+  test("a pick is priced by the rookie its rung names", () => {
+    // Roster 2's 2027 first is placed at slot 3, so it is rung 3 of the ladder —
+    // 2,500 — and the hover names the rookie the number is standing on rather
+    // than leaving a reader to take it on trust.
+    const html = adpCard();
+    assert.match(html, /2027 1\.03/);
+    assert.match(html, /Rookie pick 3 ≈ Rookie 3 on the dynasty board/);
+    assert.match(html, /2,500/);
+  });
+
+  test("a pick KTC can't reach is an em dash, and says which wall it hit", () => {
+    // The 2028 second is off both ends: rung 18 of a twelve-rung class, and no
+    // KTC row to discount it by either. The class is the nearer wall.
+    assert.match(adpCard(), /Deeper than the rookie class/);
+  });
+
+  test("FAAB is on no board, so it carries no cell on either column", () => {
+    // KTC's own pick title is what the pick half is checked against; the FAAB
+    // line has no `title` under either metric.
     assert.match(card(), /2027 Early 1st/);
     assert.doesNotMatch(adpCard(), /2027 Early 1st/);
-    // The pick is still *named*: it is the value cell beside it that is absent.
-    assert.match(adpCard(), /2027 1\.03/);
+    assert.match(adpCard(), /\$55 FAAB/);
   });
 });
 

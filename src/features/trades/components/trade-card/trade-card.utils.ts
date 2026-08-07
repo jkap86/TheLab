@@ -124,6 +124,7 @@ export function sideContext(
     teams: pricing.teams,
     adp: pricing.adp,
     adpBoard: pricing.adpBoard,
+    adpLadder: pricing.adpLadder,
     adpPool: pricing.adpPool,
     steepness: pricing.steepness,
   };

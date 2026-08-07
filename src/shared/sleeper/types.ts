@@ -97,6 +97,13 @@ export type SleeperPlayer = {
   fantasy_positions: string[] | null;
   status: string | null;
   sport: string | null;
+  /**
+   * Completed NFL seasons — 0 for a rookie. Typed as `unknown`-adjacent rather
+   * than `number | null` on purpose: it is absent for team defences and Sleeper
+   * documents nothing about it, so the sync checks the type before storing it
+   * rather than trusting this declaration.
+   */
+  years_exp?: number | null;
   [key: string]: unknown;
 };
 

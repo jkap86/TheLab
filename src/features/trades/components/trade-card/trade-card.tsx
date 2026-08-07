@@ -95,6 +95,7 @@ export const TradeCard = memo(function TradeCard({
   ktc,
   pickKtc,
   adp,
+  adpLadders,
   steepness,
   pickSlots,
   onOpenLeague,
@@ -116,6 +117,9 @@ export const TradeCard = memo(function TradeCard({
     // since the panel's fetch answers redraft and dynasty side by side and a
     // rookie is a first-round asset in one and undrafted in the other.
     adpBoard: leagueAdpBoard(league),
+    // The ladder for that market, chosen rather than built: it is a reading of
+    // the whole board, so the page memoises both and a card takes one.
+    adpLadder: adpLadders[leagueAdpBoard(league)],
     // The pool the value curve is anchored to. `leagueAdpPool` already falls
     // back to a typical lineup depth for a league with no slots on file; the
     // team count needs a fallback of its own, since `adpValue` floors a pool of

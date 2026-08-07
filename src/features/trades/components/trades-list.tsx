@@ -5,8 +5,10 @@ import { useWindowVirtualizer } from "@tanstack/react-virtual";
 
 import type { ManagerLeague } from "@/shared/manager";
 
+import type { RookieLadderRung } from "../pick-value";
 import type { TradeMetric } from "../trade-metrics";
 import type {
+  AdpBoardType,
   AdpPlayerPayload,
   KtcValue,
   PlayerSummary,
@@ -89,6 +91,7 @@ export function TradesList({
   ktc,
   pickKtc,
   adp,
+  adpLadders,
   steepness,
   pickSlots,
   headerRef,
@@ -113,6 +116,11 @@ export function TradesList({
    * and not when the list does.
    */
   adp: Record<string, AdpPlayerPayload>;
+  /**
+   * That board's rookie class in draft order, per market — the ladder a traded
+   * pick is priced off. Both travel because a card picks by its own league.
+   */
+  adpLadders: Record<AdpBoardType, readonly RookieLadderRung[]>;
   /** The panel's value curve, in halvings across a league's startable pool. */
   steepness: number;
   /** Draft slots for the picks whose league has set an order, keyed per pick. */
@@ -248,6 +256,7 @@ export function TradesList({
               ktc={ktc}
               pickKtc={pickKtc}
               adp={adp}
+              adpLadders={adpLadders}
               steepness={steepness}
               pickSlots={pickSlots}
               onOpenLeague={onOpenLeague}

@@ -1,5 +1,6 @@
 import type { ManagerLeague } from "@/shared/manager";
 
+import type { RookieLadderRung } from "../../pick-value";
 import type { TradeMetric } from "../../trade-metrics";
 import type {
   AdpBoardType,
@@ -73,6 +74,12 @@ export type TradeCardPricing = {
   adp: Record<string, AdpPlayerPayload>;
   /** Which of those markets this trade's league is in — see `leagueAdpBoard`. */
   adpBoard: AdpBoardType;
+  /**
+   * The same board's rookie class in draft order — the rookie-pick ladder a
+   * traded pick is priced off. Picked from the page's two by `adpBoard`, since
+   * a rookie's place in the queue is a different place in each market.
+   */
+  adpLadder: readonly RookieLadderRung[];
   /** Teams × starting slots, the pool the ADP value curve is anchored to. */
   adpPool: number;
   /** Halvings across that pool — the panel's own slider, list-wide. */
@@ -125,6 +132,8 @@ export type TradeCardProps = {
   ktc: Record<string, KtcValue>;
   pickKtc: Record<string, KtcValue>;
   adp: Record<string, AdpPlayerPayload>;
+  /** Both markets' rookie ladders; the card reads the one its league plays in. */
+  adpLadders: Record<AdpBoardType, readonly RookieLadderRung[]>;
   steepness: number;
   pickSlots: Record<string, number>;
   /**

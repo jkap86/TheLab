@@ -6,7 +6,7 @@ export { decodeTradeCursor, encodeTradeCursor } from "./cursor";
 export type { TradeCursor } from "./cursor";
 export {
   lookupKtc,
-  lookupKtcPicks,
+  lookupKtcPickBoard,
   lookupPlayers,
   clearTradeEnrichmentCaches,
 } from "./enrich";
