@@ -3,12 +3,12 @@ import { describe, test } from "node:test";
 
 import {
   ADP_PEAK,
+  ADP_RANGE_PRESETS,
   DEFAULT_ADP_ROUNDS,
   DEFAULT_ADP_STEEPNESS,
   adpBoardRows,
   adpNarrowingCount,
   adpQueryString,
-  adpRangePresets,
   adpValueQueryString,
   boardLabel,
   defaultAdpControls,
@@ -577,27 +577,29 @@ describe("boardLabel", () => {
   });
 });
 
-describe("adpRangePresets", () => {
-  const values = (season: string) => adpRangePresets(season, SEASON).map((p) => p.value);
-
-  test("a relative preset is only offered on a board that can contain today", () => {
-    // "The last 30 days" of a finished season is an empty board, and a chip that
-    // reliably returns nothing is worse than no chip.
-    assert.deepEqual(values("2026"), ["all", "30d", "90d"]);
-    assert.deepEqual(values("2024"), ["all"]);
+describe("ADP_RANGE_PRESETS", () => {
+  test("every named preset has a label, and rangeLabel reads it from here", () => {
+    // The chip row is gone and this table is what is left of the presets: the
+    // *names*. Every value it carries has to be one `rangeLabel` can be asked
+    // about, since that lookup is unguarded — a preset value with no row here is
+    // a crash rather than a fallback.
+    for (const preset of ADP_RANGE_PRESETS) {
+      assert.equal(rangeLabel({ preset: preset.value, from: null, to: null }), preset.label);
+    }
   });
 
-  test("twelve months survives only where it is a real cut", () => {
-    // Inside one season it is the whole season with extra steps.
-    assert.equal(values("2026").includes("12m"), false);
-    assert.deepEqual(values("all"), ["30d", "90d", "12m", "all"]);
-  });
-
-  test("the unbounded preset names the season it covers", () => {
-    const inSeason = adpRangePresets("2026", SEASON).find((p) => p.value === "all")!;
-    assert.equal(inSeason.label, "All of 2026");
-    assert.equal(inSeason.chip, "All 2026");
-    assert.equal(adpRangePresets("all", SEASON).at(-1)!.label, "All time");
+  test("the two counts the counter stores as named presets are named here", () => {
+    // `lookbackRange` writes 30 and 90 into the named presets and every other
+    // count into `lookback`. Both spellings have to read back as the same
+    // sentence, or one window would have two names depending on how it was set.
+    assert.equal(
+      rangeLabel({ preset: "lookback", from: null, to: null, days: 30 }),
+      rangeLabel({ preset: "30d", from: null, to: null }),
+    );
+    assert.equal(
+      rangeLabel({ preset: "lookback", from: null, to: null, days: 90 }),
+      rangeLabel({ preset: "90d", from: null, to: null }),
+    );
   });
 });
 

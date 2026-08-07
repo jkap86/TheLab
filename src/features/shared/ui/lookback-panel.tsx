@@ -22,78 +22,6 @@ import {
 } from "../range-domain";
 
 /**
- * The window at rest: the density at a glance, with nothing to grab.
- *
- * It exists because the full control is behind a press, and the argument for
- * showing the drafts in the first place was that they answer *where the market
- * is* before you choose a window — an answer given only after a press is an
- * answer given too late. So the resting line carries a hint of it: the same
- * bars, the same domain, lit inside the window and dim outside it.
- *
- * It is drawn by calling the same functions the panel's channel calls rather
- * than by being handed measurements, so the two cannot disagree about where a
- * month sits — and it takes no props the panel doesn't.
- *
- * `aria-hidden`, because it is a picture of what the row beside it already says
- * in words, and the control it previews is one press away and reachable.
- */
-export function RangeSparkline({
-  months,
-  live,
-  today,
-  bounds,
-  className = "",
-}: {
-  months: readonly MonthBar[];
-  live: boolean;
-  today: string;
-  bounds: { from: string | null; to: string | null };
-  className?: string;
-}) {
-  const domain = useMemo(
-    () => scrubDomain(months, densityThrough(months, today, live)),
-    [months, today, live],
-  );
-  const bars = useMemo(() => monthBars(months, domain), [months, domain]);
-  const peak = bars.reduce((max, b) => Math.max(max, b.drafts), 0);
-
-  const drawn = drawnBounds(bounds, domain);
-  const left = fractionOf(domain, drawn.from) * 100;
-  const right = fractionOf(domain, drawn.to) * 100;
-
-  return (
-    <span aria-hidden className={`relative block overflow-hidden ${className}`}>
-      {bars.map((bar) => {
-        if (bar.drafts === 0) return null;
-        const { left: barLeft, width } = monthExtent(bar.month, domain);
-        const touched =
-          bar.month >= drawn.from.slice(0, 7) && bar.month <= drawn.to.slice(0, 7);
-        return (
-          <span
-            key={bar.month}
-            style={{
-              left: `${barLeft * 100}%`,
-              width: `calc(${width * 100}% - 1px)`,
-              height: `${Math.max(12, (bar.drafts / peak) * 100)}%`,
-            }}
-            className={`absolute bottom-0 rounded-t-[1px] ${
-              touched ? "bg-active/45" : "bg-foreground/15"
-            }`}
-          />
-        );
-      })}
-      {/* The window itself, in case the bars can't say it — a narrow window over
-          a quiet stretch lights nothing, and "no bars lit" and "nothing selected"
-          must not look the same. */}
-      <span
-        style={{ left: `${left}%`, width: `${right - left}%` }}
-        className="absolute bottom-0 h-px bg-active/70"
-      />
-    </span>
-  );
-}
-
-/**
  * The ADP board's window as a sentence: **last N days, ending on a date that
  * defaults to today** — a counter instrument in place of the brush this
  * replaced.
@@ -121,6 +49,16 @@ export function RangeSparkline({
  *     not fetch three boards; the channel and caption re-read per keystroke
  *     (local and free), and the store moves on blur or Enter. The ± keys and
  *     every chip commit at once, since a press is a finished value.
+ *
+ * **It is now the whole of the control, and that is what makes the lenses
+ * load-bearing rather than an alternative spelling.** It spent a while behind a
+ * press, with a row of relative presets on the line that opened it — so the
+ * everyday windows were chips and this was where you went for the rest. Both
+ * are gone ({@link AdpRangeControl}), which leaves exactly one path to each of
+ * them: "last 30 days" is `30` in the day lens, the whole season is that lens
+ * left **empty** (the placeholder is an em dash and the label says so), and a
+ * historical cut is the date lens. Anything that removes a way *into* one of
+ * those three is removing the only one.
  *
  * All the meaning lives in `lookback.ts` (which storage a write lands in, what
  * the lenses show, which draft the key means); this file lays out pixels and

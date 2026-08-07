@@ -31,6 +31,7 @@ import type { ReactNode } from "react";
 export function Nameplate({
   children,
   trailing,
+  seat = "edge",
 }: {
   /**
    * What the plate names — the heading's own contents, so a caller that needs a
@@ -45,9 +46,18 @@ export function Nameplate({
    * a long name shortens rather than pushing it off the plate.
    */
   trailing?: ReactNode;
+  /**
+   * Where the plate seats itself. `edge` is a plate alone on a card's top edge,
+   * positioning itself against a `relative` card. `row` is a plate sharing that
+   * edge with another part, laid out by a flex row the caller owns — see
+   * {@link SEAT}.
+   */
+  seat?: keyof typeof SEAT;
 }) {
   return (
-    <div className="lab-nameplate absolute left-3.5 top-0 z-10 flex max-w-[calc(100%-3rem)] items-center gap-2 rounded-[5px] py-1 pl-2 pr-3">
+    <div
+      className={`lab-nameplate ${SEAT[seat]} flex items-center gap-2 rounded-[5px] py-1 pl-2 pr-3`}
+    >
       <span
         aria-hidden="true"
         className="lab-billet-rail h-4 w-0.5 shrink-0 rounded-sm"
@@ -67,6 +77,28 @@ export function Nameplate({
     </div>
   );
 }
+
+/**
+ * The two seats, and the reason there are two.
+ *
+ * A plate alone on an edge can position itself, and capping it at
+ * `calc(100% - 3rem)` is what leaves the card's trailing corner clear. **That
+ * cap cannot express an edge with a second part on it**: what a name may take is
+ * whatever the part beside it doesn't, and a `max-width` has no way to ask. So a
+ * caller with two parts on one edge lays them out as a flex row it positions
+ * itself, and the plate is a `min-w-0` item in it — which is what lets the name
+ * truncate against a ledge whose width is its own contents (the leagues list's
+ * record ledge).
+ *
+ * `pointer-events-auto` comes with that seat because the row it sits in has to
+ * be `pointer-events-none`: a row spanning the whole edge would otherwise take
+ * the presses that belong to the card underneath it, everywhere the two plates
+ * aren't.
+ */
+const SEAT = {
+  edge: "absolute left-3.5 top-0 z-10 max-w-[calc(100%-3rem)]",
+  row: "pointer-events-auto min-w-0",
+} as const;
 
 /**
  * The class a control on the plate wears, so the two callers' buttons cannot

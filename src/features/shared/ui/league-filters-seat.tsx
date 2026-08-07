@@ -42,6 +42,22 @@
  * title bar is a row of parts rather than a page: at the pill's own size it out-
  * weighed the sheet's title, and it has to line up with a 28px field rather than
  * with a plate's edge, so it keeps the round corners and drops a step.
+ *
+ * `rail` leads the manager tabs' subject rail — the *what these leagues are*
+ * half of a row whose other half is *who is in them*. It is the two shares keys'
+ * exact box, and being exact is the whole of it: three keys on one milled face,
+ * one of them a step larger, is a row that reads as a mistake before it reads as
+ * a hierarchy. So it takes their 10px type, their padding, and — the one place a
+ * seat reaches past shape — their `.lab-chip-sm` wall.
+ *
+ * **That thickness is the exception this table's own rule has to make room
+ * for.** Everywhere else the seats differ only in the edge they meet, because
+ * everywhere else the key is the only part of its kind in view; here it is the
+ * first of three on one surface, and a wall a pixel prouder than its neighbours'
+ * is the same fault as a corner key that overhangs. It changes nothing about
+ * what the part *says*: the cyan face still means narrowing, the badge still
+ * carries the count, and `.lab-chip-on.lab-chip-sm` in `globals.css` is what
+ * keeps the lit state at that wall too.
  */
 export const SEATS = {
   free: {
@@ -62,6 +78,15 @@ export const SEATS = {
     key: "gap-1.5 rounded-full py-1 pl-2.5 pr-3 text-[11px] leading-none",
     icon: "h-3 w-3",
     badge: "px-1 py-px text-[10px]",
+  },
+  rail: {
+    // `lab-chip-sm` rides in the shape string because that is where the trigger
+    // composes it — see the note above for why this seat is allowed the wall.
+    key: "lab-chip-sm gap-1.5 rounded-full px-2 py-[3px] text-[10px] leading-none",
+    icon: "h-3 w-3",
+    // A step under `bar`'s, since the key it sits on is a step under `bar`'s
+    // too: a badge is read against the word beside it, not at a fixed size.
+    badge: "px-1 py-px text-[9px]",
   },
 } as const;
 

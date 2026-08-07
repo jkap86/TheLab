@@ -1834,7 +1834,8 @@ stops holding, a comment saying it does would not have caught it.
       than sitting beside either. The face is therefore padded at the **top
       only**, and each region holds its own inset off the walls.
     - **The league's name rides the top edge on a nameplate** (`.lab-nameplate`),
-      the device the manager plate's filters key already uses on its bottom edge.
+      the device the lineup checker's plate already uses on its bottom edge for
+      its filters key.
       A part rising out of a card is the strongest "one object" mark there is,
       and it is nearly free vertically — it occupies margin the list was already
       spending as a gap. It is a *plate* and not a chip (rectangular, no press
@@ -2168,44 +2169,44 @@ stops holding, a comment saying it does would not have caught it.
     trigger). The digits *roll* to a new value rather than swapping
     (`RollingNumber`) — the count is the needle the window control moves, and a
     digit that travels is what says the two are connected.
-  - **The window is one line, and the lookback counter floats over the panel
-    when it is opened.** The old strip and its three attendant rows — calendar
-    rail, month axis, caption — were ~112px of a ~224px block, half of it,
-    above the board the drawer is opened to read; a window is chosen once and
-    then read, which is the same case the filter row below answers. Three
-    things make the collapse affordable rather than merely shorter, and each is
-    easy to undo:
-    - **The resting line keeps the density's argument.** The strip earned its
-      place by saying where the drafts *are* before you pick a window, and
-      behind a press it would say that only afterwards — so the trigger carries
-      a `RangeSparkline`, the same bars over the same domain through the same
-      functions as the panel's own channel, lit inside the window and dim
-      outside it. The hint is what earns the press, not decoration on it.
-    - **It floats; it does not push.** Expanding in place would shove the
-      filters, the curve and the board down by more than the collapse just
-      saved, which is the reader back where they started one press later. It is
-      a raised face over the pinned block's own ground — machined now, a graded
-      face with a specular top edge, which the old scrubber forbade by painting
-      its scrim and bubble in the panel's flat colour by hand; the counter's
-      channel and lenses carry their own grounds, so the face is free to grade.
-      It owes the three behaviours any floating control here owes: one open at
-      a time (`openPanel`, shared with the filter tray — an open tray under the
-      float is a control you can see and can't reach), a press outside
-      dismisses, and **Escape closes the innermost thing that is up**, or one
-      keypress takes the whole drawer with it.
-    - **The presets stay on the resting line, outside the float.** They fill
-      the counter's fields, but they are also the whole of what most readers
-      want here, so "last 30 days" has to stay the single press it was — and
-      drawing them inside the panel as well would be two controls for one
-      selection. The one anchor no fixed chip can carry, "since the NFL draft",
-      lives inside the panel as its ◆ key instead.
-    Two details in that line. It **wraps rather than compresses**: everything in
-    the trigger is `shrink-0` except the sparkline, so its min-content width
-    decides the break and a phone puts the presets on a second 18px line instead
-    of truncating the one thing on the row that answers the question. And it
-    carries `boardLabel` and **not** `rangeSummary` — the dates behind a
-    preset's name belong inside the control, where the lenses are sitting on
-    them; out here the name is exact and stays true as time passes.
+  - **The window is the one part that is expanded, and it is the exception this
+    whole list is otherwise about.** Every other row here got shorter by not
+    spending height on a control reporting that nothing is set. This one went
+    the other way — it was a line (a trigger carrying `boardLabel` and a
+    `RangeSparkline`, with the counter floating over the board on a press, and a
+    row of relative presets beside it) and is now `LookbackPanel` seated
+    permanently in the block. The collapse's arithmetic was never wrong; what it
+    left out is *what* was collapsed. A window is the board's **population**, so
+    setting one is the first thing the drawer is opened for, and the presets
+    beside the trigger made that look answered — a reader who found "30 days"
+    sufficient never learned there was an instrument behind the chevron. The
+    board below pays the height and scrolls. Four consequences:
+    - **The resting line went with the press, not merely the float.** Its two
+      halves were the panel's own channel drawn at 16px and the panel's own
+      caption; beside an open panel they are the same two facts twice, one edit
+      from disagreeing — which is why the sparkline was drawn by calling the
+      channel's functions rather than being handed measurements, and why
+      deleting it costs nothing that argument was protecting.
+    - **The presets went because the counter *is* them.** "Last 30 days" is `30`
+      in the day lens, "All of 2026" is that lens left empty, and a historical
+      cut is the date lens — so each of the three has exactly one way in now,
+      and any edit that removes one removes the only one. Two chips survive
+      inside the panel because neither is a fixed window: `Today` re-opens the
+      end, and ◆ `Draft` pins the start at a date that moves every April, the
+      one anchor no chip and no typed number could ever carry.
+    - **It is seated, not raised over anything.** The floating panel earned its
+      cast shadow by being *over* the rows below it; nothing floats now, so the
+      face keeps its grade — the channel is a cut, and a cut is read against the
+      face it is cut into — and trades the drop shadow for a wall. The three
+      behaviours a floating control owed go with the float: `openPanel` is down
+      to the filter tray alone (`AdpDrawerPanel` is a union of one, which is
+      what keeps a second floating control from arriving as its own boolean),
+      and **Escape closes the innermost thing that is up** now means the tray.
+    - **The block is taller and the phone still fits.** ~360px of an 844px
+      screen against ~200, with the two lens groups wrapping to their own lines
+      below `sm` — the panel's own `flex-wrap`, unchanged from when it floated.
+      That is the cost, stated rather than optimised away; trimming it is a
+      trade against the instrument, not a free win.
   - **The filter row shows only what is narrowing the board.** Seven chips
     permanently reading "All" is seven controls' worth of height reporting that
     nothing is set. `FilterRow` renders the narrowing ones plus one `Filters`
@@ -2246,9 +2247,10 @@ stops holding, a comment saying it does would not have caught it.
     its own column picker instead, where the ADP metrics come one per board.
   - **The keys are `.lab-chip`, not the drawer's own outlined `Segment`.** This
     was the last place in the app still drawing flat bordered buttons for
-    something you press; the season keys, the window presets and the filters
-    trigger all wear the raised pill and `.lab-chip-on` for lit, the same
-    grammar as the trigger that opened the drawer.
+    something you press; the season keys, the window counter's own keys (± ,
+    `Today`, ◆ `Draft`) and the filters trigger all wear the raised pill and
+    `.lab-chip-on` for lit, the same grammar as the trigger that opened the
+    drawer.
   - **The board's column headings are `sticky`** inside the one region that
     scrolls, painting the panel's own ground rather than a translucent one. It
     is a free consequence of the block above shrinking: the headings are what a
@@ -2269,21 +2271,24 @@ stops holding, a comment saying it does would not have caught it.
   - **Changing season drops the window.** The same dates against a different
     season are a window that mostly isn't there, and an empty board is a worse
     answer than the new season whole.
-  - **Which presets exist depends on the season** (`adpRangePresets`). A relative
-    preset is measured back from today, so it only means something on a board that
-    can *contain* today — "the last 30 days" of 2024 is an empty board, and a chip
-    that reliably returns nothing is worse than no chip. Twelve months goes
-    further: inside one season it is the season with extra steps, so it survives
-    only on the all-seasons board. A finished season is left with one preset, and
-    the row isn't drawn at all — a row of one is no choice, and the counter's own
-    fields are the control there.
+  - **A relative window only means something on a board that can contain
+    today**, and with the preset chips gone that is a fact the *counter* carries
+    rather than a list to filter. There used to be an `adpRangePresets` deciding
+    which chips a season could honestly offer — "the last 30 days" of 2024 is an
+    empty board, twelve months inside one season is the season with extra steps
+    — and it went with the chips. What replaces it is that the lenses say what
+    they mean on any season: a day count is measured back from the **end date**
+    in the lens beside it, so a historical board narrows within itself instead
+    of reaching for a today it does not contain, and `Today` is a key rather
+    than an assumption.
   - **The strip is the season's, not the calendar's.** `/api/adp/density` returns
     `(season, month, drafts)` and the drawer slices to the season it is showing;
     `densityThrough` then runs the domain to today only for a board still being
     drafted, since a strip running from a finished season to today is mostly
-    blank. The resting sparkline and the panel's channel read one domain through
-    one set of functions (`range-domain`), so the hint at rest and the readout
-    inside the panel cannot disagree about where a month sits.
+    blank. It is drawn once now, in the panel's channel (`range-domain` is still
+    where the domain maths lives — it served the resting sparkline and the
+    channel together, which is what kept the two from disagreeing about where a
+    month sat; there is one reader left and the seam is worth keeping).
 - **The window is a sentence — last N days, ending on a date that defaults to
   today — and the sentence replaced the brush.** `RangeScrubber` was a brush
   over the draft histogram: two handles, a sweep, a pan, a slop threshold and a
@@ -2292,15 +2297,20 @@ stops holding, a comment saying it does would not have caught it.
   isolation, and together they read as an instrument that needs a manual —
   while nearly every window a reader actually wants is "how far back should the
   average reach", which is a number, not a gesture. `LookbackPanel` asks it as
-  one: a day-count lens with ± keys, a date lens for the end, and the presets
-  filling the fields. Six things in it are decisions, not styling:
+  one: a day-count lens with ± keys, and a date lens for the end. It **is** the
+  control now — the preset chips that used to fill its fields from outside are
+  gone with the collapse, so these lenses are the only way to state a window.
+  Six things in it are decisions, not styling:
   - **The two fields are a view over the stored range, never a second store.**
     `lookback.ts` (pure, tested) maps both ways: every `AdpRange` reads as
     `{days, end}`, and a write lands in the storage its meaning asks for. A
-    window ending **today is relative** — 30 and 90 land on the *named* presets
-    so the resting line's chips light exactly, and any other count is the
-    `lookback` preset carrying its `days` — so it rolls forward with the
-    calendar, which is the promise the named presets always made. A **hand-set
+    window ending **today is relative** — 30 and 90 land on the *named* presets,
+    and any other count is the `lookback` preset carrying its `days` — so it
+    rolls forward with the calendar, which is the promise the named presets
+    always made. (Those two counts landing on names used to be what lit the
+    resting line's chips exactly; with no chips it is about *naming* — the two
+    spellings resolve to the same bounds, and `ADP_RANGE_PRESETS` is the one
+    table that says "Last 30 days".) A **hand-set
     end freezes** the window into `custom`, because a reader who named a day
     meant that day. The same two lenses show both, so the caption states which
     the board is doing ("rolls forward daily" / "ends Jun 30, 2026").
@@ -2327,7 +2337,7 @@ stops holding, a comment saying it does would not have caught it.
     everything else is paint, which is what retired the gesture machinery
     (`scrubTargetAt`, `panWindow`, `edgeBounds` and the axis-tick thinning went
     with the component, and `range-domain` keeps only the domain-and-bars maths
-    the sparkline and the channel share).
+    the channel reads).
   - **The number previews; the release commits** — the steepness slider's rule,
     for the same reason. A committed window re-fetches the board, so typing
     "104" must not fetch three boards on the way: the channel and the caption
@@ -2341,20 +2351,20 @@ stops holding, a comment saying it does would not have caught it.
     start bound, and the − key counting it down to a one-day board would be a
     press nobody meant; the + key from empty starts at 1, because "narrow this
     a little" has to start somewhere.
-  - **The presets stayed and the handles went.** The chips fill the fields
-    rather than flying handles, so `ADP_RANGE_PRESETS` still doesn't offer
-    `custom` — it is what a hand-set end date produces now, as it was what a
-    moved handle produced before. The relative presets keep earning their place
-    for the reason they always did ("Last 90 days" is still the last 90 days
-    tomorrow), and they keep their resting-line seat and `12 mo` spelling. The
-    unbounded preset names what it covers (`All 2026` / `All time`), and
-    `boardLabel` folds it into the season everywhere the board is named at all
-    — "2026 · All time" would be claiming two contradictory things.
-    `rangeLabel` still names the window alone and now speaks the counter's own
-    grammar for the general case ("Last 45 days"); `rangeSummary` is narrower
-    still — it belongs *inside* the panel and nowhere else, since naming a
-    window's edges is worth the width only where the lenses are sitting on
-    them.
+  - **What is left of the presets is the naming, and that is not their
+    leftovers.** The handles went first and the chips followed;
+    `ADP_RANGE_PRESETS` is now a label table and nothing else, and it still
+    doesn't offer `custom` or `lookback` — neither is a mode you enter, both are
+    what the lenses *produce*, and both name themselves from the dates or the
+    count they carry. The four that stay named earn it for the reason they
+    always did: "Last 90 days" is still the last 90 days tomorrow, where the
+    dates behind it would have to be re-read. `boardLabel` folds an unbounded
+    window into the season everywhere the board is named at all — "2026 · All
+    time" would be claiming two contradictory things — `rangeLabel` names the
+    window alone and speaks the counter's own grammar for the general case
+    ("Last 45 days"), and `rangeSummary` is narrower still: it belongs *inside*
+    the panel and nowhere else, since naming a window's edges is worth the width
+    only where the lenses are sitting on them.
 - **A modal that refocuses itself must not depend on its callers' callbacks.**
   `AdpDrawer`'s open effect held `onClose` in its deps, and every caller passes a
   fresh arrow each render — so every keystroke re-ran it and `panel.focus()` took
@@ -2366,8 +2376,8 @@ stops holding, a comment saying it does would not have caught it.
   sends `outlook: null`, and the KTC route lets a failed solve cost the split but
   not the value. `useAdpDensity` is the same call one layer out: a failure leaves
   `months` empty rather than tearing the control down, because the bars are the
-  only part of the window control that needs them — the presets, the lenses and
-  the draft key all work on dates alone, so the channel degrades to an empty slot
+  only part of the window control that needs them — the lenses and the draft key
+  work on dates alone, so the channel degrades to an empty slot
   and the caption says the activity is unavailable. Ask what a read is
   *load-bearing* for before letting its failure propagate; here it decorates a
   control that still functions without it.
@@ -2455,9 +2465,16 @@ stops holding, a comment saying it does would not have caught it.
   absent are different answers), and a second card drawn to say that would be a
   second chance for one of them to drift. Its week goes in `scope`, which is the
   slot that names what a record was counted over, and its league filters are the
-  manager tabs' own dialog in the same corner of the same plate — held in local
-  `useState` rather than a provider, since a provider is what three *routes*
-  sharing one selection need and this tool is one page.
+  manager tabs' own dialog, seated in this plate's bottom-right corner — held in
+  local `useState` rather than a provider, since a provider is what three
+  *routes* sharing one selection need and this tool is one page.
+  **It is the only page in that corner now, which makes it the reason the seat
+  exists rather than a second user of it.** The manager tabs moved their key onto
+  the subject rail, where it leads the row that also asks who is in these
+  leagues; this page has no such rail — one list, one filter — so the corner is
+  still the right seat here for the reason it was built. Keep `SEATS.corner` and
+  `FilterSeat` alive for it, and read the plate's own note for what holds them
+  up.
 
   **The one thing that aggregation changes on the card is which instrument the
   readout wears, and that is a prop rather than something the readout works
@@ -2500,8 +2517,41 @@ stops holding, a comment saying it does would not have caught it.
   this card's too: a league card is not a line of a table, it is the whole of
   what one league has to say with four ranked columns across it, and depth is
   what sorts those columns into an order. The two lists read as one instrument
-  now, which is what a reader crossing between the two tools experiences. Four
+  now, which is what a reader crossing between the two tools experiences. Five
   things in it are decisions rather than styling:
+  - **The top edge carries two plates, which is the one place this card goes
+    further than the trade card.** That readout was in the *head*, between the
+    chevron and the stat columns — the one part of the card that has to stay
+    quiet, since the columns are what a list a hundred rows long is scanned on,
+    and two numbers in front of them were read as a fifth. So the record and the
+    standing hold the trailing corner on a plate of their own (`RecordLedge`),
+    opposite the name: the card's two corners holding its two identities, which
+    league this is and how it is going. Four things hold it up:
+    - **It is a housing, not a second name.** Same plate, but the record keeps
+      the `.lab-readout` cut it already wore, and a cut into a lit face is
+      machining — so the part reads as an instrument label rather than a label
+      with a name on it. The standing beside it is `.lab-engraved`, the trade
+      card's own finish and for its arithmetic: one of these per card down the
+      whole list, where a numeral in the accent at that count is wallpaper.
+    - **The standing is the rank alone** — `2nd`, not `2nd of 12`. The
+      denominator is what a stat column's rank cell spends its width on, and here
+      it would come straight out of the league name's truncation budget for a
+      fact the four columns state four times over. It survives on the hover and
+      in an `sr-only`, where it costs no width: a bare ordinal is a rank out of
+      nothing, and this is the one reading of the card with no hover to fall back
+      on.
+    - **The edge is one flex row, not two placed parts.** A plate that positions
+      itself can only cap its own width, and what the name may take is whatever
+      the ledge doesn't — a width that is its own contents. As two items of one
+      row the negotiation is the layout's, which is what holds at 390px. The row
+      is `pointer-events-none` and each plate takes them back, or a press landing
+      between the two hits the row instead of the toggle underneath. This is what
+      `Nameplate`'s `seat` prop is: `edge` is a plate alone on an edge (the trade
+      card), `row` is one sharing it.
+    - **Absent is not zero**, the card's existing rule surviving the move: no
+      record and no standing draws no plate rather than an empty housing, and a
+      preseason league draws the record without a rank, since `0-0` is a true
+      count where a rank there would place a season nobody has played.
   - **An expanded card is still `.lab-plate`, and the slab makes that swap read
     better rather than making it redundant.** A slab is an *object in a list* —
     a wall you could pick it up by, a static specular sweep — and none of that
@@ -2522,6 +2572,13 @@ stops holding, a comment saying it does would not have caught it.
     same two edges, which is also what keeps the columns from stepping sideways
     as a card opens — and below `sm` the columns divide the head's own width, so
     the two insets have to *sum* the same as well as ending in the same place.
+    **The ledge's own trailing inset is that arithmetic one edge up**, and it is
+    per-state for the same reason: the plates are siblings of the *card*, so the
+    offset is measured from the card's box while the ledge has to land against
+    the *face's* trailing edge — `right-5` at rest, where 6px of that gutter is
+    the wall, and `right-[15px]` open, where the face is a bordered box at full
+    width. The leading edge needs no pair, since a slab's padding is bottom and
+    trailing only.
   - **The name is the button and the head carries no `role`.** `role="button"`
     on the head takes presentational children, which flattened four stat columns
     and their screen-reader labels into one string; the nameplate's real
@@ -2615,8 +2672,9 @@ stops holding, a comment saying it does would not have caught it.
     they are its tail rather than a note over it. `overscroll-contain` moved onto
     the two lists with the scrolling, so a flick at the end of either doesn't
     carry on into the page behind the card.
-- **The header is one plate with the filters' key seated in its bottom edge, and
-  it got there in two moves worth reading together.** It was one card stacking
+- **The header is one plate with a seat for a filters' key in its bottom edge,
+  and it got there in three moves worth reading together.** It was one card
+  stacking
   identity, the season, the record and both control pills, which on a phone was
   ~590px of a 700px screen — the controls wrapping onto their own lines because
   they shared a flex row with the season. The first move split it by what a thing
@@ -2624,7 +2682,24 @@ stops holding, a comment saying it does would not have caught it.
   triggers. The second retired the dock, because once the board's trigger went up
   into the app bar it was a ~50px trough seating a single control — and this card
   is *pinned*, so that was 50px of league rows covered on all three tabs for a
-  part pressed once a session. Four things hold up what is left:
+  part pressed once a session.
+
+  **The third move took the key off this plate on the manager tabs, and what it
+  says about the two before it is that they were solving the wrong problem.**
+  Both were about finding the key a *cheaper* home; neither asked whether the
+  plate was its home at all. Three of the plate's four corners are readouts, so
+  the one control on it was seated among facts — and the subject rail directly
+  below was already a filter row with an obvious hole at its leading end. The
+  key leads that rail now (see {@link SubjectRail}), the plate keeps its three
+  readout corners, and the 16px the seat cost — 12 of body padding, 4 of overhang
+  margin — goes back to a list this card is pinned over.
+
+  **The seat itself stays, because the lineup checker still uses it**: that page
+  has one list, no subject rail and nothing else to seat a key on, so the corner
+  is right there for the same reason it was ever built. What follows is why it is
+  built the way it is, and it is live code rather than history — the rules below
+  are what a second page in that shape would have to keep. Four things hold it
+  up:
   - **The material says which part is which**, the same raised/recessed grammar
     as the app bar: the plate is a milled face (a specular sweep, the cyan rail),
     its corner tabs are wells because they are readouts, and the filters' key is
@@ -2653,10 +2728,11 @@ stops holding, a comment saying it does would not have caught it.
     gutter beside them: a right-hand reserve wide enough for the key left ~190px
     of a 390px screen for two pills that fit on one line before it.
 - **The plate's record readout is where the filter bar used to be.** The two rows
-  of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger is
-  the key in the plate's bottom edge — it sat in the dock, beside `AdpTrigger`,
-  until the board moved into the app bar and the dock followed it out — and the
-  space they freed carries the manager's season across the
+  of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger has
+  moved twice since — into the dock beside `AdpTrigger`, into this plate's own
+  bottom edge when the board went up to the app bar and the dock followed it out,
+  and finally off the plate altogether on the manager tabs, to the head of the
+  subject rail — and the space they freed carries the manager's season across the
   filtered leagues: a dial for the win percentage, a proportion bar for the wins
   and losses behind it. The `Rostered` cell that used to stand in a rail of its
   own is folded onto the record's line, since how many of the leagues on screen
@@ -2860,6 +2936,44 @@ stops holding, a comment saying it does would not have caught it.
     the question wrongly first. The two payloads are the other tabs' resources
     behind a shared cache, fetched when the panel opens or a subject is selected —
     both naming the same query keys, so the two gates cost one request.
+- **The league filters lead that rail, which is what makes it the page's filter
+  row rather than one of two.** The key was machined into the header plate's
+  bottom-right corner — 20px, the smallest type on the card, under the countdown,
+  diagonally furthest from the list it narrows — and what made it hard to find
+  was its *company* rather than its size: it was the one control among three
+  readouts, while the row below already asked the sibling question and had a hole
+  at its leading end. The two are applied one after the other in
+  `useFilteredLeagues` and the plate's scope line has always named them in that
+  order, so the row now reads in it: **what these leagues are · who is in them ·
+  what survives.** Five things hold it up:
+  - **They stay two controls, not one dialog with two tabs.** A league rule is an
+    attribute of the league (`qb+sf ≥ 2`); a subject is a person or player in it.
+    One dialog over both would suggest a single selection, which is the same
+    argument that keeps the ADP board a third control elsewhere again. What is
+    shared is the *surface* — which is what a reader was looking for.
+  - **`SEATS.rail` is the two shares keys' exact box, and it reaches past shape
+    to do it.** Every other seat differs only in the edge it meets, because
+    everywhere else the key is the only part of its kind in view; here it is the
+    first of three on one milled face, so it takes their 10px type, their padding
+    *and* their `.lab-chip-sm` wall. A key standing a pixel prouder than its
+    neighbours is the same fault as a corner key that overhangs.
+  - **`.lab-chip-on.lab-chip-sm` is what keeps that true when it lights.**
+    `.lab-chip-sm` thins the wall and `.lab-chip-on` re-declares it, and the lit
+    rule is the later of the two — so every small chip in the app stood proud the
+    moment it started narrowing something. Written as the intersection, it
+    outranks both, so neither has to move. It fixes four call sites that already
+    had the flaw and were never noticed, which is the tell for how a row hides
+    it: one part seated wrong reads as a state.
+  - **A seam parts the groups, not spacing.** The row wraps below `sm`, and
+    spacing does not survive a wrap — the same reason the count and the two doors
+    are one flex item. `RailSeam` is that groove written once, since the row now
+    has two of them.
+  - **The count is against the account, not the league-filtered list.** With one
+    control on the rail, `N of M` named a population stated nowhere on screen;
+    with both, the denominator is the whole account and the numerator is what the
+    two leave between them — one number answering the row it is on. Unnarrowed it
+    is the bare total, since a denominator restating its numerator is the thing
+    the plate keeps having to relearn.
 - **That control is a `.lab-slab` of its own above the heading billet, and it
   spent a while as a second storey *of* that billet — which is the cheaper
   construction and the wrong one here.** The economics of the storey are real and
@@ -3404,8 +3518,9 @@ stops holding, a comment saying it does would not have caught it.
   - **A number still lives in exactly one place.** The gap moved here out of the
     roster half's prose, which used to carry `+41.72 on the bench` above the list
     it belongs to. It sits beside the two totals it is the difference between, and
-    what is left in the prose is the part neither the table nor the readout can
-    say — the names to start and sit. It takes amber, the app's existing
+    it is now the *only* place the panel states the distance from the lineup
+    Sleeper has seated — the names that used to follow it went with the rest of
+    that prose (see `roster-detail` below). It takes amber, the app's existing
     needs-attention tone, because it is the one figure here that is a verdict
     rather than a count.
   - **The dial's arc is the rank, not the points.** A full ring is the best roster
@@ -3687,9 +3802,10 @@ stops holding, a comment saying it does would not have caught it.
   says — at the cost of ~64px of a half that is ~155px wide on a phone, before a
   single player was listed. **A panel driven by a selection should not restate the
   selection**; the same reasoning took the `Optimal <total>` chip under it, which
-  is the number the standings are ranked on and states in the column beside it.
-  What is left in that summary is what the table can't say: the points on the
-  bench and who to move. Pass the same string to
+  is the number the standings are ranked on and states in the column beside it —
+  and, eventually, the `start … · sit …` line under that, which restated the two
+  lists it sat over rather than any one number. That head is now the coverage
+  caveat and nothing else. Pass the same string to
   `TeamAvatar`'s `label` so its fallback initial matches the name shown next to it.
 - **Rows in that panel give the name its own line.** Both lists inside it —
   `standings` and `roster-detail` — put the team or player name alone on the first
@@ -3759,11 +3875,25 @@ stops holding, a comment saying it does would not have caught it.
 - **`roster-detail` shows the optimal lineup only** — there is no current/optimal
   toggle. The current lineup is a click away in Sleeper; what this tool adds is
   the best lineup available, so the starters list *is* that lineup and the bench
-  follows it (promoted rows highlighted, sat rows dimmed). The gap against what
-  the team is actually starting is stated in words — `+X on the bench · start … ·
-  sit …` — rather than made something to find by toggling. `optimal.ts` still
-  computes `current` / `current_points`: `points_left`, `start` and `sit` are
-  differences against them, so they are load-bearing, not dead.
+  is everyone it doesn't seat. **The diff against what the team is actually
+  starting is not drawn at all**, which took two things that each looked like the
+  panel's own subject and were the *other* lineup wearing its clothes. The
+  `start … · sit …` prose above the list named players who were already on rows a
+  few pixels below, in the section that answers where each of them should be — the
+  same restatement the team plate and the `Optimal <total>` chip were removed for,
+  and the argument holds harder here because the sentence was a second spelling of
+  the two lists rather than of one number. And a tinted promoted starter beside a
+  dimmed sat bench player made a section's rows unequal on an axis the section
+  isn't about: this half is the lineup to hold, so which list a player is in is
+  the whole of the advice, and the marking only reported how far the team
+  currently is from taking it. What survives as a *number* is the gap, in the
+  readout strip, where it sits beside the two totals it is the difference between
+  — which is also why `optimal.ts` still computes `current` / `current_points`:
+  `points_left` is a difference against them and is on screen. `start` and `sit`
+  ride the contract still, computed and tested, with no client drawing them.
+  The one thing left above the list is `LineupCoverage`, the caveat naming slots
+  the solver didn't recognise — kept because nothing else on screen can raise it,
+  where everything else up there was already said below.
 - **Every roster row carries two numbers, not one: `start` and `bench`.** A
   season total answers the wrong question on both sides of the roster. A backup
   quarterback projected 361 points behind two better starters is worth *nothing* —
