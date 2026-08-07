@@ -542,7 +542,17 @@ export function SubjectRail({ view }: { view: SubjectView }) {
             match={subjects.match}
             onMatch={(match) => setSubjects({ ...subjects, match })}
             onToggle={(subject) => setSubjects(toggleSubject(subjects, subject))}
-            loading={!rosters.data && !members.data}
+            // Loading until *each* read has settled — with data or with an
+            // error — never "until either lands". The search is one field over
+            // both kinds, so a panel that reported settled on the faster read
+            // answered half the question with confidence: a leaguemate name
+            // typed while only the rosters were in drew "Nobody by that name",
+            // which is exactly what fetching both up front exists to prevent.
+            // The error halves keep a failed read from hanging the panel on
+            // "Reading rosters…" and swallowing the error line below it.
+            loading={
+              (!rosters.data && !rosters.error) || (!members.data && !members.error)
+            }
             error={rosters.error ?? members.error}
           />
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
 import { ADP_DRAWER_EXIT_MS } from "./adp-drawer.constants.ts";
 import {
@@ -62,8 +62,14 @@ export function useAdpDrawerLifecycle({
   const panelRef = useRef<HTMLDivElement>(null);
 
   const [openPanel, setOpenPanel] = useState<AdpDrawerPanel | null>(null);
-  const togglePanel = (which: AdpDrawerPanel) =>
-    setOpenPanel((current) => (current === which ? null : which));
+  // Stable, so a handler built on it survives the drawer's own re-renders —
+  // the memo'd filter bar reads it through one, and a steepness drag re-renders
+  // this hook's caller on every notch.
+  const togglePanel = useCallback(
+    (which: AdpDrawerPanel) =>
+      setOpenPanel((current) => (current === which ? null : which)),
+    [],
+  );
 
   // The drawer is on its way out: closed as far as everything else is
   // concerned, still mounted so `adp-drawer-out` has something to play on.

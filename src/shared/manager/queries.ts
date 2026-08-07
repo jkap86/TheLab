@@ -3,6 +3,7 @@ import { pool } from "@/shared/db";
 import { LEAGUE_TYPE_SQL } from "./adp";
 import type { AdpBoardType } from "./adp-filters";
 import { ownedDraftPicks } from "./draft-picks";
+import { standingScore } from "./rank";
 import type { TradedPick } from "./draft-picks";
 import type {
   LeagueDetail,
@@ -112,18 +113,15 @@ const CHOPPED_LEAGUE_TYPE = 3;
 /**
  * Whether the league is a chopped one, read off its settings blob.
  *
- * Regex-guarded before the cast for the house reason: Sleeper omits its defaults
- * and doesn't promise types, so one league holding junk in `type` must not fail
- * the whole query. The fallback is redraft, which is not chopped either way —
- * the same shape and the same fallback as `LEAGUE_TYPE_SQL` in `./adp`.
+ * Composed from `LEAGUE_TYPE_SQL` the way `DYNASTY_BOARD_SQL` is in `./adp` —
+ * the guard, the cast and the redraft fallback are that fragment's, so a change
+ * to how a type is read reaches the chopped test too rather than leaving it on
+ * an older spelling while five reads gate on it.
  *
  * Parenthesised as a whole because it ends in a comparison and is interpolated
  * into a larger boolean.
  */
-const CHOPPED_LEAGUE_SQL = `(
-  (CASE WHEN l.settings->>'type' ~ '^[0-9]+$'
-        THEN (l.settings->>'type')::int ELSE 0 END) = ${CHOPPED_LEAGUE_TYPE}
-)`;
+const CHOPPED_LEAGUE_SQL = `(${LEAGUE_TYPE_SQL} = ${CHOPPED_LEAGUE_TYPE})`;
 
 /**
  * True where the manager fielded a team in the league — holds a roster now, or
@@ -703,9 +701,14 @@ export async function getLeagueDetail(
     };
   });
 
-  // Standings order: most wins, then most points for as the tiebreaker.
+  // Standings order, through the one ranking rule rather than a second
+  // spelling of it: `standingScore` names this order as the thing it must
+  // agree with (the ranks route folds the same two numbers), and a tie rule
+  // changed there has to reach the panel's rows too — `orderByProjectedPoints`
+  // leans on this order as its stable tiebreak.
   teams.sort(
-    (a, b) => b.record.wins - a.record.wins || b.fpts - a.fpts,
+    (a, b) =>
+      standingScore(b.record.wins, b.fpts) - standingScore(a.record.wins, a.fpts),
   );
 
   return {

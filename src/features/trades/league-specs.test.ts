@@ -167,4 +167,42 @@ describe("leagueSpecs", () => {
       assert.ok(spec.title.length > spec.label.length, `${spec.key} has no title`);
     }
   });
+
+  // The gauge's caption is what the value is a count *of*, and it is the whole
+  // reason the run is gauges rather than tokens: on a phone there is no hover to
+  // ask what `1QB + SF` counts. An empty one is a hole in the bezel rather than
+  // a shorter label, so every spec has to carry one.
+  test("every gauge names the unit its value counts", () => {
+    const l = league({
+      settings: { type: 2, best_ball: 1 },
+      roster_positions: ["QB", "SUPER_FLEX", "TE", "BN"],
+      scoring_settings: { bonus_rec_te: 0.5 },
+    });
+    const specs = leagueSpecs(l);
+    assert.equal(specs.length, 6);
+    for (const spec of specs) {
+      assert.ok(spec.caption.length > 0, `${spec.key} has no caption`);
+      // A caption that restated its value would be spending a line on nothing —
+      // "Best ball" over "Best ball" is the one this rule was written against.
+      assert.notEqual(
+        spec.caption.toLowerCase(),
+        spec.label.toLowerCase(),
+        `${spec.key} restates itself`,
+      );
+    }
+  });
+
+  // It sits above a value in a housing the run is read *across*, so a caption
+  // long enough to wrap is taller than the value it names and the gauges stop
+  // lining up. Held to the longest that fits the narrowest gauge.
+  test("keeps every caption short enough not to wrap a gauge", () => {
+    const l = league({
+      settings: { type: 2, best_ball: 1 },
+      roster_positions: ["QB", "SUPER_FLEX", "TE", "BN"],
+      scoring_settings: { bonus_rec_te: 0.5 },
+    });
+    for (const spec of leagueSpecs(l)) {
+      assert.ok(spec.caption.length <= 8, `${spec.key}'s caption is too long`);
+    }
+  });
 });

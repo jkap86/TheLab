@@ -568,7 +568,12 @@ export const TRADE_METRICS: TradeMetric[] = [
                   ? ` · ${assumed} pick${assumed === 1 ? "" : "s"} priced off a stand-in row`
                   : ""
               }`
-            : `Nothing in this haul is priced on the ${boardName(superflex)}`,
+            : of === 0
+              ? // A FAAB-only haul, which no board covers at all — the ADP
+                // cell's own branch, kept in step: "nothing priced" reads as a
+                // gap in a board this side's assets were never on.
+                "KTC prices players and rookie picks; this side received neither"
+              : `Nothing in this haul is priced on the ${boardName(superflex)}`,
       };
     },
     // Per line, the same board the total above was summed on. FAAB alone returns
