@@ -3834,9 +3834,15 @@ stops holding, a comment saying it does would not have caught it.
     trough**: the floor is deliberately lighter than `.lab-groove`, because 6px
     type on near-black is a caption nobody reads, and the sink comes from the
     inset shadow and the lit lower lip instead. And **what stands a cut off its
-    face is the surround, not more darkness** — a dark hairline above the recess
-    and a lit one below it, outside it, which is the lip a real milling leaves;
-    deepening the fill instead just makes a darker patch of the same surface.
+    face is the depth of the sink and the lit lip at its far edge, not darkness
+    in the fill** — a darker floor alone is a darker patch of the same surface.
+    A worked surround (a dark hairline above the recess, a brighter line below,
+    a contact shadow — the lip a real milling leaves) was drawn and then taken
+    off: it reads, and it is more than one part per card in a windowed list of
+    forty thousand needs. One lit line under the cut is what is left, and it is
+    the recess's own exit edge rather than a lip around it. Reach for the sink
+    and the lip before the surround; darkness *outside* a cut is how it starts
+    reading as a border.
   - **`.lab-ledge` is that grammar carrying a heading rail**, and it is the one
     place the bar's material left the bar: the stat columns' headings are a
     machined billet the list scrolls *under*. It is `.lab-key`'s construction

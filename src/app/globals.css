@@ -807,11 +807,16 @@ body {
        and catching its far wall is what says "recess"; a dark box without one is
        a hole. That is why the lip brightens rather than the fill darkening when
        the part needs to stand out more.
-     - **The surround is outside the recess and is what stands it off the
-       face.** A dark hairline above the cut and a lit one below it, plus a short
-       contact shadow — the lip a real milling leaves, catching the light on the
-       side away from the tool. Without it the trough reads as a darker patch of
-       the same surface rather than as a part cut out of it.
+     - **One lit line outside the cut, and no worked surround.** The part shipped
+       briefly with a machined lip around it — a dark hairline above the recess,
+       a brighter line below, and a short contact shadow, which is what a real
+       milling leaves. It reads, and it was more than this needed: a card in a
+       windowed list of forty thousand carries one of these, and the deeper sink
+       above already separates the part from the face. What is left is the single
+       lit line under the cut, which is the recess's own exit edge rather than a
+       lip drawn around it. If it ever stops standing off the face, deepen the
+       sink and brighten the lower lip before reaching for the surround again —
+       adding darkness *outside* a cut is how it starts reading as a border.
      - **The gauge's gloss is one diagonal.** A window is a cut with glass over
        it, and a second highlight is a reflection nobody can place. It carries
        `position`/`overflow` for `.lab-lens`'s reason: the gloss is a
@@ -828,9 +833,7 @@ body {
       inset 0 1px 0 rgba(0, 0, 0, 0.9),
       inset 0 -1.5px 0 rgba(255, 255, 255, 0.13),
       inset 0 0 0 1px rgba(0, 255, 229, 0.07),
-      0 -1px 0 rgba(0, 0, 0, 0.65),
-      0 1px 0 rgba(255, 255, 255, 0.13),
-      0 3px 6px -3px rgba(0, 0, 0, 0.7);
+      0 1px 0 rgba(255, 255, 255, 0.09);
   }
   .lab-gauge {
     position: relative;
