@@ -1,5 +1,10 @@
 import type { ManagerLeague } from "@/shared/manager";
 
+// The module path rather than `features/shared`'s barrel — a leaf part either
+// way, but the card's own imports are all module paths and a barrel here would
+// be the one arrow pointing at everything that barrel re-exports.
+import { NAMEPLATE_BUTTON, Nameplate } from "@/features/shared/ui/nameplate";
+
 import { leagueSpecs } from "../../league-specs";
 import {
   SPEC_RUN,
@@ -36,12 +41,12 @@ import { formatTradeDate, formatTradeTime } from "./trade-card.utils.ts";
  * The league's name, on a plate straddling the card's top edge — and the card's
  * one focusable control.
  *
- * It renders as a **sibling of the slab, never a child**: `clip-path` clips its
- * whole subtree, so a plate inside the notched face would be cut off at the
- * exact edge it exists to straddle. The overhang is padding on the wrapper
- * rather than a negative margin, which is what keeps it inside the box
- * `TradesList` measures — a part hanging outside that box drifts every card
- * below it down the list.
+ * The plate itself is {@link Nameplate}, in `features/shared` since the leagues
+ * list draws the same part: its box, its rail and the heading's type are shared,
+ * and the *control* inside it is not, because the two open different things. What
+ * that shared part is careful about — living outside the notched face's clip, and
+ * hanging into padding rather than out of the card's measured box — is written
+ * there.
  *
  * **It is the button, though the whole card is the target.** Pressing a card
  * opens that league's standings and rosters, and the obvious implementation —
@@ -65,36 +70,19 @@ export function TradeNameplate({
   name: string;
 }) {
   return (
-    <div className="lab-nameplate absolute left-3.5 top-0 z-10 flex max-w-[calc(100%-3rem)] items-center gap-2 rounded-[5px] py-1 pl-2 pr-3">
-      <span
-        aria-hidden="true"
-        className="lab-billet-rail h-4 w-0.5 shrink-0 rounded-sm"
-      />
-      {/* `h2`: the page's own title is a visually-hidden `h1` (the ledge is what
-          leads it on screen), so a card is the next level down and a 3 here
-          skipped one. The button sits *inside* the heading rather than around
-          it, since a `<button>` takes phrasing content and a heading is flow —
-          the same constraint that keeps the card's own press target off a
-          `<button>` entirely.
-
-          It is set at 12px rather than the 13px it wore on the card's face — one
-          step down for the plate, not two. At 11px, tracked out to `0.14em` and
-          dimmed to 85%, the name was the hardest thing on the card to read: the
-          plate is small, so the letters were doing the work the surface should,
-          and a display face at that size loses more to tracking than it gains.
-          `leading-4` is spelled rather than inherited because `truncate` clips
-          what overflows, and a line box that depends on an ancestor is a
-          clipped ascender waiting for someone to set one. */}
-      <h2 className="min-w-0 truncate font-display text-xs font-bold uppercase leading-4 tracking-[0.1em] text-foreground [text-shadow:0_1px_0_rgba(255,255,255,0.14),0_-1px_1px_rgba(0,0,0,0.9)]">
-        <button
-          type="button"
-          title="Standings and rosters for this league"
-          className="max-w-full cursor-pointer truncate rounded-[3px] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-active"
-        >
-          {name}
-        </button>
-      </h2>
-    </div>
+    <Nameplate>
+      {/* The button sits *inside* the heading rather than around it, since a
+          `<button>` takes phrasing content and a heading is flow — the same
+          constraint that keeps the card's own press target off a `<button>`
+          entirely. */}
+      <button
+        type="button"
+        title="Standings and rosters for this league"
+        className={NAMEPLATE_BUTTON}
+      >
+        {name}
+      </button>
+    </Nameplate>
   );
 }
 

@@ -2,11 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
-import {
-  LIST_ROW_HOVER,
-  LIST_ROW_SURFACE,
-  RowSheen,
-} from "@/features/shared";
+import { NAMEPLATE_BUTTON, Nameplate, RowSheen } from "@/features/shared";
 // The module path rather than that barrel: the panel is a subtree deep enough
 // that re-exporting it there would ship it to every page importing anything
 // shared — see `ui/league-detail/index.ts`.
@@ -24,8 +20,25 @@ import { MetricColumns } from "./metric-column";
 import { Chevron } from "./ui";
 
 /**
- * One league in the leagues list: a dense, glassy row that reads at a glance and
+ * One league in the leagues list: a machined card that reads at a glance and
  * opens the full standings-and-rosters panel on click.
+ *
+ * **It is built like a trade card, which is a deliberate move away from the
+ * list's glass.** It wore `LIST_ROW_SURFACE` — the tool cards' glass held to a
+ * row's height, the surface the share cards and the lineup rows still wear — and
+ * the trades board's own card left that surface first, for an argument that turns
+ * out to be this card's too: a league card is not a row of a table, it is the
+ * whole of what one league has to say, four columns deep, and depth is what sorts
+ * those columns into an order. So it is `.lab-slab` now — the app bar's
+ * corner-lit block at card scale, with a wall running down *and* right, a
+ * chamfered leading and trailing corner and a brushed face — its name rides out
+ * of the top edge on a {@link Nameplate}, and its record sits in a `.lab-readout`
+ * rather than being set in bold text on glass. The two lists read as one
+ * instrument now, which is what a reader crossing between the manager tool and
+ * the trades board actually experiences.
+ *
+ * What it does *not* copy is anything about the trade card's contents: this card
+ * ranks a league where that one prices a haul. The stat columns are unchanged.
  *
  * The record line names where this manager stands in the league — the one ranking
  * the card states outright, because it is what the record beside it means.
@@ -39,17 +52,19 @@ import { Chevron } from "./ui";
  * the heading rail up there too, which is why this card renders numbers and no
  * pickers of its own.
  *
- * **An expanded card does not *hold* the detail panel, it *becomes* it.** The
- * row wore the list's glass while the panel inside it was a machined plate, so
- * one league was two materials nested four surfaces deep — glass, plate, trough,
- * row — before a player name was drawn, with the plate's own inset sitting
- * inside the card's and both coming out of the one track that has nowhere else
- * to go (the name). So expanding swaps this row's surface for `.lab-plate` and
- * the panel renders straight onto that face: one instrument, one inset, and the
- * app bar's grammar at card scale — the raised part is the one being worked in,
- * which is also why the rail lights and the hover lift goes away (a several-
- * hundred-pixel panel that rises under the pointer is a card pretending to still
- * be a row).
+ * **An expanded card does not *hold* the detail panel, it *becomes* it — and
+ * that is why the slab stops at the press.** The row used to wear glass while
+ * the panel inside it was a machined plate, so one league was two materials
+ * nested four surfaces deep before a player name was drawn; the correction was to
+ * swap the surface on expand, and it survives the slab intact. A slab is an
+ * *object in a list* — a wall you could pick it up by, a brushed face, a static
+ * specular sweep — and none of those is what a several-hundred-row instrument
+ * wants: the sweep would be a diagonal wash across a page of standings, and the
+ * wall's drop-shadow would be repainted around a box the reader is scrolling
+ * inside. So an open card is `.lab-plate`, the panel renders straight onto that
+ * face, and what the reader sees is one instrument rather than a card holding
+ * one. Both surfaces are machined, so the swap is now a change of *part* rather
+ * than of material — which is what it always meant.
  *
  * **An open card takes the screen, which is why it doesn't hold its own open
  * state.** Expanding pulls the card up under the app bar, pins it there, unpins
@@ -114,7 +129,7 @@ export function LeagueCard({
   onToggle: () => void;
 }) {
   const ref = useRef<HTMLLIElement>(null);
-  // The panel this row's `aria-expanded` is about. Named, so "expanded" points
+  // The panel this card's `aria-expanded` is about. Named, so "expanded" points
   // at something a reader can be taken to rather than being a state with no
   // object.
   const panelId = useId();
@@ -230,152 +245,162 @@ export function LeagueCard({
   const record = league.record;
   const standing = ranks?.standing ?? null;
   const ctx: MetricContext = { league, ranks, ktc, adp, weeks, valuedAt };
+  // The surface follows `mounted`, not `expanded`: a card that snapped back to a
+  // slab while its panel was still collapsing would be two halves of one gesture
+  // running at different speeds — and the hover lift returning under the pointer
+  // mid-collapse reads as the card jumping. It is the plate until the panel is
+  // gone.
+  const surface = mounted ? OPEN : REST;
 
   return (
+    // The nameplate hangs off the card's top edge, so it is a sibling of the
+    // surface and the overhang is this element's padding — a part reaching
+    // outside the box would be clipped by nothing here and measured by nobody,
+    // which is not true one list over (see {@link Nameplate}).
     <li
       ref={ref}
-      // The surface and the ceiling follow `mounted`, not `expanded`: a card
-      // that snapped back to the list's glass while its panel was still
-      // collapsing would be two halves of one gesture running at different
-      // speeds — and the hover lift returning under the pointer mid-collapse
-      // reads as the row jumping. It is the plate until the panel is gone.
-      className={`${SCROLL_OFFSET} ${
-        mounted
-          ? `${OPEN_SURFACE} ${OPEN_BOX}`
-          : `${LIST_ROW_SURFACE} ${LIST_ROW_HOVER}`
-      }`}
+      className={`${SCROLL_OFFSET} pt-3 ${mounted ? OPEN_BOX : "relative"}`}
     >
-      <RowSheen lit={expanded} />
-
-      {/* The whole row is the toggle, not just the name half. The stat columns
-          have nothing to press of their own — the pickers live in the heading
-          rail above the list — so the right half of every card was inert while
-          looking exactly as pressable as the left, and a click there did
-          nothing.
-
-          It is a `role="button"` div rather than a `<button>` because the row
-          holds the metric columns, which are divs: flow content inside a button
-          is invalid, and this is the way to make the whole row one press target
-          without either rewriting a shared component's markup or dropping the
-          league name's heading. The keyboard half is therefore hand-written —
-          Enter and Space, the two keys a native button answers.
-
-          `relative` is what keeps the sheen behind this rather than over it — an
-          absolutely positioned sibling paints above static content whatever the
-          source order. */}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onToggle}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          // Space scrolls the page otherwise, which is what a native button
-          // suppresses for us.
-          event.preventDefault();
-          onToggle();
-        }}
-        aria-expanded={expanded}
+      <LeagueNameplate
+        name={league.name}
+        status={league.status}
+        expanded={expanded}
         // Only while the panel is in the tree: it is mounted on expand and
         // unmounted a beat after the collapse, and a reference to an id that
         // isn't in the document is a broken relationship rather than an absent
         // one.
-        aria-controls={mounted ? panelId : undefined}
-        // `shrink-0` because the open card is a flex column with a ceiling: the
-        // head is the one part of it that must not be compressed to make room,
-        // since the league's name is what says which panel this is.
-        className="relative flex w-full shrink-0 cursor-pointer flex-col items-stretch gap-3 px-4 py-3 pl-5 text-left sm:flex-row sm:items-center sm:gap-4"
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <Chevron open={expanded} size="md" />
-          <StatusDot status={league.status} />
-          {/* The display face, as on a tool card — Orbitron is wider than the
-              body face, so the size drops a step to keep a long league name from
-              truncating any sooner than it did. */}
-          {/* `h2`, not `h3`: the only heading above this on a manager page is
-              the plate's `h1`, so a level 3 skipped a level in the outline. */}
-          <h2 className="min-w-0 flex-1 truncate font-display text-sm font-semibold tracking-tight">
-            {league.name}
-          </h2>
-          {record && (
-            <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground/70">
-              {formatRecord(record)}
-            </span>
-          )}
-          {/* The standing rides with the record rather than occupying one of the
-              four stat slots: it is what the record *means* in its league, so
-              reading it anywhere else is reading half the fact. That is why it
-              is no longer in the metric catalogue — a slot pointed at it would
-              be a second copy of what this line already says. Absent, not
-              zeroed, before a game is played, the same rule the rank cells
-              keep. */}
-          {standing && (
-            <span
-              title={`#${standing.rank} of ${standing.of} by record`}
-              className="shrink-0 text-xs font-medium tabular-nums text-foreground/45"
-            >
-              {ordinal(standing.rank)}
-              <span className="text-foreground/30"> of {standing.of}</span>
-            </span>
-          )}
-        </div>
+        panelId={mounted ? panelId : undefined}
+        onToggle={onToggle}
+      />
 
-        {/* Numbers only, at every width: the heading rail pinned above the list
-            names these columns and is the only thing that moves them, because
-            the same four words repeated down a hundred rows is what made a
-            list-wide selection read as a per-card one. */}
-        <MetricColumns metrics={LEAGUE_METRICS} ctx={ctx} columns={columns} />
-      </div>
+      {/* The wall, and the face standing on it — the trade card's construction,
+          and the chamfer goes on both layers because a wall that turns two
+          corners shows a square one wherever the clip doesn't follow it. Open,
+          the wall is nothing but a link in the height chain: the plate below
+          carries its own thickness as a plain shadow, having nothing to clip it.
 
-      {/* No seam and no inset of its own: the panel is on this card's face, so
-          what used to be a border between two surfaces would now be a line drawn
-          across one. The padding under it belongs to the panel, which is where
-          the container query that sizes it can see a width.
+          Every link from here down is `0 1 auto` with `min-h-0`, which is what
+          makes a short panel exactly as tall as its contents while only one that
+          would overrun the cap shrinks into it. `flex-1` anywhere on this chain
+          would stretch every open card to the full screen whatever it had to
+          say. */}
+      <div className={`flex min-h-0 flex-col ${surface.wall}`}>
+        <div className={`relative flex min-h-0 flex-col ${surface.face}`}>
+          {/* Only on the plate. A slab has a specular sweep of its own and a
+              cyan bloom under it, so a second travelling band would be the one
+              part of the card claiming to be glass — and the rail RowSheen
+              draws is what the nameplate's own already says. Open, it is worth
+              having for the half it does that the plate can't: the lit rail
+              marks which league is the one being worked in. */}
+          {mounted && <RowSheen lit={expanded} />}
 
-          This is the box the card's ceiling is spent through, and it takes no
-          `flex-1`: a flex item's default is `0 1 auto`, so a short panel — a
-          league still loading, or a shallow one — is exactly as tall as its
-          contents, and only one that would run past the card's ceiling shrinks
-          into it. `flex-1` would stretch every open card to the full screen
-          whatever it had to say. `min-h-0` is what lets that shrink happen at
-          all, since a flex item's floor is its content size otherwise.
+          {/* The whole head is the press target, not just the name half. The
+              stat columns have nothing to press of their own — the pickers live
+              in the heading rail above the list — so the right half of every
+              card was inert while looking exactly as pressable as the left.
 
-          **It clips; it no longer scrolls.** One scroll box over the whole panel
-          carried the readout strip and both column headings away with the rows,
-          so the numbers a reader had scrolled to were unlabelled and the team
-          the roster belongs to unnamed. The scrolling moved down into the two
-          halves, which each keep their own heading fixed over their own list
-          (see {@link LeagueDetailPanel}) — so what is left here is the clip the
-          collapse animation needs, since a `0fr` grid row only hides what its
-          item is willing to cut off.
+              It carries no `role` and no `tabIndex`: the *button* is the league's
+              name on the plate, for the reason the trade card's is. `role="button"`
+              here would take presentational children, flattening four stat
+              columns and their screen-reader labels into one string; the
+              nameplate's real `<button>` announces the league and its expanded
+              state, and this is the mouse affordance over the same toggle.
 
-          The radius is repeated here for the same reason it always was: a
-          clipping box squares its corners otherwise, and the last roster row
-          would paint across the card's rounded bottom. */}
-      {/* The height is animated through `grid-template-rows`, 0fr to 1fr, which
-          is the one way to transition to a height nobody knows: the panel's is
-          whatever the league's standings and rosters come to, and it changes
-          again when the detail read resolves — so a measured pixel height would
-          be measured at the wrong moment. The grid row resolves against the
-          content on every frame instead, which also means the cap above wins
-          without arithmetic: once the card is at its ceiling, 1fr *is* the
-          space left, and the transition simply runs to that.
+              `shrink-0` because the open card is a flex column with a ceiling:
+              the head is the one part of it that must not be compressed to make
+              room, since the columns are what the reader was reading.
 
-          Opacity rides along so a panel that has barely opened isn't a sliver
-          of legible text, and the whole thing is `motion-reduce:transition-none`
-          — a reader who asked for less motion gets the panel where it always
-          was, immediately, which is the same call the flask's animations make. */}
-      {mounted && (
-        <div
-          id={panelId}
-          className={`grid min-h-0 transition-[grid-template-rows,opacity] duration-[280ms] ease-out motion-reduce:transition-none ${
-            open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-          }`}
-        >
-          <div className="relative flex min-h-0 flex-col overflow-hidden rounded-b-xl">
-            <LeagueDetailPanel leagueId={league.league_id} />
+              `relative` is what keeps the open card's sheen behind this rather
+              than over it — an absolutely positioned sibling paints above static
+              content whatever the source order. */}
+          <div
+            onClick={onToggle}
+            className={`relative flex w-full shrink-0 cursor-pointer flex-col items-stretch gap-3 pb-3 pt-4 text-left sm:flex-row sm:items-center sm:gap-4 ${surface.head}`}
+          >
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              <Chevron open={expanded} size="md" />
+              {/* In a readout, because it is read and not pressed — the trade
+                  card's own treatment for the one number its header states. Not
+                  engraved with it: a cut inside a cut is a smudge rather than
+                  machining, which is why that card engraves only what sits on
+                  its face. */}
+              {record && (
+                <span className="lab-readout shrink-0 rounded px-2 py-0.5 text-[13px] font-semibold tabular-nums text-foreground/75">
+                  {formatRecord(record)}
+                </span>
+              )}
+              {/* The standing rides with the record rather than occupying one of
+                  the four stat slots: it is what the record *means* in its
+                  league, so reading it anywhere else is reading half the fact.
+                  That is why it is no longer in the metric catalogue — a slot
+                  pointed at it would be a second copy of what this line already
+                  says. Absent, not zeroed, before a game is played, the same
+                  rule the rank cells keep. */}
+              {standing && (
+                <span
+                  title={`#${standing.rank} of ${standing.of} by record`}
+                  className="shrink-0 text-xs font-medium tabular-nums text-foreground/45"
+                >
+                  {ordinal(standing.rank)}
+                  <span className="text-foreground/30"> of {standing.of}</span>
+                </span>
+              )}
+            </div>
+
+            {/* Numbers only, at every width: the heading rail pinned above the
+                list names these columns and is the only thing that moves them,
+                because the same four words repeated down a hundred rows is what
+                made a list-wide selection read as a per-card one. */}
+            <MetricColumns metrics={LEAGUE_METRICS} ctx={ctx} columns={columns} />
           </div>
+
+          {/* No seam and no inset of its own: the panel is on this card's face,
+              so what used to be a border between two surfaces would now be a
+              line drawn across one. The padding under it belongs to the panel,
+              which is where the container query that sizes it can see a width.
+
+              **It clips; it no longer scrolls.** One scroll box over the whole
+              panel carried the readout strip and both column headings away with
+              the rows, so the numbers a reader had scrolled to were unlabelled
+              and the team the roster belongs to unnamed. The scrolling moved
+              down into the two halves, which each keep their own heading fixed
+              over their own list (see {@link LeagueDetailPanel}) — so what is
+              left here is the clip the collapse animation needs, since a `0fr`
+              grid row only hides what its item is willing to cut off.
+
+              The radius is repeated here for the same reason it always was: a
+              clipping box squares its corners otherwise, and the last roster row
+              would paint across the card's rounded bottom.
+
+              The height is animated through `grid-template-rows`, 0fr to 1fr,
+              which is the one way to transition to a height nobody knows: the
+              panel's is whatever the league's standings and rosters come to, and
+              it changes again when the detail read resolves — so a measured
+              pixel height would be measured at the wrong moment. The grid row
+              resolves against the content on every frame instead, which also
+              means the cap above wins without arithmetic: once the card is at
+              its ceiling, 1fr *is* the space left, and the transition simply runs
+              to that.
+
+              Opacity rides along so a panel that has barely opened isn't a
+              sliver of legible text, and the whole thing is
+              `motion-reduce:transition-none` — a reader who asked for less motion
+              gets the panel where it always was, immediately, which is the same
+              call the flask's animations make. */}
+          {mounted && (
+            <div
+              id={panelId}
+              className={`grid min-h-0 transition-[grid-template-rows,opacity] duration-[280ms] ease-out motion-reduce:transition-none ${
+                open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+              }`}
+            >
+              <div className="relative flex min-h-0 flex-col overflow-hidden rounded-b-xl">
+                <LeagueDetailPanel leagueId={league.league_id} />
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </li>
   );
 }
@@ -391,13 +416,47 @@ export function LeagueCard({
 const PANEL_MS = 280;
 
 /**
- * The surface an expanded card wears: the detail panel's own plate, at row
- * width. The border is the one part not in `.lab-plate` — the class carries
- * material and never a box — and it takes the accent rather than the list's
- * hairline, since a lit edge is what says which league is open when the card
- * above it is scrolled past.
+ * The two things a card can be, each with the head inset its own box needs.
+ *
+ * **The insets differ because the boxes do, and the number they have to agree on
+ * is where the stat columns land.** The heading rail above the list is laid on
+ * the cards' geometry to the pixel (`border border-transparent px-4 pl-5`, so
+ * content starts at 21px and ends 17px off the trailing edge), and a heading a
+ * hair off the number under it reads as a misaligned table. A slab spends 6px of
+ * that trailing gutter on its wall and none of it on a border, so its face gives
+ * 6px back — 21px and 11px, arriving at the same two edges. The plate is a
+ * bordered box like the glass it replaced, so it keeps the spelling the rail was
+ * written against.
+ *
+ * That arithmetic is also what keeps the columns from stepping sideways when a
+ * card opens: below `sm` they divide the head's own width, so the two insets
+ * have to sum to the same 32px as well as landing the trailing edge in the same
+ * place.
  */
-const OPEN_SURFACE = "lab-plate group rounded-xl border border-active/25";
+export const REST = {
+  /** The wall — 6px down and right, chamfered on both layers with the face. */
+  wall: "lab-slab lab-notch-lg",
+  face: "lab-slab-face lab-notch-lg",
+  head: "pl-[21px] pr-[11px]",
+} as const;
+
+export const OPEN = {
+  // Nothing: the plate carries its own thickness as a plain `box-shadow`,
+  // having no clip to cut one off.
+  wall: "",
+  /**
+   * The surface an expanded card wears: the detail panel's own plate, at card
+   * width. The border is the one part not in `.lab-plate` — the class carries
+   * material and never a box — and it takes the accent rather than a hairline,
+   * since a lit edge is what says which league is open when the card above it is
+   * scrolled past.
+   *
+   * `group` is what {@link RowSheen}'s rail and sweep read their hover state
+   * from.
+   */
+  face: "lab-plate group rounded-xl border border-active/25",
+  head: "pl-5 pr-4",
+} as const;
 
 /**
  * The box an expanded card lives in: a column with a ceiling, so the head stays
@@ -427,19 +486,22 @@ const OPEN_SURFACE = "lab-plate group rounded-xl border border-active/25";
  * the card pins it), and the rows behind it pass underneath — which they can do
  * because `.lab-plate`'s face is opaque.
  *
- * Three details ride on it. `top` and `scroll-mt` are the same offset, so the
+ * Four details ride on it. `top` and `scroll-mt` are the same offset, so the
  * position the open-scroll aims at is exactly the one the card sticks at and the
  * two can't disagree by a pixel. The `z` is what keeps the cards *after* it from
  * painting over it — they are `relative` themselves, so DOM order would
  * otherwise win — and it sits below the header plate's `z-40` and the cards'
  * `z-30` menus, since this is a surface rather than something raised over one.
- * And it replaces `relative` on the surface rather than joining it: `sticky` is
- * a positioned element too, so {@link RowSheen} still has its containing block,
- * and two position utilities on one element is a fight decided by Tailwind's
- * alphabetical emission order rather than by anything readable here.
+ * It replaces `relative` on the card rather than joining it: `sticky` is a
+ * positioned element too, so the nameplate still has its containing block, and
+ * two position utilities on one element is a fight decided by Tailwind's
+ * alphabetical emission order rather than by anything readable here. And it
+ * **paints the page ground**, which the resting card has no need to: the
+ * nameplate hangs into the padding above the plate, and pinned under the app bar
+ * that band would otherwise be a 12px window with the list sliding through it.
  */
 const OPEN_BOX =
-  "sticky top-[var(--site-header-h)] z-20 " +
+  "sticky top-[var(--site-header-h)] z-20 bg-[var(--background)] " +
   "flex max-h-[calc(100svh-var(--site-header-h)-1.5rem)] flex-col";
 
 /**
@@ -456,17 +518,68 @@ const OPEN_BOX =
 const SCROLL_OFFSET = "scroll-mt-[var(--site-header-h)]";
 
 /**
- * A small state dot standing in for the old text badge: the accent for a league
- * in season, amber for one still drafting, dim for anything done. The status
- * word rides on hover and for screen readers.
+ * The league's name on the card's top edge, and the card's one focusable
+ * control.
+ *
+ * The plate is the trades board's ({@link Nameplate}); what differs is what the
+ * button *is*. A trade card's opens a league in a sheet, so it is a plain press;
+ * this one toggles a panel that is part of the same card, so it carries the
+ * disclosure semantics — `aria-expanded` and, while the panel is in the tree,
+ * `aria-controls` pointing at it. The card's head press is the mouse affordance
+ * over the same toggle and announces nothing.
+ *
+ * The status lamp rides after the name rather than in the head, because it says
+ * something about the *league* and this plate is what names the league. Outside
+ * the truncating heading, so a long name shortens rather than pushing the lamp
+ * off the plate.
  */
-function StatusDot({ status }: { status: string }) {
+function LeagueNameplate({
+  name,
+  status,
+  expanded,
+  panelId,
+  onToggle,
+}: {
+  name: string;
+  status: string;
+  expanded: boolean;
+  panelId: string | undefined;
+  onToggle: () => void;
+}) {
+  return (
+    <Nameplate trailing={<StatusLamp status={status} />}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        title="Standings and rosters for this league"
+        className={NAMEPLATE_BUTTON}
+      >
+        {name}
+      </button>
+    </Nameplate>
+  );
+}
+
+/**
+ * A lamp on the nameplate standing in for the old text badge: the accent for a
+ * league in season, amber for one still drafting, and a dark recess for anything
+ * done. The status word rides on hover and for screen readers.
+ *
+ * The unlit state is `.lab-readout` rather than a dimmed fill, which is the
+ * material saying it: the plate is the lightest surface on the card, so a grey
+ * dot on it reads as a lamp that is *on* and grey, where a cut with the light
+ * falling into it reads as one that is off. It is the same class the record
+ * beside it wears, at 8px.
+ */
+function StatusLamp({ status }: { status: string }) {
   const tone =
     status === "in_season"
       ? "bg-active shadow-[0_0_8px_rgba(0,255,229,0.7)]"
       : status === "drafting" || status === "pre_draft"
         ? "bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.6)]"
-        : "bg-foreground/30";
+        : "lab-readout";
   return (
     <span title={status.replace(/_/g, " ")} className="flex shrink-0 items-center">
       <span className={`h-2 w-2 rounded-full ${tone}`} aria-hidden="true" />
