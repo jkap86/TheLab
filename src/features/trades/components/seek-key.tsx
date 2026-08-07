@@ -33,7 +33,10 @@ import type { TradeSeek } from "../filters";
  * control exists, where the plate says the board begins at June 30. At the top
  * of the board there is no bound, so the key is unlit and no plate is drawn —
  * absent rather than a plate reading "today", which would be a bound on screen
- * that the query string does not carry.
+ * that the query string does not carry. It wears `.lab-nameplate` directly
+ * rather than reaching for `Nameplate`, on that component's own terms: what is
+ * shared is the plate's *material*, and `Nameplate` is the plate with an `h2` in
+ * it — a heading around a date would be announcing this key as a section.
  *
  * Three details are load-bearing:
  *

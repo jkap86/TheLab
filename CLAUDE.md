@@ -1501,8 +1501,10 @@ stops holding, a comment saying it does would not have caught it.
     bar's `z-50`, since a floating part must never cover the way home.
   - **What it costs is coverage**, and there is no version of a pinned part that
     doesn't pay it: it covers the top-right of whatever is under it, which on this
-    board is the topmost card's timestamp. That is why it is a 34px key rather
-    than the labelled field it replaced.
+    board is one card's instant ledge — a plate at the same corner, so the two
+    read as stacked rather than as one part. That is why it is a 34px key rather
+    than the labelled field it replaced, and the cost is transient: the card
+    carrying that ledge is whichever one the scroll has put under the key.
   - **Its date rides the bottom edge on a nameplate** — the trade card's own
     device. An icon alone says a control exists; the plate says the board begins
     at June 30, which is the difference between a pinned control and a pinned

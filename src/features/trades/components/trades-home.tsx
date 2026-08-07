@@ -555,9 +555,12 @@ export function TradesHome({ season }: { season: string }) {
           - **It is `h-0`**, so it takes no space in that flow and the list below
             is laid out exactly as it was. What it costs instead is coverage: a
             pinned part covers the top-right of whatever is under it, which on
-            this board is the topmost card's timestamp. That is the trade a
-            position control makes for being reachable, and it is why the key is
-            34px rather than a labelled field.
+            this board is one card's instant ledge — a plate at the same corner,
+            so the two read as stacked rather than as one part. That is the trade
+            a position control makes for being reachable; it is why the key is
+            34px rather than the labelled field it replaced, and it is transient,
+            since the card carrying that ledge is whichever one the scroll has
+            put under the key.
           - **The wrapper takes no pointer events and the key takes them back**,
             or a zero-height box stretched across the column would swallow
             presses aimed at the cards beneath it.
