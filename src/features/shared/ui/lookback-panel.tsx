@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import { mobileInputText } from "../control-type.ts";
 import {
   type AdpRange,
   boardLabel,
@@ -182,19 +183,36 @@ export function LookbackPanel({
           that can afford it: they move the end date rather than state it, and
           the lens above states where it landed either way.
 
-          The widths behind that are measured rather than judged, at 2×. The
-          panel is the viewport below 512, so a 390px screen leaves this row
-          332px and the pair at full size is 326 — six pixels, which is not
-          margin: the date lens is a **native control**, and its width moves
-          ~6px per step of device pixel ratio (144/150/156 at 1×/2×/3×) and
-          again with whatever the platform makes of a date field. At 360 there
-          was no room at all. So the instrument runs **compact below `@md`** —
-          the housing shrinks, the lens and the two gaps, while every digit
-          stays the size it was — which brings the pair to 282 and holds the
-          line down to 360 at every ratio. Above `@md` nothing moves: the three
-          parts come to 451 of the 454 a full-width drawer leaves, today's
-          arithmetic exactly, which is what the gap of 3 rather than 4 pays
-          for. */}
+          The widths behind that are measured rather than judged, and at every
+          device pixel ratio rather than one — the date lens is a **native
+          control**, and its width moves ~6px per step of DPR and again with
+          whatever the platform makes of a date field. The panel is the viewport
+          below 512, so a 390px screen leaves this row 332px and a 360px screen
+          302px, against 454 for a full-width drawer.
+
+          **The date in it is set at 16px now** — the floor below which iOS
+          Safari zooms the page on focus, and the reason there is no
+          `maximumScale` on the viewport any more (see
+          `features/shared/control-type.ts`). That is ~29px of extra glyph, and
+          it is paid for entirely out of chrome rather than out of the row: the
+          native control's own internal padding and its picker button
+          (`.date-field-tight`), the housing's inset, and a hair of negative
+          tracking on ten wide glyphs. What the pair actually measures, at
+          1× / 2× / 3×:
+
+          | row | budget | before | after |
+          | --- | --- | --- | --- |
+          | 302 (360px screen) | 302 | 252 / 258 / 264 | 256 / 262 / 268 |
+          | 332 (390px screen) | 332 | 252 / 258 / 264 | 256 / 262 / 268 |
+          | 454 (full drawer) | 329 | 296 / 302 / 308 | 312 / 318 / 324 |
+
+          — four pixels below `@md` and sixteen above it, both inside the budget
+          at every ratio, so **the break lands exactly where it landed before**:
+          the lenses hold the line and the keys take the second one at 302 and
+          332, and all three share one line at 454. Nothing else about the
+          instrument moved — the day lens is the width it was at both tiers.
+          Below `@md` it still runs compact: the housing shrinks, the lens and
+          the two gaps, while every digit stays the size it was. */}
       <div className="flex flex-wrap items-start gap-x-2 gap-y-2 @md:gap-x-3">
         <div className="flex items-start gap-1 @md:gap-1.5">
           <StepKey label="One day less" onClick={() => step(-1)}>
@@ -250,7 +268,7 @@ export function LookbackPanel({
         </div>
 
         <label className="flex flex-col items-center gap-1">
-          <span className="lab-readout lab-lens flex h-[46px] items-center rounded-lg px-1">
+          <span className="lab-readout lab-lens flex h-[46px] items-center rounded-lg px-0.5">
             <input
               type="date"
               min={domain.from}
@@ -269,7 +287,24 @@ export function LookbackPanel({
               onBlur={() => setDateDraft(null)}
               // Unlike the day counter beside it this lens does not light on
               // focus, so removing the outline left it with nothing at all.
-              className="bg-transparent px-1 font-display text-[0.68rem] font-bold tabular-nums text-active [color-scheme:dark] [text-shadow:0_0_10px_rgba(0,255,229,0.4)] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active @md:px-2"
+              // Two things buy back the width 16px costs, and neither is a
+              // digit. `.date-field-tight` takes the native control's own
+              // internal padding and its picker button; **the button comes back
+              // at `@md`**, which is the only tier with room for it and the only
+              // one where a mouse is likely — below it the platforms that matter
+              // open their picker on a tap anywhere in the field (iOS renders no
+              // button at all), so hiding it costs a phone nothing. Restored
+              // here rather than in the class because which tier has room is a
+              // fact about *this* row, not about date fields.
+              //
+              // `tracking-[-0.025em]` is the second, and it is width rather than
+              // taste: Orbitron is a wide face and this readout is ten glyphs of
+              // it, so 0.4px a glyph is 5px of the row — which at `@md`/3× is
+              // the whole margin (324 of a 329px budget against 329 without it).
+              // Safe against iOS, whose threshold is on `font-size` alone, and
+              // `tabular-nums` still aligns since letter-spacing adds uniformly
+              // to every advance.
+              className={`date-field-tight @md:[&::-webkit-calendar-picker-indicator]:block bg-transparent px-0 font-display ${mobileInputText} font-bold tracking-[-0.025em] tabular-nums text-active [color-scheme:dark] [text-shadow:0_0_10px_rgba(0,255,229,0.4)] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active`}
             />
           </span>
           <LensUnit>Ending</LensUnit>
