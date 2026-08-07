@@ -229,13 +229,13 @@ export function LeaguesViewLayout({
             />
           ) : undefined
         }
-        // The rail is drawn whenever there are leagues, and it is the *tab* that
-        // says whether the heading storey inside it has rows to head — see
-        // `ColumnsBar`'s `headings`. It used to be swapped out here for a
-        // storey-only rail once nothing matched, which remounted the control:
-        // narrowing to zero from the open search panel closed the panel, on
-        // exactly the press that most needs undoing. The fallback below is only
-        // for a tab whose list has not loaded at all yet.
+        // Drawn whenever there are leagues, and it is the *tab* that says
+        // whether the heading billet under the subject rail has rows to head —
+        // see `ColumnsBar`'s `headings`. What must not happen is this slot
+        // swapping between two different trees as the list narrows: it used to,
+        // and remounting the rail closed the search panel on exactly the press
+        // that emptied the list, which is the press that most needs undoing.
+        // The fallback below is only for a tab whose list has not loaded yet.
         columns={hasLeagues ? (columns ?? <SubjectRail view={view} />) : undefined}
         pinned={pinned}
       />

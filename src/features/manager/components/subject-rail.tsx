@@ -20,7 +20,6 @@ import {
   subjectOptions,
   toggleSubject,
 } from "../subjects";
-import { ListLedge } from "./list-ledge";
 import { MatchToggle, SubjectToken } from "./subject-parts";
 
 /**
@@ -65,15 +64,33 @@ const LeaguemateSharesSheet = dynamic(
 const RESULT_LIMIT = 8;
 
 /**
- * The list's header rail, carrying the *who is in it* filter above the column
- * headings.
+ * The *who is in it* filter, as a part of its own above the column headings.
  *
- * **This is the whole of that feature's chrome, and it is one storey of the
- * headings billet rather than a row of its own** — see {@link ListLedge} for why
- * a separate part is the expensive way to draw this. What rides here is a
- * caption, the chosen subjects as tokens, and two slots that open the panel —
- * the search, and the shares browse; the count of what survives sits at the far
- * end, where the rail's own answer belongs.
+ * **It used to be the upper storey of the headings billet, and what it cost
+ * there was legibility rather than pixels.** One billet pays for one wall, one
+ * cast shadow and one lot of clearance, which is a real saving and was the whole
+ * argument for stacking the two — but a storey and a heading rail are the same
+ * material at the same width with a 1px seam between them, so the pinned region
+ * read as one crowded instrument three faces deep and the filter read as part of
+ * the table's own head. It is not: the headings name what a row *says*, this
+ * names which rows there *are*.
+ *
+ * **So it is a slab, and the material is the separation.** `.lab-slab` is the
+ * trades board's block — a wall running down *and* right, graded from a lit near
+ * corner to a dark far one, brushed face, chamfers on all four corners against
+ * the billet's two. Nothing else in the pinned region has a wall on two sides,
+ * which is what makes this read as an object sitting above the rail rather than
+ * as more of it. It wears `.lab-slab-fixed` because it is a surface holding
+ * controls and not a card: the lift and the brightening bloom belong to a part
+ * you press, and this one you press *into*.
+ *
+ * The wrapper is the heading billet's own geometry, so the two parts share a
+ * left edge and stack rather than merely following one another; the face stops
+ * 6px short on the right, which is the wall and is the point.
+ *
+ * What rides on it is a caption, the chosen subjects as tokens, the search slot,
+ * and — at the far end — the count of what survives and the two doors onto the
+ * ranked lists.
  *
  * Five decisions worth keeping:
  *
@@ -131,14 +148,7 @@ const RESULT_LIMIT = 8;
  * board price), and several hundred players would bury several hundred people
  * whichever way it sorted.
  */
-export function SubjectRail({
-  view,
-  headings,
-}: {
-  view: FilteredLeagues;
-  /** The column headings, where the list has rows to head. */
-  headings?: React.ReactNode;
-}) {
+export function SubjectRail({ view }: { view: FilteredLeagues }) {
   const { subjects, setSubjects } = useSubjectFilters();
   const [open, setOpen] = useState(false);
   /**
@@ -228,15 +238,27 @@ export function SubjectRail({
 
   return (
     <div ref={boxRef}>
-      <ListLedge
-        headings={headings}
-        storey={
-          <>
+      {/* The heading billet's own wrapper geometry, so the two parts share a
+          left edge rather than each finding its own — see {@link ListLedge},
+          which spends the same 1px transparent border the cards do.
+
+          It is `relative` for the reason that one is: `clip-path` clips a whole
+          subtree, so the chamfered slab would cut the search panel off at its
+          own edge. The panel is a sibling of the slab, hung off this box. */}
+      <div className="relative border border-transparent px-4 pl-5">
+        {/* Wall wrapper and lit face, both chamfered — a wall that turns four
+            corners shows a square one wherever the clip doesn't follow it. */}
+        <div className="lab-slab lab-slab-fixed lab-notch-all">
+          {/* It **wraps rather than compresses**: at 390px a caption, a token,
+              a trigger and the count do not fit on one line, and everything in
+              the row is content rather than chrome — so it takes a second line
+              down there instead of pushing the count off the end of the part. */}
+          <div className="lab-slab-face lab-slab-face-rail lab-notch-all flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5">
             {/* Dropped below `sm`, where the row is already wrapping: the
                 trigger beside it says "Player or leaguemate" until something is
-                picked, so the caption is the one part of the storey a phone can
-                lose without the row stopping making sense. */}
-            <span className="hidden shrink-0 pl-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/55 sm:inline">
+                picked, so the caption is the one part of the row a phone can
+                lose without it stopping making sense. */}
+            <span className="hidden shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/55 sm:inline">
               Who&apos;s in it
             </span>
 
@@ -257,21 +279,28 @@ export function SubjectRail({
               />
             ))}
 
-            {/* The trigger is a slot cut into the storey's face — the same
-                channel the headings below sit in, which is this app's answer to
-                making a small label read as a part rather than as text.
+            {/* The trigger is a slot milled into the slab's face, which is this
+                app's answer to making a small label read as a part rather than
+                as text.
 
-                **It is the only part of this storey that keeps the channel, and
-                that is the material rule rather than a leftover.** Recessed is
-                what this app draws for a field or a readout; this trigger
-                *becomes* a text field a frame after it is pressed, so a slot is
-                the honest thing for it to look like beforehand. The two keys
-                below open a dialog and are never fields, so they wear the raised
-                pill — see the note on them. All three used to wear this class,
-                which made the row read as one segmented input with three cells:
-                the eye groups by material before it reads a word, so the two
-                doors onto a whole ranked list were being offered as somewhere
-                else to type. */}
+                **`.lab-channel` rather than the heading rail's
+                `.lab-ledge-slot`, because a cut is read against the face it is
+                cut into.** That one is tuned for the ledge's *light* face and
+                gets lighter towards its bottom, which reads as a deep slot
+                there and as a raised sliver on a face this dark; the channel is
+                near-black with a cyan hairline ring, which is what the app bar's
+                own block cuts into a face of almost exactly these tones.
+
+                **It is the only part of this row that is recessed, and that is
+                the material rule rather than a leftover.** Recessed is what this
+                app draws for a field or a readout; this trigger *becomes* a text
+                field a frame after it is pressed, so a slot is the honest thing
+                for it to look like beforehand. The two keys below open a dialog
+                and are never fields, so they wear the raised pill — see the note
+                on them. All three used to wear one class, which made the row read
+                as one segmented input with three cells: the eye groups by
+                material before it reads a word, so the two doors onto a whole
+                ranked list were being offered as somewhere else to type. */}
             <button
               ref={searchTrigger}
               type="button"
@@ -287,7 +316,7 @@ export function SubjectRail({
               // "dialog" promised a modal that never arrives. The key beside it
               // *does* open one, and keeps the attribute.
               aria-controls={open ? panelId : undefined}
-              className="lab-ledge-slot flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[10px] font-semibold text-foreground/70 transition-colors hover:text-active"
+              className="lab-channel flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[10px] font-semibold text-foreground/70 transition-colors hover:text-active"
             >
               <SearchIcon />
               {count > 0 ? "Add" : "Player or leaguemate"}
@@ -385,26 +414,25 @@ export function SubjectRail({
                 {count > 0 ? "Leaguemates" : "Leaguemate shares"}
               </button>
             </div>
-          </>
-        }
-        panel={
-          open && (
-            <SubjectPanel
-              id={panelId}
-              inputRef={inputRef}
-              query={query}
-              onQuery={setQuery}
-              results={results}
-              selected={subjects.subjects}
-              match={subjects.match}
-              onMatch={(match) => setSubjects({ ...subjects, match })}
-              onToggle={(subject) => setSubjects(toggleSubject(subjects, subject))}
-              loading={!rosters.data && !members.data}
-              error={rosters.error ?? members.error}
-            />
-          )
-        }
-      />
+          </div>
+        </div>
+
+        {open && (
+          <SubjectPanel
+            id={panelId}
+            inputRef={inputRef}
+            query={query}
+            onQuery={setQuery}
+            results={results}
+            selected={subjects.subjects}
+            match={subjects.match}
+            onMatch={(match) => setSubjects({ ...subjects, match })}
+            onToggle={(subject) => setSubjects(toggleSubject(subjects, subject))}
+            loading={!rosters.data && !members.data}
+            error={rosters.error ?? members.error}
+          />
+        )}
+      </div>
 
       {/* `onClose` clears only its own kind: a sheet closing is the last thing
           that happens on the way out of it, and clearing the state flatly would

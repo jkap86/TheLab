@@ -63,6 +63,12 @@ const ColumnsEditor = dynamic(
  * screen. Pressing a heading opens the editor armed on that heading's slot,
  * which is the same gesture answering both.
  *
+ * **Where a page has one, the subject filter is drawn above the billet as its
+ * own part rather than inside it.** This component places the two and owns the
+ * clearance between them; {@link SubjectRail} owns what it is made of. They were
+ * two storeys of one billet, which is cheaper and was wrong here — see
+ * {@link ListLedge} for the rule that came out of it.
+ *
  * **The headings are drawn at every width — they used to drop below `sm` and let
  * the cards grow their own labels back.** That made the same list two different
  * things either side of one breakpoint: a table with a heading rail on a laptop,
@@ -96,33 +102,38 @@ export function ColumnsBar<C>({
   ctx: C | null;
   previewLabel: string | null;
   /**
-   * The page's league view, where the rail is to carry the *who is in it*
-   * filter in a storey above the headings.
+   * The page's league view, where the *who is in it* filter is to be drawn
+   * above the headings.
    *
    * Optional, and this component knows nothing about what the filter *is* — it
-   * owns the billet's geometry and hands the upper storey to {@link SubjectRail},
-   * which is the piece that reads the selection. Omitted, the rail is exactly
-   * the single-storey heading rail it has always been.
+   * places {@link SubjectRail} over the billet and lets that piece own its own
+   * part. Omitted, this is exactly the heading rail it has always been.
    */
   view?: FilteredLeagues;
   /**
-   * An upper storey supplied by the caller, for a list whose rail is not the
+   * An upper storey inside the billet, for a list whose filter is not the
    * page's — the shares sheet, which draws the selection it is editing there
-   * rather than the rail's own triggers (its search lives in the sheet's title
-   * bar, and the key that opens it is what a reader pressed to get here).
+   * rather than a rail of its own (its search lives in the sheet's title bar,
+   * and the key that opens it is what a reader pressed to get here).
    *
-   * Mutually exclusive with {@link view}: that one hands the storey to
-   * {@link SubjectRail}, which would open a second sheet from inside this one.
+   * Still a storey rather than a second slab, because in the sheet the two
+   * genuinely are one header: the tokens name the rows the list is *about* and
+   * there is nothing else on that surface for a part to separate itself from.
+   *
+   * Mutually exclusive with {@link view}, which would open a second sheet from
+   * inside this one.
    */
   storey?: React.ReactNode;
   /**
    * Whether the list has rows for the headings to head.
    *
-   * False draws the billet with the subject storey alone — which is the whole
-   * exemption the two-storey rail costs: that storey holds the control that
-   * narrowed the list to nothing, so dropping it with the headings would take
-   * away the only way back. The tab decides, because what counts as a row is the
-   * tab's own grain: leagues here, shares on the other two.
+   * False draws no billet at all — with the subject filter its own part above,
+   * there is nothing left in the rail that a reader who has narrowed to zero
+   * needs to reach. That was the whole exemption the two-storey billet cost:
+   * the storey held the control that emptied the list, so dropping it with the
+   * headings took away the only way back. The tab still decides, because what
+   * counts as a row is the tab's own grain: leagues here, shares on the other
+   * two.
    */
   headings?: boolean;
   onColumnChange: (slot: number, key: string) => void;
@@ -142,7 +153,7 @@ export function ColumnsBar<C>({
   // Below `sm` the headings take a line of their own, as the cards' columns do —
   // so the rail sits over the numbers it names at both widths. From `sm` up it
   // spans the row, as the cards do. The box that lays that out is `ListLedge`'s,
-  // since the billet may now carry a second storey above these.
+  // since the billet may still carry a storey above these in the shares sheet.
   const headingCells = headings ? (
     <MetricHeadings
       metrics={metrics}
@@ -154,11 +165,20 @@ export function ColumnsBar<C>({
 
   return (
     <>
-      {view ? (
-        <SubjectRail view={view} headings={headingCells} />
-      ) : (
-        <ListLedge storey={storey} headings={headingCells} />
-      )}
+      {/* Two parts now, and the gap between them is the point rather than
+          spacing: the slab's own wall is 6px, so 12px here leaves ~18px of
+          ground under a lit face before the billet's own begins. Below that the
+          two read as one crowded instrument again, which is what splitting them
+          was for. */}
+      <div className="flex flex-col gap-3">
+        {view && <SubjectRail view={view} />}
+
+        {/* No rows and no storey is no billet: a heading rail with nothing to
+            head and no control on it is a lit face saying nothing. */}
+        {(headingCells || storey) && (
+          <ListLedge storey={storey} headings={headingCells} />
+        )}
+      </div>
 
       {everOpened && (
       <ColumnsEditor
