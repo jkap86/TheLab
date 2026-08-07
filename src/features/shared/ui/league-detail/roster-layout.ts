@@ -22,7 +22,7 @@
  * for a league with nothing to price.
  */
 export type SectionLayout = {
-  /** Column template: slot gutter, name/meta, then one track per value column. */
+  /** Column template: name/meta, then one track per value column. */
   grid: string;
   /** How far the name reaches on its own line — the meta column plus the numbers. */
   nameSpan: string;
@@ -30,57 +30,56 @@ export type SectionLayout = {
 
 // Written out rather than assembled, so Tailwind sees every class string whole.
 /**
- * The slot gutter is `1.25rem` below `@lg` and `2.5rem` above it, and the narrow
- * figure is derived rather than picked: at `text-[0.6rem]` the widest label the
- * column can be asked to hold is `DEF` at 19.2px, so 20px is that measurement
- * plus nothing. It used to be `1.75rem`, which was sized for `SFLX` at the wider
- * tier's type — 28px of track for a two-letter `RB`, spent out of the one column
- * that can't shorten its own contents.
+ * There is no slot gutter in either template, which is the change these two
+ * exist to record. The slot used to hold a fixed track spanning both of a row's
+ * lines — `1.25rem` below @lg, `2.5rem` above — so a four-letter label was
+ * charged to the numbers line as well as the name line, and the bench section
+ * paid for it on every row while never filling it. It rides the row's leading
+ * corner as a tab now (see `.lab-tab`), and the ~28px that frees is what pays
+ * for the second value column at every width.
  *
- * **A fixed track and not `auto`, which is the trap here.** Each row and each
- * section heading is its own grid container, so an intrinsic track is measured
- * per row: the starters section would size to `FLEX` and the bench section — whose
- * rows carry no slot at all — would size to zero, putting the two lists' names and
- * value columns at different x. Same reason the standings can't use one either,
- * one row down: `1` and `12` would not agree.
- *
- * That fixed width is what `NARROW_SLOT_LABEL` in `player-row` exists to respect —
- * the two are a matched pair, and a label added there without a width check here
- * truncates the one thing on the row that must never truncate, since a clipped
- * label reads as broken where a clipped name only reads as long.
+ * A knock-on worth knowing: a tab sizes to its own label where a track is sized
+ * for the widest label in the section, so `SUPER_FLEX` no longer charges `RB`
+ * for its width — which is what retired `NARROW_SLOT_LABEL` in `player-row` and
+ * the matched-pair hazard that came with it. The other side of the same coin is
+ * that a bench row's name now starts where a starter's tab ends rather than
+ * lining up with it. That is the honest trade: the alternative is indenting the
+ * bench past a mark it doesn't carry, which is the empty gutter again under
+ * another name.
  */
 export const NO_NUMBERS: SectionLayout = {
-  grid: "grid-cols-[1.25rem_minmax(0,1fr)] @lg:grid-cols-[2.5rem_minmax(0,1fr)]",
+  grid: "grid-cols-[minmax(0,1fr)]",
   nameSpan: "col-span-1",
 };
 
 /**
- * Below @xl only the *first* value column is drawn, the same rule the standings
- * half keeps and for the same reason: the panel stays a 50/50 split at every
- * width, which on a phone leaves this half ~155px. Two 3rem tracks left ~19px
- * for everything else, so the section headings truncated to `S..` and `B..` and
- * the numbers overflowed their tracks into the position badge beside them. The
- * surviving track is `auto` rather than a fixed 3rem for that second failure —
- * a season total is eight characters wide and a fixed track can't say so.
+ * **Both value columns at every width**, where the second used to wait for @xl.
  *
- * It is the second slot that goes rather than the first because the reader's
- * leading choice is the one they aimed first, and both are back the moment
- * there is width for them.
+ * **What sizes these tracks is the heading, not the number** — which is the one
+ * thing worth knowing before touching them. The old templates could use `auto`,
+ * so the widest of the two set the width and neither could clip; fixed tracks
+ * have to be measured against both, and the headings are the wider. In Arial at
+ * the rail's 0.6rem, `395.96` is 36.6px at `text-xs` while `Bench` is 34.8px
+ * uppercase and tracked — and `Optimal`, in the standings' own catalogue, is
+ * 43.8px. That is why both rails drop to sentence case below @lg (see
+ * `roster-detail`'s `ColumnRail`): a clipped *name* reads as long, where a
+ * heading clipped inside its own word reads as broken.
  *
- * **@xl and not @lg, which is three tiers rather than two, and the middle one is
- * the whole point.** A container tier describes the *panel*, and each half is
- * barely half of it: at @lg (32rem) a half is ~230px, and once its own `p-4` and
- * two fixed 3.25rem tracks come out of that, the name track is left with **32px**
- * — so `Starters` clipped to `S…` and the NFL team beside the badge was squeezed
- * to nothing, while the *name* looked fine because it spans all three columns and
- * never touches that track. A column added at the tier where the gutters widen
- * looks like one decision and is two; the middle tier is what separates them, so
- * @lg buys the roomier gutter and @xl buys the second number.
+ * Three tiers, because the constraint only moves twice: the base tier is a
+ * 352px phone, @lg is where the NFL team comes back onto the meta line beside
+ * the badge, and @xl is where there is room to spend. Every track is wider than
+ * the single `3.25rem` this used to carry from @lg up — doubled *and* wider.
+ *
+ * **Fixed tracks and not `auto`, which is the trap the old grid avoided rather
+ * than solved.** Each row and each section heading is its own grid container,
+ * so an intrinsic track is measured per row: one row holding `1,041.16` would
+ * set its columns wider than the row above it, and the two sections' numbers
+ * would not line up. Same reason the standings can't use one either.
  */
 export const SPLIT_LAYOUT: SectionLayout = {
   grid:
-    "grid-cols-[1.25rem_minmax(0,1fr)_auto] " +
-    "@lg:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem] " +
-    "@xl:grid-cols-[2.5rem_minmax(0,1fr)_3.25rem_3.25rem]",
-  nameSpan: "col-span-2 @xl:col-span-3",
+    "grid-cols-[minmax(0,1fr)_2.75rem_2.75rem] " +
+    "@lg:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem] " +
+    "@xl:grid-cols-[minmax(0,1fr)_4.5rem_4.5rem]",
+  nameSpan: "col-span-3",
 };
