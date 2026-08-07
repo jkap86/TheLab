@@ -8,9 +8,11 @@ import {
   EMPTY_SIDE,
   TRADE_CIRCLES,
   activeTradeFilterCount,
+  circleIndex,
   pickLabel,
   pickToken,
   setSideManager,
+  stepCircle,
   swapSides,
   toggleSideAsset,
   tradeFilterSummary,
@@ -287,23 +289,63 @@ describe("activeTradeFilterCount", () => {
 });
 
 describe("the circles", () => {
-  test("every circle carries the sentence its key cannot say", () => {
-    // The keys print `label` and that is all a key has room for; `note` is what
-    // separates the two leaguemate readings — who was *dealing* against where
-    // the deal *happened* — and the caption under the keys reads it out of a
-    // `find(...)!`, so a circle added to the type and not to this table is a
-    // crash on the control rather than a compiler error.
+  test("every circle carries the sentence the readout cannot say", () => {
+    // The instrument prints `label` and that is all a readout has room for;
+    // `note` is what separates the two leaguemate readings — who was *dealing*
+    // against where the deal *happened* — and the caption under it reads that
+    // out of a `find(...)!`, so a circle added to the type and not to this table
+    // is a crash on the control rather than a compiler error.
     for (const circle of TRADE_CIRCLES) {
       assert.ok(circle.label.length > 0, circle.value);
       assert.ok(circle.note.length > 0, circle.value);
     }
   });
 
-  test("the default is the whole market", () => {
+  test("the default is the whole market, and it is the widest rung", () => {
     // The page's premise: the leagues a reader plays in are a fraction of the
     // trades worth reading, and this page opens on all of them.
     assert.equal(DEFAULT_TRADE_FILTERS.circle, "all");
-    assert.equal(TRADE_CIRCLES[0].value, "all");
+    assert.equal(TRADE_CIRCLES[TRADE_CIRCLES.length - 1].value, "all");
+  });
+
+  test("the table is in radius order, narrowest first", () => {
+    // The ordering *is* the control: `‹` and `›` walk this array, and the pips
+    // count along it, so a table in any other order is a stepper that widens by
+    // narrowing. It is also the type's own claim — `mine ⊆ leaguemates ⊆
+    // leaguemate-leagues ⊆ all` — written down somewhere a test can read it.
+    assert.deepEqual(
+      TRADE_CIRCLES.map((circle) => circle.value),
+      ["mine", "leaguemates", "leaguemate-leagues", "all"],
+    );
+    TRADE_CIRCLES.forEach((circle, at) => {
+      assert.equal(circleIndex(circle.value), at, circle.value);
+    });
+  });
+
+  test("stepping walks the ladder and stops at both ends", () => {
+    assert.equal(stepCircle("mine", 1, true), "leaguemates");
+    assert.equal(stepCircle("leaguemates", 1, true), "leaguemate-leagues");
+    assert.equal(stepCircle("leaguemate-leagues", 1, true), "all");
+    assert.equal(stepCircle("all", -1, true), "leaguemate-leagues");
+
+    // Null rather than clamping, because the control draws the difference: a key
+    // that re-selects the circle already showing is a press that appears to do
+    // nothing, where an unlit one says the board cannot be widened past every
+    // league or narrowed past your own.
+    assert.equal(stepCircle("all", 1, true), null);
+    assert.equal(stepCircle("mine", -1, true), null);
+  });
+
+  test("with no account stored the ladder is one rung", () => {
+    // Every circle but the widest is drawn around a Sleeper account, so with
+    // none there is nowhere to step from anywhere — including from a circle a
+    // stored state might still be holding. The rule lives here rather than at
+    // the control because the control has two keys and four values, so what it
+    // can ask is "can I move", not "is this one allowed".
+    for (const { value } of TRADE_CIRCLES) {
+      assert.equal(stepCircle(value, 1, false), null, value);
+      assert.equal(stepCircle(value, -1, false), null, value);
+    }
   });
 });
 

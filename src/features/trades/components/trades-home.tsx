@@ -35,6 +35,7 @@ import { DEFAULT_TRADE_COLUMNS, TRADE_METRICS } from "../trade-metrics";
 import { resolveLeagueScope, tradeQueryKey } from "../trade-query";
 import type { AdpPlayerPayload, Trade } from "../types";
 import type { OpenLeague } from "./league-sheet";
+import { SeekKey } from "./seek-key";
 import { TradeControls } from "./trade-controls";
 import { TradeSearch } from "./trade-search";
 import { TradeValuePicker } from "./trade-value";
@@ -483,7 +484,6 @@ export function TradesHome({ season }: { season: string }) {
           season={season}
           account={account}
           names={names}
-          today={today}
           trailing={
             <>
               {/* The board's size, which is what the deleted heading's slot is
@@ -535,6 +535,39 @@ export function TradesHome({ season }: { season: string }) {
         />
 
         {error && <Note tone="error">{error}</Note>}
+      </div>
+
+      {/* Where in the board the reader is standing, pinned under the app bar for
+          as long as there is board left — see {@link SeekKey} for why a position
+          is not a setting and does not belong in the block above.
+
+          Four things about this wrapper are load-bearing:
+
+          - **It is a sibling of the header rather than a child of it.** A sticky
+            element travels only as far as its own parent's box, and the header
+            is a few hundred pixels tall; here the parent is `PageShell`'s
+            `<main>`, which spans the whole list, so the key stays reachable at
+            any depth.
+          - **It is `h-0`**, so it takes no space in that flow and the list below
+            is laid out exactly as it was. What it costs instead is coverage: a
+            pinned part covers the top-right of whatever is under it, which on
+            this board is the topmost card's timestamp. That is the trade a
+            position control makes for being reachable, and it is why the key is
+            34px rather than a labelled field.
+          - **The wrapper takes no pointer events and the key takes them back**,
+            or a zero-height box stretched across the column would swallow
+            presses aimed at the cards beneath it.
+          - **`z-30`, under the app bar's `z-50`**: the key pins *below* the bar,
+            and a floating part that could cover the way home would be the one
+            piece of chrome this page is not allowed to obscure. */}
+      <div className="pointer-events-none sticky top-[calc(var(--site-header-h)+0.5rem)] z-30 flex h-0 justify-end">
+        <div className="pointer-events-auto">
+          <SeekKey
+            value={tradeFilters.seek}
+            today={today}
+            onChange={(seek) => setTradeFilters({ ...tradeFilters, seek })}
+          />
+        </div>
       </div>
 
       {loading ? (

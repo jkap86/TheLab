@@ -75,30 +75,29 @@ export const DEFAULT_TRADE_SEEK: TradeSeek = null;
 export type TradeCircle = "all" | "mine" | "leaguemates" | "leaguemate-leagues";
 
 /**
- * The circles, widest last, as the page's own scope keys offer them.
+ * The circles **in radius order, narrowest first** — the ordering the control
+ * steps through and the pips count along.
+ *
+ * The order is the type's own claim made concrete: `mine ⊆ leaguemates ⊆
+ * leaguemate-leagues ⊆ all`, so reading this table top to bottom is reading the
+ * circle being drawn wider. It used to lead with `all` — the default, which is
+ * the *widest* — and that was fine while the control was four keys with no
+ * ordering to express; a stepper has nowhere to hide an arbitrary order, since
+ * "narrower" and "wider" are its two presses.
  *
  * Each carries what it means in a sentence, because the names alone do not
  * separate the two leaguemate readings: one is about *who was dealing* and the
  * other about *where the deal happened*, and a reader picking between them is
  * picking between "what are the people I play against doing" and "what does the
- * market next to mine look like".
- *
- * **There is no lower-case `summary` beside the label any more**, and its
- * absence is the on-page control's doing rather than an omission: the keys are
- * on the page now, so the selection is lit a few pixels above the line that used
- * to restate it — the same restatement the league detail panel's team plate was
- * removed for. What a key cannot say is `note`, which is why that one stays.
+ * market next to mine look like". The control names the circle and the sentence
+ * under it says what that name means — so unlike the four keys it replaced,
+ * `note` is read on every circle rather than only on the narrow ones.
  */
 export const TRADE_CIRCLES: {
   value: TradeCircle;
   label: string;
   note: string;
 }[] = [
-  {
-    value: "all",
-    label: "Every league",
-    note: "The whole crawled market.",
-  },
   {
     value: "mine",
     label: "My leagues",
@@ -114,7 +113,45 @@ export const TRADE_CIRCLES: {
     label: "Leaguemate leagues",
     note: "Any league a leaguemate plays in, whoever made the trade.",
   },
+  {
+    value: "all",
+    label: "Every league",
+    note: "The whole crawled market.",
+  },
 ];
+
+/** How far out a circle is drawn, `0` being the narrowest. */
+export function circleIndex(circle: TradeCircle): number {
+  return TRADE_CIRCLES.findIndex((option) => option.value === circle);
+}
+
+/**
+ * One notch in or out along the radius — or **null where there is nowhere to
+ * go**, which is what the control draws as an inert key.
+ *
+ * Null rather than clamping, because the two are different answers to the
+ * reader: a key that silently re-selects the circle already showing is a press
+ * that appears to do nothing, where an unlit key says the board cannot be
+ * widened past every league or narrowed past your own.
+ *
+ * **Whether an account is stored is one of the bounds, not a check the caller
+ * makes afterwards.** Every circle but the widest is drawn around a Sleeper
+ * account, so with none stored the whole ladder collapses to a single rung —
+ * and expressing that here rather than at the control is what keeps the rule in
+ * one place. It was previously spelled `option.value !== "all" && account ===
+ * null` inside the key that rendered each circle, which worked because there was
+ * a key per circle to disable; a stepper has two keys and four values, so the
+ * question it asks is "can I move", not "is this one allowed".
+ */
+export function stepCircle(
+  circle: TradeCircle,
+  step: 1 | -1,
+  hasAccount: boolean,
+): TradeCircle | null {
+  if (!hasAccount) return null;
+  const next = TRADE_CIRCLES[circleIndex(circle) + step];
+  return next ? next.value : null;
+}
 
 /**
  * One side of the trade a reader is describing: whose it is, and what it took.
