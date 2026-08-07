@@ -40,8 +40,10 @@ export {
   getManagerMatchups,
   getManagerRosters,
   getManagerSyncedAt,
+  getPreviousLeagueScores,
+  listRosterWeekPoints,
 } from "./queries";
-export type { LeagueRow } from "./queries";
+export type { LeagueRow, RosterWeekPoints } from "./queries";
 export type {
   LeagueDetail,
   Leaguemate,

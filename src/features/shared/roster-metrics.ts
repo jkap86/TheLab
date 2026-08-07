@@ -1,5 +1,6 @@
 import { formatPoints, formatValue, weekCount } from "./format.ts";
 import type { ColumnPreset, Metric } from "./metric-cell.ts";
+import type { PpgPayload } from "@/shared/contract";
 import type { PlayerOutlook, PlayerSplit } from "@/shared/projections";
 
 /**
@@ -47,6 +48,22 @@ export type PlayerMetricContext = {
   superflex: boolean;
   /** How many crawled drafts stood behind the ADP board, for its hover. */
   draftCount: number;
+  /**
+   * The week this panel is being read as, when it is being read as one at all.
+   *
+   * Null for the leagues list and the trades board, which open a league on a
+   * *season*. The two week metrics below read as "not asked for" then rather
+   * than as "no data": their columns are simply never the default there, and a
+   * reader who points a slot at one on a season panel gets an em dash and a
+   * hover saying why.
+   */
+  week: number | null;
+  /** His projected points for {@link week}, in this league's scoring. */
+  weekProjection: number | null;
+  /** His points per game coming into that week; null where he has played none. */
+  ppg: PpgPayload | null;
+  /** Which season and how many weeks that average was counted over. */
+  ppgSource: { season: string; weeks: number; prior: boolean } | null;
 };
 
 /**
@@ -96,6 +113,63 @@ function isShort(outlook: PlayerOutlook, horizon: number): boolean {
  * lenses, KeepTradeCut dynasty value and ADP-derived draft capital.
  */
 export const PLAYER_METRICS: PlayerMetric[] = [
+  {
+    key: "week_proj",
+    group: "Week",
+    label: "Wk Proj",
+    cell: ({ week, weekProjection }) => {
+      if (week === null) {
+        return {
+          kind: "value",
+          text: null,
+          title: "Only answered where a panel is opened on a week",
+        };
+      }
+      if (weekProjection === null) {
+        // Distinct from a projected 0.00 below: nothing is stored for him this
+        // week — a bye, or a week the sync has not reached — which is not the
+        // same claim as being projected to score nothing.
+        return { kind: "value", text: null, title: `No projection for week ${week}` };
+      }
+      return {
+        kind: "value",
+        text: formatPoints(weekProjection),
+        // A real zero is printed and dimmed, never an em dash: the projections
+        // feed does publish one, and it is a claim worth making.
+        muted: weekProjection === 0,
+        title: `${formatPoints(weekProjection)} projected in week ${week}`,
+      };
+    },
+  },
+  {
+    key: "ppg",
+    group: "Week",
+    label: "PPG",
+    cell: ({ ppg, ppgSource }) => {
+      if (!ppg || !ppgSource) {
+        return {
+          kind: "value",
+          text: null,
+          // The two absences a reader can act on differently: no window to
+          // average over at all, against a window he has not played in.
+          title: ppgSource
+            ? "No games played in the weeks counted"
+            : "Only answered where a panel is opened on a week",
+        };
+      }
+      return {
+        kind: "value",
+        text: formatPoints(ppg.average),
+        title:
+          `${formatPoints(ppg.average)} a game over ${weekCount(ppg.games)}` +
+          // The denominator travels with the average, and *which season* it came
+          // from travels with it too: in week 1 this is last year's form, and a
+          // column that didn't say so would be quoting a different season in the
+          // same units as the projection beside it.
+          (ppgSource.prior ? `, ${ppgSource.season} season` : " this season"),
+      };
+    },
+  },
   {
     key: "start",
     group: "Projection",
@@ -214,7 +288,22 @@ export const DEFAULT_PLAYER_COLUMNS: string[] = ["start", "bench"];
  * productive player from a startable one.
  */
 export const PLAYER_COLUMN_PRESETS: ColumnPreset[] = [
+  { name: "Week", columns: ["week_proj", "ppg"] },
   { name: "Lineup", columns: ["start", "bench"] },
   { name: "Season", columns: ["proj", "start"] },
   { name: "Value", columns: ["ktc", "adp"] },
 ];
+
+/**
+ * The two columns a roster section opens with **when the panel is opened on a
+ * week** — what this player projects for it, against what he has actually been
+ * scoring coming into it.
+ *
+ * A different pair from {@link DEFAULT_PLAYER_COLUMNS} because it answers a
+ * different question, which is also why it is stored under a key of its own
+ * rather than sharing the season panel's: the grain is one *week* rather than
+ * the rest of a season, so a reader's choice on one is not a choice on the
+ * other. The catalogue is one catalogue — both pairs are pickable from either —
+ * and only what each opens on differs.
+ */
+export const DEFAULT_WEEK_PLAYER_COLUMNS: string[] = ["week_proj", "ppg"];

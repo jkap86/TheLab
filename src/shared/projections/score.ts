@@ -88,11 +88,57 @@ export function scoreProjection(
   stats: Record<string, number> | null | undefined,
   scoring: Record<string, number> | null | undefined,
 ): number {
+  return dot(stats, scoring, DERIVED);
+}
+
+/**
+ * Fantasy points for an **actual** stat line under one league's scoring.
+ *
+ * The same dot product against the same vocabulary — Sleeper serves stats and
+ * projections off one endpoint shape — and it differs in exactly one thing:
+ * {@link DERIVED} is *not* excluded.
+ *
+ * That exclusion is a fact about projections, not about football. Sleeper does
+ * not model a first down, so in a *projection* it writes `rush_fd` as the
+ * yardage over ten and the reception splits as a fixed carve-up of `rec`;
+ * scoring those adds a second yardage rate on top of the league's own. In a
+ * played week they are what they say they are — a count of first downs a player
+ * actually gained — and 39 of the leagues stored here pay for `rush_fd`. Passing
+ * a real line through {@link scoreProjection} would silently drop those points,
+ * which is the same size of error in the opposite direction, and just as
+ * invisible.
+ *
+ * Which is why these are two exported functions rather than one with a flag:
+ * picking the wrong one is a wrong number and never an error, so the call site
+ * should have to say which kind of line it holds. {@link unprojectedScoring}
+ * still names what a league scores and the *feed* cannot supply; nothing here
+ * changes that read, which is about the projection side.
+ */
+export function scoreStatLine(
+  stats: Record<string, number> | null | undefined,
+  scoring: Record<string, number> | null | undefined,
+): number {
+  return dot(stats, scoring, null);
+}
+
+/**
+ * The dot product both scorers are, with the excluded-key set as the only knob.
+ *
+ * Driven by the scoring settings rather than the stat line: a category the league
+ * doesn't score contributes nothing, and a category it scores but the line
+ * doesn't carry contributes nothing either. Both are real gaps rather than
+ * zeroes.
+ */
+function dot(
+  stats: Record<string, number> | null | undefined,
+  scoring: Record<string, number> | null | undefined,
+  excluded: ReadonlySet<string> | null,
+): number {
   if (!stats || !scoring) return 0;
 
   let total = 0;
   for (const [key, weight] of Object.entries(scoring)) {
-    if (NOT_SCORABLE.has(key) || DERIVED.has(key)) continue;
+    if (NOT_SCORABLE.has(key) || excluded?.has(key)) continue;
     if (typeof weight !== "number" || !Number.isFinite(weight) || weight === 0) {
       continue;
     }

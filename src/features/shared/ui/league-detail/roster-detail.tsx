@@ -16,6 +16,7 @@ import type {
   LeagueOutlook,
   LeagueRosterValues,
   LeagueTeamView,
+  LeagueWeekView,
   PlayerSummary,
   TeamOutlook,
 } from "./types";
@@ -60,6 +61,7 @@ export function RosterDetail({
   rosterPositions,
   outlook,
   values,
+  weekView,
   columns,
   onOpenColumn,
 }: {
@@ -71,6 +73,8 @@ export function RosterDetail({
   outlook: LeagueOutlook | null;
   /** Per-player KTC and ADP values on this league's board, for the value columns. */
   values: LeagueRosterValues;
+  /** The week's numbers, or null on a panel opened on a season. */
+  weekView: LeagueWeekView;
   /** The metric key each of the two value columns shows. */
   columns: string[];
   /** Open the panel's player-columns editor armed on this column's slot. */
@@ -120,8 +124,13 @@ export function RosterDetail({
   // With none of the three — a league with no scoring on file and a roster KTC and
   // ADP don't cover — the columns and their headings go, so a "start / bench"
   // label doesn't promise a breakdown that isn't there.
+  // The week's numbers count as numbers, which is not a detail: a league whose
+  // horizon is empty — the one a week panel is most useful for, late in a season
+  // — would otherwise have its two columns gated off by a rest-of-season read
+  // that has nothing left to say.
   const hasNumbers =
     horizon > 0 ||
+    weekView !== null ||
     Object.keys(values.ktc).length > 0 ||
     Object.keys(values.adp).length > 0;
   const lineupLayout = hasNumbers ? SPLIT_LAYOUT : NO_NUMBERS;
@@ -175,6 +184,7 @@ export function RosterDetail({
               layout={lineupLayout}
               columns={valueColumns}
               values={values}
+              weekView={weekView}
               horizon={horizon}
             />
           ))}
@@ -192,13 +202,18 @@ export function RosterDetail({
                 layout={lineupLayout}
                 columns={valueColumns}
                 values={values}
+                weekView={weekView}
                 horizon={horizon}
               />
             ))}
           </RosterSection>
         )}
 
-        <ValueFootnote columns={valueColumns} values={values} />
+        <ValueFootnote
+          columns={valueColumns}
+          values={values}
+          weekView={weekView}
+        />
 
         <DraftPicks
           picks={team.picks}
@@ -339,27 +354,49 @@ function RosterSection({
 }
 
 /**
- * A dim line saying what the KTC and ADP columns rest on — the board they were
- * priced against and, for ADP, how many crawled drafts stood behind it — shown
- * only while one of those columns is selected. The same "say what the number
- * rests on" habit the standings footer and the outlook caveat keep, and the
- * reminder that KTC is a dynasty board and ADP a market consensus, not points.
+ * A dim line saying what the selected columns rest on — the board KTC and ADP
+ * were priced against, and which weeks a points-per-game average was counted
+ * over — shown only while the column it is about is selected. The same "say what
+ * the number rests on" habit the standings footer and the outlook caveat keep,
+ * and the reminder that KTC is a dynasty board and ADP a market consensus, not
+ * points.
+ *
+ * The PPG line is the one that earns it most, because what it qualifies is
+ * *which season*: coming into week 1 there is nothing this year to average, so
+ * the column is last year's form standing in the same units as the projection
+ * beside it, and only this line says so.
  */
 function ValueFootnote({
   columns,
   values,
+  weekView,
 }: {
   columns: string[];
   values: LeagueRosterValues;
+  weekView: LeagueWeekView;
 }) {
   const showKtc = columns.includes("ktc");
   const showAdp = columns.includes("adp");
-  if (!showKtc && !showAdp) return null;
+  const showPpg = columns.includes("ppg") && weekView !== null;
+  if (!showKtc && !showAdp && !showPpg) return null;
 
   const board = values.superflex ? "superflex" : "1QB";
 
   return (
     <div className="mt-2 space-y-0.5 text-[0.65rem] leading-relaxed text-foreground/35">
+      {showPpg && weekView && (
+        <p>
+          PPG ·{" "}
+          {weekView.ppg_source.prior
+            ? `points per game across the ${weekView.ppg_source.season} season, ` +
+              "since no week of this one has been played yet"
+            : weekView.ppg_source.weeks > 0
+              ? `points per game over ${weekView.ppg_source.weeks} completed ` +
+                `week${weekView.ppg_source.weeks === 1 ? "" : "s"}, ` +
+                "in this league's scoring"
+              : "no completed weeks stored to average"}
+        </p>
+      )}
       {showKtc && (
         <p>
           KTC · KeepTradeCut dynasty {board} value

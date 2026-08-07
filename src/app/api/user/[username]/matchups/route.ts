@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 
 import type {
+  ApiErrorPayload,
   LeagueMatchupPayload,
   ManagerMatchupsPayload,
 } from "@/shared/contract";
 import { getManagerLeagueRosters, getManagerMatchups } from "@/shared/manager";
 import type { LeagueRosterSet, ManagerMatchup } from "@/shared/manager";
-import { getUpcomingWeek, getWeekLineups } from "@/shared/projections";
+import {
+  getUpcomingWeek,
+  getWeekLineups,
+  LAST_REGULAR_WEEK,
+} from "@/shared/projections";
 import type { LeagueTeamsInput, WeekLineups } from "@/shared/projections";
+import { integer } from "@/shared/query";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
@@ -31,6 +37,13 @@ export const dynamic = "force-dynamic";
  * today has no week to ask about, so everything below is skipped entirely rather
  * than run against a week invented from a clock.
  *
+ * `?week=` overrides that resolve, which is what the lineup checker's own week
+ * control sends. It is a *default* being replaced rather than a filter being
+ * added — the same relationship `?season=` has to `getActiveSeason` — so a named
+ * week is answered for whether or not it is the one the schedule would have
+ * picked, and the week always travels back on the payload so the caller reads
+ * one answer rather than assuming its own.
+ *
  * The two reads under it *are* parallel — the pairings and the rosters answer
  * different questions of the same week — and the projections are a third step,
  * because which rosters to solve is what the first two say.
@@ -41,10 +54,25 @@ export async function GET(
 ) {
   const resolved = await resolveManagerIdRequest(request, params);
   if (!resolved.ok) return resolved.response;
-  const { userId, username, season } = resolved;
+  const { userId, username, season, searchParams } = resolved;
+
+  // An explicitly asked-for week is the caller's answer and skips the resolve
+  // entirely, the rule `?season=` keeps one layer up: the derived week is a
+  // *default*, and a reader who has stepped the control has already decided.
+  // It also means a season with nothing stored ahead of today still answers for
+  // a week the reader named, rather than reporting no week at all.
+  const requested = integer(searchParams, "week", {
+    min: 1,
+    max: LAST_REGULAR_WEEK,
+    fallback: null,
+  });
+  if (!requested.ok) {
+    const error: ApiErrorPayload = { error: requested.error };
+    return NextResponse.json(error, { status: 400 });
+  }
 
   try {
-    const week = await getUpcomingWeek(season);
+    const week = requested.value ?? (await getUpcomingWeek(season));
     if (week === null) {
       const empty: ManagerMatchupsPayload = { season, week: null, matchups: {} };
       return NextResponse.json(empty);

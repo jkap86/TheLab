@@ -2,6 +2,7 @@ import type {
   LeagueDetailPayload,
   LeagueRosterValues,
   LeagueTeamPayload,
+  LeagueWeekViewPayload,
 } from "@/shared/contract";
 import type { DraftPickAsset } from "@/shared/manager";
 import type { PlayerSummary } from "@/shared/players";
@@ -26,11 +27,22 @@ export type {
   DraftPickAsset,
   LeagueOutlook,
   LeagueRosterValues,
+  LeagueWeekViewPayload,
   PlayerOutlook,
   PlayerSplit,
   PlayerSummary,
   TeamOutlook,
 };
+
+/**
+ * The week's numbers as the two tables read them: the payload, or null where the
+ * panel was opened on a season or the week's read failed.
+ *
+ * One alias rather than three spellings of `LeagueWeekViewPayload | null` down
+ * the tree, since every consumer treats "not asked for" and "asked for and
+ * unanswerable" the same way — the metrics draw an em dash and say which.
+ */
+export type LeagueWeekView = LeagueWeekViewPayload | null;
 
 /** A team as sent to the client (manager avatar id resolved to a URL). */
 export type LeagueTeamView = LeagueTeamPayload;

@@ -17,6 +17,7 @@ import type { KtcRosterValue, KtcValue } from "@/shared/ktc";
 import type { PlaceholderPick } from "@/shared/picktracker";
 import type { PlayersSyncSummary, PlayerSummary } from "@/shared/players";
 import type { Trade } from "@/shared/trades";
+import type { StatsSyncSummary } from "@/shared/stats";
 import type {
   LeagueOutlook,
   ProjectionFilters,
@@ -94,6 +95,55 @@ export type LeagueRosterValues = {
   adp_position: Record<string, number>;
 };
 
+/**
+ * A points-per-game reading, with the population behind it.
+ *
+ * `games` travels with `average` rather than being left to be derived, the habit
+ * `outlook.weeks`, KTC's `priced` of `rostered` and `aggregateRecord`'s league
+ * count all keep: an average over two games and one over eleven are different
+ * claims, and only the denominator says which is on screen.
+ */
+export type PpgPayload = { average: number; games: number };
+
+/**
+ * One league read as a **week** — what each subject projects for it, and what
+ * each has actually been averaging coming into it.
+ *
+ * Sent only when the caller asked for a week (`?week=`), which the lineup
+ * checker does and the leagues list and trades board do not: everything else
+ * that panel shows is a rest-of-season shape, which is the right question when a
+ * reader arrives at a league and the wrong one when they arrive at a *lineup*.
+ *
+ * Null where the week's read failed. The rosters are the point of that route and
+ * this is a pair of columns on top of them, so a failure here costs the columns
+ * and not the panel — the call `outlook` already makes beside it.
+ */
+export type LeagueWeekViewPayload = {
+  week: number;
+  /**
+   * Which season the averages were counted over, how many weeks contributed, and
+   * whether this is the previous season standing in for a window with nothing in
+   * it (week 1, or a season not yet backfilled).
+   *
+   * A property of the *read*, not of a row: the fallback fires because the window
+   * is empty, never because one player missed every game in it — a player with no
+   * games inside a real window is an em dash. Mixing the two would put two
+   * seasons' numbers in one column with nothing saying which was which.
+   */
+  ppg_source: { season: string; weeks: number; prior: boolean };
+  /** Player id → his projected points for the week, in this league's scoring. */
+  projection: Record<string, number>;
+  /** Player id → his points per game over the window; absent where he has none. */
+  ppg: Record<string, PpgPayload>;
+  /** Roster id → that team's best and current lineup for the week. */
+  team_projection: Record<
+    string,
+    { optimal: number; current: number; points_left: number }
+  >;
+  /** Roster id → that team's points per game over the same window. */
+  team_ppg: Record<string, PpgPayload>;
+};
+
 /** `GET /api/league/[leagueId]` — standings and rosters for one league. */
 export type LeagueDetailPayload = Omit<LeagueDetail, "teams"> & {
   teams: LeagueTeamPayload[];
@@ -134,6 +184,16 @@ export type LeagueDetailPayload = Omit<LeagueDetail, "teams"> & {
    * file, or no weeks left on the schedule.
    */
   outlook: LeagueOutlook | null;
+  /**
+   * The same league read as one week, when the caller asked for one — see
+   * {@link LeagueWeekViewPayload}.
+   *
+   * Absent rather than null when no `?week=` was sent, which is the honest
+   * spelling of "not asked for": null is what a *failed* week read answers with,
+   * and a panel needs to tell "these columns have no data" from "these columns
+   * were never requested".
+   */
+  week_view?: LeagueWeekViewPayload | null;
 };
 
 /** A manager's leagues, sent once from cache and again after a refresh. */
@@ -924,6 +984,9 @@ export type ProjectionsSyncPayload = ProjectionsSyncSummary;
 
 /** What `/api/players/sync` answers with — see {@link ProjectionsSyncPayload}. */
 export type PlayersSyncPayload = PlayersSyncSummary;
+
+/** What `/api/stats/sync` answers with — see {@link ProjectionsSyncPayload}. */
+export type StatsSyncPayload = StatsSyncSummary;
 
 /**
  * `GET /api/kickoff?season=YYYY` — when the season's first regular-season game
