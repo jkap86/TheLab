@@ -798,6 +798,51 @@ body {
     );
   }
 
+  /* A native date control stripped of its own internal chrome, so a lens can
+     hold one at the 16px iOS demands without the row growing.
+
+     `input[type="date"]` is not one box: WebKit lays it out as an edit region
+     holding a field per date component, each padded, with a calendar button
+     after them — and none of that padding answers to the padding utilities on
+     the input, which is why the control is ~40px wider than the date inside it.
+     On the window lenses that is the difference between the two of them holding
+     one line and breaking onto two, which reads as two controls rather than as
+     the halves of one sentence.
+
+     **The picker button is hidden here and put back by the call site at `@md`**,
+     which is the whole of how this stays a width fix rather than a behaviour
+     one. It is the expensive half — ~18px of the ~20 — and it is also the half
+     that costs a phone nothing to lose: iOS renders no button at all and opens
+     its wheel on a tap anywhere in the field, and Android's Chrome does the
+     same. So it goes where the row is tight (a narrow container is a phone) and
+     comes back where it is not (a container past `@md` is a desktop drawer, and
+     a mouse has nothing else to press).
+
+     **What is deliberately not done is `showPicker()` on click**, which is the
+     obvious way to give a mouse the field itself as the target and which
+     silently breaks typing: with a picker open Chromium routes keystrokes to it,
+     so `12312027` into a focused field leaves the value untouched. This lens is
+     typed into — the component holds a partial-entry buffer for exactly that —
+     so a fix that trades the keyboard for the mouse is not a fix.
+
+     Scoped to a class rather than applied to every date input: the seek key's
+     field is `w-full` in a panel with room to spare, and it keeps its button at
+     every width. */
+  .date-field-tight::-webkit-datetime-edit,
+  .date-field-tight::-webkit-datetime-edit-fields-wrapper,
+  .date-field-tight::-webkit-datetime-edit-month-field,
+  .date-field-tight::-webkit-datetime-edit-day-field,
+  .date-field-tight::-webkit-datetime-edit-year-field {
+    padding: 0;
+  }
+  /* The separators keep a hair, or the digits run together. */
+  .date-field-tight::-webkit-datetime-edit-text {
+    padding: 0 1px;
+  }
+  .date-field-tight::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+
   /* A bezel with gauges in it: the trade card's league specs.
 
      **Two depths, and both of them run the same way.** The bezel is a trough

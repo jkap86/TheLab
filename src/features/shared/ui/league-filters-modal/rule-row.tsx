@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { mobileInputText } from "../../control-type.ts";
 import { COMPARE_OPS, type FilterRule, formatRuleValue } from "../../league-filters";
 
 import type { RuleKeyOption } from "./league-filters-modal.types.ts";
@@ -48,8 +49,15 @@ export function RuleRow({
 
   // Inset parts, laid in the bay's trough: a control you type into is a slot,
   // not a key. The dark face and the top shadow are what say so.
+  //
+  // One string for all three, which is why it carries the input token and not
+  // the select one — they are the same 16px, and a row that spelled its floor
+  // twice would be a row where one of them could drift. The padding is
+  // untouched: this row's width is absorbed by the key menu (`flex-1
+  // min-w-0`), so the wider type costs it nothing, and pinning the line box is
+  // what keeps the row at the 44px it was drawn at.
   const inset =
-    "rounded-md border border-foreground/10 bg-[#06111b] px-1.5 py-1 text-[13px] font-bold text-foreground shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] outline-none focus-visible:border-active/60";
+    `rounded-md border border-foreground/10 bg-[#06111b] px-1.5 py-1 ${mobileInputText} font-bold text-foreground shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] outline-none focus-visible:border-active/60`;
 
   return (
     <div className="flex items-center gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.05] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">

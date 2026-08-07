@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Avatar, PositionBadge } from "@/features/shared";
+import { SEARCH_FIELD } from "@/features/shared/control-type";
 import type { UserInfo } from "@/shared/contract";
 
 import {
@@ -164,7 +165,7 @@ export function TradeSearchPanel({
           onChange={(event) => setQuery(event.target.value)}
           placeholder={who ? "Search managers" : "Search players and picks"}
           aria-label={who ? "Search managers" : "Search players and picks"}
-          className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-foreground/30"
+          className={SEARCH_FIELD}
         />
       </div>
 

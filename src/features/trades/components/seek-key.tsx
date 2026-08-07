@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
+import { compactInput } from "@/features/shared/control-type";
 import { MONTH_ABBREVIATIONS } from "@/features/shared/date-range";
 
 import type { TradeSeek } from "../filters";
@@ -174,7 +175,13 @@ export function SeekKey({
               // discover.
               travel(!picked || picked >= today ? null : picked);
             }}
-            className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.04] px-2.5 py-1.5 text-xs outline-none transition-colors focus:border-active/45"
+            // `compactInput` rather than the bare floor: this field states its
+            // own box, so the half-step off `py-1.5` is what lands 16px type on
+            // the 30px the panel was drawn with. Its width is `w-full` inside a
+            // 240px panel, so the type costs nothing horizontally and the
+            // native picker button stays — the lens in the ADP drawer is the
+            // one that has to give that up for room.
+            className={`w-full rounded-lg border border-foreground/10 bg-foreground/[0.04] px-2.5 ${compactInput} outline-none transition-colors focus:border-active/45`}
           />
           <p className="mt-2 flex items-center gap-2 text-[10.5px] text-foreground/40">
             {value === null ? (

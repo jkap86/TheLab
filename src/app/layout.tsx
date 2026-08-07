@@ -27,34 +27,35 @@ const orbitron = Orbitron({
 });
 
 /**
- * `maximumScale: 1` is here for one reason: iOS Safari zooms the page in when a
- * field is focused whose font-size is under 16px, and it does not zoom back out
- * — so tapping a filter chip, a search box or a date lens left the reader
- * scrolled sideways in a magnified page, having to pinch their way back before
- * the next press.
+ * **Nothing here caps the scale, and the reason is that the bug it used to cap
+ * is fixed at its source.**
  *
- * The other cure is a 16px floor on every form control, and it is the wrong one
- * *here* rather than in general. These fields are measured instruments: the
- * lookback panel's two lenses come to 282px of the 332 a 390px screen leaves
- * (the arithmetic is written out beside them, per device-pixel-ratio, because a
- * native date control moves ~6px a step), a rule row's value field is a 52px
- * box in a half-bay, and the drawer's filter row is a wrap of `text-xs` chips
- * sized to leave the board room. A floor would reflow all of it on exactly the
- * width the cap exists for, so the type stays as drawn and the page declines to
- * scale instead.
+ * iOS Safari zooms the page in when a field is focused whose computed
+ * `font-size` is under 16px, and it does not zoom back out — so tapping a filter
+ * chip, a search box or a date lens left the reader scrolled sideways in a
+ * magnified page, pinching their way back before the next press. This export
+ * carried `maximumScale: 1` against that, which works by asking the browser not
+ * to scale at all.
  *
- * What it costs is stated plainly: `userScalable` is deliberately left unset —
- * this asks browsers not to scale *on their own*, never to refuse the reader —
- * and iOS has honoured pinch-zoom past `maximum-scale` since iOS 10, so the
- * gesture survives where the bug was. Chrome on Android does respect the cap
- * and loses pinch-zoom by default (its "Force enable zoom" setting overrides
- * it), and Android has no focus zoom to fix, so that browser pays for a fix it
- * did not need. On a page of 10px readouts that is a real trade, and the way
- * out if it ever matters is scoping the cap to the platform that zooms — which
- * needs either a dynamic render (`headers()`, which would un-prerender every
- * page here) or UA sniffing whose misses are invisible until someone reports
- * the zoom again. Neither is worth it for a cap the affected platform ignores
- * when a reader pinches.
+ * That was a fix aimed at the symptom, and it billed the wrong reader. iOS
+ * ignores the cap for a deliberate pinch and so kept its gesture; **Chrome for
+ * Android honours it and loses pinch-zoom by default**, and Android has no focus
+ * zoom to fix — so the one platform that paid the whole cost was the one with
+ * nothing wrong with it, on a page written in 10px readouts. The old note
+ * conceded that and argued the alternative was worse: a 16px floor would reflow
+ * a set of instruments measured to the pixel, on exactly the widths the cap was
+ * for.
+ *
+ * Measured rather than assumed, that turned out to be false. Every focusable
+ * control is at 16px now and the boxes are within a pixel of where they were —
+ * `features/shared/control-type.ts` is the floor, the table of before-and-after
+ * heights, and the two places that had to give a padding back for it. So the
+ * cap is gone: **`userScalable` unset and `maximumScale` unset means every
+ * browser keeps pinch-zoom, and none of them has a reason to scale on its own.**
+ *
+ * The way this regresses is a new field written at `text-xs` because a row is
+ * tight — which is why the floor is a named token with a test reading every
+ * control in the tree back, rather than a habit.
  */
 export const viewport: Viewport = {
   // Both restated because defining this export replaces Next's default meta
@@ -62,7 +63,6 @@ export const viewport: Viewport = {
   // every layout in the app is drawn against.
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
 };
 
 export const metadata: Metadata = {

@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { SEARCH_FIELD } from "../control-type.ts";
 import {
   type Subject,
   type SubjectKind,
@@ -670,7 +671,7 @@ function SubjectPanel({
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Search players and leaguemates"
           aria-label="Search players and leaguemates"
-          className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-foreground/30"
+          className={SEARCH_FIELD}
         />
       </div>
 

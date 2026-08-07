@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 
 import type { AdpPlayerPayload } from "@/shared/contract";
 
+import { SEARCH_FIELD } from "../../control-type.ts";
 import type { ColumnPreset } from "../../metric-cell.ts";
 import { rankByName } from "../../name-search.ts";
 import type { ShareMetric, ShareMetricContext } from "../../share-metrics.ts";
@@ -305,7 +306,7 @@ export function SharesSheet<T extends ShareRow>({
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Search ${noun} shares`}
               aria-label={`Search ${noun} shares`}
-              className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-foreground/30"
+              className={SEARCH_FIELD}
             />
           </div>
 
