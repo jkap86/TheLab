@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useId, useMemo, useRef, useState } from "react";
 
 import type { ManagerLeague } from "@/shared/manager";
 
@@ -23,6 +23,25 @@ import {
 import type { FilterSpec } from "./adp-drawer.types.ts";
 import { leagueSizeFilter, withSeason } from "./adp-drawer.utils.ts";
 import { useAdpDrawerLifecycle } from "./use-adp-drawer-lifecycle.ts";
+
+/**
+ * The pinned block's sections, memo'd at the use site rather than at their
+ * exports — the render test calls those as plain functions, which `memo`'s
+ * wrapper object is not.
+ *
+ * What the memo is for: the steepness preview (`dragging` below) is this
+ * component's own state, so every notch of a drag re-renders the composition
+ * root — and the curve only reaches the slider and the board's value cells.
+ * Without these, each of the ~24 notches across the slider's travel also
+ * rebuilt the rolling draft count, the window channel's bars and the filter
+ * tray — none of which a curve can change. Their props are stable through a
+ * drag by construction: the store's `controls` hasn't moved, and every handler
+ * this file creates is a `useCallback` below.
+ */
+const PinnedHeader = memo(AdpDrawerHeader);
+const PinnedRange = memo(AdpRangeControl);
+const PinnedFilterBar = memo(AdpFilterBar);
+const PinnedFooter = memo(AdpDrawerFooter);
 
 /**
  * The ADP board: which crawled drafts the average is taken over, and the board
@@ -144,6 +163,18 @@ export function AdpDrawer({
     [density.months, controls.season],
   );
 
+  // Stable across a steepness drag, which is what lets the memo'd sections
+  // above skip: an inline arrow is a fresh prop per notch.
+  const handleSeasonChange = useCallback(
+    (season: string) => onChange(withSeason(controls, season)),
+    [controls, onChange],
+  );
+  const handleRangeChange = useCallback(
+    (range: AdpControls["range"]) => onChange({ ...controls, range }),
+    [controls, onChange],
+  );
+  const toggleFilters = useCallback(() => togglePanel("filters"), [togglePanel]);
+
   if (!onScreen) return null;
 
   return (
@@ -216,34 +247,35 @@ export function AdpDrawer({
             good, so the block is taller than the arithmetic above would leave
             it; the board below is what pays, and it scrolls. */}
         <div className="flex flex-col gap-2 border-b border-foreground/10 bg-foreground/[0.02] px-4 py-2">
-          <AdpDrawerHeader
+          <PinnedHeader
             seasons={seasons}
             season={controls.season}
             draftCount={board.data?.draft_count ?? null}
+            stale={board.stale}
             // The window is dropped with the season, not carried across it —
             // see `withSeason`.
-            onSeasonChange={(season) => onChange(withSeason(controls, season))}
+            onSeasonChange={handleSeasonChange}
             onClose={onClose}
           />
 
-          <AdpRangeControl
+          <PinnedRange
             range={controls.range}
             season={controls.season}
             defaultSeason={defaultSeason}
             months={seasonMonths}
             density={density}
             today={today}
-            onChange={(range) => onChange({ ...controls, range })}
+            onChange={handleRangeChange}
           />
 
-          <AdpFilterBar
+          <PinnedFilterBar
             controls={controls}
             filters={filters}
             seedLeagues={seedLeagues}
             open={openPanel === "filters"}
             trayId={filterTrayId}
             triggerRef={filterTrigger}
-            onToggle={() => togglePanel("filters")}
+            onToggle={toggleFilters}
             onChange={onChange}
           />
 
@@ -275,7 +307,7 @@ export function AdpDrawer({
           onChange={onChange}
         />
 
-        <AdpDrawerFooter
+        <PinnedFooter
           teams={controls.teams}
           premiseId={premiseId}
           onReset={onReset}

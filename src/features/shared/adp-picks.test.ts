@@ -309,6 +309,32 @@ describe("adpBoardEntries", () => {
       adpBoardRows(board, "both").map((p) => p.player_id),
     );
   });
+
+  /**
+   * What the windowed list rests on: `getItemKey` reads these keys, so a key
+   * repeated within one board is two rows sharing virtualizer state, and a key
+   * that changed across an identical recompute is a measurement thrown away for
+   * nothing. A filter change reshuffles the board, and keying by the row's
+   * subject rather than its index is what keeps nothing the virtualizer held
+   * about the old order alive against the new one.
+   */
+  test("keys are unique, deterministic, and the subject's own", () => {
+    for (const shown of ["both", "redraft", "dynasty"] as const) {
+      const entries = adpBoardEntries(board, rows({ players: board }), shown);
+      const at = keys(entries);
+      assert.equal(new Set(at).size, at.length, `${shown}: keys must be unique`);
+      assert.deepEqual(
+        keys(adpBoardEntries(board, rows({ players: board }), shown)),
+        at,
+        `${shown}: same inputs, same keys`,
+      );
+      // The prefix is what makes a pick's key unable to collide with the
+      // Sleeper player id a player row is keyed by.
+      for (const entry of entries) {
+        if (entry.kind === "pick") assert.ok(entry.key.startsWith("pick:"));
+      }
+    }
+  });
 });
 
 describe("pickDiscountBoard", () => {

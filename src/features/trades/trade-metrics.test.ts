@@ -212,6 +212,10 @@ test("TRADE_METRICS", async (t) => {
     const faabOnly = cell("adp", ctx({ faab: 25 }));
     assert.equal(faabOnly.kind === "value" && faabOnly.text, null);
     assert.match(faabOnly.title, /this side received neither/);
+    // The KTC cell keeps the same branch — one rule, two catalogue entries.
+    const ktcFaabOnly = cell("ktc", ctx({ faab: 25 }));
+    assert.equal(ktcFaabOnly.kind === "value" && ktcFaabOnly.text, null);
+    assert.match(ktcFaabOnly.title, /this side received neither/);
   });
 
   // An unplaced pick takes the middle of its round and the untiered KTC row, so

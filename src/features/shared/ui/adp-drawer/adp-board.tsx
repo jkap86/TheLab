@@ -154,32 +154,48 @@ export function AdpBoard({
             redraftDrafts={redraft_drafts}
             dynastyDrafts={dynasty_drafts}
             teams={controls.teams}
+            refreshing={board.stale}
             onToggleBoard={(next) => onChange(withBoardToggle(controls, next))}
           />
-          {rows.length === 0 ? (
-            <AdpBoardNoRows board={soleBoard} />
-          ) : (
-            <AdpBoardRows
-              rows={rows}
-              scrollRef={scrollRef}
-              both={both}
-              soleBoard={soleBoard}
-              soleDrafts={soleDrafts}
-              redraftDrafts={redraft_drafts}
-              dynastyDrafts={dynasty_drafts}
-              teams={controls.teams}
-              steepness={steepness}
-            />
-          )}
-          {player_count !== null && player_count > players.length && (
-            <p className="px-1 pt-2 text-xs text-foreground/35">
-              {/* Player rows, not every row: the picks in this list are derived
-                  from the rookies already on it, so counting them would put the
-                  numerator above a denominator that only ever counts players. */}
-              Showing {shownPlayers.toLocaleString()} of{" "}
-              {player_count.toLocaleString()} players matching these filters.
-            </p>
-          )}
+          {/* `keepPreviousData` holds these rows through a filter change, so
+              while `stale` they are the *previous* board's answer wearing the
+              new filters' header. Dimming them — the trades board's own
+              treatment of its held count — is what keeps that honest without
+              the flash an emptied list would be; the rows stay readable and
+              the scroll stays live, so nothing about the drawer stops
+              responding. `aria-busy` says the same thing to a screen reader,
+              and the "Updating" mark in the sticky head above says it in
+              words. A background refetch of the *same* board never dims:
+              `stale` is placeholder data only, never `loading`. */}
+          <div
+            aria-busy={board.stale || undefined}
+            className={`transition-opacity duration-200 ${board.stale ? "opacity-40" : ""}`}
+          >
+            {rows.length === 0 ? (
+              <AdpBoardNoRows board={soleBoard} />
+            ) : (
+              <AdpBoardRows
+                rows={rows}
+                scrollRef={scrollRef}
+                both={both}
+                soleBoard={soleBoard}
+                soleDrafts={soleDrafts}
+                redraftDrafts={redraft_drafts}
+                dynastyDrafts={dynasty_drafts}
+                teams={controls.teams}
+                steepness={steepness}
+              />
+            )}
+            {player_count !== null && player_count > players.length && (
+              <p className="px-1 pt-2 text-xs text-foreground/35">
+                {/* Player rows, not every row: the picks in this list are derived
+                    from the rookies already on it, so counting them would put the
+                    numerator above a denominator that only ever counts players. */}
+                Showing {shownPlayers.toLocaleString()} of{" "}
+                {player_count.toLocaleString()} players matching these filters.
+              </p>
+            )}
+          </div>
         </>
       )}
     </div>

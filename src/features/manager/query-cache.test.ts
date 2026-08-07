@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   QueryObserver,
+  keepPreviousData,
   type QueryClient,
   type QueryObserverOptions,
 } from "@tanstack/react-query";
@@ -56,10 +57,13 @@ const leaguesOptions = (searched: string) => ({
   staleTime: STALE_TIMES.leagues,
 });
 
+// Mirrors `useAdp`'s options, `keepPreviousData` included — the stale-flag test
+// below is about exactly that line.
 const adpOptions = (query: string) => ({
   queryKey: boardQueryKeys.adp(query),
   queryFn: () => fetchJson<{ query: string }>(`/api/adp?${query}`, "Failed to load ADP"),
   staleTime: ADP_STALE_TIMES.board,
+  placeholderData: keepPreviousData,
 });
 
 test("navigating between sibling manager routes", async (t) => {
@@ -269,6 +273,47 @@ test("the ADP board", async (t) => {
 
     assert.equal(mock.countOf("/api/adp"), 1);
     other.unmount();
+    mock.restore();
+  });
+
+  await t.test("holds the previous board through a filter change, flagged stale", async () => {
+    // `useAdp`'s `keepPreviousData`, seen from the cache: a filter press is a
+    // *different key* on the same observer, and what the drawer renders in the
+    // gap is the old board — real rows, wrong filters — which is exactly what
+    // `isPlaceholderData` exists to name. The drawer dims the rows on it; this
+    // pins the flag's whole lifecycle so that dimming means what it says.
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ query: url }));
+
+    const board = mount(client, adpOptions("season=2026"));
+    await flush();
+    assert.equal(board.observer.getCurrentResult().isPlaceholderData, false);
+
+    // The press: same observer, new key — the hook re-rendering with new filters.
+    board.observer.setOptions(adpOptions("season=2026&superflex=1"));
+    const held = board.observer.getCurrentResult();
+    assert.deepEqual(
+      held.data,
+      { query: "/api/adp?season=2026" },
+      "the old board stays on screen rather than blanking",
+    );
+    assert.equal(held.isPlaceholderData, true, "and it is flagged as not this key's answer");
+
+    // The new board lands: the flag drops with the data swap, never after it.
+    await flush();
+    const landed = board.observer.getCurrentResult();
+    assert.deepEqual(landed.data, { query: "/api/adp?season=2026&superflex=1" });
+    assert.equal(landed.isPlaceholderData, false);
+
+    // Widening back is a cache hit: the first board, immediately, with no
+    // stale beat and no third request.
+    board.observer.setOptions(adpOptions("season=2026"));
+    const restored = board.observer.getCurrentResult();
+    assert.deepEqual(restored.data, { query: "/api/adp?season=2026" });
+    assert.equal(restored.isPlaceholderData, false);
+    assert.equal(mock.countOf("/api/adp"), 2);
+
+    board.unmount();
     mock.restore();
   });
 });

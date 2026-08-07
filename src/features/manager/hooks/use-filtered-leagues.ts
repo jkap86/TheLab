@@ -200,8 +200,15 @@ export function useFilteredLeagues(searched: string) {
     /** After the league filters, before the subjects — what the menus count over. */
     leagueFiltered,
     filtered,
-    /** True while a selected subject's maps are still being read. */
-    subjectsLoading: narrowing && !rosters.data && !members.data,
+    /**
+     * True while a selected subject's maps are still being read — until each
+     * has settled with data or an error, not until either lands. Judged on the
+     * faster read alone, a leaguemate rule showed a settled empty count while
+     * the membership it needs was still in flight.
+     */
+    subjectsLoading:
+      narrowing &&
+      ((!rosters.data && !rosters.error) || (!members.data && !members.error)),
   };
 }
 
