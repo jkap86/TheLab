@@ -752,9 +752,12 @@ received; `shared/trades/params` and `features/trades/trade-query` are the two
 ends of the vocabulary that decides which of those trades a reader is looking at,
 and `features/trades/filters` is what is left on the client once the *matching*
 moved into SQL — the shape of a selection, the pick token's spelling, and how a
-window resolves against today. `features/trades/pick-display` is the third of
-that shape and the smallest: what a pick is *called* and when its origin is worth
-printing, two rules the card had neither of. All are pure and tested, and the thin
+seek resolves against today. `features/trades/pick-display` is the third of
+that shape and the smallest: when a pick's origin is worth printing, a rule the
+card had neither of. (What a pick is *called* was its other half and lives in
+`features/shared/pick-value` now, since the ADP board enumerates picks belonging
+to no trade and has to call them what the cards call them; this file re-exports
+`pickLabel` so its own callers keep one import.) All are pure and tested, and the thin
 I/O around them (`shared/trades/queries`, the routes, the page) has no rules of
 its own.
 
@@ -798,11 +801,13 @@ Three decisions live in the pair rather than in the components:
   asset landed on is the trade's own display.
 - **`all` and `any` are both real questions** — "did these two managers trade
   with each other" against "anything involving any of these three players" — so
-  the selection carries one mode over the whole of it. The date window is not
-  one of the alternatives: it always narrows, because it is a bound rather than
-  a selection. And a trade Sleeper filed with no timestamp is dropped by *any*
-  bound, for the reason `/api/adp` drops an undated draft — there is no honest
-  side of the boundary to put it on.
+  the selection carries one mode over the whole of it. The date is not one of
+  the alternatives: it always narrows, because it is a bound rather than a
+  selection — which is as true of the single seek the client sends today as it
+  was of the window it replaced, since the wire still takes a `from`/`to` pair
+  and the seek is one half of it. And a trade Sleeper filed with no timestamp is
+  dropped by *any* bound, for the reason `/api/adp` drops an undated draft —
+  there is no honest side of the boundary to put it on.
 
 **The league filters' rule lists are AND-only, and that difference from the
 trades selection is deliberate.** Both let a reader build a list rather than pick
@@ -971,10 +976,10 @@ stops holding, a comment saying it does would not have caught it.
     `hero` for `/tools`, where the wordmark *is* the page, and `page` everywhere
     else, where the app bar has already named the tool. **`/trades` leads with
     its controls instead and has none**, which is the honest end of that
-    "the app bar has already named the tool" clause: a board that is a filter
-    ledge over a list several thousand rows long was spending ~96px on a word the
-    bar says a few pixels above it and a scope line the ledge's own summary says
-    beside the control that sets it. Reach for the heading when a page has
+    "the app bar has already named the tool" clause: a board that is a bank of
+    filters over a list several thousand rows long was spending ~96px on a word
+    the bar says a few pixels above it and a scope line the controls themselves
+    now say, beside the keys that set it. Reach for the heading when a page has
     something to say before its content; skip it when the first control *is* the
     content's own description.
   - `LIST_ROW_SURFACE` / `LIST_ROW_HOVER` / `RowSheen` are the tool cards' glass
@@ -1267,18 +1272,36 @@ stops holding, a comment saying it does would not have caught it.
   three nulls through to say so.
 - **The trades page carries two filter sets, like the manager tabs, and for the
   same reason.** The league filters say *which leagues' trades are in the list at
-  all*; the trade filters say *which of those trades* — circle, window, players,
+  all*; the trade filters say *which of those trades* — circle, seek, players,
   picks, managers. One is about where you play, the other about what happened
   there, so they stay two controls rather than two tabs of one dialog. **They
   are no longer the same *kind* of control, and that asymmetry is the point**:
-  the trade
-  filters are a ledge seated on the page — one line that expands in place — while
-  the league filters stay a modal, because that dialog is shared with the manager
-  tabs and a control rendered on two pages with two shapes is the drift a shared
-  component exists to stop. Which also settles what each trigger says: the ledge
-  is `Filters` and the modal is `Leagues` here (`label`, defaulting to `Filters`
-  where it is the page's only one), since two parts wearing the same word are two
-  answers to the same question. Both are applied by
+  the trade filters are `TradeControls`, seated on the page with nothing behind a
+  press, while the league filters stay a modal, because that dialog is shared
+  with the manager tabs and a control rendered on two pages with two shapes is
+  the drift a shared component exists to stop. That is also why only one trigger
+  on this row needs a word: the modal says `Leagues` (`label`, defaulting to
+  `Filters` where it is the page's only one), and there is no second `Filters`
+  key to be confused with it — two parts wearing the same word are two answers to
+  the same question.
+
+  **The trade filters got there by losing a ledge, and the lesson is worth the
+  paragraph.** They were one line that expanded in place onto a panel holding the
+  scope and a date window, on the reasoning that both are chosen once and then
+  read — which is right about *reading* them and wrong about the press. The scope
+  is the page's most consequential narrowing (it is the difference between the
+  whole crawled market and one account's corner of it) and the seek is a place in
+  the list, which is not a setting at all; behind a press both were invisible, so
+  the ledge had to carry a summary line restating them, and **the summary was
+  doing the work of the control it was hiding**. On the page they state
+  themselves — a lit key, a date field — and the ledge's own `Filters` trigger,
+  its badge, its `dynamic()` split and half its summary line all went with the
+  panel. What is left of the summary is `season · league rules · the bays`, and
+  the bullet on `tradeFilterSummary` is why: a line beside a control must not
+  restate what the control already says, which is the league detail panel's
+  dropped team plate one page over. Reach for a disclosure when what is behind it
+  is genuinely settings; a control that has to be summarised outside itself is
+  one that wanted to be on the page. Both filter sets are applied by
   the **database** now, which is the change the whole page is arranged around
   (see the next bullet); what stays on the client is the league *rules*, because
   they are a slot-group and scoring-key engine over Sleeper's JSONB and a second
@@ -1289,7 +1312,7 @@ stops holding, a comment saying it does would not have caught it.
   — which players moved, who deals most, which pick seasons are on the table —
   because a fixed list would offer players nobody traded while hiding the one
   someone wants; they are `/api/trades/facets`, a grouped aggregate over the same
-  population, asked for only while the dialog is open. Two details in the menus:
+  population, asked for only while the search panel is open. Two details in the menus:
   each option carries how many trades it would leave, counted over everything
   *except* the selection itself — counting over the narrowed list collapses a menu
   to its own selection the moment you make one, and it can't be widened again
@@ -1360,6 +1383,41 @@ stops holding, a comment saying it does would not have caught it.
     database has never synced has no leagues and no leaguemates; folding that back
     to "not narrowing" would answer a question nobody asked. The page's empty state
     says so, which is where a reader can act on it.
+- **The date is one date, and it is a place in the board rather than a window
+  over it** (`TradeSeek`, `tradeSeekBounds`). It was a `from`/`to` pair with four
+  relative presets and a `custom` mode the two fields put it into; what replaced
+  all of that is a single field defaulting to today. The argument is the board's
+  own ordering: this is a keyset walk newest-first, so a date is exactly what its
+  cursor already expresses — the read resumes there and everything older is
+  *below* it, which is where a reader scrolling a chronological list expects to
+  find it. A window had two halves, a preset table, a mode and a label function to
+  answer a question the list answers for free. Five things hold it up:
+  - **Only the far end is ever bounded**, which is what makes it a place to scroll
+    from rather than a slice to look at. The lower bound is gone from the
+    vocabulary, not merely unset — there is no second field to leave half-filled
+    and no `custom` mode to enter.
+  - **It is stored as null and displayed as today.** No trade completes in the
+    future, so "today" and "the newest trades" are one board — and spelling the
+    default as a date would put a bound on the query string that narrows nothing,
+    minting a fresh cache entry every midnight for an answer that never differs.
+    `tradeSeekBounds` folds *both* spellings (and any date past today) to the open
+    bounds rather than trusting the control to, which is also what makes picking
+    today the one-press way back to the top.
+  - **An unreadable date is an unpositioned board, never an empty one** — `NaN` as
+    a bound compares false against every trade, which would clear the list with
+    nothing on screen to say why. The parse comes before the day shift, since the
+    shift is what would throw.
+  - **Travelling scrolls the page back to the header, not to the list.** The list
+    is unmounted whenever the board is empty (the "no trades" note takes its
+    place), so a travel that lands on nothing would have no scroll target — and a
+    target that can unmount mid-change takes the scroll with it. The header is
+    always mounted, its top edge is where the board begins, and `scroll-mt` is how
+    the pinned app bar is accounted for, the same mechanism the leagues list
+    scrolls an expanded card by.
+  - **It only scrolls when the header has actually scrolled off**, and never on
+    mount. A reader still looking at the controls is already at the top, and
+    pulling the page to hide the control they just pressed is worse than not
+    moving; a board arriving is not a reader travelling.
 - **The board is filtered in SQL and paginated, and it used to stream the whole
   season — this is the largest performance decision in the app, and it is worth
   reading as a correction of the one before it.** The old design was a sound
@@ -1472,9 +1530,9 @@ stops holding, a comment saying it does would not have caught it.
     total changes on every press. Together, one checkbox re-ran a season-wide
     grouped aggregate (~1.5s) to move a number `count(*)` answers in ten
     milliseconds. There was a third route for that number, `/api/trades/count`,
-    and the ledge retired it: the filters commit live, so the narrowed total
-    arrives on the first page of the board itself — one route fewer, and no way
-    for the promise and the list to disagree. The facets query runs its three
+    and committing live retired it: every filter applies on the press, so the
+    narrowed total arrives on the first page of the board itself — one route
+    fewer, and no way for the promise and the list to disagree. The facets query runs its three
     branches as
     three parallel statements rather than one `UNION ALL` — 2,090ms as one
     statement, ~850ms as three — which costs reading the population three times
@@ -1553,16 +1611,24 @@ stops holding, a comment saying it does would not have caught it.
     written during render survives a concurrent render that was thrown away,
     while React re-runs a self-adjusting component before committing anything
     under it.
-  - **Both filter controls are split at the press, not at the component.**
-    Neither's contents are on screen at first paint, and between them they were
-    the largest client modules the page pulled. For the league filters the seam
-    is the whole dialog, which is nothing but a trigger and a `<dialog>`; for the
-    ledge it is one layer in — `TradeFiltersPanel`, since the ledge's own trigger
-    and summary line *are* on screen and are what a reader who never opens it
-    reads. Either way the rule is the same: the part that carries the badge stays
-    static, the part nobody has opened is split. The ADP drawer and the columns
-    editor are split the same way in the manager tool, each latched so closing
-    doesn't unmount the dialog inside its own `close` handler.
+  - **A control is split at the press, not at the component — and what is not
+    behind a press is not split at all.** The seam goes where the trigger ends
+    and the contents begin: for the league filters that is the whole dialog,
+    which is nothing but a trigger and a `<dialog>`, and for the trade search it
+    is one layer in — `TradeSearchPanel`, since the bays and their tokens *are*
+    on screen and are what a reader who never opens it reads. The rule either way
+    is that the part carrying the badge stays static and the part nobody has
+    opened is split. The ADP drawer and the columns editor are split the same way
+    in the manager tool, each latched so closing doesn't unmount the dialog
+    inside its own `close` handler.
+
+    **`TradeControls` is the counter-example and worth keeping as one**: it had a
+    `dynamic()` too, for the panel behind its `Filters` key, and lost both when
+    the scope and the date came out onto the page. What is left is four keys, a
+    date input and two lines of prose — a chunk boundary costs more than that
+    saves, in bytes and in the placeholder needed to hold the row's height while
+    it lands. **Split what a reader might never open; a control they always see
+    is not a candidate however small the diff looks.**
 
     **The league sheet is the third on this page and the easiest of the three**,
     because the trigger is a trade card three modules away rather than anything
@@ -1641,6 +1707,12 @@ stops holding, a comment saying it does would not have caught it.
     list, since the count is the number the filter was pressed to move and
     showing the old one undimmed is the one place the lag would read as an
     answer.
+
+    **The date control is the one press this has to be undone for**, and that is
+    the whole of why travelling scrolls the page (see the seek bullet above).
+    Holding the reader's position through a re-key is right for a narrowing —
+    the list they are reading stays put while it thins — and wrong for a
+    position, where staying put is the one outcome that hides the answer.
 - **A trade card's header states the instant, and its sides each state one
   value.** Two changes to what a card says, and each replaced something that read
   as information and wasn't:
@@ -1755,8 +1827,10 @@ stops holding, a comment saying it does would not have caught it.
     So a pick is priced by the player it buys, on the same curve, in the same
     units, out of the same population — which is what makes a haul of players
     and picks one sum where summing an ADP value and a KTC price would be a
-    scale nobody has defined. `features/trades/pick-value.ts` is the ladder and
-    the decisions in it:
+    scale nobody has defined. `features/shared/pick-value.ts` is the ladder —
+    it was `features/trades/pick-value.ts` until the ADP drawer became its second
+    reader, and that path re-exports it under the mover's rule — and the
+    decisions in it:
     - **Two boards, because ordering and pricing are two questions**
       (`rookieLadder(ordering, pricing, board)`). *Which rookie does this pick
       take* is a fact about **rookie drafts**, whose ADP orders one class against
@@ -2066,7 +2140,8 @@ stops holding, a comment saying it does would not have caught it.
     line, which is a column of ones.
   - **A pick is named the way Sleeper names it: its slot where the order is set,
     its round where it isn't, and its origin only when that is a surprise**
-    (`features/trades/pick-display`). Once a league has set that draft's order the
+    (`features/trades/pick-display`, and `pickLabel` in
+    `features/shared/pick-value`). Once a league has set that draft's order the
     pick has a *place* — 1.05 rather than "a 1st" — which is the difference
     between the pick that takes the best rookie and the pick that takes the fifth;
     most picks on this board are seasons out, so the round is usually all there
@@ -2460,6 +2535,45 @@ stops holding, a comment saying it does would not have caught it.
     column of bare numbers three hundred rows down needs, and there was no
     pinned surface to hang them under before.
 
+  **Draft picks are rows on that list, beside the players, and they read off the
+  board on screen** (`features/shared/adp-picks`). A board of player averages has
+  no row for a pick and doesn't need one: a rookie pick is a place in a queue and
+  the queue is on the board already, so the 1.01 stands where the best rookie
+  goes, the 1.02 where the second does, and a pick's ADP *is* a player's ADP —
+  which is what lets it sort into the list rather than sit in a table of its own.
+  Six decisions in it:
+  - **Both halves read the displayed board, which is the opposite call from
+    `pick-value`'s and deliberately so.** There the ordering comes from rookie
+    drafts and the price from startups, because a *valuation* must not follow a
+    display choice — that split is the whole of that module's argument. Here the
+    display **is** the question: "where do picks fall on the board in front of
+    me" has one answer per board, and on a board of rookie drafts the 1.01
+    genuinely is ADP ~1. A second population would make the pick rows describe
+    drafts the reader is not looking at.
+  - **The discount lands on the value and never on the ADP**, which is what
+    `pickAdpStand` was split out of `pickAdpValue` for. The curve is dragged a
+    notch at a time and reorders nothing (`adpListIdentity`'s own rule), so a
+    pick carries an average and a factor and the cell multiplies them — exactly
+    as a player row carries an average and prices it in the cell.
+  - **The numbered class asks KTC for nothing.** `ladderSeason` tells
+    `pickAdpStand` that a pick is the class the ladder describes, so an unsynced
+    KTC board costs the future rows and not the current ones. Without it a failed
+    scrape takes the whole feature, since `ktcPickDiscount` answers null with no
+    anchor to measure against — which is right for a 2032 4th and wrong for a
+    pick being spent now.
+  - **A future season is one row per round, assumed mid, and only where KTC
+    prices it** (`ktcPickBoardRows`). There is no class to number against, so
+    there is no honest slot; and a season KTC has no opinion about is a season
+    whose picks cannot be discounted, so it is absent rather than quoted at a
+    nearer pick's price.
+  - **The class season is the *active* one, not the board's.** `rookie` on a row
+    names the class that is a rookie now, so a board cut to a past season holds
+    none of them and lists no picks — empty rather than mislabelled.
+  - **`adpBoardEntries` decides where a pick goes among the players and nothing
+    else**: a merge of two ordered lists rather than one sort over both, so
+    `adpBoardRows`' own tiebreaks stay its business. A tie puts the player first,
+    since the pick is an annotation of the row above it.
+
   `draft_type` is a constant now (`snake,linear`)
   for the reason it always defaulted that way: an auction's `pick_no` is
   nomination order, so its "ADP" is not one. The board is fetched by
@@ -2707,6 +2821,24 @@ stops holding, a comment saying it does would not have caught it.
   deliberately unequal — a standings row is a lit key and carries its own `px`,
   a roster row carries none — so the plates differ by a step to land both lists
   on a comparable left edge.
+- **The scroll bar is the fifth box across that width, and it is a lane rather
+  than an accident.** Each half scrolls on its own, so each has a bar, and with
+  nothing reserved it painted over the trailing value column — the numbers are
+  right-aligned against the box's own edge, which is exactly where a bar rides.
+  8px of trailing padding on the scroll box is the lane, and **the heading rail
+  above it takes the same 8px**, because the rail is *outside* the box it names
+  and anything the box gives up it has to give up too or a heading and its
+  column disagree about where the column is. Half of the lane is paid for by
+  bleeding the box into the plate's own inset (`-mr-1`), so a row gives up 4px
+  and not 8. It is padding and **not `scrollbar-gutter: stable`**, which is the
+  spelling that looks right and reserves nothing where it matters: a gutter is
+  ignored wherever scrollbars *overlay* content — iOS, and macOS by default —
+  which is the case the bar was covering numbers in, while padding is reserved a
+  second time where they don't. So the overlay case is exact and a classic bar
+  takes its own width on top, narrow rather than the platform's 15px because
+  `.lab-scroll` thins and tints it. Zeroing that residue too would need the
+  heading inside the scroll box, which is where it used to be and cannot go
+  back: its picker menu overhangs the rows and a scroll box would clip it.
 - **A heading that shares the name's track is sized against the track, not
   against its sibling headings.** `Starters` at `text-xs` exactly filled that
   track and clipped to `STARTE…`; it takes 0.65rem below `@lg`, the size the

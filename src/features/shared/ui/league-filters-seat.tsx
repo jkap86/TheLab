@@ -5,8 +5,8 @@
  * be static while the dialog is not.** `LeagueFiltersModal` is loaded through
  * `dynamic()` at both its call sites — it is a trigger and a `<dialog>`, and
  * nobody has opened the dialog at first paint — but something has to occupy the
- * trigger's box until the chunk arrives, or the header plate's corner and the
- * trades ledge's row both reflow when it lands. A fallback that lived in the
+ * trigger's box until the chunk arrives, or the subject rail and the trades
+ * board's controls row both reflow when it lands. A fallback that lived in the
  * dialog's own module would pull that module back into the static graph and
  * split nothing, which is the trap `AdpTrigger` was moved out of `AdpDrawer`'s
  * file to avoid.
@@ -27,13 +27,14 @@
  * (`.lab-chip` / `.lab-chip-on`), the icon, the word and the count are the same
  * part in both. What differs is the edge it is seated against.
  *
- * `free` stands on a page — the trades ledge, where nothing bounds it, so it is
- * the pill `.lab-chip` was written for. (There was a `corner` seat too, machined
- * into the bottom right of the manager header's plate; it went when the key moved
- * onto the subject rail, and what it leaves behind is the reason a seat may only
- * change *shape*: it had to run at the plate's tab scale rather than the pill's,
- * because at `text-sm` the part was 32px tall and crossed the win-pct dial above
- * it. A seat is a fact about the edge, never about the control.)
+ * `free` stands on a page — the trades board's controls row, where nothing
+ * bounds it, so it is the pill `.lab-chip` was written for. (There was a
+ * `corner` seat too, machined into the bottom right of the manager header's
+ * plate; it went when the key moved onto the subject rail, and what it leaves
+ * behind is the reason a seat may only change *shape*: it had to run at the
+ * plate's tab scale rather than the pill's, because at `text-sm` the part was
+ * 32px tall and crossed the win-pct dial above it. A seat is a fact about the
+ * edge, never about the control.)
  *
  * `bar` rides in the shares sheet's title bar, beside a search field and a close
  * mark. It is `free`'s pill at the smaller of the two type scales, because a

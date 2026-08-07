@@ -11,19 +11,19 @@ import { tradeQueryKey } from "../trade-query";
 import type { TradeRequest } from "../trade-query";
 
 /**
- * The option lists the trade filter ledge is built on.
+ * The option lists the trade search panel is built on.
  *
- * **It is gated on the ledge being open**, which is what makes a season-wide
+ * **It is gated on that panel being open**, which is what makes a season-wide
  * grouped aggregate affordable at all: a reader who never opens it never asks
  * for it, and that is most visits. The gate used to be `enabled` against a null
  * request, because the dialog existed whether or not it was showing; the panel
- * is unmounted while the ledge is closed, so **mounting is the gate** and the
- * request is unconditional. `enabled` is kept anyway, since a hook that cannot
- * express "don't ask" is one a second caller has to work around.
+ * is unmounted while it is closed, so **mounting is the gate** and the request
+ * is unconditional. `enabled` is kept anyway, since a hook that cannot express
+ * "don't ask" is one a second caller has to work around.
  *
- * There was a second hook here, `useTradeCount`, for the dialog footer's "N
- * trades match". The ledge commits live, so the board's own `total` *is* that
- * number — one route fewer, and no way for the two to disagree.
+ * There was a second hook here, `useTradeCount`, for a dialog footer's "N trades
+ * match". Every filter on this page commits live, so the board's own `total` *is*
+ * that number — one route fewer, and no way for the two to disagree.
  */
 
 /**

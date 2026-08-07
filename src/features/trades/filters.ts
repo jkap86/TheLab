@@ -6,9 +6,9 @@ import { ordinal } from "../shared/format.ts";
  * What narrows the trades list, and the rules for deciding whether a trade
  * passes.
  *
- * Kept apart from the modal that renders it, and pure, for the same reason the
+ * Kept apart from the controls that render it, and pure, for the same reason the
  * league filters are: these are the rules, and they are worth reading and
- * testing without a fetch or a dialog behind them.
+ * testing without a fetch or a control behind them.
  *
  * **What is left here is the vocabulary, not the matching.** `tradeAssets`,
  * `tradeMatches` and `tradeOptions` used to live beside these — the predicate a
@@ -17,7 +17,7 @@ import { ordinal } from "../shared/format.ts";
  * definitions did not move so much as change language: `tradeMatches` is the
  * selection half of `shared/trades/sql`, and `tradeOptions` is
  * `getTradeFacets`. What stays is what both ends still have to agree on — the
- * shape of a selection, the pick token\u2019s spelling, and how a window resolves
+ * shape of a selection, the pick token\u2019s spelling, and how a seek resolves
  * against today.
  *
  * They are a *different* set from the league filters the page also carries, and
@@ -28,42 +28,30 @@ import { ordinal } from "../shared/format.ts";
  * happened there.
  */
 
-export type TradeRangePreset = "7d" | "30d" | "90d" | "all" | "custom";
-
 /**
- * When the trade completed. A window rather than a week, because a week is a
- * fact about the NFL schedule and dries up in the offseason — where dynasty
- * leagues trade hardest — while "the last 7 days" is the question the page is
- * usually being asked.
+ * Where the board starts: a `YYYY-MM-DD` the reader jumped to, or null for the
+ * newest trades.
+ *
+ * **A position rather than a window, and that is the whole of the change from
+ * the range it replaced.** The board is a keyset walk newest-first, so "take me
+ * to June" is exactly what its cursor already expresses — the read resumes at
+ * that date and scrolls back from there, at the same cost on any date as on the
+ * first page. A window needed two halves, a preset table and a mode to enter,
+ * and answered a question this page's own ordering answers for free: everything
+ * older than the date picked is *below* the date picked, which is where a reader
+ * scrolling a chronological list expects to find it.
+ *
+ * **Null rather than today, though the control opens showing today.** No trade
+ * completes in the future, so "today" and "the newest trades" are one board —
+ * and spelling the default as a date would put a bound on the query string that
+ * narrows nothing, splitting the cache into a fresh entry every midnight for an
+ * answer that never differs. See {@link tradeSeekBounds}, which folds the two
+ * together rather than trusting the caller to.
  */
-export type TradeRange = {
-  preset: TradeRangePreset;
-  /** `YYYY-MM-DD`, both inclusive. Read only when `preset` is `"custom"`; either may be null for an open end. */
-  from: string | null;
-  to: string | null;
-};
+export type TradeSeek = string | null;
 
-/**
- * The presets, in the order the modal offers them. `custom` is deliberately not
- * among them: it is what the two date inputs below produce, not a mode to enter
- * first. The relative ones keep earning their place because "Last 30 days" is
- * still the last 30 days tomorrow, where the dates behind it would not be.
- */
-export const TRADE_RANGE_PRESETS: {
-  value: Exclude<TradeRangePreset, "custom">;
-  label: string;
-}[] = [
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "90d", label: "Last 90 days" },
-  { value: "all", label: "All time" },
-];
-
-export const DEFAULT_TRADE_RANGE: TradeRange = {
-  preset: "all",
-  from: null,
-  to: null,
-};
+/** The newest trades — the top of the board, which is where it opens. */
+export const DEFAULT_TRADE_SEEK: TradeSeek = null;
 
 /**
  * How close to the reader's own account a trade has to be.
@@ -87,43 +75,43 @@ export const DEFAULT_TRADE_RANGE: TradeRange = {
 export type TradeCircle = "all" | "mine" | "leaguemates" | "leaguemate-leagues";
 
 /**
- * The circles, widest last, as the dialog offers them.
+ * The circles, widest last, as the page's own scope keys offer them.
  *
  * Each carries what it means in a sentence, because the names alone do not
  * separate the two leaguemate readings: one is about *who was dealing* and the
  * other about *where the deal happened*, and a reader picking between them is
  * picking between "what are the people I play against doing" and "what does the
  * market next to mine look like".
+ *
+ * **There is no lower-case `summary` beside the label any more**, and its
+ * absence is the on-page control's doing rather than an omission: the keys are
+ * on the page now, so the selection is lit a few pixels above the line that used
+ * to restate it — the same restatement the league detail panel's team plate was
+ * removed for. What a key cannot say is `note`, which is why that one stays.
  */
 export const TRADE_CIRCLES: {
   value: TradeCircle;
   label: string;
-  /** Lower case — read mid-sentence in the page's scope line. */
-  summary: string;
   note: string;
 }[] = [
   {
     value: "all",
     label: "Every league",
-    summary: "every crawled league",
     note: "The whole crawled market.",
   },
   {
     value: "mine",
     label: "My leagues",
-    summary: "my leagues",
     note: "Leagues you field a team in.",
   },
   {
     value: "leaguemates",
     label: "Leaguemate trades",
-    summary: "leaguemate trades",
     note: "Trades a leaguemate was party to, in any league of theirs.",
   },
   {
     value: "leaguemate-leagues",
     label: "Leaguemate leagues",
-    summary: "leaguemate leagues",
     note: "Any league a leaguemate plays in, whoever made the trade.",
   },
 ];
@@ -159,7 +147,8 @@ export type TradeSideFilter = {
 export type SideIndex = 0 | 1;
 
 export type TradeFilters = {
-  range: TradeRange;
+  /** Where the board starts, newest-first — see {@link TradeSeek}. */
+  seek: TradeSeek;
   /** How close to the reader's account — see {@link TradeCircle}. */
   circle: TradeCircle;
   /**
@@ -198,7 +187,7 @@ export const EMPTY_SIDE: TradeSideFilter = {
 };
 
 export const DEFAULT_TRADE_FILTERS: TradeFilters = {
-  range: DEFAULT_TRADE_RANGE,
+  seek: DEFAULT_TRADE_SEEK,
   // The whole market, which is the page's premise: the leagues a reader plays in
   // are a fraction of the trades worth reading, and narrowing back to them is
   // one press away.
@@ -293,43 +282,52 @@ export function swapSides(filters: TradeFilters): TradeFilters {
 /** The window in epoch milliseconds; null on a side it doesn't bound. */
 export type TradeBounds = { from: number | null; to: number | null };
 
+/** Nothing bounded — the whole board, from its newest trade back. */
+const OPEN_BOUNDS: TradeBounds = { from: null, to: null };
+
 /**
- * Resolve a range against today, as instants.
+ * Resolve a seek against today, as instants.
+ *
+ * **Only the far end is ever bounded.** The board reads newest-first, so a
+ * position in it is an upper bound and nothing else: everything older than the
+ * date picked stays on the board, below it, which is what makes this a place to
+ * scroll from rather than a slice to look at. There is no lower bound to set and
+ * no second field to leave half-filled.
+ *
+ * Three cases fold to the same open answer, and each would otherwise be a
+ * different kind of wrong:
+ *
+ * - **No seek** is the default and the top of the board.
+ * - **A seek at or after today** bounds nothing, because no trade completes in
+ *   the future — so a reader who picks today is back at the newest trades rather
+ *   than on a second cache entry holding the identical board. It is what lets the
+ *   control open on today's date without the default carrying a bound.
+ * - **A date that doesn't parse** is an unpositioned board, never an empty one.
+ *   `NaN` as a bound compares false against every trade, which would clear the
+ *   list with nothing on screen to say why.
+ *
+ * The bound is the *next* midnight so the named day is included whole — the same
+ * exclusive-end rule `/api/adp` applies to its dates, and what makes "jump to
+ * today" show a trade completed an hour ago.
  *
  * Local time, not UTC and not ET: a trade carries an instant, and the day a
- * reader means by "yesterday" is the day where they are. This is the client, so
+ * reader means by "the 30th" is the day where they are. This is the client, so
  * unlike the ADP board — where the same question is answered in SQL because only
  * the database knows the zone to read a bare date in — the reader's own zone is
  * the one in hand.
  *
- * The end bound is the *next* midnight so the named day is included whole, which
- * is the same exclusive-end rule `/api/adp` applies to its dates. The relative
- * presets leave the end open rather than closing it at today, so a trade
- * completed minutes ago can't fall outside "last 7 days" on a clock technicality.
- *
  * `today` is passed in (`YYYY-MM-DD`) rather than read from the clock, so this
- * stays pure and a filter's result changes when the date does rather than on
- * every render.
+ * stays pure and the board moves when the date does rather than on every render.
  */
-export function tradeRangeBounds(
-  range: TradeRange,
-  today: string,
-): TradeBounds {
-  switch (range.preset) {
-    case "all":
-      return { from: null, to: null };
-    case "custom":
-      return { from: startOfDay(range.from), to: startOfDay(shiftDay(range.to)) };
-    case "7d":
-      return { from: startOfDay(shiftDays(today, -6)), to: null };
-    case "30d":
-      return { from: startOfDay(shiftDays(today, -29)), to: null };
-    case "90d":
-      return { from: startOfDay(shiftDays(today, -89)), to: null };
-  }
+export function tradeSeekBounds(seek: TradeSeek, today: string): TradeBounds {
+  // ISO dates sort as strings, which is the whole reason the app spells them
+  // this way — no parse is needed to know a seek is not in the past.
+  if (seek === null || seek >= today) return OPEN_BOUNDS;
+  // Parsed before it is shifted: `shiftDays` builds a `Date` from the result and
+  // would throw on an unreadable one, where this hands back the open board.
+  if (startOfDay(seek) === null) return OPEN_BOUNDS;
+  return { from: null, to: startOfDay(shiftDays(seek, 1)) };
 }
-
-const shiftDay = (date: string | null) => (date ? shiftDays(date, 1) : null);
 
 /** Local midnight of a `YYYY-MM-DD`; null passes through as an open end. */
 function startOfDay(date: string | null): number | null {
@@ -359,15 +357,21 @@ export function pickLabel(token: string): string {
 }
 
 /**
- * How many filters are narrowing the list — the count on the ledge's trigger.
+ * How many filters are narrowing the list — what `Clear` is drawn against.
  *
  * A named manager counts as one, exactly as an asset does: both are one thing the
  * reader picked, and a bay that says "jkap got Nabers" is two narrowings however
  * differently the two are stored.
+ *
+ * **A seek counts, though it is a position rather than a filter.** Everything
+ * newer than the date is off the board while it is set, so it is a narrowing by
+ * the only test that matters here — whether `Clear` has something to undo. A
+ * reader who jumped back in April and came to the page again in August would
+ * otherwise have no one control that puts them back at the top.
  */
 export function activeTradeFilterCount(filters: TradeFilters): number {
   return (
-    (filters.range.preset === "all" ? 0 : 1) +
+    (filters.seek === null ? 0 : 1) +
     (filters.circle === "all" ? 0 : 1) +
     filters.sides.reduce(
       (count, side) =>
@@ -422,61 +426,25 @@ export function sideLabel(
   return index === 0 ? "one side got" : "the other side got";
 }
 
-/** A circle in words, lower case — see {@link tradeFilterSummary}. */
-export function tradeCircleSummary(circle: TradeCircle): string {
-  return TRADE_CIRCLES.find((c) => c.value === circle)!.summary;
-}
-
 /**
- * The window in words, for the trigger and the header — the same job
- * `filterSummary` does for the league filters, and lower case for the same
- * reason: it is read mid-sentence. A preset keeps its name; only a custom window
- * spells its dates out, since "Last 30 days" stays true as time passes.
- */
-export function tradeRangeLabel(range: TradeRange): string {
-  if (range.preset !== "custom") {
-    return TRADE_RANGE_PRESETS.find((p) => p.value === range.preset)!.label;
-  }
-  const { from, to } = range;
-  if (from && to) return `${from} – ${to}`;
-  if (from) return `Since ${from}`;
-  if (to) return `Through ${to}`;
-  // A custom window with neither end set narrows nothing, so say what it does.
-  return "All time";
-}
-
-/**
- * The whole selection in words — the window, then what is selected and under
- * which mode, e.g. `"last 30 days · all of 2 managers, 1 player"`.
+ * The two bays as one phrase, or null where neither says anything.
  *
- * The modal hides its own state, so this is what says outside it not just *that*
- * filters are on (the trigger's count does that) but what they are asking. The
- * match mode has nowhere else to surface at all: "all of" and "any of" are the
- * difference between two very different lists, and a reader who left it on the
- * other one would otherwise have to open the dialog to find out.
+ * **What it no longer carries is anything a control on the page already says.**
+ * It used to lead with the window and the whole line it sits in used to lead with
+ * the circle, because both were set inside a modal and a modal hides its own
+ * state. Both are keys and a date field on the page now, lit, a few pixels above
+ * this line — so restating them here is the league detail panel's dropped team
+ * plate again: a panel driven by a selection should not restate the selection.
+ *
+ * What is left is the one part of this filter set that has nowhere else to
+ * surface. The bays print their own tokens, but the *relation* between them —
+ * who gave what to whom — is only legible as a sentence, and the match mode is
+ * legible nowhere at all: "all of" and "any of" are the difference between two
+ * very different lists, and it is set behind a press in the search panel.
  *
  * Lower case because it is read mid-sentence, beside `filterSummary`'s account
  * of the league filters — the same rule, so the two halves of the scope line
  * read as one sentence.
- *
- * **The circle is deliberately not in here**, though it lives in the same filter
- * set and is edited in the same dialog. What the scope line says is
- * `season · circle · league rules · this`, and the circle belongs at that end of
- * it: it names the *population* the two narrowings then cut down, the same job
- * the literal "every crawled league" used to do in that slot before a reader
- * could change it. See {@link tradeCircleSummary}.
- */
-export function tradeFilterSummary(
-  filters: TradeFilters,
-  names: TradeNames,
-): string {
-  const window = tradeRangeLabel(filters.range).toLowerCase();
-  const selection = sidesSummary(filters, names);
-  return selection === null ? window : `${window} · ${selection}`;
-}
-
-/**
- * The two bays as one phrase, or null where neither says anything.
  *
  * It reads the bays rather than counting them, which is the whole change: "all of
  * 1 manager, 1 player" described the shape of a selection where "jkap gave Malik
@@ -492,7 +460,10 @@ export function tradeFilterSummary(
  *   the label its relation earns it. A bay holding only a manager contributes no
  *   clause of its own — it is already spoken by the other bay's "gave".
  */
-function sidesSummary(filters: TradeFilters, names: TradeNames): string | null {
+export function tradeFilterSummary(
+  filters: TradeFilters,
+  names: TradeNames,
+): string | null {
   const [a, b] = filters.sides;
   if (isSideEmpty(a) && isSideEmpty(b)) return null;
 

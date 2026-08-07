@@ -265,6 +265,11 @@ export function AdpDrawer({
         <AdpBoard
           board={board}
           controls={controls}
+          // The active season, not `controls.season`: the rookie flag on these
+          // rows names the class that is a rookie *now*, so that is the season
+          // its picks are numbered under. A board cut to a past season holds
+          // none of them and lists no picks, which is the honest answer there.
+          classSeason={defaultSeason}
           steepness={steepness}
           today={today}
           onChange={onChange}

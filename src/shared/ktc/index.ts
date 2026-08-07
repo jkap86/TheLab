@@ -30,6 +30,7 @@ export {
 export type { KtcValue, KtcValueSet, KtcPickBoard } from "./queries";
 export {
   ktcPickBaseSeason,
+  ktcPickBoardRows,
   ktcPickDiscount,
   ktcPickKey,
   ktcPickPrice,

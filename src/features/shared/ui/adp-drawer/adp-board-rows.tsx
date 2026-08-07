@@ -4,10 +4,11 @@ import { type RefObject, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { AdpBoardType } from "@/shared/manager";
-import type { AdpPlayerPayload } from "@/shared/contract";
 
 import type { AdpControls } from "../../adp-controls";
+import type { AdpBoardEntry } from "../../adp-picks";
 import { AdpBoardRow } from "./adp-board-row";
+import { AdpPickBoardRow } from "./adp-pick-row";
 import {
   ADP_BOARD_INITIAL_RECT,
   ADP_ROW_HEIGHT,
@@ -48,8 +49,11 @@ export function AdpBoardRows({
   teams,
   steepness,
 }: {
-  /** The display's own ordering, which is what the ranks below count down. */
-  rows: readonly AdpPlayerPayload[];
+  /**
+   * The display's own ordering, which is what the ranks below count down —
+   * players and the picks that stand on them, interleaved by `adpBoardEntries`.
+   */
+  rows: readonly AdpBoardEntry[];
   /**
    * The board's scroll box, which belongs to {@link AdpBoard} — it is the one
    * element that is there whether or not there are rows to draw, and it is what
@@ -114,9 +118,11 @@ export function AdpBoardRows({
     // `ADP_ROW_HEIGHT`), so measuring would buy nothing and cost a
     // `getBoundingClientRect` per row per pass.
     estimateSize: () => ADP_ROW_HEIGHT,
-    // Keyed by the player rather than the index, so nothing the virtualizer
-    // holds about a row survives a filter change that reshuffles the board.
-    getItemKey: (index) => rows[index].player_id,
+    // Keyed by the row's subject rather than the index, so nothing the
+    // virtualizer holds about a row survives a filter change that reshuffles
+    // the board. A pick's key is prefixed, so it cannot collide with the player
+    // id a player row is keyed by.
+    getItemKey: (index) => rows[index].key,
     overscan: ADP_ROW_OVERSCAN,
     scrollMargin,
     initialRect: ADP_BOARD_INITIAL_RECT,
@@ -128,22 +134,33 @@ export function AdpBoardRows({
     // it opens no stacking context of its own, so the head above goes on
     // painting over them on its `z-10`.
     <ul ref={listRef} className="relative" style={{ height: virtualizer.getTotalSize() }}>
-      {virtualizer.getVirtualItems().map((item) => (
-        <AdpBoardRow
-          key={rows[item.index].player_id}
-          player={rows[item.index]}
-          rank={item.index + 1}
-          count={rows.length}
-          offset={item.start - scrollMargin}
-          both={both}
-          soleBoard={soleBoard}
-          soleDrafts={soleDrafts}
-          redraftDrafts={redraftDrafts}
-          dynastyDrafts={dynastyDrafts}
-          teams={teams}
-          steepness={steepness}
-        />
-      ))}
+      {virtualizer.getVirtualItems().map((item) => {
+        const row = rows[item.index];
+        // The shared props first, so the two kinds of row cannot drift on the
+        // things that place them: a pick sits in the same grid at the same
+        // height as the player it stands on, or the offsets stop being true.
+        const seat = {
+          rank: item.index + 1,
+          count: rows.length,
+          offset: item.start - scrollMargin,
+          both,
+          soleBoard,
+          teams,
+          steepness,
+        };
+        return row.kind === "pick" ? (
+          <AdpPickBoardRow key={row.key} pick={row.pick} {...seat} />
+        ) : (
+          <AdpBoardRow
+            key={row.key}
+            player={row.player}
+            {...seat}
+            soleDrafts={soleDrafts}
+            redraftDrafts={redraftDrafts}
+            dynastyDrafts={dynastyDrafts}
+          />
+        );
+      })}
     </ul>
   );
 }

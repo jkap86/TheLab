@@ -175,8 +175,15 @@ export function RosterDetail({
           middle of one lineup. The footnote and the picks travel with it: they
           are the tail of this list, not a fixed footer over it — where the
           standings' week range is fixed because it qualifies numbers that are
-          on screen the whole time. */}
-      <div className="min-h-0 overflow-y-auto overscroll-contain">
+          on screen the whole time.
+
+          The bar rides in a lane of its own rather than over the last value
+          column — 8px of trailing padding, half of it paid for by bleeding into
+          the plate's own inset, so a row gives up 4px and not 8. See
+          `.lab-scroll` for why the lane is padding and not `scrollbar-gutter`,
+          and {@link ColumnRail} for the 4px it gives up to stay over the same
+          column. */}
+      <div className="lab-scroll -mr-1 min-h-0 overflow-y-auto overscroll-contain pr-2">
         <RosterSection title="Starters" layout={lineupLayout}>
           {starters.map((row, i) => (
             <PlayerRow
@@ -236,7 +243,12 @@ export function RosterDetail({
  * is the same rail the leagues list draws above its cards, for the same reason —
  * a list-wide selection named once above the list rather than on every row.
  *
- * Laid on the sections' own grid so each label sits over the numbers it names.
+ * Laid on the sections' own grid so each label sits over the numbers it names —
+ * which is why it carries the 4px the list below it gives up to its scroll lane
+ * (see the scroll box, and `.lab-scroll`). The rows are inside that box and this
+ * rail is not, so anything the box reserves has to be reserved here too or the
+ * heading and its column disagree about where the column is.
+ *
  * The name track is left empty rather than captioned: the section titles under
  * it already say what the rows are, and a second heading word stacked on the
  * first would be the duplication this just removed.
@@ -260,7 +272,9 @@ function ColumnRail({
   if (valueColumns.length === 0) return null;
 
   return (
-    <div className={`mb-1.5 grid shrink-0 ${layout.grid} items-baseline gap-x-2`}>
+    <div
+      className={`mb-1.5 grid shrink-0 ${layout.grid} items-baseline gap-x-2 pr-1`}
+    >
       <span />
       {valueColumns.map((key, slot) => (
         <ColumnPicker

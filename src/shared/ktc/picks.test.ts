@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   ktcPickBaseSeason,
+  ktcPickBoardRows,
   ktcPickDiscount,
   ktcPickKey,
   ktcPickPrice,
@@ -388,5 +389,53 @@ test("ktcPickDiscount", async (t) => {
       ),
       null,
     );
+  });
+});
+
+test("ktcPickBoardRows", async (t) => {
+  // What it is *for*: the ADP board enumerates its future pick rows from this,
+  // so the answer has to be which `(season, round)` the board has an opinion
+  // about — not how many rows it stores about each of them.
+  await t.test("collapses the three tiers of a round to one row", () => {
+    const board = {
+      [ktcPickKey("2027", 1, "early")]: price(6000),
+      [ktcPickKey("2027", 1, "mid")]: price(5000),
+      [ktcPickKey("2027", 1, "late")]: price(4000),
+      [ktcPickKey("2027", 2, null)]: price(2000),
+    };
+    assert.deepEqual(ktcPickBoardRows(board), [
+      { season: "2027", round: 1 },
+      { season: "2027", round: 2 },
+    ]);
+  });
+
+  // Seasons are four-digit years, so a string compare is the numeric one — and
+  // the order is what decides which future seasons a board lists first.
+  await t.test("orders by season then round", () => {
+    const board = {
+      [ktcPickKey("2029", 1, null)]: price(1000),
+      [ktcPickKey("2028", 3, null)]: price(800),
+      [ktcPickKey("2028", 1, null)]: price(3000),
+    };
+    assert.deepEqual(ktcPickBoardRows(board), [
+      { season: "2028", round: 1 },
+      { season: "2028", round: 3 },
+      { season: "2029", round: 1 },
+    ]);
+  });
+
+  await t.test("an empty board prices no picks at all", () => {
+    assert.deepEqual(ktcPickBoardRows({}), []);
+  });
+
+  // A key `ktcPickKey` didn't write is skipped rather than guessed at, the same
+  // call `parseKtcPickName` makes about a name it doesn't understand.
+  await t.test("a key it doesn't understand is not a row", () => {
+    const board = {
+      "not a key": price(100),
+      "2030|x|": price(100),
+      [ktcPickKey("2030", 1, null)]: price(900),
+    };
+    assert.deepEqual(ktcPickBoardRows(board), [{ season: "2030", round: 1 }]);
   });
 });

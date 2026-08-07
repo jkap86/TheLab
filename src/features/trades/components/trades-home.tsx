@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   DEFAULT_LEAGUE_FILTERS,
@@ -24,7 +24,7 @@ import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { focusRosterFor } from "../exchange";
-import { DEFAULT_TRADE_FILTERS, hasSideSelection, tradeRangeBounds } from "../filters";
+import { DEFAULT_TRADE_FILTERS, hasSideSelection, tradeSeekBounds } from "../filters";
 import type { TradeFilters, TradeNames } from "../filters";
 import { useFilteredTrades } from "../hooks/use-filtered-trades";
 import { useTradeLeagues } from "../hooks/use-trade-leagues";
@@ -35,7 +35,7 @@ import { DEFAULT_TRADE_COLUMNS, TRADE_METRICS } from "../trade-metrics";
 import { resolveLeagueScope, tradeQueryKey } from "../trade-query";
 import type { AdpPlayerPayload, Trade } from "../types";
 import type { OpenLeague } from "./league-sheet";
-import { TradeFiltersLedge } from "./trade-filters-ledge";
+import { TradeControls } from "./trade-controls";
 import { TradeSearch } from "./trade-search";
 import { TradeValuePicker } from "./trade-value";
 import { TradesList } from "./trades-list";
@@ -47,18 +47,20 @@ import { TradesList } from "./trades-list";
  * shown by a press — and it is the largest client module this page pulls: ~970
  * lines with the whole slot-group and scoring-rule editor, its option tables and
  * its breakdown counts behind it. Statically imported, all of that was parsed
- * and evaluated before the first card could be drawn. The trade filters are
- * split the same way one layer in, at the ledge's panel rather than here, since
- * the ledge's own trigger and summary are not behind a press.
+ * and evaluated before the first card could be drawn. The trade *search* is
+ * split the same way one layer in, at its panel rather than at its trigger,
+ * since its bays and their tokens are not behind a press. The trade filters
+ * proper are not split at all any more — a scope key row and a date field are
+ * smaller than the placeholder a split would need.
  *
  * `ssr: false` because there is nothing to prerender: a `<dialog>` that opens on
  * a press has no server-rendered state worth having, and rendering it would put
  * the markup back in the document that the split is removing.
  *
  * The trigger *is* the component, so the fallback is what holds its place in the
- * ledge's row while the chunk loads — a plain pill of the same size, so the row
- * doesn't reflow when it arrives (which would move the list under it and make
- * the virtualizer re-measure its own offset).
+ * controls' trailing group while the chunk loads — a plain pill of the same
+ * size, so the row doesn't reflow when it arrives (which would move the list
+ * under it and make the virtualizer re-measure its own offset).
  */
 const LeagueFiltersModal = dynamic(
   () =>
@@ -135,9 +137,9 @@ const LeagueSheet = dynamic(
  * **The page leads with its controls rather than with its name.** There was a
  * `Trades` heading and a scope line above all of this; the app bar already names
  * the tool, so the title said what was said a few pixels above it, and the scope
- * line said what the ledge's own summary now says beside the control that sets
- * it. What replaced ~96px of masthead is one line carrying the count, the
- * selection in words and every trigger on the page.
+ * line named a population and a window that the controls under it now state for
+ * themselves. What replaced ~96px of masthead is `TradeControls`: the scope, the
+ * date the board is positioned at, the count and every trigger on the page.
  *
  * Three things are arranged around keeping the page identical while the read
  * changed:
@@ -278,8 +280,8 @@ export function TradesHome({ season }: { season: string }) {
   // than the clock, so the list only moves when the day does.
   const today = todayIso();
   const bounds = useMemo(
-    () => tradeRangeBounds(tradeFilters.range, today),
-    [tradeFilters.range, today],
+    () => tradeSeekBounds(tradeFilters.seek, today),
+    [tradeFilters.seek, today],
   );
 
   const leagueFiltersActive = activeFilterCount(leagueFilters) > 0;
@@ -303,6 +305,47 @@ export function TradesHome({ season }: { season: string }) {
   // key carries every id in it, and it is read twice below — as the board's
   // cache key and as the residual pass's generation.
   const requestKey = useMemo(() => tradeQueryKey(request), [request]);
+
+  /**
+   * Travelling to a date takes the reader back to the top of the board.
+   *
+   * **This is what makes the date control a place to go rather than a slice to
+   * look at.** A seek re-keys the board, and `keepPreviousData` deliberately
+   * holds the reader where they were through a re-key — which is right for every
+   * other filter here, where the point is that the list *doesn't* flash away,
+   * and exactly wrong for a position: landing forty cards into a board that
+   * begins at the requested date is the one place that date cannot be read.
+   *
+   * Three decisions in it:
+   *
+   * - **It scrolls the page header, not the list.** The list is unmounted
+   *   whenever the board is empty — the "no trades" note takes its place — so a
+   *   travel that lands on nothing has no list to scroll to, and a list that
+   *   unmounts mid-change takes its own scroll target with it. The header is
+   *   always mounted and its top edge is where the board begins, so the reader
+   *   arrives looking at the control they just used with the date's first cards
+   *   directly beneath it.
+   * - **It only fires once the header has scrolled off.** A reader still looking
+   *   at the controls is already at the top, and pulling the page to hide the
+   *   control they just pressed is worse than not moving at all.
+   * - **It is skipped on mount**, since a board arriving is not a reader
+   *   travelling — the ref opens holding the seek this render already has.
+   *
+   * The offset is the browser's arithmetic: `scroll-mt` on the header below is
+   * how the pinned app bar is accounted for, the same mechanism the leagues list
+   * scrolls an expanded card by. The scroll is not smooth, because a glide under
+   * a list being replaced beneath it is two motions fighting.
+   */
+  const seek = tradeFilters.seek;
+  const travelledTo = useRef(seek);
+  useEffect(() => {
+    if (travelledTo.current === seek) return;
+    travelledTo.current = seek;
+    const header = headerRef.current;
+    if (header && header.getBoundingClientRect().top < 0) {
+      header.scrollIntoView({ block: "start", behavior: "auto" });
+    }
+  }, [seek]);
 
   const { data, loading, loadingMore, stale, hasMore, loadMore, error } =
     useTrades(request, requestKey);
@@ -384,8 +427,8 @@ export function TradesHome({ season }: { season: string }) {
 
   return (
     <>
-      {/* The board's trigger, seated in the app bar rather than the ledge
-          below — it narrows the crawled market, not this page's trades, the
+      {/* The board's trigger, seated in the app bar rather than beside the
+          page's own controls — it narrows the crawled market, not this page's trades, the
           same split the manager tool draws (and the same seat: directly to
           the left of the Tools menu). Only its *box* moves; it is still a
           child of this page, reading the same store and driving the drawer
@@ -400,10 +443,14 @@ export function TradesHome({ season }: { season: string }) {
         />
       </HeaderSlot>
 
-      {/* Everything above the list, watched by the virtualizer — which is what
-          makes the ledge safe to expand in place: opening it moves the board
-          down, and the observer on this element is how the list is told. */}
-      <div ref={headerRef}>
+      {/* Everything above the list, watched by the virtualizer — a control row
+          that rewraps at a narrower width moves the board down, and the observer
+          on this element is how the list is told.
+
+          It is also what the date control scrolls back to (see the effect
+          above), which is what the `scroll-mt` is for: the app bar is pinned, so
+          a header scrolled flush to the viewport top would sit under it. */}
+      <div ref={headerRef} className="scroll-mt-[var(--site-header-h)]">
         {/* The page deliberately leads with its controls rather than a title —
             the app bar already names the tool, which is the whole argument for
             deleting the masthead. What that left was a document whose first
@@ -416,7 +463,8 @@ export function TradesHome({ season }: { season: string }) {
             were on the same side of the trade, so a manager and a player
             together means he received him and on opposite sides means he gave
             him. It leads because it is what a reader arrives wanting — the
-            ledge below says where they are standing, which is chosen once. */}
+            controls below say where they are standing and where in the board
+            they are, which are chosen once and then read. */}
         <TradeSearch
           filters={tradeFilters}
           onChange={setTradeFilters}
@@ -428,13 +476,14 @@ export function TradesHome({ season }: { season: string }) {
           managers={managers}
         />
 
-        <TradeFiltersLedge
+        <TradeControls
           filters={tradeFilters}
           onChange={setTradeFilters}
           leagueFilters={leagueFilters}
           season={season}
           account={account}
           names={names}
+          today={today}
           trailing={
             <>
               {/* The board's size, which is what the deleted heading's slot is
@@ -581,19 +630,12 @@ export function TradesHome({ season }: { season: string }) {
 /** Whether anything the reader set is narrowing — for the empty state's wording. */
 function activeTradeSelection(filters: TradeFilters): boolean {
   return (
-    filters.range.preset !== "all" ||
+    filters.seek !== null ||
     filters.circle !== "all" ||
     hasSideSelection(filters)
   );
 }
 
-/**
- * The size and shape of a filter trigger, held while its chunk loads.
- *
- * Sized to match rather than left empty, because the ledge's row wrapping when
- * the real button arrives would move the list down the page — which the
- * virtualizer would then have to re-measure and re-lay-out from.
- */
 /** Stable empties, so a render before the first page doesn't change identity. */
 const EMPTY_TRADES: readonly never[] = [];
 // Typed as a lookup rather than left as `{}`, which is not indexable: the scope

@@ -1,4 +1,3 @@
-import { ordinal } from "../shared/format.ts";
 import type { TradePickAsset } from "./types";
 
 /**
@@ -12,7 +11,10 @@ import type { TradePickAsset } from "./types";
  * best rookie on the board and the pick that takes the fifth. Where the order
  * isn't set (most picks on this board are two or three seasons out, and the
  * draft doesn't exist yet) the round is all there is, and the ordinal is what a
- * reader says out loud.
+ * reader says out loud. **That half lives in `features/shared/pick-value` now**
+ * — the ADP board enumerates picks belonging to no trade and no roster, and has
+ * to call them what these cards call them — and is re-exported below so this
+ * feature's own callers keep one import.
  *
  * **Whose it is.** A pick is only worth naming an owner for when that owner is a
  * surprise. In the ordinary trade — a manager handing over their own first — the
@@ -22,25 +24,14 @@ import type { TradePickAsset } from "./types";
  * the pick came from somewhere else, since a third party's 1st is a different
  * asset from the dealer's own. So the origin is drawn exactly when the pick did
  * *not* originate with the roster handing it over, which is the rule Sleeper's
- * own trade view follows.
+ * own trade view follows. That one is genuinely about a *trade*, which is why it
+ * stayed.
  *
- * Pure, and its one runtime import is {@link ordinal} by relative path with an
- * explicit extension — the mechanism the tests use.
+ * Pure, and its one runtime import is by relative path with an explicit
+ * extension — the mechanism the tests use.
  */
 
-/**
- * What to call this pick: `2026 1.05` where its draft order is known, `2026 1st`
- * where it isn't.
- *
- * The slot is zero-padded to two digits so a column of picks lines up and so
- * `1.05` reads as a slot rather than as a decimal — the spelling every fantasy
- * league uses. A league of more than 99 teams would overflow it, and would have
- * bigger problems.
- */
-export function pickLabel(pick: TradePickAsset, slot: number | null): string {
-  if (slot === null) return `${pick.season} ${ordinal(pick.round)}`;
-  return `${pick.season} ${pick.round}.${String(slot).padStart(2, "0")}`;
-}
+export { pickLabel } from "../shared/pick-value.ts";
 
 /**
  * The roster whose pick this originally is, or null where saying so would only

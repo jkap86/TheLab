@@ -6,10 +6,11 @@ import type { AdpBoardType } from "@/shared/manager";
 
 import {
   type AdpControls,
-  adpBoardRows,
   adpListIdentity,
+  previewDraftTeams,
   shownAdpBoards,
 } from "../../adp-controls";
+import { adpBoardEntries, adpPickRows, pickDiscountBoard } from "../../adp-picks";
 import type { AdpState } from "../../use-adp";
 import { AdpBoardHeader } from "./adp-board-header";
 import { AdpBoardRows } from "./adp-board-rows";
@@ -18,7 +19,7 @@ import {
   AdpBoardError,
   AdpBoardNoRows,
 } from "./adp-board-empty-state";
-import { EMPTY_PLAYERS } from "./adp-drawer.constants.ts";
+import { EMPTY_PICK_KTC, EMPTY_PLAYERS } from "./adp-drawer.constants.ts";
 import { soleBoardOf, withBoardToggle } from "./adp-drawer.utils.ts";
 
 /**
@@ -43,12 +44,20 @@ import { soleBoardOf, withBoardToggle } from "./adp-drawer.utils.ts";
 export function AdpBoard({
   board,
   controls,
+  classSeason,
   steepness,
   today,
   onChange,
 }: {
   board: AdpState;
   controls: AdpControls;
+  /**
+   * The season the rookies on this board belong to — the active one, which is
+   * the class `AdpPlayerPayload.rookie` names whatever season the board is cut
+   * to. It is what the numbered pick rows are labelled with, and the line past
+   * which a pick is a *future* pick and gets discounted.
+   */
+  classSeason: string;
   /** The curve being previewed, which is the committed one unless a drag is on. */
   steepness: number;
   /**
@@ -60,9 +69,28 @@ export function AdpBoard({
   onChange: (controls: AdpControls) => void;
 }) {
   const players = board.data?.players ?? EMPTY_PLAYERS;
+  const pickKtc = board.data?.pick_ktc ?? EMPTY_PICK_KTC;
+
+  // The picks the board lists — the current class numbered out of the size the
+  // curve is previewed on, and the seasons past it a round at a time.
+  //
+  // **Memoised apart from the steepness**, which is the whole reason a pick row
+  // carries an average and a discount rather than a value: the slider is dragged
+  // a notch at a time and reorders nothing, so the rows it moves are the cells,
+  // never this list. `adpPickRows` reads no curve at all.
+  const teams = previewDraftTeams(controls.teams);
+  const superflex = pickDiscountBoard(controls.superflex);
+  const picks = useMemo(
+    () => adpPickRows({ players, ktcPicks: pickKtc, classSeason, teams, superflex }),
+    [players, pickKtc, classSeason, teams, superflex],
+  );
   const rows = useMemo(
-    () => adpBoardRows(players, controls.boards),
-    [players, controls.boards],
+    () => adpBoardEntries(players, picks, controls.boards),
+    [players, picks, controls.boards],
+  );
+  const shownPlayers = useMemo(
+    () => rows.reduce((n, row) => (row.kind === "player" ? n + 1 : n), 0),
+    [rows],
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -145,7 +173,10 @@ export function AdpBoard({
           )}
           {player_count !== null && player_count > players.length && (
             <p className="px-1 pt-2 text-xs text-foreground/35">
-              Showing {rows.length.toLocaleString()} of{" "}
+              {/* Player rows, not every row: the picks in this list are derived
+                  from the rookies already on it, so counting them would put the
+                  numerator above a denominator that only ever counts players. */}
+              Showing {shownPlayers.toLocaleString()} of{" "}
               {player_count.toLocaleString()} players matching these filters.
             </p>
           )}

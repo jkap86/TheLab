@@ -31,9 +31,10 @@ import type { PlayerSummary, TradeManager } from "../types";
  *
  * The bays are on screen at first paint and the results are not, so what splits
  * off is the facets query, the grouped result list and the match toggle. The
- * trigger stays here for the reason the ledge's does — and the seam is a module
- * boundary rather than an export name, because a `dynamic()` import that names a
- * symbol in its own module splits nothing at all.
+ * trigger stays here because it is what a reader who never opens the panel still
+ * reads — and the seam is a module boundary rather than an export name, because
+ * a `dynamic()` import that names a symbol in its own module splits nothing at
+ * all.
  *
  * `ssr: false`: a panel that only exists after a press has no server-rendered
  * state worth having.
@@ -88,9 +89,10 @@ export type PickedName = {
  * - **The panel floats.** The bays sit inside the element the virtualizer
  *   watches, so a panel that expanded in place would move every card on the board
  *   to answer a question about it.
- * - **It commits live.** A press narrows immediately, and the count in the ledge
- *   below moves with it — the facet counts are taken without the selection, so
- *   nothing a press can do changes the number beside the thing being pressed.
+ * - **It commits live.** A press narrows immediately, and the count on the
+ *   controls row below moves with it — the facet counts are taken without the
+ *   selection, so nothing a press can do changes the number beside the thing
+ *   being pressed.
  */
 export function TradeSearch({
   filters,
