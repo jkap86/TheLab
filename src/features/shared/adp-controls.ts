@@ -657,6 +657,38 @@ export function adpQueryString(controls: AdpControls, today: string): string {
 }
 
 /**
+ * What makes the drawer's list *a different list* — which players are on it and
+ * in what order — as one string.
+ *
+ * The board's rows are the reader's scroll position: a filter that changes the
+ * population or the ranking leaves whatever they were looking at somewhere else
+ * entirely, so the list has to go back to the top. Which changes those are is
+ * not a judgement call and is deliberately not spelled out here as a list of
+ * fields — it is exactly two things, and both are read from their canonical
+ * definition rather than re-typed:
+ *
+ *   - **{@link adpQueryString}**, which *is* the population: every filter that
+ *     narrows which drafts are averaged is in it by construction, so a filter
+ *     added there resets the scroll without this function being touched. It also
+ *     gets the near-misses right — moving from the `all` preset to a custom
+ *     window with neither end set resolves to the same bounds, so the string is
+ *     unchanged and the reader keeps their place.
+ *   - **`boards`**, the one *display* selection that is not merely a display
+ *     selection: {@link adpBoardRows} drops the rows a single board can't
+ *     average and re-sorts on that board's column, so pressing a board key is a
+ *     different list at a different order.
+ *
+ * The **steepness is deliberately absent**, which is the whole reason this is a
+ * function rather than the query string alone. It converts an averaged ADP into
+ * draft capital and reorders nothing, and it is dragged a notch at a time while
+ * the reader watches one player's value bend — yanking the list to the top under
+ * that hand is exactly the bug this exists to avoid.
+ */
+export function adpListIdentity(controls: AdpControls, today: string): string {
+  return `${adpQueryString(controls, today)}|boards=${controls.boards}`;
+}
+
+/**
  * The `/api/user/[username]/adp-value` query string: the same board, minus the
  * axes that are facts about a league rather than choices about a market.
  *

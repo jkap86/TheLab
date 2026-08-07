@@ -7,6 +7,7 @@ import {
   DEFAULT_ADP_ROUNDS,
   DEFAULT_ADP_STEEPNESS,
   adpBoardRows,
+  adpListIdentity,
   adpNarrowingCount,
   adpQueryString,
   adpValueQueryString,
@@ -219,6 +220,85 @@ describe("adpQueryString", () => {
       );
       assert.equal(query.draft_type, "snake,linear");
     }
+  });
+});
+
+describe("adpListIdentity", () => {
+  /** The board as it opens, and that board with one field written. */
+  const base = defaultAdpControls(SEASON);
+  const identity = (over: Partial<AdpControls> = {}) =>
+    adpListIdentity({ ...base, ...over }, TODAY);
+
+  test("every change to the population is a different list", () => {
+    // Each of these narrows *which drafts are averaged*, so the players on the
+    // board and their order both move: a reader four hundred rows deep is
+    // nowhere in particular afterwards, which is what the scroll reset is for.
+    const changes: Partial<AdpControls>[] = [
+      { season: "2025" },
+      { season: "all" },
+      { scoring: "ppr" },
+      { superflex: "yes" },
+      { bestBall: "no" },
+      { teams: "10" },
+      { rounds: "rookie" },
+      { range: { preset: "30d", from: null, to: null } },
+      { range: { preset: "lookback", from: null, to: null, days: 45 } },
+      { range: { preset: "custom", from: "2026-01-01", to: "2026-06-30" } },
+    ];
+    for (const change of changes) {
+      assert.notEqual(
+        identity(change),
+        identity(),
+        `${JSON.stringify(change)} should be a different list`,
+      );
+    }
+    // And each of them is a different list from the others, not merely from the
+    // default — one identity standing for two populations is a board that
+    // silently keeps a stale offset.
+    const all = changes.map((change) => identity(change));
+    assert.equal(new Set(all).size, all.length);
+  });
+
+  test("swapping the market shown is a different list, though it narrows nothing", () => {
+    // The fetch is identical — `boards` is display state and never reaches the
+    // query — but `adpBoardRows` drops the rows a single board can't average and
+    // re-sorts on that board's column, so the list under the reader is not the
+    // one they were reading.
+    assert.equal(adpQueryString(base, TODAY), adpQueryString({ ...base, boards: "dynasty" }, TODAY));
+    const seen = new Set([identity(), identity({ boards: "redraft" }), identity({ boards: "dynasty" })]);
+    assert.equal(seen.size, 3);
+  });
+
+  test("the curve alone keeps the reader where they are", () => {
+    // The one change that must *not* reset. It is dragged a notch at a time
+    // while the reader watches one player's value bend, and it reorders nothing
+    // — every row keeps its rank and its place.
+    for (const steepness of [1, 3, DEFAULT_ADP_STEEPNESS, 6, 9]) {
+      assert.equal(identity({ steepness }), identity());
+    }
+  });
+
+  test("a window respelled to the same dates is the same list", () => {
+    // "All time" and a custom window with neither end set resolve to the same
+    // bounds, so the fetch is the same fetch. Reading the identity off the query
+    // string rather than off the raw fields is what gets this right.
+    assert.equal(
+      identity({ range: { preset: "custom", from: null, to: null } }),
+      identity({ range: { preset: "all", from: null, to: null } }),
+    );
+    // Likewise a lookback spelled as its named preset.
+    assert.equal(
+      identity({ range: { preset: "lookback", from: null, to: null, days: 30 } }),
+      identity({ range: { preset: "30d", from: null, to: null } }),
+    );
+  });
+
+  test("it is the query string and the shown boards, and nothing retyped", () => {
+    // The agreement that keeps a filter added to `adpQueryString` resetting the
+    // scroll without this function being touched.
+    const controls: AdpControls = { ...base, scoring: "half_ppr", boards: "dynasty" };
+    assert.ok(adpListIdentity(controls, TODAY).startsWith(adpQueryString(controls, TODAY)));
+    assert.ok(adpListIdentity(controls, TODAY).endsWith("dynasty"));
   });
 });
 

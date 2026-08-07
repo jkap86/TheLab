@@ -2263,6 +2263,70 @@ stops holding, a comment saying it does would not have caught it.
   the layout and gated on `open`, so a tab nobody opened it on costs no request;
   on the Players tab that means the same board is fetched twice while the drawer is
   up, which is a bounded cost paid only while someone is looking at both.
+- **That board is windowed and its scroll box is *bounded*, and the two are one
+  fix rather than a fix and an optimisation.** `/api/adp` answers up to
+  `limit=1000`, so the list was a thousand six-column grids mounted at once — and
+  the box holding them was `flex-1` with no `min-h-0`, whose automatic minimum is
+  its own content, so it never shrank into the drawer and its `overflow-y-auto`
+  had nothing left to scroll: the rows ran past the bottom of the panel taking
+  the footer with them, and the wheel reached a page whose scroll the drawer had
+  already locked. Bounded but unwindowed is a thousand rows behind every frame;
+  windowed but unbounded is a spacer nobody can scroll. Five things hold it up:
+  - **Fixed size, not measured, and the row is *given* the height rather than
+    asked for it.** `ADP_ROW_HEIGHT` is arithmetic (a 20px `text-sm` line box,
+    `py-1.5` either side, the 1px top border) and is written onto every `<li>`,
+    because the rows are positioned at multiples of it — an *estimate* a pixel
+    out is a screen of drift a thousand rows down. It is safe to pin because no
+    cell wraps and the name is truncated to one line; a row that ever needs two
+    wants `measureElement`, not a bigger constant.
+  - **`useVirtualizer` over the drawer's own box, never `useWindowVirtualizer`.**
+    The trades board virtualises the *document* on purpose (an inner scroller on
+    a phone is a scroll trap); this list already lives in a bounded modal, so its
+    scroll element is that box. What that costs is an origin mismatch — the
+    virtualizer measures rows from the *list's* top while comparing them against
+    the box's `scrollTop` — which `scrollMargin` reconciles, measured off the
+    sticky head with a `ResizeObserver` on the **box** (whose size changes with
+    the drawer and never with the list inside it). A plain effect suffices
+    because `getTotalSize()` and `start - scrollMargin` are both invariant to
+    that number: a late measurement moves nothing on screen, it only sharpens
+    which rows count as visible.
+  - **The head stays a sibling *before* the spacer.** Inside it, it would be
+    absolutely positioned along with the rows and stop sticking; the rows pass
+    behind it because `sticky z-10` outranks positioned children whose `<ul>`
+    opens no stacking context of its own.
+  - **The window lives one component down** (`AdpBoardRows`). The virtualizer
+    notifies React on `[isScrolling, startIndex, endIndex]`, so whatever holds it
+    re-renders every time the window crosses a row boundary — many times a second
+    at 33px a row. Held in `AdpBoard`, each of those also rebuilt the board head:
+    two keys, seven headings and the three hover strings behind them, none of
+    which a scroll can change. (It is also the component the React Compiler
+    declines to memoise, which is honest — it *must* re-render on scroll — and
+    confining it keeps that skip off the chrome.)
+  - **A row takes an `offset`, not a `style`.** The list rebuilds every windowed
+    row's props on each notification, and a fresh object would fail `memo`'s
+    shallow comparison for two dozen rows of which at most one moved. Rank and
+    `aria-posinset` are the index in the *whole* list, so a screen reader hears
+    the board's length rather than the DOM's.
+- **A board that becomes a *different board* sends the list back to the top, and
+  which changes those are is one tested function.** `useAdp` holds
+  `keepPreviousData` — which is what keeps the old rows on screen through a fetch,
+  and exactly what leaves a reader four hundred rows deep in a list about to be
+  seventy-five rows long in a different order. `adpListIdentity` is the key that
+  effect runs on, and it is deliberately **not** a list of fields: it is
+  `adpQueryString` (which *is* the population, so a filter added there resets the
+  scroll without this being touched) plus `boards` (the one display selection that
+  isn't merely one — `adpBoardRows` drops the rows a single board can't average
+  and re-sorts on that board's column). The **steepness is the exception the whole
+  function exists for**: it converts an averaged ADP into draft capital and
+  reorders nothing, and it is dragged a notch at a time while the reader watches
+  one player's value bend. Two details. The reset fires on the *press*, not on the
+  arrival — a beat of the old board's first rows is the honest thing to show,
+  where a preserved offset lands the reader among players nobody asked for — and
+  it is `behavior: "auto"`, since a glide under a list being replaced is two
+  motions fighting. Reading the identity off the query string also gets the
+  near-misses right: the `all` preset and a custom window with neither end set
+  resolve to the same bounds, so that is not a new list and the reader keeps their
+  place.
 - **The season is the board's population; the window is a cut inside it.** The
   drawer leads with a row of season segments (`seasonOptions`, taken from the
   density rows so a season nobody has crawled isn't offered, with the current one

@@ -5,23 +5,37 @@ import type { AdpPlayerPayload } from "@/shared/contract";
 
 import { ADP_PEAK, type AdpControls, previewAdpValue } from "../../adp-controls";
 import { PositionBadge } from "../position-badge";
-import { BOARD_COLUMNS_BOTH, BOARD_COLUMNS_ONE } from "./adp-drawer.constants.ts";
+import {
+  ADP_ROW_HEIGHT,
+  BOARD_COLUMNS_BOTH,
+  BOARD_COLUMNS_ONE,
+} from "./adp-drawer.constants.ts";
 import { adpCellTitle, takenShare } from "./adp-drawer.utils.ts";
 
 /**
  * One player's row.
  *
  * Memoised, and every prop is a primitive or the row's own payload object for
- * that reason: the board can be several hundred rows, and the drawer above it
+ * that reason: the board can be a thousand rows, and the drawer above it
  * re-renders on things the rows have no stake in — a filter tray opening, the
  * window panel opening or closing, a draft count arriving. Nothing here takes a
  * callback, so there is no identity to keep stable and no `useCallback` to add;
  * what *does* move the rows is the steepness under a drag, which is the preview
  * the slider exists for.
+ *
+ * **The list is windowed, so a row places itself.** It takes an `offset` — a
+ * number, not a style object, which is what keeps the memo above worth having:
+ * the list rebuilds every windowed row's props on each scroll notification, and
+ * a fresh `style` object would fail the shallow comparison for the two dozen
+ * rows of which at most one has actually moved. The height is written on rather
+ * than left to the content for the reason {@link ADP_ROW_HEIGHT} documents: the
+ * offsets are multiples of that constant, so the element has to be exactly it.
  */
 export const AdpBoardRow = memo(function AdpBoardRow({
   player,
   rank,
+  count,
+  offset,
   both,
   soleBoard,
   soleDrafts,
@@ -33,6 +47,13 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   player: AdpPlayerPayload;
   /** The row's place in the *display's* order, which is not the fetch's. */
   rank: number;
+  /**
+   * How long the whole list is. Only a windowful of rows is in the DOM, so
+   * without this a screen reader would announce the board as being that long.
+   */
+  count: number;
+  /** Where this row sits down the list, in px from the list's own top. */
+  offset: number;
   both: boolean;
   soleBoard: AdpBoardType;
   soleDrafts: number | null;
@@ -48,7 +69,12 @@ export const AdpBoardRow = memo(function AdpBoardRow({
 
   return (
     <li
-      className={`grid ${both ? BOARD_COLUMNS_BOTH : BOARD_COLUMNS_ONE} items-center gap-2 border-t border-foreground/[0.04] px-1 py-1.5 text-sm`}
+      aria-setsize={count}
+      aria-posinset={rank}
+      className={`absolute inset-x-0 top-0 grid ${both ? BOARD_COLUMNS_BOTH : BOARD_COLUMNS_ONE} items-center gap-2 border-t border-foreground/[0.04] px-1 py-1.5 text-sm`}
+      // Positioned by transform rather than `top`, so scrolling past a row
+      // doesn't dirty layout for the rows that didn't move.
+      style={{ height: ADP_ROW_HEIGHT, transform: `translateY(${offset}px)` }}
     >
       <span className="text-right text-xs tabular-nums text-foreground/35">
         {rank}

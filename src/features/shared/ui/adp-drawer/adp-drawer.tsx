@@ -93,6 +93,12 @@ export function AdpDrawer({
   const { onScreen, closing, panelRef, openPanel, togglePanel } =
     useAdpDrawerLifecycle({ open, onClose });
 
+  // Resolved once for the whole drawer rather than at each call site: the window
+  // control reads it to place its handles and the board reads it to know when it
+  // has become a *different* board, and those two answering to different days
+  // would be a list that resets for a window nobody moved.
+  const today = todayIso();
+
   // The footer's premise line, as the dialog's description: a board priced on an
   // assumed pool is exactly the caveat a reader should hear on arrival rather
   // than have to find at the bottom of a panel that scrolls.
@@ -226,7 +232,7 @@ export function AdpDrawer({
             defaultSeason={defaultSeason}
             months={seasonMonths}
             density={density}
-            today={todayIso()}
+            today={today}
             onChange={(range) => onChange({ ...controls, range })}
           />
 
@@ -260,6 +266,7 @@ export function AdpDrawer({
           board={board}
           controls={controls}
           steepness={steepness}
+          today={today}
           onChange={onChange}
         />
 

@@ -25,8 +25,11 @@ import { AdpDrawerHeader } from "./adp-drawer-header.tsx";
 import { AdpFilterBar } from "./adp-filter-bar.tsx";
 import { AdpLeagueSeedControl } from "./adp-league-seed-control.tsx";
 import {
+  ADP_BOARD_INITIAL_RECT,
   ADP_DRAWER_ENTER_MS,
   ADP_DRAWER_EXIT_MS,
+  ADP_ROW_HEIGHT,
+  ADP_ROW_OVERSCAN,
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
   FIXED_FILTERS,
@@ -351,6 +354,111 @@ describe("the board's states", () => {
     assert.match(drawer(), /Showing 3 of 5,000 players matching these filters\./);
     const whole = drawer({ board: loaded({ player_count: 3 }) });
     assert.doesNotMatch(whole, /Showing/);
+  });
+});
+
+describe("the board is windowed", () => {
+  /** A board the size the endpoint can actually answer with. */
+  const bigBoard = (count: number) =>
+    loaded({ players: Array.from({ length: count }, (_, i) => player(String(i + 1))) });
+
+  /**
+   * Every mounted row, as the facts that place it. Read attribute by attribute
+   * rather than as one pattern over the whole tag, so reordering the props on
+   * the element doesn't fail this for a reason nobody can see.
+   */
+  const mounted = (html: string) =>
+    [...html.matchAll(/<li [^>]*>/g)].map((tag) => {
+      const read = (pattern: RegExp) => Number(pattern.exec(tag[0])?.[1] ?? NaN);
+      return {
+        size: read(/aria-setsize="(\d+)"/),
+        rank: read(/aria-posinset="(\d+)"/),
+        height: read(/height:\s*([\d.]+)px/),
+        offset: read(/translateY\((-?[\d.]+)px\)/),
+      };
+    });
+
+  test("a thousand-row board mounts a window, not a thousand rows", () => {
+    // The whole of the fix. `/api/adp` answers up to `limit=1000`, and every one
+    // of those was a six-column grid in the DOM at once — which is what made
+    // scrolling the panel feel stuck. What is mounted now is the visible rows
+    // plus the overscan either side, whatever the board's length.
+    const html = drawer({ board: bigBoard(1000) });
+    const rows = mounted(html);
+    assert.equal(rows.length, (html.match(/<li /g) ?? []).length);
+    assert.ok(rows.length > 0, "expected the first screenful to be drawn");
+    // A screenful of `ADP_BOARD_INITIAL_RECT` plus one overscan at each end,
+    // which is nowhere near a thousand — the bound is what matters, not the
+    // exact count.
+    const ceiling = Math.ceil(ADP_BOARD_INITIAL_RECT.height / ADP_ROW_HEIGHT) + 2 * ADP_ROW_OVERSCAN + 2;
+    assert.ok(rows.length <= ceiling, `${rows.length} rows mounted, expected at most ${ceiling}`);
+    // And the count does not grow with the board: ten times the rows, the same
+    // windowful.
+    assert.equal(mounted(drawer({ board: bigBoard(100) })).length, rows.length);
+  });
+
+  test("the spacer is as tall as the whole list, so the scrollbar tells the truth", () => {
+    const html = drawer({ board: bigBoard(1000) });
+    const spacer = html.match(/<ul[^>]*style="height:(\d+)px"/)?.[1];
+    assert.equal(Number(spacer), 1000 * ADP_ROW_HEIGHT);
+  });
+
+  test("a row is exactly the height the offsets are multiples of", () => {
+    // `ADP_ROW_HEIGHT` is written onto the element rather than estimated from
+    // it, which is what makes fixed-size windowing safe: an estimate a pixel out
+    // is a screen of drift a thousand rows down.
+    const rows = mounted(drawer({ board: bigBoard(200) }));
+    assert.ok(rows.length > 1);
+    for (const row of rows) {
+      assert.equal(row.height, ADP_ROW_HEIGHT);
+      assert.equal(row.offset, (row.rank - 1) * ADP_ROW_HEIGHT);
+    }
+  });
+
+  test("a rank is the row's place in the whole list, not in the window", () => {
+    // The invariant that would break if the visible rows were numbered from one:
+    // every mounted row's rank is its own offset's row index, and the set size
+    // every row reports is the board's length rather than the DOM's.
+    const html = drawer({ board: bigBoard(400) });
+    const rows = mounted(html);
+    assert.ok(rows.length < 400);
+    for (const row of rows) {
+      assert.equal(row.size, 400);
+      assert.equal(row.rank, row.offset / ADP_ROW_HEIGHT + 1);
+    }
+    assert.equal(rows[0].rank, 1);
+    assert.equal(rows[rows.length - 1].rank, rows.length);
+  });
+
+  test("the scroll box is bounded, contained, and keeps its gutter", () => {
+    const html = drawer();
+    const box = html.match(/class="min-h-0[^"]*"/)?.[0];
+    assert.ok(box, "expected the board to be the drawer's one scroll box");
+    // `min-h-0` is the one that fixes the scrolling: a flex child's automatic
+    // minimum is its own content, so without it the box grew past the panel and
+    // its `overflow-y-auto` had nothing left to scroll.
+    for (const rule of [
+      "min-h-0",
+      "flex-1",
+      "overflow-y-auto",
+      "overscroll-contain",
+      "[scrollbar-gutter:stable]",
+    ]) {
+      assert.ok(box.includes(rule), `expected the scroll box to carry ${rule}`);
+    }
+  });
+
+  test("the sticky head sits above the spacer, not inside it", () => {
+    // Virtualising must not cost the column labels: they are what a column of
+    // bare numbers three hundred rows down is read against, so the head stays a
+    // sibling *before* the positioned rows — inside the spacer it would be
+    // absolutely positioned along with them and stop sticking.
+    const html = drawer({ board: bigBoard(200) });
+    const head = html.indexOf("sticky top-0 z-10");
+    const list = html.indexOf("<ul");
+    assert.ok(head !== -1 && list !== -1);
+    assert.ok(head < list, "the board head should precede the list");
+    assert.ok(!html.slice(list).includes("sticky top-0 z-10"));
   });
 });
 

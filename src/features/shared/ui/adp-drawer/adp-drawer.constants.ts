@@ -24,6 +24,49 @@ export const BOARD_COLUMNS_ONE =
 export const BOARD_COLUMNS_BOTH =
   "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.75rem] @md:grid-cols-[1.75rem_1fr_2rem_2.75rem_2.75rem_3.25rem_3.25rem]";
 
+/**
+ * One board row's height in px, which the row is *given* rather than measured
+ * for — see {@link AdpBoardRow}, which writes it onto every `<li>`.
+ *
+ * It is the height the row already had, and it is arithmetic rather than a
+ * guess: a 20px line box (`text-sm`, whose line-height is the tallest thing in
+ * the grid — the position badge is 18.9px and every numeric cell is `text-xs` at
+ * 16px), plus `py-1.5` either side, plus the 1px top border. A row cannot be any
+ * other height, because the name is `truncate`d to one line and no cell wraps.
+ *
+ * Pinning it is what lets the list be windowed with a fixed size rather than a
+ * measured one: the rows are absolutely positioned at multiples of this number,
+ * so a constant that merely *estimated* the height would drift a pixel per row
+ * — a thousand rows deep, a whole screen of it. Written on the element, the
+ * constant is true by construction and the two cannot disagree.
+ */
+export const ADP_ROW_HEIGHT = 33;
+
+/**
+ * How many rows are mounted either side of the visible window.
+ *
+ * Twelve is ~400px of board, which is what a flick covers between the scroll
+ * event and the re-render that answers it. It also absorbs the one place the
+ * virtualizer's arithmetic is approximate: the board's sticky head sits between
+ * the scroll box's own origin and the list's, and `scrollMargin` is measured
+ * rather than known ahead of time — so a header that rewraps between
+ * measurements shifts the computed range by a row or two, and the overscan is
+ * what keeps that invisible.
+ */
+export const ADP_ROW_OVERSCAN = 12;
+
+/**
+ * The viewport the virtualizer assumes before it has measured the real one.
+ *
+ * It matters only where there is nothing to measure — a static render, which is
+ * how the drawer is tested — since in a browser the measurement runs in a layout
+ * effect and lands before the first paint. Zero (the library's default) makes
+ * `calculateRange` answer *no rows at all*, so a server-rendered board would be
+ * an empty list rather than a screenful; 640px is a plausible drawer, and being
+ * wrong about it costs one over-rendered frame at worst.
+ */
+export const ADP_BOARD_INITIAL_RECT = { width: 0, height: 640 } as const;
+
 /** One frozen empty, so the default `seedLeagues` keeps a stable identity. */
 export const EMPTY_LEAGUES: readonly ManagerLeague[] = [];
 
