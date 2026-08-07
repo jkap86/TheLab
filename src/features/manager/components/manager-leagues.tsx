@@ -123,7 +123,14 @@ export function ManagerLeagues({ searched }: { searched: string }) {
         />
       }
     >
-      <ul className="flex flex-col gap-4 w-full">
+      {/* 18px rather than the 16 this list ran at, and it is the nameplate's
+          number rather than a separation one — the trades board arrived at it
+          for the same part. Each card's name rides out of its top edge on a
+          plate that hangs into the card's own 12px of padding, so at a 12px gap
+          the plate sat almost exactly between two cards and could be read as
+          belonging to either; at 18 there is visibly more ground above it than
+          below. Check that before moving it. */}
+      <ul className="flex w-full flex-col gap-[18px]">
         {view.filtered.map((league) => (
           <LeagueCard
             key={league.league_id}

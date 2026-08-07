@@ -95,6 +95,7 @@ export { AmbientBackdrop } from "./ui/ambient-backdrop";
 export { PageHeading } from "./ui/page-heading";
 export { PageShell } from "./ui/page-shell";
 export { LIST_ROW_HOVER, LIST_ROW_SURFACE, RowSheen } from "./ui/list-row";
+export { NAMEPLATE_BUTTON, Nameplate } from "./ui/nameplate";
 export { ListLedge } from "./ui/list-ledge";
 export { COLUMN_BOX, COLUMN_ROW, COLUMN_WIDTH } from "./ui/stat-columns";
 export { HeaderSlot } from "./ui/header-slot";

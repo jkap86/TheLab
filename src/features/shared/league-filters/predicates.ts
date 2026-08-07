@@ -127,6 +127,24 @@ export function leagueType(league: ManagerLeague): number {
 }
 
 /**
+ * Whether a league scores best ball — lineups set automatically, so depth is
+ * worth what a starter is.
+ *
+ * Sleeper omits `best_ball` for the ordinary lineup league, so absent is false;
+ * unlike `roster_positions`, there is no unknown here worth keeping apart, since
+ * a league whose settings blob never synced is not evidence of a format either
+ * way and both readings of it land on the same answer.
+ *
+ * Exported rather than read inline for the reason {@link leagueType} is: the
+ * trade card prints this beside the league's name and {@link matchesFilters}
+ * selects on it, and a card that says "best ball" over a filter that disagrees
+ * is the drift one definition prevents.
+ */
+export function isBestBall(league: ManagerLeague): boolean {
+  return settingNumber(league, "best_ball") === 1;
+}
+
+/**
  * The scoring bucket a league falls in, from its `rec` points. Mirrors the
  * `SCORING_SQL` `/api/adp` groups by exactly — absent/unparseable and anything
  * under half a point is standard — so a filter seeded from a league matches the
@@ -164,8 +182,8 @@ export function matchesFilters(
     if (leagueType(league) !== Number(filters.type)) return false;
   }
   if (filters.bestBall !== "all") {
-    const isBestBall = settingNumber(league, "best_ball") === 1;
-    if (filters.bestBall === "yes" ? !isBestBall : isBestBall) return false;
+    const bestBall = isBestBall(league);
+    if (filters.bestBall === "yes" ? !bestBall : bestBall) return false;
   }
   if (filters.status !== "all") {
     const matches =

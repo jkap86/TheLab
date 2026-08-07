@@ -919,9 +919,13 @@ stops holding, a comment saying it does would not have caught it.
     something to say before its content; skip it when the first control *is* the
     content's own description.
   - `LIST_ROW_SURFACE` / `LIST_ROW_HOVER` / `RowSheen` are the tool cards' glass
-    held to a row's height, worn by league cards and share cards. (Trade cards
-    wore it and don't now — they are machined rather than glass, which is argued
-    where the card is.)
+    held to a row's height, worn by the share cards and the lineup rows. (Trade
+    cards wore it and don't now, and **league cards followed them** — both are
+    machined rather than glass, which is argued where each card is. That leaves
+    two lists on this surface rather than the three it was written for, so what
+    it is still *for* is worth restating: it is a row that opens into more of
+    itself, or is one line of a table, rather than an object standing on the
+    page.)
     What they deliberately don't take is the **corner brackets** — those are a
     card-scale device, and four of them on each of a hundred-odd rows reads as
     noise rather than as an instrument. Two details in `RowSheen` are
@@ -1523,6 +1527,47 @@ stops holding, a comment saying it does would not have caught it.
     a claim about what the NFL has played — and still spelled by hand rather
     than through `toLocaleTimeString`, so the punctuation matches the date it
     follows.
+  - **What kind of league it was shares that line, and none of it is a chip**
+    (`features/trades/league-specs.ts`, pure and tested). A second-round pick is
+    a different asset in a 10-team redraft from what it is in a 14-team
+    superflex dynasty, and this board spans every crawled league — so the card's
+    only answer to "which of those am I looking at" was a league name, which
+    helps nobody who doesn't already know the league. Six tokens now say it:
+    type, size, the QB and superflex slots, tight ends, TE premium where there
+    is one, and best ball where it is one. Five decisions in it:
+    - **They are readouts, not `.lab-chip`.** The bar's grammar is that raised
+      means press me, and six pills per card across the couple of dozen the
+      virtualiser keeps mounted is ~150 apparent controls that do nothing. The
+      recessed spelling is also the material the instant beside them and the
+      side totals below them already wear, so the run adds no fourth surface to
+      a card that deliberately counts three — and the accent stays unspent,
+      which is the same argument that engraved the values rather than lighting
+      them.
+    - **Every fact is read through the league filters' own predicates**
+      (`slotCount`, `scoringValue`, `leagueType`, and `isBestBall`, which was
+      inlined in `matchesFilters` and is exported for this). A card saying
+      "1QB + SF" over a filter for `qb+sf ≥ 2` that disagrees is the drift one
+      definition prevents, and it is what makes a new QB-eligible flex count
+      here the moment the solver learns it.
+    - **A fact that isn't known is omitted, never printed as zero.** An
+      unsynced `roster_positions` is not evidence a league starts no tight end,
+      so the lineup tokens simply aren't drawn — the rule that keeps `k = 0`
+      from sweeping in every unsynced league, applied to a label. A lineup that
+      is present and *empty* still says `0TE`, which is a different answer.
+    - **The always-present facts lead in a fixed order and the conditional ones
+      trail.** The run is read down a list rather than across one card, so type,
+      size, QB and TE hold the same positions on every card and TE premium and
+      best ball follow them; leading with best ball would move every other token
+      one place left on the minority of cards that carry it. Best ball prints
+      only when true for the same reason the filters' summary names a selection
+      and not the absence of one.
+    - **They stack above the instant below `sm` rather than sharing one
+      wrapping row.** The instant keeps the top-right corner it holds by rule,
+      so the line is `flex-row-reverse` at width with the DOM order that needs.
+      One wrapping row is the tempting spelling and lays the run out inside the
+      ~180px left beside the timestamp — three lines, with the space under the
+      timestamp empty — where stacked it gets the card's full width and fits on
+      one line at 390px. Zero added height from `sm` up.
   - **The value column is the league cards' pickable stat column at this page's
     grain** (`trade-metrics`, and `usePersistedColumns("trade-side", …)`). It is
     **one** slot rather than their four: a trade card is already a table of the
@@ -1641,11 +1686,11 @@ stops holding, a comment saying it does would not have caught it.
     The odd side of a three-way still spans the row rather than leaving a cell
     beside it empty — an empty cell in a grid of sides reads as a participant who
     came away with nothing, which is a state this card draws in words.
-  - **The card is machined rather than glass, and it is the one list row that
-    is.** League cards and share cards wear `LIST_ROW_SURFACE`, and the point of
-    sharing it is that three lists read as one material; this one wears
-    `.lab-slab` — the app bar's corner-lit block at card scale. What buys the
-    divergence is that a trade card is not a row that opens into *more of
+  - **The card is machined rather than glass, and the league cards came with
+    it.** The share cards and the lineup rows wear `LIST_ROW_SURFACE`, and the
+    point of sharing it is that several lists read as one material; this one
+    wears `.lab-slab` — the app bar's corner-lit block at card scale. What buys
+    the divergence is that a trade card is not a row that opens into *more of
     itself*: it is the whole of what it has to say, four columns deep, and the
     depth is what sorts those columns into an order. That reading survives the
     card becoming pressable — what a press opens is the *league*, which is the
@@ -2342,6 +2387,51 @@ stops holding, a comment saying it does would not have caught it.
   way: the swap is `sticky` → `relative` and nothing moves, the plate simply
   stops following the scroll. `relative` rather than nothing, because the fade
   below the header is an `::after` on that box.
+- **A league card is a trade card, and the slab stops at the press.** It wore
+  `LIST_ROW_SURFACE` and wears `.lab-slab` now — wall, brushed face, chamfered
+  corners, its name riding out of the top edge on a nameplate, its record in a
+  `.lab-readout` — because the trades board's argument for leaving the glass is
+  this card's too: a league card is not a line of a table, it is the whole of
+  what one league has to say with four ranked columns across it, and depth is
+  what sorts those columns into an order. The two lists read as one instrument
+  now, which is what a reader crossing between the two tools experiences. Four
+  things in it are decisions rather than styling:
+  - **An expanded card is still `.lab-plate`, and the slab makes that swap read
+    better rather than making it redundant.** A slab is an *object in a list* —
+    a wall you could pick it up by, a static specular sweep — and none of that
+    is what a several-hundred-row instrument wants: the sweep would be a
+    diagonal wash across a page of standings, and the wall's `drop-shadow` would
+    be repainted around a box the reader is scrolling inside. The panel renders
+    straight onto the plate's face, as it did before; what changed is that the
+    swap is now a change of *part* rather than of material, which is what it
+    always meant.
+  - **The head's inset is spelled differently in each state, and that is the
+    two boxes agreeing rather than disagreeing.** The heading rail is laid on
+    the cards' geometry (`border border-transparent px-4 pl-5`), so content
+    starts 21px in and ends 17px off the trailing edge, and a heading a hair off
+    the number under it reads as a misaligned table. A slab spends 6px of that
+    trailing gutter on its wall and nothing on a border, so its face gives 6px
+    back (`pl-[21px] pr-[11px]`); the plate is a bordered box like the glass it
+    replaced and keeps the rail's own spelling (`pl-5 pr-4`). Both land at the
+    same two edges, which is also what keeps the columns from stepping sideways
+    as a card opens — and below `sm` the columns divide the head's own width, so
+    the two insets have to *sum* the same as well as ending in the same place.
+  - **The name is the button and the head carries no `role`.** `role="button"`
+    on the head takes presentational children, which flattened four stat columns
+    and their screen-reader labels into one string; the nameplate's real
+    `<button>` announces the league and its expanded state, and the head's click
+    is the mouse affordance over the same toggle. The trade card's rule, arrived
+    at for the same reason.
+  - **`RowSheen` is worn only while open.** A slab has a specular sweep of its
+    own and a bloom under it, so a second travelling band is the one part of the
+    card claiming to be glass — and the rail it draws is what the nameplate's
+    already says. Open, it is worth having for the half the plate can't do:
+    marking which league is being worked in.
+  The list's gap went 16 → 18 with it, which is the nameplate's number and not a
+  separation one — the same 18 the trades board arrived at, for the same part.
+  `Nameplate` itself is in `features/shared` under the mover's rule: the plate's
+  box, its rail and the heading's type are shared, and the *control* inside it is
+  not, because the two cards open different things.
 - **An open league card is one screen: pulled to the top, capped there, and
   scrolling inside itself** (in two places — see the bullet after this one). The
   panel is several hundred rows in a deep dynasty

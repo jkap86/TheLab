@@ -195,12 +195,20 @@ describe("the card's material", () => {
     assert.match(card(), /<span aria-hidden="true" class="lab-billet-rail/);
   });
 
-  test("the instant and each side's total are readouts, and none is a lens", () => {
+  test("everything read rather than pressed is a readout, and none is a lens", () => {
     // A lens is glass with a cyan rim — the *lit* reading the card trades away
     // for an engraved one, so nothing here wears it.
     const html = card();
-    assert.equal(count(html, "lab-readout"), 3);
+    // The instant, each side's total, and one per league spec.
+    assert.equal(count(html, "lab-readout"), 3 + 4);
     assert.doesNotMatch(html, /lab-lens/);
+  });
+
+  test("nothing on the card is a chip", () => {
+    // The bar's grammar: raised means press me. The league specs are read, so a
+    // run of `.lab-chip` pills would be six apparent controls per card that do
+    // nothing — across the couple of dozen the virtualiser keeps mounted.
+    assert.doesNotMatch(card(), /lab-chip/);
   });
 });
 
@@ -212,6 +220,46 @@ describe("what the header says", () => {
 
   test("the date and the clock time, in that order and in one readout", () => {
     assert.match(card(), /Jul 15, 2026 · 3:07 PM/);
+  });
+
+  test("what kind of league it was, beside the instant", () => {
+    // The whole point of the run: this board spans every crawled league, so a
+    // pick is a different asset card to card and the name alone only helps a
+    // reader who already knows the league.
+    const html = card();
+    assert.match(html, /Dynasty/);
+    assert.match(html, /12 Team/);
+    assert.match(html, /1QB \+ SF/);
+    assert.match(html, /1TE/);
+  });
+
+  test("the specs stack above the instant on a phone and share its line at width", () => {
+    // Not one wrapping row: a flex item wraps inside the width it was given, so
+    // the run would be laid out in the ~180px left beside the timestamp and take
+    // three lines while the space under it sat empty. `row-reverse` is what
+    // keeps the instant on the trailing edge with the DOM order it needs.
+    assert.match(card(), /class="flex flex-col[^"]*sm:flex-row-reverse/);
+  });
+
+  test("no specs at all until the league list answers", () => {
+    // A league with no settings in hand has none to report, and a row of em
+    // dashes would report six holes rather than one absence.
+    //
+    // Counted in readouts rather than matched on the words: "dynasty" and
+    // "1QB" appear in every KTC title on the card, which is a different claim
+    // — the board a haul is priced on, not the league it happened in.
+    const html = card({ league: null });
+    assert.equal(count(html, "lab-readout"), 3, "the instant and two totals");
+    assert.doesNotMatch(html, /flex-wrap/);
+  });
+
+  test("an unsynced lineup drops the lineup tokens rather than reading them as zero", () => {
+    // The rule this shares with the filters: null is not zero. The league is
+    // still a 12-team dynasty and still says so.
+    const html = card({ league: { ...league, roster_positions: null } });
+    assert.match(html, /Dynasty/);
+    assert.match(html, /12 Team/);
+    assert.doesNotMatch(html, /0TE|0QB/);
   });
 
   test("an undated trade says so and adds no dangling separator", () => {
