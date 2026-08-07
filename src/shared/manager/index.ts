@@ -28,6 +28,7 @@ export type { CrawlCandidate, CrawlClock, CrawlPriority } from "./crawl-priority
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
   LEAGUE_COLUMNS_SQL,
+  getAdpLeagues,
   toManagerLeague,
   getLeagueDetail,
   getLeagueAdpBoards,

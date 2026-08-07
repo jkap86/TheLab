@@ -1,128 +1,95 @@
-import type { RefObject } from "react";
+import dynamic from "next/dynamic";
 
 import type { ManagerLeague } from "@/shared/manager";
 
 import type { AdpControls } from "../../adp-controls";
-import { ChipSelect } from "./adp-filter-control";
+import type { LeagueFilters } from "../../league-filters";
+import { LeagueFiltersPlaceholder } from "../league-filters-seat";
 import { AdpLeagueSeedControl } from "./adp-league-seed-control";
-import { narrowingFilters } from "./adp-drawer.utils.ts";
-import type { FilterSpec } from "./adp-drawer.types.ts";
+import { ROUNDS_SEGMENT } from "./adp-drawer.constants.ts";
 
 /**
- * The filters, showing only what is actually narrowing the board.
+ * The board's league filters, behind the app's one league-filters dialog.
  *
- * All seven sat on screen permanently, wrapping to three rows on a laptop and
- * four on a phone — and six of the seven usually read "All", which is a control
- * spending a row to report that it is doing nothing. Closed, this is one key and
- * whatever is set; open, it is the full set. A filter that *is* narrowing stays
- * a live `<select>`, so changing one is the single press it always was — what
- * costs a second press is reaching for a filter that was off, which is the case
- * where the drawer was previously spending the height.
+ * **It was four chips of this drawer's own — scoring, superflex, best ball and
+ * league size — and they are league rules now.** Each was a fixed question out
+ * of a space readers arrive at a board with their own question in ("average the
+ * drafts of leagues that start a linebacker", "half PPR with a TE bonus over
+ * half a point"), and each already had an exact equivalent in the rule
+ * vocabulary the manager tabs and the trades board have been narrowing with:
+ * `qb+sf ≥ 2` *is* `isSuperflexLineup`, and the size chip is `teams = 12`. Two
+ * filter languages a few pixels apart, one of them strictly weaker, was the
+ * thing to fix — not the row's height.
  *
- * The open tray holds **every** filter rather than only the unset ones, so the
- * set doesn't reshuffle as it is used; the summary chips step aside while it is
- * up, since two controls for one filter is a worse answer than either.
+ * What the dialog gains for this caller is the **draft-kind row**, seated in its
+ * trough as an {@link ExtraSegment}: what kind of draft to average is the one
+ * thing left that a *league* rule cannot say, since it is a fact about the room.
+ * It goes inside rather than beside, because a dialog and a stray chip is the
+ * arrangement this replaced.
+ *
+ * The seed control stays outside it and stays a chip. It is not a filter — it
+ * *writes* filters, from a league the reader recognises by name — and the trades
+ * board passes no leagues to it at all, which is what keeps it out of a dialog
+ * that page also opens.
+ *
+ * `dynamic()` for the dialog itself, the split its two other call sites already
+ * make: the drawer is behind a press and the dialog is behind a second one, so
+ * the ~55KB of rule bays, presets and match rail has no business in the chunk
+ * that draws the board. The placeholder comes from `league-filters-seat` and
+ * never from the dialog's own module — an import of that module here would pull
+ * it straight back into the static graph and split nothing.
  */
+const LeagueFiltersModal = dynamic(
+  () =>
+    import("../league-filters-modal").then((m) => m.LeagueFiltersModal),
+  { ssr: false, loading: () => <LeagueFiltersPlaceholder label="Leagues" /> },
+);
+
 export function AdpFilterBar({
   controls,
-  filters,
+  leagues,
   seedLeagues,
-  open,
-  trayId,
-  triggerRef,
-  onToggle,
   onChange,
 }: {
   controls: AdpControls;
-  filters: readonly FilterSpec[];
+  /**
+   * The crawled leagues the rules run over — the dialog's per-option counts, its
+   * breakdown rows and its scoring-key menu are all read off this, and so is the
+   * scope the board is actually narrowed by (which the *caller* resolves, since
+   * it is what the fetch is keyed on).
+   *
+   * Empty while it loads, or where nothing has asked for it yet. That is the
+   * honest state rather than a gap: with no leagues in hand the rules resolve to
+   * no narrowing, so the board is the unnarrowed one and the dialog's counts are
+   * zeroes until the list lands.
+   */
+  leagues: readonly ManagerLeague[];
   /** See {@link AdpDrawer}'s own prop — empty means no seed control at all. */
   seedLeagues: readonly ManagerLeague[];
-  open: boolean;
-  /** The tray's id, so the trigger's `aria-controls` has something to name. */
-  trayId: string;
-  /**
-   * The trigger, held by the drawer.
-   *
-   * It is the drawer that closes this tray — Escape reaches it through a
-   * document listener, so a reader who had tabbed into the tray loses the
-   * focused `<select>` out from under them — and the drawer is therefore where
-   * the focus is put back. This section stays a pure function of its props for
-   * it: the id and the ref come in rather than being made here, which is what
-   * lets it be called directly in `adp-drawer.render.test`.
-   */
-  triggerRef: RefObject<HTMLButtonElement | null>;
-  onToggle: () => void;
   onChange: (controls: AdpControls) => void;
 }) {
-  const narrowing = narrowingFilters(filters, controls);
-
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <button
-          ref={triggerRef}
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-controls={open ? trayId : undefined}
-          className={`lab-chip lab-chip-sm inline-flex items-center gap-1.5 rounded-full px-3 py-[3px] text-xs font-semibold transition-colors ${
-            narrowing.length > 0 && !open ? "lab-chip-on" : "text-foreground/70"
-          }`}
-        >
-          Filters
-          {narrowing.length > 0 ? (
-            <span
-              className={`rounded-full px-1.5 text-[0.6rem] font-bold tabular-nums ${
-                open ? "bg-active text-[#052029]" : "bg-[#052029]/25"
-              }`}
-            >
-              {narrowing.length}
-            </span>
-          ) : (
-            <span aria-hidden className="text-[0.6rem] text-foreground/40">
-              {open ? "▴" : "▾"}
-            </span>
-          )}
-        </button>
+    <div className="flex flex-wrap items-center gap-1.5">
+      <LeagueFiltersModal
+        label="Leagues"
+        filters={controls.leagueRules}
+        leagues={leagues}
+        onChange={(next: LeagueFilters) =>
+          onChange({ ...controls, leagueRules: next })
+        }
+        extra={{
+          ...ROUNDS_SEGMENT,
+          value: controls.rounds,
+          onApply: (rounds: string) =>
+            onChange({ ...controls, rounds: rounds as AdpControls["rounds"] }),
+        }}
+      />
 
-        {/* Open, the tray below holds these — two controls for one filter would
-            be a worse answer than either of them alone. */}
-        {!open &&
-          narrowing.map((f) => (
-            <ChipSelect
-              key={f.key}
-              value={f.get(controls)}
-              options={f.options}
-              ariaLabel={f.ariaLabel}
-              narrowed
-              onChange={(value) => onChange(f.set(controls, value))}
-            />
-          ))}
-
-        <AdpLeagueSeedControl
-          controls={controls}
-          leagues={seedLeagues}
-          onChange={onChange}
-        />
-      </div>
-
-      {open && (
-        <div
-          id={trayId}
-          className="flex flex-wrap gap-1.5 border-t border-foreground/[0.07] pt-2"
-        >
-          {filters.map((f) => (
-            <ChipSelect
-              key={f.key}
-              value={f.get(controls)}
-              options={f.options}
-              ariaLabel={f.ariaLabel}
-              narrowed={f.get(controls) !== "all"}
-              onChange={(value) => onChange(f.set(controls, value))}
-            />
-          ))}
-        </div>
-      )}
+      <AdpLeagueSeedControl
+        controls={controls}
+        leagues={seedLeagues}
+        onChange={onChange}
+      />
     </div>
   );
 }

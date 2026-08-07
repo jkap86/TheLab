@@ -42,3 +42,35 @@ export async function fetchJson<T>(
   const res = await apiFetch(url, { signal, fallbackError });
   return (await res.json()) as T;
 }
+
+/**
+ * Read a route that may be asked either way: a GET, or a POST carrying what was
+ * too long for the request line.
+ *
+ * **The two are one function because they must stay one *question*.** The query
+ * string is identical either way and the route parses it identically; the only
+ * difference is where a long list of league ids was read from. A caller never
+ * chooses — the builder that produced the request did, off the size of what it
+ * had to send — which is what keeps the long case from being a second code path
+ * with its own bugs. `/api/trades` was the first route asked this way and
+ * `/api/adp` and its two value routes are the rest.
+ */
+export async function fetchScoped<T>(
+  path: string,
+  request: { method: "GET" | "POST"; search: URLSearchParams; body: unknown },
+  fallbackError: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  const res = await apiFetch(`${path}?${request.search}`, {
+    signal,
+    fallbackError,
+    ...(request.body
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request.body),
+        }
+      : null),
+  });
+  return (await res.json()) as T;
+}

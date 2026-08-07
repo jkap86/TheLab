@@ -11,7 +11,7 @@ import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 // The module paths rather than `features/shared`'s own barrel, which this file is
 // inside of: a barrel importing a subtree that imports the barrel is a cycle, and
 // this panel is deliberately absent from it in any case (see `./index.ts`).
-import { adpValueQueryString, todayIso } from "../../adp-controls";
+import { adpValueRead, todayIso } from "../../adp-controls";
 import { useAdpControls } from "../../adp-controls-context";
 import {
   DEFAULT_PLAYER_COLUMNS,
@@ -141,8 +141,11 @@ export function LeagueDetailPanel({
   // drawer is the only thing that can move its two value columns, and being
   // driven by a *different* selection from the card that opened it is what this
   // replaced.
-  const { controls } = useAdpControls();
-  const board = useMemo(() => adpValueQueryString(controls, todayIso()), [controls]);
+  const { controls, scope } = useAdpControls();
+  const board = useMemo(
+    () => adpValueRead(controls, scope, todayIso()),
+    [controls, scope],
+  );
   const { data, loading, error } = useLeagueDetail(leagueId, board);
 
   // The query container is here rather than around the loaded panel alone, so

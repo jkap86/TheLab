@@ -29,6 +29,7 @@ export const DEFAULT_LEAGUE_FILTERS: LeagueFilters = {
   status: "all",
   slots: [],
   scoring: [],
+  size: [],
 };
 
 /**
@@ -188,6 +189,28 @@ export const SLOT_GROUP_BY_KEY = new Map(
 /** A slot group's label, or the raw key for one this build doesn't know. */
 export function slotGroupLabel(key: string): string {
   return SLOT_GROUP_BY_KEY.get(key)?.label ?? key;
+}
+
+/**
+ * What a size rule can count. One key today — how many rosters the league holds
+ * — and a table rather than that one string spelled at the four places that
+ * need it (the menu, the label, the reader, the tests).
+ *
+ * It is a *rule* family rather than a segment of fixed sizes, which is what the
+ * ADP board's own `All sizes / 10 / 12 / …` chip was: a chip can only ask for an
+ * exact count, where "at least ten teams" is the question a reader arrives with
+ * as often. The reader itself is in `./predicates` beside the other two, since
+ * that is where every read of a league lives.
+ */
+export const SIZE_KEYS: { key: string; label: string; hint: string }[] = [
+  { key: "teams", label: "Teams", hint: "rosters in the league" },
+];
+
+export const SIZE_KEY_BY_KEY = new Map(SIZE_KEYS.map((size) => [size.key, size]));
+
+/** A size key's label, or the raw key for one this build doesn't know. */
+export function sizeKeyLabel(key: string): string {
+  return SIZE_KEY_BY_KEY.get(key)?.label ?? key;
 }
 
 /**

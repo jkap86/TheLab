@@ -26,12 +26,15 @@ export type CompareOp = "eq" | "ne" | "gt" | "gte" | "lt" | "lte";
 /**
  * One rule: a key, a comparison and a number.
  *
- * The same shape serves both lists — what differs is only which number the key
- * names (a count of slots, a scoring rate), which is why the two families are
- * two arrays of one type rather than two types.
+ * The same shape serves all three lists — what differs is only which number the
+ * key names (a count of slots, a scoring rate, a count of teams), which is why
+ * the families are three arrays of one type rather than three types.
  */
 export type FilterRule = {
-  /** A slot-group key (see `./defaults`), or a Sleeper `scoring_settings` key. */
+  /**
+   * A slot-group key, a league-size key (both `./defaults`), or a Sleeper
+   * `scoring_settings` key.
+   */
   key: string;
   op: CompareOp;
   value: number;
@@ -51,6 +54,20 @@ export type LeagueFilters = {
   slots: readonly FilterRule[];
   /** Rules over what `scoring_settings` pays for a stat. */
   scoring: readonly FilterRule[];
+  /**
+   * Rules over how big the league is — `teams = 12`, `teams ≥ 10`.
+   *
+   * A list rather than the single comparison one attribute seems to want,
+   * because the lists are AND-only: a band is `teams ≥ 10` *and* `teams ≤ 12`,
+   * which costs nothing to express here and would need a second field and a
+   * second control as a pair of bounds.
+   *
+   * It arrived with the ADP board, whose own size chip this replaced, and it is
+   * a fact about a league like every other rule here — so the manager tabs and
+   * the trades board read it too rather than it being a fourth filter set only
+   * one page knows about.
+   */
+  size: readonly FilterRule[];
 };
 
 /**
@@ -88,7 +105,8 @@ export type SlotGroup = {
 export type ActiveFilter =
   | { kind: "fixed"; field: "type" | "bestBall" | "status"; label: string }
   | { kind: "slot"; index: number; label: string }
-  | { kind: "scoring"; index: number; label: string };
+  | { kind: "scoring"; index: number; label: string }
+  | { kind: "size"; index: number; label: string };
 
 /** One line of the readout rail's composition list. */
 export type LeagueBreakdownRow = { key: string; label: string; count: number };

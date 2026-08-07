@@ -5,7 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { AdpBoardType } from "@/shared/manager";
 
-import type { AdpControls } from "../../adp-controls";
+import type { LeagueFilters } from "../../league-filters";
 import type { AdpBoardEntry } from "../../adp-picks";
 import { AdpBoardRow } from "./adp-board-row";
 import { AdpPickBoardRow } from "./adp-pick-row";
@@ -46,7 +46,7 @@ export function AdpBoardRows({
   soleDrafts,
   redraftDrafts,
   dynastyDrafts,
-  teams,
+  rules,
   steepness,
 }: {
   /**
@@ -65,7 +65,8 @@ export function AdpBoardRows({
   soleDrafts: number | null;
   redraftDrafts: number | null;
   dynastyDrafts: number | null;
-  teams: AdpControls["teams"];
+  /** The board's league rules, threaded to the rows' value cells. */
+  rules: LeagueFilters;
   steepness: number;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
@@ -145,7 +146,7 @@ export function AdpBoardRows({
           offset: item.start - scrollMargin,
           both,
           soleBoard,
-          teams,
+          rules,
           steepness,
         };
         return row.kind === "pick" ? (

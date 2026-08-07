@@ -25,10 +25,12 @@ import {
 } from "@/shared/manager";
 import type { AdpBoardChoices, AdpBoardType, PlayerBoardAdp } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
+import type { LeagueScopeBody } from "@/shared/query";
 import { getLeagueOutlook } from "@/shared/projections";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
+import { readLeagueScope } from "../../league-scope";
 import { readFailureResponse } from "../../read-failure";
 
 export const runtime = "nodejs";
@@ -163,20 +165,44 @@ async function priceRosters(args: {
  */
 export async function GET(
   request: Request,
+  context: { params: Promise<{ leagueId: string }> },
+) {
+  return leagueDetail(request, context);
+}
+
+/**
+ * The same read, with the board's league scope in the body — see `/api/adp`'s
+ * own POST for why a read answers one at all. The rosters don't depend on the
+ * board; the panel's two value columns do, and they have to read the same board
+ * the card that opened them was priced on.
+ */
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ leagueId: string }> },
+) {
+  return leagueDetail(request, context);
+}
+
+async function leagueDetail(
+  request: Request,
   { params }: { params: Promise<{ leagueId: string }> },
 ) {
   const { leagueId } = await params;
   const searchParams = new URL(request.url).searchParams;
 
   try {
-    return await leaguePayload(leagueId, searchParams);
+    return await leaguePayload(leagueId, searchParams, await readLeagueScope(request));
   } catch (error) {
     console.error(`[league] query failed for ${leagueId}:`, error);
     return readFailureResponse(error, "Failed to load league");
   }
 }
 
-async function leaguePayload(leagueId: string, searchParams: URLSearchParams) {
+async function leaguePayload(
+  leagueId: string,
+  searchParams: URLSearchParams,
+  scope: LeagueScopeBody,
+) {
   const detail = await getLeagueDetail(leagueId);
   if (!detail) {
     const error: ApiErrorPayload = { error: "League not found" };
@@ -195,7 +221,7 @@ async function leaguePayload(leagueId: string, searchParams: URLSearchParams) {
   // unbounded board falls back to. Rejected rather than defaulted, the answer
   // `/api/adp` gives the same vocabulary — this string is one the client builds
   // from its own controls, so a 400 is a bug on that side of the wire.
-  const board = parseAdpBoardChoices(searchParams, detail.season);
+  const board = parseAdpBoardChoices(searchParams, detail.season, scope);
   if (!board.ok) return NextResponse.json({ error: board.error }, { status: 400 });
   const halvings = parseSteepness(searchParams.get(ADP_VALUE_PARAMS.steepness));
 

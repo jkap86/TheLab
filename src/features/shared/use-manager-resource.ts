@@ -70,11 +70,17 @@ export function useManagerResource<T>(
    * key and the cache is what deduplicates them.
    */
   enabled = true,
+  /**
+   * The ADP valuation's request, where its board's league rules were too long
+   * for a request line — see {@link fetchManagerResource}. The other four
+   * resources send none and are read as GETs, unchanged.
+   */
+  scoped?: { method: "GET" | "POST"; search: URLSearchParams; body: unknown } | null,
 ): ManagerResourceState<T> {
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) =>
-      fetchManagerResource<T>(searched, path, fallbackError, signal, userId),
+      fetchManagerResource<T>(searched, path, fallbackError, signal, userId, scoped),
     enabled: enabled && userId !== null && (leagues?.length ?? 0) > 0,
     staleTime,
   });

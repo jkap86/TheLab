@@ -35,3 +35,20 @@ export const SCORING_PRESETS: RulePreset[] = [
   { label: "Standard", rule: { key: "rec", op: "lt", value: 0.5 } },
   { label: "TE premium", rule: { key: "bonus_rec_te", op: "gt", value: 0 } },
 ];
+
+/**
+ * The three sizes nearly every league is, and the two bounds that split them.
+ *
+ * The exact counts are what the ADP board's retired size chip offered, so the
+ * one-press path is unchanged for a reader who wants "12-team drafts". The two
+ * bounds are what the chip could not express at all and what a *rule* is for —
+ * "10 or fewer" is the shallow-league question, and the two of them together
+ * name the band this list otherwise leaves out.
+ */
+export const SIZE_PRESETS: RulePreset[] = [
+  { label: "10-team", rule: { key: "teams", op: "eq", value: 10 } },
+  { label: "12-team", rule: { key: "teams", op: "eq", value: 12 } },
+  { label: "14-team", rule: { key: "teams", op: "eq", value: 14 } },
+  { label: "≤ 10", rule: { key: "teams", op: "lte", value: 10 } },
+  { label: "≥ 12", rule: { key: "teams", op: "gte", value: 12 } },
+];

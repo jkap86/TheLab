@@ -9,7 +9,7 @@ import {
   toggleAdpBoard,
 } from "../../adp-controls.ts";
 import type { AdpPickRow, AdpPickStats } from "../../adp-picks.ts";
-import type { FilterSpec } from "./adp-drawer.types.ts";
+import type { LeagueFilters } from "../../league-filters/types.ts";
 
 /**
  * The drawer's own pure arithmetic and wording: the strings its cells and
@@ -34,8 +34,8 @@ export function boardTitle(board: AdpBoardType, drafts: number | null): string {
 }
 
 /** The value headings' hover — one premise, however many columns state it. */
-export function valueTitle(teams: AdpControls["teams"]): string {
-  return `Draft capital under the value curve above, on a ${previewAdpPool(teams)}-slot startable pool — the shape a league card's team value is summed from`;
+export function valueTitle(leagues: LeagueFilters): string {
+  return `Draft capital under the value curve above, on a ${previewAdpPool(leagues)}-slot startable pool — the shape a league card's team value is summed from`;
 }
 
 /** The Taken heading's hover — a share, and the header is the only place to say of what. */
@@ -108,12 +108,12 @@ export const PICK_TAKEN_TITLE =
  * one thing a pick adds to it.
  */
 export function pickValueTitle(
-  teams: AdpControls["teams"],
+  leagues: LeagueFilters,
   pick: AdpPickRow,
   stats: AdpPickStats,
 ): string {
-  if (stats.discount === 1) return valueTitle(teams);
-  return `${valueTitle(teams)} · discounted to ${Math.round(stats.discount * 100)}% for a ${pick.season} draft`;
+  if (stats.discount === 1) return valueTitle(leagues);
+  return `${valueTitle(leagues)} · discounted to ${Math.round(stats.discount * 100)}% for a ${pick.season} draft`;
 }
 
 /**
@@ -122,47 +122,6 @@ export function pickValueTitle(
  */
 export function soleBoardOf(shown: AdpShownBoards): AdpBoardType {
   return shown === "dynasty" ? "dynasty" : "redraft";
-}
-
-/**
- * The league-size filter, whose options are data rather than a fixed list — the
- * sizes the supplied population actually contains, so a chosen size always
- * matches something and seeding from a league always lands on a listed option.
- */
-export function leagueSizeFilter(
-  leagues: readonly ManagerLeague[],
-): FilterSpec {
-  return {
-    key: "teams",
-    ariaLabel: "League size",
-    options: [
-      { value: "all", label: "All sizes" },
-      ...Array.from(new Set(leagues.map((l) => l.total_rosters)))
-        .sort((a, b) => a - b)
-        .map((size) => ({ value: String(size), label: `${size} teams` })),
-    ],
-    get: (c) => c.teams,
-    set: (c, v) => ({ ...c, teams: v }),
-  };
-}
-
-/**
- * The filters actually cutting the population — what the closed row shows.
- *
- * Against `"all"`, deliberately, where {@link adpNarrowingCount} compares each
- * field to its *default*: the two answer different questions. That count tells a
- * reader whether their board differs from the one everybody else opens, so a
- * default cannot count; this row says what the board in front of them is cut by,
- * and the rounds default cuts it hard — a startup-only board with nothing on the
- * row would be the panel's largest fact about its own population left unsaid.
- * The chip is also the way back to every draft, which a filter hidden for
- * reading "not narrowing" would not be.
- */
-export function narrowingFilters(
-  filters: readonly FilterSpec[],
-  controls: AdpControls,
-): FilterSpec[] {
-  return filters.filter((f) => f.get(controls) !== "all");
 }
 
 /**

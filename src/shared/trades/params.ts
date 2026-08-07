@@ -1,4 +1,9 @@
-import { integer, list } from "../query/parse.ts";
+import {
+  type LeagueScopeBody,
+  NO_LEAGUE_SCOPE_BODY,
+  integer,
+  list,
+} from "../query/parse.ts";
 
 /**
  * `/api/trades`'s query string, validated into the shape the SQL is built from.
@@ -217,72 +222,23 @@ export const MAX_TRADE_PAGE_SIZE = 500;
 export const MAX_LEAGUE_IDS = 500;
 
 /**
- * The ceiling on how many league ids one body may carry.
+ * The league scope as a request body carries it, and the reader for it.
  *
- * Not a tuning knob: it is the bound on how large a `= ANY($n)` this route will
- * build out of something a caller sent. The client only ever sends the *shorter*
- * of the include and exclude lists, so reaching this at all means a corpus of
- * 100k leagues in one season — far past anything real, and the honest failure
- * there is a truncated narrowing rather than an unbounded query.
+ * Both are the shared primitives now, under this module's own names. The body
+ * shape is JSON this app writes and this app reads, and `/api/adp` sends the
+ * identical two keys for the identical reason — its league rules are the same
+ * browser-side engine resolved to the same ids — so a second shape check here
+ * would be a second chance for one of them to be wrong about the dedupe, the id
+ * pattern or the cap. Lenient in exactly the way the query-string parser is: an
+ * unreadable value is *absent* rather than an error, because every field here is
+ * a narrowing and the neutral form of a narrowing is not narrowing.
  */
-export const MAX_BODY_LEAGUE_IDS = 50_000;
-
-/**
- * What a league id may look like before it is bound into a query.
- *
- * Sleeper's are digit strings; this is deliberately a little wider so a future
- * id shape doesn't silently empty a board, and deliberately bounded so a body
- * cannot carry megabyte-long "ids". Everything still arrives as a bound
- * parameter — this is about the *size* of what one request can ask for, not
- * about escaping.
- */
-const LEAGUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
-
-/** The league scope as a request body carries it, before validation. */
-export type TradeScopeBody = {
-  leagues: string[] | null;
-  excludeLeagues: string[] | null;
-};
-
-/** Nothing narrowed — what an absent or unreadable body means. */
-export const NO_SCOPE_BODY: TradeScopeBody = {
-  leagues: null,
-  excludeLeagues: null,
-};
-
-/**
- * Read the league scope out of a POST body.
- *
- * Lenient in exactly the way the query-string parser is: an unreadable value is
- * *absent* rather than an error, because every field here is a narrowing and the
- * neutral form of a narrowing is not narrowing. The one distinction it must keep
- * is the same one `ids` keeps — an empty array is "the rules matched nothing",
- * which is a real answer and an empty board, where a missing key is "not
- * narrowing this way".
- */
-export function parseTradeScopeBody(body: unknown): TradeScopeBody {
-  if (typeof body !== "object" || body === null) return NO_SCOPE_BODY;
-  const record = body as Record<string, unknown>;
-  return {
-    leagues: bodyIds(record.leagues),
-    excludeLeagues: bodyIds(record.xleagues),
-  };
-}
-
-/** One body id list: deduplicated, shape-checked and capped. */
-function bodyIds(value: unknown): string[] | null {
-  if (!Array.isArray(value)) return null;
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const entry of value) {
-    if (typeof entry !== "string" || !LEAGUE_ID_PATTERN.test(entry)) continue;
-    if (seen.has(entry)) continue;
-    seen.add(entry);
-    out.push(entry);
-    if (out.length >= MAX_BODY_LEAGUE_IDS) break;
-  }
-  return out;
-}
+export {
+  MAX_BODY_LEAGUE_IDS,
+  NO_LEAGUE_SCOPE_BODY as NO_SCOPE_BODY,
+  parseLeagueScopeBody as parseTradeScopeBody,
+} from "../query/parse.ts";
+export type { LeagueScopeBody as TradeScopeBody } from "../query/parse.ts";
 
 /**
  * Read a `/api/trades` query string.
@@ -304,7 +260,7 @@ function bodyIds(value: unknown): string[] | null {
 export function parseTradeQuery(
   params: URLSearchParams,
   season: string,
-  scope: TradeScopeBody = NO_SCOPE_BODY,
+  scope: LeagueScopeBody = NO_LEAGUE_SCOPE_BODY,
 ): TradeQuery {
   const limit = integer(params, "limit", {
     min: 1,

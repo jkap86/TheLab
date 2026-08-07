@@ -847,6 +847,29 @@ export type AdpDensityPayload = {
 };
 
 /**
+ * `GET /api/adp/leagues` — every league with a draft the board could average,
+ * for one season.
+ *
+ * **The league rules' input, and the only reason this crosses the wire.** The
+ * board's filters are the shared league-filters dialog — what a league starts,
+ * what its scoring pays, how big it is — and that is a rule engine over
+ * Sleeper's JSONB blobs which cannot be re-implemented in SQL without drifting
+ * invisibly. So the browser evaluates them over this list and sends back ids,
+ * exactly as {@link TradeLeaguesPayload} lets the trades board do; the dialog's
+ * per-option counts and its breakdown rows are read off the same list, which is
+ * what makes them describe the corpus a reader is actually cutting.
+ *
+ * A route of its own rather than a field on the board: it is asked for when the
+ * dialog opens or when a rule is set, where the board is asked for on every
+ * filter change, and it is much the larger of the two.
+ */
+export type AdpLeaguesPayload = {
+  /** The season these leagues drafted in, or `"all"` for every season on file. */
+  season: string;
+  leagues: ManagerLeague[];
+};
+
+/**
  * One player's projection for a week. The player is resolved inline, as in
  * `AdpPlayerPayload` — a player appears once per week, so there is nothing a side
  * map would deduplicate.

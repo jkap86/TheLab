@@ -127,3 +127,75 @@ export function isoDate(params: URLSearchParams, key: string): Parsed<string | n
   }
   return { ok: true, value: raw };
 }
+
+/**
+ * The ceiling on how many league ids one request body may carry.
+ *
+ * Not a tuning knob: it is the bound on how large a `= ANY($n)` a route will
+ * build out of something a caller sent. The client only ever sends the *shorter*
+ * of the include and exclude lists, so reaching this at all means a corpus of
+ * 100k leagues in one season — far past anything real, and the honest failure
+ * there is a truncated narrowing rather than an unbounded query.
+ */
+export const MAX_BODY_LEAGUE_IDS = 50_000;
+
+/**
+ * What a league id may look like before it is bound into a query.
+ *
+ * Sleeper's are digit strings; this is deliberately a little wider so a future
+ * id shape doesn't silently empty a board, and deliberately bounded so a body
+ * cannot carry megabyte-long "ids". Everything still arrives as a bound
+ * parameter — this is about the *size* of what one request can ask for, not
+ * about escaping.
+ */
+const LEAGUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The two league-id lists a request body may carry, as `/api/trades` and
+ * `/api/adp` both read them.
+ *
+ * **Both boards resolve their league rules in the browser and send the answer**,
+ * and past `MAX_LEAGUE_IDS` that answer is too long for a request line — so it
+ * arrives as JSON instead. The two routes share this parser rather than each
+ * checking its own body, because the shape is JSON this app writes and this app
+ * reads: there is no reason for them to disagree about it, and one parser is one
+ * place the shape check, the dedupe and the cap are right.
+ *
+ * A list that isn't an array reads as absent (null, "no narrowing sent this
+ * way") rather than as empty — an empty array is a real answer meaning "the
+ * rules matched nothing", and collapsing the two would show a reader who asked
+ * for no leagues every league there is.
+ */
+export type LeagueScopeBody = {
+  leagues: string[] | null;
+  excludeLeagues: string[] | null;
+};
+
+export const NO_LEAGUE_SCOPE_BODY: LeagueScopeBody = {
+  leagues: null,
+  excludeLeagues: null,
+};
+
+export function parseLeagueScopeBody(body: unknown): LeagueScopeBody {
+  if (typeof body !== "object" || body === null) return NO_LEAGUE_SCOPE_BODY;
+  const record = body as Record<string, unknown>;
+  return {
+    leagues: leagueIdList(record.leagues),
+    excludeLeagues: leagueIdList(record.xleagues),
+  };
+}
+
+/** One body id list: deduplicated, shape-checked and capped. */
+function leagueIdList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "string" || !LEAGUE_ID_PATTERN.test(entry)) continue;
+    if (seen.has(entry)) continue;
+    seen.add(entry);
+    out.push(entry);
+    if (out.length >= MAX_BODY_LEAGUE_IDS) break;
+  }
+  return out;
+}

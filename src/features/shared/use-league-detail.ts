@@ -5,7 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { LeagueDetailPayload } from "@/shared/contract";
 import { errorMessage } from "@/shared/util";
 
-import { fetchJson } from "./api";
+import type { AdpRead } from "./adp-controls";
+import { fetchScoped } from "./api";
 import { LEAGUE_DETAIL_STALE_TIME, leagueQueryKeys } from "./league-query";
 
 export type LeagueDetailState = {
@@ -21,11 +22,16 @@ export type LeagueDetailState = {
  * request, and one opened, closed and opened again now costs one rather than
  * three, which is the whole reason it is a query.
  *
- * `board` is the ADP drawer's own query string, the same one the collapsed card's
- * team value is priced on: the panel's two value columns read it, so a drawer
- * narrowed to startup drafts narrows the number in the row as well as the number
- * on the card. The rosters themselves don't depend on it, but they arrive on one
- * payload, so it is part of the key.
+ * `board` is the ADP drawer's own read, the same one the collapsed card's team
+ * value is priced on: the panel's two value columns read it, so a drawer
+ * narrowed to startup drafts — or to a set of league rules — narrows the number
+ * in the row as well as the number on the card. The rosters themselves don't
+ * depend on it, but they arrive on one payload, so it is part of the key.
+ *
+ * It is a request rather than a string because the board's league rules resolve
+ * to ids a request line cannot always carry, which is why this route answers a
+ * POST as readily as a GET. The key still holds those ids inlined
+ * ({@link AdpRead}), since two league sets that differ are two boards.
  *
  * **It clears on a new league and holds through a new board**, which is one rule
  * rather than two exceptions. This is the read whose previous answer can be about
@@ -38,13 +44,14 @@ export type LeagueDetailState = {
  */
 export function useLeagueDetail(
   leagueId: string,
-  board: string,
+  board: AdpRead,
 ): LeagueDetailState {
   const detail = useQuery({
-    queryKey: leagueQueryKeys.detail(leagueId, board),
+    queryKey: leagueQueryKeys.detail(leagueId, board.key),
     queryFn: ({ signal }) =>
-      fetchJson<LeagueDetailPayload>(
-        `/api/league/${encodeURIComponent(leagueId)}?${board}`,
+      fetchScoped<LeagueDetailPayload>(
+        `/api/league/${encodeURIComponent(leagueId)}`,
+        board,
         "Failed to load league",
         signal,
       ),

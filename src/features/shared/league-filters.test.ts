@@ -14,6 +14,7 @@ import {
   matchesFilters,
   scoringKeyOptions,
   scoringValue,
+  sizeValue,
   slotCount,
 } from "./league-filters/index.ts";
 import type { ManagerLeague } from "@/shared/manager";
@@ -49,9 +50,10 @@ const only = (filters: Partial<LeagueFilters>): LeagueFilters => ({
   ...filters,
 });
 
-/** A slot rule and a scoring rule, spelled the way the dialog writes them. */
+/** The three rule lists, spelled the way the dialog writes them. */
 const slots = (...rules: FilterRule[]) => only({ slots: rules });
 const scoring = (...rules: FilterRule[]) => only({ scoring: rules });
+const size = (...rules: FilterRule[]) => only({ size: rules });
 
 /** A one-QB lineup, the base the roster-position cases vary from. */
 const ONE_QB = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "BN", "BN"];
@@ -309,6 +311,61 @@ describe("slotCount and scoringValue", () => {
     const scored = league(null, { scoring_settings: { rec: 1 } });
     assert.equal(scoringValue(scored, "bonus_rec_te"), 0);
     assert.equal(scoringValue(league(null), "rec"), null);
+  });
+});
+
+/**
+ * The size rule, which arrived with the ADP board — its own `All sizes / 10 /
+ * 12` chip, in the vocabulary every other league filter is already written in.
+ * A rule rather than a chip because a chip can only ask for an exact count,
+ * where "at least ten teams" is the question a reader arrives with as often.
+ */
+describe("the size rule", () => {
+  test("reads the league's roster count, and only for a key it knows", () => {
+    assert.equal(sizeValue(league(null, { total_rosters: 10 }), "teams"), 10);
+    // A key this build has no reader for is unknown rather than assumed: a rule
+    // stored by a later build narrows to nothing here rather than to everything.
+    assert.equal(sizeValue(league(null), "rosters"), null);
+  });
+
+  test("zero is unknown, not a real size", () => {
+    // Sleeper always reports `total_rosters` for a live league, so a 0 is a row
+    // stored before the league answered — and `teams < 10` sweeping in every
+    // such league is the `k = 0` trap `slotCount` keeps null for.
+    assert.equal(sizeValue(league(null, { total_rosters: 0 }), "teams"), null);
+    assert.equal(
+      matchesFilters(
+        league(null, { total_rosters: 0 }),
+        size({ key: "teams", op: "lt", value: 10 }),
+      ),
+      false,
+    );
+  });
+
+  test("an exact size and a bound both narrow, and a band is two rules", () => {
+    const twelve = league(null, { total_rosters: 12 });
+    const ten = league(null, { total_rosters: 10 });
+    assert.equal(matchesFilters(twelve, size({ key: "teams", op: "eq", value: 12 })), true);
+    assert.equal(matchesFilters(ten, size({ key: "teams", op: "eq", value: 12 })), false);
+    assert.equal(matchesFilters(ten, size({ key: "teams", op: "lte", value: 10 })), true);
+    // A band is `>= 10` *and* `<= 12`, which is what the lists being an AND is
+    // for — and is the thing a pair of bounds on one field could not express.
+    const band = size(
+      { key: "teams", op: "gte", value: 10 },
+      { key: "teams", op: "lte", value: 12 },
+    );
+    assert.equal(matchesFilters(ten, band), true);
+    assert.equal(matchesFilters(twelve, band), true);
+    assert.equal(matchesFilters(league(null, { total_rosters: 14 }), band), false);
+  });
+
+  test("it counts, names and clears itself like the other two lists", () => {
+    const filters = size({ key: "teams", op: "gte", value: 12 });
+    assert.equal(activeFilterCount(filters), 1);
+    assert.equal(filterSummary(filters), "teams ≥ 12");
+    const [active] = activeFilters(filters);
+    assert.deepEqual(active, { kind: "size", index: 0, label: "teams ≥ 12" });
+    assert.deepEqual(clearFilter(filters, active).size, []);
   });
 });
 

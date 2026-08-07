@@ -2,8 +2,7 @@ import type { AdpBoardType, ManagerLeague } from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
 import type { KtcValue } from "@/shared/ktc";
 
-import type { AdpControls } from "../../adp-controls";
-import type { FilterSpec } from "./adp-drawer.types.ts";
+import { DEFAULT_ADP_ROUNDS } from "../../adp-controls";
 
 /**
  * The board's grids, written out whole so Tailwind can see them, and shared by
@@ -123,67 +122,33 @@ export const EMPTY_PICK_KTC: Readonly<Record<string, KtcValue>> = {};
 export const ADP_DRAWER_ENTER_MS = 460;
 export const ADP_DRAWER_EXIT_MS = 340;
 
-// What *kind* of draft, which is a round count underneath: a startup fills a
-// roster, a rookie draft is a handful of rounds. It replaced a snake/linear/auction
-// chip in this slot — the room's picking order is not a fact about the market it
-// priced, where a startup's 1.01 and a rookie draft's 1.01 are different players.
-const ROUNDS_FILTER: FilterSpec = {
-  key: "rounds",
-  ariaLabel: "Kind of draft",
+/**
+ * The draft-kind row the board seats inside the league-filters dialog.
+ *
+ * What *kind* of draft, which is a round count underneath: a startup fills a
+ * roster, a rookie draft is a handful of rounds. It replaced a
+ * snake/linear/auction chip in this slot — the room's picking order is not a
+ * fact about the market it priced, where a startup's 1.01 and a rookie draft's
+ * 1.01 are different players.
+ *
+ * **It is the one control of this board's that is not a league rule**, which is
+ * why it is an `ExtraSegment` rather than a field of `LeagueFilters`: how many
+ * rounds a room ran is a fact about the room, and the manager tabs and the
+ * trades board would inherit a filter that means nothing to them. Seated in the
+ * dialog's trough rather than beside its trigger, so the board's filters are one
+ * dialog rather than a dialog and a stray chip.
+ *
+ * `value` and `onApply` are the caller's — this is the half that doesn't vary.
+ */
+export const ROUNDS_SEGMENT = {
+  label: "Drafts",
   options: [
     { value: "all", label: "All drafts" },
     { value: "full", label: "Startup (12+ rds)" },
     { value: "rookie", label: "Rookie (≤5 rds)" },
   ],
-  get: (c) => c.rounds,
-  set: (c, v) => ({ ...c, rounds: v as AdpControls["rounds"] }),
-};
-
-/**
- * The filters whose options are fixed — everything but league size, which is
- * read off the population the caller supplies (see `leagueSizeFilter`).
- *
- * No league-type filter in this table any more: the fetch answers the redraft
- * and dynasty markets side by side, and which is drawn is the board keys' job
- * over the list itself — a display choice, not a narrowing.
- */
-export const FIXED_FILTERS: readonly FilterSpec[] = [
-  ROUNDS_FILTER,
-  {
-    key: "scoring",
-    ariaLabel: "Scoring",
-    options: [
-      { value: "all", label: "All scoring" },
-      { value: "std", label: "Standard" },
-      { value: "half_ppr", label: "Half PPR" },
-      { value: "ppr", label: "PPR" },
-    ],
-    get: (c) => c.scoring,
-    set: (c, v) => ({ ...c, scoring: v as AdpControls["scoring"] }),
-  },
-  {
-    key: "superflex",
-    ariaLabel: "Quarterbacks started",
-    options: [
-      { value: "all", label: "SF & 1QB" },
-      { value: "yes", label: "Superflex" },
-      { value: "no", label: "1QB" },
-    ],
-    get: (c) => c.superflex,
-    set: (c, v) => ({ ...c, superflex: v as AdpControls["superflex"] }),
-  },
-  {
-    key: "bestBall",
-    ariaLabel: "Format",
-    options: [
-      { value: "all", label: "BB & lineup" },
-      { value: "no", label: "Lineup" },
-      { value: "yes", label: "Best ball" },
-    ],
-    get: (c) => c.bestBall,
-    set: (c, v) => ({ ...c, bestBall: v as AdpControls["bestBall"] }),
-  },
-];
+  defaultValue: DEFAULT_ADP_ROUNDS,
+} as const;
 
 /** How a board is spelled where there is room for a word rather than a letter. */
 export const BOARD_NAMES: Record<AdpBoardType, string> = {

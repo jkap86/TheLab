@@ -191,26 +191,20 @@ describe("where Tab goes next", () => {
 });
 
 describe("what a keypress means", () => {
-  test("Escape closes the drawer when nothing floats over it", () => {
-    assert.deepEqual(drawerKeyAction("Escape", false, false), { type: "close-drawer" });
-  });
-
-  test("Escape closes the innermost thing that is up", () => {
-    assert.deepEqual(drawerKeyAction("Escape", false, true), { type: "close-panel" });
+  test("Escape closes the drawer", () => {
+    // One answer, where there used to be two. The drawer carried its own filter
+    // tray and Escape had to close the innermost thing that was up; that tray is
+    // the shared league-filters `<dialog>` now, which hears Escape in the top
+    // layer and never lets the press reach this handler at all.
+    assert.deepEqual(drawerKeyAction("Escape", false), { type: "close-drawer" });
   });
 
   test("Tab carries its direction", () => {
-    assert.deepEqual(drawerKeyAction("Tab", false, false), {
+    assert.deepEqual(drawerKeyAction("Tab", false), {
       type: "trap-tab",
       backwards: false,
     });
-    assert.deepEqual(drawerKeyAction("Tab", true, false), {
-      type: "trap-tab",
-      backwards: true,
-    });
-    // A floating panel does not change what Tab means: it is inside the dialog,
-    // so the same trap covers it.
-    assert.deepEqual(drawerKeyAction("Tab", true, true), {
+    assert.deepEqual(drawerKeyAction("Tab", true), {
       type: "trap-tab",
       backwards: true,
     });
@@ -218,7 +212,7 @@ describe("what a keypress means", () => {
 
   test("every other key is none of the drawer's business", () => {
     for (const key of ["a", "Enter", " ", "ArrowDown", "Home", "Esc"]) {
-      assert.equal(drawerKeyAction(key, false, false), null);
+      assert.equal(drawerKeyAction(key, false), null);
     }
   });
 });
@@ -233,8 +227,6 @@ describe("the composed keydown handler", () => {
       stops: () => stops[Math.min(press, stops.length - 1)],
       activeElement: () => active,
       focusContainer: () => log.push("container"),
-      panelOpen: () => log.includes("panel-open"),
-      closePanel: () => log.push("close-panel"),
       closeDrawer: () => log.push("close-drawer"),
     });
     return {
@@ -245,9 +237,6 @@ describe("the composed keydown handler", () => {
       focusOn(node: Fake | null) {
         active = node;
       },
-      openPanel() {
-        log.push("panel-open");
-      },
       send(key: string, shiftKey = false) {
         handler({ key, shiftKey, preventDefault: () => (prevented += 1) });
         press += 1;
@@ -255,15 +244,10 @@ describe("the composed keydown handler", () => {
     };
   }
 
-  test("Escape reaches the drawer, and the panel first when one is up", () => {
+  test("Escape reaches the drawer", () => {
     const h = harness([[fake("a"), fake("b")]]);
     h.send("Escape");
     assert.deepEqual(h.log, ["close-drawer"]);
-
-    const withPanel = harness([[fake("a")]]);
-    withPanel.openPanel();
-    withPanel.send("Escape");
-    assert.deepEqual(withPanel.log, ["panel-open", "close-panel"]);
   });
 
   test("Tab off the last stop wraps to the first and consumes the press", () => {

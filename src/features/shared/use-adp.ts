@@ -6,7 +6,8 @@ import { useMemo } from "react";
 import type { AdpPayload } from "@/shared/contract";
 import { errorMessage } from "@/shared/util";
 
-import { fetchJson } from "./api";
+import type { AdpRead } from "./adp-controls";
+import { fetchScoped } from "./api";
 import { ADP_STALE_TIMES, boardQueryKeys } from "./adp-query";
 
 export type AdpState = {
@@ -30,8 +31,14 @@ export type AdpState = {
  * Unlike the manager sub-resources, this is *not* keyed to the manager: ADP
  * describes the drafts in the whole database narrowed by settings, so the same
  * filters are the same board whoever is being looked at, and the key is the
- * query alone (normalised, so two callers spelling the same filters in a
+ * request alone (normalised, so two callers spelling the same filters in a
  * different order still land on one entry).
+ *
+ * **It takes an {@link AdpRead} rather than a query string**, because a board's
+ * league rules resolve to a list of ids that can outgrow a request line. The key
+ * is `read.key`, which inlines those ids whatever transport carried them — two
+ * league sets that differ are two boards, and a key that dropped them would
+ * serve one board's rows under another's filters.
  *
  * **That is what removes the duplicate board request.** Two consumers ask for it
  * — the Players tab's own ADP column and the drawer's board — and while the
@@ -47,22 +54,22 @@ export type AdpState = {
  * and back. A filter *returned* to is a cache hit, so it doesn't blank either.
  */
 export function useAdp(
-  query: string | null,
+  read: AdpRead | null,
   options: { enabled?: boolean } = {},
 ): AdpState {
   const { enabled = true } = options;
   const queryKey = useMemo(
-    // A null query means the board isn't asked for at all; the placeholder key
+    // A null read means the board isn't asked for at all; the placeholder key
     // is never fetched under, since `enabled` is false with it.
-    () => (query ? boardQueryKeys.adp(query) : boardQueryKeys.adp("")),
-    [query],
+    () => boardQueryKeys.adp(read?.key ?? ""),
+    [read?.key],
   );
 
   const board = useQuery({
     queryKey,
     queryFn: ({ signal }) =>
-      fetchJson<AdpPayload>(`/api/adp?${query}`, "Failed to load ADP", signal),
-    enabled: enabled && query !== null,
+      fetchScoped<AdpPayload>("/api/adp", read!, "Failed to load ADP", signal),
+    enabled: enabled && read !== null,
     staleTime: ADP_STALE_TIMES.board,
     placeholderData: keepPreviousData,
   });

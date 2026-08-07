@@ -44,6 +44,7 @@ describe("parseAdpFilters", () => {
     assert.equal(filters.start_after, null);
     assert.equal(filters.start_before, null);
     assert.equal(filters.league_ids, null);
+    assert.equal(filters.exclude_league_ids, null);
     assert.equal(filters.scoring, null);
     assert.equal(filters.best_ball, null);
     assert.equal(filters.superflex, null);
@@ -145,6 +146,48 @@ describe("parseAdpFilters", () => {
     assert.match(errorFor(`limit=${ADP_LIMIT_MAX + 1}`), /Invalid limit/);
   });
 
+  /**
+   * The league rules' answer. They are a browser-side predicate engine over
+   * Sleeper's blobs (a second implementation in SQL would drift silently), so
+   * what reaches this parser is a list of ids — inline where it fits on a
+   * request line, in a POST body where it doesn't.
+   */
+  test("an id list narrows, and either half may be the one sent", () => {
+    assert.deepEqual(parse("league_id=1,2").league_ids, ["1", "2"]);
+    assert.deepEqual(parse("xleague_id=7").exclude_league_ids, ["7"]);
+    assert.equal(parse("league_id=1").exclude_league_ids, null);
+  });
+
+  test("an empty list is a real answer, where an absent one is no narrowing", () => {
+    // The rules matching nothing is an empty board; the parameter not being
+    // sent is every draft on file. Collapsing the two shows a reader who asked
+    // for no leagues every league there is.
+    assert.deepEqual(parse("league_id=").league_ids, []);
+    assert.equal(parse("").league_ids, null);
+  });
+
+  test("a body list overrides the query string rather than merging with it", () => {
+    // Two spellings of one narrowing, and the client sends exactly one — so
+    // everything downstream sees a single set of filters and cannot tell which
+    // arrived, which is the whole point of taking it here.
+    const parsed = parseAdpFilters(
+      new URLSearchParams("season=2026&league_id=1,2"),
+      "2026",
+      { leagues: ["9"], excludeLeagues: null },
+    );
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.filters.league_ids, ["9"]);
+
+    // Including when the body's answer is "nothing matched".
+    const empty = parseAdpFilters(
+      new URLSearchParams("season=2026&league_id=1,2"),
+      "2026",
+      { leagues: [], excludeLeagues: null },
+    );
+    assert.ok(empty.ok);
+    assert.deepEqual(empty.filters.league_ids, []);
+  });
+
   test("combines draft and league filters into one query", () => {
     const filters = parse(
       "season=2026&draft_type=snake&draft_status=complete&rounds_min=15" +
@@ -157,6 +200,7 @@ describe("parseAdpFilters", () => {
       draft_types: ["snake"],
       draft_statuses: ["complete"],
       league_ids: null,
+      exclude_league_ids: null,
       scoring: ["ppr"],
       best_ball: null,
       superflex: true,

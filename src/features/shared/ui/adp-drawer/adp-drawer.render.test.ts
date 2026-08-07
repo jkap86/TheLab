@@ -17,6 +17,8 @@ import {
   defaultAdpControls,
   seedFromLeague,
 } from "../../adp-controls.ts";
+import { DEFAULT_LEAGUE_FILTERS } from "../../league-filters/defaults.ts";
+import { ALL_LEAGUES } from "../../league-scope.ts";
 import type { AdpState } from "../../use-adp.ts";
 import { AdpBoardHeader } from "./adp-board-header.tsx";
 import { AdpDrawer } from "./adp-drawer.tsx";
@@ -32,9 +34,8 @@ import {
   ADP_ROW_OVERSCAN,
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
-  FIXED_FILTERS,
 } from "./adp-drawer.constants.ts";
-import { PICK_TAKEN_TITLE, leagueSizeFilter } from "./adp-drawer.utils.ts";
+import { PICK_TAKEN_TITLE } from "./adp-drawer.utils.ts";
 
 /**
  * The drawer without a DOM.
@@ -140,13 +141,6 @@ const density = { months: [{ season: "2026", month: "2026-05", drafts: 120 }], e
  * what puts the focus back. Passing them in rather than making them here is what
  * keeps this section a plain function this file can call.
  */
-const filterBarProps = {
-  seedLeagues: [] as readonly ManagerLeague[],
-  trayId: "tray",
-  triggerRef: { current: null },
-  onToggle: () => {},
-  onChange: () => {},
-};
 
 function drawer(over: Partial<Parameters<typeof AdpDrawer>[0]> = {}): string {
   return renderToStaticMarkup(
@@ -158,6 +152,7 @@ function drawer(over: Partial<Parameters<typeof AdpDrawer>[0]> = {}): string {
       onReset: () => {},
       defaultSeason: "2026",
       leagues,
+      scope: ALL_LEAGUES,
       board: loaded(),
       density,
       ...over,
@@ -284,12 +279,6 @@ describe("what is on screen", () => {
 
   test("every control keeps an accessible name", () => {
     const html = drawer({ seedLeagues: leagues });
-    for (const spec of [...FIXED_FILTERS, leagueSizeFilter(leagues)]) {
-      // Only the narrowing filters are on screen at rest, so open the tray's
-      // worth by narrowing each in turn.
-      const controls = spec.set(defaultAdpControls("2026"), spec.options[1].value);
-      assert.match(drawer({ controls }), new RegExp(`aria-label="${spec.ariaLabel}"`));
-    }
     assert.match(html, /aria-label="Value curve steepness"/);
     // The apostrophe arrives HTML-escaped, which is the markup being right.
     assert.match(html, /aria-label="Match one of this manager(&#x27;|')s leagues"/);
@@ -649,41 +638,69 @@ describe("the league seed control", () => {
 });
 
 describe("what the controls do", () => {
-  test("a filter chip hands back the controls with that one field written", () => {
-    const controls: AdpControls = { ...defaultAdpControls("2026"), scoring: "ppr" };
+  test("the filters row is the shared dialog, plus the seed chip and nothing else", () => {
+    // The four chips this row used to carry — scoring, superflex, best ball and
+    // league size — are league *rules* now, so what is left here is one trigger
+    // and the shortcut that writes rules from a league the reader recognises.
+    const tree = AdpFilterBar({
+      controls: defaultAdpControls("2026"),
+      leagues,
+      seedLeagues: leagues,
+      onChange: () => {},
+    });
+    // The row's own children, unrendered: the dialog (named by its label) and
+    // the seed control (named by the leagues it was handed). Two parts, no
+    // chips — the row itself is the assertion.
+    // Everything but the wrapper the row is laid out in.
+    const row = elements(tree).filter((el) => typeof el.type !== "string");
+    assert.equal(row.length, 2);
+    assert.equal(row[0].props.label, "Leagues");
+    assert.deepEqual(row[1].props.leagues, leagues);
+    assert.equal(row[1].type, AdpLeagueSeedControl);
+  });
+
+  test("the dialog writes the league rules back onto the controls", () => {
+    const controls = defaultAdpControls("2026");
     let next: AdpControls | null = null;
     const tree = AdpFilterBar({
       controls,
-      filters: [...FIXED_FILTERS, leagueSizeFilter(leagues)],
+      leagues,
       seedLeagues: [],
-      open: false,
-      trayId: "tray",
-      triggerRef: { current: null },
-      onToggle: () => {},
       onChange: (value) => {
         next = value;
       },
     });
-    press(only(tree, "ariaLabel", "Scoring"), "onChange")("half_ppr");
-    assert.deepEqual(next, { ...controls, scoring: "half_ppr" });
+    const rules = { ...controls.leagueRules, type: "2" as const };
+    press(only(tree, "label", "Leagues"), "onChange")(rules);
+    assert.deepEqual(next, { ...controls, leagueRules: rules });
   });
 
-  test("only the narrowing filters are on the closed row, and the tray holds all", () => {
-    const filters = [...FIXED_FILTERS, leagueSizeFilter(leagues)];
-    const controls: AdpControls = { ...defaultAdpControls("2026"), scoring: "ppr" };
-    const closed = elements(
-      AdpFilterBar({ ...filterBarProps, controls, filters, open: false }),
-    ).filter((el) => typeof el.props.ariaLabel === "string");
-    // The kind-of-draft chip is on the closed row untouched, because the board
-    // opens on startups: this row says what the population in front of the
-    // reader is cut by, and a startup-only board saying nothing would leave its
-    // largest fact about itself unsaid. It is also the way back to every draft.
-    assert.deepEqual(closed.map((el) => el.props.ariaLabel), ["Kind of draft", "Scoring"]);
-
-    const open = elements(
-      AdpFilterBar({ ...filterBarProps, controls, filters, open: true }),
-    ).filter((el) => typeof el.props.ariaLabel === "string");
-    assert.deepEqual(open.map((el) => el.props.ariaLabel), filters.map((f) => f.ariaLabel));
+  test("the draft kind rides inside that dialog, and applies onto the controls", () => {
+    // Seated in the dialog's trough rather than beside its trigger: what kind of
+    // draft to average is the one thing left that a league rule cannot say, and
+    // a dialog plus a stray chip is the arrangement this replaced.
+    const controls = defaultAdpControls("2026");
+    let next: AdpControls | null = null;
+    const tree = AdpFilterBar({
+      controls,
+      leagues,
+      seedLeagues: [],
+      onChange: (value) => {
+        next = value;
+      },
+    });
+    const extra = only(tree, "label", "Leagues").props.extra as {
+      value: string;
+      options: { value: string }[];
+      onApply: (value: string) => void;
+    };
+    assert.equal(extra.value, controls.rounds);
+    assert.deepEqual(
+      extra.options.map((o) => o.value),
+      ["all", "full", "rookie"],
+    );
+    extra.onApply("rookie");
+    assert.deepEqual(next, { ...controls, rounds: "rookie" });
   });
 
   test("a board key toggles that market, and the last one lit stays lit", () => {
@@ -695,7 +712,7 @@ describe("what the controls do", () => {
       soleDrafts: 900,
       redraftDrafts: 900,
       dynastyDrafts: 304,
-      teams: "all",
+      rules: DEFAULT_LEAGUE_FILTERS,
       onToggleBoard: (board) => toggles.push(board),
     });
     const keys = elements(tree).filter((el) => typeof el.props.onToggle === "function");
@@ -729,7 +746,7 @@ describe("what the controls do", () => {
     let reset = 0;
     let closed = 0;
     const tree = AdpDrawerFooter({
-      teams: "all",
+      rules: DEFAULT_LEAGUE_FILTERS,
       premiseId: "premise",
       onReset: () => {
         reset += 1;

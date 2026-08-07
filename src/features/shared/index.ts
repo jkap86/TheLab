@@ -57,8 +57,8 @@ export {
   DEFAULT_STEEPNESS,
   STEEPNESS_RANGE,
   adpNarrowingCount,
-  adpQueryString,
-  adpValueQueryString,
+  adpBoardRead,
+  adpValueRead,
   boardLabel,
   defaultAdpControls,
   isUnboundedRange,
@@ -73,7 +73,16 @@ export {
   startupPricingBoard,
   steepnessSummary,
 } from "./adp-controls";
-export type { AdpControls, AdpRange, AdpRangeBounds, AdpRangePreset } from "./adp-controls";
+export type {
+  AdpControls,
+  AdpRange,
+  AdpRangeBounds,
+  AdpRangePreset,
+  AdpRead,
+} from "./adp-controls";
+export { ALL_LEAGUES, resolveLeagueScope } from "./league-scope";
+export type { LeagueScope } from "./league-scope";
+export { useAdpLeagues } from "./use-adp-leagues";
 export { AdpControlsProvider, useAdpControls } from "./adp-controls-context";
 export { useAdp } from "./use-adp";
 export type { AdpState } from "./use-adp";
