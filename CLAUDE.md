@@ -2411,8 +2411,41 @@ stops holding, a comment saying it does would not have caught it.
   this card's too: a league card is not a line of a table, it is the whole of
   what one league has to say with four ranked columns across it, and depth is
   what sorts those columns into an order. The two lists read as one instrument
-  now, which is what a reader crossing between the two tools experiences. Four
+  now, which is what a reader crossing between the two tools experiences. Five
   things in it are decisions rather than styling:
+  - **The top edge carries two plates, which is the one place this card goes
+    further than the trade card.** That readout was in the *head*, between the
+    chevron and the stat columns — the one part of the card that has to stay
+    quiet, since the columns are what a list a hundred rows long is scanned on,
+    and two numbers in front of them were read as a fifth. So the record and the
+    standing hold the trailing corner on a plate of their own (`RecordLedge`),
+    opposite the name: the card's two corners holding its two identities, which
+    league this is and how it is going. Four things hold it up:
+    - **It is a housing, not a second name.** Same plate, but the record keeps
+      the `.lab-readout` cut it already wore, and a cut into a lit face is
+      machining — so the part reads as an instrument label rather than a label
+      with a name on it. The standing beside it is `.lab-engraved`, the trade
+      card's own finish and for its arithmetic: one of these per card down the
+      whole list, where a numeral in the accent at that count is wallpaper.
+    - **The standing is the rank alone** — `2nd`, not `2nd of 12`. The
+      denominator is what a stat column's rank cell spends its width on, and here
+      it would come straight out of the league name's truncation budget for a
+      fact the four columns state four times over. It survives on the hover and
+      in an `sr-only`, where it costs no width: a bare ordinal is a rank out of
+      nothing, and this is the one reading of the card with no hover to fall back
+      on.
+    - **The edge is one flex row, not two placed parts.** A plate that positions
+      itself can only cap its own width, and what the name may take is whatever
+      the ledge doesn't — a width that is its own contents. As two items of one
+      row the negotiation is the layout's, which is what holds at 390px. The row
+      is `pointer-events-none` and each plate takes them back, or a press landing
+      between the two hits the row instead of the toggle underneath. This is what
+      `Nameplate`'s `seat` prop is: `edge` is a plate alone on an edge (the trade
+      card), `row` is one sharing it.
+    - **Absent is not zero**, the card's existing rule surviving the move: no
+      record and no standing draws no plate rather than an empty housing, and a
+      preseason league draws the record without a rank, since `0-0` is a true
+      count where a rank there would place a season nobody has played.
   - **An expanded card is still `.lab-plate`, and the slab makes that swap read
     better rather than making it redundant.** A slab is an *object in a list* —
     a wall you could pick it up by, a static specular sweep — and none of that
@@ -2433,6 +2466,13 @@ stops holding, a comment saying it does would not have caught it.
     same two edges, which is also what keeps the columns from stepping sideways
     as a card opens — and below `sm` the columns divide the head's own width, so
     the two insets have to *sum* the same as well as ending in the same place.
+    **The ledge's own trailing inset is that arithmetic one edge up**, and it is
+    per-state for the same reason: the plates are siblings of the *card*, so the
+    offset is measured from the card's box while the ledge has to land against
+    the *face's* trailing edge — `right-5` at rest, where 6px of that gutter is
+    the wall, and `right-[15px]` open, where the face is a bordered box at full
+    width. The leading edge needs no pair, since a slab's padding is bottom and
+    trailing only.
   - **The name is the button and the head carries no `role`.** `role="button"`
     on the head takes presentational children, which flattened four stat columns
     and their screen-reader labels into one string; the nameplate's real
