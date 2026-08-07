@@ -1,5 +1,5 @@
 import { getKtcPickBoard, getKtcValuesBySleeperId } from "@/shared/ktc";
-import type { KtcValue } from "@/shared/ktc";
+import type { KtcPickBoard, KtcValue } from "@/shared/ktc";
 import { getPlayersByIds } from "@/shared/players";
 import type { PlayerSummary } from "@/shared/players";
 
@@ -53,16 +53,17 @@ const playersCache = new BoundedCache<PlayerSummary | null>(20000, PLAYERS_TTL_M
 const ktcCache = new BoundedCache<KtcValue | null>(20000, KTC_TTL_MS);
 
 /**
- * The pick half of the same board, keyed by {@link ktcPickKey} rather than by a
- * player id.
+ * The pick half of the same board, held **whole** under one key rather than a
+ * row per `(season, round, tier)`.
  *
  * Its own cache because it is a different population read a different way: KTC
- * prices a few dozen pick rows against ~500 players, and they are asked for by
- * `(season, round, tier)` — a pick carries no `sleeper_id` for the player cache
- * to hold it under. Sized to that population several times over rather than to
- * the players'.
+ * prices a few dozen pick rows against ~500 players, and a pick carries no
+ * `sleeper_id` for the player cache to hold it under. Keyed by row it would be
+ * the same shape as the three above; keyed as one value it is not, and the
+ * reason is what the board is now read *for* — see {@link lookupKtcPickBoard}.
  */
-const ktcPicksCache = new BoundedCache<KtcValue | null>(2000, KTC_TTL_MS);
+const ktcPickBoardCache = new BoundedCache<KtcPickBoard>(1, KTC_TTL_MS);
+const KTC_PICK_BOARD_KEY = "board";
 
 /** Player summaries for `ids`, from cache where possible. */
 export function lookupPlayers(
@@ -95,25 +96,33 @@ export function lookupKtc(
 }
 
 /**
- * KTC's price for the pick rows `keys` names, from cache where possible.
+ * KTC's pick board, whole, from cache where possible.
  *
- * **The fetch ignores which keys missed and reads the whole board**, which is
- * the one place these lookups differ from the three above. A pick board is a few
- * dozen rows and one unindexed scan of a 500-row table; narrowing it to the
- * handful a page names would cost the same query and answer less of the next
- * page. `cachedLookup` still records only what was asked for — including the
- * keys the board has nothing for, so a season KTC no longer prices is asked
- * about once rather than on every page a pick from it appears in.
+ * **Whole rather than narrowed to the rows a page names**, which is where this
+ * parts company with the three lookups above. It was narrowed, and the fetch
+ * read the whole board anyway (a few dozen rows and one unindexed scan of a
+ * 500-row table), so the narrowing bought nothing but a smaller payload. What
+ * ended it is that the board is now read for a fact about *itself*: the ADP
+ * column discounts a future pick by the ratio of its row to the nearest priced
+ * season's, and which season that is cannot be asked for by key — a page naming
+ * no 2027 pick would never have requested the row that answers it.
+ *
+ * One cache entry rather than one per row, so there is nothing to partition and
+ * no negative caching to get right: the board either is in hand or is one query
+ * away. It is still bounded and TTL'd, which is the whole of what these caches
+ * are for.
  */
-export function lookupKtcPicks(
-  keys: readonly string[],
-): Promise<Map<string, KtcValue>> {
-  return cachedLookup(ktcPicksCache, keys, () => getKtcPickBoard());
+export async function lookupKtcPickBoard(): Promise<KtcPickBoard> {
+  const hit = ktcPickBoardCache.get(KTC_PICK_BOARD_KEY);
+  if (hit) return hit;
+  const board = await getKtcPickBoard();
+  ktcPickBoardCache.set(KTC_PICK_BOARD_KEY, board);
+  return board;
 }
 
 /** For tests, and for a sync that has just replaced what these hold. */
 export function clearTradeEnrichmentCaches(): void {
   playersCache.clear();
   ktcCache.clear();
-  ktcPicksCache.clear();
+  ktcPickBoardCache.clear();
 }

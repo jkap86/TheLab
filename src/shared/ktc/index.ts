@@ -29,13 +29,21 @@ export {
 } from "./queries";
 export type { KtcValue, KtcValueSet, KtcPickBoard } from "./queries";
 export {
+  ktcPickBaseSeason,
+  ktcPickDiscount,
   ktcPickKey,
   ktcPickPrice,
   parseKtcPickName,
   pickTier,
   KTC_PICK_TIERS,
 } from "./picks";
-export type { KtcPickMatch, KtcPickName, KtcPickPrice, KtcPickTier } from "./picks";
+export type {
+  KtcPickDiscount,
+  KtcPickMatch,
+  KtcPickName,
+  KtcPickPrice,
+  KtcPickTier,
+} from "./picks";
 export {
   isSuperflexLineup,
   ktcBoardValue,

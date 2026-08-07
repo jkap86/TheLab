@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import type { LeaguematePayload, TradesPagePayload } from "@/shared/contract";
-import { ktcPickKey, KTC_PICK_TIERS } from "@/shared/ktc";
 import { isSeason } from "@/shared/query";
 import { getActiveSeason } from "@/shared/season";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
@@ -14,7 +13,7 @@ import {
   isUnnarrowed,
   listTrades,
   lookupKtc,
-  lookupKtcPicks,
+  lookupKtcPickBoard,
   lookupPlayers,
   parseTradeQuery,
   pickSlotKey,
@@ -173,12 +172,6 @@ async function resolveNames(trades: readonly Trade[]) {
     out.push(id);
   };
 
-  // KTC's pick rows the page's picks could land on. Kept in a set of its own
-  // rather than sharing `seen`: these keys are built from a season and a round
-  // rather than from an id, so they belong to a different namespace and sharing
-  // one would only be safe by accident.
-  const pickKeys = new Set<string>();
-
   for (const trade of trades) {
     for (const side of trade.sides) {
       for (const id of side.players) take(id, playerIds);
@@ -189,17 +182,6 @@ async function resolveNames(trades: readonly Trade[]) {
         // covered by the side ids above — and it is exactly the case the card
         // names an owner for.
         if (pick.user_id) take(pick.user_id, managerIds);
-        // **Every tier, not the one this pick falls in.** Which third of the
-        // round a pick lands in is a function of the league's draft order *and*
-        // its size, and the size is on the league list the client already holds
-        // — so the client resolves the tier and this sends the rows it could
-        // resolve to. Four rows per `(season, round)` the page names, of which a
-        // page names a handful; resolving the tier here instead would send one
-        // entry per pick per league and re-send it on every page a pick from
-        // that draft appears in.
-        for (const tier of [...KTC_PICK_TIERS, null]) {
-          pickKeys.add(ktcPickKey(pick.season, pick.round, tier));
-        }
       }
     }
   }
@@ -210,7 +192,16 @@ async function resolveNames(trades: readonly Trade[]) {
     // Keyed on the same new-ids list as the names, so a player priced once is
     // priced once for the whole board.
     lookupKtc(playerIds),
-    lookupKtcPicks([...pickKeys]),
+    // **The whole board, not the rows this page's picks land on.** It used to be
+    // narrowed to four rows per `(season, round)` named here, on the reasoning
+    // that the client resolves a pick's tier and so needs every tier of the
+    // rows it might read — still true, and no longer sufficient. The ADP column
+    // discounts a future pick by the ratio of its KTC row to the *nearest
+    // priced season's*, and which season that is is a fact about the board
+    // rather than about any pick on the page: a page naming no 2027 pick could
+    // not have computed it from a narrowed read. The board is a few dozen rows
+    // and one query, so it is simply sent whole.
+    lookupKtcPickBoard(),
     getDraftSlots(draftKeys),
   ]);
 
@@ -227,7 +218,9 @@ async function resolveNames(trades: readonly Trade[]) {
     players: Object.fromEntries(players),
     managers: resolvedManagers,
     ktc: Object.fromEntries(ktc),
-    pickKtc: Object.fromEntries(pickKtc),
+    // Already a plain record — the board is read whole rather than resolved
+    // through the keyed cache the three lookups above return maps from.
+    pickKtc,
     // Narrowed to the picks the page actually holds: a league's order covers
     // every roster in it, and a page names two or three of them.
     pickSlots: resolvePickSlots(trades, draftSlots),

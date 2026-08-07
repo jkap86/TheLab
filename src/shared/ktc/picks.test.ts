@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  ktcPickBaseSeason,
+  ktcPickDiscount,
   ktcPickKey,
   ktcPickPrice,
   parseKtcPickName,
@@ -137,5 +139,108 @@ test("ktcPickPrice", async (t) => {
   await t.test("a season the board doesn't carry is null", () => {
     assert.equal(ktcPickPrice(board, pick("2024"), null), null);
     assert.equal(ktcPickPrice(board, pick("2027", 3), "early"), null);
+  });
+});
+
+test("ktcPickBaseSeason", async (t) => {
+  // The nearest priced draft, which is what a future pick is discounted
+  // against. Read off the board rather than a calendar because *which* seasons
+  // KTC carries moves through the year — a season's rows come off once its
+  // draft has happened.
+  await t.test("the earliest season the board prices", () => {
+    assert.equal(
+      ktcPickBaseSeason({
+        [ktcPickKey("2029", 1, null)]: price(3000),
+        [ktcPickKey("2027", 1, "mid")]: price(5000),
+        [ktcPickKey("2028", 2, null)]: price(2000),
+      }),
+      "2027",
+    );
+  });
+
+  // KTC unsynced, or a rename the parser hasn't learned: the one case where no
+  // pick can be discounted at all, and the caller has to be able to see it.
+  await t.test("a board with no rows has no base", () => {
+    assert.equal(ktcPickBaseSeason({}), null);
+  });
+});
+
+test("ktcPickDiscount", async (t) => {
+  const board: Record<string, KtcPickPrice> = {
+    [ktcPickKey("2027", 1, "early")]: price(6000),
+    [ktcPickKey("2027", 1, "late")]: price(4000),
+    [ktcPickKey("2027", 1, null)]: price(5000),
+    [ktcPickKey("2028", 1, null)]: price(3000),
+    [ktcPickKey("2029", 1, null)]: price(1500),
+  };
+
+  await t.test("a pick at the nearest season is undiscounted", () => {
+    assert.deepEqual(ktcPickDiscount(board, { season: "2027", round: 1 }, null, true), {
+      factor: 1,
+      base: "2027",
+      exact: true,
+    });
+  });
+
+  // A season KTC has dropped — its draft has happened — is the ladder's own
+  // class, so there is nothing to discount it by rather than nothing to say.
+  await t.test("a pick before the nearest season is undiscounted too", () => {
+    assert.deepEqual(
+      ktcPickDiscount(board, { season: "2026", round: 1 }, null, true),
+      { factor: 1, base: "2027", exact: true },
+    );
+  });
+
+  await t.test("a future pick is its own row over the nearest season's", () => {
+    assert.equal(
+      ktcPickDiscount(board, { season: "2028", round: 1 }, null, true)?.factor,
+      3000 / 5000,
+    );
+    assert.equal(
+      ktcPickDiscount(board, { season: "2029", round: 1 }, null, true)?.factor,
+      1500 / 5000,
+    );
+  });
+
+  // Both ends go through `ktcPickPrice`, so the tier preference and its
+  // fallbacks are the KTC column's own rather than a second spelling of them.
+  await t.test("both ends are read at the pick's own tier where there is one", () => {
+    const early = ktcPickDiscount(board, { season: "2028", round: 1 }, "early", true);
+    // 2028 has only an untiered row, so the numerator is a stand-in for the
+    // early third and the ratio says so.
+    assert.equal(early?.factor, 3000 / 6000);
+    assert.equal(early?.exact, false);
+  });
+
+  await t.test("the ratio is read on the league's own board", () => {
+    // `price` puts the 1QB number 200 below the superflex one, so the two
+    // boards give different ratios for the same pick — which is why this takes
+    // the league's answer rather than picking one.
+    const sf = ktcPickDiscount(board, { season: "2028", round: 1 }, null, true);
+    const oneqb = ktcPickDiscount(board, { season: "2028", round: 1 }, null, false);
+    assert.notEqual(sf?.factor, oneqb?.factor);
+    assert.equal(oneqb?.factor, 2800 / 4800);
+  });
+
+  // Null is what leaves a far-future pick unpriced rather than quoted at the
+  // nearest draft's price — the one wrong answer that would look like a
+  // working one.
+  await t.test("no row on either end is no discount, never a guess", () => {
+    assert.equal(ktcPickDiscount({}, { season: "2029", round: 1 }, null, true), null);
+    // KTC prices no 2029 second at all.
+    assert.equal(
+      ktcPickDiscount(board, { season: "2029", round: 2 }, null, true),
+      null,
+    );
+    // A round the *base* season doesn't carry has nothing to measure against.
+    assert.equal(
+      ktcPickDiscount(
+        { ...board, [ktcPickKey("2029", 3, null)]: price(400) },
+        { season: "2029", round: 3 },
+        null,
+        true,
+      ),
+      null,
+    );
   });
 });

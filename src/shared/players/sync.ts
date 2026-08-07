@@ -61,13 +61,22 @@ async function syncPlayersLocked(
       table: "players",
       columns: [
         "player_id", "first_name", "last_name", "full_name", "position", "team",
-        "fantasy_positions", "status", "sport", "data",
+        "fantasy_positions", "status", "sport", "years_exp", "data",
       ],
       rows: entries,
       values: ([id, p]) => [
         id, p.first_name ?? null, p.last_name ?? null, p.full_name ?? null,
         p.position ?? null, p.team ?? null, j(p.fantasy_positions),
-        p.status ?? null, p.sport ?? null, j(p),
+        // Promoted out of `data` because the ADP board filters on it — see the
+        // migration. Anything that isn't a number is stored as null rather than
+        // coerced: Sleeper omits it for team defences and promises nothing about
+        // its type, and a null reads as "not known to be a rookie", which is the
+        // safe side of the one question this column is asked.
+        p.status ?? null, p.sport ?? null,
+        typeof p.years_exp === "number" && Number.isFinite(p.years_exp)
+          ? p.years_exp
+          : null,
+        j(p),
       ],
       trailing: { column: "updated_at", sql: "now()" },
       onConflict: `(player_id) DO UPDATE SET
@@ -75,6 +84,7 @@ async function syncPlayersLocked(
           full_name = EXCLUDED.full_name, position = EXCLUDED.position,
           team = EXCLUDED.team, fantasy_positions = EXCLUDED.fantasy_positions,
           status = EXCLUDED.status, sport = EXCLUDED.sport,
+          years_exp = EXCLUDED.years_exp,
           data = EXCLUDED.data, updated_at = now()`,
     }),
   );

@@ -1,4 +1,4 @@
-import type { ManagerLeague } from "@/shared/manager";
+import type { AdpBoardType, ManagerLeague } from "@/shared/manager";
 
 import { LIVE_STATUSES, SLOT_GROUP_BY_KEY } from "./defaults.ts";
 import type { CompareOp, FilterRule, LeagueFilters } from "./types.ts";
@@ -124,6 +124,28 @@ function settingNumber(league: ManagerLeague, key: string): number | undefined {
  */
 export function leagueType(league: ManagerLeague): number {
   return settingNumber(league, "type") ?? 0;
+}
+
+/**
+ * Which of `/api/adp`'s two boards a league's own market is: Sleeper's
+ * `settings.type` 2 is dynasty, and everything else — redraft and keeper — reads
+ * the redraft board.
+ *
+ * Exported for the reason {@link leagueType} is, and this one had already been
+ * written out three times before a fourth reader asked for it: the server groups
+ * crawled drafts with `DYNASTY_BOARD_SQL`, `getLeagueTypes` buckets a stored
+ * league with a bare `=== 2`, and `seedFromLeague` chose the drawer's displayed
+ * board with a copy of its own. A haul priced off the market its league isn't in
+ * is wrong at every line — the same failure reading a superflex roster off KTC's
+ * 1QB board is — so it is worth one definition rather than four.
+ *
+ * **A league the list hasn't answered for yet is redraft**, which is the same
+ * shape as an unsynced lineup falling to KTC's 1QB board: the broader market,
+ * never a guess at the narrower one. A trade in an unknown league is priced
+ * against the drafts most leagues run rather than left blank.
+ */
+export function leagueAdpBoard(league: ManagerLeague | null): AdpBoardType {
+  return league && leagueType(league) === 2 ? "dynasty" : "redraft";
 }
 
 /**

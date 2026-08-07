@@ -42,6 +42,7 @@ export { scoringKeyLabel, scoringKeyOptions } from "./options.ts";
 export {
   compare,
   deriveScoring,
+  leagueAdpBoard,
   leagueType,
   matchesFilters,
   matchesScoringRule,

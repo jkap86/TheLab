@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { AdpPayload, AdpPlayerPayload, ApiErrorPayload } from "@/shared/contract";
 import { getDraftAdp, parseAdpFilters, usesDefaultSeason } from "@/shared/manager";
-import { getPlayersByIds } from "@/shared/players";
+import { getPlayersByIds, getRookiePlayerIds } from "@/shared/players";
 import { getActiveSeason } from "@/shared/season";
 
 import { readFailureResponse } from "../read-failure";
@@ -66,7 +66,15 @@ export async function GET(request: Request) {
 
   try {
     const result = await getDraftAdp(filters);
-    const players = await getPlayersByIds(result.rows.map((r) => r.player_id));
+    const ids = result.rows.map((r) => r.player_id);
+    // Two reads of one table rather than one, and the second is what makes the
+    // trades board's pick column possible — see `getRookiePlayerIds`. They are
+    // independent, so neither waits on the other; both are primary-key lookups
+    // beside an aggregate that has already done the expensive work.
+    const [players, rookies] = await Promise.all([
+      getPlayersByIds(ids),
+      getRookiePlayerIds(ids),
+    ]);
 
     const payload: AdpPayload = {
       filters,
@@ -81,6 +89,7 @@ export async function GET(request: Request) {
           name: player?.name ?? row.player_id,
           position: player?.position ?? null,
           team: player?.team ?? null,
+          rookie: rookies.has(row.player_id),
           redraft: row.redraft,
           dynasty: row.dynasty,
         };
