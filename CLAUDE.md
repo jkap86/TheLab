@@ -2754,37 +2754,67 @@ stops holding, a comment saying it does would not have caught it.
     the question wrongly first. The two payloads are the other tabs' resources
     behind a shared cache, fetched when the panel opens or a subject is selected —
     both naming the same query keys, so the two gates cost one request.
-- **That control rides in a second storey of the heading rail, not in a row of its
-  own — `ListLedge` is the billet, and `MetricHeadings` renders the face's
-  contents rather than the face.** The rail is inside the pinned header, where
-  every pixel is league rows covered on all three tabs, and a separate part costs
-  more than its own contents: its wall, its cast shadow, and the clearance holding
-  its lit face off the rail's lit face — the same 20px the plate's filters key
-  gave back by seating flush in its corner. One billet pays those once and says
-  something true, since both storeys are the list's own header. Four things hold
-  it up, and three were caught by rendering it rather than by reading it:
-  - **A billet has one top edge.** The top storey wears the three-stop chamfer
-    (`.lab-ledge-storey`) **and the cyan hairline with it** — left on the face
-    below, that hairline drew a cyan line across the middle of the part, which
-    reads as two stacked bars, the exact thing one billet exists to avoid. The
-    seated storey is `.lab-ledge-face-seated`, which drops both and picks the
-    light back up under the cut.
-  - **The notch is split with the storeys.** A parent's `clip-path` clips its
-    subtree, so the wrapper's `.lab-notch-lg` already cuts the top-left of
-    whatever is at the top; what it cannot reach is an inner face's bottom-right,
-    which sits 5px above the wrapper's. So the *last* storey carries
-    `.lab-notch-br` and no other — `.lab-notch-lg` there would chamfer a corner
-    in the middle of the part.
-  - **The search panel is outside the billet, and it has to be.** That same clip
-    would cut off anything floating under the rail, which is why `ListLedge` owns
-    the `relative` box and takes the panel as a sibling.
-  - **The storey wraps rather than compresses**, and the caption goes below `sm`.
+- **That control is a `.lab-slab` of its own above the heading billet, and it
+  spent a while as a second storey *of* that billet — which is the cheaper
+  construction and the wrong one here.** The economics of the storey are real and
+  still hold where they apply: a separate part costs its wall, its cast shadow
+  and the clearance holding its lit face off the rail's lit face — the same 20px
+  the plate's filters key gave back by seating flush in its corner — and one
+  billet pays those once. What that argument leaves out is what the two rows
+  *are*. Two storeys are the same material at the same width with a 1px seam
+  between them, so a control over the list read as part of the table's own head,
+  and stacked under the pinned plate it made the header three lit faces deep.
+  The headings name what a row **says**; this names which rows there **are**.
+  **Reach for a storey when the second row is saying the same kind of thing as
+  the headings, and pay for a part when it isn't** — the shares sheet still takes
+  the storey (`ColumnsBar`'s `storey` prop), because there its tokens name the
+  rows the list is about and there genuinely is one header.
+
+  Six things hold the split up, and three of them were caught by *rendering* it
+  rather than by reading it:
+  - **The material is the separation, and the slab is what it is for.** A wall
+    running down *and* right, graded from a lit near corner to a dark far one,
+    brushed face, chamfers on all four corners against the billet's two — nothing
+    else in the pinned region has a wall on two sides. It wears `.lab-slab-fixed`
+    because it is a **surface holding controls, not a card**: `.lab-slab`'s lift
+    and brightening bloom belong to a part you press, and a rail that rose under
+    the cursor would promise a press that lands on whatever chip is under the
+    finger. That class is declared after `.lab-slab:hover` on purpose — both are
+    one class and one pseudo-class, so they tie on specificity and source order
+    decides, and moving it up silently restores the lift.
+  - **A corner-lit gradient is a claim about a box's shape, and it degenerates
+    off that shape.** `.lab-slab-face` fills at 168°, and the gradient line for
+    an angle over a w×h box is `|w·sinθ| + |h·cosθ|` — ~382px over a 1700×34
+    rail, so the three stops resolve inside the leading fifth and 1300px sit flat
+    on the last one. Worse, the bottom falloff (`inset 0 -20px 38px -22px`) is a
+    soft shading over the last sixth of a 150px card and over **half the height**
+    of a rail. Measured, the far end came out at rgb(11,21,31) against a page of
+    rgb(10,20,30): a face indistinguishable from its own ground, with the two keys
+    at that end appearing to float off the part. `.lab-slab-face-rail` re-lays the
+    fill horizontally in percentages (so it scales with the part) and scales both
+    falloffs, keeping the three 1px bevel lines untouched — a specular edge is 1px
+    whatever the box is. **Sample the pixels rather than trusting the class**: this
+    was invisible in review and obvious at rgb().
+  - **The search trigger takes `.lab-channel`, not the heading rail's
+    `.lab-ledge-slot`.** A cut is read against the face it is cut into: that one
+    is tuned for the ledge's *light* face and gets lighter towards its bottom,
+    which is a deep slot there and a raised sliver on a face this dark.
+  - **The clearance is the point rather than spacing.** The slab's own wall is
+    6px, so `gap-3` between the two parts leaves ~18px of ground under a lit face
+    before the billet's begins. Below that they read as one crowded instrument
+    again, which is what splitting them was for.
+  - **The search panel is outside the slab, and it has to be.** `clip-path` clips
+    a whole subtree, so the chamfered face would cut off anything floating under
+    the rail — the panel is a sibling, in a `relative` wrapper that is otherwise
+    the billet's own geometry so the two parts share a left edge. This is the same
+    rule `ListLedge` owns its wrapper for.
+  - **The row wraps rather than compresses**, and the caption goes below `sm`.
     At 390px a caption, a token, a trigger and the count do not fit one line, and
-    a nowrap row pushed the count off the end of the billet. Everything in the row
+    a nowrap row pushed the count off the end of the part. Everything in the row
     is content, so it takes a second line down there; the caption is the one part
     a phone can lose, since the trigger reads "Player or leaguemate" until
     something is picked.
-  - **The search is the storey's only channel; the two shares keys are raised
+  - **The search is the row's only channel; the two shares keys are raised
     pills at its trailing end.** All three were `.lab-ledge-slot` in one adjacent
     run — same material, same size, no divider — which is a segmented text input
     in every respect a reader judges by, so the two doors onto a whole ranked list
@@ -2795,19 +2825,22 @@ stops holding, a comment saying it does would not have caught it.
     smallest key, borrowed rather than reinvented). **Material and seating are
     two halves and only one survives a phone.** The seating is real — the count
     and the two keys all describe the *population* where the field is the reader's
-    own input, the argument that put the ADP block beside Tools — but the storey
+    own input, the argument that put the ADP block beside Tools — but the row
     wraps down there and the two ends become two lines, so material is what
     carries it at the width the confusion is worst. The seating has one
     consequence worth spelling: they are **one flex item**, because `ml-auto`
     resolves per flex line, and loose they sat right on the first line and hard
     against the *left* of the second.
 
-  Two knock-ons worth keeping. **The heading storey is what's conditional, never
-  the rail** — `ColumnsBar` takes `headings`, and the tab decides, because what
-  counts as a row is the tab's grain (leagues here, shares on the other two). It
-  was first written as the layout swapping in a storey-only rail once nothing
-  matched, which *remounted* the control: narrowing to zero from the open panel
-  closed the panel, on exactly the press that most needs undoing. And **the
+  Two knock-ons worth keeping. **The headings are what's conditional, never the
+  rail** — `ColumnsBar` takes `headings`, and the tab decides, because what
+  counts as a row is the tab's grain (leagues here, shares on the other two).
+  With the filter its own part, no rows now means *no billet at all* rather than
+  a storey-only one: a heading rail with nothing to head and no control on it is
+  a lit face saying nothing. What must not come back is this slot **swapping
+  between two different trees** as the list narrows — that is what it did before,
+  and remounting the control closed the search panel on exactly the press that
+  emptied the list. And **the
   plate's scope line names both selections**, since the record beside it is summed
   over the list the subjects leave — a line naming only the league filters would
   be labelling a number counted over something narrower than it says.

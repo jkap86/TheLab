@@ -493,6 +493,28 @@ body {
       drop-shadow(0 16px 24px rgba(0, 0, 0, 0.8))
       drop-shadow(0 0 26px rgba(0, 255, 229, 0.22));
   }
+  /* The slab as a *surface* rather than as a card.
+
+     `.lab-slab` is the trades board's row: a card you press, so it lifts and
+     blooms under the cursor. The manager list's subject rail is made of the same
+     block for a different reason — it has to be unmistakably a different object
+     from the heading billet 18px below it, and a wall running down *and* right
+     is the strongest "separate object" mark this app owns — but it is a surface
+     holding controls, not a control. A rail that rose under the cursor would be
+     promising a press that lands on whatever chip is under the finger.
+
+     Declared after `.lab-slab:hover` on purpose: both selectors are one class
+     and one pseudo-class, so they tie on specificity and source order is what
+     decides. Moving this above it silently restores the lift. */
+  .lab-slab-fixed {
+    transition: none;
+  }
+  .lab-slab-fixed:hover {
+    transform: none;
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 10px 16px rgba(0, 0, 0, 0.75))
+      drop-shadow(0 0 20px rgba(0, 255, 229, 0.1));
+  }
   .lab-slab-face {
     position: relative;
     background:
@@ -508,6 +530,56 @@ body {
       inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
       inset 0 -20px 38px -22px rgba(0, 0, 0, 0.9),
       inset -8px 0 16px -10px rgba(0, 0, 0, 0.75);
+  }
+  /* The slab's face at *rail* proportions, worn beside `.lab-slab-face` and
+     overriding only its fill.
+
+     **A corner-lit gradient is a claim about a box's shape, and it degenerates
+     when the box stops being card-shaped.** The face's own fill runs at 168° —
+     twelve degrees off vertical, which on a card traverses its height and reads
+     as light falling from the near corner. The gradient line for an angle over a
+     w×h box is `|w·sinθ| + |h·cosθ|`, so on a 1700×30 rail that same 168° is
+     ~382px long against 1700px of part: the three stops resolve inside the
+     leading fifth and the remaining 1300px sit flat on the last one — which is
+     `#0a1723`, three values off the page ground. The part appeared to end
+     somewhere around its own count, with the two keys at its trailing edge
+     floating on what looked like background.
+
+     So the fill is re-laid for the aspect ratio it is actually being used at:
+     the corner light becomes a *horizontal* graded base whose stops are
+     percentages and therefore scale with the part, plus a vertical wash for the
+     light from above. The tones are the card's own, lifted a step so the far end
+     stays clear of the ground — `.lab-ledge`'s rule, which this is the second
+     instance of.
+
+     **The two falloffs have to come with it, and they are the half that
+     actually mattered.** The face darkens its bottom edge by `inset 0 -20px 38px
+     -22px` and its trailing edge by `inset -8px 0 16px -10px` — a soft shading
+     over the last sixth of a 150px card, and over *half the height* of a 34px
+     rail. Measured, the far end of the fixed fill still came out at rgb(11,21,31)
+     against a page of rgb(10,20,30): a face indistinguishable from the ground it
+     sits on, with the two keys at that end appearing to float. Both are scaled to
+     the part here; the three bevel lines above them are untouched, since a
+     specular edge is 1px whatever the box is.
+
+     The brushed grain and the specular sweep still come from `.lab-slab-face`.
+     This replaces its `background` and `box-shadow` and nothing else, so it has
+     to be declared after it. */
+  .lab-slab-face-rail {
+    background:
+      repeating-linear-gradient(
+        101deg,
+        rgba(255, 255, 255, 0.016) 0 1px,
+        transparent 1px 3px
+      ),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 70%),
+      linear-gradient(100deg, #23445f 0%, #1a3145 45%, #142534 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 2.5px 0 -1px rgba(255, 255, 255, 0.14),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
+      inset 0 -8px 14px -12px rgba(0, 0, 0, 0.85),
+      inset -10px 0 20px -14px rgba(0, 0, 0, 0.7);
   }
   /* The specular sweep. Static, unlike `RowSheen`'s travelling band: this face
      is metal being lit rather than glass catching a highlight, and a sweep that
@@ -867,13 +939,22 @@ body {
   }
   /* The rail's *upper storey*, and the seam that separates it from the headings.
 
-     The subject filter — which of this manager's leagues hold a given player, or
-     are shared with a given leaguemate — is a control over the list, so it wants
-     to sit above the headings. Drawn as a part of its own it would cost three
-     things the headings rail already pays for: a second wall, a second cast
-     shadow, and the clearance holding its lit face off the rail's lit face —
-     the same 20px the filters key gave back by seating flush in the plate's
-     corner. One billet with two storeys pays them once.
+     A row above the headings drawn as a part of its own costs three things this
+     rail already pays for: a second wall, a second cast shadow, and the
+     clearance holding its lit face off the rail's lit face — the same 20px the
+     filters key gave back by seating flush in the plate's corner. One billet
+     with two storeys pays them once, and the shares sheet takes that deal: its
+     tokens name the rows the list is *about*, so the storey and the headings
+     really are one header.
+
+     **The manager tool's subject filter took it and gave it back, which is the
+     boundary worth recording.** Two storeys are the same material at the same
+     width with a 1px seam between them, so a *control over the list* drawn up
+     here read as part of the table's own head — and stacked under the manager
+     plate it made the pinned region three lit faces deep. That one is a
+     `.lab-slab` above the billet now. Reach for a storey when the second row is
+     saying the same kind of thing as the headings; reach for a separate part
+     when it isn't, and pay the wall.
 
      What makes it read as two storeys rather than as one tall face is the
      chamfer and the seam, and the two are a matched pair:

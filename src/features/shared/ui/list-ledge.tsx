@@ -10,14 +10,22 @@ import type { ReactNode } from "react";
  * knows about either tool is nothing — it owns the wall, the notch and the faces,
  * and takes whatever goes on them as nodes.
  *
- * The stat-column headings have always ridden here ({@link MetricHeadings}); the
- * subject filter is the second storey above them. **The point of one billet is
- * that a separate part costs more than its own contents**: its wall, its cast
- * shadow, and the clearance holding its lit face off the rail's lit face — the
- * same 20px the manager plate's filters key gave back by seating flush in its
- * corner. Two storeys pay those once, and say something true while they are at
- * it: both are the list's header, one naming its columns and one naming its
- * population.
+ * The stat-column headings ride here ({@link MetricHeadings}); a caller may put
+ * one storey above them. **A separate part costs more than its own contents** —
+ * its wall, its cast shadow, and the clearance holding its lit face off this
+ * one's, the same 20px the manager plate's filters key gave back by seating
+ * flush in its corner — so a storey is the cheap way to carry a second row, and
+ * it is the right way exactly when that row and the headings are one header.
+ *
+ * **The manager tool's subject filter was that storey and is not now, which is
+ * the limit of the trick worth knowing.** A storey and a heading rail are the
+ * same material at the same width with a 1px seam between them, so a filter
+ * drawn there read as part of the table's own head rather than as a control over
+ * it — and the pinned region ran three lit faces deep. It is a slab of its own
+ * above this billet now (see `SubjectRail`), and what still uses the storey is
+ * the shares sheet, where the tokens name the rows the list is *about* and there
+ * is genuinely one header to be part of. The test is not whether a second row
+ * exists; it is whether it is saying the same kind of thing as the headings.
  *
  * Three details are load-bearing and easy to undo.
  *
