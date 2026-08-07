@@ -37,6 +37,13 @@ import type { TradeCircle, TradeFilters, TradeNames } from "../filters";
  * by `TradesHome` — so what is left here is genuinely only the two things chosen
  * once and then read.
  *
+ * **It leads the page, above the search bays.** The scope is the widest claim
+ * this page makes — every crawled league, or one account's corner of it — and a
+ * bay reading `+ anyone` means "anyone *in this circle*", so a reader meeting
+ * the bays first is composing a question with no population stated to ask it of.
+ * The search sits between this block and the list instead, next to the cards it
+ * is the question for.
+ *
  * Two rows, and the split is what each row is *for* rather than a way to fit:
  *
  * - **The scope leads**, because it says what board this is. Nothing about the
@@ -85,7 +92,10 @@ export function TradeControls({
   const selection = tradeFilterSummary(filters, names);
 
   return (
-    <div className="lab-trough mb-4 flex flex-col gap-2.5 rounded-2xl p-3">
+    // `mb-3` rather than the `mb-4` that separated this from the list when it
+    // was the last block above one: what follows it now is the search, and the
+    // two controls sit closer to each other than either does to the board.
+    <div className="lab-trough mb-3 flex flex-col gap-2.5 rounded-2xl p-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* The population, leading, because it is the widest claim on the page:
             every other control here narrows within whatever this leaves. */}

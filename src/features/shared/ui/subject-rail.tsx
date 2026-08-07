@@ -308,7 +308,15 @@ export function SubjectRail({ view }: { view: SubjectView }) {
   const allLeagues = leagues;
 
   return (
-    <div ref={boxRef}>
+    // The 12px is the clearance holding this lit face off whatever lit face
+    // follows it — usually the heading billet, which carries the same margin on
+    // its own top edge, and the two collapse to one gap. It is on this part as
+    // well as on that one because the billet is not always drawn: narrow the list
+    // to nothing and the rail is followed by the note saying so, which without
+    // this would sit flush against it. A margin rather than a `gap` on a shared
+    // box, because the billet pins itself and a box around the two would scroll
+    // away and take it along — see {@link ListLedge}.
+    <div ref={boxRef} className="mb-3">
       {/* The heading billet's own wrapper geometry, so the two parts share a
           left edge rather than each finding its own — see {@link ListLedge},
           which spends the same 1px transparent border the cards do.
@@ -660,7 +668,12 @@ function SubjectPanel({
       id={id}
       role="group"
       aria-label="Filter by player or leaguemate"
-      className="absolute left-4 right-4 top-full z-30 mt-1.5 flex max-h-[min(60vh,26rem)] flex-col gap-1.5 rounded-xl border border-active/25 bg-gradient-to-b from-[#1b3040] to-[#0d1c27] p-2 shadow-[0_24px_50px_-20px_rgba(0,0,0,0.95),0_0_36px_-16px_rgba(0,255,229,0.35)] sm:max-w-[26rem]"
+      // `z-40` is measured against the heading rail immediately below this one,
+      // which pins itself at `z-30` while the list scrolls under it: this panel
+      // hangs *down* over that rail, so anything at or below its level is painted
+      // under a part it has to cover. It stays under the app bar's `z-50`, which
+      // is the one thing that may cover this.
+      className="absolute left-4 right-4 top-full z-40 mt-1.5 flex max-h-[min(60vh,26rem)] flex-col gap-1.5 rounded-xl border border-active/25 bg-gradient-to-b from-[#1b3040] to-[#0d1c27] p-2 shadow-[0_24px_50px_-20px_rgba(0,0,0,0.95),0_0_36px_-16px_rgba(0,255,229,0.35)] sm:max-w-[26rem]"
       style={{ animation: "dialog-rise 0.14s cubic-bezier(0.2,0.9,0.3,1)" }}
     >
       <div className="flex shrink-0 items-center gap-2 rounded-lg border border-foreground/10 bg-[#06111b] px-2.5 py-1.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] focus-within:border-active/60">

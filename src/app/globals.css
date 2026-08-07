@@ -22,26 +22,30 @@
   --background: rgb(10, 20, 30);
 
   /* The height of the pinned app bar (`SiteHeader`). Anything that pins itself
-     underneath — the manager card — offsets by this, so the two measurements
-     can't drift into a gap or an overlap. It includes the bar's extruded bottom
-     edge (`--bar-edge-h`): the edge is drawn *inside* the header box rather
-     than as an outside shadow, or the card pinned at this offset would cover
-     it. */
+     underneath — a list's heading rail — offsets by this, so the two
+     measurements can't drift into a gap or an overlap. It includes the bar's
+     extruded bottom edge (`--bar-edge-h`): the edge is drawn *inside* the header
+     box rather than as an outside shadow, or a part pinned at this offset would
+     cover it. */
   --site-header-h: 3.75rem;
   --bar-edge-h: 6px;
 
-  /* The height of the manager plate pinned under that bar (`ManagerHeader`),
-     published by the plate itself and 0 on every page that draws none.
+  /* The height of the heading rail pinned under that bar (`ListLedge`),
+     published by the rail itself and 0 on every page that pins none.
 
      It is the one runtime measurement in the app, and it is here because there
-     is no constant to write: the plate's height is whatever its record line, its
-     scope line and its filter row wrap to at the width being read. What needs it
-     is a league card opened into its detail panel — that card pins directly
-     beneath the plate and caps at what is left of the screen, so the two
-     offsets have to agree or the panel is either cut off at the top or hanging
-     off the bottom. Registering it here rather than only setting it from script
-     is what keeps the `calc()`s below valid on a page with no plate at all. */
-  --manager-header-h: 0px;
+     is no constant to write: below `sm` the rail takes a second line — the
+     subject heading over the four columns, the way the cards' own columns stack
+     — so its height is whatever the width being read makes it. What needs it is
+     a league card opened into its detail panel: that card pins directly beneath
+     the rail and caps at what is left of the screen, so the two offsets have to
+     agree or the panel is either cut off at the top or hanging off the bottom.
+     Registering it here rather than only setting it from script is what keeps
+     the `calc()`s reading it valid on a page that pins no rail at all.
+
+     It used to be `--manager-header-h`, when the plate, the filter row and this
+     rail were one pinned box. Only the rail holds the top now. */
+  --list-ledge-h: 0px;
 
   /* The extrusion palette. A raised surface is a bright face sitting on a dark
      side wall; these are the two walls — one under an unlit face, one under a

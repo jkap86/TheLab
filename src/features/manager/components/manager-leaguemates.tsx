@@ -86,6 +86,7 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
           <ColumnsBar
             view={view}
             headings={shares.mates.length > 0}
+            pinned
             metrics={LEAGUEMATE_SHARE_METRICS}
             columns={columns}
             subject="Leaguemate"

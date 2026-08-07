@@ -90,9 +90,15 @@ export type PickedName = {
  *   watches, so a panel that expanded in place would move every card on the board
  *   to answer a question about it.
  * - **It commits live.** A press narrows immediately, and the count on the
- *   controls row below moves with it — the facet counts are taken without the
+ *   controls row above moves with it — the facet counts are taken without the
  *   selection, so nothing a press can do changes the number beside the thing
  *   being pressed.
+ *
+ * It sits *under* the scope block rather than leading the page, which is a claim
+ * about what a bay means rather than about which control matters more: `+ anyone`
+ * is "anyone in this circle", so the population has to be stated before the
+ * question is composed against it. What it still leads is the list, which is
+ * what the question is asked of.
  */
 export function TradeSearch({
   filters,
@@ -170,7 +176,10 @@ export function TradeSearch({
   );
 
   return (
-    <div ref={boxRef} className="relative mb-3">
+    // `mb-4`, the gap the block above the list has always had: this is that
+    // block now, and the cards want more ground under a control than the two
+    // controls want between themselves.
+    <div ref={boxRef} className="relative mb-4">
       {/* One part holding two regions, which is the card's own construction and
           not a resemblance to it: `SIDE_ZONE` and the seam come from the card
           itself, so the control cannot drift from the thing it filters. No gap

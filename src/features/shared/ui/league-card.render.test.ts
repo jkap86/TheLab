@@ -225,20 +225,20 @@ describe("where the stat columns land", () => {
 describe("where an open card pins", () => {
   /**
    * The chrome an open card has to clear, in the order it is stacked: the app
-   * bar, then the manager plate pinned under it. The plate's term is published at
-   * runtime (`usePinnedHeight`) because its height is whatever its scope line and
-   * its filter row wrap to at the width being read — there is no constant to
-   * assert against, which is exactly why the three places that *name* it have to
-   * be asserted against each other.
+   * bar, then the list's heading rail pinned under it. The rail's term is
+   * published at runtime (`usePinnedHeight`) because its height is whatever the
+   * width being read makes it — it takes a second line below `sm` — so there is
+   * no constant to assert against, which is exactly why the three places that
+   * *name* it have to be asserted against each other.
    *
    * Three class strings carry it and none of them can be checked by a type: the
    * card sticks at this offset, the open-scroll aims at it, and the cap subtracts
    * it from the screen. Each failure is silent and different — a `top` short of
-   * it puts the card's head under the plate, a `scroll-mt` short of it scrolls to
+   * it puts the card's head under the rail, a `scroll-mt` short of it scrolls to
    * a position the card then refuses to hold, and a cap missing a term hangs the
    * panel's last rows off the bottom of the screen.
    */
-  const CHROME = ["var(--site-header-h)", "var(--manager-header-h)"];
+  const CHROME = ["var(--site-header-h)", "var(--list-ledge-h)"];
 
   /** The body of one arbitrary value, e.g. `top-[…]` → what is in the brackets. */
   const arbitrary = (classes: string, prefix: string): string =>
@@ -263,10 +263,11 @@ describe("where an open card pins", () => {
     }
   });
 
-  test("it stays under the pinned plate rather than over it", () => {
-    // The plate is `z-40` and its own search panel floats down over this card,
-    // so a card that outranked it would paint over both. What keeps the *other*
-    // cards from painting over this one is that they carry no `z` at all.
+  test("it stays under the pinned heading rail rather than over it", () => {
+    // The rail is `z-30` and the subject rail's search panel floats down over
+    // this card at `z-40`, so a card that outranked either would paint over it.
+    // What keeps the *other* cards from painting over this one is that they
+    // carry no `z` at all.
     assert.match(OPEN_BOX, /(?:^| )z-20(?: |$)/);
     assert.doesNotMatch(card(), /z-[234]0/);
   });
