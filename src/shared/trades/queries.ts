@@ -10,11 +10,10 @@ import type { TradeCircleScope } from "./circle";
 import { decodeTradeCursor, encodeTradeCursor } from "./cursor";
 import type { TradeQuery } from "./params";
 import {
-  jsonbArraySql,
-  PICK_TOKEN_SQL,
   STARTUP_DRAFT_CTE,
   TRADES_POPULATION_SQL,
   TRADE_COLUMNS_SQL,
+  TRADE_FACET_SQL,
   TRADE_ORDER_SQL,
   TRADE_SORT_SQL,
   tradeCursorSql,
@@ -307,46 +306,9 @@ export async function getTradeFacets(query: TradeQuery): Promise<TradeFacets> {
   // against branches that cost 270ms, 270ms and 830ms — a trade worth making,
   // and the reason it is worth making is that the branches are so unequal.
   const [players, picks, managers] = await Promise.all([
-    facetQuery(
-      query,
-      circle,
-      // `adds` is player id → the roster that received them, so its keys *are*
-      // the players who moved, pooled across the sides the way `tradeAssets`
-      // used to pool them. Keys are unique within an object, so a plain
-      // `count(*)` is already a count of trades.
-      `SELECT k AS value, count(*)::bigint AS count
-         FROM pop, LATERAL jsonb_object_keys(
-                CASE WHEN jsonb_typeof(pop.adds) = 'object'
-                     THEN pop.adds ELSE '{}'::jsonb END
-              ) k
-        GROUP BY k`,
-    ),
-    facetQuery(
-      query,
-      circle,
-      // Distinctly, because a trade can carry two 2027 firsts and the menu's
-      // number is "trades that name it".
-      `SELECT ${PICK_TOKEN_SQL} AS value,
-              count(DISTINCT pop.transaction_id)::bigint AS count
-         FROM pop, LATERAL jsonb_array_elements(${jsonbArraySql("pop.draft_picks")}) p
-        WHERE p ? 'season' AND p ? 'round'
-        GROUP BY 1`,
-    ),
-    facetQuery(
-      query,
-      circle,
-      // A trade names rosters and a reader names people, so this is the only
-      // branch that has to join. Distinctly again: a manager can hold two
-      // rosters in one league, and a three-way trade can name both.
-      `SELECT r.owner_id AS value,
-              count(DISTINCT pop.transaction_id)::bigint AS count
-         FROM pop
-         CROSS JOIN LATERAL jsonb_array_elements_text(${jsonbArraySql("pop.roster_ids")}) ri
-         JOIN rosters r
-           ON r.league_id = pop.league_id AND r.roster_id = ri::int
-        WHERE ri ~ '^[0-9]+$' AND r.owner_id IS NOT NULL
-        GROUP BY 1`,
-    ),
+    facetQuery(query, circle, TRADE_FACET_SQL.players),
+    facetQuery(query, circle, TRADE_FACET_SQL.picks),
+    facetQuery(query, circle, TRADE_FACET_SQL.managers),
   ]);
 
   return { players, picks, managers };

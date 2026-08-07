@@ -34,6 +34,14 @@ export type ManagerResourceState<T> = {
  * null means the stream hasn't produced a result, an empty list is a manager with
  * no leagues, and there is nothing to ask for either way.
  *
+ * **It also takes the canonical `user_id`, and will not ask without one.** These
+ * routes are pure Postgres reads keyed on that id; resolving the searched name
+ * through Sleeper to arrive at it is a request per resource per page load, which
+ * is what sending it removes (see {@link fetchManagerResource}). Gating on it as
+ * well as on the leagues costs nothing — both arrive on the same stream message
+ * — and it is what makes "resolve once, then read the database" a rule rather
+ * than an optimisation a call site can forget.
+ *
  * Data already loaded stays put across a refetch, which is the cache's own
  * behaviour now rather than something each hook has to remember: a failed
  * background refetch leaves the last good answer in place and reports the failure
@@ -44,6 +52,8 @@ export type ManagerResourceState<T> = {
 export function useManagerResource<T>(
   queryKey: QueryKey,
   searched: string,
+  /** The manager's canonical Sleeper id, off the leagues stream. */
+  userId: string | null,
   leagues: ManagerLeague[] | null,
   path: string,
   fallbackError: string,
@@ -63,8 +73,8 @@ export function useManagerResource<T>(
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) =>
-      fetchManagerResource<T>(searched, path, fallbackError, signal),
-    enabled: enabled && (leagues?.length ?? 0) > 0,
+      fetchManagerResource<T>(searched, path, fallbackError, signal, userId),
+    enabled: enabled && userId !== null && (leagues?.length ?? 0) > 0,
     staleTime,
   });
 

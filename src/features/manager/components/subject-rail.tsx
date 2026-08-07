@@ -240,8 +240,8 @@ export function SubjectRail({ view }: { view: FilteredLeagues }) {
   // Both halves are fetched whenever the panel is up: the search is one field
   // over both kinds, so opening it with only the rosters loaded would silently
   // answer half the question. The sheet asks for the rosters under the same key.
-  const rosters = useManagerPlayers(view.searched, leagues, open);
-  const members = useManagerLeaguemates(view.searched, leagues, open);
+  const rosters = useManagerPlayers(view.searched, view.userId, leagues, open);
+  const members = useManagerLeaguemates(view.searched, view.userId, leagues, open);
 
   const options = useMemo(
     () =>

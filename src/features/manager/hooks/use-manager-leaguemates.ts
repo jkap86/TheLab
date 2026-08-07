@@ -19,6 +19,12 @@ export type ManagerLeaguematesState =
  */
 export function useManagerLeaguemates(
   searched: string,
+  /**
+   * The manager's canonical Sleeper id, off the leagues stream. Sent with the
+   * read so the route needn't resolve the searched name through Sleeper again —
+   * see {@link useManagerResource}.
+   */
+  userId: string | null,
   leagues: ManagerLeague[] | null,
   /** Off until a subject filter needs it — see {@link useManagerResource}. */
   enabled = true,
@@ -30,6 +36,7 @@ export function useManagerLeaguemates(
   return useManagerResource<ManagerLeaguematesResult>(
     queryKey,
     searched,
+    userId,
     leagues,
     "leaguemates",
     "Failed to load leaguemates",

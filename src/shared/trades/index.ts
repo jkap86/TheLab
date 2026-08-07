@@ -12,20 +12,26 @@ export {
 } from "./enrich";
 export {
   DEFAULT_TRADE_PAGE_SIZE,
+  MAX_BODY_LEAGUE_IDS,
   MAX_LEAGUE_IDS,
   MAX_TRADE_PAGE_SIZE,
   MAX_TRADE_SIDES,
+  NO_SCOPE_BODY,
   hasTradeNarrowing,
   isUnnarrowed,
   leagueScopeQuery,
   parseTradeQuery,
+  parseTradeScopeBody,
 } from "./params";
 export type {
   TradeCircle,
   TradeMatchMode,
   TradeQuery,
+  TradeScopeBody,
   TradeSideQuery,
 } from "./params";
+export { collectEnrichmentIds } from "./enrich-ids";
+export type { TradeEnrichmentIds } from "./enrich-ids";
 export { draftOrderKey, pickSlotKey } from "./pick-slots";
 export {
   countTradeTotals,

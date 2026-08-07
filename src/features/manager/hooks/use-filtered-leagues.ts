@@ -71,8 +71,21 @@ export function useFilteredLeagues(searched: string) {
   // own half, which is the cache doing exactly what it is there for.
   const narrowing = subjects.subjects.length > 0;
   const leaguesForResources = stream.data?.leagues ?? null;
-  const rosters = useManagerPlayers(searched, leaguesForResources, narrowing);
-  const members = useManagerLeaguemates(searched, leaguesForResources, narrowing);
+  // The canonical id the stream resolved, which every dependent read sends back
+  // so the route it hits needn't ask Sleeper who this name is a second time.
+  const userId = stream.data?.user.user_id ?? null;
+  const rosters = useManagerPlayers(
+    searched,
+    userId,
+    leaguesForResources,
+    narrowing,
+  );
+  const members = useManagerLeaguemates(
+    searched,
+    userId,
+    leaguesForResources,
+    narrowing,
+  );
   const index: SubjectIndex = useMemo(
     () =>
       rosters.data || members.data
@@ -155,6 +168,15 @@ export function useFilteredLeagues(searched: string) {
   return {
     ...stream,
     searched,
+    /**
+     * The manager's canonical Sleeper id, or null before the stream has said.
+     *
+     * Exposed rather than left inside because every dependent read needs it —
+     * the views own their own calls to the rank, KTC and ADP hooks — and one
+     * resolution feeding all of them is the whole point (see
+     * {@link useManagerResource}).
+     */
+    userId,
     filters,
     setFilters,
     subjectDisplay,

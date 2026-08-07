@@ -12,7 +12,7 @@ import type { WeeklyTeamPoints } from "@/shared/projections";
 import { errorMessage } from "@/shared/util";
 
 import { readFailureResponse } from "../../../read-failure";
-import { resolveManagerRequest } from "../manager-request";
+import { resolveManagerIdRequest } from "../manager-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {
-  const resolved = await resolveManagerRequest(request, params);
+  const resolved = await resolveManagerIdRequest(request, params);
   if (!resolved.ok) return resolved.response;
   const { userId, username, season } = resolved;
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { ApiErrorPayload } from "@/shared/contract";
-import { resolveManagerUser } from "@/shared/manager";
+import { resolveManagerUser, resolveManagerUserId } from "@/shared/manager";
 import { isSeason } from "@/shared/query";
 import type { SleeperUser } from "@/shared/sleeper";
 import { getActiveSeason } from "@/shared/season";
@@ -73,6 +73,84 @@ export async function resolveManagerRequest(
     userId: resolved.user.user_id,
     // Only the blank is filled from the resolver — an explicitly requested
     // season is the caller's answer and stays exactly what they asked for.
+    season: season || (await getActiveSeason()),
+    searchParams,
+  };
+}
+
+/**
+ * The same opening for a route that reads **Postgres and nothing else** — the
+ * five manager sub-resources plus the matchups one.
+ *
+ * **It exists so that one manager page is one Sleeper lookup rather than five.**
+ * Those routes never touch the profile: they take a `user_id`, join it against
+ * rosters and membership the leagues sync already wrote, and answer. Resolving
+ * the username first was therefore a request to Sleeper whose only output was an
+ * id the client had been holding since the leagues stream sent it. So the client
+ * sends it back as `?user_id=`, and this reads it.
+ *
+ * Three things keep that safe and keep it from becoming a requirement:
+ *
+ * - **The hint is checked for shape, not trusted as identity** — see
+ *   `isSleeperUserId`. What it can buy is a public statistical answer about a
+ *   different public account, which is what these routes already are; what it
+ *   cannot buy is arbitrary text in a query, since it is a digit string and is
+ *   bound as a parameter regardless.
+ * - **Without it, nothing changes.** A direct navigation, a bookmark or an older
+ *   client falls through to the same resolution `resolveManagerRequest` does, so
+ *   an unknown manager is still a 404 and a blank name still a 400.
+ * - **It answers no profile.** `user` is deliberately absent from this result
+ *   rather than nullable, so a route that needs an avatar or a canonical
+ *   username cannot quietly reach for one that isn't there and must use
+ *   {@link resolveManagerRequest} instead.
+ */
+export type ManagerIdRequest = {
+  ok: true;
+  /** As spelled in the URL — what to put in a log line. */
+  username: string;
+  userId: string;
+  season: string;
+  searchParams: URLSearchParams;
+};
+
+export type ManagerIdRequestResult =
+  | ManagerIdRequest
+  | { ok: false; response: NextResponse };
+
+/** The parameter the client sends the canonical id back on. */
+export const USER_ID_PARAM = "user_id";
+
+export async function resolveManagerIdRequest(
+  request: Request,
+  params: Promise<{ username: string }>,
+): Promise<ManagerIdRequestResult> {
+  const { username } = await params;
+  const searchParams = new URL(request.url).searchParams;
+
+  const resolved = await resolveManagerUserId(
+    username,
+    searchParams.get(USER_ID_PARAM),
+  );
+  if (!resolved.ok) {
+    const error: ApiErrorPayload = { error: resolved.error };
+    return {
+      ok: false,
+      response: NextResponse.json(error, { status: resolved.status }),
+    };
+  }
+
+  const season = searchParams.get("season")?.trim();
+  if (season && !isSeason(season)) {
+    const error: ApiErrorPayload = {
+      error: `Invalid season: ${season}. Expected a 4-digit year.`,
+    };
+    return { ok: false, response: NextResponse.json(error, { status: 400 }) };
+  }
+
+  return {
+    ok: true,
+    username,
+    userId: resolved.userId,
     season: season || (await getActiveSeason()),
     searchParams,
   };

@@ -1,6 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 import type { TradeFacetsPayload } from "@/shared/contract";
 
@@ -53,8 +54,16 @@ export type TradeFacetsState = {
  * answer while the next lands is the rule `useAdp` follows for the same reason.
  */
 export function useTradeFacets(request: TradeRequest | null): TradeFacetsState {
+  // Memoised on the request rather than rebuilt per render: this panel
+  // re-renders on every keystroke in its search field, and with a large league
+  // scope the key carries every id in it.
+  const key = useMemo(
+    () => (request ? tradeQueryKey(request) : ""),
+    [request],
+  );
+
   const query = useQuery({
-    queryKey: tradesQueryKeys.facets(request ? tradeQueryKey(request) : ""),
+    queryKey: tradesQueryKeys.facets(key),
     queryFn: ({ signal }) => fetchTradeFacets({ request: request!, signal }),
     enabled: request !== null,
     staleTime: TRADE_FACETS_STALE_TIME,

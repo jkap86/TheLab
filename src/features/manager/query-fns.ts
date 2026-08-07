@@ -25,15 +25,37 @@ import type { LeaguesStreamMessage } from "@/shared/contract";
 // mover's-rule habit `adp-controls` keeps for `todayIso`.
 export { fetchJson };
 
-/** One of the manager's cached sub-resources: rosters, membership, ranks, values. */
+/**
+ * One of the manager's cached sub-resources: rosters, membership, ranks, values.
+ *
+ * **`userId` is the canonical id the leagues stream already resolved, and
+ * sending it is what makes a manager page one Sleeper lookup rather than five.**
+ * These five routes read Postgres and nothing else — they take a `user_id` and
+ * join it against what the leagues sync wrote — but each one used to open by
+ * asking Sleeper who the searched name is, purely to arrive at an id the browser
+ * had been holding since the stream's first message. Sent back, the route skips
+ * that entirely; omitted (a bookmark, an older client), it resolves the name as
+ * it always did, so nothing depends on this being here.
+ *
+ * It is *not* in the query key: `searched` and the id are one manager, so keying
+ * on both would split one answer across two entries — and the hooks don't ask
+ * until the stream has produced the id, so there is no window where the key
+ * would need to change.
+ */
 export function fetchManagerResource<T>(
   searched: string,
   path: string,
   fallbackError: string,
   signal?: AbortSignal,
+  userId?: string | null,
 ): Promise<T> {
+  // `path` already carries a query string for the ADP valuation, which is why
+  // the separator is chosen rather than assumed.
+  const hint = userId
+    ? `${path.includes("?") ? "&" : "?"}user_id=${encodeURIComponent(userId)}`
+    : "";
   return fetchJson<T>(
-    `/api/user/${encodeURIComponent(searched)}/${path}`,
+    `/api/user/${encodeURIComponent(searched)}/${path}${hint}`,
     fallbackError,
     signal,
   );

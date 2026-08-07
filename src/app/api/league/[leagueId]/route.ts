@@ -19,6 +19,7 @@ import {
   getLeagueAdpBoards,
   getLeagueDetail,
   leagueAdpPool,
+  markLeaguesAccessed,
   parseAdpBoardChoices,
   parseSteepness,
 } from "@/shared/manager";
@@ -181,6 +182,14 @@ async function leaguePayload(leagueId: string, searchParams: URLSearchParams) {
     const error: ApiErrorPayload = { error: "League not found" };
     return NextResponse.json(error, { status: 404 });
   }
+
+  // Somebody opened this league's panel, which is the second of the two places
+  // this app can *observe* demand rather than infer it — it moves the league up
+  // the crawler's refresh queue and does nothing else, so it is fired off rather
+  // than awaited. See `shared/manager/crawl-priority`.
+  void markLeaguesAccessed([leagueId]).catch((error) => {
+    console.warn(`[league] demand stamp failed for ${leagueId}:`, errorMessage(error));
+  });
 
   // Resolved after the league, because the league's own season is what an
   // unbounded board falls back to. Rejected rather than defaulted, the answer

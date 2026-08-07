@@ -48,8 +48,8 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   // value is a third lens on top of both. All fetch over the unfiltered leagues,
   // since the chips belong to every card the filters might later show.
   const leagues = view.data?.leagues ?? null;
-  const ranks = useManagerRanks(searched, leagues);
-  const ktc = useManagerKtc(searched, leagues);
+  const ranks = useManagerRanks(searched, view.userId, leagues);
+  const ktc = useManagerKtc(searched, view.userId, leagues);
   // The whole shared ADP drawer drives the team value, not just its curve: the
   // window, the kind of draft, the league size and the format all narrow the
   // population these cards are priced against, so a panel showing startup ADP
@@ -58,7 +58,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   // on the server, matched per league — see `adpValueQueryString`.
   const { controls } = useAdpControls();
   const adpBoard = useMemo(() => adpValueQueryString(controls, todayIso()), [controls]);
-  const adp = useManagerAdpValue(searched, leagues, adpBoard);
+  const adp = useManagerAdpValue(searched, view.userId, leagues, adpBoard);
 
   // Which metric each of the four stat columns shows, shared by every card so the
   // columns line up down the list — a change on any card's picker moves them all.

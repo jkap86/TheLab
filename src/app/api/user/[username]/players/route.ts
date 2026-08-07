@@ -5,7 +5,7 @@ import { getManagerRosters } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
 
 import { readFailureResponse } from "../../../read-failure";
-import { resolveManagerRequest } from "../manager-request";
+import { resolveManagerIdRequest } from "../manager-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {
-  const resolved = await resolveManagerRequest(request, params);
+  const resolved = await resolveManagerIdRequest(request, params);
   if (!resolved.ok) return resolved.response;
   const { userId, season } = resolved;
 

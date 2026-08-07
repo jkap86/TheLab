@@ -7,6 +7,7 @@ import type { TradeCircleScope } from "./circle.ts";
 import type { TradeQuery, TradeSideQuery } from "./params.ts";
 import {
   PICK_TOKEN_SQL,
+  TRADE_FACET_SQL,
   STARTUP_DRAFT_CTE,
   STARTUP_DRAFT_SQL,
   TRADES_POPULATION_SQL,
@@ -14,6 +15,7 @@ import {
   TRADE_ORDER_SQL,
   TRADE_SORT_SQL,
   jsonbArraySql,
+  rosterIdIntSql,
   tradeCursorSql,
   tradeFilterSql,
   tradeNarrowingSql,
@@ -513,6 +515,35 @@ describe("the ordering agrees with the index built for it", () => {
     );
   });
 
+  test("the date window agrees with the index that still serves it", () => {
+    // `transactions_trade_recency_idx` predates the keyset one and is *not*
+    // redundant: it is ordered on `coalesce(status_updated, created)`, which is
+    // a different expression from the keyset index's
+    // `coalesce(status_updated, created, 0)` as far as the planner is concerned.
+    // The board's own read never needs it (its `ORDER BY` pins it to the keyset
+    // walk), but `countTradeTotals` and the facet aggregates have no `ORDER BY`,
+    // so a windowed board's denominators can take this as an index range instead
+    // of a filter over the season. Dropping the index means changing the
+    // spelling below first.
+    const params: unknown[] = [];
+    const windowed = tradeNarrowingSql(query({ from: 1, to: 2 }), params);
+    assert.ok(windowed.includes("coalesce(t.status_updated, t.created)"));
+    assert.ok(
+      !windowed.includes(TRADE_SORT_SQL),
+      "the window must not be spelled as the sort key, or the old index is dead",
+    );
+
+    const dir = new URL("../../../db/migrations/", import.meta.url).pathname;
+    const file = readdirSync(dir).find((n) => n.includes("trade_recency_index"));
+    assert.ok(file, "the recency index migration is still there");
+    const migration = readFileSync(join(dir, file), "utf8");
+    const normalise = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+    assert.ok(
+      normalise(migration).includes("coalesce(status_updated,created)"),
+      "the window expression no longer matches the indexed one",
+    );
+  });
+
   test("the population is the partial index's own predicate", () => {
     // The index is partial on exactly these two, so a read that widened past
     // them would silently fall off it.
@@ -660,5 +691,113 @@ describe("the jsonb reads", () => {
     // pair with no compiler link, so a filter built one way and read the other
     // matches nothing rather than erroring.
     assert.equal(PICK_TOKEN_SQL, `((p->>'season') || '-' || (p->>'round'))`);
+  });
+});
+
+/**
+ * Every place a jsonb roster id becomes an integer.
+ *
+ * The failure being guarded against is not subtle once it happens and is
+ * invisible until it does: `r.roster_id = ri::int WHERE ri ~ '^[0-9]+$'` reads
+ * as safe and isn't, because Postgres does not promise to apply the `WHERE`
+ * before the cast — so one league whose `roster_ids` holds a non-numeric entry
+ * fails the *whole* read with `invalid input syntax for type integer`, for
+ * everybody. The regex has to be inside a `CASE` that short-circuits, and it has
+ * to be there in all three places, which is what makes this a scan rather than
+ * three assertions.
+ */
+describe("roster id casts", () => {
+  /** Every SQL string this module can emit that could contain one. */
+  const emitted = (): [string, string][] => {
+    const params: unknown[] = [];
+    return [
+      ["facets: players", TRADE_FACET_SQL.players],
+      ["facets: picks", TRADE_FACET_SQL.picks],
+      ["facets: managers", TRADE_FACET_SQL.managers],
+      [
+        "sides with a manager",
+        tradeFilterSql(
+          query({ sides: [side({ manager: "u1", players: ["p1"] })] }),
+          params,
+        ),
+      ],
+      [
+        "the leaguemate circle",
+        tradeFilterSql(query(), params, {
+          kind: "traders",
+          ids: ["u1"],
+        } as TradeCircleScope),
+      ],
+      ["the population", TRADES_POPULATION_SQL],
+      ["the columns", TRADE_COLUMNS_SQL],
+    ];
+  };
+
+  test("the guard short-circuits rather than relying on a WHERE", () => {
+    const guarded = rosterIdIntSql("ri");
+    assert.match(guarded, /CASE WHEN ri ~ '\^\[0-9\]\+\$' THEN ri::int END/);
+    // Parenthesised, since every call site appends its own comparison.
+    assert.ok(guarded.startsWith("(") && guarded.endsWith(")"));
+  });
+
+  test("no emitted SQL casts to int outside that guard", () => {
+    for (const [name, sql] of emitted()) {
+      for (const match of sql.matchAll(/(\w+)::int\b/g)) {
+        const before = sql.slice(0, match.index);
+        assert.match(
+          before.slice(-80),
+          new RegExp(`CASE WHEN ${match[1]} ~ '\\^\\[0-9\\]\\+\\$' THEN $`),
+          `${name}: \`${match[0]}\` is cast without a CASE guard in front of it`,
+        );
+      }
+    }
+  });
+
+  test("the three call sites spell one guard, not three", () => {
+    // Two spellings of the same guard is how the facets branch came to be the
+    // one missing it.
+    const guard = rosterIdIntSql("ri");
+    assert.ok(TRADE_FACET_SQL.managers.includes(guard));
+    const params: unknown[] = [];
+    const circle = tradeFilterSql(query(), params, {
+      kind: "traders",
+      ids: ["u1"],
+    } as TradeCircleScope);
+    assert.ok(circle.includes(guard));
+  });
+
+  test("a malformed roster id yields null, so it joins to nothing", () => {
+    // The whole reason `CASE` without an `ELSE` is right here: the miss is a
+    // null, which matches no `roster_id`, so the trade loses its manager rather
+    // than the request losing its board.
+    assert.ok(!rosterIdIntSql("ri").includes("ELSE"));
+  });
+
+  test("the managers facet still counts trades, not rows", () => {
+    // A manager can hold two rosters in one league and a three-way can name
+    // both, so the menu's number is distinct trades.
+    assert.match(
+      TRADE_FACET_SQL.managers,
+      /count\(DISTINCT pop\.transaction_id\)/,
+    );
+    assert.match(TRADE_FACET_SQL.managers, /r\.owner_id IS NOT NULL/);
+  });
+
+  test("the facet aggregates read the population as `pop`", () => {
+    // They are interpolated under a CTE of that name; a branch naming it
+    // differently is a syntax error in only one direction.
+    for (const sql of Object.values(TRADE_FACET_SQL)) {
+      assert.match(sql, /\bpop\b/);
+      // No `$n` placeholders: the branch is appended to a `pop` CTE the caller
+      // has already bound, so a parameter of its own would land on an index the
+      // builder never pushed. (`$` appears inside the guard's regex, which is
+      // why this asks about placeholders rather than the character.)
+      assert.equal(sql.match(/\$\d/g), null, "a facet branch binds nothing of its own");
+    }
+  });
+
+  test("the jsonb columns they unnest are array-guarded", () => {
+    assert.ok(TRADE_FACET_SQL.picks.includes(jsonbArraySql("pop.draft_picks")));
+    assert.ok(TRADE_FACET_SQL.managers.includes(jsonbArraySql("pop.roster_ids")));
   });
 });

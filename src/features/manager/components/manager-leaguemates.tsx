@@ -32,7 +32,11 @@ import { PanelLoading, PanelMessage } from "./ui";
  */
 export function ManagerLeaguemates({ searched }: { searched: string }) {
   const view = useFilteredLeagues(searched);
-  const membership = useManagerLeaguemates(searched, view.data?.leagues ?? null);
+  const membership = useManagerLeaguemates(
+    searched,
+    view.userId,
+    view.data?.leagues ?? null,
+  );
 
   const selfId = view.data?.user.user_id;
   const shares = useMemo(

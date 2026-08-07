@@ -43,7 +43,11 @@ import { PanelLoading, PanelMessage } from "./ui";
  */
 export function ManagerPlayers({ searched }: { searched: string }) {
   const view = useFilteredLeagues(searched);
-  const rosters = useManagerPlayers(searched, view.data?.leagues ?? null);
+  const rosters = useManagerPlayers(
+    searched,
+    view.userId,
+    view.data?.leagues ?? null,
+  );
 
   const shares = useMemo(
     () =>

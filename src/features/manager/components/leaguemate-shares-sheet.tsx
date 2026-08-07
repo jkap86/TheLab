@@ -48,7 +48,7 @@ export function LeaguemateSharesSheet({
   // Off until the sheet is opened, and the same query key the rail's panel and
   // the Leaguemates tab already name — so a reader who has been to either pays
   // nothing, and a reader who never opens this costs no request.
-  const membership = useManagerLeaguemates(view.searched, leagues, open);
+  const membership = useManagerLeaguemates(view.searched, view.userId, leagues, open);
 
   const selfId = view.data?.user.user_id;
   const shares = useMemo(
