@@ -3,12 +3,23 @@ import type { ManagerLeague } from "@/shared/manager";
 // The module path rather than `features/shared`'s barrel — a leaf part either
 // way, but the card's own imports are all module paths and a barrel here would
 // be the one arrow pointing at everything that barrel re-exports.
-import { NAMEPLATE_BUTTON, Nameplate } from "@/features/shared/ui/nameplate";
+//
+// `./nameplate` and not `./league-card`: the ledge is re-exported from there for
+// the two lists that already read it, and that module statically imports the
+// whole league-detail subtree — which this page keeps behind a press.
+import {
+  CardLedge,
+  NAMEPLATE_BUTTON,
+  Nameplate,
+} from "@/features/shared/ui/nameplate";
 
 import { leagueSpecs } from "../../league-specs";
 import {
-  SPEC_RUN,
-  SPEC_TOKEN,
+  SPEC_BAY,
+  SPEC_BEZEL,
+  SPEC_CAPTION,
+  SPEC_GAUGE,
+  SPEC_SEAM,
   SPEC_TONE,
   TRADE_HEADER_LINE,
 } from "./trade-card.constants.ts";
@@ -19,22 +30,27 @@ import { formatTradeDate, formatTradeTime } from "./trade-card.utils.ts";
  * this happened in, what kind of league that is, and the instant it went
  * through.
  *
- * **The name is on the edge and the rest is on the first interior line.** The
- * league's name rides *out* of the card on a nameplate ({@link TradeNameplate}),
- * because a part rising from an edge is the strongest mark for "one object"
- * available and the name is what a card is looked up by; the instant keeps a
- * line of its own inside the face ({@link TradeHeaderLine}). Folding the two into
- * the plate fits and was tried — one part carrying both facts costs nothing
- * vertically — but a league name long enough to truncate takes the timestamp
- * with it, and the instant is the card's answer to "which of this afternoon's
- * five deals landed first". A line is what that is worth.
+ * **The two facts hold the top edge and the settings have the line below it.**
+ * The league's name rides out of the card on a nameplate ({@link TradeNameplate})
+ * and the instant rides beside it on a plate of its own
+ * ({@link TradeInstantLedge}), so the card's two corners carry which league this
+ * is and when it happened.
  *
- * **The league's settings joined that line rather than the plate**, for the same
- * reason and the mirror of it: they are facts about the league, so the plate is
- * where they belong semantically, and the plate is the one part on this card
- * with no room to spare — every token would come straight out of the name's
- * truncation budget. The interior line had an empty half beside a right-flushed
- * timestamp, which is exactly the width six short tokens need.
+ * **The instant used to keep a line of its own inside the face, and the note
+ * here used to argue that it had to.** The argument was that folding it into the
+ * plate costs nothing vertically but a league name long enough to truncate takes
+ * the timestamp down with it — which is true of *one* plate carrying both facts
+ * and is not true of two plates sharing the edge. A plate that positions itself
+ * can only cap its own width; two items of one flex row negotiate, so the name
+ * truncates against the instant rather than against a width guessed ahead of it.
+ * That construction is the leagues list's (see `CardLedge`), and adopting it is
+ * what freed the whole interior line.
+ *
+ * **The league's settings took that line**, which is what let them become one
+ * housed instrument rather than a run of tokens squeezed into the ~180px beside
+ * a right-flushed timestamp. They are still not on the plate, for the reason
+ * they never were: it is the one part on this card with no room to spare, and
+ * every gauge would come out of the name's truncation budget.
  */
 
 /**
@@ -70,7 +86,10 @@ export function TradeNameplate({
   name: string;
 }) {
   return (
-    <Nameplate>
+    // `row`, because this edge carries a second part: the plate is an item of the
+    // row the card positions, so the name truncates against the instant rather
+    // than against a width guessed ahead of it.
+    <Nameplate seat="row">
       {/* The button sits *inside* the heading rather than around it, since a
           `<button>` takes phrasing content and a heading is flow — the same
           constraint that keeps the card's own press target off a `<button>`
@@ -87,62 +106,102 @@ export function TradeNameplate({
 }
 
 /**
- * The card's first interior line: what kind of league this was, and when the
- * trade went through.
+ * When the trade went through, on the plate holding the card's trailing corner.
  *
- * The instant is flush right, on the same edge every value below it sits on and
- * diagonally opposite the nameplate, so the two facts hold the card's corners
- * rather than crowding one of them. The specs fill the half that was empty
- * beside it. Both are readouts — recessed, because they are read and not
- * pressed — which is why they read as one strip rather than as a control run
- * with a timestamp stuck on the end.
+ * **It is the leagues list's record ledge with a different fact in it**, down to
+ * the grammar inside: the primary reading sits in a `.lab-readout` cut and the
+ * secondary one is engraved beside it, which is exactly how a record and its
+ * standing sit together one tool over. A cut into the plate's lit face is
+ * machining, so the part reads as a housing around an instrument rather than as a
+ * second label — which is what keeps it from competing with the league's name on
+ * the same edge.
  *
- * See {@link TRADE_HEADER_LINE} for why the two stack below `sm` instead of
- * sharing one wrapping row, and {@link SPEC_TOKEN} for why none of this is a
- * chip.
+ * **The date is the cut and the time is engraved**, in that order, because they
+ * answer different questions. The date is what a reader is placing the trade by;
+ * the clock time is the tiebreaker between an afternoon's five deals, which is
+ * the whole reason it exists (see {@link formatTradeTime}) and is worth less
+ * width than the date it follows.
+ *
+ * **An undated trade still draws the plate**, which is where this parts company
+ * with the record ledge — that one renders nothing rather than an empty housing.
+ * Here the absence *is* the answer: a trade Sleeper filed with no timestamp is
+ * dropped by every date bound on this board, so a reader who cannot find it in a
+ * window has been told why. It says so in words rather than as an em dash, and
+ * the time simply is not drawn — the separator that used to keep that honest
+ * belonged to a one-line spelling and is gone with it.
+ */
+export function TradeInstantLedge({
+  completedAt,
+}: {
+  /** Epoch milliseconds, or null for a trade Sleeper filed with no timestamp. */
+  completedAt: number | null;
+}) {
+  const time = formatTradeTime(completedAt);
+  return (
+    <CardLedge>
+      <span className="lab-readout shrink-0 rounded px-1.5 py-px text-[11.5px] font-semibold leading-4 tabular-nums text-foreground/85">
+        {formatTradeDate(completedAt)}
+      </span>
+      {time && (
+        <span className="lab-engraved shrink-0 text-[10.5px] font-semibold leading-4 tabular-nums text-foreground/70">
+          {time}
+        </span>
+      )}
+    </CardLedge>
+  );
+}
+
+/**
+ * The card's first interior line: what kind of league this was, as one bezel of
+ * gauges.
+ *
+ * **Each fact is a value in a window with its unit cut into the floor above
+ * it**, which is the one spelling that tells a reader what `1QB + SF` is a count
+ * of without a hover — and there is no hover on a phone, which is the width the
+ * run is tightest at. That is what the whole part is for; everything else about
+ * it follows from making a run of six read as one instrument (see
+ * {@link SPEC_BEZEL}).
+ *
+ * **Nothing here is a chip.** The app bar's grammar is that raised means press
+ * me, and six raised pills per card across the couple of dozen the virtualiser
+ * keeps mounted is a hundred and fifty apparent controls that do nothing. Both
+ * of this part's depths run *downward* for exactly that reason.
  */
 export function TradeHeaderLine({
   league,
-  completedAt,
 }: {
   /**
    * The league this trade happened in, or null while the league list is still
    * in flight — which draws no specs rather than guessing at any of them.
    */
   league: ManagerLeague | null;
-  /** Epoch milliseconds, or null for a trade Sleeper filed with no timestamp. */
-  completedAt: number | null;
 }) {
   const specs = leagueSpecs(league);
 
-  return (
-    // Reversed at width, so the instant keeps the trailing edge with the specs
-    // pushed left by their own `mr-auto`. DOM order is instant-first for that.
-    <header className={TRADE_HEADER_LINE}>
-      {/* The date and the clock time are two functions and one reading — see
-          `formatTradeTime`, which carries its own separator so a trade with no
-          timestamp leaves nothing dangling after the words that say so. */}
-      <span className="lab-readout self-end shrink-0 rounded px-2 py-0.5 text-[11px] tabular-nums text-foreground/60">
-        {formatTradeDate(completedAt)}
-        {formatTradeTime(completedAt)}
-      </span>
+  // Nothing at all rather than an empty bezel: a league the list hasn't answered
+  // for has no settings to report, and a housing of em dashes would be reporting
+  // six holes instead of one absence.
+  if (specs.length === 0) return null;
 
-      {/* Nothing at all rather than an empty box: a league the list hasn't
-          answered for has no settings to report, and a row of em dashes would
-          be reporting six holes instead of one absence. */}
-      {specs.length > 0 && (
-        <div className={SPEC_RUN}>
-          {specs.map((spec) => (
-            <span
-              key={spec.key}
-              title={spec.title}
-              className={`${SPEC_TOKEN} ${SPEC_TONE[spec.tone]}`}
-            >
+  return (
+    <header className={TRADE_HEADER_LINE}>
+      <div className={SPEC_BEZEL}>
+        {specs.map((spec, i) => (
+          <span
+            key={spec.key}
+            title={spec.title}
+            // The seam is applied by index rather than by an adjacent-sibling
+            // selector, which Tailwind has none of — the same arithmetic the
+            // sides one level down use, and for the same reason.
+            className={`${SPEC_BAY} ${i === 0 ? "" : SPEC_SEAM}`}
+          >
+            <span className={SPEC_CAPTION}>{spec.caption}</span>
+            <span className={`${SPEC_GAUGE} ${SPEC_TONE[spec.tone]}`}>
               {spec.label}
             </span>
-          ))}
-        </div>
-      )}
+          </span>
+        ))}
+      </div>
     </header>
   );
 }

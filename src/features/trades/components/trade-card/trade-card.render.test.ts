@@ -17,6 +17,8 @@ import { TradeCard } from "./trade-card";
 import {
   SIDE_SEAM_COLUMN,
   SIDE_SEAM_ROW,
+  SPEC_CAPTION,
+  SPEC_SEAM,
 } from "./trade-card.constants.ts";
 
 /**
@@ -39,6 +41,10 @@ import {
 // Named rather than indexed: the catalogue's order is a *display* decision (the
 // column a card opens with moved from KTC to ADP), and these tests are about
 // what each metric draws.
+// The caption's class list is long and its leading token is enough to anchor a
+// match against the markup without pinning the whole string twice.
+const SPEC_CAPTION_PROBE = SPEC_CAPTION.split(" ")[0];
+
 const ktcMetric = TRADE_METRICS.find((m) => m.key === "ktc")!;
 const adpMetric = TRADE_METRICS.find((m) => m.key === "adp")!;
 const playersMetric = TRADE_METRICS.find((m) => m.key === "players")!;
@@ -231,14 +237,29 @@ describe("the card's material", () => {
     assert.equal(count(three, SIDE_SEAM_ROW), 2);
   });
 
-  test("the nameplate rides the edge, outside the clip that would cut it", () => {
+  test("both plates ride the edge, outside the clip that would cut them", () => {
     // `clip-path` clips its whole subtree, so a plate inside the notched face
     // would be severed at the exact edge it exists to straddle. The wrapper's
-    // `pt-3` is the overhang it straddles into, so that is what is pinned — not
-    // the rest of that element's class list, which now also carries the press.
+    // `pt-3` is the overhang they straddle into, and what follows it is the row
+    // that lays the two out — not the rest of that element's class list, which
+    // also carries the press.
     const html = card();
-    assert.match(html, /pt-3"><div class="lab-nameplate/);
+    assert.match(html, /pt-3"><div class="pointer-events-none absolute/);
     assert.doesNotMatch(html, /lab-slab-face[\s\S]*lab-nameplate/);
+  });
+
+  test("the edge is one row, so the name truncates against the instant", () => {
+    // A plate that positions itself can only cap its own width, and what the
+    // name may take is whatever the timestamp doesn't — a width that is its own
+    // contents, and a different one for an undated trade. As two items of one
+    // flex row the negotiation is the layout's.
+    const html = card();
+    assert.match(html, /class="pointer-events-none absolute[^"]*flex items-start justify-between/);
+    // Both plates are in it, name first, and each takes its presses back from
+    // the row that would otherwise eat them.
+    assert.equal(count(html, "lab-nameplate"), 2);
+    assert.equal(count(html, "pointer-events-auto"), 2);
+    assert.ok(html.indexOf("The Lab Dynasty") < html.indexOf("Jul 15, 2026"));
   });
 
   test("the league's name is the card's one button, and it is inside the heading", () => {
@@ -257,12 +278,18 @@ describe("the card's material", () => {
     assert.match(card(), /<span aria-hidden="true" class="lab-billet-rail/);
   });
 
-  test("everything read rather than pressed is a readout, and none is a lens", () => {
-    // A lens is glass with a cyan rim — the *lit* reading the card trades away
-    // for an engraved one, so nothing here wears it.
+  test("everything read rather than pressed is recessed, and none is a lens", () => {
+    // A lens is glass with a cyan rim around the whole of it — the *lit*
+    // reading the card trades away, so nothing here wears it. A gauge is the
+    // near miss worth keeping apart: its accent is the lit lower lip of a cut,
+    // which is light falling into a recess rather than an outline around a
+    // value, and an outline is what a control has.
     const html = card();
-    // The instant, each side's total, and one per league spec.
-    assert.equal(count(html, "lab-readout"), 3 + 4);
+    // The date and each side's total.
+    assert.equal(count(html, "lab-readout"), 3);
+    // One bezel holding one gauge per league spec.
+    assert.equal(count(html, "lab-bezel"), 1);
+    assert.equal(count(html, "lab-gauge"), 4);
     assert.doesNotMatch(html, /lab-lens/);
   });
 
@@ -280,11 +307,19 @@ describe("what the header says", () => {
     assert.match(card({ league: null }), />L1</);
   });
 
-  test("the date and the clock time, in that order and in one readout", () => {
-    assert.match(card(), /Jul 15, 2026 · 3:07 PM/);
+  test("the date is cut into the plate and the time is engraved beside it", () => {
+    // The record ledge's grammar one tool over: the primary reading sits in a
+    // `.lab-readout` cut and the secondary one is engraved next to it, so the
+    // part reads as a housing around an instrument rather than a second label.
+    const html = card();
+    assert.match(html, /lab-readout[^"]*"[^>]*>Jul 15, 2026</);
+    assert.match(html, /lab-engraved[^"]*"[^>]*>3:07 PM</);
+    assert.ok(html.indexOf("Jul 15, 2026") < html.indexOf("3:07 PM"));
+    // Two elements parted by a gap and a change of material — no punctuation.
+    assert.doesNotMatch(html, /Jul 15, 2026 · 3:07 PM/);
   });
 
-  test("what kind of league it was, beside the instant", () => {
+  test("what kind of league it was, on the line the instant used to share", () => {
     // The whole point of the run: this board spans every crawled league, so a
     // pick is a different asset card to card and the name alone only helps a
     // reader who already knows the league.
@@ -295,24 +330,49 @@ describe("what the header says", () => {
     assert.match(html, /1TE/);
   });
 
-  test("the specs stack above the instant on a phone and share its line at width", () => {
-    // Not one wrapping row: a flex item wraps inside the width it was given, so
-    // the run would be laid out in the ~180px left beside the timestamp and take
-    // three lines while the space under it sat empty. `row-reverse` is what
-    // keeps the instant on the trailing edge with the DOM order it needs.
-    assert.match(card(), /class="flex flex-col[^"]*sm:flex-row-reverse/);
+  test("every gauge carries the unit its value counts", () => {
+    // The one thing the tokens lacked and the reason the run is gauges: nothing
+    // on a phone says what `1QB + SF` is a count of, because there is no hover
+    // there to ask.
+    const html = card();
+    for (const caption of ["Type", "Teams", "QB", "TE"]) {
+      assert.match(html, new RegExp(`${SPEC_CAPTION_PROBE}[^>]*>${caption}<`));
+    }
   });
 
-  test("no specs at all until the league list answers", () => {
-    // A league with no settings in hand has none to report, and a row of em
+  test("the run is one housing, and the first gauge wears no seam", () => {
+    // Six separate housings read as perforation in the face rather than as one
+    // fact about the league. The seam is applied by index because Tailwind has
+    // no adjacent-sibling selector, so the off-by-one is a real risk: a seam on
+    // the first bay would be a line down the inside of the bezel's own wall.
+    const html = card();
+    assert.equal(count(html, "lab-bezel"), 1);
+    assert.equal(count(html, SPEC_SEAM), 3, "one fewer than the four gauges");
+  });
+
+  test("the header line is the specs alone, with no breakpoint left on it", () => {
+    // It held the instant too, which is why it was a reversed row that stacked
+    // below `sm` — the run had ~180px beside a right-flushed timestamp and took
+    // three lines there. With the instant on the edge it is one block at every
+    // width.
+    const html = card();
+    assert.match(html, /<header class="px-3 pb-2">/);
+    assert.doesNotMatch(html, /flex-row-reverse/);
+  });
+
+  test("no specs and no bezel at all until the league list answers", () => {
+    // A league with no settings in hand has none to report, and a housing of em
     // dashes would report six holes rather than one absence.
     //
-    // Counted in readouts rather than matched on the words: "dynasty" and
+    // Counted in material rather than matched on the words: "dynasty" and
     // "1QB" appear in every KTC title on the card, which is a different claim
     // — the board a haul is priced on, not the league it happened in.
     const html = card({ league: null });
-    assert.equal(count(html, "lab-readout"), 3, "the instant and two totals");
-    assert.doesNotMatch(html, /flex-wrap/);
+    assert.equal(count(html, "lab-readout"), 3, "the date and two totals");
+    assert.equal(count(html, "lab-bezel"), 0);
+    assert.equal(count(html, "lab-gauge"), 0);
+    // Not an empty header either: the line is dropped whole.
+    assert.doesNotMatch(html, /<header/);
   });
 
   test("an unsynced lineup drops the lineup tokens rather than reading them as zero", () => {
@@ -324,10 +384,19 @@ describe("what the header says", () => {
     assert.doesNotMatch(html, /0TE|0QB/);
   });
 
-  test("an undated trade says so and adds no dangling separator", () => {
+  test("an undated trade says so, on a plate it still draws", () => {
+    // Where this parts company with the leagues list's record ledge, which
+    // renders nothing rather than an empty housing: here the absence *is* the
+    // answer, since a trade Sleeper filed with no timestamp is dropped by every
+    // date bound on this board.
     const html = card({ trade: { ...twoSided, completed_at: null } });
     assert.match(html, /date unknown/);
+    assert.equal(count(html, "lab-nameplate"), 2);
+    // Nothing dangles after the words, and no empty element stands in for the
+    // time — the two used to share one readout, where the separator rode on the
+    // half that vanishes.
     assert.doesNotMatch(html, /date unknown ·/);
+    assert.doesNotMatch(html, /date unknown<\/span><span[^>]*><\/span>/);
   });
 
   test("the scoring week is not on the card — the instant replaced it", () => {
