@@ -6,17 +6,22 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ManagerLeague } from "@/shared/manager";
 
 import type { LeagueMatchup } from "../types.ts";
+import { LineupCard } from "./lineup-card.tsx";
 import { LineupStatHeadings } from "./lineup-columns.tsx";
-import { LineupRow } from "./lineup-row.tsx";
 
 /**
- * The row without a DOM.
+ * The card without a DOM.
  *
  * `renderToStaticMarkup` answers what a reader *sees*, which is the half of this
- * component no type can hold: the four states of the opponent line are strings
- * chosen by a conditional, and the columns' alignment with the headings above
- * them is a shared class that a refactor can silently retype. `opponent.ts` pins
- * which state a row is *in*; this pins that the row spends it.
+ * component no type can hold: the four states of the opponent are strings chosen
+ * by a conditional, and the columns' alignment with the headings above them is a
+ * shared class that a refactor can silently retype. `opponent.ts` pins which
+ * state a row is *in*; this pins that the card spends it.
+ *
+ * The card's own material — the slab, the plates, the press, the geometry it
+ * shares with the heading rail — is `features/shared/ui/league-card` and is
+ * tested there. What is left for this file is the one thing that is this list's:
+ * what rides on the trailing plate, and the four columns.
  */
 
 const league: ManagerLeague = {
@@ -41,9 +46,17 @@ const matchup = (over: Partial<LeagueMatchup> = {}): LeagueMatchup => ({
 });
 
 const render = (week: number | null, matchup: LeagueMatchup | undefined) =>
-  renderToStaticMarkup(createElement(LineupRow, { league, week, matchup }));
+  renderToStaticMarkup(
+    createElement(LineupCard, {
+      league,
+      week,
+      matchup,
+      expanded: false,
+      onToggle: () => {},
+    }),
+  );
 
-describe("LineupRow", () => {
+describe("the opponent ledge", () => {
   test("names the opponent by username, with the team name on the hover", () => {
     const html = render(
       3,
@@ -60,17 +73,49 @@ describe("LineupRow", () => {
 
     assert.match(html, /jkap86/);
     assert.match(html, /title="Team Chaos"/);
-    // The team name is demoted to the hover, not printed on the row beside it.
+    // The team name is demoted to the hover, not printed on the card beside it.
     assert.equal(html.includes(">Team Chaos<"), false);
   });
 
-  test("spells the three kinds of nothing differently", () => {
-    assert.match(render(3, matchup()), /Bye this week/);
-    assert.match(render(3, undefined), /Matchup not synced yet/);
-    assert.match(render(null, undefined), /No week scheduled/);
+  test("it rides the trailing plate, opposite the league's name", () => {
+    // Where the leagues list seats the record. Both plates are on the card's top
+    // edge, before the wall — so the opponent is stated before the slab begins,
+    // and there are two plates rather than the one a card with nothing to seat
+    // would draw.
+    const html = render(
+      3,
+      matchup({
+        opponent: {
+          roster_id: 7,
+          user_id: "42",
+          display_name: "jkap86",
+          team_name: null,
+          avatar_url: null,
+        },
+      }),
+    );
+    assert.equal(html.split("lab-nameplate").length - 1, 2);
+    assert.ok(html.indexOf("jkap86") < html.indexOf("lab-slab lab-notch-lg"));
   });
 
-  test("draws four stat cells on every row, whatever the matchup says", () => {
+  test("spells the three kinds of nothing differently", () => {
+    // Three different facts — a real bye, a week the crawler has not reached,
+    // and a season with nothing stored ahead of today. Collapsing them would
+    // tell a reader their league has no game when what it has is no data.
+    assert.match(render(3, matchup()), />Bye</);
+    assert.match(render(3, undefined), />Not synced yet</);
+    assert.match(render(null, undefined), />No week scheduled</);
+  });
+
+  test("the plate is drawn even when there is no opponent to name", () => {
+    // Where the leagues list's record ledge draws nothing rather than an empty
+    // housing: here "nothing" is itself the answer the card exists to give.
+    assert.equal(render(3, undefined).split("lab-nameplate").length - 1, 2);
+  });
+});
+
+describe("the stat columns", () => {
+  test("draws four stat cells on every card, whatever the matchup says", () => {
     for (const html of [render(3, matchup()), render(null, undefined)]) {
       // Three em dashes for the reserved slots, and a fourth for a bench gap
       // there is no projection to form.
@@ -83,7 +128,7 @@ describe("LineupRow", () => {
       3,
       matchup({ projection: { optimal: 132.5, current: 120.16, points_left: 12.34 } }),
     );
-    // Amber and signed: the one number on the row that is a verdict rather than
+    // Amber and signed: the one number on the card that is a verdict rather than
     // a count, spelled as the expanded panel's own `Lineup gap` spells it.
     assert.match(gap, /\+12\.34/);
     assert.match(gap, /text-amber-300/);
@@ -112,8 +157,16 @@ describe("LineupRow", () => {
     assert.equal(headings.split(width).length - 1, 4);
     assert.equal(row.split(width).length - 1, 4);
   });
+});
 
-  test("the row does not lift under the pointer — it opens into nothing", () => {
-    assert.equal(render(3, undefined).includes("hover:-translate-y-0.5"), false);
+describe("the press", () => {
+  test("the card opens into the league, and its name is the control", () => {
+    // It was a glass row that opened into nothing and deliberately did not lift
+    // under the pointer. It is the leagues list's card now, so the press is
+    // real: the league's name is the one button, carrying the disclosure state.
+    const html = render(3, undefined);
+    assert.match(html, /<h2 [^>]*><button type="button"/);
+    assert.match(html, /aria-expanded="false"/);
+    assert.equal(html.split("<button").length - 1, 1);
   });
 });

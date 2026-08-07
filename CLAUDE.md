@@ -177,11 +177,18 @@ between this and the `local-store` preferences.
 
 Four rules hold it up, and each replaced a specific failure:
 
-- **A key is built in `query-keys`, never at the call site.** Everything
-  manager-scoped hangs off `manager(searched)`, lower-cased (Sleeper resolves
-  `Jkap` and `jkap` to one account, and two entries for one manager is the
-  duplicate request this exists to remove), and the season is always a segment
-  with `"default"` spelled out rather than dropped. The **ADP board is
+- **A key is built in `shared/manager-query`, never at the call site.**
+  Everything manager-scoped hangs off `manager(searched)`, lower-cased (Sleeper
+  resolves `Jkap` and `jkap` to one account, and two entries for one manager is
+  the duplicate request this exists to remove), and the season is always a
+  segment with `"default"` spelled out rather than dropped. **The table is in
+  `features/shared` rather than in the manager tool because a second tool reads
+  these entries**: the lineup checker draws that tool's subject rail and both of
+  its shares sheets, so it asks `/api/user/[username]/{players,leaguemates}` —
+  and it keys on the stored account's *username*, so the two tools are one cache
+  rather than two answers to one question. `features/manager/query-keys.ts`
+  re-exports it for the consumers, its own tests among them, that already read it
+  from there. The **ADP board is
   deliberately outside that prefix**: it describes every crawled draft, so it is
   the same answer whoever is being looked at, and a manager-wide invalidation has
   no business throwing it away. Its key is the query string *normalised* to
@@ -710,11 +717,13 @@ rather than a relative phrase — the window a reader picked is the window the
 query runs. Reach for one because of whose day you are naming, not because it is
 the one nearest to hand.
 
-`manager/shares` is that shape on the client: `playerShares` takes the leagues,
+`shared/shares` is that shape on the client: `playerShares` takes the leagues,
 the rosters and the players cache as arguments and counts, so the rules that
 decide what a share is out of can be read and tested without a fetch behind them.
-It sits beside `filters` because the two compose — the caller filters the league
-list, then counts over what's left.
+It sits beside `league-filters` because the two compose — the caller filters the
+league list, then counts over what's left. (It was `manager/shares` until the
+lineup checker started opening the same browse; `features/manager` re-exports it,
+the usual mover's habit.)
 
 `manager/record` is the third module cut to that shape, and it is worth noticing
 that it re-encodes **the same two rules** rather than inventing any — which is
@@ -969,13 +978,14 @@ stops holding, a comment saying it does would not have caught it.
     something to say before its content; skip it when the first control *is* the
     content's own description.
   - `LIST_ROW_SURFACE` / `LIST_ROW_HOVER` / `RowSheen` are the tool cards' glass
-    held to a row's height, worn by the share cards and the lineup rows. (Trade
-    cards wore it and don't now, and **league cards followed them** — both are
-    machined rather than glass, which is argued where each card is. That leaves
-    two lists on this surface rather than the three it was written for, so what
-    it is still *for* is worth restating: it is a row that opens into more of
-    itself, or is one line of a table, rather than an object standing on the
-    page.)
+    held to a row's height, worn by the share cards. (Trade cards wore it and
+    don't now, **league cards followed them**, and the lineup checker's rows
+    followed those — all three are machined rather than glass, which is argued
+    where each card is. That leaves *one* list on this surface rather than the
+    three it was written for, so what it is still **for** is worth restating: it
+    is a row that opens into more of itself, or is one line of a table, rather
+    than an object standing on the page. A fourth list reaching for it should
+    check itself against that sentence first; three have now failed it.)
     What they deliberately don't take is the **corner brackets** — those are a
     card-scale device, and four of them on each of a hundred-odd rows reads as
     noise rather than as an instrument. Two details in `RowSheen` are
@@ -1192,7 +1202,41 @@ stops holding, a comment saying it does would not have caught it.
   for; what it says is that "only this tool reads it" is a fact with a shelf life,
   not a property of the module.
 
-  **The league detail panel is the largest thing that rule has moved.** The
+  **The subject rail and the two shares sheets are the largest thing that rule
+  has moved, and the move is instructive for what it had to change rather than
+  for its size.** The lineup checker draws the same filter row — the league
+  filters' key, the player/leaguemate search, and the two doors onto the ranked
+  shares lists — so `subject-rail`, `subject-parts`, `columns-bar`,
+  `columns-editor`, `metric-column` and the whole `ui/shares/` subtree are in
+  `features/shared/ui/` now, with the pure halves they read (`subjects`,
+  `name-search`, `shares`, `leaguemates`, `share-metrics`, tests included) beside
+  them and `Chevron`, `SharedLeagueRow` and `ErrorCard` carried along. Two things
+  are worth reading:
+
+  - **The cache layer came with it, and the whole table came rather than the two
+    entries the rail reads.** `features/shared/manager-query.ts` holds
+    `managerQueryKeys`, its TTLs and `fetchManagerResource`, plus
+    `useManagerResource`/`useManagerPlayers`/`useManagerLeaguemates` beside it.
+    Keying both tools the *same* way is the point rather than a side effect: the
+    lineup checker keys on the stored account's **username**, so a reader who has
+    looked themselves up in the manager tool pays for none of it again. And
+    `managerQueryKeys.manager()` is the prefix every entry hangs off, so splitting
+    out `players` and `leaguemates` would leave the manager tool building keys
+    onto a root it no longer owns — two spellings of one prefix, which is the
+    drift a key module exists to stop.
+  - **What the parts took as a prop had to shrink first.** They took
+    `FilteredLeagues` — a cached NDJSON stream keyed on a searched name, with its
+    filters in providers — which is the manager tool's *state*, not the parts'
+    contract. What they actually need is two league lists, two selections and how
+    to name a chosen subject, so that is `features/shared/subject-view.ts`, and
+    the subject selection travels as a **value** rather than being read from a
+    context: a provider is what three routes sharing one selection need, and a
+    shared part that insisted on one would be making that choice for a tool that
+    is a single page. `useFilteredLeagues` gains three fields and a one-line check
+    that its return still satisfies the type — declared where the return is, so a
+    rename is an error there rather than in `features/shared`.
+
+  **The league detail panel is the largest thing that rule had moved before it.** The
   trades board opens a trade card into the same standings and rosters, so
   `components/league-detail-panel` and the five components under it are
   `features/shared/ui/league-detail/`, and what they read went with them: the
@@ -1943,7 +1987,7 @@ stops holding, a comment saying it does would not have caught it.
     beside it empty — an empty cell in a grid of sides reads as a participant who
     came away with nothing, which is a state this card draws in words.
   - **The card is machined rather than glass, and the league cards came with
-    it.** The share cards and the lineup rows wear `LIST_ROW_SURFACE`, and the
+    it.** The share cards wear `LIST_ROW_SURFACE`, and the
     point of sharing it is that several lists read as one material; this one
     wears `.lab-slab` — the app bar's corner-lit block at card scale. What buys
     the divergence is that a trade card is not a row that opens into *more of
@@ -2168,9 +2212,18 @@ stops holding, a comment saying it does would not have caught it.
   which was the smaller half of that and left the drawer able to say one thing
   while the cards under it said another — see `adpValueQueryString`.
 
-  **The provider is per *tool*, not per app, and the trades page mounts a second
-  one.** That page reads the same board (`app/trades/page.tsx` wraps `TradesHome`
-  in its own `AdpControlsProvider`), and the temptation is to hoist one provider
+  **The provider is per *tool*, not per app, and two other pages mount their
+  own.** The trades page reads the same board (`app/trades/page.tsx` wraps
+  `TradesHome` in its own `AdpControlsProvider`) and so does the lineup checker,
+  which needs one because its player-shares sheet prices rows off that board —
+  the sheet is shared, so it reads `useAdpControls` wherever it is opened, and a
+  page that opens it has to mount a store. (That is also why `/lineupchecker` is
+  `force-dynamic`: the season a board opens on is server-resolved, and a page
+  reading it must not be prerendered or the resolution is baked into the bundle.
+  It draws no drawer, so the board there is the default one and a reader cannot
+  retune it — the honest cost of putting the sheet on a page with no ADP trigger,
+  and the fix if it ever matters is that trigger rather than anything about the
+  sheet.) The temptation is to hoist one provider
   to the root layout so a board chosen anywhere follows you everywhere. That is
   wrong for the reason the two filter sets above are wrong to merge: what the two
   boards *mean* differs. The manager drawer's size options are the sizes you
@@ -2678,17 +2731,41 @@ stops holding, a comment saying it does would not have caught it.
   counted by the same two rules (the denominator is what contributed; zero and
   absent are different answers), and a second card drawn to say that would be a
   second chance for one of them to drift. Its week goes in `scope`, which is the
-  slot that names what a record was counted over, and its league filters are the
-  manager tabs' own dialog, seated in this plate's bottom-right corner — held in
-  local `useState` rather than a provider, since a provider is what three
-  *routes* sharing one selection need and this tool is one page.
-  **It is the only page in that corner now, which makes it the reason the seat
-  exists rather than a second user of it.** The manager tabs moved their key onto
-  the subject rail, where it leads the row that also asks who is in these
-  leagues; this page has no such rail — one list, one filter — so the corner is
-  still the right seat here for the reason it was built. Keep `SEATS.corner` and
-  `FilterSeat` alive for it, and read the plate's own note for what holds them
-  up.
+  slot that names what a record was counted over, and its filters are the manager
+  tabs' own — the league dialog *and* the subject search, on the same
+  {@link SubjectRail} in the same seat, held in local `useState` rather than in
+  providers, since a provider is what three *routes* sharing one selection need
+  and this tool is one page.
+  **The plate's bottom-right corner is retired, and this page is why.** It was
+  the last seat for the filters' key: the manager tabs moved theirs onto the
+  subject rail, and the argument that moved it — three of that plate's four
+  corners are readouts, so the one control among them was seated in the wrong
+  company, while the row below was already a filter row with a hole at its
+  leading end — turned out to be this page's too the moment it grew the same row.
+  So `SEATS.corner`, `FilterSeat` and `ManagerHeader`'s `filters` prop are gone,
+  and `bodyPadding`/`statePadding` are constants rather than a branch on whether
+  a key had to be cleared. What the seat leaves behind is the rule it was built
+  to keep: **a seat may change a control's shape and nothing else** — that one
+  had to run at the plate's tab scale rather than the pill's, because at
+  `text-sm` the part was 32px tall and crossed the win-pct dial above it.
+
+  **Its rows are the leagues list's cards too, and what they put on the trailing
+  plate is the opponent.** Same `features/shared/ui/league-card`: same slab, same
+  nameplate, same press into the league detail panel. The record is what a
+  season-long list is about and who you are playing is what a week's list is
+  about, so one fact swaps for the other in one housing — which is the whole of
+  the difference between the two lists' cards, and the reason the card is
+  parameterised on that plate rather than forked. Two decisions are this page's:
+  the panel opens on **this manager's own roster** (`focusRosterId`, the one
+  thing this card knows that the leagues list doesn't — a reader arrives here
+  because of their own lineup, so landing on the projected leader's bench answers
+  a question nobody asked), and the plate is drawn **even when there is nobody to
+  name**. That is where it parts company with the record ledge, which draws
+  nothing rather than an empty housing: here "nothing" is itself the answer, and
+  {@link matchupState}'s three kinds of it — a real bye, a week the crawler has
+  not reached, a season with nothing stored ahead of today — are three different
+  facts. Collapsing them into an absent plate would tell a reader their league
+  has no game when what it has is no data.
 
   **The one thing that aggregation changes on the card is which instrument the
   readout wears, and that is a prop rather than something the readout works
@@ -2715,8 +2792,8 @@ stops holding, a comment saying it does would not have caught it.
   pinned card lets the rows scroll through the gaps around its rounded corners.
   Its `z-40` sits above the cards' `z-30` menus and below the drawer's `z-50`.
   **It lets go of the top for exactly one thing: a league card opened into its
-  detail panel** (`pinned`, defaulting to true and lowered only by
-  `ManagerLeagues`). That is the same argument the pinning rests on, run the
+  detail panel** (`pinned`, defaulting to true and lowered by `ManagerLeagues`
+  and by the lineup checker, which draws the same card). That is the same argument the pinning rests on, run the
   other way — a pinned card is paying for its height out of whatever is behind
   it, and an open panel is sized to the screen, so the plate would be taking a
   quarter of the one thing being read to restate facts about the account. What
@@ -2731,8 +2808,22 @@ stops holding, a comment saying it does would not have caught it.
   this card's too: a league card is not a line of a table, it is the whole of
   what one league has to say with four ranked columns across it, and depth is
   what sorts those columns into an order. The two lists read as one instrument
-  now, which is what a reader crossing between the two tools experiences. Five
-  things in it are decisions rather than styling:
+  now, which is what a reader crossing between the two tools experiences.
+
+  **The card itself is `features/shared/ui/league-card`, because a third list
+  wears it**: the lineup checker's rows are the same card with this week's
+  opponent where the record goes. What is parameterised is exactly the two things
+  that differ — the trailing plate (`ledge`) and the stat columns — and nothing
+  else: the slab, the head's inset, the press, the panel and the whole
+  pull-to-the-top-and-cap gesture are one definition, which is what keeps the two
+  lists from becoming slightly different products. `CardLedge` is the plate's box
+  so the two ledges cannot drift either, and the one thing about it that is not
+  obvious is that it is **capped rather than shrinkable**: flex shrinks a box and
+  lets its contents overflow, so `min-w-0 shrink` gave a 71px plate around a 118px
+  readout hanging off the right of a 390px screen. It takes what it needs up to a
+  share of the edge, and the name — which truncates — takes the rest.
+
+  Five things in it are decisions rather than styling:
   - **The top edge carries two plates, which is the one place this card goes
     further than the trade card.** That readout was in the *head*, between the
     chevron and the stat columns — the one part of the card that has to stay
@@ -2886,9 +2977,8 @@ stops holding, a comment saying it does would not have caught it.
     they are its tail rather than a note over it. `overscroll-contain` moved onto
     the two lists with the scrolling, so a flick at the end of either doesn't
     carry on into the page behind the card.
-- **The header is one plate with a seat for a filters' key in its bottom edge,
-  and it got there in three moves worth reading together.** It was one card
-  stacking
+- **The header is one plate whose four corners are readouts, and it got there in
+  four moves worth reading together.** It was one card stacking
   identity, the season, the record and both control pills, which on a phone was
   ~590px of a 700px screen — the controls wrapping onto their own lines because
   they shared a flex row with the season. The first move split it by what a thing
@@ -2908,39 +2998,32 @@ stops holding, a comment saying it does would not have caught it.
   readout corners, and the 16px the seat cost — 12 of body padding, 4 of overhang
   margin — goes back to a list this card is pinned over.
 
-  **The seat itself stays, because the lineup checker still uses it**: that page
-  has one list, no subject rail and nothing else to seat a key on, so the corner
-  is right there for the same reason it was ever built. What follows is why it is
-  built the way it is, and it is live code rather than history — the rules below
-  are what a second page in that shape would have to keep. Four things hold it
-  up:
-  - **The material says which part is which**, the same raised/recessed grammar
-    as the app bar: the plate is a milled face (a specular sweep, the cyan rail),
-    its corner tabs are wells because they are readouts, and the filters' key is
-    raised because it is pressed. A control that looks like content is one nobody
-    presses — which is the whole argument against the obvious simplification
-    here, a third tab cut into the edge. A tab is a well, and a well saying
-    "Filters" is the card telling you to read its filter.
-  - **The key straddles the border rather than sitting inside it.** Half in, half
-    out: the inner half rides in bottom padding the avatar's row already paid
-    for, the outer half hangs below with its wall and its bloom. Fully inside it
-    would need the whole 32px as padding — more height than straddling, and it
-    would read as a chip parked in the card rather than a part rising out of its
-    edge.
-  - **The plate keeps `overflow-hidden` and the key lives outside it.** The clip
-    is load-bearing (the rail and the sweep are square boxes drawn against
-    rounded corners), and `.lab-chip`'s wall is a `box-shadow` the clip would
-    cut — leaving a part with no thickness, which is exactly what a pressable
-    part must not be. So the two are siblings in a bare `relative` wrapper, and
-    that wrapper carries the overhang's margin: no filters, no margin, and the
-    header is exactly as tall as its plate.
+  **The fourth move deleted the seat, and the lineup checker is why.** That page
+  was the last one in the corner — one list, no subject rail, nothing else to
+  seat a key on — and it grew the same rail, at which point the corner had no
+  user and the third move's argument applied to it too. So `SEATS.corner`,
+  `FilterSeat` and the `filters` prop are gone, and `bodyPadding`/`statePadding`
+  are constants: both were a branch on whether a lit key had to be held clear of
+  the readout above it. **What the seat is worth remembering for is the two rules
+  it kept**, either of which a future part seated in this plate's edge would have
+  to keep again. *A control that looks like content is one nobody presses* — the
+  plate's corner tabs are wells because they are readouts, so the key was raised,
+  and the obvious simplification (a third tab cut into the edge) would have been
+  the card telling you to read its filter. And *the plate keeps `overflow-hidden`
+  and a raised part has to live outside it* — the clip is load-bearing (the rail
+  and the sweep are square boxes drawn against rounded corners) and `.lab-chip`'s
+  wall is a `box-shadow` the clip would cut, leaving a part with no thickness,
+  which is exactly what a pressable part must not be. Two things still hold:
   - **The plate's height is the same in September as in December.** The record
     bar keeps its empty rail when nothing has been played, because a card pinned
     under the app bar can't change how much of the list it covers as the season
-    turns over. The transient state line is the one thing allowed to grow, which
-    is why *it* buys the key's clearance below its pills rather than reserving a
-    gutter beside them: a right-hand reserve wide enough for the key left ~190px
-    of a 390px screen for two pills that fit on one line before it.
+    turns over. The transient state line is the one thing allowed to grow.
+  - **The material says which part is which**, the same raised/recessed grammar
+    as the app bar: the plate is a milled face (a specular sweep, the cyan rail)
+    and its corner tabs are wells because they are readouts. Every corner is a
+    well now, which is what makes the rule easy to break by accident — the next
+    part added to this plate has to ask which of the two it is before it picks a
+    material.
 - **The plate's record readout is where the filter bar used to be.** The two rows
   of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger has
   moved twice since — into the dock beside `AdpTrigger`, into this plate's own
@@ -3094,10 +3177,18 @@ stops holding, a comment saying it does would not have caught it.
   is the one the trades board runs over a whole season of leagues it has no
   account for. Owning a player is `rosters[league_id]` and sharing a league is
   `members[league_id]` — lookups a `ManagerLeague` doesn't carry and that page
-  could never satisfy. So `features/manager/subjects.ts` is pure and separate,
-  `SubjectFiltersProvider` is a third store beside the league filters and the ADP
-  controls, and the narrowing runs in `useFilteredLeagues` **after**
-  `matchesFilters`. Five rules in it:
+  could never satisfy. So `features/shared/subjects.ts` is pure and separate from
+  that package, and the narrowing runs **after** `matchesFilters` — in
+  `useFilteredLeagues` for the manager tabs, in `useLineupView` for the lineup
+  checker.
+
+  **Where the selection is *held* is the page's business, not the rail's.** The
+  manager tabs keep it in `SubjectFiltersProvider`, a third store beside the
+  league filters and the ADP controls, because three routes share one selection;
+  the lineup checker keeps it in `useState`, because it is one page. That is why
+  it reaches the shared parts as a value on {@link SubjectView} rather than
+  through a context: a shared part that read the provider directly would be
+  choosing a mounting strategy for both of its callers. Five rules in it:
   - **A subject is not a rule, so the control is a search that leaves tokens
     behind** — there is nothing to compare a name to, and there are several
     hundred of them. One field over both kinds, grouped in the results: they are
@@ -3767,16 +3858,17 @@ stops holding, a comment saying it does would not have caught it.
   | `manager/league-metrics` | one league | collapsed card |
   | `shared/standings-metrics` | one team | league detail panel's standings |
   | `shared/roster-metrics` | one player | league detail panel's roster list |
-  | `manager/share-metrics` | one subject held across several leagues | players and leaguemates cards |
+  | `shared/share-metrics` | one subject held across several leagues | players and leaguemates cards |
   | `trades/trade-metrics` | one side of one trade | trade card |
 
-  **Two of them are in `features/shared` and three are not, and the split is the
-  mover's rule rather than the grain**: the panel those two feed is drawn by the
-  leagues list *and* by a trade card, so the catalogues its columns pick from went
-  with it. Nothing else about them changed — both are still pure, still tested
+  **Three of them are in `features/shared` and two are not, and the split is the
+  mover's rule rather than the grain**: the panel the standings and roster
+  catalogues feed is drawn by the leagues list *and* by a trade card, and the
+  share catalogue feeds two sheets the lineup checker opens as well as the manager
+  tabs. Nothing else about them changed — all three are still pure, still tested
   beside themselves, and still take their subject shapes as erased `import type`s
-  (from `@/shared/contract` and `@/shared/projections` directly now, since there
-  is no feature `types.ts` where they landed).
+  (from `@/shared/contract`, `@/shared/manager` and `@/shared/projections`
+  directly now, since there is no feature `types.ts` where they landed).
 
   The fifth is the first outside the manager tool, which is what moved the
   vocabulary they all speak — `Metric<C>`, `MetricCell`, `metricPreview` — to

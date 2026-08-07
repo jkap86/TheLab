@@ -33,8 +33,8 @@ export type HeaderStat = {
 /**
  * What a page hands the header.
  *
- * The three `/manager/[searched]/…` views vary in only `stat`, `filters` and
- * `columns`, which is why this is one card taking props rather than three copies
+ * The three `/manager/[searched]/…` views vary in only `stat` and `columns`,
+ * which is why this is one card taking props rather than three copies
  * — see {@link ManagerHeader}. The lineup checker is the fourth page to wear it
  * and varies in one thing more: it has no leagues stream behind it, which is why
  * the three sync fields are optional rather than three nulls threaded through a
@@ -99,13 +99,6 @@ export type ManagerHeaderProps = {
    * {@link OverallRecord}, and only the page knows which question it counted.
    */
   countdown?: boolean;
-  /**
-   * The filters' trigger, seated in the plate's bottom-right corner. Omitted
-   * where a view has nothing to filter (e.g. a manager with no leagues) — which
-   * is also what returns the bottom padding holding the key clear of the dial,
-   * so an unfilterable header is exactly as tall as its contents.
-   */
-  filters?: ReactNode;
   /**
    * The list's stat-column headings, laid on the cards' geometry.
    *

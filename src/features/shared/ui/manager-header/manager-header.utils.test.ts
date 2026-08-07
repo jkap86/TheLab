@@ -7,12 +7,10 @@ import type {
   HeaderSyncSummary,
 } from "./manager-header.types.ts";
 import {
-  bodyPadding,
   hasSyncState,
   recordBarParts,
   refreshingSuffix,
   resolveKickoff,
-  statePadding,
 } from "./manager-header.utils.ts";
 
 const record = (over: Partial<OverallRecord> = {}): OverallRecord => ({
@@ -32,19 +30,6 @@ const summary = (
 
 const progress = (over: Partial<HeaderProgress> = {}): HeaderProgress =>
   ({ type: "progress", phase: "refresh", loaded: 4, total: 12, failed: 0, ...over }) as HeaderProgress;
-
-describe("the plate's two seams", () => {
-  // The key sits in the bottom-right corner, so whichever row is the plate's
-  // bottom edge is the one that has to hold its lit face clear of the readout
-  // above. Only one of the two is ever the edge, but both are charged the same
-  // way, and charged only where there is a key to clear.
-  test("both seams widen for a key and neither does without one", () => {
-    assert.notEqual(bodyPadding(true), bodyPadding(false));
-    assert.notEqual(statePadding(true), statePadding(false));
-    for (const pad of [bodyPadding(true), statePadding(true)])
-      assert.match(pad, /\bpb-6\b/);
-  });
-});
 
 describe("the state line only appears when it has something to say", () => {
   const quiet = { refreshing: false, summary: summary(), refreshError: null };
