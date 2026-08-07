@@ -22,11 +22,18 @@ import type {
  */
 
 /**
- * Short labels for the slots whose Sleeper names don't fit the column.
+ * Short labels for the slots whose Sleeper names are too long to print.
  *
  * The overlapping flexes have the longest names and are exactly the ones a
  * reader has to tell apart — `WRRB_FLEX` and `REC_FLEX` both truncate to
  * something unreadable, so they get the RB/WR and WR/TE spellings instead.
+ *
+ * **One table now, where there were two.** A second held `FLX` and `SFX` for the
+ * narrow tier, because the slot lived in a fixed 20px track that the four-letter
+ * spellings didn't fit — and the two were a matched pair with no compiler link
+ * between them, so a label added to one without a width check against the other
+ * truncated the one thing on the row that must never truncate. A tab sizes to
+ * its own label, so the concession has nothing left to concede to.
  */
 const SLOT_LABEL: Record<string, string> = {
   WRRB_FLEX: "W/R",
@@ -34,32 +41,6 @@ const SLOT_LABEL: Record<string, string> = {
   SUPER_FLEX: "SFLX",
   IDP_FLEX: "IDP",
 };
-
-/**
- * The spellings that only fit the narrow tier's gutter, which is 20px wide at
- * `text-[0.6rem]` (see `roster-layout`).
- *
- * Two labels don't fit it and both are four characters: `FLEX` and `SFLX` measure
- * 24.5px there, against 19.2 for the widest three — so this table is the two of
- * them and nothing else, and it is an override of {@link SLOT_LABEL} rather than
- * a replacement for it. Above `@lg` the track is 2.5rem and the fuller spellings
- * are the ones drawn, which is why this is a second map and not an edit to the
- * first: `FLEX` is a word a reader knows and `FLX` is a concession to a width, so
- * the concession is made only where the width demands it.
- *
- * Adding an entry means checking it against that 20px — this table and the track
- * in `roster-layout` are a matched pair with no compiler link between them.
- */
-const NARROW_SLOT_LABEL: Record<string, string> = {
-  FLEX: "FLX",
-  SUPER_FLEX: "SFX",
-};
-
-/** What the slot gutter draws at each tier — the same slot, spelled to fit. */
-function slotLabels(slot: string): { narrow: string; wide: string } {
-  const wide = SLOT_LABEL[slot] ?? slot;
-  return { narrow: NARROW_SLOT_LABEL[slot] ?? wide, wide };
-}
 
 export function PlayerRow({
   player,
@@ -105,7 +86,7 @@ export function PlayerRow({
   // two, so the pair is rendered rather than branched on at runtime; where they
   // agree, one span is drawn.
   const short = empty ? name : shortPlayerName(name, player?.position ?? null);
-  const labels = slot ? slotLabels(slot) : null;
+  const slotLabel = slot ? (SLOT_LABEL[slot] ?? slot) : null;
 
   const ctx = {
     outlook,
@@ -119,22 +100,16 @@ export function PlayerRow({
   };
 
   return (
-    <li className={`grid ${layout.grid} items-center gap-x-2 gap-y-0.5 py-1.5`}>
-      {/* Spans both lines so the slot reads as labelling the whole row, and holds
-          the gutter open on bench rows that have no slot to show. Two spellings
-          rather than one: the gutter is 20px below @lg and the fuller labels
-          don't fit it (see `NARROW_SLOT_LABEL`). `hidden` is paired with
-          `@lg:inline` rather than a bare `inline` on the other, since Tailwind
-          emits the display utilities alphabetically and `.inline` would beat
-          `.hidden` at every width. */}
-      <span className="row-span-2 self-center truncate text-center text-[0.6rem] font-semibold uppercase text-foreground/35 @lg:text-[0.7rem]">
-        {labels && (
-          <>
-            <span className="@lg:hidden">{labels.narrow}</span>
-            <span className="hidden @lg:inline">{labels.wide}</span>
-          </>
-        )}
-      </span>
+    <li className={`relative grid ${layout.grid} items-center gap-x-2 gap-y-0.5 py-1.5`}>
+      {/* Out of flow on the row's leading corner rather than in a track of its
+          own — see `.lab-tab` and `roster-layout`. It bleeds into the plate's
+          own inset, so it costs this row nothing but the name's indent, and a
+          bench row without one costs nothing at all. */}
+      {slotLabel && (
+        <span className="lab-tab absolute -left-1 top-[2px] inline-flex h-[17px] min-w-[26px] items-center justify-center rounded-[5px] px-[5px] font-mono text-[9px] font-bold uppercase leading-none tracking-[0.04em] text-foreground/60">
+          {slotLabel}
+        </span>
+      )}
 
       {/* `title` is the desktop backstop and deliberately not the plan: it does
           nothing on a touch screen, which is the width where the name is short
@@ -142,8 +117,9 @@ export function PlayerRow({
       <span
         title={empty ? undefined : name}
         className={`${layout.nameSpan} min-w-0 truncate text-sm ${
-          empty ? "text-foreground/25" : "text-foreground/85"
-        }`}
+          // Clears the tab's overhang, and only on a row that carries one.
+          slotLabel ? "pl-[34px]" : ""
+        } ${empty ? "text-foreground/25" : "text-foreground/85"}`}
       >
         {short === name ? (
           name
@@ -155,38 +131,34 @@ export function PlayerRow({
         )}
       </span>
 
-      {/* Second line: what the name used to be competing with. The badge no longer
-          needs hiding at narrow widths — it isn't taking room from anything now. */}
-      <span className="col-start-2 flex min-w-0 items-center gap-1.5">
+      {/* Second line, and the tight one now that both value columns are drawn at
+          every width — which is why the NFL team waits for @lg.
+
+          It is the fact to yield, and the reasoning is the standings' own for
+          the points-for one half over: what gives is a whole fact rather than
+          half of one, and this is the least load-bearing thing on the row —
+          the player's name is directly above it and the position badge stays.
+          The badge is what a reader is scanning a lineup by, and narrowing that
+          instead would take the shared component's padding and type size with
+          it for the sake of three characters. */}
+      <span className="col-start-1 flex min-w-0 items-center gap-1.5">
         {!empty && <PositionBadge position={player?.position ?? null} />}
         {player?.team && (
-          <span className="truncate text-[0.65rem] tabular-nums text-foreground/35">
+          <span className="hidden truncate text-[0.65rem] tabular-nums text-foreground/35 @lg:inline">
             {player.team}
           </span>
         )}
       </span>
 
-      {columns.map((key, i) => {
-        // Paired with the section's grid template and its heading pickers: the
-        // second column exists only once this half is wide enough for it, and a
-        // cell rendered into a track that isn't there would wrap onto a row of
-        // its own.
-        const narrow = i === 0 ? "" : "hidden @xl:block";
-        return empty ? (
+      {columns.map((key, i) =>
+        empty ? (
           // Keep the number columns occupied so an unfilled slot doesn't pull the
           // next row's cells up into its line.
-          <span key={i} className={narrow} />
+          <span key={i} />
         ) : (
-          <PlayerStat
-            key={i}
-            metricKey={key}
-            ctx={ctx}
-            outlook={outlook}
-            horizon={horizon}
-            className={narrow}
-          />
-        );
-      })}
+          <PlayerStat key={i} metricKey={key} ctx={ctx} outlook={outlook} horizon={horizon} />
+        ),
+      )}
     </li>
   );
 }
@@ -205,14 +177,11 @@ function PlayerStat({
   ctx,
   outlook,
   horizon,
-  className = "",
 }: {
   metricKey: string;
   ctx: Parameters<(typeof PLAYER_METRICS)[number]["cell"]>[0];
   outlook?: PlayerOutlook;
   horizon: number;
-  /** The grid-column rules the section applies — which widths this cell exists at. */
-  className?: string;
 }) {
   const metric = PLAYER_METRICS_BY_KEY[metricKey] ?? PLAYER_METRICS[0];
   const cell = metric.cell(ctx);
@@ -220,7 +189,12 @@ function PlayerStat({
   return (
     <span
       title={cell.title}
-      className={`${className} text-right text-xs tabular-nums ${
+      // A step down below @lg, and the size is set by the *widest* total rather
+      // than by a typical one: a season projection is eight characters in a
+      // high-scoring league (`1,041.16`), which is 46px at `text-xs` against a
+      // 44px track and 39.7px here. A shortened name still reads as a name
+      // where a shortened total reads as bad data.
+      className={`text-right text-[0.65rem] tabular-nums @lg:text-xs ${
         cell.text === null || cell.muted ? "text-foreground/25" : "text-foreground/70"
       }`}
     >

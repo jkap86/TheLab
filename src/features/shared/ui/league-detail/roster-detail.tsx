@@ -151,8 +151,11 @@ export function RosterDetail({
     // A flex column, because this half scrolls on its own inside the card's cap
     // (see `LeagueDetailPanel`): the coverage caveat and the column rail are the
     // head it scrolls under, and only the list below them moves.
+    // The inset is a step tighter at the base tier than it was: with both value
+    // columns drawn at every width the row needs the 4px more than the edge
+    // does. Trim the padding, never the gap.
     <div
-      className={`lab-plate lab-plate-sm flex min-h-0 flex-col rounded-lg p-1.5 @lg:p-4 ${
+      className={`lab-plate lab-plate-sm flex min-h-0 flex-col rounded-lg p-1 @sm:p-1.5 @lg:p-4 ${
         elevated ? "relative z-30" : ""
       }`}
     >
@@ -259,14 +262,13 @@ function ColumnRail({
   return (
     <div className={`mb-1.5 grid shrink-0 ${layout.grid} items-baseline gap-x-2`}>
       <span />
-      <span />
       {valueColumns.map((key, slot) => (
         <ColumnPicker
           key={slot}
-          // Paired with the layout's grid template and the rows' own cells: the
-          // second column appears only once this half is wide enough.
-          wrapperClassName={slot === 0 ? "inline-flex" : "hidden @xl:inline-flex"}
-          className="text-[0.6rem]"
+          // Sentence case below @lg, the standings rail's rule and for its
+          // reason — see the note there. Both rails switch at one tier so the
+          // two halves can't read as two instruments.
+          className="text-[0.6rem] normal-case tracking-normal @lg:uppercase @lg:tracking-wide"
           options={PLAYER_METRIC_OPTIONS}
           activeKey={key}
           open={openPicker === `roster-${slot}`}
@@ -334,15 +336,15 @@ function RosterSection({
     // above holds its own bottom gap, so a top margin here would double it.
     <div className="mt-3 first:mt-0">
       <div className={`mb-1.5 grid ${layout.grid} items-baseline gap-x-2`}>
-        <span />
-        {/* 0.65rem below @lg, the size the standings' own heading row uses at that
-            tier and for the same reason: this heading shares the name's track, so
-            at 12px "Starters" was wider than the track and truncated to "STARTE…"
-            — a heading clipped inside its own word reads as broken where a
-            clipped *name* only reads as long. */}
+        {/* Spans the whole row rather than sitting in the name track alone.
+            There is nothing else on this line — the value columns are named
+            once by the rail above, not per section — so spanning costs nothing
+            and takes "Starters" out of the one track it used to truncate in. */}
         {/* `h3`, not `h5`: the league name this panel belongs to is an `h2`, so
             a 5 here skipped two levels. The size is a class either way. */}
-        <h3 className="min-w-0 truncate text-[0.65rem] font-medium uppercase tracking-wide text-foreground/35 @lg:text-xs">
+        <h3
+          className={`${layout.nameSpan} min-w-0 truncate text-[0.65rem] font-medium uppercase tracking-wide text-foreground/35 @lg:text-xs`}
+        >
           {title}
         </h3>
       </div>
