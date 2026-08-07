@@ -1330,8 +1330,9 @@ stops holding, a comment saying it does would not have caught it.
   the list, which is not a setting at all; behind a press both were invisible, so
   the ledge had to carry a summary line restating them, and **the summary was
   doing the work of the control it was hiding**. On the page they state
-  themselves — a lit key, a date field — and the ledge's own `Filters` trigger,
-  its badge, its `dynamic()` split and half its summary line all went with the
+  themselves — an instrument naming its circle, a pinned date key — and the
+  ledge's own `Filters` trigger, its badge, its `dynamic()` split and half its
+  summary line all went with the
   panel. What is left of the summary is `season · league rules · the bays`, and
   the bullet on `tradeFilterSummary` is why: a line beside a control must not
   restate what the control already says, which is the league detail panel's
@@ -1369,7 +1370,35 @@ stops holding, a comment saying it does would not have caught it.
   you play in was made by people you play against, and everyone you play against
   shares a league with you, so `mine ⊆ leaguemates ⊆ leaguemate-leagues` and
   independent switches would only ever offer the widest one ticked. What varies is
-  how far out the circle is drawn. Five things hold it up:
+  how far out the circle is drawn.
+
+  **So the control is a stepper, and the nesting is what makes it one.** It was
+  four keys of equal weight, which is the shape a set of unrelated answers takes
+  — in an order (widest, then narrowest, then two middles) no reading of the row
+  could decode, wrapping to two lines on a phone, three of them inert without an
+  account and each carrying the same sentence saying so. `‹` and `›` are the two
+  presses the question actually has, over a `.lab-readout` naming the circle with
+  four pips for where along the radius the board is standing. Four things hold it
+  up, and the first is why the table moved: **`TRADE_CIRCLES` is in radius order,
+  narrowest first**, since the stepper walks it and the pips count along it —
+  there is nowhere in a stepper to hide an arbitrary order. **`stepCircle` owns
+  both bounds**, the ends of the ladder *and* the account, because a stepper asks
+  "can I move" where a key per circle asked "is this one allowed"; it answers null
+  rather than clamping, so a key with nowhere to go is drawn inert rather than
+  re-selecting what is already showing. **The instrument is a fixed width from
+  `sm`**, not a share of its row — beside the sentence it sits next to, whose
+  `sm:basis-auto sm:flex-1` resolves to `flex: 1 1 auto` (Tailwind emits
+  `basis-auto` after `flex-1`), a share made the readout resize with *that
+  sentence's* length and `LEAGUEMATE TRADES` came out as `LEAGU…`. And **the
+  sentence under it now always speaks**: the four keys printed each circle's full
+  name, so a note repeating the selected one was a restatement and went quiet on
+  the widest; a readout has room for the name and not for what the name means,
+  which is the half that separates the two leaguemate readings. What it costs is
+  up to three presses to reach a named circle where four keys were always one —
+  the trade the mockups (`docs/mockups/trades-scope-and-seek.html`) were drawn to
+  price, and the one that was chosen.
+
+  Five things hold the circle itself up:
   - **It crosses the wire unresolved, where every other filter sends its answer.**
     The league rules go the other way round — the browser already holds the
     season's leagues for the dialog's counts, so it evaluates them and sends ids —
@@ -1454,6 +1483,38 @@ stops holding, a comment saying it does would not have caught it.
     mount. A reader still looking at the controls is already at the top, and
     pulling the page to hide the control they just pressed is worse than not
     moving; a board arriving is not a reader travelling.
+
+  **And because it is a position, it is pinned rather than filed with the
+  settings** (`SeekKey`). It was a labelled date field on the controls row — the
+  right seat for something chosen once and then read, and the wrong one for the
+  one control here worth reaching for *while reading*, which is exactly when that
+  block is three screens up. It is the ADP block's material at 34px, held under
+  the app bar at the board's trailing edge, opening onto the same native input
+  and the same way back. Four things hold it up:
+  - **The sticky wrapper is the page's, not the key's.** A sticky element travels
+    only as far as its own parent's box, so seated inside the header it would
+    scroll away with it; it is a sibling of the header in `TradesHome`'s
+    fragment, which makes its parent `PageShell`'s `<main>` — the box that spans
+    the list. `h-0` so the flow below is untouched, `pointer-events-none` on the
+    wrapper with the key taking them back (a zero-height box across the column
+    would otherwise swallow presses meant for the cards), and `z-30` under the
+    bar's `z-50`, since a floating part must never cover the way home.
+  - **What it costs is coverage**, and there is no version of a pinned part that
+    doesn't pay it: it covers the top-right of whatever is under it, which on this
+    board is one card's instant ledge — a plate at the same corner, so the two
+    read as stacked rather than as one part. That is why it is a 34px key rather
+    than the labelled field it replaced, and the cost is transient: the card
+    carrying that ledge is whichever one the scroll has put under the key.
+  - **Its date rides the bottom edge on a nameplate** — the trade card's own
+    device. An icon alone says a control exists; the plate says the board begins
+    at June 30, which is the difference between a pinned control and a pinned
+    control that tells the truth about a travelled board. No bound draws no plate
+    and no glow: a plate reading "today" would put a bound on screen that the
+    query string deliberately does not carry.
+  - **`w-fit` on that wrapper is load-bearing**, because the plate is centred on
+    it (`left-1/2`) and a block-level flex container fills its parent — so in any
+    caller that isn't itself a flex row the plate would centre on the whole column
+    and float off to the right of the key.
 - **The board is filtered in SQL and paginated, and it used to stream the whole
   season — this is the largest performance decision in the app, and it is worth
   reading as a correction of the one before it.** The old design was a sound
@@ -1749,9 +1810,27 @@ stops holding, a comment saying it does would not have caught it.
     Holding the reader's position through a re-key is right for a narrowing —
     the list they are reading stays put while it thins — and wrong for a
     position, where staying put is the one outcome that hides the answer.
-- **A trade card's header states the instant, and its sides each state one
-  value.** Two changes to what a card says, and each replaced something that read
-  as information and wasn't:
+- **A trade card's top edge states which league and when; its first interior
+  line states what kind of league, and its sides each state one value.** Three
+  changes to what a card says, and each replaced something that read as
+  information and wasn't:
+  - **The instant is on the edge, on a ledge of its own, and the note here used
+    to argue it could not be.** That argument was that folding it into the
+    nameplate costs nothing vertically but a league name long enough to truncate
+    takes the timestamp down with it — true of *one* plate carrying both facts,
+    and not true of two plates sharing the edge. A plate that positions itself
+    can only cap its own width; two items of one flex row negotiate, so the name
+    truncates against the instant rather than against a width guessed ahead of
+    it. That is the leagues list's construction exactly (`CardLedge`), and
+    adopting it bought the whole interior line for the league's settings. The
+    ledge keeps the record ledge's grammar inside, too — the date in a
+    `.lab-readout` cut, the time engraved beside it — since a cut into a lit
+    plate is machining, which is what keeps the part from reading as a second
+    name on the same edge.
+    **An undated trade still draws the plate**, which is where it parts company
+    with the record ledge: there "nothing to report" means draw nothing, and
+    here the absence *is* the answer, since a trade Sleeper filed with no
+    timestamp is dropped by every date bound on this board.
   - **The clock time holds the slot the scoring week used to.** "Aug 1, 2026 ·
     Wk 1" said *when* twice, the second time in a unit that is null for most of
     the calendar — Sleeper files an offseason trade under no week at all. Trades
@@ -1760,24 +1839,56 @@ stops holding, a comment saying it does would not have caught it.
     It is read in the **reader's own zone** — the `todayIso` side of the
     two-todays rule, since this is a wall-clock reading of a moment rather than
     a claim about what the NFL has played — and still spelled by hand rather
-    than through `toLocaleTimeString`, so the punctuation matches the date it
-    follows.
-  - **What kind of league it was shares that line, and none of it is a chip**
-    (`features/trades/league-specs.ts`, pure and tested). A second-round pick is
-    a different asset in a 10-team redraft from what it is in a 14-team
-    superflex dynasty, and this board spans every crawled league — so the card's
-    only answer to "which of those am I looking at" was a league name, which
-    helps nobody who doesn't already know the league. Six tokens now say it:
-    type, size, the QB and superflex slots, tight ends, TE premium where there
-    is one, and best ball where it is one. Five decisions in it:
-    - **They are readouts, not `.lab-chip`.** The bar's grammar is that raised
-      means press me, and six pills per card across the couple of dozen the
-      virtualiser keeps mounted is ~150 apparent controls that do nothing. The
-      recessed spelling is also the material the instant beside them and the
-      side totals below them already wear, so the run adds no fourth surface to
-      a card that deliberately counts three — and the accent stays unspent,
-      which is the same argument that engraved the values rather than lighting
-      them.
+    than through `toLocaleTimeString`, so the digits match the date beside them.
+    It **lost its own ` · ` separator** with the move, which is worth knowing
+    before one is added back: the two facts shared a single readout, so the
+    separator had to ride on the *time* — the half that vanishes for an undated
+    trade, and a dangling "date unknown ·" is what that prevented. They are two
+    elements on a plate now, parted by a gap and a change of material, so
+    punctuation between them would be a third thing saying what the layout
+    already says.
+  - **What kind of league it was has that line to itself, as one bezel of
+    gauges** (`features/trades/league-specs.ts`, pure and tested; `.lab-bezel`
+    and `.lab-gauge` in `globals.css`). A second-round pick is a different asset
+    in a 10-team redraft from what it is in a 14-team superflex dynasty, and this
+    board spans every crawled league — so the card's only answer to "which of
+    those am I looking at" was a league name, which helps nobody who doesn't
+    already know the league. Six gauges now say it: type, size, the QB and
+    superflex slots, tight ends, TE premium where there is one, and best ball
+    where it is one. Six decisions in it:
+    - **Every value carries the unit it counts, cut into the floor above it.**
+      That is what the whole part is for: a reader who has never met this app
+      cannot tell what `1QB + SF` is a count of, and the `title` that used to
+      answer it does not exist on a phone — which is the width the run is
+      tightest at. `LeagueSpec.caption` is that unit, every spec carries one, and
+      the tests pin both that and that no caption restates its own value.
+    - **The run is one housing, not six.** Six separate readouts read as
+      perforation in the card's face rather than as one fact about the league,
+      and nothing in a run of six identical pills is easier to find than
+      anything else. Housed, it is a single object a reader learns the shape of
+      once. It is `inline-flex` and so as wide as the league's own settings: a
+      housing that reached both walls would have to be *filled*, and a
+      four-gauge redraft league would leave two thirds of it empty.
+    - **Both of its depths run downward, which is what keeps it off the press
+      grammar.** The bezel is a trough milled into the face and each gauge is a
+      window sunk into that trough's floor — where the app bar's block does the
+      opposite, standing off the surface with its channel cut into it. A raised
+      housing would be the one grammar this app reserves for a press, six times
+      per card across the couple of dozen the virtualiser keeps mounted. Nothing
+      here is a `.lab-chip`, and nothing here travels.
+      **That is a fourth countable level on a card whose own rule is three**
+      (plate, groove, readout — "a fourth flattens the other three"), and the
+      exception is deliberate rather than an oversight: the fourth is *nested
+      inside* the third rather than being a fourth surface competing across the
+      face, so what the eye sorts at card scale is still three. The bezel is the
+      only place on this card that may hold two, and a second housing anywhere
+      on it would be the rule reasserting itself.
+    - **The accent appears once per gauge, in the lit lower lip of its cut, and
+      never as a ring.** A rim drawn all the way around a value is an outline,
+      and an outline is what a control has; light entering the top of a cut and
+      catching its far wall is what says recess. The values themselves are the
+      `foreground` token at two brightnesses and are not tinted — a cyan-white
+      numeral has no token to read, and the accent is already spent in the lip.
     - **Every fact is read through the league filters' own predicates**
       (`slotCount`, `scoringValue`, `leagueType`, and `isBestBall`, which was
       inlined in `matchesFilters` and is exported for this). A card saying
@@ -1796,13 +1907,15 @@ stops holding, a comment saying it does would not have caught it.
       one place left on the minority of cards that carry it. Best ball prints
       only when true for the same reason the filters' summary names a selection
       and not the absence of one.
-    - **They stack above the instant below `sm` rather than sharing one
-      wrapping row.** The instant keeps the top-right corner it holds by rule,
-      so the line is `flex-row-reverse` at width with the DOM order that needs.
-      One wrapping row is the tempting spelling and lays the run out inside the
-      ~180px left beside the timestamp — three lines, with the space under the
-      timestamp empty — where stacked it gets the card's full width and fits on
-      one line at 390px. Zero added height from `sm` up.
+    - **The line has no breakpoint left on it.** It held the instant too, which
+      is why it used to be a reversed row that stacked below `sm`: the run had
+      the ~180px left beside a right-flushed timestamp and took three lines
+      there. With the instant on the edge it is one block at every width, and
+      what a phone gets is two rows *inside* one bezel rather than a run that
+      overflows — the seam is applied by index, so it survives the wrap as the
+      housing's own inner edge. The captions cost ~10px of height on every card,
+      which is the price of the reading and is stated here rather than
+      discovered later.
   - **The value column is the league cards' pickable stat column at this page's
     grain** (`trade-metrics`, and `usePersistedColumns("trade-side", …)`). It is
     **one** slot rather than their four: a trade card is already a table of the
@@ -2152,12 +2265,17 @@ stops holding, a comment saying it does would not have caught it.
       the plate sat almost exactly between two cards and could be read as
       belonging to either; at 18 there is visibly more ground above it than
       below. Check that before moving it.
-  - **The instant keeps a line of its own, and folding it into the nameplate was
-    tried and rejected.** One part carrying both facts costs nothing vertically
-    and is the obvious economy — but a league name long enough to truncate takes
-    the timestamp with it, and the instant is the card's answer to which of an
-    afternoon's five deals landed first. Right-aligned, diagonally opposite the
-    plate, so the two facts hold the card's corners.
+  - **The instant shares the top edge on a ledge of its own, and the two plates
+    are laid out as one row.** It kept a line inside the face for a while, on the
+    reasoning that folding it into the nameplate would let a league name long
+    enough to truncate take the timestamp down with it. That is true of one part
+    carrying both facts and false of two: a plate that positions itself can only
+    cap its own width, where two items of one flex row negotiate — so the name
+    truncates against the instant, which is the leagues list's own construction
+    and the reason `CardLedge` exists. The two facts still hold the card's
+    corners; what changed is that the trailing one is now a part rather than a
+    right-aligned span, and the interior line it left is what the league specs
+    became a housed instrument on.
   - **The value column reads one asset at a time as well as the side total, and
     only where that says something the total doesn't** (`TradeMetric.asset`,
     `bundleAssets`). A total says which haul was bigger and nothing about which
@@ -2995,6 +3113,21 @@ stops holding, a comment saying it does would not have caught it.
   readout hanging off the right of a 390px screen. It takes what it needs up to a
   share of the edge, and the name — which truncates — takes the rest.
 
+  **`CardLedge` itself lives in `ui/nameplate.tsx`, and that is a bundle
+  decision rather than a filing one.** The trade card became its third caller
+  (its ledge holds the instant), and *this* module statically imports
+  `LeagueDetailPanel` — two dense tables, a rank dial, a draft-pick list and a
+  query hook. A barrel is one module to the bundler and so is a component file:
+  importing one name from here pulls the whole subtree into the graph of
+  whatever imported it, which on the trades board is the first paint of a page
+  whose panel is deliberately behind a press. Measured both ways — importing the
+  ledge from here put a league-detail chunk in `/trades`'s static graph, and
+  importing it from `nameplate` (which imports nothing) does not, while the two
+  routes that *do* draw the panel inline still carry it. This file re-exports it
+  under the mover's usual habit, so the two lists that already read it from here
+  keep one import. It is the same failure the ADP drawer and the league filters
+  dialog were each caught by, arrived at without a `dynamic()` anywhere near it.
+
   Five things in it are decisions rather than styling:
   - **The top edge carries two plates, which is the one place this card goes
     further than the trade card.** That readout was in the *head*, between the
@@ -3795,6 +3928,26 @@ stops holding, a comment saying it does would not have caught it.
     colour, so the rows switch to plain `opacity-*` rather than carrying a second
     palette of on-cyan text tokens that would have to be kept in step with the
     face above them.
+  - **`.lab-bezel` / `.lab-gauge` are that grammar at *token* scale**, and the
+    one part in the app that stacks two recesses. The bezel is a trough milled
+    into the trade card's face; each gauge is a window sunk into that trough's
+    floor. Three things it teaches. **Down twice is how a run of facts becomes an
+    object without becoming a control** — the app bar's block is the same idea
+    inverted (a part standing off the surface with a channel cut into it), and
+    raising this one would be six apparent presses per card across a windowed
+    list of forty thousand. **A housing that carries a caption cannot be a bare
+    trough**: the floor is deliberately lighter than `.lab-groove`, because 6px
+    type on near-black is a caption nobody reads, and the sink comes from the
+    inset shadow and the lit lower lip instead. And **what stands a cut off its
+    face is the depth of the sink and the lit lip at its far edge, not darkness
+    in the fill** — a darker floor alone is a darker patch of the same surface.
+    A worked surround (a dark hairline above the recess, a brighter line below,
+    a contact shadow — the lip a real milling leaves) was drawn and then taken
+    off: it reads, and it is more than one part per card in a windowed list of
+    forty thousand needs. One lit line under the cut is what is left, and it is
+    the recess's own exit edge rather than a lip around it. Reach for the sink
+    and the lip before the surround; darkness *outside* a cut is how it starts
+    reading as a border.
   - **`.lab-ledge` is that grammar carrying a heading rail**, and it is the one
     place the bar's material left the bar: the stat columns' headings are a
     machined billet the list scrolls *under*. It is `.lab-key`'s construction

@@ -101,6 +101,50 @@ const SEAT = {
 } as const;
 
 /**
+ * The plate a card's *second* fact rides on — the box, so the lists' ledges
+ * cannot drift apart while what they hold differs.
+ *
+ * **It lives here rather than beside the league card that wrote it, and the
+ * reason is a bundle rather than a filing preference.** The trade card is the
+ * third caller (its ledge holds the instant), and `ui/league-card.tsx` statically
+ * imports `LeagueDetailPanel` — two dense tables, a rank dial and a query hook.
+ * Importing one name from that module pulls the whole subtree into the graph of
+ * whatever imported it, which on the trades board is the first paint of a page
+ * whose panel is deliberately behind a press (see `trades/league-sheet`). This
+ * module imports nothing, so the ledge costs its callers a box and a class list.
+ * `league-card.tsx` re-exports it under the mover's usual habit, so its own
+ * consumers keep one import.
+ *
+ * `.lab-nameplate` rather than {@link Nameplate}: what is shared is the plate's
+ * *material*, and that component is the plate with a heading in it — an `h2`
+ * around a record, an opponent or a timestamp would be announcing a card's
+ * second name. The box is here rather than in the class per the rule the whole
+ * `.lab-*` layer keeps, which is what lets this one size to its contents while
+ * the name's is sized to sit under a 12px display face.
+ *
+ * **It does not shrink, and it is capped instead — which is the one thing about
+ * this box that is not obvious.** The edge is one flex row so that the name gives
+ * way to whatever is beside it rather than to a width guessed ahead of time, and
+ * the tempting spelling of "beside it" is `min-w-0 shrink`: let both parts give.
+ * That is wrong here, because flex shrinks the *box* and its contents are free to
+ * overflow it — a 71px plate around a 118px readout, hanging past the card and
+ * off the right of a 390px screen. So the plate takes exactly what it needs, up
+ * to a bound, and the name (which truncates) takes the rest. The bound is what
+ * keeps a long opponent from doing to the name what the name was doing to it;
+ * anything the caller puts in here past that width has to truncate for itself.
+ *
+ * `pointer-events-auto` because the row it sits in is `pointer-events-none` —
+ * see each card's own note on why.
+ */
+export function CardLedge({ children }: { children: ReactNode }) {
+  return (
+    <div className="lab-nameplate pointer-events-auto flex max-w-[46%] shrink-0 items-center gap-2 rounded-[5px] py-0.5 pl-1 pr-2.5">
+      {children}
+    </div>
+  );
+}
+
+/**
  * The class a control on the plate wears, so the two callers' buttons cannot
  * drift apart in shape while their behaviour differs.
  */

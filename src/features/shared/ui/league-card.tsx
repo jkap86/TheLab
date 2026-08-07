@@ -602,34 +602,13 @@ function StatusLamp({ status }: { status: string }) {
 }
 
 /**
- * The plate a card's second fact rides on — the box, so the two lists' ledges
- * cannot drift apart while what they hold differs.
+ * The plate a card's second fact rides on.
  *
- * `.lab-nameplate` rather than {@link Nameplate}: what is shared is the plate's
- * *material*, and that component is the plate with a heading in it — an `h2`
- * around a record or an opponent would be announcing a card's second name. The
- * box is here rather than in the class per the rule the whole `.lab-*` layer
- * keeps, which is what lets this one size to its contents while the name's is
- * sized to sit under a 12px display face.
- *
- * **It does not shrink, and it is capped instead — which is the one thing about
- * this box that is not obvious.** The edge is one flex row so that the name gives
- * way to whatever is beside it rather than to a width guessed ahead of time, and
- * the tempting spelling of "beside it" is `min-w-0 shrink`: let both parts give.
- * That is wrong here, because flex shrinks the *box* and its contents are free to
- * overflow it — a 71px plate around a 118px readout, hanging past the card and
- * off the right of a 390px screen. So the plate takes exactly what it needs, up
- * to a bound, and the name (which truncates) takes the rest. The bound is what
- * keeps a long opponent from doing to the name what the name was doing to it;
- * anything the caller puts in here past that width has to truncate for itself.
- *
- * `pointer-events-auto` because the row it sits in is `pointer-events-none` —
- * see the card's own note on why.
+ * **It lives in `./nameplate` now** — the trade card became its third caller, and
+ * this module statically imports {@link LeagueDetailPanel}, so reaching the ledge
+ * through here would have pulled that whole subtree into the trades board's first
+ * paint. Re-exported rather than moved outright, per the mover's usual habit: the
+ * two lists that already import it from here keep one import, and there is still
+ * exactly one definition.
  */
-export function CardLedge({ children }: { children: ReactNode }) {
-  return (
-    <div className="lab-nameplate pointer-events-auto flex max-w-[46%] shrink-0 items-center gap-2 rounded-[5px] py-0.5 pl-1 pr-2.5">
-      {children}
-    </div>
-  );
-}
+export { CardLedge } from "./nameplate";

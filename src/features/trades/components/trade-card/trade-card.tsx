@@ -13,7 +13,11 @@ import {
   SIDE_SEAM_COLUMN,
   SIDE_SEAM_ROW,
 } from "./trade-card.constants.ts";
-import { TradeHeaderLine, TradeNameplate } from "./trade-header";
+import {
+  TradeHeaderLine,
+  TradeInstantLedge,
+  TradeNameplate,
+} from "./trade-header";
 import { TradeSideColumn } from "./trade-side";
 import type { TradeCardProps } from "./trade-card.types.ts";
 
@@ -145,18 +149,37 @@ export const TradeCard = memo(function TradeCard({
       className="relative cursor-pointer pt-3"
       onClick={() => onOpenLeague(trade)}
     >
-      <TradeNameplate name={league?.name ?? trade.league_id} />
+      {/* **The top edge is one row rather than two placed parts**, which is what
+          lets the league's name give way to the instant instead of to a guess.
+          A plate that positions itself can only cap its own width, and what the
+          name may take is whatever the timestamp doesn't — a width that is its
+          own contents, and a different one for an undated trade. As two items of
+          one row the negotiation is the layout's, and it holds at 390px where it
+          matters. That construction is the leagues list's; see `CardLedge`.
+
+          `pointer-events-none` is what keeps the row from eating the card: it
+          spans the whole edge and sits over the face's top inset, so without it
+          every press landing between the two plates would hit this instead of
+          the card underneath. Each plate takes them back.
+
+          `right-5` is 14px inside the *face's* trailing edge rather than the
+          card's — the plates are siblings of the card, and 6px of that gutter is
+          the slab's wall. */}
+      <div className="pointer-events-none absolute left-3.5 right-5 top-0 z-10 flex items-start justify-between gap-2.5">
+        <TradeNameplate name={league?.name ?? trade.league_id} />
+        <TradeInstantLedge completedAt={trade.completed_at} />
+      </div>
 
       {/* The wall, and the face standing on it. Both carry the chamfer: a wall
           that turns two corners shows a square one wherever the clip doesn't
           follow it. The face is padded at the top only — its regions run edge
           to edge so their seams can reach both walls. */}
       <div className="lab-slab lab-notch-lg">
-        {/* `pt-4` clears the plate: it is 24px tall against the wrapper's 12px
-            of overhang, so 12px of it hangs into the card and the first line
-            has to start below that. */}
+        {/* `pt-4` clears the plates: they are 24px tall against the wrapper's
+            12px of overhang, so 12px hangs into the card and the first line has
+            to start below that. */}
         <article className="lab-slab-face lab-notch-lg pt-4">
-          <TradeHeaderLine league={league} completedAt={trade.completed_at} />
+          <TradeHeaderLine league={league} />
 
           {/* No gap: the sides are regions of one face, so what separates them
               is a cut and not the ground showing between two objects. */}

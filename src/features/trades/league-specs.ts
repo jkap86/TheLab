@@ -9,8 +9,8 @@ import {
 import { formatRuleValue } from "../shared/league-filters/summaries.ts";
 
 /**
- * What kind of league a trade happened in, as a row of tokens on the card's
- * header line.
+ * What kind of league a trade happened in, as a row of gauges on the card's
+ * first interior line.
  *
  * A trade means different things in different rooms — a second-round pick is a
  * different asset in a 10-team redraft from what it is in a 14-team superflex
@@ -33,21 +33,36 @@ import { formatRuleValue } from "../shared/league-filters/summaries.ts";
  */
 
 /**
- * Which kind of fact a token carries, which is the only thing that varies about
+ * Which kind of fact a gauge carries, which is the only thing that varies about
  * how one is drawn.
  *
  * `format` is what game this is — the type and best ball — and it reads a step
  * brighter, because it changes what a trade *means* rather than describing the
  * room it happened in. `config` is the lineup and scoring detail. Two tones and
- * no more: this run sits on a card that already counts three surfaces, and the
- * distinction is worth exactly one step of brightness.
+ * no more, and the difference is exactly one step of brightness on the value:
+ * the run is already one part with its own depth, so anything stronger would be
+ * asking the reader to sort six gauges into two kinds before reading any of
+ * them.
  */
 export type LeagueSpecTone = "format" | "config";
 
-/** One token: what it says, what it means, and how brightly it is drawn. */
+/** One gauge: what it says, what it counts, what it means, how brightly. */
 export type LeagueSpec = {
   /** Stable across renders and unique within a run — the React key. */
   key: string;
+  /**
+   * What the value is a count *of*, cut into the bezel above it.
+   *
+   * It is the whole reason this run is gauges rather than a row of tokens: a
+   * reader who has never met this app cannot tell what `1QB + SF` counts, and
+   * the hover that used to answer that does not exist on a phone. Two or three
+   * characters of unit is the difference between an abbreviation and a reading.
+   *
+   * Every spec carries one — a gauge with an empty caption is a hole in the
+   * bezel, and the run is read across, so one missing caption is visible as a
+   * gap rather than as a shorter label.
+   */
+  caption: string;
   /** What the token says, in the card's display face. */
   label: string;
   /**
@@ -127,6 +142,7 @@ export function leagueSpecs(league: ManagerLeague | null): LeagueSpec[] {
   if (typeLabel) {
     specs.push({
       key: "type",
+      caption: "Type",
       label: typeLabel,
       title: `${typeLabel} league`,
       tone: "format",
@@ -139,6 +155,7 @@ export function leagueSpecs(league: ManagerLeague | null): LeagueSpec[] {
   if (league.total_rosters > 0) {
     specs.push({
       key: "teams",
+      caption: "Teams",
       label: `${league.total_rosters} Team`,
       title: `${league.total_rosters}-team league`,
       tone: "config",
@@ -150,6 +167,7 @@ export function leagueSpecs(league: ManagerLeague | null): LeagueSpec[] {
   if (qb !== null && sf !== null) {
     specs.push({
       key: "qb",
+      caption: "QB",
       label: qbSlotLabel(qb, sf),
       title:
         sf === 0
@@ -165,6 +183,7 @@ export function leagueSpecs(league: ManagerLeague | null): LeagueSpec[] {
   if (te !== null) {
     specs.push({
       key: "te",
+      caption: "TE",
       label: `${te}TE`,
       title: `Starts ${plural(te, "tight end")}`,
       tone: "config",
@@ -180,6 +199,7 @@ export function leagueSpecs(league: ManagerLeague | null): LeagueSpec[] {
     const rate = formatRuleValue(tep);
     specs.push({
       key: "tep",
+      caption: "TE prem",
       label: `TEP ${rate}`,
       title: `TE premium — ${rate} extra per tight end reception`,
       tone: "config",
@@ -192,6 +212,10 @@ export function leagueSpecs(league: ManagerLeague | null): LeagueSpec[] {
   if (isBestBall(league)) {
     specs.push({
       key: "best_ball",
+      // The unit is what the fact is *about*: best ball is a claim about how
+      // lineups are set, which is the one thing a reader has to know to place
+      // it. "Best ball / Best ball" would be a caption restating its own value.
+      caption: "Lineup",
       label: "Best ball",
       title: "Best ball — lineups are scored automatically",
       tone: "format",
