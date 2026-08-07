@@ -5,7 +5,7 @@ import {
   TEAM_METRICS_BY_KEY,
   type TeamMetric,
 } from "../../standings-metrics";
-import { ColumnPicker, type ColumnOption } from "./column-picker";
+import { ColumnHeading } from "./column-heading";
 import { managerLabel, TeamAvatar } from "./team-label";
 import type {
   LeagueOutlook,
@@ -13,12 +13,6 @@ import type {
   LeagueTeamView,
   TeamOutlook,
 } from "./types";
-
-/** The team metrics offered in every standings column's picker. */
-const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
-  key: m.key,
-  label: m.label,
-}));
 
 /**
  * The league table, rendered in the order given — the panel passes teams in
@@ -39,17 +33,18 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
  * **The heading and the footer are fixed and the rows scroll between them.** The
  * half is one of two that scroll independently inside the card's cap (see
  * {@link LeagueDetailPanel}), and what stays put is what a scrolled list can't
- * do without: the column headings, which are also the pickers that aim those
- * columns, and the footer's week range, which is what the numbers above it are
- * over. It is a twelve-row table beside a forty-row roster, so it usually has no
- * scrollbar at all — the point of the split is that the roster's does not move
+ * do without: the column headings, which are also what opens the editor that aims
+ * those columns, and the footer's week range, which is what the numbers above it
+ * are over. It is a twelve-row table beside a forty-row roster, so it usually has
+ * no scrollbar at all — the point of the split is that the roster's does not move
  * it.
  *
  * The two value columns are slots the reader points at a team-level metric —
  * projected points and projected bench to start with, swappable to the season
- * optimal, points for, or the roster's whole KTC / ADP total from the heading's
- * picker. Which metric each shows is held above this table (in the panel) so both
- * columns line up down the list and one picker moves the whole column.
+ * optimal, points for, or the roster's whole KTC / ADP total. Pressing a heading
+ * opens the panel's columns editor armed on that slot; which metric each column
+ * shows is held above this table (in the panel), so both columns line up down the
+ * list and one pick moves the whole column.
  *
  * **Both of them are drawn at every width, and the rank is what paid for it.**
  * The second used to wait for @xl, because the row had no room: a fixed rank
@@ -98,10 +93,7 @@ export function Standings({
   selectedId,
   onSelect,
   columns,
-  openPicker,
-  onTogglePicker,
-  onSelectColumn,
-  elevated,
+  onOpenColumn,
 }: {
   teams: LeagueTeamView[];
   outlook: LeagueOutlook | null;
@@ -111,14 +103,8 @@ export function Standings({
   onSelect: (rosterId: number) => void;
   /** The metric key each of the two value columns shows. */
   columns: string[];
-  /** Which picker is open across the whole panel, if any. */
-  openPicker: string | null;
-  /** Toggle a picker by its key (the panel closes any other that was open). */
-  onTogglePicker: (key: string) => void;
-  /** Point value column `slot` at another metric. */
-  onSelectColumn: (slot: number, key: string) => void;
-  /** Lift this half's stacking order while one of its pickers overhangs the rows. */
-  elevated: boolean;
+  /** Open the panel's team-columns editor armed on this column's slot. */
+  onOpenColumn: (slot: number) => void;
 }) {
   // Per-team outlook, so a metric can read any of its totals. Absent (rather than
   // an empty object) when the league has no projections at all, which is what
@@ -151,15 +137,12 @@ export function Standings({
   return (
     // A recessed field: this half is the one being *read*, and the roster plate
     // beside it is the one being acted on — the same raised/recessed pairing the
-    // app bar draws between its tools key and its current-page chip. Nothing may
-    // clip, because a column picker's menu overhangs the rows under it, which is
-    // why the sink is inset shadow (`.lab-trough`) rather than a bordered box
-    // that would want `overflow-hidden` to round its corners.
-    <div
-      className={`lab-trough relative flex min-h-0 flex-col rounded-lg p-1 @lg:p-2 ${
-        elevated ? "z-30" : ""
-      }`}
-    >
+    // app bar draws between its tools key and its current-page chip. The sink is
+    // an inset shadow (`.lab-trough`) rather than a bordered box, which is what
+    // keeps it from wanting an `overflow-hidden` to round its corners with — a
+    // clip is what the column headings' old menus overhung, and the editor they
+    // open instead is in the top layer where nothing here can reach it.
+    <div className="lab-trough flex min-h-0 flex-col rounded-lg p-1 @lg:p-2">
       <div
         className={`grid shrink-0 ${grid} ${inset} items-center gap-x-2 pb-2 pt-1 text-[0.6rem] text-foreground/40 @lg:text-xs`}
       >
@@ -179,7 +162,7 @@ export function Standings({
         </span>
         {outlookByRoster &&
           columns.map((key, slot) => (
-            <ColumnPicker
+            <ColumnHeading
               key={slot}
               // Sentence case below @lg, and the reason is `Optimal`: uppercase
               // and tracked it measures 43.8px at this rail's size, against a
@@ -188,20 +171,15 @@ export function Standings({
               // base-then-variant so no two utilities of one property ever meet
               // on this element.
               className="normal-case tracking-normal @lg:uppercase @lg:tracking-wide"
-              options={TEAM_METRIC_OPTIONS}
-              activeKey={key}
-              open={openPicker === `team-${slot}`}
-              onToggle={() => onTogglePicker(`team-${slot}`)}
-              onSelect={(metricKey) => onSelectColumn(slot, metricKey)}
+              label={(TEAM_METRICS_BY_KEY[key] ?? TEAM_METRICS[0]).label}
+              onOpen={() => onOpenColumn(slot)}
             />
           ))}
       </div>
-      {/* The list is what scrolls, and only the list: the heading above it holds
-          the column pickers, whose menus overhang the rows — inside a scroll
-          box they would be clipped by it and would scroll away from the trigger
-          that opened them, which is the same reason this half sinks with an
-          inset shadow rather than a bordered box that would want a clip of its
-          own. The 2px of bottom padding is the last row's own wall
+      {/* The list is what scrolls, and only the list: the heading above it is
+          what says which metric each column of bare numbers is showing, and it
+          is also the way to change one — a control that scrolls away is one you
+          have to go back for. The 2px of bottom padding is the last row's own wall
           (`.lab-row`'s `0 2px 0`), which a scroll box would otherwise cut off.
 
           The bar rides in a lane of its own rather than over the last value

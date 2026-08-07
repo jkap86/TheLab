@@ -1,10 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
 
 import type { ColumnPreset, Metric } from "../metric-cell.ts";
 import type { SubjectView } from "../subject-view.ts";
+import { useColumnsEditor } from "../use-columns-editor";
 import type { ColumnsEditor as ColumnsEditorComponent } from "./columns-editor";
 import { ListLedge } from "./list-ledge";
 import { MetricHeadings } from "./metric-column";
@@ -140,15 +140,10 @@ export function ColumnsBar<C>({
   onColumns: (keys: readonly string[]) => void;
   onReset: () => void;
 }) {
-  /** Which heading opened the editor, and so which slot it opens armed on. */
-  const [openSlot, setOpenSlot] = useState<number | null>(null);
-  const close = useCallback(() => setOpenSlot(null), []);
-
-  // Latched rather than `openSlot !== null`, so closing doesn't unmount the
-  // dialog inside its own `close` handler — and so the second press is instant,
-  // the chunk already being in memory.
-  const [everOpened, setEverOpened] = useState(false);
-  if (openSlot !== null && !everOpened) setEverOpened(true);
+  // Which heading opened the editor (and so which slot it opens armed on), plus
+  // the latch that keeps the dialog mounted through its own close — see
+  // {@link useColumnsEditor}, which the league detail panel's two tables share.
+  const { openSlot, open, close, mounted } = useColumnsEditor();
 
   // Below `sm` the headings take a line of their own, as the cards' columns do —
   // so the rail sits over the numbers it names at both widths. From `sm` up it
@@ -159,7 +154,7 @@ export function ColumnsBar<C>({
       metrics={metrics}
       columns={columns}
       subject={subject}
-      onOpen={setOpenSlot}
+      onOpen={open}
     />
   ) : undefined;
 
@@ -180,7 +175,7 @@ export function ColumnsBar<C>({
         )}
       </div>
 
-      {everOpened && (
+      {mounted && (
       <ColumnsEditor
         metrics={metrics}
         columns={columns}

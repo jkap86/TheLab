@@ -1107,7 +1107,7 @@ stops holding, a comment saying it does would not have caught it.
     selection can't be owned by two places. Both share views share the key
     `share`, which is the grain rule doing its job — a stored `adp` column simply
     falls back per slot on the leaguemates list, which has no board price.
-- **`ColumnsEditor` is all four slots at once, and it commits live.** The
+- **`ColumnsEditor` is every slot at once, and it commits live.** The
   per-column menus were right for changing one column and wrong for changing the
   board: four slots are rarely four independent choices, so recomposing them was
   four menus and four passes over one flat list with nothing to see until the last
@@ -1120,6 +1120,19 @@ stops holding, a comment saying it does would not have caught it.
   each column will say — so there is nothing to protect from moving, which is why
   the footer says `Done` and not `Apply`. A preview is against one arbitrary
   subject, so the footer names it.
+
+  **How many slots there are is the caller's, which is what lets one dialog serve
+  two tools.** The lists wear four; the league detail panel's standings and roster
+  each wear two, since a table rendering at half a card's width has room for two
+  numbers. Nothing in the dialog counts to four — the wells lay out on the row
+  they are given, and the header spells the count it was handed. The one thing
+  that is *not* generic is the layout: a pair of slots keeps `grid-cols-2` at
+  every width rather than taking four tracks, since two wells with half a row
+  empty beside them read as two columns missing rather than as a table that has
+  two. Both class strings are written out whole, the usual Tailwind rule, and
+  `columns-editor.render.test.ts` pins the pair — a conditional class and a
+  spelled-number table are the category of thing that is invisible in review and
+  only wrong on screen.
 - **It is the *only* way to aim a column, and a heading is what opens it.** The
   rail's per-slot menus and a `Columns` chip beside them were two controls over
   one board, and each was worse than the dialog at the job the other did: the
@@ -1135,6 +1148,29 @@ stops holding, a comment saying it does would not have caught it.
   inside the dialog has to survive, and the seeding is done during render against
   the previous `openSlot`, since an effect would point the panel at the wrong
   column for a frame.
+
+  **The league detail panel was the last place the retired menus survived, and it
+  has them no longer.** Its two tables hung the same flat catalogue under whichever
+  heading was pressed — every argument above, one tool over, and doubly so for a
+  panel a reader arrives at *from* the list this dialog already serves. Both
+  headings open the editor now, one per table, since a team's aggregate and a
+  player's number are two catalogues and two selections. What that retired with
+  them is an apparatus the panel used to own: one-picker-at-a-time, an
+  outside-click listener, an Escape listener, and each half lifting its stacking
+  order over the other so an overhanging menu wasn't painted under it. A
+  `<dialog>` is in the top layer and reports every way out through its own `close`
+  event, so all four are the platform's. **Which is exactly why `LeagueSheet`'s
+  `onClose` had to grow a target test**: React walks its own tree for `close`,
+  which does not bubble in the DOM, so a dialog opened *inside* that sheet took the
+  sheet down with it — the rule the shares sheet already carries, arrived at again
+  by a component two modules away growing a dialog.
+- **`useColumnsEditor` is which heading was pressed plus the latch that keeps the
+  dialog mounted through its own close**, and it is shared because there are three
+  of these now — the lists' rail and the panel's two tables. The latch is the half
+  worth reading twice: the editor is a `dynamic()` import that reports its exit
+  through its own `close` event, so unmounting it the instant the slot clears is
+  unmounting a component inside its own handler. Latched, it also makes the second
+  press instant.
 - **The account is the key to the whole grid: every card is inert until one
   resolves.** Each tool reads that account, so `ToolGrid` passes `disabled={!user}`
   and `ToolLinkCard` renders an `aria-disabled`, dimmed `div` instead of a
@@ -2838,7 +2874,8 @@ stops holding, a comment saying it does would not have caught it.
   takes its own width on top, narrow rather than the platform's 15px because
   `.lab-scroll` thins and tints it. Zeroing that residue too would need the
   heading inside the scroll box, which is where it used to be and cannot go
-  back: its picker menu overhangs the rows and a scroll box would clip it.
+  back: it is the only thing naming a column of bare numbers, and it is the
+  control that aims one.
 - **A heading that shares the name's track is sized against the track, not
   against its sibling headings.** `Starters` at `text-xs` exactly filled that
   track and clipped to `STARTE…`; it takes 0.65rem below `@lg`, the size the
@@ -2849,10 +2886,13 @@ stops holding, a comment saying it does would not have caught it.
 - **`hidden` does not beat a `display` utility that sorts after it.** Tailwind v4
   emits the display utilities in *alphabetical* order, so `.block` loses to
   `.hidden` (which is why the standings *cells* hid correctly) while
-  `.inline-flex`, `.inline` and `.table` all win against it. `ColumnPicker`
-  therefore takes its wrapper's `display` from the caller rather than owning
-  `inline-flex` itself — a shared component that hard-codes one is a component
-  no caller can hide, and the failure is silent in both the class list and the
+  `.inline-flex`, `.inline` and `.table` all win against it. It is the rule
+  behind `ColumnHeading` taking its type treatment from the caller rather than
+  owning it: both rails set sentence case at their narrow tiers, and two
+  `text-transform` utilities on one element are decided by their order in the
+  stylesheet, not in the attribute. The general form — a shared component that
+  hard-codes a property a caller has to override is a component no caller can
+  override it on, and the failure is silent in both the class list and the
   compiler. Source order in the `class` attribute never enters into it.
 - **Every `/manager/[searched]/…` view renders one `ManagerHeader`, and so does
   the lineup checker.** Who is being looked at, the season, the sync state and
@@ -3070,8 +3110,8 @@ stops holding, a comment saying it does would not have caught it.
   scrolling the roster left three numbers on screen with nothing naming whose
   they were; each half's column headings are what say which metric its value
   columns are pointed at, so a list past its own heading is a column of
-  unlabelled numbers — and those headings are the pickers, so the panel's only
-  controls were the first thing to leave. And the two lists are wildly unequal
+  unlabelled numbers — and those headings are what open the columns editor, so
+  the panel's only controls were the first thing to leave. And the two lists are wildly unequal
   (a forty-row roster beside a twelve-team table), which is the case for
   scrolling them separately rather than together: finding a player took the
   standings with him. Four things hold it up:
@@ -3096,13 +3136,17 @@ stops holding, a comment saying it does would not have caught it.
     `1fr` row is `minmax(auto,1fr)`, and that auto minimum is the taller half's
     full height — the row refuses to be smaller than the list it is supposed to be
     scrolling, so the panel overruns the cap with no scrollbar anywhere.
-  - **A picker cannot live inside the box it scrolls.** Its menu is absolutely
-    positioned and overhangs the rows under it, so a scroll box clips it the
-    moment it opens *and* scrolls it away from its own trigger. The standings'
-    heading row was already above its `<ul>`; the roster's were inside each
-    section, drawing the same two labels twice for one shared selection, so they
-    are one `ColumnRail` above the scroll box now — the leagues list's own rule
-    about naming a list-wide selection once above the list.
+  - **A heading cannot live inside the box it scrolls.** It is the only thing
+    naming a column of bare numbers *and* the way to change one, so carried off
+    the top it takes both with it. The standings' heading row was already above
+    its `<ul>`; the roster's were inside each section, drawing the same two labels
+    twice for one shared selection, so they are one `ColumnRail` above the scroll
+    box now — the leagues list's own rule about naming a list-wide selection once
+    above the list. The rule used to rest on a second argument that has since
+    expired — a picker's menu was absolutely positioned, so a scroll box clipped
+    it and scrolled it away from its own trigger — and it is worth knowing the
+    argument outlived the menus: **the reason to hoist a control is that it names
+    what is under it, not that its popup would be clipped.**
   - **What stays fixed is what qualifies the numbers.** The standings' week range
     is a footer outside its scroll box, and the outlook caveat sits outside both;
     the roster's value footnote and draft picks scroll *with* the list, because
@@ -3976,14 +4020,15 @@ stops holding, a comment saying it does would not have caught it.
   with no field to place it in (bench value, the raw points behind a rank) — same
   menu, different cells, because "3rd of 12" and "41,200" are not comparable
   claims. The selection lives in `ManagerLeagues`, not per card, so the columns
-  line up down the list and one picker moves them all — per-card columns would
+  line up down the list and one pick moves them all — per-card columns would
   make the list unreadable vertically, which is the axis it is scanned on. And
   the module keeps the pure-and-tested bar its neighbours `shares` and `filters`
   hold: everything from `./types` arrives as an erased `import type`, so the
   accessors test without a fetch (`league-metrics.test.ts`).
 - **There are five metric catalogues, one per grain, and that is the axis they
-  divide on — not the screen they appear on.** `ColumnPicker` and `MetricColumn`
-  are the shared controls; what differs is what a row *is*:
+  divide on — not the screen they appear on.** `ColumnsEditor` is how every one
+  of them is aimed and `MetricColumn` draws the cards' cells; what differs is what
+  a row *is*:
 
   | Module | Grain | Where |
   | --- | --- | --- |
@@ -4023,6 +4068,21 @@ stops holding, a comment saying it does would not have caught it.
   under `features/` — they format for display, so they belong beside the
   components, and their `./format.ts` import is relative with an explicit
   extension for the usual test-runner reason.
+
+  **All five now speak `Metric<C>` outright, and the two panel catalogues took a
+  small type trick to get there.** They had cell types of their own —
+  `TeamMetricCell`, `PlayerMetricCell` — that were the union's `value` arm minus
+  its tag, so they could not be handed to the editor without an adapter array in
+  between, which is one more definition of the catalogue to drift. Spelling
+  `kind: "value"` on them is the whole fix, since only the tag was missing. The
+  trap is in *how* the narrowing is written: `Metric<C> & { cell: … }` reads
+  right and silently loses it, because an intersection of two `cell` properties
+  makes an overload and a call resolves to the **first** — `Metric`'s, returning
+  the union — so `cell.text` stops compiling in the file the narrow type exists
+  to keep simple. `Omit<Metric<C>, "cell"> & { cell: … }` is the spelling that
+  works. `PlayerMetricCell`'s own `muted`/`short` ride along untouched: extra
+  properties never block assignability to the union arm, and the editor reads
+  neither.
 - **The share catalogue serves two views and is still one grain.** A player share
   and a leaguemate share are the same subject shape — something held across some
   of the manager's leagues — and the only thing a player has that a person does
