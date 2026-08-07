@@ -2654,6 +2654,24 @@ stops holding, a comment saying it does would not have caught it.
   deliberately unequal — a standings row is a lit key and carries its own `px`,
   a roster row carries none — so the plates differ by a step to land both lists
   on a comparable left edge.
+- **The scroll bar is the fifth box across that width, and it is a lane rather
+  than an accident.** Each half scrolls on its own, so each has a bar, and with
+  nothing reserved it painted over the trailing value column — the numbers are
+  right-aligned against the box's own edge, which is exactly where a bar rides.
+  8px of trailing padding on the scroll box is the lane, and **the heading rail
+  above it takes the same 8px**, because the rail is *outside* the box it names
+  and anything the box gives up it has to give up too or a heading and its
+  column disagree about where the column is. Half of the lane is paid for by
+  bleeding the box into the plate's own inset (`-mr-1`), so a row gives up 4px
+  and not 8. It is padding and **not `scrollbar-gutter: stable`**, which is the
+  spelling that looks right and reserves nothing where it matters: a gutter is
+  ignored wherever scrollbars *overlay* content — iOS, and macOS by default —
+  which is the case the bar was covering numbers in, while padding is reserved a
+  second time where they don't. So the overlay case is exact and a classic bar
+  takes its own width on top, narrow rather than the platform's 15px because
+  `.lab-scroll` thins and tints it. Zeroing that residue too would need the
+  heading inside the scroll box, which is where it used to be and cannot go
+  back: its picker menu overhangs the rows and a scroll box would clip it.
 - **A heading that shares the name's track is sized against the track, not
   against its sibling headings.** `Starters` at `text-xs` exactly filled that
   track and clipped to `STARTE…`; it takes 0.65rem below `@lg`, the size the

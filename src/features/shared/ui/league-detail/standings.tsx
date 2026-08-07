@@ -140,8 +140,13 @@ export function Standings({
   const nameSpan = outlookByRoster ? "col-span-3" : "col-span-1";
 
   // The rail sits on the rows' own inset, or a heading lands a pixel or two off
-  // the number under it and the table reads as misaligned.
-  const inset = "px-1 @sm:px-1.5 @lg:px-3";
+  // the number under it and the table reads as misaligned. Its *trailing* side
+  // carries the scroll lane on top of that inset — 4px, which is what is left of
+  // the list's 8px lane once the list has bled the other 4 back into the
+  // trough's own padding (see the `<ul>`). Written as `pl`/`pr` rather than a
+  // `px` with a `pr` after it: two utilities of one property are decided by
+  // their order in the stylesheet, not in the attribute.
+  const inset = "pl-1 pr-2 @sm:pl-1.5 @sm:pr-2.5 @lg:pl-3 @lg:pr-4";
 
   return (
     // A recessed field: this half is the one being *read*, and the roster plate
@@ -197,8 +202,15 @@ export function Standings({
           that opened them, which is the same reason this half sinks with an
           inset shadow rather than a bordered box that would want a clip of its
           own. The 2px of bottom padding is the last row's own wall
-          (`.lab-row`'s `0 2px 0`), which a scroll box would otherwise cut off. */}
-      <ul className="flex min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain pb-0.5">
+          (`.lab-row`'s `0 2px 0`), which a scroll box would otherwise cut off.
+
+          The bar rides in a lane of its own rather than over the last value
+          column — 8px of trailing padding, half of it paid for by bleeding into
+          the trough's own inset, so a row gives up 4px and not 8. See
+          `.lab-scroll` for why the lane is padding and not
+          `scrollbar-gutter`, and the heading rail above for the 4px it gives up
+          to stay over the same column. */}
+      <ul className="lab-scroll -mr-1 flex min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain pb-0.5 pr-2">
         {teams.map((team, i) => (
           <StandingsRow
             key={team.roster_id}
