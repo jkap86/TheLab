@@ -3,7 +3,14 @@ import { describe, test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { CardLedge, LeagueCard, OPEN, REST } from "./league-card.tsx";
+import {
+  CardLedge,
+  LeagueCard,
+  OPEN,
+  OPEN_BOX,
+  REST,
+  SCROLL_OFFSET,
+} from "./league-card.tsx";
 
 /**
  * The card without a DOM — the trade card's own test, for the card that shares
@@ -212,5 +219,55 @@ describe("where the stat columns land", () => {
     // the face's left edge in both states — which is why the row's `left-3.5` is
     // written once rather than carried by REST/OPEN.
     assert.match(card(), new RegExp(`left-${PLATE_INSET / 4} top-0`));
+  });
+});
+
+describe("where an open card pins", () => {
+  /**
+   * The chrome an open card has to clear, in the order it is stacked: the app
+   * bar, then the manager plate pinned under it. The plate's term is published at
+   * runtime (`usePinnedHeight`) because its height is whatever its scope line and
+   * its filter row wrap to at the width being read — there is no constant to
+   * assert against, which is exactly why the three places that *name* it have to
+   * be asserted against each other.
+   *
+   * Three class strings carry it and none of them can be checked by a type: the
+   * card sticks at this offset, the open-scroll aims at it, and the cap subtracts
+   * it from the screen. Each failure is silent and different — a `top` short of
+   * it puts the card's head under the plate, a `scroll-mt` short of it scrolls to
+   * a position the card then refuses to hold, and a cap missing a term hangs the
+   * panel's last rows off the bottom of the screen.
+   */
+  const CHROME = ["var(--site-header-h)", "var(--manager-header-h)"];
+
+  /** The body of one arbitrary value, e.g. `top-[…]` → what is in the brackets. */
+  const arbitrary = (classes: string, prefix: string): string =>
+    classes.match(new RegExp(`(?:^| )${prefix}-\\[([^\\]]+)\\]`))?.[1] ?? "";
+
+  test("it sticks at exactly the offset it was scrolled to", () => {
+    // Aimed at one position and holding another is a card that lands where it
+    // was asked to and then jumps a plate's height the moment the reader
+    // scrolls.
+    const top = arbitrary(OPEN_BOX, "top");
+    assert.equal(top, arbitrary(SCROLL_OFFSET, "scroll-mt"));
+    assert.equal(top, `calc(${CHROME.join("+")})`);
+  });
+
+  test("the cap subtracts every term the offset adds", () => {
+    // The two are one subtraction: whatever the card is pushed down by is
+    // whatever the screen has less of for it.
+    const cap = arbitrary(OPEN_BOX, "max-h");
+    assert.match(cap, /^calc\(100svh/);
+    for (const term of CHROME) {
+      assert.ok(cap.includes(`-${term}`), `the cap does not subtract ${term}`);
+    }
+  });
+
+  test("it stays under the pinned plate rather than over it", () => {
+    // The plate is `z-40` and its own search panel floats down over this card,
+    // so a card that outranked it would paint over both. What keeps the *other*
+    // cards from painting over this one is that they carry no `z` at all.
+    assert.match(OPEN_BOX, /(?:^| )z-20(?: |$)/);
+    assert.doesNotMatch(card(), /z-[234]0/);
   });
 });

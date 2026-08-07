@@ -107,20 +107,34 @@ export type ManagerHeaderProps = {
    * that scrolls away halfway down a hundred-row list leaves the numbers under it
    * unlabelled. Sitting here it needs no offset of its own — measuring this
    * card's height to pin a sibling beneath it is the machinery not writing it
-   * here avoids. It is outside the plate because it belongs to neither: it is
+   * here avoids. (That measurement does exist now, in
+   * {@link usePinnedHeight}, and the exception is narrow: it is for a *row of the
+   * list* that pins under this card, which cannot ride inside it. Anything that
+   * belongs with the card still comes here.) It is outside the plate because it
+   * belongs to neither: it is
    * the list's own header, and it is laid out to line up with the rows rather
    * than with anything on this card.
    */
   columns?: ReactNode;
   /**
-   * Whether the card holds the top of the screen. It normally does — that is the
-   * whole argument on {@link ManagerHeader} — and the leagues tab lowers it while
-   * a league is expanded: an open panel is capped at the viewport and given the
-   * screen, so a card pinned over it would be spending a quarter of the one thing
-   * being read on facts about the account. Unpinning is a change of `position`
-   * and nothing else, because a sticky element occupies its normal flow space
-   * either way, so the plate stays exactly where it is and simply stops following
-   * the scroll.
+   * Whether the card's opaque paint fades out below itself rather than ending.
+   * It normally does — the argument is on {@link ManagerHeader} — and it costs
+   * nothing, because what is under those 64px is the page's own background with
+   * the list scrolling through it.
+   *
+   * A page lowers it while a row below has pinned an *opaque* surface flush
+   * against this card: an expanded league card does exactly that, and there the
+   * fade has nothing to blend into and 64px of near-solid background lands on the
+   * card's own head — washing out the league's name and the stat columns at the
+   * top of the one thing being read. So it is drawn against the page and dropped
+   * against a part.
+   *
+   * It is a prop rather than something this card works out because the card can
+   * see nothing below itself; only the page knows whether one of its rows has
+   * taken the screen. It replaced a `pinned` prop that answered the same question
+   * for a bigger consequence — the card used to let go of the top entirely while
+   * a league was open, which took both filter rows and the heading rail off
+   * screen with it.
    */
-  pinned?: boolean;
+  fade?: boolean;
 };

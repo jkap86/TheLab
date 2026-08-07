@@ -28,8 +28,11 @@ import { PicktrackerSearch } from "./picktracker-search";
 export function PicktrackerHome() {
   const router = useRouter();
   const user = useStoredAccount();
-  // Null until an account is stored, which is the hook's idle state — no fetch.
-  const { leagues, loading, error } = useUserLeagues(user?.user_id ?? null);
+  // By name rather than by id: the manager tool files this route's answer under
+  // the name searched in its URL, so asking the same way is what makes this the
+  // same cache entry rather than a second one holding the identical list. Null
+  // until an account is stored, which is the hook's idle state — no fetch.
+  const { leagues, loading, error } = useUserLeagues(user?.username ?? null);
 
   const openLeague = (leagueId: string) => {
     router.push(`/picktracker/${encodeURIComponent(leagueId)}`);
