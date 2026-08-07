@@ -1330,8 +1330,9 @@ stops holding, a comment saying it does would not have caught it.
   the list, which is not a setting at all; behind a press both were invisible, so
   the ledge had to carry a summary line restating them, and **the summary was
   doing the work of the control it was hiding**. On the page they state
-  themselves — a lit key, a date field — and the ledge's own `Filters` trigger,
-  its badge, its `dynamic()` split and half its summary line all went with the
+  themselves — an instrument naming its circle, a pinned date key — and the
+  ledge's own `Filters` trigger, its badge, its `dynamic()` split and half its
+  summary line all went with the
   panel. What is left of the summary is `season · league rules · the bays`, and
   the bullet on `tradeFilterSummary` is why: a line beside a control must not
   restate what the control already says, which is the league detail panel's
@@ -1369,7 +1370,35 @@ stops holding, a comment saying it does would not have caught it.
   you play in was made by people you play against, and everyone you play against
   shares a league with you, so `mine ⊆ leaguemates ⊆ leaguemate-leagues` and
   independent switches would only ever offer the widest one ticked. What varies is
-  how far out the circle is drawn. Five things hold it up:
+  how far out the circle is drawn.
+
+  **So the control is a stepper, and the nesting is what makes it one.** It was
+  four keys of equal weight, which is the shape a set of unrelated answers takes
+  — in an order (widest, then narrowest, then two middles) no reading of the row
+  could decode, wrapping to two lines on a phone, three of them inert without an
+  account and each carrying the same sentence saying so. `‹` and `›` are the two
+  presses the question actually has, over a `.lab-readout` naming the circle with
+  four pips for where along the radius the board is standing. Four things hold it
+  up, and the first is why the table moved: **`TRADE_CIRCLES` is in radius order,
+  narrowest first**, since the stepper walks it and the pips count along it —
+  there is nowhere in a stepper to hide an arbitrary order. **`stepCircle` owns
+  both bounds**, the ends of the ladder *and* the account, because a stepper asks
+  "can I move" where a key per circle asked "is this one allowed"; it answers null
+  rather than clamping, so a key with nowhere to go is drawn inert rather than
+  re-selecting what is already showing. **The instrument is a fixed width from
+  `sm`**, not a share of its row — beside the sentence it sits next to, whose
+  `sm:basis-auto sm:flex-1` resolves to `flex: 1 1 auto` (Tailwind emits
+  `basis-auto` after `flex-1`), a share made the readout resize with *that
+  sentence's* length and `LEAGUEMATE TRADES` came out as `LEAGU…`. And **the
+  sentence under it now always speaks**: the four keys printed each circle's full
+  name, so a note repeating the selected one was a restatement and went quiet on
+  the widest; a readout has room for the name and not for what the name means,
+  which is the half that separates the two leaguemate readings. What it costs is
+  up to three presses to reach a named circle where four keys were always one —
+  the trade the mockups (`docs/mockups/trades-scope-and-seek.html`) were drawn to
+  price, and the one that was chosen.
+
+  Five things hold the circle itself up:
   - **It crosses the wire unresolved, where every other filter sends its answer.**
     The league rules go the other way round — the browser already holds the
     season's leagues for the dialog's counts, so it evaluates them and sends ids —
@@ -1454,6 +1483,38 @@ stops holding, a comment saying it does would not have caught it.
     mount. A reader still looking at the controls is already at the top, and
     pulling the page to hide the control they just pressed is worse than not
     moving; a board arriving is not a reader travelling.
+
+  **And because it is a position, it is pinned rather than filed with the
+  settings** (`SeekKey`). It was a labelled date field on the controls row — the
+  right seat for something chosen once and then read, and the wrong one for the
+  one control here worth reaching for *while reading*, which is exactly when that
+  block is three screens up. It is the ADP block's material at 34px, held under
+  the app bar at the board's trailing edge, opening onto the same native input
+  and the same way back. Four things hold it up:
+  - **The sticky wrapper is the page's, not the key's.** A sticky element travels
+    only as far as its own parent's box, so seated inside the header it would
+    scroll away with it; it is a sibling of the header in `TradesHome`'s
+    fragment, which makes its parent `PageShell`'s `<main>` — the box that spans
+    the list. `h-0` so the flow below is untouched, `pointer-events-none` on the
+    wrapper with the key taking them back (a zero-height box across the column
+    would otherwise swallow presses meant for the cards), and `z-30` under the
+    bar's `z-50`, since a floating part must never cover the way home.
+  - **What it costs is coverage**, and there is no version of a pinned part that
+    doesn't pay it: it covers the top-right of whatever is under it, which on this
+    board is one card's instant ledge — a plate at the same corner, so the two
+    read as stacked rather than as one part. That is why it is a 34px key rather
+    than the labelled field it replaced, and the cost is transient: the card
+    carrying that ledge is whichever one the scroll has put under the key.
+  - **Its date rides the bottom edge on a nameplate** — the trade card's own
+    device. An icon alone says a control exists; the plate says the board begins
+    at June 30, which is the difference between a pinned control and a pinned
+    control that tells the truth about a travelled board. No bound draws no plate
+    and no glow: a plate reading "today" would put a bound on screen that the
+    query string deliberately does not carry.
+  - **`w-fit` on that wrapper is load-bearing**, because the plate is centred on
+    it (`left-1/2`) and a block-level flex container fills its parent — so in any
+    caller that isn't itself a flex row the plate would centre on the whole column
+    and float off to the right of the key.
 - **The board is filtered in SQL and paginated, and it used to stream the whole
   season — this is the largest performance decision in the app, and it is worth
   reading as a correction of the one before it.** The old design was a sound

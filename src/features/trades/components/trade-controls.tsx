@@ -10,31 +10,38 @@ import {
   DEFAULT_TRADE_FILTERS,
   TRADE_CIRCLES,
   activeTradeFilterCount,
+  circleIndex,
+  stepCircle,
   tradeFilterSummary,
 } from "../filters";
-import type { TradeCircle, TradeFilters, TradeNames, TradeSeek } from "../filters";
+import type { TradeCircle, TradeFilters, TradeNames } from "../filters";
 
 /**
  * The trades board's own controls, seated on the page: where the reader is
- * standing, and where in the board they are standing.
+ * standing, and what the board came out as.
  *
  * **It replaces a ledge that expanded onto a panel, and the panel is gone
- * rather than moved.** That control put the two things it holds behind a press,
- * on the reasoning that a scope and a window are chosen once and then read — an
- * argument that is right about *reading* them and wrong about the press. The
- * scope is the page's single most consequential narrowing (it is the difference
- * between the whole crawled market and one account's corner of it) and the seek
- * is a place in the list, which is not a setting at all; both were invisible
- * until opened, so the ledge had to carry a summary line restating them, and the
- * summary was doing the work of the control it was hiding. On the page they
- * state themselves — a lit key and a date field — and the summary drops to the
- * one thing still behind a press.
+ * rather than moved.** That control put the scope behind a press, on the
+ * reasoning that a scope is chosen once and then read — an argument that is
+ * right about *reading* it and wrong about the press. The scope is the page's
+ * single most consequential narrowing (it is the difference between the whole
+ * crawled market and one account's corner of it), and it was invisible until
+ * opened, so the ledge had to carry a summary line restating it — the summary
+ * doing the work of the control it was hiding.
+ *
+ * **The seek left this block too, and in the other direction.** It was a labelled
+ * date field on the row below the scope, which is the right seat for a setting
+ * and the wrong one for a *position*: the board is a hundred thousand rows deep
+ * and the one moment a reader wants to travel is the moment this block is three
+ * screens up. It is a pinned key over the board now ({@link SeekKey}), rendered
+ * by `TradesHome` — so what is left here is genuinely only the two things chosen
+ * once and then read.
  *
  * Two rows, and the split is what each row is *for* rather than a way to fit:
  *
- * - **The controls that moved out lead**, because between them they say what
- *   board this is. Nothing about the list can be read without knowing which
- *   population it came from.
+ * - **The scope leads**, because it says what board this is. Nothing about the
+ *   list can be read without knowing which population it came from. From `sm`
+ *   the sentence explaining the circle shares that row rather than taking one.
  * - **What the board came out as follows** — the scope in words, the count, and
  *   the two triggers the page keeps behind a press (its value column and the
  *   league rules). This is the old ledge's row with its own trigger removed.
@@ -42,8 +49,8 @@ import type { TradeCircle, TradeFilters, TradeNames, TradeSeek } from "../filter
  * The whole thing sits inside the element the virtualizer watches, so a row
  * wrapping at a narrow width moves the list down the page and the list is told.
  * Nothing here expands, which is what retired the `dynamic()` the ledge needed:
- * what is left is four keys, a date input and two lines of prose, and a split
- * costs more than it saves at that size.
+ * what is left is one stepper and two lines of prose, and a split costs more
+ * than it saves at that size.
  */
 export function TradeControls({
   filters,
@@ -52,7 +59,6 @@ export function TradeControls({
   season,
   account,
   names,
-  today,
   trailing,
 }: {
   filters: TradeFilters;
@@ -68,17 +74,14 @@ export function TradeControls({
    * ids of its own, so the page's own lookups come in.
    */
   names: TradeNames;
-  /** Today where the reader is, `YYYY-MM-DD` — see {@link SeekField}. */
-  today: string;
   /** The page's own controls, seated on the summary row. */
   trailing?: React.ReactNode;
 }) {
-  // The caption under the scope keys is what says *why* they are inert without
-  // an account, so the keys point at it rather than leaving the sentence beside
-  // them and unrelated.
+  // The sentence under the instrument is what says *why* a step key is inert
+  // without an account, so the keys point at it rather than leaving the
+  // explanation beside them and unrelated.
   const circleNoteId = useId();
   const active = activeTradeFilterCount(filters);
-  const note = circleNote(filters.circle, account);
   const selection = tradeFilterSummary(filters, names);
 
   return (
@@ -86,60 +89,30 @@ export function TradeControls({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* The population, leading, because it is the widest claim on the page:
             every other control here narrows within whatever this leaves. */}
-        <div
-          role="group"
-          aria-label="Scope"
-          className="flex flex-wrap items-center gap-1.5"
+        <CircleAperture
+          circle={filters.circle}
+          hasAccount={account !== null}
+          describedBy={circleNoteId}
+          onChange={(circle) => onChange({ ...filters, circle })}
+        />
+
+        {/* What the circle means, in one line. It takes a line of its own below
+            `sm` and shares the instrument's row above it — the same shape the
+            summary row below uses, and for the same reason: on a phone a
+            sentence beside a control is two truncated things rather than one
+            legible one.
+
+            Unlike the four keys this replaced, it is never silent. Those keys
+            printed the circle's full name, so a note under them repeated it;
+            the readout has room for the name and not for what the name means,
+            which is exactly the half a sentence is for. */}
+        <p
+          id={circleNoteId}
+          className="order-last min-w-0 basis-full text-xs text-foreground/45 sm:order-none sm:basis-auto sm:flex-1"
         >
-          {TRADE_CIRCLES.map((option) => (
-            <Key
-              key={option.value}
-              selected={filters.circle === option.value}
-              // Every circle but the widest is drawn around an account, so
-              // without one there is nothing to draw. Disabled rather than
-              // absent: what it takes to switch it on is a sentence, and hiding
-              // the control hides the sentence too — which is also why it is
-              // `aria-disabled`, so the key stays reachable and carries the
-              // sentence with it.
-              disabled={option.value !== "all" && account === null}
-              describedBy={circleNoteId}
-              onClick={() => onChange({ ...filters, circle: option.value })}
-            >
-              {option.label}
-            </Key>
-          ))}
-        </div>
-
-        {/* A cut rather than air, because this row wraps: spacing does not
-            survive a wrap, and the two groups are different questions — which
-            trades are on this board, and where in it to start reading. The
-            manager tool's subject rail parts its own groups the same way. */}
-        <span
-          aria-hidden="true"
-          className="hidden h-3.5 w-px shrink-0 bg-[rgba(0,0,0,0.5)] shadow-[1px_0_0_rgba(255,255,255,0.09)] sm:block"
-        />
-
-        <SeekField
-          value={filters.seek}
-          today={today}
-          onChange={(seek) => onChange({ ...filters, seek })}
-        />
-      </div>
-
-      {/* One caption for the group rather than a note under each key: the labels
-          alone don't separate the two leaguemate readings — one is about who was
-          dealing, the other about where the deal happened — and four notes at
-          this width is a paragraph where the row should be.
-
-          Drawn only when it says something the keys don't. With an account and
-          the widest circle there is nothing left to explain, and a line
-          permanently reading "the whole crawled market" under a lit key spelling
-          "Every league" is the restatement this whole change is about. */}
-      {note !== null && (
-        <p id={circleNoteId} className="text-xs text-foreground/45">
-          {note}
+          {circleNote(filters.circle, account)}
         </p>
-      )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* What the board came out as, in words. It takes a line of its own
@@ -169,123 +142,152 @@ export function TradeControls({
 }
 
 /**
- * Where in the board to start reading: one date, defaulting to today.
+ * How far out to draw the circle: a readout with a step either side.
  *
- * **It is a position, not a window, and every decision here follows from that.**
- * The board is a keyset walk newest-first, so a date is a place to resume it and
- * everything older stays below — which is why there is one field where there
- * were two, no preset table, and nothing to leave half-filled. The page scrolls
- * the list back to its top when this moves, which is what makes it read as
- * travelling to the date rather than as slicing the board at it.
+ * **The circles are a radius, and this is the control that says so.** They nest
+ * — `mine ⊆ leaguemates ⊆ leaguemate-leagues ⊆ all` — so what a reader is
+ * choosing is not one of four unrelated answers but *how far out* to draw one
+ * circle. Four keys of equal weight said the opposite, in an order (widest,
+ * then narrowest, then two middles) that no reading of the row could decode;
+ * `‹` and `›` are the two presses the question actually has, and the four pips
+ * are where along it you are standing.
  *
- * Three details are load-bearing:
+ * Four decisions in it:
  *
- * - **It shows today while holding null.** The default is "the newest trades",
- *   which is not a date — but an empty date field says nothing and invites a
- *   press to find out, where today's date says exactly where the board is.
- *   `tradeSeekBounds` folds the two together so neither spelling costs a second
- *   cache entry.
- * - **Picking today, or clearing the field, is the way back.** A reader who
- *   travelled back has the newest trades one press away without reaching for
- *   `Clear`, which would take their circle and their search with it.
- * - **`max` is today**, because there is nothing to seek to in the future and a
- *   calendar that opens on a month with no trades in it is a dead end.
+ * - **It is an instrument, not a field.** The accent rail is the manager
+ *   plate's mark for "a readout follows" and the name is engraved into a
+ *   `.lab-readout` cut rather than lit on a face — the raised/recessed grammar
+ *   the rest of the app keeps, where what you press is raised (the two step
+ *   keys) and what you read is sunk.
+ * - **It cannot wrap at any width.** One row of a fixed height, which is the
+ *   property the four keys did not have: at 390px they took two lines, and the
+ *   block above a windowed list is height charged to every card on screen.
+ * - **A step with nowhere to go is drawn inert rather than hidden**, and it is
+ *   `aria-disabled` rather than `disabled` — the reason a key is dead is a
+ *   sentence printed under it, and `disabled` takes the key out of the tab order
+ *   and that sentence out of reach with it. This is the same call the four keys
+ *   made for the same reason.
+ * - **The name is a live region.** The step keys are labelled "narrower" and
+ *   "wider", which is what they *do* and not what the board became — so the one
+ *   thing a press changes has to announce itself, or the control is only legible
+ *   to someone who can see the readout.
  *
- * A native input, so the platform's calendar, its keyboard entry and its locale
- * spelling all come free — the same call the two date fields it replaces made.
+ * What it costs is spelled out where the decision was made: up to three presses
+ * to reach a named circle, where four keys were always one. The trade is that
+ * the four keys were also always four keys, in an arbitrary order, wrapping.
  */
-function SeekField({
-  value,
-  today,
+function CircleAperture({
+  circle,
+  hasAccount,
+  describedBy,
   onChange,
 }: {
-  value: TradeSeek;
-  /** Today where the reader is — passed in rather than read from the clock, so this renders the same on every re-render of the day. */
-  today: string;
-  onChange: (seek: TradeSeek) => void;
+  circle: TradeCircle;
+  /** Every circle but the widest is drawn around an account — see {@link stepCircle}. */
+  hasAccount: boolean;
+  /** The sentence saying what this circle is, and why a step may be inert. */
+  describedBy: string;
+  onChange: (circle: TradeCircle) => void;
 }) {
-  const labelId = useId();
+  const at = circleIndex(circle);
+  const label = TRADE_CIRCLES[at].label;
+
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <span
-        id={labelId}
-        className="text-[10px] font-bold uppercase tracking-[0.16em] text-foreground/40"
+    <div
+      role="group"
+      aria-label="Scope"
+      // **A fixed width from `sm`, not a share of the row**, and the difference
+      // is the whole legibility of the part. As `flex-1` beside the sentence it
+      // sat next to, the readout resized with *that sentence's* length —
+      // `LEAGUEMATE TRADES` came out as `LEAGU…` under the longest note and full
+      // width under the shortest, so the one thing the instrument exists to say
+      // was the first thing to go. (Tailwind emits `basis-auto` after `flex-1`,
+      // so the sentence's `sm:basis-auto sm:flex-1` is `flex: 1 1 auto` —
+      // content-sized *and* growing, which takes the slack from anything else
+      // sharing the row.) 19rem holds the longest circle name at this face
+      // without truncating; the sentence takes whatever is left.
+      //
+      // Below `sm` it is the row's whole width, which is the same rule read the
+      // other way: down there the sentence is on a line of its own, so there is
+      // no slack to share and every pixel is the readout's.
+      className="flex w-full items-center gap-2 sm:w-[19rem] sm:flex-none"
+    >
+      <StepKey
+        to={stepCircle(circle, -1, hasAccount)}
+        label="Narrow the scope"
+        describedBy={describedBy}
+        onChange={onChange}
       >
-        Jump to
-      </span>
-      <input
-        type="date"
-        aria-labelledby={labelId}
-        value={value ?? today}
-        max={today}
-        onChange={(event) => {
-          const picked = event.target.value;
-          // An emptied field and today are both "the newest trades" — see the
-          // note above. Anything past today would bound nothing anyway, so it
-          // is folded here rather than left for the resolver to discover.
-          onChange(!picked || picked >= today ? null : picked);
-        }}
-        className="rounded-lg border border-foreground/10 bg-foreground/[0.04] px-2.5 py-1.5 text-xs outline-none transition-colors focus:border-active/45"
-      />
-      {value !== null && (
-        <button
-          type="button"
-          onClick={() => onChange(null)}
-          className="lab-chip lab-chip-sm shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold text-foreground/75"
+        ‹
+      </StepKey>
+
+      <span className="lab-readout flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1.5 pl-2 pr-2.5">
+        {/* Flush to the readout's leading edge and stretched to its height: it
+            is the side of the part catching the light, the same rail the ADP
+            block wears, rather than a stripe drawn on the face. */}
+        <span
+          aria-hidden
+          className="lab-billet-rail w-[2.5px] flex-none self-stretch rounded-[2px]"
+        />
+        <span
+          // The only thing a press changes, and the step keys' own labels
+          // cannot say it — so it says itself.
+          aria-live="polite"
+          className="lab-engraved min-w-0 flex-1 truncate font-display text-[11.5px] font-semibold uppercase tracking-[0.03em] text-foreground/90"
         >
-          Today
-        </button>
-      )}
+          {label}
+        </span>
+        <Pips at={at} />
+      </span>
+
+      <StepKey
+        to={stepCircle(circle, 1, hasAccount)}
+        label="Widen the scope"
+        describedBy={describedBy}
+        onChange={onChange}
+      >
+        ›
+      </StepKey>
     </div>
   );
 }
 
 /**
- * A segment key on the controls row — `.lab-chip-sm`, the app's thinner press.
+ * One notch in or out — or the inert spelling of it, where `to` is null.
  *
- * Thinner than the page's own triggers for the reason the league filters'
- * quick-adds are: a key that sets one value among four is a lesser press than a
- * key that opens a dialog, and a row of full-thickness parts here would read as
- * competing with the two beside them.
+ * Flat and unlit when there is nowhere to go: the app bar's rule held to at this
+ * size, that a part which does nothing when pressed must not look pressable, so
+ * it loses its wall rather than only dimming its glyph.
  */
-function Key({
-  selected,
-  disabled = false,
+function StepKey({
+  to,
+  label,
   describedBy,
-  onClick,
+  onChange,
   children,
 }: {
-  selected: boolean;
-  disabled?: boolean;
-  /** The note saying why this key is inert, where it is. */
-  describedBy?: string;
-  onClick: () => void;
+  /** Where this key goes, or null when the ladder ends here. */
+  to: TradeCircle | null;
+  label: string;
+  describedBy: string;
+  onChange: (circle: TradeCircle) => void;
   children: React.ReactNode;
 }) {
+  const dead = to === null;
   return (
     <button
       type="button"
-      aria-pressed={selected}
-      // `aria-disabled`, not `disabled`. The reason these are inert is a
-      // sentence printed under them, and `disabled` takes the key out of the tab
-      // order and the sentence out of reach with it — a filter nobody can find
-      // is one nobody knows they could have, which is the argument that kept the
-      // keys visible in the first place.
-      aria-disabled={disabled || undefined}
-      aria-describedby={disabled ? describedBy : undefined}
+      aria-label={label}
+      aria-disabled={dead || undefined}
+      aria-describedby={dead ? describedBy : undefined}
       onClick={() => {
-        if (disabled) return;
-        onClick();
+        if (to === null) return;
+        onChange(to);
       }}
-      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-        selected
-          ? "lab-chip-on lab-chip-sm"
-          : disabled
-            ? // Flat and unlit, the app bar's rule held to at this size: a part
-              // that does nothing when pressed must not look pressable, so it
-              // loses its wall rather than only dimming its text.
-              "cursor-not-allowed rounded-full text-foreground/25"
-            : "lab-chip lab-chip-sm text-foreground/75"
+      className={`grid h-[30px] w-[26px] flex-none place-items-center rounded-lg text-[13px] leading-none ${
+        dead
+          ? "cursor-not-allowed text-foreground/25"
+          : "lab-chip lab-chip-sm text-foreground/75"
       }`}
     >
       {children}
@@ -294,24 +296,53 @@ function Key({
 }
 
 /**
- * What the scope keys mean, in one line that follows the selection — or null
- * where the keys have already said it.
+ * Where along the radius the board is standing, as four dots.
  *
- * Two things it says that the keys cannot. Which of the two leaguemate circles
- * is which — who was *dealing* against where the deal *happened* — and, once one
- * is chosen, *whose* circle it is: the account is stored on the device and may
- * not be the one the reader has in mind.
- *
- * With an account and the widest circle it says neither, so it says nothing.
- * Without one it always speaks, because that is the sentence the inert keys
- * point at.
+ * Decorative and `aria-hidden`: it says the same thing as the readout beside it
+ * and the position within the ladder, both of which are already announced. What
+ * it adds for a reader who can see it is that there *is* an ordering — which is
+ * the whole complaint against the keys this control replaced.
  */
-function circleNote(circle: TradeCircle, account: UserInfo | null): string | null {
+function Pips({ at }: { at: number }) {
+  return (
+    <span aria-hidden className="flex flex-none items-center gap-1">
+      {TRADE_CIRCLES.map((option, index) => (
+        <span
+          key={option.value}
+          className={`block h-[5px] w-[5px] rounded-full ${
+            index === at
+              ? "bg-active shadow-[0_0_6px_rgba(0,255,229,0.85)]"
+              : "bg-foreground/20"
+          }`}
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * What the scope instrument is showing, in one line.
+ *
+ * **It always speaks**, which is the change the readout forced. The four keys it
+ * replaced printed each circle's full name, so a note repeating the selected one
+ * was the restatement a control on the page exists to retire — hence the old
+ * `circle === "all" → null`. A readout has room for the name and not for what
+ * the name means, and the two leaguemate readings are indistinguishable by name
+ * alone: who was *dealing* against where the deal *happened*.
+ *
+ * Two things it says that the instrument cannot. What this circle is, and — once
+ * one is chosen — *whose* it is: the account is stored on the device and may not
+ * be the one the reader has in mind.
+ *
+ * Without an account the sentence carries the way out, because that is what the
+ * inert step keys point at. It leads with the circle either way, so the line
+ * describes the board in front of the reader before it asks anything of them.
+ */
+function circleNote(circle: TradeCircle, account: UserInfo | null): string {
+  const { note } = TRADE_CIRCLES.find((c) => c.value === circle)!;
   if (account === null) {
-    return "Look your Sleeper account up on the tools page to filter by your own leagues and leaguemates.";
+    return `${note} Look your Sleeper account up on the tools page to narrow to your own leagues and leaguemates.`;
   }
-  if (circle === "all") return null;
-  const who = `@${account.display_name || account.username}`;
-  const note = TRADE_CIRCLES.find((c) => c.value === circle)!.note;
-  return `${note} Drawn around ${who}.`;
+  if (circle === "all") return note;
+  return `${note} Drawn around @${account.display_name || account.username}.`;
 }
