@@ -4,27 +4,19 @@ import { describe, test } from "node:test";
 import { PICK_TOKEN_SQL } from "../../shared/trades/sql.ts";
 import {
   DEFAULT_TRADE_FILTERS,
-  DEFAULT_TRADE_RANGE,
+  DEFAULT_TRADE_SEEK,
   EMPTY_SIDE,
   TRADE_CIRCLES,
-  TRADE_RANGE_PRESETS,
   activeTradeFilterCount,
   pickLabel,
   pickToken,
   setSideManager,
   swapSides,
   toggleSideAsset,
-  tradeCircleSummary,
   tradeFilterSummary,
-  tradeRangeBounds,
-  tradeRangeLabel,
+  tradeSeekBounds,
 } from "./filters.ts";
-import type {
-  TradeFilters,
-  TradeNames,
-  TradeRange,
-  TradeSideFilter,
-} from "./filters.ts";
+import type { TradeFilters, TradeNames, TradeSideFilter } from "./filters.ts";
 
 const filters = (over: Partial<TradeFilters> = {}): TradeFilters => ({
   ...DEFAULT_TRADE_FILTERS,
@@ -50,121 +42,84 @@ const NAMES: TradeNames = {
 /** An unbounded window — both halves open. */
 const OPEN = { from: null, to: null };
 
-describe("tradeRangeBounds", () => {
-  test("a relative preset counts back from today and leaves the end open", () => {
-    const bounds = tradeRangeBounds(
-      { preset: "7d", from: null, to: null },
-      "2026-07-31",
-    );
-    // Seven days *including* today, so the window opens on the 25th.
-    assert.equal(bounds.from, Date.parse("2026-07-25T00:00:00"));
-    assert.equal(bounds.to, null);
-  });
-
-  test("all time bounds nothing", () => {
-    assert.deepEqual(
-      tradeRangeBounds({ preset: "all", from: null, to: null }, "2026-07-31"),
-      OPEN,
-    );
-  });
-
-  test("a custom end includes the named day whole", () => {
-    const bounds = tradeRangeBounds(
-      { preset: "custom", from: "2026-06-01", to: "2026-06-30" },
-      "2026-07-31",
-    );
-    assert.equal(bounds.from, Date.parse("2026-06-01T00:00:00"));
+describe("tradeSeekBounds", () => {
+  test("a seek bounds only the far end, so everything older stays on the board", () => {
+    // The board reads newest-first, so a position in it is an upper bound and
+    // nothing else — which is what makes the date a place to scroll *from*
+    // rather than a slice to look at.
+    const bounds = tradeSeekBounds("2026-06-30", "2026-07-31");
+    assert.equal(bounds.from, null);
     // Exclusive at the next midnight — a trade at 23:59 on the 30th is in.
     assert.equal(bounds.to, Date.parse("2026-07-01T00:00:00"));
   });
 
-  test("a custom range with one open end stays open on that side", () => {
-    const bounds = tradeRangeBounds(
-      { preset: "custom", from: "2026-06-01", to: null },
-      "2026-07-31",
-    );
-    assert.equal(bounds.to, null);
+  test("no seek is the whole board, from its newest trade back", () => {
+    assert.deepEqual(tradeSeekBounds(null, "2026-07-31"), OPEN);
   });
 
-  test("a custom range with neither end set bounds nothing", () => {
-    // What the two date inputs read as before either is filled — an unbounded
-    // window rather than a window of zero width.
-    assert.deepEqual(
-      tradeRangeBounds({ preset: "custom", ...OPEN }, "2026-07-31"),
-      OPEN,
-    );
+  test("today bounds nothing, so it is the same board as no seek at all", () => {
+    // No trade completes in the future, so the two are one answer — and the
+    // control opens showing today while holding null, which only works because
+    // picking today explicitly resolves back to the identical bounds rather than
+    // to a second cache entry.
+    assert.deepEqual(tradeSeekBounds("2026-07-31", "2026-07-31"), OPEN);
   });
 
-  test("an unparseable start reads as an open end, never as NaN", () => {
-    // `NaN` as a bound compares false against every trade, which would empty the
-    // board with nothing on screen to say why — so the guard reads it as "not
-    // set". The control is a native date input and only ever emits `""` or a
-    // real date, so this is the belt behind the braces rather than a live path.
-    assert.deepEqual(
-      tradeRangeBounds({ preset: "custom", from: "not a date", to: null }, "2026-07-31"),
-      OPEN,
-    );
+  test("a date past today bounds nothing either", () => {
+    // Unreachable through the control, which caps its own `max` at today — this
+    // is the belt behind that, since a stale bookmark or a clock rolling over
+    // between renders can produce one.
+    assert.deepEqual(tradeSeekBounds("2027-01-01", "2026-07-31"), OPEN);
   });
 
-  test("each relative preset is longer than the one before it", () => {
-    // They are one scale, so a reader stepping out through them widens the
-    // board every time — the day counts are off by one from their names on
-    // purpose (seven days *including* today), which is easy to fix into a bug.
-    const today = "2026-07-31";
-    const from = (preset: TradeRange["preset"]) =>
-      tradeRangeBounds({ preset, ...OPEN }, today).from!;
-    assert.ok(from("7d") > from("30d"));
-    assert.ok(from("30d") > from("90d"));
-    assert.equal(tradeRangeBounds({ preset: "all", ...OPEN }, today).from, null);
+  test("an unparseable date reads as an unpositioned board, never as an empty one", () => {
+    // `NaN` as a bound compares false against every trade, which would clear the
+    // list with nothing on screen to say why. The shift is also what would throw
+    // on an unreadable date, so the parse has to come first.
+    assert.deepEqual(tradeSeekBounds("2026-13-45", "2026-12-31"), OPEN);
+    assert.deepEqual(tradeSeekBounds("not a date", "2026-07-31"), OPEN);
   });
 
-  test("the default window is the whole market", () => {
-    // The page opens unnarrowed, which is what makes the circle the thing that
-    // narrows it back to a reader's own leagues.
-    assert.equal(DEFAULT_TRADE_RANGE.preset, "all");
-    assert.deepEqual(tradeRangeBounds(DEFAULT_TRADE_RANGE, "2026-07-31"), OPEN);
-  });
-});
-
-describe("tradeRangeLabel", () => {
-  test("a preset keeps its name, so it stays true as time passes", () => {
-    assert.equal(tradeRangeLabel({ preset: "7d", ...OPEN }), "Last 7 days");
-    assert.equal(tradeRangeLabel({ preset: "all", ...OPEN }), "All time");
+  test("an earlier seek reaches further back than a later one", () => {
+    const to = (seek: string) => tradeSeekBounds(seek, "2026-07-31").to!;
+    assert.ok(to("2026-05-01") < to("2026-06-01"));
+    assert.ok(to("2026-06-01") < to("2026-07-30"));
   });
 
-  test("every offered preset has a name to be read by", () => {
-    // The lookup is a `find(...)!`, so a preset added to the type and not to the
-    // table is a crash on the trigger rather than a compiler error.
-    for (const { value } of TRADE_RANGE_PRESETS) {
-      assert.equal(typeof tradeRangeLabel({ preset: value, ...OPEN }), "string");
-    }
-  });
-
-  test("a custom window spells out the ends it has", () => {
+  test("the seek crosses a month end without rolling the day", () => {
+    // The bound is the *next* day's midnight, and the shift is what has to know
+    // that June has thirty of them.
     assert.equal(
-      tradeRangeLabel({ preset: "custom", from: "2026-06-01", to: "2026-06-30" }),
-      "2026-06-01 – 2026-06-30",
+      tradeSeekBounds("2026-06-30", "2026-07-31").to,
+      Date.parse("2026-07-01T00:00:00"),
     );
     assert.equal(
-      tradeRangeLabel({ preset: "custom", from: "2026-06-01", to: null }),
-      "Since 2026-06-01",
-    );
-    assert.equal(
-      tradeRangeLabel({ preset: "custom", from: null, to: "2026-06-30" }),
-      "Through 2026-06-30",
+      tradeSeekBounds("2026-02-28", "2026-07-31").to,
+      Date.parse("2026-03-01T00:00:00"),
     );
   });
 
-  test("a custom window with neither end says what it does, not 'Custom'", () => {
-    // It narrows nothing, and the summary line beside it is read mid-sentence —
-    // "custom" there would name the control rather than the board.
-    assert.equal(tradeRangeLabel({ preset: "custom", ...OPEN }), "All time");
+  test("the board opens at its newest trades", () => {
+    // The page opens unnarrowed and unpositioned, which is what makes the circle
+    // the thing that narrows it back to a reader's own leagues.
+    assert.equal(DEFAULT_TRADE_SEEK, null);
+    assert.equal(DEFAULT_TRADE_FILTERS.seek, null);
+    assert.deepEqual(tradeSeekBounds(DEFAULT_TRADE_SEEK, "2026-07-31"), OPEN);
   });
 });
 
 describe("tradeFilterSummary", () => {
-  test("names the window alone when nothing is selected", () => {
-    assert.equal(tradeFilterSummary(DEFAULT_TRADE_FILTERS, NAMES), "all time");
+  test("says nothing at all when neither bay does", () => {
+    // Null rather than a phrase, so the scope line it is joined into doesn't
+    // carry a separator with nothing after it — and so what it *used* to lead
+    // with can't creep back: the window and the circle are keys on the page now,
+    // and a line restating a lit control is what this stopped doing.
+    assert.equal(tradeFilterSummary(DEFAULT_TRADE_FILTERS, NAMES), null);
+    assert.equal(tradeFilterSummary(filters({ circle: "mine" }), NAMES), null);
+    assert.equal(
+      tradeFilterSummary(filters({ seek: "2026-06-30" }), NAMES),
+      null,
+    );
   });
 
   test("reads the bays out rather than counting them", () => {
@@ -173,12 +128,11 @@ describe("tradeFilterSummary", () => {
     assert.equal(
       tradeFilterSummary(
         filters({
-          range: { preset: "30d", from: null, to: null },
           sides: [side({ manager: "u1" }), side({ players: ["p1"] })],
         }),
         NAMES,
       ),
-      "last 30 days · jkap gave Malik Nabers",
+      "jkap gave Malik Nabers",
     );
   });
 
@@ -193,7 +147,7 @@ describe("tradeFilterSummary", () => {
         }),
         NAMES,
       ),
-      "all time · jkap got Malik Nabers · DarksideEmperors got 2027 1st",
+      "jkap got Malik Nabers · DarksideEmperors got 2027 1st",
     );
   });
 
@@ -205,7 +159,7 @@ describe("tradeFilterSummary", () => {
         }),
         NAMES,
       ),
-      "all time · one side got Malik Nabers · the other side got 2027 1st",
+      "one side got Malik Nabers · the other side got 2027 1st",
     );
   });
 
@@ -213,14 +167,14 @@ describe("tradeFilterSummary", () => {
     // Naming the bays here would be describing sides that hold nothing.
     assert.equal(
       tradeFilterSummary(filters({ sides: [side({ manager: "u1" }), EMPTY_SIDE] }), NAMES),
-      "all time · jkap traded",
+      "jkap traded",
     );
     assert.equal(
       tradeFilterSummary(
         filters({ sides: [side({ manager: "u1" }), side({ manager: "u2" })] }),
         NAMES,
       ),
-      "all time · jkap traded with DarksideEmperors",
+      "jkap traded with DarksideEmperors",
     );
   });
 
@@ -228,9 +182,9 @@ describe("tradeFilterSummary", () => {
     const both = filters({
       sides: [side({ players: ["p1"], picks: ["2027-1"] }), EMPTY_SIDE],
     });
-    assert.match(tradeFilterSummary(both, NAMES), /Malik Nabers and 2027 1st/);
+    assert.match(tradeFilterSummary(both, NAMES)!, /Malik Nabers and 2027 1st/);
     assert.match(
-      tradeFilterSummary({ ...both, match: "any" }, NAMES),
+      tradeFilterSummary({ ...both, match: "any" }, NAMES)!,
       /Malik Nabers or 2027 1st/,
     );
   });
@@ -239,7 +193,7 @@ describe("tradeFilterSummary", () => {
     // The board's maps only carry what its loaded pages named, and a summary
     // reading "1 player" beside a bay drawing a name was the old shape's tell.
     assert.match(
-      tradeFilterSummary(filters({ sides: [side({ players: ["p9"] }), EMPTY_SIDE] }), NAMES),
+      tradeFilterSummary(filters({ sides: [side({ players: ["p9"] }), EMPTY_SIDE] }), NAMES)!,
       /p9/,
     );
   });
@@ -280,17 +234,26 @@ describe("the side mutations", () => {
 });
 
 describe("activeTradeFilterCount", () => {
-  test("counts each thing named and a bounded window as one", () => {
+  test("counts each thing named and a seek as one", () => {
     assert.equal(activeTradeFilterCount(DEFAULT_TRADE_FILTERS), 0);
     assert.equal(
       activeTradeFilterCount(
         filters({
-          range: { preset: "30d", from: null, to: null },
+          seek: "2026-06-30",
           sides: [side({ manager: "u1", players: ["a", "b"] }), EMPTY_SIDE],
         }),
       ),
       4,
     );
+  });
+
+  test("a seek counts, and the newest board is none", () => {
+    // It is a position rather than a filter, but everything newer than the date
+    // is off the board while it is set — and `Clear` is drawn against this
+    // count, so a seek that didn't reach it would leave a reader who travelled
+    // back in April with no one control that puts them at the top again.
+    assert.equal(activeTradeFilterCount(filters({ seek: null })), 0);
+    assert.equal(activeTradeFilterCount(filters({ seek: "2026-06-30" })), 1);
   });
 
   test("a named manager counts wherever the bay is", () => {
@@ -305,9 +268,10 @@ describe("activeTradeFilterCount", () => {
   });
 
   test("a circle is one narrowing, and the widest one is none", () => {
-    // The trigger's badge is the only thing outside the panel that says a
-    // circle is on, so a circle that didn't reach this count would be a board
-    // narrowed to one account with nothing on screen admitting it.
+    // The keys are on the page and say for themselves which circle is on; what
+    // this count decides is whether `Clear` is drawn, so a circle that didn't
+    // reach it would be a board narrowed to one account with no way back to the
+    // whole market but pressing the widest key by hand.
     assert.equal(activeTradeFilterCount(filters({ circle: "all" })), 0);
     assert.equal(activeTradeFilterCount(filters({ circle: "mine" })), 1);
     assert.equal(
@@ -323,14 +287,15 @@ describe("activeTradeFilterCount", () => {
 });
 
 describe("the circles", () => {
-  test("every circle is named, in words that read mid-sentence", () => {
-    // The page's scope line is `season · circle · league rules · trade
-    // filters`, so a missing summary would read as a stray separator rather
-    // than as a filter with no name.
+  test("every circle carries the sentence its key cannot say", () => {
+    // The keys print `label` and that is all a key has room for; `note` is what
+    // separates the two leaguemate readings — who was *dealing* against where
+    // the deal *happened* — and the caption under the keys reads it out of a
+    // `find(...)!`, so a circle added to the type and not to this table is a
+    // crash on the control rather than a compiler error.
     for (const circle of TRADE_CIRCLES) {
-      const summary = tradeCircleSummary(circle.value);
-      assert.ok(summary.length > 0, circle.value);
-      assert.equal(summary, summary.toLowerCase(), circle.value);
+      assert.ok(circle.label.length > 0, circle.value);
+      assert.ok(circle.note.length > 0, circle.value);
     }
   });
 

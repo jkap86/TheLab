@@ -119,7 +119,7 @@ export function tradesBoardQuery(request: TradeRequest, key: string) {
  *   windows it.
  * - **`keepPreviousData` holds the last board while the next one lands.** That
  *   is what makes the filters committing live affordable: without it every press
- *   in the ledge is a new key with nothing in it, so the whole list is replaced
+ *   on the controls is a new key with nothing in it, so the whole list is replaced
  *   by the loading flask and back again — which is exactly the flash `useAdp`
  *   and the four manager hooks refuse for the same reason. Pagination is gated
  *   on it below, since asking a board that is on its way out for another page

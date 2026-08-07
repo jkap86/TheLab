@@ -25,7 +25,7 @@ export const tradesQueryKeys = {
   /** The season's leagues — the league rules' input, and every card's name. */
   leagues: (season: string) => ["trades", "leagues", season] as const,
   /**
-   * The filter ledge's menus, keyed on the league scope and window *without* the
+   * The search panel's menus, keyed on the league scope and window *without* the
    * selection — pressing a checkbox cannot change them, so a key that moved with
    * the selection would re-run a season-wide aggregate for an unchanged answer.
    */
