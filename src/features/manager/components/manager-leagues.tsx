@@ -31,11 +31,11 @@ import { LeaguesViewLayout } from "./leagues-view-layout";
  * and KTC chips those cards wear.
  *
  * Which league is open lives here rather than in the card, because opening one
- * is a claim about the whole page: the card is pulled to the top of the screen
- * and capped at it, and the manager plate above lets go of the top so the panel
- * has the screen to itself. Two cards making that claim at once is two things
- * each asking to be the one being read, so opening a league closes the one
- * before it.
+ * is a claim about the whole page: the card is pulled up under the pinned header
+ * and capped at what is left of the screen, so the panel scrolls inside itself
+ * rather than running the list several screens down. Two cards making that claim
+ * at once is two things each asking to be the one being read, so opening a league
+ * closes the one before it.
  */
 export function ManagerLeagues({ searched }: { searched: string }) {
   const view = useFilteredLeagues(searched);
@@ -103,10 +103,13 @@ export function ManagerLeagues({ searched }: { searched: string }) {
         value: showing,
         sub: showing === total ? undefined : `of ${total} total`,
       }}
-      // The header lets go of the top while a league is open — the open card is
-      // sized to the screen, and a plate pinned over it would be taking a
-      // quarter of the panel to restate facts about the account.
-      pinned={open === null}
+      // The header keeps the top through an open league — the filters, the
+      // subject rail and the heading rail all ride in it, and losing them at the
+      // moment a reader goes a level deeper is what the plate letting go used to
+      // cost. What it does give up is the fade below itself: an open card pins
+      // flush against the plate, so those 64px of near-solid background land on
+      // the card's own head rather than on the page.
+      fade={open === null}
       columns={
         <ColumnsBar
           view={view}
