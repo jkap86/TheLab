@@ -122,6 +122,10 @@ export function sideContext(
     leagueId,
     pickSlots: lookups.pickSlots,
     teams: pricing.teams,
+    adp: pricing.adp,
+    adpBoard: pricing.adpBoard,
+    adpPool: pricing.adpPool,
+    steepness: pricing.steepness,
   };
 }
 

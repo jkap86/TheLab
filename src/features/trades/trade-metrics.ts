@@ -1,11 +1,18 @@
 import { ktcPickPrice, pickTier } from "../../shared/ktc/picks.ts";
 import type { KtcPickMatch, KtcPickTier } from "../../shared/ktc/picks.ts";
 import { ktcBoardValue } from "../../shared/ktc/roster.ts";
+import { adpValue } from "../../shared/manager/adp-value.ts";
 import { pickSlotKey } from "../../shared/trades/pick-slots.ts";
 import { ordinal } from "../shared/format.ts";
 import type { Metric } from "../shared/metric-cell.ts";
 import type { TradeBundle } from "./exchange.ts";
-import type { KtcValue, TradePickAsset } from "./types";
+import type {
+  AdpBoardStats,
+  AdpBoardType,
+  AdpPlayerPayload,
+  KtcValue,
+  TradePickAsset,
+} from "./types";
 
 /**
  * The metrics a trade card's value column can show, and how to read one off one
@@ -31,10 +38,10 @@ import type { KtcValue, TradePickAsset } from "./types";
  * this catalogue has no per-asset form — a count of players is 1 on every line,
  * which is a column of ones.
  *
- * Pure and free of runtime imports beyond {@link ktcBoardValue} — which arrives
- * relatively with an explicit `.ts` extension, the way the league filters reach
- * the same file — so the numbers are tested without a fetch behind them, the bar
- * its four sibling catalogues hold.
+ * Pure and free of runtime imports beyond {@link ktcBoardValue} and
+ * {@link adpValue} — both arriving relatively with an explicit `.ts` extension,
+ * the way the league filters reach the same files — so the numbers are tested
+ * without a fetch behind them, the bar its four sibling catalogues hold.
  */
 
 /** What a trade metric reads from: one side's haul, priced on its league's board. */
@@ -75,6 +82,35 @@ export type TradeSideContext = {
    * place.
    */
   teams: number | null;
+  /**
+   * Player id → his row on the ADP board **the panel is showing**, carrying the
+   * redraft and dynasty markets side by side the way `/api/adp` answers them. A
+   * player that board didn't average — past its tail, or taken in too few of its
+   * drafts to have a number worth trusting — is absent rather than zero, which
+   * is what lets a haul say how much of itself it managed to price.
+   */
+  adp: Record<string, AdpPlayerPayload>;
+  /**
+   * Which of those two markets this trade's league plays in, read from its own
+   * `settings.type`. The same shape as `superflex` above and there for the same
+   * reason: this board spans every crawled league, and a dynasty roster priced
+   * off redraft drafts is a different claim at every line — a rookie is a first-
+   * round asset in one market and undrafted in the other.
+   */
+  adpBoard: AdpBoardType;
+  /**
+   * The startable pool the value curve is anchored to: this league's teams times
+   * its starting slots. Anchoring to the pool rather than to a pick count is
+   * what makes a late first worth the same in a 10- and a 14-team league, and it
+   * is why this is a fact about the league rather than about the board.
+   */
+  adpPool: number;
+  /**
+   * How many times value halves across that pool — the panel's own slider, so
+   * flattening the curve reprices every card on the page rather than only the
+   * drawer's preview column.
+   */
+  steepness: number;
 };
 
 /**
@@ -159,25 +195,140 @@ function boardName(superflex: boolean): string {
 }
 
 /**
+ * One player's row on the market his league plays in, or null where the panel's
+ * board has no average for him.
+ *
+ * Two different absences arrive here as one null and that is deliberate: a
+ * player past the board's tail and one taken in fewer drafts than `min_picks`
+ * are both "this board has no number for him", and the cell says exactly that.
+ * What it must never do is read the *other* market's row as a stand-in — the
+ * whole reason `/api/adp` answers both is that they are two different games.
+ */
+function adpStats(ctx: TradeSideContext, id: string): AdpBoardStats | null {
+  return ctx.adp[id]?.[ctx.adpBoard] ?? null;
+}
+
+/** That row as draft capital, under the panel's own pool and curve. */
+function adpPlayerValue(ctx: TradeSideContext, id: string): number | null {
+  const stats = adpStats(ctx, id);
+  return stats === null ? null : adpValue(stats.adp, ctx.adpPool, ctx.steepness);
+}
+
+/** `dynasty` / `redraft`, for the hovers that have to name the market. */
+function marketName(board: AdpBoardType): string {
+  return board === "dynasty" ? "dynasty" : "redraft";
+}
+
+/**
+ * What an ADP average rests on, for the per-line hover: the spread it was taken
+ * over and how many of that market's drafts stood behind it. The same "state the
+ * population" habit `/api/adp` is required to keep wherever its number surfaces
+ * — there is no ADP endpoint, so every one of these is an average of the drafts
+ * this app happens to have crawled.
+ */
+function adpSampleTitle(stats: AdpBoardStats, board: AdpBoardType): string {
+  return `ADP ${stats.adp.toFixed(1)} on the ${marketName(board)} board · picks ${
+    stats.min_pick
+  }–${stats.max_pick} over ${stats.picks} draft${stats.picks === 1 ? "" : "s"}`;
+}
+
+/**
  * Every metric a trade card's value column can show, in the order the picker
  * lists them: what the haul is worth, then what it is made of.
  *
- * The KTC entry leads because it is the question the column was added for, and
- * it is the one that can decline to answer: KTC prices ~500 dynasty skill
- * players and a few dozen pick rows, so a haul of a kicker and a 2032 4th is off
- * the board entirely. That reads as an em dash rather than as zero, and a
- * partly-priced haul says so in its hover — the same habit as the league card's
- * `priced` of `rostered`.
+ * **ADP leads, and it is what a card opens on** — the column used to be KTC's
+ * dynasty board and now reads the board the ADP panel in the app bar is
+ * showing. The panel was already on this page and narrowed nothing on it: a
+ * reader could cut the market to 2024 startups, or to 10-team half-PPR drafts,
+ * and every card under it went on quoting one national dynasty board. That is
+ * the same two-answers-to-one-question the manager tool's `adp-value` was built
+ * to close, arriving on the page whose whole premise is that it spans leagues
+ * playing different games. So the season, the window, the draft kind, the size
+ * and the format all reach these numbers, and so does the value curve — the
+ * drawer's slider reprices the board rather than only its own preview column.
  *
- * **Picks are part of that total now, and the change is larger than it looks.**
- * The column used to price the players in a haul and print "draft picks aren't
- * on KTC's board" beside the rest, which was true of the player board and false
- * of the one KTC publishes — it prices picks by third of the round, and the sync
- * has always stored those rows. On a board where a first is routinely the whole
- * trade, a total covering only the players was answering a different question
- * from the one the column asks.
+ * The two value metrics decline to answer in **different places**, which is the
+ * reason KTC stays in the picker rather than being deleted with the default:
+ *
+ * - **ADP prices players and has no opinion on picks.** It is an average of
+ *   crawled draft positions, so a draft pick is not a row on it — a 2028 1st
+ *   gets no cell rather than an em dash, the standing FAAB has on both.
+ * - **KTC prices both**, players off its ~500-deep dynasty board and picks off
+ *   its `RDP` rows, but only ever as *dynasty* and only ever nationally.
+ *
+ * Neither total is the other's units, which is why they are two columns and
+ * never one blended number: KTC's board is a trade calculator's, ADP's is a
+ * curve over draft position anchored to a league's own startable pool. A haul
+ * summing one player's KTC price and one pick's ADP would be a scale this app
+ * nowhere claims exists.
+ *
+ * A partly-priced haul says so in its hover either way — the same habit as the
+ * league card's `priced` of `rostered`, and the reason a total is never a zero
+ * standing in for an absence.
  */
 export const TRADE_METRICS: TradeMetric[] = [
+  {
+    key: "adp",
+    group: "Value",
+    label: "ADP",
+    cell: (ctx) => {
+      const { received, adpBoard } = ctx;
+      let total = 0;
+      let priced = 0;
+
+      for (const id of received.players) {
+        const value = adpPlayerValue(ctx, id);
+        if (value === null) continue;
+        total += value;
+        priced += 1;
+      }
+
+      // Players only, which is what makes the denominator honest — see the
+      // `asset` reader below for why a pick is not counted as an asset this
+      // board declined to price.
+      const of = received.players.length;
+      const market = marketName(adpBoard);
+      return {
+        kind: "value",
+        // Zero priced players is not a value of zero, the rule the whole
+        // catalogue rests on: it is a haul these drafts have nothing to say
+        // about.
+        text: priced > 0 ? total.toLocaleString() : null,
+        title:
+          priced > 0
+            ? `Draft capital from crawled ${market} ADP · ${priced} of ${of} player${
+                of === 1 ? "" : "s"
+              } priced`
+            : of === 0
+              ? // A picks-and-FAAB haul. Saying the board holds no picks is more
+                // use than "nothing priced", which reads as a gap in a board
+                // these assets were never on.
+                "ADP prices drafted players; this side received none"
+              : `No player in this haul appears on the ${market} ADP board`,
+      };
+    },
+    // Per line, on the same board the total was summed on. **Only a player gets
+    // a cell**, and picks join FAAB in returning null rather than an em dash:
+    // ADP is a board of drafted players, so a pick is a category it was never
+    // on, where an unpriced *player* is a genuine gap in a board he could have
+    // been on. Same distinction the KTC reader draws between an unpriced pick
+    // and FAAB, one asset kind further along.
+    asset: (ctx, asset) => {
+      if (asset.kind !== "player") return null;
+
+      const stats = adpStats(ctx, asset.id);
+      if (stats === null) {
+        return {
+          text: null,
+          title: `Not on the ${marketName(ctx.adpBoard)} ADP board`,
+        };
+      }
+      return {
+        text: adpValue(stats.adp, ctx.adpPool, ctx.steepness).toLocaleString(),
+        title: adpSampleTitle(stats, ctx.adpBoard),
+      };
+    },
+  },
   {
     key: "ktc",
     group: "Value",
@@ -314,5 +465,13 @@ export const TRADE_METRICS: TradeMetric[] = [
   },
 ];
 
-/** The column a trade card opens with — the value the others are context for. */
-export const DEFAULT_TRADE_COLUMNS: readonly string[] = ["ktc"];
+/**
+ * The column a trade card opens with — the value the others are context for.
+ *
+ * It was `ktc`. A stored selection naming a metric this build still holds wins
+ * over a default, so a reader who has explicitly picked KTC keeps it, and
+ * everyone who never touched the picker gets the board their panel is set to.
+ * That is `resolveColumns` behaving exactly as designed, and it is why moving
+ * the default is the whole of the migration.
+ */
+export const DEFAULT_TRADE_COLUMNS: readonly string[] = ["adp"];

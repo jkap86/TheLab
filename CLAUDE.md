@@ -1578,6 +1578,47 @@ stops holding, a comment saying it does would not have caught it.
     the manager tool's heading rail: that works because every card puts its
     numbers at one x, where a trade's value belongs to a *side* and the sides
     stack or split by width and count, so the number wears its own label.
+  - **That column opens on ADP now, read off the board the panel in the app bar
+    is showing** (`TRADE_METRICS`'s `adp` entry, `DEFAULT_TRADE_COLUMNS`). The
+    drawer was already seated here and narrowed *nothing* on the page: a reader
+    could cut the market to 2024 startups, or to 10-team half-PPR drafts, or
+    flatten the value curve, and every card under it went on quoting one
+    national dynasty board — the same two-answers-to-one-question that moved the
+    manager tool's team value onto `adpValueQueryString`, arriving on the page
+    whose whole premise is that it spans leagues playing different games. So the
+    season, the window, the draft kind, the size, the format *and* the steepness
+    reach these numbers, and the panel's slider reprices the board rather than
+    only its own preview column. Four things hold it up:
+    - **Which market a card reads is the league's, not the reader's**, the same
+      split `adpBoardFor` draws: `/api/adp` answers redraft and dynasty side by
+      side, and `leagueAdpBoard` picks the half the league actually plays in —
+      a rookie is a first-round asset in one and undrafted in the other. That
+      predicate had been spelled three times before this (`DYNASTY_BOARD_SQL`,
+      `getLeagueTypes`, `seedFromLeague`) and is now one function the two client
+      readers share. An unanswered league is redraft, the broader market, on the
+      same terms an unsynced lineup falls to KTC's 1QB board.
+    - **The curve is anchored to the league's own startable pool**
+      (`leagueAdpPool` off `total_rosters` and `roster_positions`), which is what
+      makes a late first worth the same in a 10- and a 14-team league. The team
+      count needs a fallback of its own where the league list hasn't answered:
+      `adpValue` floors a pool of zero at one pick, so every player but the 1.01
+      would round to nothing — a card of zeroes rather than a shortfall a reader
+      can see.
+    - **The board is fetched whether or not the drawer is open**, unlike the
+      manager tool's Leagues and Leaguemates tabs — the value column is on
+      screen either way, which is the Players tab's own rule. It costs nothing
+      extra when the drawer *is* opened: both consumers share one query key.
+    - **KTC stays in the picker, because the two decline in different places.**
+      ADP is an average of drafted players, so a draft pick is a category it was
+      never on — a pick gets no cell rather than an em dash, the standing FAAB
+      has on both — where KTC prices players *and* picks, but only ever as
+      dynasty and only ever nationally. Neither total is the other's units, so
+      they are two columns and never one blended number: a haul summing a
+      player's KTC price and a pick's ADP would claim a scale this app nowhere
+      says exists. Moving `DEFAULT_TRADE_COLUMNS` is the whole of the migration
+      — `resolveColumns` keeps a selection that still names a live metric, so a
+      reader who explicitly picked KTC keeps it and everyone else gets the board
+      their own panel is set to.
   - **Those numbers are on the display face and cut into what they sit on**
     (`.lab-engraved`, `.lab-engraved-faint`). The page's subject used to be the
     quietest type on its own card: the league name was Orbitron at 13px tracked,

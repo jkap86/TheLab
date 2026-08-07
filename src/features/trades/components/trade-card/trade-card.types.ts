@@ -2,6 +2,8 @@ import type { ManagerLeague } from "@/shared/manager";
 
 import type { TradeMetric } from "../../trade-metrics";
 import type {
+  AdpBoardType,
+  AdpPlayerPayload,
   KtcValue,
   PlayerSummary,
   Trade,
@@ -50,19 +52,31 @@ export type TradeCardLookups = {
 };
 
 /**
- * What a haul is priced against: the chosen column, KTC's two boards, and the
- * league facts that decide how they are read.
+ * What a haul is priced against: the chosen column, the two boards behind the
+ * value metrics, and the league facts that decide how each is read.
  *
- * `superflex` and `teams` are derived once from the league at the top of the
- * card rather than re-derived per side, and they are on this bundle rather than
- * the lookups because both exist only to be read *by the metric* — see
- * {@link sideContext}, which is the one place they are assembled into the shape
- * a metric takes.
+ * `superflex`, `teams`, `adpBoard` and `adpPool` are derived once from the
+ * league at the top of the card rather than re-derived per side, and they are on
+ * this bundle rather than the lookups because all four exist only to be read *by
+ * the metric* — see {@link sideContext}, which is the one place they are
+ * assembled into the shape a metric takes.
  */
 export type TradeCardPricing = {
   /** The value column every side wears, chosen once for the whole list. */
   metric: TradeMetric;
   ktc: Record<string, KtcValue>;
+  /**
+   * The ADP panel's board, keyed by player id — both league-type markets per
+   * row, since this list spans leagues that play different ones. Empty until
+   * `/api/adp` answers, which reads as an unpriced haul for that moment.
+   */
+  adp: Record<string, AdpPlayerPayload>;
+  /** Which of those markets this trade's league is in — see `leagueAdpBoard`. */
+  adpBoard: AdpBoardType;
+  /** Teams × starting slots, the pool the ADP value curve is anchored to. */
+  adpPool: number;
+  /** Halvings across that pool — the panel's own slider, list-wide. */
+  steepness: number;
   /**
    * KTC's rookie-pick rows for the picks on this page, keyed by season, round
    * and tier. Which row a pick reads is resolved from the slots in
@@ -87,13 +101,14 @@ export type TradeCardPricing = {
 /**
  * What a trade card is given.
  *
- * Unchanged from before this folder existed: the list renders forty thousand of
- * these and passes the props flat, so the card takes them flat and bundles them
- * for its own parts. Every field is one of the two bundles above spelled out —
- * `players`, `managers` and `pickSlots` are {@link TradeCardLookups}, and
- * `metric`, `ktc` and `pickKtc` are the stored half of {@link TradeCardPricing},
- * whose other two fields the card derives from `league`. What each one is for is
- * documented there rather than twice.
+ * Unchanged in shape from before this folder existed: the list renders forty
+ * thousand of these and passes the props flat, so the card takes them flat and
+ * bundles them for its own parts. Every field is one of the two bundles above
+ * spelled out — `players`, `managers` and `pickSlots` are
+ * {@link TradeCardLookups}, and `metric`, `ktc`, `pickKtc`, `adp` and
+ * `steepness` are the stored half of {@link TradeCardPricing}, whose other four
+ * fields the card derives from `league`. What each one is for is documented
+ * there rather than twice.
  */
 export type TradeCardProps = {
   trade: Trade;
@@ -109,6 +124,8 @@ export type TradeCardProps = {
   metric: TradeMetric;
   ktc: Record<string, KtcValue>;
   pickKtc: Record<string, KtcValue>;
+  adp: Record<string, AdpPlayerPayload>;
+  steepness: number;
   pickSlots: Record<string, number>;
   /**
    * Open this trade's league — its standings and rosters, over the board.

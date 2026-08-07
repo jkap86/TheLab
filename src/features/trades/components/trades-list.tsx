@@ -6,7 +6,13 @@ import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import type { ManagerLeague } from "@/shared/manager";
 
 import type { TradeMetric } from "../trade-metrics";
-import type { KtcValue, PlayerSummary, Trade, TradeManager } from "../types";
+import type {
+  AdpPlayerPayload,
+  KtcValue,
+  PlayerSummary,
+  Trade,
+  TradeManager,
+} from "../types";
 import { TradeCard } from "./trade-card";
 
 /**
@@ -82,6 +88,8 @@ export function TradesList({
   metric,
   ktc,
   pickKtc,
+  adp,
+  steepness,
   pickSlots,
   headerRef,
   hasMore,
@@ -98,6 +106,15 @@ export function TradesList({
   ktc: Record<string, KtcValue>;
   /** KTC's pick rows, keyed by season, round and tier — see `ktcPickKey`. */
   pickKtc: Record<string, KtcValue>;
+  /**
+   * The ADP panel's board by player id, both markets per row. Unlike the two
+   * above it this is not enriched onto a page of trades — it is the whole board
+   * the drawer in the app bar describes, so it changes when the *panel* moves
+   * and not when the list does.
+   */
+  adp: Record<string, AdpPlayerPayload>;
+  /** The panel's value curve, in halvings across a league's startable pool. */
+  steepness: number;
   /** Draft slots for the picks whose league has set an order, keyed per pick. */
   pickSlots: Record<string, number>;
   /**
@@ -230,6 +247,8 @@ export function TradesList({
               metric={metric}
               ktc={ktc}
               pickKtc={pickKtc}
+              adp={adp}
+              steepness={steepness}
               pickSlots={pickSlots}
               onOpenLeague={onOpenLeague}
             />

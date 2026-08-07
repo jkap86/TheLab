@@ -30,7 +30,7 @@ import { useTrades } from "../hooks/use-trades";
 import type { Verdict } from "../incremental";
 import { DEFAULT_TRADE_COLUMNS, TRADE_METRICS } from "../trade-metrics";
 import { resolveLeagueScope, tradeQueryKey } from "../trade-query";
-import type { Trade } from "../types";
+import type { AdpPlayerPayload, Trade } from "../types";
 import type { OpenLeague } from "./league-sheet";
 import { TradeFiltersLedge } from "./trade-filters-ledge";
 import { TradeSearch } from "./trade-search";
@@ -201,8 +201,25 @@ export function TradesHome({ season }: { season: string }) {
     () => adpQueryString(adpControls, todayIso()),
     [adpControls],
   );
-  const board = useAdp(adpQuery, { enabled: boardOpen });
+  // **Not gated on the drawer being open**, unlike the manager tool's Leagues
+  // and Leaguemates tabs: the cards' value column reads this board, so it is on
+  // screen either way — the same rule the Players tab follows for its own ADP
+  // column. A closed drawer costs nothing extra, since both consumers share one
+  // query key and one entry.
+  const board = useAdp(adpQuery);
   const density = useAdpDensity(boardOpen);
+
+  // The board by player id, which is how a card asks about one. Memoised on the
+  // payload rather than rebuilt per render, because every windowed card takes it
+  // as a prop and `TradeCard` is memoised on prop identity — a fresh object here
+  // would re-render all ~26 of them at both ends of every scroll gesture.
+  const adpByPlayer = useMemo(() => {
+    const rows = board.data?.players;
+    if (!rows) return EMPTY_MAP;
+    const byId: Record<string, AdpPlayerPayload> = {};
+    for (const row of rows) byId[row.player_id] = row;
+    return byId;
+  }, [board.data]);
 
   // The one thing on this page that asks who is reading it, and it asks softly:
   // without an account the circle filter is inert and everything else is exactly
@@ -463,6 +480,8 @@ export function TradesHome({ season }: { season: string }) {
             metric={metric}
             ktc={ktc}
             pickKtc={pickKtc}
+            adp={adpByPlayer}
+            steepness={adpControls.steepness}
             pickSlots={pickSlots}
             headerRef={headerRef}
             hasMore={hasMore}

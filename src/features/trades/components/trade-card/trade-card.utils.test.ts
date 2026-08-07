@@ -54,6 +54,10 @@ const context = (over: Partial<TradeSideContext> = {}): TradeSideContext => ({
   leagueId: "L1",
   pickSlots: {},
   teams: 12,
+  adp: {},
+  adpBoard: "redraft",
+  adpPool: 108,
+  steepness: 4,
   ...over,
 });
 
@@ -161,6 +165,19 @@ describe("sideContext", () => {
       pickKtc: { "2027|1|mid": { sf: 30, oneqb: 40 } },
       superflex: true,
       teams: 10,
+      adp: {
+        p1: {
+          player_id: "p1",
+          name: "A Player",
+          position: "RB",
+          team: "SF",
+          redraft: null,
+          dynasty: { picks: 12, adp: 16, min_pick: 8, max_pick: 30, stdev: 4 },
+        },
+      },
+      adpBoard: "dynasty",
+      adpPool: 60,
+      steepness: 4,
     };
     const received = bundle({ players: ["p1"] });
 
@@ -172,12 +189,26 @@ describe("sideContext", () => {
       leagueId: "L1",
       pickSlots: lookups.pickSlots,
       teams: 10,
+      adp: pricing.adp,
+      adpBoard: "dynasty",
+      adpPool: 60,
+      steepness: 4,
     });
   });
 
   test("an unanswered league list reads as unplaced, not as zero teams", () => {
     const ctx = sideContext(
-      { metric: counting, ktc: {}, pickKtc: {}, superflex: false, teams: null },
+      {
+        metric: counting,
+        ktc: {},
+        pickKtc: {},
+        superflex: false,
+        teams: null,
+        adp: {},
+        adpBoard: "redraft",
+        adpPool: 108,
+        steepness: 4,
+      },
       { players: {}, managers: {}, pickSlots: {} },
       "L1",
       bundle(),
