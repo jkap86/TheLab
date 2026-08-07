@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { ktcPickKey } from "../../shared/ktc/picks.ts";
 import { pickSlotKey } from "../../shared/trades/pick-slots.ts";
 import { metricPreview } from "../shared/metric-cell.ts";
+import type { RookieLadderRung } from "./pick-value.ts";
 import type { TradeAsset, TradeSideContext } from "./trade-metrics.ts";
 import { TRADE_METRICS, bundleAssets } from "./trade-metrics.ts";
 import type { AdpPlayerPayload } from "./types";
@@ -25,8 +26,12 @@ const pickKtc = {
   [ktcPickKey("2027", 1, "early")]: { sf: 6000, oneqb: 5400 },
   [ktcPickKey("2027", 1, "mid")]: { sf: 5000, oneqb: 4500 },
   [ktcPickKey("2027", 1, "late")]: { sf: 4000, oneqb: 3600 },
-  // A season further out, at half the early-first row above it — which is the
-  // whole of what KTC is asked for by the ADP column: the ratio, not the price.
+  // A season further out, at half the matching row above it — which is the whole
+  // of what KTC is asked for by the ADP column: the ratio, not the price. It
+  // carries an early row *and* an untiered one because the discount reads both
+  // ends on the same row, so a fixture with only one of them would test the
+  // refusal rather than the ratio.
+  [ktcPickKey("2028", 1, "early")]: { sf: 3000, oneqb: 2700 },
   [ktcPickKey("2028", 1, null)]: { sf: 3000, oneqb: 2700 },
   [ktcPickKey("2028", 3, null)]: { sf: 900, oneqb: 800 },
 };
@@ -84,13 +89,24 @@ const adp: Record<string, AdpPlayerPayload> = {
 };
 
 /**
- * Twelve rookies in the order the selected drafts took them — a 12-team league's
- * whole first round, so a second-rounder runs off the end of the class the board
- * priced. The first four sit on exact powers of two against {@link ADP_POOL}.
+ * Twelve rookies in the order the *rookie* drafts took them — a 12-team
+ * league's whole first round, so a second-rounder runs off the end of the class
+ * the board priced. Each carries what the *startup* drafts pay for him, which is
+ * the number the curve reads; the first four sit on exact powers of two against
+ * {@link ADP_POOL}. The two scales are deliberately unrelated — see
+ * `./pick-value`, where that separation is the subject.
  */
-const ladder = [1, 28, 55, 82, 109, 136, 150, 164, 178, 192, 206, 220].map(
-  (adp, i) => ({ adp, name: `Rookie ${i + 1}` }),
-);
+const ladder: RookieLadderRung[] = [
+  1, 28, 55, 82, 109, 136, 150, 164, 178, 192, 206, 220,
+].map((startupAdp, i) => ({
+  player_id: `r${i + 1}`,
+  name: `Rookie ${i + 1}`,
+  rookieAdp: i + 1,
+  rookiePicks: 20,
+  startupAdp,
+  startupSource: "observed" as const,
+  startupPicks: 18,
+}));
 
 const ctx = (
   received: Partial<TradeSideContext["received"]>,
@@ -329,7 +345,10 @@ test("per-asset values", async (t) => {
   });
 
   // The rung is the answer, and naming the rookie is the whole of the reasoning
-  // behind the number — a reader has no other way to judge it.
+  // behind the number — a reader has no other way to judge it. The ADP printed
+  // beside him is the **startup** one, since that is the number the curve read:
+  // his rookie-draft ADP of 3 against a value of 2,500 would invite exactly the
+  // confusion the two-board ladder exists to remove.
   await t.test("a pick is priced by the rookie its rung names", () => {
     const moved = pick("2027", 1);
     const cell = read("adp", ctx({ picks: [moved] }, true, 3), {
@@ -337,31 +356,82 @@ test("per-asset values", async (t) => {
       pick: moved,
     });
     assert.equal(cell?.text, "2,500");
-    assert.match(cell!.title, /Rookie pick 3 ≈ Rookie 3 on the dynasty board/);
-    assert.doesNotMatch(cell!.title, /draft order not set/);
+    assert.match(
+      cell!.title,
+      /Rookie pick 3 ≈ Rookie 3, startup ADP 55\.0 on the dynasty board/,
+    );
+    // Nothing was assumed, so nothing is claimed — and in particular the reader
+    // is not told their own league's draft order is unset when it plainly isn't.
+    assert.doesNotMatch(cell!.title, /slot|interpolated|estimated/);
   });
 
   // KTC's only job under this column: the ratio that says what waiting costs.
   await t.test("a future pick is the same rung discounted by KTC", () => {
     const moved = pick("2028", 1);
-    // Slot 4 of 12 is an early first, and KTC prices 2028 at half of 2027's
-    // early row — so rung 4's 1,250 comes back as 625.
+    // Slot 4 of 12 is an early first, and KTC prices the 2028 early row at half
+    // of 2027's — so rung 4's 1,250 comes back as 625. Both ends on the early
+    // row, which is what makes the ratio a statement about one kind of pick.
     const cell = read("adp", ctx({ picks: [moved] }, true, 4), {
       kind: "pick",
       pick: moved,
     });
     assert.equal(cell?.text, "625");
     assert.match(cell!.title, /×0\.50 against 2027 on KTC/);
+    assert.doesNotMatch(cell!.title, /estimated/);
   });
 
-  await t.test("an unplaced pick takes the middle of its round and says so", () => {
+  /**
+   * The three assumptions are three sentences, and the reason they were split:
+   * a pick whose slot is known and whose KTC row fell back used to be reported
+   * as "(draft order not set)" — a claim about the reader's own league, and a
+   * false one.
+   */
+  await t.test("an unplaced pick reports its slot and only its slot", () => {
     const moved = pick("2027", 1);
     const cell = read("adp", ctx({ picks: [moved] }), { kind: "pick", pick: moved });
     assert.match(cell!.title, /Rookie pick 6/);
-    assert.match(cell!.title, /draft order not set/);
+    assert.match(cell!.title, /projected mid-round slot/);
+    assert.doesNotMatch(cell!.title, /future-year|interpolated/);
   });
 
-  await t.test("the three ways a pick goes unpriced read differently", () => {
+  await t.test("a KTC fallback is reported as one, not as an unset order", () => {
+    const moved = pick("2028", 1);
+    // Neither season carries an early row, so both ends fall back to the generic
+    // one together — still like-for-like, and still not a fact about this
+    // league's draft order.
+    const generic = {
+      [ktcPickKey("2027", 1, null)]: { sf: 5000, oneqb: 4500 },
+      [ktcPickKey("2028", 1, null)]: { sf: 3000, oneqb: 2700 },
+    };
+    const cell = read(
+      "adp",
+      { ...ctx({ picks: [moved] }, true, 4), pickKtc: generic },
+      { kind: "pick", pick: moved },
+    );
+    assert.match(
+      cell!.title,
+      /future-year adjustment estimated from the generic 1st-round market/,
+    );
+    assert.doesNotMatch(cell!.title, /slot/);
+  });
+
+  await t.test("an interpolated startup price says which half was guessed", () => {
+    const moved = pick("2027", 1);
+    const guessed = ladder.map((rung, i) =>
+      i === 2
+        ? { ...rung, startupSource: "interpolated" as const, startupPicks: null }
+        : rung,
+    );
+    const cell = read(
+      "adp",
+      { ...ctx({ picks: [moved] }, true, 3), adpLadder: guessed },
+      { kind: "pick", pick: moved },
+    );
+    assert.match(cell!.title, /startup value interpolated from nearby rookies/);
+    assert.doesNotMatch(cell!.title, /slot|future-year/);
+  });
+
+  await t.test("the ways a pick goes unpriced read differently", () => {
     const moved = pick("2027", 2);
     const past = read("adp", ctx({ picks: [moved] }, true, 3), {
       kind: "pick",
@@ -375,7 +445,23 @@ test("per-asset values", async (t) => {
       { ...ctx({ picks: [moved] }), adpLadder: [] },
       { kind: "pick", pick: moved },
     );
-    assert.match(bare!.title, /No rookies on the dynasty ADP board/);
+    assert.match(bare!.title, /No rookies in the dynasty rookie drafts/);
+
+    // A ladder with places and no prices: the startup board answered nothing,
+    // which is a different gap from having no rookie order at all.
+    const unpriced = ladder.map((rung) => ({
+      ...rung,
+      startupAdp: null,
+      startupSource: "none" as const,
+      startupPicks: null,
+    }));
+    const nothing = read(
+      "adp",
+      { ...ctx({ picks: [pick("2027", 1)] }, true, 3), adpLadder: unpriced },
+      { kind: "pick", pick: pick("2027", 1) },
+    );
+    assert.equal(nothing?.text, null);
+    assert.match(nothing!.title, /No dynasty startup ADP/);
 
     const far = pick("2032", 1);
     const unknown = read("adp", ctx({ picks: [far] }, true, 3), {
@@ -383,7 +469,7 @@ test("per-asset values", async (t) => {
       pick: far,
     });
     assert.equal(unknown?.text, null);
-    assert.match(unknown!.title, /KTC carries no row/);
+    assert.match(unknown!.title, /KTC carries no like-for-like row/);
   });
 
   // Never covered at all, on either value column: a dash against FAAB would
@@ -428,6 +514,33 @@ test("per-asset values", async (t) => {
     });
     assert.equal(cell?.text, "5,000");
     assert.match(cell!.title, /2027 Mid 1st \(draft order not set\)/);
+  });
+
+  /**
+   * The same mislabelled-estimate bug the ADP column's flags were split to fix,
+   * at this column's own grain: a *placed* pick whose third KTC doesn't publish
+   * is a fact about KTC's board, not about the reader's league.
+   */
+  await t.test("a placed pick on a broader row doesn't blame the draft order", () => {
+    // Slot 4 of 12 is an early first, and this board carries only the untiered
+    // 2028 row — so the price is a stand-in and the order is set all the same.
+    const cell = read("ktc", ctx({ picks: [pick("2028", 1)] }, true, 4), {
+      kind: "pick",
+      pick: pick("2028", 1),
+    });
+    assert.match(cell!.title, /2028 Early 1st/);
+    assert.doesNotMatch(cell!.title, /draft order not set/);
+
+    const generic = {
+      [ktcPickKey("2028", 1, null)]: { sf: 3000, oneqb: 2700 },
+    };
+    const stood = read(
+      "ktc",
+      { ...ctx({ picks: [pick("2028", 1)] }, true, 4), pickKtc: generic },
+      { kind: "pick", pick: pick("2028", 1) },
+    );
+    assert.match(stood!.title, /2028 1st \(KTC publishes no row for that third\)/);
+    assert.doesNotMatch(stood!.title, /draft order not set/);
   });
 
   // Covered by the board and off it — the same genuine gap an unpriced player is.

@@ -380,6 +380,44 @@ const ROUNDS_BOUNDS: Record<"rookie" | "full", { min?: number; max?: number }> =
 export const DEFAULT_ADP_ROUNDS: AdpControls["rounds"] = "full";
 
 /**
+ * The two boards a **rookie pick's** value is read from, whatever the panel is
+ * displaying — the reader's population, asked twice with the round bounds fixed.
+ *
+ * A rookie pick is a place in a queue, and the queue and the price come off
+ * different drafts (`features/trades/pick-value` carries the argument). Rookie
+ * drafts order one class against itself; startups price that class against the
+ * whole player pool. So a pick's value needs *both*, and neither may be the
+ * board the panel happens to be showing:
+ *
+ * - **`rounds` is the one control that must not propagate.** It is the choice
+ *   between exactly these two populations, so honouring it here would mean a
+ *   reader switching the panel to "Rookie" repriced every pick on the page off
+ *   rookie-draft ADP — the 1.01 at ADP ~1, which the curve reads as the most
+ *   valuable asset in dynasty football. That is presentation state reaching into
+ *   a valuation, and it is what these two functions exist to sever.
+ * - **Everything else does propagate**, because every other axis is a fact about
+ *   *which market* rather than which question: the season, the window, the
+ *   scoring, superflex, best ball and the league size all describe a population,
+ *   and the two boards have to describe the same one or the ordering and the
+ *   pricing are about different leagues.
+ *
+ * The bounds themselves are `ROUNDS_BOUNDS`, so the definition of "a rookie
+ * draft" is the one the drawer's own chip uses and there is no second threshold
+ * to drift. Both are plain derivations of the controls rather than query strings
+ * so they compose with `adpQueryString` — and so a caller that already displays
+ * one of these boards lands on the identical query, which is what makes the
+ * extra fetch free in the common case.
+ */
+export function rookieOrderingBoard(controls: AdpControls): AdpControls {
+  return { ...controls, rounds: "rookie" };
+}
+
+/** The board a rookie pick's *price* is read from — see above. */
+export function startupPricingBoard(controls: AdpControls): AdpControls {
+  return { ...controls, rounds: "full" };
+}
+
+/**
  * The starting board: one season of startup drafts, whole, both meaningful draft
  * types (snake + linear), no league narrowing, both league-type boards on
  * display.

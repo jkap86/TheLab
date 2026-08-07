@@ -98,15 +98,24 @@ const adp: Record<string, AdpPlayerPayload> = {
 };
 
 /**
- * The same board's rookie class in draft order. The league below starts five and
- * drafts twelve, so rung 3 — where roster 2's 2027 first lands — is an ADP of 31
- * and a quarter of the peak. Twelve rungs, so a second-rounder runs off the end.
+ * The rookie class in the order the rookie drafts took them, each rung carrying
+ * its *startup* ADP — the number the value curve reads. The league below starts
+ * five and drafts twelve, so rung 3 (where roster 2's 2027 first lands) is a
+ * startup ADP of 31 and a quarter of the peak. Twelve rungs, so a second-rounder
+ * runs off the end.
  */
 const adpLadders = {
-  dynasty: [1, 16, 31, 46, 61, 76, 91, 106, 121, 136, 151, 166].map((adp, i) => ({
-    adp,
-    name: `Rookie ${i + 1}`,
-  })),
+  dynasty: [1, 16, 31, 46, 61, 76, 91, 106, 121, 136, 151, 166].map(
+    (startupAdp, i) => ({
+      player_id: `r${i + 1}`,
+      name: `Rookie ${i + 1}`,
+      rookieAdp: i + 1,
+      rookiePicks: 20,
+      startupAdp,
+      startupSource: "observed" as const,
+      startupPicks: 18,
+    }),
+  ),
   redraft: [],
 };
 
@@ -490,7 +499,10 @@ describe("what the ADP column says", () => {
     // than leaving a reader to take it on trust.
     const html = adpCard();
     assert.match(html, /2027 1\.03/);
-    assert.match(html, /Rookie pick 3 ≈ Rookie 3 on the dynasty board/);
+    assert.match(
+      html,
+      /Rookie pick 3 ≈ Rookie 3, startup ADP 31\.0 on the dynasty board/,
+    );
     assert.match(html, /2,500/);
   });
 

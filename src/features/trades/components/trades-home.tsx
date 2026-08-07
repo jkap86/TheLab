@@ -11,6 +11,8 @@ import {
   activeFilterCount,
   adpNarrowingCount,
   adpQueryString,
+  rookieOrderingBoard,
+  startupPricingBoard,
   todayIso,
   useAdp,
   useAdpControls,
@@ -202,12 +204,34 @@ export function TradesHome({ season }: { season: string }) {
     () => adpQueryString(adpControls, todayIso()),
     [adpControls],
   );
+  // The two boards a rookie *pick* is valued off, which are deliberately not
+  // whichever one the panel is displaying — see `rookieOrderingBoard`. They are
+  // the reader's own population with the round bounds fixed, so switching the
+  // panel between "Startup" and "Rookie" changes what the *list* shows and
+  // leaves every pick's value where it was.
+  //
+  // **This is one extra request, not two.** They are the same query string as
+  // the displayed board wherever the rounds already match — which the default
+  // (`Startup`) does — so React Query resolves the pricing board to the very
+  // entry `adpQuery` is already fetching, and only the rookie-draft board is a
+  // fetch of its own. No board is fetched per card, per trade or per pick: both
+  // are read once into the ladders below.
+  const rookieQuery = useMemo(
+    () => adpQueryString(rookieOrderingBoard(adpControls), todayIso()),
+    [adpControls],
+  );
+  const startupQuery = useMemo(
+    () => adpQueryString(startupPricingBoard(adpControls), todayIso()),
+    [adpControls],
+  );
   // **Not gated on the drawer being open**, unlike the manager tool's Leagues
   // and Leaguemates tabs: the cards' value column reads this board, so it is on
   // screen either way — the same rule the Players tab follows for its own ADP
   // column. A closed drawer costs nothing extra, since both consumers share one
   // query key and one entry.
   const board = useAdp(adpQuery);
+  const rookieBoard = useAdp(rookieQuery);
+  const startupBoard = useAdp(startupQuery);
   const density = useAdpDensity(boardOpen);
 
   // The board by player id, which is how a card asks about one. Memoised on the
@@ -222,17 +246,26 @@ export function TradesHome({ season }: { season: string }) {
     return byId;
   }, [board.data]);
 
-  // The same board's rookie class in draft order — the ladder a traded pick is
-  // priced off, since a rookie pick is a place in that queue and nothing else
-  // (see `../pick-value`). Both markets, because a card reads the one its own
-  // league plays in and this page spans leagues of both kinds; built once for
-  // the list rather than per card, since it is a reading of the whole board.
+  // The rookie-pick ladder: the class in the order the *rookie* drafts took
+  // them, each rung carrying what the *startup* drafts pay for that player (see
+  // `../pick-value`). Both markets, because a card reads the one its own league
+  // plays in and this page spans leagues of both kinds; built once for the list
+  // rather than per card, since it is a reading of two whole boards and not of
+  // any one trade — which is also what keeps this off the per-card path.
   const adpLadders = useMemo(
     () => ({
-      redraft: rookieLadder(board.data?.players ?? [], "redraft"),
-      dynasty: rookieLadder(board.data?.players ?? [], "dynasty"),
+      redraft: rookieLadder(
+        rookieBoard.data?.players ?? [],
+        startupBoard.data?.players ?? [],
+        "redraft",
+      ),
+      dynasty: rookieLadder(
+        rookieBoard.data?.players ?? [],
+        startupBoard.data?.players ?? [],
+        "dynasty",
+      ),
     }),
-    [board.data],
+    [rookieBoard.data, startupBoard.data],
   );
 
   // The one thing on this page that asks who is reading it, and it asks softly:
