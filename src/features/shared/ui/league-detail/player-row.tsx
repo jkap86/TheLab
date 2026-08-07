@@ -12,7 +12,13 @@ import type {
 /**
  * One roster row and its number cells, laid out on the section's shared grid
  * (see `roster-layout`). Split out of `roster-detail`, which keeps the sections
- * and the lineup summary; this file owns everything below a section heading.
+ * and the coverage caveat; this file owns everything below a section heading.
+ *
+ * Every row in a section is drawn alike. It used to tint a starter the optimal
+ * lineup promoted and dim a bench player it sat, which read this half as a diff
+ * against what Sleeper has seated — but the two lists *are* the best lineup
+ * available, so which section a player is in already says where he belongs, and
+ * the marking only said how far the team currently is from agreeing.
  */
 
 /**
@@ -65,8 +71,6 @@ export function PlayerRow({
   columns,
   values,
   horizon = 0,
-  promoted,
-  benched,
 }: {
   player: PlayerSummary | undefined;
   playerId: string;
@@ -92,10 +96,6 @@ export function PlayerRow({
   values: LeagueRosterValues;
   /** Weeks the projection covers, so a partial one can be marked as such. */
   horizon?: number;
-  /** Starting here only in the optimal lineup. */
-  promoted?: boolean;
-  /** Started today, but sat by the optimal lineup. */
-  benched?: boolean;
 }) {
   // Sleeper pads an unfilled starting slot with an empty id or a literal "0".
   const empty = !playerId || playerId === "0";
@@ -119,11 +119,7 @@ export function PlayerRow({
   };
 
   return (
-    <li
-      className={`grid ${layout.grid} items-center gap-x-2 gap-y-0.5 py-1.5 ${
-        promoted ? "bg-active/[0.07]" : benched ? "opacity-50" : ""
-      }`}
-    >
+    <li className={`grid ${layout.grid} items-center gap-x-2 gap-y-0.5 py-1.5`}>
       {/* Spans both lines so the slot reads as labelling the whole row, and holds
           the gutter open on bench rows that have no slot to show. Two spellings
           rather than one: the gutter is 20px below @lg and the fuller labels
