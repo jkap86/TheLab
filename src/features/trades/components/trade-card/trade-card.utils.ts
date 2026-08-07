@@ -41,7 +41,7 @@ export function formatTradeDate(at: number | null): string {
 }
 
 /**
- * The time of day the trade went through, e.g. ` · 3:07 PM`, or nothing at all
+ * The time of day the trade went through, e.g. `3:07 PM`, or the empty string
  * where Sleeper filed no timestamp.
  *
  * It holds the slot the scoring week used to. A week is a coarser reading of the
@@ -55,7 +55,16 @@ export function formatTradeDate(at: number | null): string {
  * the app: `TODAY_ET` is Eastern because it decides what the NFL has played,
  * where this is a wall-clock reading of a moment for whoever is looking at it.
  * It is still spelled out by hand rather than through `toLocaleTimeString`, so
- * the punctuation matches the date it follows in every locale.
+ * the digits match the date it sits beside in every locale.
+ *
+ * **It used to carry its own ` · ` separator and does not now**, which is worth
+ * knowing before one is added back: the two facts shared a single readout on the
+ * card's first interior line, so the separator had to live on the *time* — that
+ * being the half that vanishes for an undated trade, and a dangling "date
+ * unknown ·" is the failure it prevented. They are two elements on a plate now
+ * (see `TradeInstantLedge`), parted by a gap and a change of material, so a
+ * punctuation mark between them would be a third thing saying what the layout
+ * already does — and the empty string is what draws no element at all.
  *
  * It is a second function rather than a branch inside {@link formatTradeDate}
  * because the two answer differently to a missing timestamp: the date says so in
@@ -67,7 +76,7 @@ export function formatTradeTime(at: number | null): string {
   const hours = d.getHours();
   const hour12 = hours % 12 === 0 ? 12 : hours % 12;
   const minutes = String(d.getMinutes()).padStart(2, "0");
-  return ` · ${hour12}:${minutes} ${hours < 12 ? "AM" : "PM"}`;
+  return `${hour12}:${minutes} ${hours < 12 ? "AM" : "PM"}`;
 }
 
 /**

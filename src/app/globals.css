@@ -785,6 +785,74 @@ body {
     );
   }
 
+  /* A bezel with gauges in it: the trade card's league specs.
+
+     **Two depths, and both of them run the same way.** The bezel is a trough
+     milled into the card's face; each `.lab-gauge` is a window sunk into that
+     trough's floor. That is what separates it from the app bar's block, where
+     the part stands *off* the surface and the channel is cut *into* it — a
+     raised housing would be six apparent controls per card wearing the one
+     grammar this app reserves for a press, on a run nobody presses. Down twice
+     is the only way to make a fact about the league an object without claiming
+     it is a control.
+
+     Four things are load-bearing, and each was arrived at by drawing it:
+
+     - **The floor is lighter than a bare trough on purpose.** The captions are
+       cut into it, and a 6px caption on `.lab-groove`'s near-black is a caption
+       nobody reads. The sink comes from the inset shadow and the lit lower lip
+       rather than from the fill being dark, which is the same trade
+       `.lab-readout` makes one size down.
+     - **The lower lip is the whole reading.** Light entering the top of a cut
+       and catching its far wall is what says "recess"; a dark box without one is
+       a hole. That is why the lip brightens rather than the fill darkening when
+       the part needs to stand out more.
+     - **The surround is outside the recess and is what stands it off the
+       face.** A dark hairline above the cut and a lit one below it, plus a short
+       contact shadow — the lip a real milling leaves, catching the light on the
+       side away from the tool. Without it the trough reads as a darker patch of
+       the same surface rather than as a part cut out of it.
+     - **The gauge's gloss is one diagonal.** A window is a cut with glass over
+       it, and a second highlight is a reflection nobody can place. It carries
+       `position`/`overflow` for `.lab-lens`'s reason: the gloss is a
+       pseudo-element and has to be clipped by the part it lies on. Everything
+       with a size still comes from utilities at the call site.
+
+     The accent appears once, in each gauge's lower lip, and nowhere else here —
+     the card spends its decoration on `.lab-engraved` and keeps the lit reading
+     for the one thing on this page worth it. */
+  .lab-bezel {
+    background: linear-gradient(180deg, #04101c, #0b1d29);
+    box-shadow:
+      inset 0 5px 11px rgba(0, 0, 0, 0.95),
+      inset 0 1px 0 rgba(0, 0, 0, 0.9),
+      inset 0 -1.5px 0 rgba(255, 255, 255, 0.13),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.07),
+      0 -1px 0 rgba(0, 0, 0, 0.65),
+      0 1px 0 rgba(255, 255, 255, 0.13),
+      0 3px 6px -3px rgba(0, 0, 0, 0.7);
+  }
+  .lab-gauge {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, #030d17, #0a1c28);
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.95),
+      inset 0 -1px 0 rgba(0, 255, 229, 0.16),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  }
+  .lab-gauge::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      112deg,
+      rgba(255, 255, 255, 0.09) 0 30%,
+      transparent 52%
+    );
+  }
+
   /* The key grammar at row scale, for a list of parts rather than one control.
 
      A standings row *is* a key: pressing it drives the roster panel beside it,

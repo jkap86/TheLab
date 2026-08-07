@@ -95,20 +95,30 @@ describe("formatTradeDate", () => {
 describe("formatTradeTime", () => {
   const at = (h: number, m = 0) => new Date(2026, 6, 15, h, m).getTime();
 
-  test("a 12-hour clock with its own separator", () => {
-    assert.equal(formatTradeTime(at(15, 7)), " · 3:07 PM");
-    assert.equal(formatTradeTime(at(9, 30)), " · 9:30 AM");
+  test("a bare 12-hour clock, with no separator of its own", () => {
+    assert.equal(formatTradeTime(at(15, 7)), "3:07 PM");
+    assert.equal(formatTradeTime(at(9, 30)), "9:30 AM");
+  });
+
+  // It carried a leading " · " while the date and the time shared one readout
+  // on the card's interior line. They are two elements on a plate now, parted
+  // by a gap and a change of material, so punctuation between them would be a
+  // third thing saying what the layout already says.
+  test("no punctuation, since the plate parts the two facts itself", () => {
+    assert.doesNotMatch(formatTradeTime(at(15, 7)), /·/);
+    assert.doesNotMatch(formatTradeTime(at(15, 7)), /^\s/);
   });
 
   test("both noons read as 12, never as 0", () => {
-    assert.equal(formatTradeTime(at(0, 5)), " · 12:05 AM");
-    assert.equal(formatTradeTime(at(12, 5)), " · 12:05 PM");
+    assert.equal(formatTradeTime(at(0, 5)), "12:05 AM");
+    assert.equal(formatTradeTime(at(12, 5)), "12:05 PM");
   });
 
   test("minutes are zero-padded, so the column stays a column", () => {
-    assert.equal(formatTradeTime(at(1, 1)), " · 1:01 AM");
+    assert.equal(formatTradeTime(at(1, 1)), "1:01 AM");
   });
 
+  // The empty string is what draws no element at all beside the date's words.
   test("an undated trade adds nothing, so the date's words stand alone", () => {
     assert.equal(formatTradeTime(null), "");
   });

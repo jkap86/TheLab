@@ -183,65 +183,108 @@ export const SIDE_SEAM_VERTICAL =
   "shadow-[inset_1px_0_0_rgba(0,0,0,0.75),inset_2px_0_0_rgba(255,255,255,0.07)]";
 
 /**
- * The card's first interior line: what kind of league this was, and when it
- * happened.
+ * The card's first interior line, which the league specs now have to
+ * themselves.
  *
- * **They share a line from `sm` up and stack below it, and the instant is what
- * holds its place.** The timestamp is flush right, diagonally opposite the
- * nameplate, so the two facts hold the card's top corners — that is a decision
- * the header already made and this must not undo. So the row is `row-reverse`
- * at width, which puts the instant on the trailing edge with the specs pushed
- * left by their own `mr-auto`, and the DOM order is instant-then-specs to make
- * that work.
- *
- * Below `sm` they are two lines rather than one crowded one. The alternative —
- * one wrapping row — reads worse than it sounds: a flex item's wrap happens
- * inside the width it was given, so the spec run would be laid out in the
- * ~180px left over beside the instant and take three lines while the space
- * under the timestamp sat empty. Stacked, the run gets the card's full width
- * and fits on one line at 390px, which is the whole of what the second line
- * buys.
+ * **It used to hold the instant too, and that is why it was a reversed row.**
+ * The timestamp was flush right, diagonally opposite the nameplate, with the
+ * specs pushed left beside it — which meant the run was laid out in the ~180px
+ * left over and took three lines on a phone while the space under the timestamp
+ * sat empty, so the two had to stack below `sm`. The instant is on the top edge
+ * now (see {@link TradeInstantLedge}), so all of that goes: one block, the
+ * card's full width at every size, and no breakpoint.
  */
-export const TRADE_HEADER_LINE =
-  "flex flex-col gap-1.5 px-3 pb-2 sm:flex-row-reverse sm:items-center sm:gap-2";
+export const TRADE_HEADER_LINE = "px-3 pb-2";
 
 /**
- * The spec run itself. `min-w-0` so a long run wraps inside the line rather
- * than pushing the instant off the card, and `mr-auto` is what parts the two in
- * the reversed row above.
+ * The bezel the specs sit in: one trough milled into the card's face.
+ *
+ * **The run is one part, and that is the whole change.** Six separate housings
+ * read as perforation in the face rather than as one fact about the league, and
+ * nothing in a run of six identical pills is easier to find than anything else.
+ * Housed, it is a single object a reader learns the shape of once.
+ *
+ * `inline-flex` so the part is as wide as the league's own settings rather than
+ * the card — a housing that reached both walls would have to be *filled*, and a
+ * four-token redraft league would leave two thirds of it empty. It wraps, which
+ * is what a phone gets: two rows inside one bezel rather than a run that
+ * overflows, since the seam below is drawn by index and survives the wrap as the
+ * housing's own inner edge.
+ *
+ * The material and its two depths are `.lab-bezel` in `globals.css`, per the
+ * rule that a `.lab-*` class carries material and never layout.
  */
-export const SPEC_RUN =
-  "flex min-w-0 flex-wrap items-center gap-1 sm:mr-auto";
+export const SPEC_BEZEL =
+  "lab-bezel inline-flex max-w-full flex-wrap rounded-[5px] px-1 pb-1 pt-[3px]";
 
 /**
- * One league spec, in the card's own recessed material.
+ * One gauge's box: the caption over the value it names.
  *
- * **A readout and never `.lab-chip`.** The app bar's grammar is that raised
- * means press me and recessed means you are here, and these are read rather
- * than pressed — six raised pills per card, across the couple of dozen the
- * virtualiser keeps mounted, is a hundred and fifty apparent controls that do
- * nothing. `.lab-readout` is also the material the instant beside them and the
- * side totals below them already wear, so the run adds no fourth surface to a
- * card that deliberately counts three.
- *
- * On the display face at 9px — a step under the 10px the asset values wear,
- * which is the rule a named row already follows, since Orbitron is wide and
- * these sit beside a timestamp that must not give way to them.
+ * A region of the bezel's floor rather than a part seated in it — no fill, no
+ * wall, no radius. That is the card's own rule about sides applied one scale
+ * down: giving each bay a face would be a third countable depth inside a part
+ * that already has two, and nothing inside the housing is built like a part for
+ * the same reason nothing inside the card is built like a card.
  */
-export const SPEC_TOKEN =
-  "lab-readout shrink-0 rounded-[3px] px-1.5 py-px font-display text-[9px] font-semibold uppercase leading-[14px] tracking-[0.09em] tabular-nums";
+export const SPEC_BAY =
+  "flex min-w-0 flex-col gap-px px-[5px] pb-[3px] pt-0.5";
 
 /**
- * How brightly a token is drawn, per {@link LeagueSpec.tone}.
+ * The cut parting one gauge from the one before it — the card's own milled seam
+ * ({@link SIDE_SEAM_VERTICAL}) at gauge scale, applied by index at the call
+ * site because Tailwind has no adjacent-sibling selector and the first bay must
+ * not wear one.
+ *
+ * Dimmer than the seam between two sides: this one is inside a recess, where
+ * there is less light to catch, and a seam as strong as the card's own would
+ * claim the gauges are as separate from each other as two managers' hauls are.
+ */
+export const SPEC_SEAM =
+  "shadow-[inset_1px_0_0_rgba(0,0,0,0.65),inset_2px_0_0_rgba(255,255,255,0.05)]";
+
+/**
+ * The caption, cut into the bezel's floor.
+ *
+ * `.lab-engraved-faint` rather than the full-strength cut, which is the rule
+ * that class exists for: the highlight is a fixed 1px whatever the type size, so
+ * at 6px the strong lower lip is most of the stroke weight and reads as a blur.
+ *
+ * At 6px it is the smallest type in the app and it earns that by being a *unit*
+ * rather than a word to read — `TEAMS` over `12 TEAM` is recognised at a glance
+ * and never parsed, which is what lets it go this small. `whitespace-nowrap`
+ * because a caption that wraps is taller than the value it names and the gauges
+ * would stop lining up.
+ */
+export const SPEC_CAPTION =
+  "lab-engraved-faint text-center font-display text-[6px] font-bold uppercase leading-[8px] tracking-[0.2em] text-foreground/35";
+
+/**
+ * The value, in a window sunk into the bezel's floor.
+ *
+ * On the display face at 9.5px — a hair under the 10px the asset values wear,
+ * the rule a named row already follows, since Orbitron is wide and six of these
+ * have to fit a phone. The glass and the lit lower lip are `.lab-gauge`.
+ */
+export const SPEC_GAUGE =
+  "lab-gauge rounded-[3px] px-[7px] text-center font-display text-[9.5px] font-bold uppercase leading-[14px] tracking-[0.04em] tabular-nums whitespace-nowrap";
+
+/**
+ * How brightly a value is drawn, per {@link LeagueSpec.tone}.
  *
  * One step between them and no more. What game this is — the type, best ball —
  * changes what a trade means, so it reads first; the lineup and scoring detail
  * describes the room it happened in. Both stay well under the manager's name
  * below them, which is what the eye should reach next.
+ *
+ * **Both are the `foreground` token and neither is tinted.** A cyan-white
+ * numeral was the obvious spelling and is the wrong one twice over: it has no
+ * token to read, and the accent is already spent in every gauge's lower lip —
+ * putting it in the type as well would light the numerals of a fact the card
+ * ranks below both manager names.
  */
 export const SPEC_TONE: Record<"format" | "config", string> = {
-  format: "text-foreground/65",
-  config: "text-foreground/45",
+  format: "text-foreground/90",
+  config: "text-foreground/65",
 };
 
 /**
