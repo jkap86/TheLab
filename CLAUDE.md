@@ -1243,6 +1243,26 @@ stops holding, a comment saying it does would not have caught it.
   `isPending` — which is wrong at both ends, since a disabled query is pending
   forever and publishing *any* state settles the query, including a cold
   account's `progress` message that carries no leagues yet.
+
+  **And all three readers ask by *username*, which is what makes them one entry
+  rather than two that happen to hold the same list.** The pick tracker and the
+  lineup checker hold a resolved account, so they could ask by either half of it,
+  and they asked by `user_id` — on the honest reasoning that the id is what those
+  pages have and that Sleeper resolves either. What that missed is that the
+  manager tool has *only* a name (it is the URL segment), so the id was the one
+  spelling the three could never share: a reader who looked themselves up in the
+  manager tool and then opened the lineup checker paid for the same stream twice,
+  under `manager/<id>/leagues` and `manager/<name>/leagues`. The name is the
+  spelling they can all reach, `managerQueryKeys` lower-cases it so a typed
+  `Jkap` and a canonical `jkap` are one entry, and the route resolves a name
+  exactly as it resolved the id. **The cost is that these two pages now depend on
+  the stored username still being current**, where an id is immutable — a Sleeper
+  rename leaves the stored account naming somebody who no longer exists, and both
+  pages 404 until it is re-resolved on `/tools`. That is the same exposure every
+  `/manager/<name>` URL already has, and it is the price of the three tools
+  sharing one entry. The sub-resource reads are unaffected either way: they put
+  the name in the path but send `?user_id=`, which is what actually resolves
+  them.
   (The trades page was the second reader of the hook
   itself for a while; it reads every crawled league now and asks about no
   account, so the pick tracker and the lineup checker are its two readers.)

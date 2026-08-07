@@ -3,8 +3,8 @@ import test from "node:test";
 
 import { QueryObserver, type QueryClient } from "@tanstack/react-query";
 
-import { MANAGER_STALE_TIMES } from "./manager-query.ts";
-import type { ManagerLeaguesData } from "./leagues-stream.ts";
+import { MANAGER_STALE_TIMES, managerQueryKeys } from "./manager-query.ts";
+import { fetchManagerLeagues, type ManagerLeaguesData } from "./leagues-stream.ts";
 import {
   createTestQueryClient,
   flush,
@@ -28,7 +28,10 @@ import { userLeaguesQuery } from "./use-user-leagues.ts";
  * observer subscribing; navigating away is it unsubscribing.
  */
 
-/** A canonical Sleeper id, which is what these two pages hold. */
+/** The account's canonical username — what all three readers file under. */
+const USERNAME = "alice";
+
+/** Its Sleeper id, which these pages hold beside the name and no longer ask by. */
 const USER_ID = "12345678901234567";
 
 const league = (id: string) => ({
@@ -49,10 +52,10 @@ const resultMessage = (leagues: string[]) => ({
 });
 
 /** Mount a consumer of the query — the pick tracker's picker, or the checker. */
-function mount(client: QueryClient, userId: string | null) {
+function mount(client: QueryClient, username: string | null) {
   const observer = new QueryObserver<ManagerLeaguesData, Error>(
     client,
-    userLeaguesQuery(userId, client) as never,
+    userLeaguesQuery(username, client) as never,
   );
   const unsubscribe = observer.subscribe(() => {});
   return { observer, unmount: unsubscribe };
@@ -68,11 +71,11 @@ test("the account's leagues across a navigation", async (t) => {
 
     // /lineupchecker → /tools → /lineupchecker: the middle page reads nothing,
     // so the query is unmounted throughout and remounted at the end.
-    const first = mount(client, USER_ID);
+    const first = mount(client, USERNAME);
     await flush();
     first.unmount();
     await flush();
-    const back = mount(client, USER_ID);
+    const back = mount(client, USERNAME);
     await flush();
 
     assert.equal(mock.countOf("/leagues"), 1);
@@ -88,8 +91,8 @@ test("the account's leagues across a navigation", async (t) => {
 
     // The pick tracker's picker and the lineup checker's list name the same key,
     // so concurrent readers collapse to one in-flight stream.
-    const picker = mount(client, USER_ID);
-    const checker = mount(client, USER_ID);
+    const picker = mount(client, USERNAME);
+    const checker = mount(client, USERNAME);
     await flush();
 
     assert.equal(mock.countOf("/leagues"), 1);
@@ -138,7 +141,7 @@ test("the account's leagues across a navigation", async (t) => {
       );
     });
 
-    const page = mount(client, USER_ID);
+    const page = mount(client, USERNAME);
     await flush();
     assert.equal(leaguesOf(page.observer)?.length, 1, "the cached payload shows");
     assert.equal(
@@ -173,13 +176,13 @@ test("the account's leagues across a navigation", async (t) => {
   await t.test("are a different entry per account", async () => {
     const client = createTestQueryClient();
     const mock = installFetchMock((url) =>
-      ndjsonResponse([resultMessage(url.includes("999") ? ["z"] : ["a", "b"])]),
+      ndjsonResponse([resultMessage(url.includes("bob") ? ["z"] : ["a", "b"])]),
     );
 
-    const first = mount(client, USER_ID);
+    const first = mount(client, USERNAME);
     await flush();
     first.unmount();
-    const second = mount(client, "999");
+    const second = mount(client, "bob");
     await flush();
 
     assert.equal(mock.countOf("/leagues"), 2);
@@ -190,11 +193,44 @@ test("the account's leagues across a navigation", async (t) => {
     mock.restore();
   });
 
+  await t.test("are the manager tool's own entry, not a second one", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock(() => ndjsonResponse([resultMessage(["a", "b"])]));
+
+    // `/manager/Jkap` files this route's answer under the name in its URL, case
+    // and all. The two tools that hold a *resolved* account ask by that same
+    // name, so all three are one entry — which is what asking by `user_id`
+    // could never be, however the id was spelled.
+    const managerTab = new QueryObserver<ManagerLeaguesData, Error>(client, {
+      queryKey: managerQueryKeys.leagues("Jkap"),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        fetchManagerLeagues({
+          searched: "Jkap",
+          signal,
+          publish: (data) =>
+            client.setQueryData(managerQueryKeys.leagues("Jkap"), data),
+        }),
+      staleTime: MANAGER_STALE_TIMES.leagues,
+    } as never);
+    const stopTab = managerTab.subscribe(() => {});
+    await flush();
+    stopTab();
+
+    // Now the lineup checker, with the canonical lower-case name off the store.
+    const checker = mount(client, "jkap");
+    await flush();
+
+    assert.equal(mock.countOf("/leagues"), 1, "the second tool asks for nothing");
+    assert.equal(leaguesOf(checker.observer)?.length, 2);
+    checker.unmount();
+    mock.restore();
+  });
+
   await t.test("reuse the manager area's own freshness window", () => {
     // Not a number of its own: this is the same route the manager tool reads,
     // and two stale times for one answer is how the two tools start disagreeing
     // about when it is worth asking again.
-    const options = userLeaguesQuery(USER_ID, createTestQueryClient());
+    const options = userLeaguesQuery(USERNAME, createTestQueryClient());
     assert.equal(options.staleTime, MANAGER_STALE_TIMES.leagues);
     // A failed stream is this page's whole content, so it surfaces at once.
     assert.equal(options.retry, false);

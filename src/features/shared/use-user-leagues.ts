@@ -60,13 +60,20 @@ export type UserLeaguesState = {
  * published data is what keeps this hook's promise — the menu fills at the first
  * message, exactly as it did when this was `useState`.
  *
- * Keyed by `userId` (a Sleeper id resolves as readily as a name): passing null —
- * no account stored yet — fetches nothing and reports an empty, idle state,
- * which is the whole no-account path on the pick tracker's page (the id form
- * still works). The key is {@link managerQueryKeys.leagues} because the entry
- * holds exactly what that key already files — this route's answer, under the
- * spelling of the subject asked about, which here is the id this page holds
- * rather than a name typed into a URL.
+ * **Keyed by the account's username, which is what makes it the manager tool's
+ * own entry rather than a second one beside it.** These two pages hold a
+ * resolved account and could ask by either half of it; the manager tool has only
+ * the name searched in its URL, so the name is the one spelling the three can
+ * share — and `managerQueryKeys.leagues` lower-cases it, so `Jkap` typed into a
+ * URL and the canonical `jkap` off a resolved profile are one entry. A reader
+ * who has looked themselves up in the manager tool arrives here with the list
+ * already loaded, and the same holds in reverse. It asks by name for the same
+ * reason it files by name: Sleeper resolves a name as readily as an id, so
+ * splitting the two would be two requests for one answer with nothing gained.
+ *
+ * Passing null — no account stored yet — fetches nothing and reports an empty,
+ * idle state, which is the whole no-account path on the pick tracker's page (the
+ * id form still works).
  *
  * `retry: false` keeps what this hook has always done. The manager tool takes
  * the client-wide single retry because its header can show a partial list behind
@@ -87,13 +94,17 @@ export type UserLeaguesState = {
  * only thing in here that is React's: `publish` writes each mid-stream state
  * into this very entry, and `previousRevision` reads the last one back out.
  */
-export function userLeaguesQuery(userId: string | null, queryClient: QueryClient) {
-  const queryKey = managerQueryKeys.leagues(userId ?? "");
+export function userLeaguesQuery(
+  /** The account's username — the spelling the manager tool files under too. */
+  username: string | null,
+  queryClient: QueryClient,
+) {
+  const queryKey = managerQueryKeys.leagues(username ?? "");
   return {
     queryKey,
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       fetchManagerLeagues({
-        searched: userId ?? "",
+        searched: username ?? "",
         signal,
         // Carried forward so a re-read continues the refresh sequence rather
         // than restarting it — which the manager tool would read as a
@@ -105,19 +116,19 @@ export function userLeaguesQuery(userId: string | null, queryClient: QueryClient
         publish: (data: ManagerLeaguesData) =>
           queryClient.setQueryData(queryKey, data),
       }),
-    enabled: userId !== null,
+    enabled: username !== null,
     staleTime: MANAGER_STALE_TIMES.leagues,
     retry: false,
   };
 }
 
-export function useUserLeagues(userId: string | null): UserLeaguesState {
+export function useUserLeagues(username: string | null): UserLeaguesState {
   const queryClient = useQueryClient();
-  // Memoised on the id: the options carry the key the fetcher's `publish` closes
-  // over, and rebuilding them per render would rebuild that for nothing.
+  // Memoised on the name: the options carry the key the fetcher's `publish`
+  // closes over, and rebuilding them per render would rebuild that for nothing.
   const options = useMemo(
-    () => userLeaguesQuery(userId, queryClient),
-    [userId, queryClient],
+    () => userLeaguesQuery(username, queryClient),
+    [username, queryClient],
   );
 
   const query = useQuery(options);
@@ -135,7 +146,7 @@ export function useUserLeagues(userId: string | null): UserLeaguesState {
     // far sent only `progress` would read as loaded with an empty menu. The
     // state this hook promises is about the payload, so it is read off the
     // payload.
-    loading: userId !== null && result === null && query.error === null,
+    loading: username !== null && result === null && query.error === null,
     // A refresh that failed behind a payload worth keeping is a field on the
     // data; only a failure with nothing to show reaches the query's own error.
     error:

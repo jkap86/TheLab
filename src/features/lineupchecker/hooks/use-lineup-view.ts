@@ -37,17 +37,15 @@ import { useManagerPlayers } from "@/features/shared/use-manager-players";
  *
  * Three things are worth knowing about the seams it sits on.
  *
- * **The leagues are keyed by `user_id` and the sub-resources by username, which
- * is not the inconsistency it looks like.** Both are `managerQueryKeys` entries;
- * what differs is the spelling of the subject each read actually asks about. The
- * list comes off the stream keyed by the id, because the id is what this page
- * holds — there is no name in its URL — and that is the same entry the pick
- * tracker's picker fills, so the two tools share one stream rather than opening
- * two. The rosters and membership behind the subject filter are keyed by
- * `searched`, and `searched` is the account's *username*, so those entries are
- * the ones the manager tool fills: a reader who has looked themselves up over
- * there pays nothing here, and vice versa. One manager, one spelling, one entry —
- * the rule `managerQueryKeys` exists for.
+ * **Every read on this page is filed under the account's username, the leagues
+ * included.** The account is resolved on `/tools` and persisted, so this page
+ * holds both halves of it and could ask by either; the manager tool has only the
+ * name searched in its URL, so the name is the one spelling all of these entries
+ * can share, and `managerQueryKeys` lower-cases it so a typed `Jkap` and a
+ * canonical `jkap` are one entry. A reader who has looked themselves up over
+ * there pays for none of this, and vice versa. One manager, one spelling, one
+ * entry — the rule `managerQueryKeys` exists for, applied to the whole page
+ * rather than to the four reads it was easy to apply it to.
  *
  * **The two league lists are both kept**, for the reason the manager tool keeps
  * both: `leagueFiltered` is what the subject menus count over, since a menu
@@ -59,20 +57,21 @@ import { useManagerPlayers } from "@/features/shared/use-manager-players";
  * would have answered the question wrongly first.
  */
 export function useLineupView(user: UserInfo | null): LineupView {
-  // Keyed by the id: this page has no username in its URL, and Sleeper resolves
-  // an id as readily as a name. Null — no account stored — fetches nothing.
-  const stream = useUserLeagues(user?.user_id ?? null);
+  // The cache spelling, which is the manager tool's: the username, so both tools
+  // read one set of entries. Empty until an account resolves, which is also when
+  // every read below is gated off.
+  const searched = user?.username ?? "";
+  const userId = user?.user_id ?? null;
+
+  // By name rather than by id, so this is the same entry `/manager/<name>` fills
+  // — see the note above. Null — no account stored — fetches nothing.
+  const stream = useUserLeagues(user?.username ?? null);
 
   const [filters, setFilters] = useState<LeagueFilters>(DEFAULT_LEAGUE_FILTERS);
   const [subjects, setSubjects] = useState<SubjectFilters>(
     DEFAULT_SUBJECT_FILTERS,
   );
 
-  // The cache spelling, which is the manager tool's: the username, so both tools
-  // read one set of entries. Empty until an account resolves, which is also when
-  // the reads below are gated off.
-  const searched = user?.username ?? "";
-  const userId = user?.user_id ?? null;
   const leagues = stream.leagues;
 
   const leagueFiltered = useMemo(

@@ -26,7 +26,8 @@ export function storeAccount(user: UserInfo | null) {
 /**
  * The stored account, or null before one is resolved (and on the server, and on
  * the first client render). Only the resolved `UserInfo` is kept — a manager's
- * leagues re-derive from `user_id` (see `useUserLeagues`), so there is nothing
+ * leagues re-derive from it (`useUserLeagues` asks by `username`, which is the
+ * spelling the manager tool files the same answer under), so there is nothing
  * else worth storing.
  */
 export function useStoredAccount(): UserInfo | null {
