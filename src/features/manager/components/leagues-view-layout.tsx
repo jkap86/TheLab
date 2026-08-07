@@ -93,27 +93,23 @@ export function LeaguesViewLayout({
   view,
   stat,
   columns,
-  fade = true,
   children,
 }: {
   view: FilteredLeagues;
   /** The tab's own headline count, shown in the header readout's side rail. */
   stat: HeaderStat;
   /**
-   * The tab's stat-column headings, pinned with the header — see
-   * {@link ManagerHeader}'s own note on why they ride there. Each tab builds its
-   * own, since the catalogue behind them is the tab's grain and not this
-   * scaffold's business; a tab whose list has no stat columns omits it.
+   * The tab's filter rail and stat-column headings — a {@link ColumnsBar}, whose
+   * billet pins itself under the app bar while this list scrolls past. Each tab
+   * builds its own, since the catalogue behind the headings is the tab's grain
+   * and not this scaffold's business.
+   *
+   * It is rendered here as a *sibling* of the header and of the list rather than
+   * inside either, and that is what makes the pinning work at all: a sticky part
+   * travels only as far as its own parent's box, so the box it needs is the one
+   * the rows are in — see {@link ListLedge}.
    */
   columns?: ReactNode;
-  /**
-   * Whether the header's paint fades out below itself — see
-   * {@link ManagerHeader}'s own note. A tab lowers it while one of its rows has
-   * pinned an opaque surface flush against the card, where the fade has nothing
-   * to blend into and only washes out that row's own head; only the leagues tab
-   * has such a row today, so the default is the fade every tab has always had.
-   */
-  fade?: boolean;
   /** The tab's content, rendered once at least one league passes the filters. */
   children: ReactNode;
 }) {
@@ -194,23 +190,20 @@ export function LeaguesViewLayout({
         scope={scope}
         leagueCount={filtered.length}
         stat={stat}
-        // No key in the plate's corner — there is no corner seat any more. The
-        // league filters are at the leading end of the subject rail below, beside
-        // the *who is in it* half of the same question (see {@link SubjectRail}),
-        // which leaves the plate four readout corners and gives back the key's
-        // clearance; this card is pinned over the list, so that clearance is
-        // league rows.
-        //
-        // Drawn whenever there are leagues, and it is the *tab* that says
-        // whether the heading billet under the subject rail has rows to head —
-        // see `ColumnsBar`'s `headings`. What must not happen is this slot
-        // swapping between two different trees as the list narrows: it used to,
-        // and remounting the rail closed the search panel on exactly the press
-        // that emptied the list, which is the press that most needs undoing.
-        // The fallback below is only for a tab whose list has not loaded yet.
-        columns={hasLeagues ? (columns ?? <SubjectRail view={view} />) : undefined}
-        fade={fade}
       />
+
+      {/* The page's two filter rows and the list's own heading rail, between the
+          card and the rows and belonging to neither: they narrow the list, and
+          the billet has to be able to pin over it.
+
+          Drawn whenever there are leagues, and it is the *tab* that says whether
+          the heading billet under the subject rail has rows to head — see
+          `ColumnsBar`'s `headings`. What must not happen is this slot swapping
+          between two different trees as the list narrows: it used to, and
+          remounting the rail closed the search panel on exactly the press that
+          emptied the list, which is the press that most needs undoing. The
+          fallback is only for a tab whose list has not loaded yet. */}
+      {hasLeagues && (columns ?? <SubjectRail view={view} />)}
 
       {/* The trigger is drawn in the app bar rather than in the header's dock —
           the board describes every crawled draft rather than this manager's

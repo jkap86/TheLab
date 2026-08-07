@@ -103,17 +103,19 @@ export function ManagerLeagues({ searched }: { searched: string }) {
         value: showing,
         sub: showing === total ? undefined : `of ${total} total`,
       }}
-      // The header keeps the top through an open league — the filters, the
-      // subject rail and the heading rail all ride in it, and losing them at the
-      // moment a reader goes a level deeper is what the plate letting go used to
-      // cost. What it does give up is the fade below itself: an open card pins
-      // flush against the plate, so those 64px of near-solid background land on
-      // the card's own head rather than on the page.
-      fade={open === null}
       columns={
         <ColumnsBar
           view={view}
           headings={showing > 0}
+          // The heading rail holds the top through an open league too: it is
+          // what names the four columns the rows under it are being read on, and
+          // losing that at the moment a reader goes a level deeper is what the
+          // whole header pinning used to be justified by. What it gives up is the
+          // fade below itself — an open card pins flush against the rail, so that
+          // near-solid background would land on the card's own head rather than
+          // on the page.
+          pinned
+          fade={open === null}
           metrics={LEAGUE_METRICS}
           columns={columns}
           subject="League"

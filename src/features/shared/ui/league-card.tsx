@@ -509,39 +509,40 @@ export const OPEN = {
  *
  * **That chrome is two parts, not one, and the second is measured.** The card
  * used to pin at the app bar's height alone, because opening a league unpinned
- * the manager plate — which took both filter rows and the heading rail off screen
- * with it. The plate holds the top now, so the offset is the bar plus the plate,
- * and the plate publishes its own height as `--manager-header-h` (see
+ * the chrome above it — which took both filter rows and the heading rail off
+ * screen with it. The heading rail holds the top now (the manager plate and the
+ * filter row scroll away with the page), so the offset is the bar plus that rail,
+ * and the rail publishes its own height as `--list-ledge-h` (see
  * {@link usePinnedHeight}). Both terms are in the `max-h` as well as the `top`:
- * they are the same subtraction, and a cap that forgot the plate would hang the
- * panel's footer off the bottom of the screen by exactly the plate's height.
+ * they are the same subtraction, and a cap that forgot the rail would hang the
+ * panel's footer off the bottom of the screen by exactly the rail's height.
  *
  * Four details ride on it. `top` and `scroll-mt` are the same offset, so the
  * position the open-scroll aims at is exactly the one the card sticks at and the
  * two can't disagree by a pixel. The `z` is what keeps the cards *after* it from
  * painting over it — they are `relative` themselves, so DOM order would
- * otherwise win — and it stays below the header plate's `z-40`, since the plate
- * has to cover what slides under it and its own search panel floats down over
- * this card. It replaces `relative` on the card rather than joining it: `sticky`
- * is a positioned element too, so the nameplate still has its containing block,
- * and two position utilities on one element is a fight decided by Tailwind's
- * alphabetical emission order rather than by anything readable here. And it
- * **paints the page ground**, which the resting card has no need to: the
+ * otherwise win — and it stays below the heading rail's `z-30`, since the rail
+ * has to cover what slides under it and the subject rail's search panel floats
+ * down over this card. It replaces `relative` on the card rather than joining it:
+ * `sticky` is a positioned element too, so the nameplate still has its containing
+ * block, and two position utilities on one element is a fight decided by
+ * Tailwind's alphabetical emission order rather than by anything readable here.
+ * And it **paints the page ground**, which the resting card has no need to: the
  * nameplate hangs into the padding above the plate, and pinned under the chrome
  * that band would otherwise be a 12px window with the list sliding through it.
  */
 export const OPEN_BOX =
-  "sticky top-[calc(var(--site-header-h)+var(--manager-header-h))] z-20 bg-[var(--background)] " +
-  "flex max-h-[calc(100svh-var(--site-header-h)-var(--manager-header-h)-1.5rem)] flex-col";
+  "sticky top-[calc(var(--site-header-h)+var(--list-ledge-h))] z-20 bg-[var(--background)] " +
+  "flex max-h-[calc(100svh-var(--site-header-h)-var(--list-ledge-h)-1.5rem)] flex-col";
 
 /**
  * The offset every scroll to this card aims at, and the one the open card sticks
- * at — the app bar's height plus the manager plate's, so the browser does that
- * arithmetic in `calc()` rather than an effect adding two numbers up.
+ * at — the app bar's height plus the pinned heading rail's, so the browser does
+ * that arithmetic in `calc()` rather than an effect adding two numbers up.
  *
- * `--manager-header-h` is registered at `0px` in `globals.css`, so a list drawn
- * with no plate over it (there is none today) resolves this to the bar alone
- * rather than to an invalid length that would drop the offset entirely.
+ * `--list-ledge-h` is registered at `0px` in `globals.css`, so a list drawn with
+ * no rail pinned over it resolves this to the bar alone rather than to an invalid
+ * length that would drop the offset entirely.
  *
  * It is worn at **both** states rather than riding with the open box, because
  * the two scrolls happen at opposite ends of the gesture: opening aims at a card
@@ -551,7 +552,7 @@ export const OPEN_BOX =
  * behind it at all.
  */
 export const SCROLL_OFFSET =
-  "scroll-mt-[calc(var(--site-header-h)+var(--manager-header-h))]";
+  "scroll-mt-[calc(var(--site-header-h)+var(--list-ledge-h))]";
 
 /**
  * The league's name on the card's top edge, and the card's one focusable

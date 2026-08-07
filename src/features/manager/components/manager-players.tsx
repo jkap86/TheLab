@@ -111,6 +111,7 @@ export function ManagerPlayers({ searched }: { searched: string }) {
           <ColumnsBar
             view={view}
             headings={shares.players.length > 0}
+            pinned
             metrics={PLAYER_SHARE_METRICS}
             columns={columns}
             subject="Player"

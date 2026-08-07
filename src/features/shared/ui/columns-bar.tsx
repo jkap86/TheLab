@@ -69,6 +69,15 @@ const ColumnsEditor = dynamic(
  * two storeys of one billet, which is cheaper and was wrong here — see
  * {@link ListLedge} for the rule that came out of it.
  *
+ * **It renders them as siblings rather than inside a box of its own, and that is
+ * load-bearing.** Over a list the billet pins itself under the app bar, and a
+ * sticky element travels only as far as its *own parent's* box — so a wrapper
+ * around these two would scroll away and take the rail with it a few pixels
+ * later. A fragment puts both in the page's own column, beside the rows, which
+ * is the box the rail has to span. The clearance that wrapper used to hold is on
+ * the billet's own box now (see {@link ListLedge}'s pinned box), since a
+ * `gap` needs the parent this deliberately does not have.
+ *
  * **The headings are drawn at every width — they used to drop below `sm` and let
  * the cards grow their own labels back.** That made the same list two different
  * things either side of one breakpoint: a table with a heading rail on a laptop,
@@ -89,6 +98,8 @@ export function ColumnsBar<C>({
   view,
   storey,
   headings = true,
+  pinned = false,
+  fade = true,
   onColumnChange,
   onColumns,
   onReset,
@@ -136,6 +147,18 @@ export function ColumnsBar<C>({
    * two.
    */
   headings?: boolean;
+  /**
+   * Whether the billet holds the top while the list scrolls under it — see
+   * {@link ListLedge}. True for a list on a page; false inside the shares sheet,
+   * which scrolls its own box.
+   */
+  pinned?: boolean;
+  /**
+   * Whether the pinned billet's ground fades below itself — see
+   * {@link ListLedge}. A page lowers it while one of its rows has pinned an
+   * opaque surface flush against the rail.
+   */
+  fade?: boolean;
   onColumnChange: (slot: number, key: string) => void;
   onColumns: (keys: readonly string[]) => void;
   onReset: () => void;
@@ -160,20 +183,22 @@ export function ColumnsBar<C>({
 
   return (
     <>
-      {/* Two parts now, and the gap between them is the point rather than
-          spacing: the slab's own wall is 6px, so 12px here leaves ~18px of
-          ground under a lit face before the billet's own begins. Below that the
-          two read as one crowded instrument again, which is what splitting them
-          was for. */}
-      <div className="flex flex-col gap-3">
-        {view && <SubjectRail view={view} />}
+      {view && <SubjectRail view={view} />}
 
-        {/* No rows and no storey is no billet: a heading rail with nothing to
-            head and no control on it is a lit face saying nothing. */}
-        {(headingCells || storey) && (
-          <ListLedge storey={storey} headings={headingCells} />
-        )}
-      </div>
+      {/* No rows and no storey is no billet: a heading rail with nothing to
+          head and no control on it is a lit face saying nothing.
+
+          The clearance between the two lit faces rides on the billet's own box
+          rather than being a `gap` here — see the note above on why these two
+          cannot share one. */}
+      {(headingCells || storey) && (
+        <ListLedge
+          storey={storey}
+          headings={headingCells}
+          pinned={pinned}
+          fade={fade}
+        />
+      )}
 
       {mounted && (
       <ColumnsEditor

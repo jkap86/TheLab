@@ -1081,10 +1081,21 @@ stops holding, a comment saying it does would not have caught it.
   can't drift a pixel off the number under it, with a transparent `divide-x`
   because the cards' own divider sits *inside* their box). Four things it
   taught:
-  - **It rides inside `ManagerHeader`**, as a `columns` node, because that card is
-    pinned: a rail that scrolled away halfway down the list would leave the
-    numbers unlabelled. Sitting there it needs no offset of its own — measuring
-    the header's height to pin a sibling under it is the machinery this avoids.
+  - **It pins itself under the app bar, and it is the only part of these pages'
+    header that does.** A rail that scrolled away halfway down the list would
+    leave the numbers unlabelled, which is the whole argument — and for a while it
+    was met by riding *inside* `ManagerHeader`, which pinned the manager plate and
+    both filter rows along with it. That is a card's worth of facts about the
+    account held on screen permanently, paid for out of the list, so that four
+    headings could stay. The account is read once and the headings are read at row
+    ninety, so the plate scrolls and the rail holds (`ListLedge`'s `pinned`).
+    Two things follow. It is a **sibling** of the header and of the list rather
+    than a child of either — a sticky part travels only as far as its own parent's
+    box, so a rail seated in the header, or in any box wrapping it and the filter
+    row, sticks nowhere; the box it needs is the one the rows are in, which is the
+    page shell's `<main>`. And it **paints the page's ground on its own box**,
+    outside the inset that lands its headings over the cards' numbers, or the rows
+    scroll through the gutter either side of the billet.
   - **A card names none of its columns and holds no picker, at any width.** The
     labels used to come back below `sm`, where the rail was dropped, and that
     made one list two products either side of a breakpoint — a heading rail on a
@@ -3115,25 +3126,29 @@ stops holding, a comment saying it does would not have caught it.
   a page that never draws the clock never mounts `useKickoff` and costs no
   `/api/kickoff` request either.
 
-  **It is pinned under the app bar and it carries no tabs** — those
-  two go together: a card that stays on screen is paying for its height out of
-  the list behind it, so navigation left the card entirely (first to a tab strip
-  in the bar, then to the bar's tools menu, which listed the three views anyway)
-  and what is left is identity, state and the record readout. It offsets by
-  `--site-header-h` rather than a retyped number, bleeds `-mx-4 px-4` to
-  `PageShell`'s `wide` gutter and paints `--background`, because a transparent
-  pinned card lets the rows scroll through the gaps around its rounded corners.
-  Its `z-40` sits above the cards' `z-30` menus and below the drawer's `z-50`.
-  **It lets go of the top for exactly one thing: a league card opened into its
-  detail panel** (`pinned`, defaulting to true and lowered by `ManagerLeagues`
-  and by the lineup checker, which draws the same card). That is the same argument the pinning rests on, run the
-  other way — a pinned card is paying for its height out of whatever is behind
-  it, and an open panel is sized to the screen, so the plate would be taking a
-  quarter of the one thing being read to restate facts about the account. What
-  makes it cheap is that a sticky element occupies its normal flow space either
-  way: the swap is `sticky` → `relative` and nothing moves, the plate simply
-  stops following the scroll. `relative` rather than nothing, because the fade
-  below the header is an `::after` on that box.
+  **It scrolls away, and only the list's heading rail stays.** It used to pin
+  under the app bar and carry the filter row and that rail inside it, so all
+  three held the top together — which is the argument that also took its tabs
+  off it (navigation left the card entirely, first to a tab strip in the bar and
+  then to the bar's tools menu, which listed the three views anyway) and then
+  argued itself out: a card that stays on screen is paying for its height out of
+  the list behind it, and what a reader still needs at row ninety is the names of
+  the four columns they are scanning, not the account they looked up at the top
+  of the page. So the rail pins itself now (see the columns bar above) and this
+  is an ordinary card above a list. Five things went with the pinning, and each
+  belonged to it rather than to the card: the `sticky` and the `z` that ranked
+  it, the `-mx-4 px-4` bleed to `PageShell`'s `wide` gutter, the `--background`
+  paint (both so a list passed *behind* the card rather than through the gaps
+  around its rounded corners), the `::after` that faded that paint into the
+  ambient aurora rather than ending against it, and the `-mt-10` that cancelled
+  the shell's top padding so the card's resting place *was* its pinned one. The
+  first four are the rail's now (at `z-30`, since what it has to rank against is
+  the open card under it and the search panel over it, not a list of menus). The
+  fifth is simply gone: with no top to pin to, the page's ordinary breathing room
+  above the card is the right answer.
+  **What the card no longer renders is the filter row and that rail**, and it
+  could not if it wanted to — a sticky part seated in a box that scrolls away
+  scrolls away with it. Both are the page's own children, beside the rows.
 - **A league card is a trade card, and the slab stops at the press.** It wore
   `LIST_ROW_SURFACE` and wears `.lab-slab` now — wall, brushed face, chamfered
   corners, its name riding out of the top edge on a nameplate, its record in a
@@ -3255,17 +3270,21 @@ stops holding, a comment saying it does would not have caught it.
   and the rest of the list several screens down. Four pieces hold the correction
   up, and each is easy to undo by treating the cap as styling:
   - **Which league is open lives in `ManagerLeagues`, not in the card.** Opening
-    one is a claim about the whole page — the card takes the screen and the
-    header lets go of the top — and two cards making that claim at once is two
-    things each asking to be the thing being read. So it is one id, and opening
-    a league closes the one before it. It is also **read against the filtered
-    list during render** rather than trusted: narrowing the filters can take the
-    open league off screen, and an id pointing at a card nobody can see would
-    leave the header unpinned for a panel that isn't there.
-  - **The scroll is `scrollIntoView` against a `scroll-mt`,** so the app bar's
-    height is the browser's arithmetic rather than a number read at runtime —
-    and only on *open*. Closing scrolls nothing: reversing a scroll the reader
-    didn't ask for is how a list loses its place.
+    one is a claim about the whole page — the card takes the screen, and the
+    heading rail pinned above it drops its fade because the card is now flush
+    against it — and two cards making that claim at once is two things each
+    asking to be the thing being read. So it is one id, and opening a league
+    closes the one before it. It is also **read against the filtered list during
+    render** rather than trusted: narrowing the filters can take the open league
+    off screen, and an id pointing at a card nobody can see would leave the rail
+    dropping a fade for a panel that isn't there.
+  - **The scroll is `scrollIntoView` against a `scroll-mt`,** so the chrome's
+    height is the browser's arithmetic rather than a number read at runtime — the
+    app bar plus the heading rail pinned under it, whose own height is the app's
+    one runtime measurement (`--list-ledge-h`, published by the rail) because
+    the rail takes a second line below `sm`. And only on *open*: closing scrolls
+    nothing, since reversing a scroll the reader didn't ask for is how a list
+    loses its place.
   - **The panel takes no `flex-1`.** A flex item's default `0 1 auto` is what
     makes a short panel — one still loading, or a shallow league — exactly as
     tall as its contents while only an overrunning one shrinks into the cap and
@@ -3337,8 +3356,8 @@ stops holding, a comment saying it does would not have caught it.
   *is*: a milled identity plate, and a recessed dock under it holding the
   triggers. The second retired the dock, because once the board's trigger went up
   into the app bar it was a ~50px trough seating a single control — and this card
-  is *pinned*, so that was 50px of league rows covered on all three tabs for a
-  part pressed once a session.
+  was *pinned* at the time, so that was 50px of league rows covered on all three
+  tabs for a part pressed once a session.
 
   **The third move took the key off this plate on the manager tabs, and what it
   says about the two before it is that they were solving the wrong problem.**
@@ -3348,7 +3367,7 @@ stops holding, a comment saying it does would not have caught it.
   below was already a filter row with an obvious hole at its leading end. The
   key leads that rail now (see {@link SubjectRail}), the plate keeps its three
   readout corners, and the 16px the seat cost — 12 of body padding, 4 of overhang
-  margin — goes back to a list this card is pinned over.
+  margin — goes back to the list this card was, at the time, pinned over.
 
   **The fourth move deleted the seat, and the lineup checker is why.** That page
   was the last one in the corner — one list, no subject rail, nothing else to
@@ -3367,9 +3386,11 @@ stops holding, a comment saying it does would not have caught it.
   wall is a `box-shadow` the clip would cut, leaving a part with no thickness,
   which is exactly what a pressable part must not be. Two things still hold:
   - **The plate's height is the same in September as in December.** The record
-    bar keeps its empty rail when nothing has been played, because a card pinned
-    under the app bar can't change how much of the list it covers as the season
-    turns over. The transient state line is the one thing allowed to grow.
+    bar keeps its empty rail when nothing has been played: the rule arrived while
+    the card was pinned, where its height was list rows covered, and it survives
+    the card letting go of the top for the plainer reason that a header growing a
+    row as the season turns over moves the whole list under it. The transient
+    state line is the one thing allowed to grow.
   - **The material says which part is which**, the same raised/recessed grammar
     as the app bar: the plate is a milled face (a specular sweep, the cyan rail)
     and its corner tabs are wells because they are readouts. Every corner is a
@@ -3652,7 +3673,7 @@ stops holding, a comment saying it does would not have caught it.
   - **The material is the separation, and the slab is what it is for.** A wall
     running down *and* right, graded from a lit near corner to a dark far one,
     brushed face, chamfers on all four corners against the billet's two — nothing
-    else in the pinned region has a wall on two sides. It wears `.lab-slab-fixed`
+    else in the page's header has a wall on two sides. It wears `.lab-slab-fixed`
     because it is a **surface holding controls, not a card**: `.lab-slab`'s lift
     and brightening bloom belong to a part you press, and a rail that rose under
     the cursor would promise a press that lands on whatever chip is under the
@@ -3683,7 +3704,10 @@ stops holding, a comment saying it does would not have caught it.
   - **The search panel is outside the slab, and it has to be.** `clip-path` clips
     a whole subtree, so the chamfered face would cut off anything floating under
     the rail — the panel is a sibling, in a `relative` wrapper that is otherwise
-    the billet's own geometry so the two parts share a left edge. This is the same
+    the billet's own geometry so the two parts share a left edge. It is `z-40`,
+    which is a window rather than a spare number: it hangs *down* over the
+    heading billet, which pins itself at `z-30` while the list scrolls under it,
+    and it stays below the app bar's `z-50`. This is the same
     rule `ListLedge` owns its wrapper for.
   - **The row wraps rather than compresses**, and the caption goes below `sm`.
     At 390px a caption, a token, a trigger and the count do not fit one line, and
@@ -3786,7 +3810,7 @@ stops holding, a comment saying it does would not have caught it.
   component. Its container matches `PageShell`'s so the wordmark lines up with
   the content under it. It is **pinned**, so the way home is reachable from the
   bottom of a several-hundred-row list and not only from the top; its height is
-  `--site-header-h` (a variable, not padding) because the manager card pins
+  `--site-header-h` (a variable, not padding) because a list's heading rail pins
   itself directly underneath and has to know where this ends.
   **It carries a route list now, which this note used to forbid.** The old rule
   was that a second navigation system competes with the first; what it produced
@@ -3906,7 +3930,7 @@ stops holding, a comment saying it does would not have caught it.
     data (the shape of a board) and a class cannot carry three of anything.
   - **The bar's extruded edge is drawn *inside* the header box** (`--bar-edge-h`,
     counted into `--site-header-h`). As an outside shadow it would be covered by
-    the manager card, which pins at exactly that offset.
+    a list's heading rail, which pins at exactly that offset.
   - **The plate is tinted glass, and the blur is what makes that safe.** It was
     opaque, on the reasoning that a surface with visible thickness can't have
     page content showing through its extrusion. What that bought was a flat band
