@@ -1,3 +1,4 @@
+import { asNumber, isRecord, items, numbers } from "./jsonb.ts";
 import type { Trade, TradePickAsset, TradeSide } from "./types.ts";
 
 /**
@@ -109,24 +110,4 @@ export function assembleTrade(
     completed_at: row.status_updated ?? row.created,
     sides,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function items(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-/** Sleeper sends roster ids as numbers, but has been seen to send strings. */
-function asNumber(value: unknown): number | null {
-  const n = typeof value === "string" ? Number(value) : value;
-  return typeof n === "number" && Number.isFinite(n) ? n : null;
-}
-
-function numbers(value: unknown): number[] {
-  return items(value)
-    .map(asNumber)
-    .filter((n): n is number => n !== null);
 }

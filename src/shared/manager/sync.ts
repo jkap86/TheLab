@@ -6,6 +6,7 @@ import {
 } from "@/shared/db";
 import { getNflState, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague, SleeperNflState } from "@/shared/sleeper";
+import { syncTradeRosters } from "@/shared/trades";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
 import { markLeaguesAccessed } from "./crawl-queue";
@@ -172,6 +173,21 @@ export async function syncLeagueGraphs(
     try {
       const graph = await fetchLeagueGraph(league, weeksFor(league.league_id));
       await persistLeagueGraph(graph);
+      // The pre-trade rosters ride on this pass because this is where both of
+      // their inputs land — the current rosters and the transaction log — and
+      // because the walk is only correct once the log it reads is committed.
+      // **Its failure is not this league's failure**, the per-read judgement
+      // `/api/league/[leagueId]` makes about its projections: the graph is the
+      // point and these are a derived extra, so a `failed` here would report a
+      // league that synced perfectly well as one that didn't, and take it out
+      // of the crawler's stamp with it. Due work stays due, so the next pass
+      // simply tries again.
+      await syncTradeRosters(league.league_id, graph.txWeeks).catch((error) => {
+        console.warn(
+          `[trades] pre-trade rosters for league ${league.league_id} failed:`,
+          errorMessage(error),
+        );
+      });
       counts.rosters += graph.rosters.length;
       counts.leagueUsers += graph.users.length;
       counts.tradedPicks += graph.tradedPicks.length;
