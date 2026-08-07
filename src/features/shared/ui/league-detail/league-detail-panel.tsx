@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
+import { useMemo, useState, type ReactNode } from "react";
 
 // Both imported directly rather than through their barrels, which would pull
 // `pg`-backed code into the client bundle — see `slots.ts` and `rank.ts`.
@@ -12,15 +13,48 @@ import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 // this panel is deliberately absent from it in any case (see `./index.ts`).
 import { adpValueQueryString, todayIso } from "../../adp-controls";
 import { useAdpControls } from "../../adp-controls-context";
-import { DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS } from "../../roster-metrics";
-import { DEFAULT_TEAM_COLUMNS, TEAM_METRICS } from "../../standings-metrics";
+import {
+  DEFAULT_PLAYER_COLUMNS,
+  PLAYER_COLUMN_PRESETS,
+  PLAYER_METRICS,
+  type PlayerMetricContext,
+} from "../../roster-metrics";
+import {
+  DEFAULT_TEAM_COLUMNS,
+  rosterValueTotal,
+  TEAM_COLUMN_PRESETS,
+  TEAM_METRICS,
+  type TeamMetricContext,
+} from "../../standings-metrics";
+import { useColumnsEditor } from "../../use-columns-editor";
 import { useLeagueDetail } from "../../use-league-detail";
 import { usePersistedColumns } from "../../use-persisted-columns";
+import type { ColumnsEditor as ColumnsEditorComponent } from "../columns-editor";
 import { PanelLoading, PanelMessage } from "../panel-message";
 import { PanelTelemetry } from "./panel-telemetry";
 import { RosterDetail } from "./roster-detail";
 import { Standings } from "./standings";
-import type { LeagueDetailResult } from "./types";
+import { managerLabel } from "./team-label";
+import type { LeagueDetailResult, LeagueTeamView, TeamOutlook } from "./types";
+
+/**
+ * The dialog both of this panel's tables aim their columns from, loaded the
+ * first time a heading is pressed.
+ *
+ * The same component the lists' heading rail opens, so the two tools' boards are
+ * edited the same way — and the same `dynamic()` for the same reason: it is a
+ * `<dialog>` nobody has opened, and its slot previews, captioned bays and preset
+ * row are not small. The trigger is three modules away (the headings live in
+ * `Standings` and `RosterDetail`), so the seam is a module boundary and the split
+ * is real rather than nominal.
+ *
+ * `dynamic` erases the generic, so the loaded component is cast back to what it
+ * is — safe because the cast names the very module being imported.
+ */
+const ColumnsEditor = dynamic(
+  () => import("../columns-editor").then((m) => m.ColumnsEditor),
+  { ssr: false },
+) as typeof ColumnsEditorComponent;
 
 /**
  * A league's standings on the left and the selected team's roster on the right.
@@ -46,9 +80,23 @@ import type { LeagueDetailResult } from "./types";
  * rank and totals, so scrolling the roster out from under it left the numbers
  * describing a team the panel no longer named; and each half's column headings
  * are what say which metric its value columns are pointed at, so a list scrolled
- * past its own heading is a column of unlabelled numbers. Both are also the
- * panel's only controls (the headings are the column pickers), and a control
- * that scrolls away is one you have to go back for.
+ * past its own heading is a column of unlabelled numbers. The headings are also
+ * the panel's only controls — pressing one opens the columns editor armed on
+ * that slot — and a control that scrolls away is one you have to go back for.
+ *
+ * **Aiming a column is the lists' own dialog, not a menu of this panel's.** Each
+ * table used to hang a flat catalogue under whichever heading was pressed, which
+ * is exactly the shape {@link ColumnsEditor} was written to replace one tool
+ * over: no preview of what a column would say, no named pair, and nothing about
+ * which other slot already holds the metric being picked. Both tables open that
+ * dialog now — one each, since a team's aggregate and a player's number are two
+ * catalogues and two selections — so the board is edited the same way here as on
+ * the leagues list that expands into this panel. What that retired along with the
+ * menus is a whole apparatus this file used to own: one-picker-at-a-time, an
+ * outside-click listener, an Escape listener, and each half lifting its stacking
+ * order over the other so an overhanging menu wasn't painted under it. A
+ * `<dialog>` is in the top layer and reports every way out through its own
+ * `close` event, so all four are the platform's.
  *
  * The two halves scroll separately rather than together for the reason they are
  * side by side at all: reading one against the other is the point, and a roster
@@ -177,48 +225,32 @@ function Panel({
   // mounts on expand and unmounts on collapse, which used to reset both tables
   // every time a different league was opened. One key per grain, not per league —
   // what a column means is a fact about the catalogue, not about this league.
-  const { columns: teamColumns, setColumn: setTeamColumn } = usePersistedColumns(
-    "standings",
-    DEFAULT_TEAM_COLUMNS,
-    TEAM_METRICS,
-  );
-  const { columns: rosterColumns, setColumn: setRosterColumn } =
-    usePersistedColumns("roster", DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS);
-  const [openPicker, setOpenPicker] = useState<string | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const {
+    columns: teamColumns,
+    setColumn: setTeamColumn,
+    setColumns: setTeamColumns,
+    reset: resetTeamColumns,
+  } = usePersistedColumns("standings", DEFAULT_TEAM_COLUMNS, TEAM_METRICS);
+  const {
+    columns: rosterColumns,
+    setColumn: setRosterColumn,
+    setColumns: setRosterColumns,
+    reset: resetRosterColumns,
+  } = usePersistedColumns("roster", DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS);
 
-  useEffect(() => {
-    if (openPicker === null) return;
-    const onDown = (event: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
-        setOpenPicker(null);
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpenPicker(null);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [openPicker]);
+  // One editor per table, because they are two catalogues and two selections —
+  // a team's aggregate and a player's number are not choices from one list. Each
+  // holds which heading opened it, so a press lands on the column the reader
+  // meant rather than on a dialog they then have to aim.
+  const teamEditor = useColumnsEditor();
+  const rosterEditor = useColumnsEditor();
 
-  const togglePicker = (key: string) =>
-    setOpenPicker((current) => (current === key ? null : key));
-  const pickTeamColumn = (slot: number, key: string) => {
-    setTeamColumn(slot, key);
-    setOpenPicker(null);
-  };
-  const pickRosterColumn = (slot: number, key: string) => {
-    setRosterColumn(slot, key);
-    setOpenPicker(null);
-  };
-
-  // The open menu overhangs the rows below it, so the half it opens from lifts its
-  // stacking order over the other while a picker is open.
-  const teamPickerOpen = openPicker?.startsWith("team-") ?? false;
+  // What each editor previews a metric against: the team the panel is currently
+  // about, and the first player of its roster as the list below draws it. Both
+  // are assumptions — every team and every player has its own numbers — so the
+  // editor names its subject in the footer rather than letting one row's `41,320`
+  // pass as the column's own answer.
+  const preview = useMemo(() => previewSubjects(data, selected), [data, selected]);
 
   // The panel is one milled instrument rather than two adjacent boxes: a plate
   // holding a recessed field (the standings, which is read) beside a raised one
@@ -259,10 +291,9 @@ function Panel({
   // Splitting them is also what makes the query *stable* — a container whose own
   // padding is set by a query on itself changes the content box that query is
   // measured against, so the threshold moves as it is crossed. The container is
-  // one level up, around every state this panel can be in; this div holds only
-  // the ref the pickers' outside-click test reads.
+  // one level up, around every state this panel can be in.
   return (
-    <div ref={panelRef} className="flex min-h-0 flex-col">
+    <div className="flex min-h-0 flex-col">
       {/* Outside the inset on purpose: the readout is the card's head
           continuing, so it runs the full width under its own seam rather than
           sitting in the body as a third object between the name and the
@@ -286,10 +317,7 @@ function Panel({
             selectedId={selected.roster_id}
             onSelect={setSelectedId}
             columns={teamColumns}
-            openPicker={openPicker}
-            onTogglePicker={togglePicker}
-            onSelectColumn={pickTeamColumn}
-            elevated={teamPickerOpen}
+            onOpenColumn={teamEditor.open}
           />
           <RosterDetail
             team={selected}
@@ -299,17 +327,118 @@ function Panel({
             outlook={data.outlook}
             values={data.values}
             columns={rosterColumns}
-            openPicker={openPicker}
-            onTogglePicker={togglePicker}
-            onSelectColumn={pickRosterColumn}
-            elevated={openPicker !== null && !teamPickerOpen}
+            onOpenColumn={rosterEditor.open}
           />
         </div>
         <OutlookCaveat data={data} />
       </div>
+
+      {/* Two dialogs, one per table, each mounted from the first press onward —
+          see {@link useColumnsEditor}. They sit outside the halves rather than
+          inside the one that opened them: a `<dialog>` is in the top layer, so
+          nothing about either half's scroll box or stacking order reaches it. */}
+      {teamEditor.mounted && (
+        <ColumnsEditor
+          metrics={TEAM_METRICS}
+          columns={teamColumns}
+          presets={TEAM_COLUMN_PRESETS}
+          ctx={preview.team}
+          previewLabel={preview.teamLabel}
+          openSlot={teamEditor.openSlot}
+          onClose={teamEditor.close}
+          onColumnChange={setTeamColumn}
+          onColumns={setTeamColumns}
+          onReset={resetTeamColumns}
+        />
+      )}
+      {rosterEditor.mounted && (
+        <ColumnsEditor
+          metrics={PLAYER_METRICS}
+          columns={rosterColumns}
+          presets={PLAYER_COLUMN_PRESETS}
+          ctx={preview.player}
+          previewLabel={preview.playerLabel}
+          openSlot={rosterEditor.openSlot}
+          onClose={rosterEditor.close}
+          onColumnChange={setRosterColumn}
+          onColumns={setRosterColumns}
+          onReset={resetRosterColumns}
+        />
+      )}
     </div>
   );
 }
+
+/**
+ * The subjects the two columns editors preview their metrics against: the
+ * selected team, and the first player of its roster as the panel draws it.
+ *
+ * The leagues list previews against the first row on screen, and this is the
+ * same rule read at this panel's two grains — except that the row worth reading
+ * here is the *selected* one rather than the first, since it is the team the
+ * telemetry names and the roster half is listing. The player follows the roster
+ * list's own order: the optimal lineup's first filled slot, falling back to
+ * what Sleeper has seated and then to anything on the roster, so the number in
+ * the preview is one the reader can find a few pixels away.
+ *
+ * A team always exists (the panel returns early on an empty league); a player
+ * may not — an undrafted league has empty rosters — and the editor takes a null
+ * context as "no previews", which is the honest answer rather than a column of
+ * em dashes attributed to nobody.
+ */
+function previewSubjects(
+  data: LeagueDetailResult,
+  selected: LeagueTeamView,
+): {
+  team: TeamMetricContext;
+  teamLabel: string;
+  player: PlayerMetricContext | null;
+  playerLabel: string | null;
+} {
+  const teamOutlook: TeamOutlook | undefined = data.outlook?.teams.find(
+    (t) => t.roster_id === selected.roster_id,
+  );
+
+  const team: TeamMetricContext = {
+    team: selected,
+    outlook: teamOutlook ?? null,
+    ktcTotal: rosterValueTotal(selected.players, data.values.ktc),
+    adpTotal: rosterValueTotal(selected.players, data.values.adp),
+    superflex: data.values.superflex,
+    draftCount: data.values.adp_draft_count,
+  };
+
+  // Sleeper pads an unfilled slot with an empty id or a literal "0", so a
+  // roster's first *entry* is not necessarily a player.
+  const playerId =
+    teamOutlook?.optimal.find((s) => s.player_id)?.player_id ??
+    selected.starters.find(real) ??
+    selected.players.find(real) ??
+    null;
+
+  if (!playerId) {
+    return { team, teamLabel: managerLabel(selected), player: null, playerLabel: null };
+  }
+
+  return {
+    team,
+    teamLabel: managerLabel(selected),
+    player: {
+      outlook: data.outlook?.players[playerId],
+      split: teamOutlook?.weekly_split[playerId],
+      horizon: data.outlook?.weeks.length ?? 0,
+      ktc: data.values.ktc[playerId] ?? null,
+      adp: data.values.adp[playerId] ?? null,
+      adpPosition: data.values.adp_position[playerId] ?? null,
+      superflex: data.values.superflex,
+      draftCount: data.values.adp_draft_count,
+    },
+    playerLabel: data.players[playerId]?.name ?? playerId,
+  };
+}
+
+/** Whether a roster entry names a player rather than padding an empty slot. */
+const real = (id: string) => Boolean(id) && id !== "0";
 
 /**
  * Says so when this league's projections are known to be incomplete.

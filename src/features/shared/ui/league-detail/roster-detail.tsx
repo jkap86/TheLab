@@ -6,8 +6,8 @@ import { useMemo } from "react";
 // pull `pg`-backed code into the client bundle — see `slots.ts`.
 import { NON_STARTING_SLOTS } from "@/shared/projections/slots";
 
-import { PLAYER_METRICS } from "../../roster-metrics";
-import { ColumnPicker, type ColumnOption } from "./column-picker";
+import { PLAYER_METRICS, PLAYER_METRICS_BY_KEY } from "../../roster-metrics";
+import { ColumnHeading } from "./column-heading";
 import { DraftPicks } from "./draft-picks";
 import { PlayerRow } from "./player-row";
 import { NO_NUMBERS, SPLIT_LAYOUT } from "./roster-layout";
@@ -19,12 +19,6 @@ import type {
   PlayerSummary,
   TeamOutlook,
 } from "./types";
-
-/** The player metrics offered in every roster column's picker. */
-const PLAYER_METRIC_OPTIONS: ColumnOption[] = PLAYER_METRICS.map((m) => ({
-  key: m.key,
-  label: m.label,
-}));
 
 /** A row of the starters list: a slot and who is in it. */
 type SlotRow = { slot: string; player_id: string };
@@ -44,15 +38,15 @@ type SlotRow = { slot: string; player_id: string };
  *
  * The two value columns beside each player are slots the reader points at a
  * player-level metric — the projected start/bench split to start with, swappable
- * to the season total or to this player's KTC and ADP value from the rail above
- * the list. Which metric each shows is held above this panel so the two sections'
- * columns line up and one picker moves the whole column.
+ * to the season total or to this player's KTC and ADP value. Pressing either
+ * heading on the rail above the list opens the panel's columns editor armed on
+ * that slot; which metric each column shows is held above this panel, so the two
+ * sections' columns line up and one pick moves the whole column.
  *
  * **The head is fixed and the two sections scroll under it.** This half scrolls
  * on its own (see {@link LeagueDetailPanel}), and what is above the scroll box is
  * what a scrolled roster can't do without: the rail naming the two number columns
- * — which is also the control that aims them, and which could not stay inside the
- * box in any case, since its menu overhangs the rows it would be clipped by.
+ * — which is also what opens the editor that aims them.
  *
  * It names no team of its own. The plate that used to head it — avatar, team name
  * and record — restated the standings row that is already highlighted a few pixels
@@ -67,10 +61,7 @@ export function RosterDetail({
   outlook,
   values,
   columns,
-  openPicker,
-  onTogglePicker,
-  onSelectColumn,
-  elevated,
+  onOpenColumn,
 }: {
   team: LeagueTeamView;
   /** Every team in the league, for naming the roster an acquired pick came from. */
@@ -82,14 +73,8 @@ export function RosterDetail({
   values: LeagueRosterValues;
   /** The metric key each of the two value columns shows. */
   columns: string[];
-  /** Which picker is open across the whole panel, if any. */
-  openPicker: string | null;
-  /** Toggle a picker by its key (the panel closes any other that was open). */
-  onTogglePicker: (key: string) => void;
-  /** Point value column `slot` at another metric. */
-  onSelectColumn: (slot: number, key: string) => void;
-  /** Lift this half's stacking order while one of its pickers overhangs the rows. */
-  elevated: boolean;
+  /** Open the panel's player-columns editor armed on this column's slot. */
+  onOpenColumn: (slot: number) => void;
 }) {
   const teamOutlook = useMemo(
     () => outlook?.teams.find((t) => t.roster_id === team.roster_id) ?? null,
@@ -154,19 +139,13 @@ export function RosterDetail({
     // The inset is a step tighter at the base tier than it was: with both value
     // columns drawn at every width the row needs the 4px more than the edge
     // does. Trim the padding, never the gap.
-    <div
-      className={`lab-plate lab-plate-sm flex min-h-0 flex-col rounded-lg p-1 @sm:p-1.5 @lg:p-4 ${
-        elevated ? "relative z-30" : ""
-      }`}
-    >
+    <div className="lab-plate lab-plate-sm flex min-h-0 flex-col rounded-lg p-1 @sm:p-1.5 @lg:p-4">
       {teamOutlook && <LineupCoverage teamOutlook={teamOutlook} />}
 
       <ColumnRail
         layout={lineupLayout}
         valueColumns={valueColumns}
-        openPicker={openPicker}
-        onTogglePicker={onTogglePicker}
-        onSelectColumn={onSelectColumn}
+        onOpenColumn={onOpenColumn}
       />
 
       {/* One scroll box over both sections rather than one each, because the
@@ -236,12 +215,11 @@ export function RosterDetail({
  *
  * They used to sit in each section's own heading, which drew the same two labels
  * twice — one selection, two places claiming it, since a pick in either moves
- * both — and put a control inside the box that scrolls. Both matter now that this
- * half scrolls: a picker carried off the top takes the only thing naming those
- * columns with it, and its menu (absolutely positioned, overhanging the rows
- * under it) would be clipped by the scroll box the moment it opened. Hoisted, it
- * is the same rail the leagues list draws above its cards, for the same reason —
- * a list-wide selection named once above the list rather than on every row.
+ * both — and put a control inside the box that scrolls. The second still matters
+ * now that this half scrolls: a heading carried off the top takes the only thing
+ * naming those columns with it, and it is the way to change one. Hoisted, it is
+ * the same rail the leagues list draws above its cards, for the same reason — a
+ * list-wide selection named once above the list rather than on every row.
  *
  * Laid on the sections' own grid so each label sits over the numbers it names —
  * which is why it carries the 4px the list below it gives up to its scroll lane
@@ -256,16 +234,12 @@ export function RosterDetail({
 function ColumnRail({
   layout,
   valueColumns,
-  openPicker,
-  onTogglePicker,
-  onSelectColumn,
+  onOpenColumn,
 }: {
   layout: SectionLayout;
   /** The two value columns' metric keys — empty when the half shows no numbers. */
   valueColumns: string[];
-  openPicker: string | null;
-  onTogglePicker: (key: string) => void;
-  onSelectColumn: (slot: number, key: string) => void;
+  onOpenColumn: (slot: number) => void;
 }) {
   // Nothing to name, so no rail: a league with no projections and nothing priced
   // would otherwise spend a line on two empty tracks.
@@ -277,17 +251,14 @@ function ColumnRail({
     >
       <span />
       {valueColumns.map((key, slot) => (
-        <ColumnPicker
+        <ColumnHeading
           key={slot}
           // Sentence case below @lg, the standings rail's rule and for its
           // reason — see the note there. Both rails switch at one tier so the
           // two halves can't read as two instruments.
           className="text-[0.6rem] normal-case tracking-normal @lg:uppercase @lg:tracking-wide"
-          options={PLAYER_METRIC_OPTIONS}
-          activeKey={key}
-          open={openPicker === `roster-${slot}`}
-          onToggle={() => onTogglePicker(`roster-${slot}`)}
-          onSelect={(metricKey) => onSelectColumn(slot, metricKey)}
+          label={(PLAYER_METRICS_BY_KEY[key] ?? PLAYER_METRICS[0]).label}
+          onOpen={() => onOpenColumn(slot)}
         />
       ))}
     </div>

@@ -1,4 +1,5 @@
 import { formatPoints, formatValue } from "./format.ts";
+import type { ColumnPreset, Metric } from "./metric-cell.ts";
 import type { LeagueTeamPayload } from "@/shared/contract";
 import type { TeamOutlook } from "@/shared/projections";
 
@@ -76,21 +77,40 @@ export function rosterValueTotal(
  * One column's read: the formatted number to print, or null for an em dash when
  * the metric has no answer (a league with nothing projected). The hover travels
  * with it, so a metric owns everything its column needs.
+ *
+ * A {@link MetricCell}'s `value` shape spelled out, which is the whole of what
+ * this catalogue ever produces — the standings has no rank cell to place a
+ * placing in. Naming the kind is not decoration: it is what makes a
+ * {@link TeamMetric} a {@link Metric} the shared columns editor can lay out
+ * unadapted.
  */
-export type TeamMetricCell = { text: string | null; title: string };
+export type TeamMetricCell = { kind: "value"; text: string | null; title: string };
 
-/** One selectable team metric: its key, its short column label, and how to read it. */
-export type TeamMetric = {
-  /** Stable id, stored as a column's selection and keyed in the picker. */
-  key: string;
-  /** The uppercase column heading — kept short enough to sit in a stat column. */
-  label: string;
-  /** Reads this metric off one team's context into a renderable cell. */
+/**
+ * One selectable team metric: its key, its short column label, and how to read
+ * it.
+ *
+ * A {@link Metric} at this catalogue's grain, narrowed to the one cell shape it
+ * returns. That earns both halves: the editor takes the catalogue as
+ * `Metric<TeamMetricContext>[]` with no adapter in between, while `standings.tsx`
+ * still reads `cell.text` off a cell it doesn't have to narrow out of a union.
+ *
+ * **`Omit` and not a plain intersection**, which is the spelling that reads
+ * right and silently loses the narrowing: `{cell: A} & {cell: B}` makes `cell` an
+ * overload of the two, and a call resolves to the *first* — `Metric`'s, which
+ * returns the union. The compiler then rejects `cell.text` in the very file this
+ * type exists to keep simple.
+ */
+export type TeamMetric = Omit<Metric<TeamMetricContext>, "cell"> & {
   cell: (ctx: TeamMetricContext) => TeamMetricCell;
 };
 
 /** The em-dash cell a projection-based metric returns when the league has no outlook. */
-const noProjection: TeamMetricCell = { text: null, title: "No projection" };
+const noProjection: TeamMetricCell = {
+  kind: "value",
+  text: null,
+  title: "No projection",
+};
 
 /**
  * Every team metric a standings column can show, in the order the picker lists
@@ -104,10 +124,12 @@ const noProjection: TeamMetricCell = { text: null, title: "No projection" };
 export const TEAM_METRICS: TeamMetric[] = [
   {
     key: "proj",
+    group: "Projection",
     label: "Proj",
     cell: ({ outlook }) =>
       outlook
         ? {
+            kind: "value",
             text: formatPoints(outlook.weekly_optimal_points),
             title: `${formatPoints(
               outlook.weekly_optimal_points,
@@ -117,10 +139,12 @@ export const TEAM_METRICS: TeamMetric[] = [
   },
   {
     key: "bench",
+    group: "Projection",
     label: "Bench",
     cell: ({ outlook }) =>
       outlook
         ? {
+            kind: "value",
             text: formatPoints(outlook.weekly_bench_points),
             title: `${formatPoints(
               outlook.weekly_bench_points,
@@ -130,10 +154,12 @@ export const TEAM_METRICS: TeamMetric[] = [
   },
   {
     key: "optimal",
+    group: "Projection",
     label: "Optimal",
     cell: ({ outlook }) =>
       outlook
         ? {
+            kind: "value",
             text: formatPoints(outlook.optimal_points),
             title: `${formatPoints(
               outlook.optimal_points,
@@ -143,19 +169,27 @@ export const TEAM_METRICS: TeamMetric[] = [
   },
   {
     key: "pf",
+    group: "Record",
     label: "PF",
     cell: ({ team }) => ({
+      kind: "value",
       text: formatPoints(team.fpts),
       title: `${formatPoints(team.fpts)} points for`,
     }),
   },
   {
     key: "ktc",
+    group: "Value",
     label: "KTC",
     cell: ({ ktcTotal, superflex }) =>
       ktcTotal === null
-        ? { text: null, title: "nothing on this roster is priced on KeepTradeCut" }
+        ? {
+            kind: "value",
+            text: null,
+            title: "nothing on this roster is priced on KeepTradeCut",
+          }
         : {
+            kind: "value",
             text: formatValue(ktcTotal),
             title: `${formatValue(ktcTotal)} KeepTradeCut dynasty ${
               superflex ? "superflex" : "1QB"
@@ -164,11 +198,13 @@ export const TEAM_METRICS: TeamMetric[] = [
   },
   {
     key: "adp",
+    group: "Value",
     label: "ADP",
     cell: ({ adpTotal, superflex, draftCount }) =>
       adpTotal === null
-        ? { text: null, title: "no ADP value on the matching board" }
+        ? { kind: "value", text: null, title: "no ADP value on the matching board" }
         : {
+            kind: "value",
             text: formatValue(adpTotal),
             title: [
               `${formatValue(adpTotal)} draft-capital value`,
@@ -192,3 +228,18 @@ export const TEAM_METRICS_BY_KEY: Record<string, TeamMetric> =
  * view is unchanged.
  */
 export const DEFAULT_TEAM_COLUMNS: string[] = ["proj", "bench"];
+
+/**
+ * The named pairs the columns editor offers as one press each.
+ *
+ * Two slots are still rarely two independent choices: a reader arrives at this
+ * table with a question, and each of these is one — what will these rosters
+ * score, what have they done, what are they worth. `Season` is the pair that has
+ * to be read together to mean anything, since one best lineup over the horizon
+ * and the points already banked are the two halves of a whole year.
+ */
+export const TEAM_COLUMN_PRESETS: ColumnPreset[] = [
+  { name: "Projection", columns: ["proj", "bench"] },
+  { name: "Season", columns: ["optimal", "pf"] },
+  { name: "Value", columns: ["ktc", "adp"] },
+];

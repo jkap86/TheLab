@@ -10,16 +10,21 @@ import {
 } from "../metric-cell.ts";
 
 /**
- * All four stat columns in one place, behind a dialog.
+ * Every stat column in one place, behind a dialog.
  *
  * The columns are aimed one at a time from their own labels, which is the right
- * control for changing one and the wrong one for changing the board: the four
- * slots are rarely four independent choices — a reader arrives with a question,
- * and a question is a set of columns — so recomposing them meant four menus, four
- * passes over the same flat list, and no way to see the result until the last
- * pick landed. This is the other half of that: the four slots across the top, the
- * catalogue laid out in captioned bays under them, and the named boards as one
- * press each.
+ * control for changing one and the wrong one for changing the board: the slots
+ * are rarely independent choices — a reader arrives with a question, and a
+ * question is a set of columns — so recomposing them meant a menu each, a pass
+ * over the same flat list each, and no way to see the result until the last pick
+ * landed. This is the other half of that: the slots across the top, the catalogue
+ * laid out in captioned bays under them, and the named boards as one press each.
+ *
+ * **How many slots there are is the caller's, and it is read off `columns`.** The
+ * lists wear four; the league detail panel's two tables wear two each, since a
+ * standings row at half a card's width has room for two numbers. Nothing here
+ * counts to four — the wells lay out on the row they are given and the header
+ * says how many there are, which is what lets one dialog serve both.
  *
  * **It commits live rather than editing a draft**, which is where it parts
  * company with the league filters dialog beside it. That one holds a draft
@@ -133,6 +138,11 @@ export function ColumnsEditor<C>({
   const preview = (metric: Metric<C>) =>
     ctx === null ? null : metricPreview(metric.cell(ctx));
 
+  // Spelled rather than printed as a digit, because it is read mid-sentence.
+  // Beyond the counts a table actually wears, the numeral is better than a
+  // spelling nobody wrote.
+  const slotCount = SPELLED[columns.length] ?? String(columns.length);
+
   // A preset is "on" when the board is exactly what it writes — the same
   // derivation the filters' chips use, so there is no second copy of the
   // selection that could disagree with the columns themselves.
@@ -176,10 +186,10 @@ export function ColumnsEditor<C>({
                 that one is `display: none` on a phone, where a description
                 pointing at it would resolve to nothing. */}
             <span id={hintId} className="sr-only">
-              Every card in the list shows the same four columns.
+              Every row in the list shows the same {slotCount} columns.
             </span>
             <span aria-hidden="true" className="hidden text-xs text-foreground/40 sm:inline">
-              Every card shows the same four.
+              Every row shows the same {slotCount}.
             </span>
             <button
               type="button"
@@ -202,7 +212,16 @@ export function ColumnsEditor<C>({
                   the point: a column named "Proj bench" tells you less than the
                   `#9 / 12` it is about to print.
                 */}
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {/* Written out whole rather than assembled, so Tailwind sees
+                    both class strings. A pair of slots stays a pair at every
+                    width — spread across four tracks they would be two wells
+                    with half the row empty beside them, which reads as two
+                    columns missing rather than as a table that has two. */}
+                <div
+                  className={`grid gap-2 ${
+                    columns.length > 2 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2"
+                  }`}
+                >
                   {columns.map((key, index) => {
                     const metric =
                       metrics.find((m) => m.key === key) ?? metrics[0];
@@ -372,6 +391,9 @@ export function ColumnsEditor<C>({
 /** The uppercase caption over every group and slot, as in the filters dialog. */
 const CAPTION =
   "font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40";
+
+/** The slot counts a table actually wears, for the header's sentence. */
+const SPELLED: Record<number, string> = { 1: "one", 2: "two", 3: "three", 4: "four" };
 
 function CloseIcon() {
   return (
