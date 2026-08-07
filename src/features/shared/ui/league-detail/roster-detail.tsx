@@ -34,10 +34,12 @@ type SlotRow = { slot: string; player_id: string };
  * each player's projected points for the rest of the season.
  *
  * The starters section shows the *best* lineup available to the team, not what
- * it is currently starting (see `outlook`), and the bench follows: a player the
- * optimal lineup starts is listed as a starter and highlighted, one it sits is
- * dimmed on the bench, so the two lists always read as one lineup. IR and taxi
- * players aren't broken out — they're treated as bench depth (candidates for the
+ * it is currently starting (see `outlook`), and the bench follows: everyone the
+ * optimal lineup doesn't seat, best available first. Neither list marks the moves
+ * against the team's current lineup — a promoted starter is drawn like any other
+ * starter and a sat player like any other bench player — so what the two read as
+ * is one lineup rather than a diff against another one. IR and taxi players
+ * aren't broken out either; they're treated as bench depth (candidates for the
  * lineup like anyone on the bench), so they simply sit in the bench list.
  *
  * The two value columns beside each player are slots the reader points at a
@@ -48,10 +50,9 @@ type SlotRow = { slot: string; player_id: string };
  *
  * **The head is fixed and the two sections scroll under it.** This half scrolls
  * on its own (see {@link LeagueDetailPanel}), and what is above the scroll box is
- * what a scrolled roster can't do without: the moves to make, and the rail naming
- * the two number columns — which is also the control that aims them, and which
- * could not stay inside the box in any case, since its menu overhangs the rows
- * it would be clipped by.
+ * what a scrolled roster can't do without: the rail naming the two number columns
+ * — which is also the control that aims them, and which could not stay inside the
+ * box in any case, since its menu overhangs the rows it would be clipped by.
  *
  * It names no team of its own. The plate that used to head it — avatar, team name
  * and record — restated the standings row that is already highlighted a few pixels
@@ -148,14 +149,14 @@ export function RosterDetail({
     // instruments that happen to be adjacent rather than as a part seated in one.
     //
     // A flex column, because this half scrolls on its own inside the card's cap
-    // (see `LeagueDetailPanel`): the lineup summary and the column rail are the
+    // (see `LeagueDetailPanel`): the coverage caveat and the column rail are the
     // head it scrolls under, and only the list below them moves.
     <div
       className={`lab-plate lab-plate-sm flex min-h-0 flex-col rounded-lg p-1.5 @lg:p-4 ${
         elevated ? "relative z-30" : ""
       }`}
     >
-      {teamOutlook && <LineupSummary teamOutlook={teamOutlook} players={players} />}
+      {teamOutlook && <LineupCoverage teamOutlook={teamOutlook} />}
 
       <ColumnRail
         layout={lineupLayout}
@@ -186,7 +187,6 @@ export function RosterDetail({
               columns={valueColumns}
               values={values}
               horizon={horizon}
-              promoted={teamOutlook?.start.includes(row.player_id)}
             />
           ))}
         </RosterSection>
@@ -204,7 +204,6 @@ export function RosterDetail({
                 columns={valueColumns}
                 values={values}
                 horizon={horizon}
-                benched={teamOutlook?.sit.includes(id)}
               />
             ))}
           </RosterSection>
@@ -280,61 +279,36 @@ function ColumnRail({
 }
 
 /**
- * Which players to move to reach the optimal lineup, and what the lineup misses.
+ * The one thing the two lists below can't say about themselves: that they aren't
+ * the whole roster, because the solver met a slot it doesn't recognise.
  *
- * Two totals are deliberately not here. The optimal one is what the standings
- * beside this panel are ranked on — the selected row states it under whichever
+ * Three things this head used to carry have each left for the same reason — a
+ * number lives in exactly one place. The optimal total is what the standings
+ * beside this panel are ranked on, and the selected row states it under whichever
  * projection column is aimed at it, with the horizon spelled out once in that
- * table's footer — so a chip repeating it above the lineup it belongs to was the
- * same claim twice, and the second one had to carry its own week range to be
- * honest. The *gap* has now left for the same reason: it is a headline about this
- * team rather than a note on its bench, so it is a cell in the panel's readout
- * strip, where it sits beside the two totals it is the difference between. Two
- * places for one number is one edit away from them disagreeing.
+ * table's footer. The *gap* is a headline about this team rather than a note on
+ * its bench, so it is a cell in the panel's readout strip, beside the two totals
+ * it is the difference between. And the **moves** — `start … · sit …` — were the
+ * lineup restated in prose above the lineup itself: every name in them was already
+ * on a row a few pixels below, in the section that answers where it should be, so
+ * what the sentence added over the two lists was a second spelling of them. The
+ * rows carry no promoted/sat marking now either: this panel shows the best lineup
+ * available, not a diff against the one Sleeper has seated.
  *
- * What is left is the part neither the table nor the readout can say: the names.
+ * The caveat stays because nothing else on screen can raise it — a roster quietly
+ * missing a slot reads as a complete lineup.
  */
-function LineupSummary({
-  teamOutlook,
-  players,
-}: {
-  teamOutlook: TeamOutlook;
-  players: Record<string, PlayerSummary>;
-}) {
-  const name = (id: string) => players[id]?.name ?? id;
-  const moves = teamOutlook.start.length > 0 || teamOutlook.sit.length > 0;
-  if (!moves && teamOutlook.unknown_slots.length === 0) return null;
+function LineupCoverage({ teamOutlook }: { teamOutlook: TeamOutlook }) {
+  if (teamOutlook.unknown_slots.length === 0) return null;
 
   return (
     // `mb-3` rather than the section below taking `mt-3`: the rail sits between
     // the two now, and this half's head has to hold its own gap since only what
     // is under it scrolls.
-    <div className="mb-3 shrink-0 space-y-1.5">
-      {moves && (
-        <p className="text-[0.7rem] leading-relaxed text-foreground/50">
-          {teamOutlook.start.length > 0 && (
-            <>
-              <span className="font-semibold text-active">start</span>{" "}
-              {teamOutlook.start.map(name).join(", ")}
-            </>
-          )}
-          {teamOutlook.start.length > 0 && teamOutlook.sit.length > 0 && " · "}
-          {teamOutlook.sit.length > 0 && (
-            <>
-              <span className="font-semibold text-foreground/70">sit</span>{" "}
-              {teamOutlook.sit.map(name).join(", ")}
-            </>
-          )}
-        </p>
-      )}
-
-      {teamOutlook.unknown_slots.length > 0 && (
-        <p className="text-[0.7rem] text-foreground/40">
-          {teamOutlook.unknown_slots.join(", ")} left out — this lineup covers only
-          part of the roster.
-        </p>
-      )}
-    </div>
+    <p className="mb-3 shrink-0 text-[0.7rem] text-foreground/40">
+      {teamOutlook.unknown_slots.join(", ")} left out — this lineup covers only part
+      of the roster.
+    </p>
   );
 }
 

@@ -35,9 +35,11 @@ import type { LeagueOutlook, TeamOutlook } from "./types";
  * The gap is the one figure here that is a verdict rather than a count, so it
  * takes the amber the app already uses for "needs attention" (a drafting
  * league's status dot, a failed-refresh note) rather than competing with cyan —
- * and it is stated *only* here now: the lineup summary inside the roster half
- * used to carry the same number above the list it belongs to, and two places is
- * one edit away from disagreeing.
+ * and it is the panel's *only* remaining word on the lineup the team is
+ * currently seating. The roster half's head used to carry the same number above
+ * the list it belongs to (two places for one figure being one edit away from
+ * disagreeing), and then the `start … · sit …` names under it, which restated
+ * the two lists a few pixels below rather than any number at all.
  *
  * Rendered only for a league that has an outlook, which is the same gate the
  * standings' value columns sit behind; a team with no outlook of its own inside

@@ -244,6 +244,36 @@ describe("what is on screen", () => {
     assert.match(openingTag, /adp-drawer-panel/);
   });
 
+  test("the window counter is on screen at rest, not behind a press", () => {
+    // The drawer is merely open — nothing has been pressed — and both lenses are
+    // already there. This is the whole of the change that removed the window's
+    // trigger: it used to be a collapsed line, and re-collapsing it would put the
+    // board's *population* back behind a chevron a reader has to find.
+    const html = drawer();
+    assert.match(html, /aria-label="Days back — empty means the whole season"/);
+    assert.match(html, /aria-label="Window ends"/);
+    // And the channel it is read against, likewise unpressed.
+    assert.match(html, /lab-channel/);
+  });
+
+  test("no preset chip states a window the lenses already state", () => {
+    // "Last 30 days" is `30` in the day lens and "All of 2026" is that lens left
+    // empty, so a chip row beside an open counter is two controls for one
+    // selection. What survives inside the panel is the keys that are *not* fixed
+    // windows — `Today`, which re-opens the end, and the ◆ draft key, which pins
+    // a date that moves every April (drawn only when the strip's domain holds a
+    // draft, which this fixture's single May month does not; `lookback.test.ts`
+    // is where that resolution is checked).
+    const html = drawer();
+    for (const chip of [">30 days<", ">90 days<", ">12 mo<", ">All 2026<", ">All time<"]) {
+      assert.ok(!html.includes(chip), `expected no ${chip} preset chip`);
+    }
+    assert.match(html, />Today</);
+    // The board's own name is stated once, by the counter's caption — the
+    // trigger that used to carry `boardLabel` beside it is gone.
+    assert.equal((html.match(/All of 2026/g) ?? []).length, 1);
+  });
+
   test("every control keeps an accessible name", () => {
     const html = drawer({ seedLeagues: leagues });
     for (const spec of [...FIXED_FILTERS, leagueSizeFilter(leagues)]) {
