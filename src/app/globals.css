@@ -440,6 +440,57 @@ body {
       0 10px 20px -12px rgba(0, 0, 0, 0.8);
   }
 
+  /* A scroll box's own bar, thinned and tinted to the field it is cut into —
+     the two halves of the league detail panel, which scroll independently
+     inside the card's cap.
+
+     A platform bar is ~15px of light grey chrome, which at the width those
+     halves render at is most of a number column drawn by somebody else's
+     design; thinned and dropped to a translucent thumb on a transparent track,
+     it reads as part of the instrument.
+
+     **The lane it rides in is the call site's, and it is padding rather than
+     `scrollbar-gutter`.** The two spellings of a reserved lane answer to
+     different platforms and neither covers both: a gutter reserves nothing
+     where scrollbars *overlay* the content (iOS, and macOS by default), which
+     is exactly the case where the bar was painting over the last number column,
+     while padding is reserved a second time where they don't. So the box pads
+     and the heading above it pads to match, which is right for the overlay case
+     and leaves a classic bar taking its own width on top — narrow, because of
+     this class, rather than the platform's default. A heading is what names a
+     value column, so whatever the box gives up the heading has to give up too,
+     or the two disagree about where the column is.
+
+     Material only, per the layer's rule: the width set here is the *bar's*, not
+     the box's. */
+  .lab-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  }
+  /* The older spelling, for engines with no `scrollbar-width` (Safari before
+     18.2). Chrome ignores these outright once the two standard properties above
+     are set, which is why they are the fallback and not the definition. */
+  .lab-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .lab-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  /* The border is what insets the thumb inside its own lane — a bar hard
+     against a plate's wall reads as a seam in the part rather than as something
+     riding in it — and it takes `background-clip` to stop the fill painting
+     under it. */
+  .lab-scroll::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.16);
+    background-clip: padding-box;
+  }
+  .lab-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.28);
+  }
+
   /* `.lab-billet`'s corner-lit block at *card* scale — the trade card.
 
      It is the app bar's construction rather than `.lab-plate`'s, and the reason
