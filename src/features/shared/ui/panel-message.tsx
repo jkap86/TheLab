@@ -55,3 +55,24 @@ export function PanelLoading({ children }: { children: string }) {
     </div>
   );
 }
+
+/**
+ * A read that failed, standing in for what it would have filled.
+ *
+ * Its own tone rather than {@link PanelMessage}'s `error`, because it replaces a
+ * *page* or a whole list rather than a panel's contents: it came here from the
+ * manager tool's cold-load states with the shares sheet, which draws it when the
+ * rosters behind a browse can't be read and which two tools now open.
+ */
+export function ErrorCard({ message }: { message: string }) {
+  return (
+    // A read that failed is worth interrupting for, and this one replaces the
+    // page — the same call `UserLookup` and the pick tracker's league list make.
+    <div
+      role="alert"
+      className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-200"
+    >
+      {message}
+    </div>
+  );
+}

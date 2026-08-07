@@ -2,16 +2,13 @@
 
 import { useId, useState } from "react";
 
-import {
-  LIST_ROW_HOVER,
-  LIST_ROW_SURFACE,
-  RowSheen,
-} from "@/features/shared";
+import type { ManagerLeague } from "@/shared/manager";
 
-import type { ShareMetric, ShareMetricContext } from "../share-metrics";
-import type { ManagerLeague } from "../types";
-import { MetricColumns } from "./metric-column";
-import { Chevron, SharedLeagueRow } from "./ui";
+import type { ShareMetric, ShareMetricContext } from "../../share-metrics.ts";
+import { Chevron } from "../chevron";
+import { LIST_ROW_HOVER, LIST_ROW_SURFACE, RowSheen } from "../list-row";
+import { MetricColumns } from "../metric-column";
+import { SharedLeagueRow } from "./shared-league-row";
 
 /**
  * One share in the players or leaguemates list: the same glassy card a league

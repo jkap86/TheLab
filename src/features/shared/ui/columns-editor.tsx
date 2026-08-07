@@ -2,13 +2,12 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
-import { groupMetrics } from "@/features/shared/columns";
-
+import { groupMetrics } from "../columns";
 import {
   metricPreview,
   type ColumnPreset,
   type Metric,
-} from "../metric-cell";
+} from "../metric-cell.ts";
 
 /**
  * All four stat columns in one place, behind a dialog.

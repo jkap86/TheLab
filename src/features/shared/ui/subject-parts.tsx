@@ -1,8 +1,9 @@
 "use client";
 
-import { Avatar, PositionBadge } from "@/features/shared";
+import type { Subject, SubjectLabel, SubjectMatch } from "../subjects.ts";
 
-import type { Subject, SubjectLabel, SubjectMatch } from "../subjects";
+import { Avatar } from "./avatar";
+import { PositionBadge } from "./position-badge";
 
 /**
  * The two small parts the *who is in it* selection is drawn with, wherever it is

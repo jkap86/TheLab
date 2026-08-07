@@ -61,15 +61,7 @@ export function EmptyState({ season }: { season: string }) {
   );
 }
 
-export function ErrorCard({ message }: { message: string }) {
-  return (
-    // A read that failed is worth interrupting for, and this one replaces the
-    // page — the same call `UserLookup` and the pick tracker's league list make.
-    <div
-      role="alert"
-      className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-200"
-    >
-      {message}
-    </div>
-  );
-}
+// The failed-read card went to `features/shared/ui/panel-message` with the
+// shares sheet that draws it — the lineup checker opens the same sheet — and is
+// re-exported here for this feature's own consumers.
+export { ErrorCard } from "@/features/shared/ui/panel-message";

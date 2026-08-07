@@ -2,19 +2,21 @@
 
 import { useMemo } from "react";
 
-import { adpQueryString, todayIso, useAdp } from "@/features/shared";
-import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
+import type { AdpPlayerPayload } from "@/shared/contract";
 
-import { useAdpControls } from "../filters-context";
-import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
-import { useManagerPlayers } from "../hooks/use-manager-players";
+import { useAdpControls } from "../../adp-controls-context";
+import { adpQueryString } from "../../adp-controls";
+import { todayIso } from "../../date-range";
 import {
   DEFAULT_PLAYER_COLUMNS,
   PLAYER_SHARE_COLUMN_PRESETS,
   PLAYER_SHARE_METRICS,
-} from "../share-metrics";
-import { playerShares } from "../shares";
-import type { AdpPlayerPayload } from "../types";
+} from "../../share-metrics.ts";
+import { playerShares } from "../../shares.ts";
+import type { SubjectView } from "../../subject-view.ts";
+import { useAdp } from "../../use-adp";
+import { useManagerPlayers } from "../../use-manager-players";
+import { usePersistedColumns } from "../../use-persisted-columns";
 import { PlayerShares } from "./player-shares";
 import { SharesSheet } from "./shares-sheet";
 
@@ -33,11 +35,11 @@ export function PlayerSharesSheet({
   open,
   onClose,
 }: {
-  view: FilteredLeagues;
+  view: SubjectView;
   open: boolean;
   onClose: () => void;
 }) {
-  const leagues = view.data?.leagues ?? null;
+  const leagues = view.leagues;
   // Off until the sheet is opened, and the same query key the rail's panel and
   // the Players tab already name — so a reader who has been to either pays
   // nothing, and a reader who never opens this costs no request.

@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { matchesFilters } from "@/features/shared";
+import type { SubjectView } from "@/features/shared/subject-view";
 import { useLeagueFilters, useSubjectFilters } from "../filters-context";
 import { invalidateManagerDependents } from "../query-fns";
 import { EMPTY_SUBJECT_INDEX, matchesSubjects } from "../subjects";
@@ -42,7 +43,7 @@ import { useManagerPlayers } from "./use-manager-players";
 export function useFilteredLeagues(searched: string) {
   const stream = useManagerLeagues(searched);
   const { filters, setFilters } = useLeagueFilters();
-  const { subjects } = useSubjectFilters();
+  const { subjects, setSubjects } = useSubjectFilters();
   const queryClient = useQueryClient();
 
   const revision = stream.revision;
@@ -165,6 +166,13 @@ export function useFilteredLeagues(searched: string) {
 
   // `searched` rides along so the layout can label its loading state and link its
   // tabs without the page threading it in a second time.
+  //
+  // **What this returns satisfies {@link SubjectView}**, which is what lets the
+  // rail and the two shares sheets be shared components: the lineup checker
+  // builds the same shape out of the stored account and plain `useState`, and
+  // neither of those parts knows which of the two it is drawing over. The extra
+  // fields here are the manager tool's own (the stream's progress, the revision,
+  // the tab labelling), and structural typing is what makes carrying them free.
   return {
     ...stream,
     searched,
@@ -177,8 +185,16 @@ export function useFilteredLeagues(searched: string) {
      * {@link useManagerResource}).
      */
     userId,
+    /**
+     * Every league on the account, flat — {@link SubjectView} asks for this
+     * rather than reaching through `data`, since the lineup checker's list
+     * arrives on a different read and there is no payload for it to reach into.
+     */
+    leagues: leagues ?? null,
     filters,
     setFilters,
+    subjects,
+    setSubjects,
     subjectDisplay,
     subjectLabel,
     /** After the league filters, before the subjects — what the menus count over. */
@@ -190,3 +206,9 @@ export function useFilteredLeagues(searched: string) {
 }
 
 export type FilteredLeagues = ReturnType<typeof useFilteredLeagues>;
+
+// The agreement the shared rail rests on, checked here rather than at each of the
+// call sites that pass a view: a field renamed on the return above is a type
+// error in this file instead of one buried in `features/shared`.
+const _satisfiesSubjectView: (view: FilteredLeagues) => SubjectView = (view) => view;
+void _satisfiesSubjectView;

@@ -2,16 +2,15 @@
 
 import { useMemo } from "react";
 
-import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
-
-import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
-import { useManagerLeaguemates } from "../hooks/use-manager-leaguemates";
-import { leaguemateShares } from "../leaguemates";
+import { leaguemateShares } from "../../leaguemates.ts";
 import {
   DEFAULT_LEAGUEMATE_COLUMNS,
   LEAGUEMATE_SHARE_METRICS,
   SHARE_COLUMN_PRESETS,
-} from "../share-metrics";
+} from "../../share-metrics.ts";
+import type { SubjectView } from "../../subject-view.ts";
+import { useManagerLeaguemates } from "../../use-manager-leaguemates";
+import { usePersistedColumns } from "../../use-persisted-columns";
 import { LeaguemateShares } from "./leaguemate-shares";
 import { SharesSheet } from "./shares-sheet";
 
@@ -40,17 +39,17 @@ export function LeaguemateSharesSheet({
   open,
   onClose,
 }: {
-  view: FilteredLeagues;
+  view: SubjectView;
   open: boolean;
   onClose: () => void;
 }) {
-  const leagues = view.data?.leagues ?? null;
+  const leagues = view.leagues;
   // Off until the sheet is opened, and the same query key the rail's panel and
   // the Leaguemates tab already name — so a reader who has been to either pays
   // nothing, and a reader who never opens this costs no request.
   const membership = useManagerLeaguemates(view.searched, view.userId, leagues, open);
 
-  const selfId = view.data?.user.user_id;
+  const selfId = view.userId;
   const shares = useMemo(
     () =>
       membership.data && selfId

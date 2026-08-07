@@ -1,7 +1,9 @@
 "use client";
 
-import type { ShareMetric, ShareMetricContext } from "../share-metrics";
-import type { AdpPlayerPayload, ManagerLeague } from "../types";
+import type { AdpPlayerPayload } from "@/shared/contract";
+import type { ManagerLeague } from "@/shared/manager";
+
+import type { ShareMetric, ShareMetricContext } from "../../share-metrics.ts";
 import { ShareCard } from "./share-card";
 
 /** What this list needs of a row: something to name it, and what it expands to. */
