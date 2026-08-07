@@ -463,24 +463,14 @@ export function TradesHome({ season }: { season: string }) {
             a heading outline can see it. */}
         <h1 className="sr-only">Trades</h1>
 
-        {/* The page's front door, above the settings that used to hide it. Two
-            bays wearing the trade card's own side plate: things in the same bay
-            were on the same side of the trade, so a manager and a player
-            together means he received him and on opposite sides means he gave
-            him. It leads because it is what a reader arrives wanting — the
-            controls below say where they are standing and where in the board
-            they are, which are chosen once and then read. */}
-        <TradeSearch
-          filters={tradeFilters}
-          onChange={setTradeFilters}
-          season={season}
-          scope={scope}
-          account={account}
-          bounds={bounds}
-          players={players}
-          managers={managers}
-        />
-
+        {/* Which board this is, above the search that asks a question of it.
+            The scope is the page's widest claim — every crawled league, or one
+            account's corner of it — and a bay reading `+ anyone` means "anyone
+            *in this circle*", so a reader who meets the bays first is composing
+            a question without knowing what population it will be asked over.
+            The count and the two triggers ride here for the same reason: they
+            are the board's own description, and they belong with the control
+            that sets it. */}
         <TradeControls
           filters={tradeFilters}
           onChange={setTradeFilters}
@@ -536,6 +526,24 @@ export function TradesHome({ season }: { season: string }) {
               />
             </>
           }
+        />
+
+        {/* The page's front door, under the scope it is asked within. Two bays
+            wearing the trade card's own side plate: things in the same bay were
+            on the same side of the trade, so a manager and a player together
+            means he received him and on opposite sides means he gave him. It
+            sits directly above the list because it is what a reader arrives
+            wanting and what the cards below are the answer to — the block above
+            it is chosen once and then read. */}
+        <TradeSearch
+          filters={tradeFilters}
+          onChange={setTradeFilters}
+          season={season}
+          scope={scope}
+          account={account}
+          bounds={bounds}
+          players={players}
+          managers={managers}
         />
 
         {error && <Note tone="error">{error}</Note>}
