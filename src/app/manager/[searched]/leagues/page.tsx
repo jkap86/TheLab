@@ -1,4 +1,4 @@
-import { ManagerLeagues } from "@/features/manager";
+import { ManagerLeagues } from "@/features/manager/components/manager-leagues";
 
 export default async function ManagerLeaguesPage({
   params,

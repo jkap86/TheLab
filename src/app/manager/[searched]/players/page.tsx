@@ -1,4 +1,4 @@
-import { ManagerPlayers } from "@/features/manager";
+import { ManagerPlayers } from "@/features/manager/components/manager-players";
 
 export default async function ManagerPlayersPage({
   params,

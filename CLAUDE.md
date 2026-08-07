@@ -1481,6 +1481,24 @@ stops holding, a comment saying it does would not have caught it.
     is also what keeps one spelling of the key's geometry: the placeholder is
     standing in for its exact box, so a second copy of those classes is a reflow
     waiting for someone to edit one of them.
+
+    **The third instance had no `dynamic()` anywhere near it, which is what makes
+    it the general statement of the rule: a barrel is one module to the bundler,
+    so importing one name from it pulls every name it exports.** Splitting is
+    only ever how you *notice*. `features/manager/index.ts` named the three tab
+    views beside the username search, and `/manager` — a prerendered page whose
+    entire content is one text field — imported `ManagerSearch` from it and
+    shipped the league cards, the league detail panel, both share lists, the
+    subject rail and the columns editor with it: **780.6KB across 13 chunks,
+    down to 693.9KB across 10** once that barrel kept only the three providers
+    and the four routes named module paths. It was also the heaviest of the
+    prerendered pages and is now the lightest. The same edit stopped each of the
+    three tab routes statically referencing the other two tabs' views — they
+    still share most of their weight, which is honest (one scaffold, one header,
+    the two shares sheets), but a tab's own view is now the tab's own.
+    **Which side of the line a barrel export sits on is what it costs to name**:
+    a provider is a context and a `useState`, and the layout that mounts it is on
+    the path of every route in the feature anyway; a view is the whole tool.
   - **The board holds its previous pages while a new filter set lands**
     (`keepPreviousData`). It is what makes committing live affordable: a filter
     change is a *different key* with nothing in it, so without this every press
