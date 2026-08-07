@@ -3,13 +3,13 @@
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
-import type { Trade } from "@/shared/trades";
+import type { TradesPagePayload } from "@/shared/contract";
 
 import { fetchTradesPage } from "../query-fns";
 import { tradesQueryKeys } from "../query-keys";
-import { tradeQueryKey } from "../trade-query";
+import { foldTradePages } from "../trades-data";
+import type { TradesData } from "../trades-data";
 import type { TradeRequest } from "../trade-query";
-import type { KtcValue, PlayerSummary, TradeManager } from "../types";
 
 /**
  * How long a loaded board is worth reusing before it is asked for again.
@@ -37,36 +37,7 @@ export const TRADES_STALE_TIME = 15 * 60 * 1000;
  */
 export const TRADES_GC_TIME = 5 * 60 * 1000;
 
-/**
- * How many pages of a board are kept.
- *
- * `maxPages` is React Query's own bound on an infinite query, and it is the
- * memory half of the same argument: without it, scrolling a busy season to the
- * bottom accumulates every page ever fetched, which is the whole-season download
- * again arriving one scroll at a time. Twenty pages is 4,000 trades — far past
- * what anyone scrolls in one sitting, and a hard ceiling on what one entry can
- * grow to. Past it the oldest page is dropped and re-fetched if the reader
- * scrolls back, which for a keyset walk is one indexed query.
- */
-export const TRADES_MAX_PAGES = 20;
-
-/** What the board has loaded so far, folded across its pages. */
-export type TradesData = {
-  season: string;
-  /** Newest first — every page's trades, in order. */
-  trades: readonly Trade[];
-  /** How many trades match the filters in full; null if the count failed. */
-  total: number | null;
-  /** How many the league filters alone leave — the "of M" in the headline. */
-  scopeTotal: number | null;
-  players: Record<string, PlayerSummary>;
-  managers: Record<string, TradeManager>;
-  ktc: Record<string, KtcValue>;
-  /** KTC's pick rows, keyed by season, round and tier — see `ktcPickKey`. */
-  pickKtc: Record<string, KtcValue>;
-  /** Pick key → draft slot, for the picks whose league has set an order. */
-  pickSlots: Record<string, number>;
-};
+export type { TradesData };
 
 export type TradesState = {
   data: TradesData | null;
@@ -89,6 +60,38 @@ export type TradesState = {
 };
 
 /**
+ * The board's infinite-query options, as a value rather than an inline literal.
+ *
+ * Separated so the cache's own behaviour can be driven by an
+ * `InfiniteQueryObserver` in a test rather than through a renderer — the same
+ * argument `features/manager/query-cache.test.ts` rests on, and the reason the
+ * assertions there are about *request counts*. What it pins is that the config
+ * a test exercises is the config the page runs.
+ */
+export function tradesBoardQuery(request: TradeRequest, key: string) {
+  return {
+    queryKey: tradesQueryKeys.board(key),
+    queryFn: ({
+      pageParam,
+      signal,
+    }: {
+      pageParam: string | null;
+      signal: AbortSignal;
+    }) => fetchTradesPage({ request, cursor: pageParam, signal }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last: TradesPagePayload) => last.nextCursor,
+    // No `maxPages`: see the note on the hook below, and `foldTradePages`.
+    staleTime: TRADES_STALE_TIME,
+    gcTime: TRADES_GC_TIME,
+    placeholderData: keepPreviousData,
+    // A failed board read fails the same way twice — a database that is down, a
+    // season nothing has been crawled for — so the client-wide single retry only
+    // doubles the wait before the error appears.
+    retry: false,
+  };
+}
+
+/**
  * The trades board, paginated.
  *
  * **This was a whole-season stream and is now an infinite query, which is the
@@ -107,8 +110,13 @@ export type TradesState = {
  *   the normalised query string, so narrowing starts a fresh board and widening
  *   back finds the old one still loaded (inside `gcTime`) with its scroll
  *   position intact.
- * - **`maxPages` bounds it.** See {@link TRADES_MAX_PAGES}: an unbounded
- *   infinite query is the season download with extra steps.
+ * - **Loaded pages are never evicted.** There is deliberately no `maxPages`:
+ *   React Query drops the *oldest* page when that bound is passed, and this
+ *   board has no previous-page path to read it back with — a keyset walk resumes
+ *   forwards only. See {@link foldTradePages} for the four things that broke
+ *   when it did. What bounds memory instead is {@link TRADES_GC_TIME} for an
+ *   abandoned board, and the DOM stays bounded at any depth because `TradesList`
+ *   windows it.
  * - **`keepPreviousData` holds the last board while the next one lands.** That
  *   is what makes the filters committing live affordable: without it every press
  *   in the ledge is a new key with nothing in it, so the whole list is replaced
@@ -117,93 +125,27 @@ export type TradesState = {
  *   on it below, since asking a board that is on its way out for another page
  *   would append the old filters' next page to the new filters' first.
  *
- * The folded value is memoised on the raw pages, so the concat-and-merge below
- * runs once per page arriving rather than once per render — this component's
- * parent re-renders on every filter keystroke, and the maps are what the list
- * reads.
+ * The folded value is memoised on the raw pages, so {@link foldTradePages} runs
+ * once per page arriving rather than once per render — this component's parent
+ * re-renders on every filter keystroke, and the maps are what the list reads.
+ *
+ * `key` is {@link tradeQueryKey} of the same request, taken as an argument
+ * rather than derived here because the caller already memoises it: with a large
+ * league scope that string carries every league id, so building it twice a
+ * render is real work over a list that grows with the corpus.
  */
-export function useTrades(request: TradeRequest): TradesState {
-  const key = tradeQueryKey(request);
-
-  const query = useInfiniteQuery({
-    queryKey: tradesQueryKeys.board(key),
-    queryFn: ({ pageParam, signal }) =>
-      fetchTradesPage({ request, cursor: pageParam, signal }),
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) => last.nextCursor,
-    maxPages: TRADES_MAX_PAGES,
-    staleTime: TRADES_STALE_TIME,
-    gcTime: TRADES_GC_TIME,
-    placeholderData: keepPreviousData,
-    // A failed board read fails the same way twice — a database that is down, a
-    // season nothing has been crawled for — so the client-wide single retry only
-    // doubles the wait before the error appears.
-    retry: false,
-  });
+export function useTrades(request: TradeRequest, key: string): TradesState {
+  const query = useInfiniteQuery(tradesBoardQuery(request, key));
 
   // What is on screen belongs to the filter set that has just been left. The
   // list is unchanged by design; what it gates is pagination and what it tells
   // the header is that the count beside it is about to move.
   const stale = query.isPlaceholderData;
 
-  const data = useMemo((): TradesData | null => {
-    const pages = query.data?.pages;
-    if (!pages || pages.length === 0) return null;
-
-    const trades: Trade[] = [];
-    const players: Record<string, PlayerSummary> = {};
-    const managers: Record<string, TradeManager> = {};
-    const ktc: Record<string, KtcValue> = {};
-    const pickKtc: Record<string, KtcValue> = {};
-    const pickSlots: Record<string, number> = {};
-
-    for (const page of pages) {
-      // `push(...page.trades)` would spread thousands of arguments onto the
-      // stack once the board is deep; a loop is the same work without the
-      // argument-count ceiling.
-      for (const trade of page.trades) trades.push(trade);
-      Object.assign(players, page.players);
-      Object.assign(managers, page.managers);
-      Object.assign(ktc, page.ktc);
-      Object.assign(pickKtc, page.pickKtc);
-      Object.assign(pickSlots, page.pickSlots);
-    }
-
-    // Only a first page carries them, and `maxPages` can evict it — so the last
-    // non-null wins rather than `pages[0]`'s, which would blank the headline
-    // after a long scroll.
-    let total: number | null = null;
-    let scopeTotal: number | null = null;
-    for (const page of pages) {
-      if (page.total !== null) total = page.total;
-      if (page.scopeTotal !== null) scopeTotal = page.scopeTotal;
-    }
-
-    // **Never smaller than what is on screen.** The unnarrowed total is a
-    // stored count refreshed on the crawler's tick, so it lags the trades it
-    // counts by up to its TTL — normally by a handful, and by a lot on a
-    // database that has just been filled. A denominator under its own numerator
-    // is the one way that lag is visible, and it reads as the page being
-    // broken; clamping states what is actually known, which is "at least this
-    // many". It cannot mask a real shortfall, because the rows it is clamped
-    // against came out of the same population it counts.
-    if (total !== null && total < trades.length) total = trades.length;
-    if (scopeTotal !== null && scopeTotal < trades.length) {
-      scopeTotal = trades.length;
-    }
-
-    return {
-      season: pages[0].season,
-      trades,
-      total,
-      scopeTotal,
-      players,
-      managers,
-      ktc,
-      pickKtc,
-      pickSlots,
-    };
-  }, [query.data]);
+  const data = useMemo(
+    () => foldTradePages(query.data?.pages ?? EMPTY_PAGES),
+    [query.data],
+  );
 
   // Wrapped rather than handed out raw: `fetchNextPage` returns a promise, and
   // an unhandled rejection from a scroll handler that fired during teardown is
@@ -229,3 +171,6 @@ export function useTrades(request: TradeRequest): TradesState {
     error: query.error instanceof Error ? query.error.message : null,
   };
 }
+
+/** One frozen empty page list, so a board with no data folds to a stable null. */
+const EMPTY_PAGES: readonly TradesPagePayload[] = [];

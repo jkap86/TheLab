@@ -24,23 +24,27 @@ import type { TradeBounds, TradeFilters } from "./filters.ts";
 export type LeagueScope =
   | { kind: "all" }
   | { kind: "include"; ids: string[] }
-  | { kind: "exclude"; ids: string[] }
-  /**
-   * Too many ids to put in a query string. The request goes unnarrowed and the
-   * page's own residual pass does the narrowing — see `./incremental`, whose
-   * three-state accumulator is what makes that cheap.
-   */
-  | { kind: "client"; allowed: ReadonlySet<string> };
+  | { kind: "exclude"; ids: string[] };
 
 /**
- * How many league ids will go in a query string before the request gives up and
- * narrows on the client instead.
+ * How many league ids will go in a query string before the request switches to
+ * carrying them in a POST body instead.
  *
  * At ~19 characters an id plus a separator, 500 is ~10KB on the request line —
  * past what several proxies and CDNs accept, and the failure mode is a 414 that
- * reads as the page being broken. It is a generous bound: a database holding
- * more than 500 leagues *with trades in one season* has other things to worry
- * about, and the fallback is correct anyway.
+ * reads as the page being broken. Past it the ids travel as JSON and the route
+ * reads them there; nothing else about the request changes, which is the point
+ * (see {@link tradeHttpRequest}).
+ *
+ * **It used to be the point at which the narrowing gave up and moved to the
+ * browser, and that was a correctness bug rather than a degradation.** The page
+ * asked for an *unnarrowed* board and filtered the pages as they arrived, so a
+ * first page whose two hundred trades all came from excluded leagues left
+ * `visible` empty — which renders the "no trades" note, which unmounts
+ * `TradesList`, which is what would have asked for page two. Matching trades on
+ * pages three and four were unreachable, and the headline counts described the
+ * unfiltered population while the list described the filtered one. The database
+ * is where a `WHERE` belongs, and a body is how a long list gets there.
  */
 export const MAX_LEAGUE_IDS = 500;
 
@@ -57,7 +61,9 @@ export const MAX_LEAGUE_IDS = 500;
  *
  * Include or exclude, whichever is shorter, because the two express the same
  * narrowing and a query string has a length: filtering to all but three leagues
- * is three ids, not four hundred.
+ * is three ids, not four hundred. Whichever is chosen, the narrowing is always
+ * the server's — how the ids get there is {@link tradeHttpRequest}'s problem
+ * and nothing else's.
  *
  * An empty allowed set is `include: []`, not `all`. The rules matching nothing
  * is a real answer and the honest response to it is an empty board — collapsing
@@ -78,12 +84,58 @@ export function resolveLeagueScope(
   }
 
   if (denied.length === 0) return { kind: "all" };
-  if (Math.min(allowed.length, denied.length) > MAX_LEAGUE_IDS) {
-    return { kind: "client", allowed: new Set(allowed) };
-  }
   return allowed.length <= denied.length
     ? { kind: "include", ids: allowed }
     : { kind: "exclude", ids: denied };
+}
+
+/**
+ * Whether this scope's ids are too long to put on a request line — the one
+ * thing {@link MAX_LEAGUE_IDS} decides now.
+ */
+export function scopeNeedsBody(scope: LeagueScope): boolean {
+  return scope.kind !== "all" && scope.ids.length > MAX_LEAGUE_IDS;
+}
+
+/** The league ids a large scope sends as JSON, spelled as the route reads them. */
+export type TradeScopeBody = { leagues?: string[]; xleagues?: string[] };
+
+/**
+ * One HTTP request for a trades read: the method, the query string and the body.
+ *
+ * **GET and POST differ in where the league ids ride and in nothing else.** The
+ * season, the circle, the window, the bays and the pagination parameters are on
+ * the query string either way, so the route parses one query and the keyset walk
+ * is identical — which is what keeps a large scope from being a second code path
+ * with its own bugs. `cursor` and `limit` stay out of {@link tradeQueryKey} for
+ * the same reason they always did: they are pagination rather than narrowing.
+ */
+export type TradeHttpRequest = {
+  method: "GET" | "POST";
+  search: URLSearchParams;
+  body: TradeScopeBody | null;
+};
+
+export function tradeHttpRequest(
+  request: TradeRequest,
+  page: { cursor?: string | null; limit?: number } = {},
+): TradeHttpRequest {
+  const large = scopeNeedsBody(request.scope);
+  const search = tradeQueryParams(request, { inlineScope: !large });
+  if (page.cursor) search.set("cursor", page.cursor);
+  if (page.limit) search.set("limit", String(page.limit));
+
+  if (!large || request.scope.kind === "all") {
+    return { method: "GET", search, body: null };
+  }
+  return {
+    method: "POST",
+    search,
+    body:
+      request.scope.kind === "include"
+        ? { leagues: sorted(request.scope.ids) }
+        : { xleagues: sorted(request.scope.ids) },
+  };
 }
 
 /** Everything a trades request is narrowed by, before it becomes a string. */
@@ -114,14 +166,25 @@ export type TradeRequest = {
  * the key depend on the order the leagues happened to arrive in, so the same
  * filter set becomes two cache entries and two round trips through the same
  * query. The same reason `/api/adp`'s key normalises its parameters.
+ *
+ * `inlineScope` is false only where the ids are about to travel in a body, and
+ * only for the *wire* — the cache key always inlines them, because two league
+ * sets that differ are two boards whatever transport carries them.
  */
-export function tradeQueryParams(request: TradeRequest): URLSearchParams {
+export function tradeQueryParams(
+  request: TradeRequest,
+  options: { inlineScope?: boolean } = {},
+): URLSearchParams {
+  const { inlineScope = true } = options;
   const params = new URLSearchParams();
   params.set("season", request.season);
 
   const { scope } = request;
-  if (scope.kind === "include") params.set("leagues", join(scope.ids));
-  else if (scope.kind === "exclude") params.set("xleagues", join(scope.ids));
+  if (inlineScope && scope.kind === "include") {
+    params.set("leagues", join(scope.ids));
+  } else if (inlineScope && scope.kind === "exclude") {
+    params.set("xleagues", join(scope.ids));
+  }
 
   // Both or neither. The server forces the circle open when there is no user, so
   // sending one without the other would only make the key differ between a
@@ -175,4 +238,5 @@ export function tradeQueryKey(request: TradeRequest): string {
     .join("&");
 }
 
-const join = (values: readonly string[]) => [...values].sort().join(",");
+const sorted = (values: readonly string[]) => [...values].sort();
+const join = (values: readonly string[]) => sorted(values).join(",");

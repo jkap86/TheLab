@@ -13,6 +13,18 @@ export type {
 } from "./sync";
 export { runLeagueCrawl } from "./crawl";
 export type { CrawlSummary, CrawlOptions } from "./crawl";
+export { markLeaguesAccessed } from "./crawl-queue";
+export {
+  ACTIVE_LEAGUE_STATUSES,
+  CRAWL_PRIORITY,
+  DEMAND_WINDOW_MS,
+  STARVATION_MULTIPLE,
+  compareLeagueRefresh,
+  leagueRefreshPriority,
+  staleLeagueClaimSql,
+  starvationMs,
+} from "./crawl-priority";
+export type { CrawlCandidate, CrawlClock, CrawlPriority } from "./crawl-priority";
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
   LEAGUE_COLUMNS_SQL,
@@ -44,8 +56,14 @@ export { orderByProjectedPoints, projectedRank, rankOf, standingScore } from "./
 export type { LeagueRank, ProjectedRank } from "./rank";
 export { ownedDraftPicks } from "./draft-picks";
 export type { DraftPickAsset, TradedPick } from "./draft-picks";
-export { resolveManagerUser, toUserInfo } from "./resolve";
-export type { ResolvedManager } from "./resolve";
+export {
+  clearManagerLookupCache,
+  isSleeperUserId,
+  resolveManagerUser,
+  resolveManagerUserId,
+  toUserInfo,
+} from "./resolve";
+export type { ResolvedManager, ResolvedManagerId } from "./resolve";
 export { getDraftAdp, getDraftAdpForPlayers, getDraftDensity } from "./adp";
 export type {
   AdpBoardStats,

@@ -1,5 +1,11 @@
 import { msInterval, pool } from "@/shared/db";
 
+import {
+  DEMAND_WINDOW_MS,
+  staleLeagueClaimSql,
+  starvationMs,
+} from "./crawl-priority.ts";
+
 /**
  * The crawler's queue: every database read and write that decides *what* to
  * crawl next. Deliberately free of policy — batch sizes and freshness windows
@@ -65,6 +71,12 @@ export async function leagueQueueStats(
  * Claim and stamp are one statement so two ticks (or two instances) can never
  * pick the same leagues, and so a league that fails — or a tick that dies
  * mid-flight — rotates to the back rather than being retried immediately.
+ *
+ * **Which leagues are due is unchanged; which of them go first is not.** The
+ * ordering is `./crawl-priority`'s — demand, then liveness, then how long the
+ * crawler has been away — with a starvation bound so a cold league cannot be
+ * deferred forever by a database that always has something hot in it. The batch
+ * size, the tick interval and the upstream cost are all exactly what they were.
  */
 export async function claimStaleLeagues(
   season: string,
@@ -72,20 +84,40 @@ export async function claimStaleLeagues(
   limit: number,
 ): Promise<string[]> {
   const { rows } = await pool.query<{ league_id: string }>(
-    `UPDATE leagues
-        SET sync_attempt_at = now()
-      WHERE league_id IN (
-              SELECT league_id
-                FROM leagues
-               WHERE season = $1 AND updated_at < now() - $2::interval
-                 AND gone_at IS NULL
-               ORDER BY sync_attempt_at ASC NULLS FIRST
-               LIMIT $3
-            )
-      RETURNING league_id`,
-    [season, msInterval(ttlMs), limit],
+    staleLeagueClaimSql(),
+    [
+      season,
+      msInterval(ttlMs),
+      msInterval(starvationMs(ttlMs)),
+      msInterval(DEMAND_WINDOW_MS),
+      limit,
+    ],
   );
   return rows.map((r) => r.league_id);
+}
+
+/**
+ * Record that somebody actually asked for these leagues.
+ *
+ * The crawler's one demand signal, and it is stamped only where demand is
+ * *observed*: a manager's league sync (someone searched them) and a league
+ * detail read (someone opened its panel). The crawler deliberately does not
+ * stamp what it refreshes — within one rotation every league would look
+ * demanded, which flattens the ordering back to the round-robin it replaces.
+ *
+ * Best-effort by design: it is a scheduling hint, so a caller fires it off and
+ * does not wait on it, and a failure costs a league its place in a queue rather
+ * than costing the request its answer.
+ */
+export async function markLeaguesAccessed(
+  leagueIds: readonly string[],
+): Promise<void> {
+  if (leagueIds.length === 0) return;
+  await pool.query(
+    `UPDATE leagues SET last_accessed_at = now()
+      WHERE league_id = ANY($1::varchar[])`,
+    [leagueIds],
+  );
 }
 
 /** League members due a league-list enumeration, longest-waiting first. */

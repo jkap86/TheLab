@@ -130,6 +130,31 @@ business logic": every decision it makes already belongs to a module it calls,
 and what is left is the HTTP adaptation. A non-route file in the app directory is
 fine — only `route.ts`/`page.tsx` are special, and the build confirms it.
 
+**Six routes resolve a manager; only two of them may ask Sleeper who it is.**
+`resolveManagerRequest` fetches the profile and is for the two routes that need
+one — `/api/user/[username]` and `…/leagues`. The other six (`players`,
+`leaguemates`, `ranks`, `ktc`, `adp-value`, `matchups`) read Postgres and
+nothing else, keyed on a `user_id`, and used to spend a Sleeper request each
+purely to arrive at an id the leagues stream had already sent — five lookups per
+manager page, on every navigation between the tabs. `resolveManagerIdRequest`
+takes it back as `?user_id=`, so a page is **one** lookup and four database
+reads. Four rules hold it up. The hint is checked for *shape*
+(`isSleeperUserId`: a digit string, bounded) and never trusted as identity —
+these are public statistical reads, so the worst a forged id buys is a public
+answer about a different public account, and it reaches Postgres as a bound
+parameter regardless. Without a hint nothing changes: a bookmark or a direct
+navigation resolves the name exactly as before, an unknown manager is still a
+404 and a blank one still a 400. The id is **not** in the query key — `searched`
+and the id are one manager, and the hooks don't ask until the stream has
+produced it, so there is no window where the key would have to change. And
+behind all of it `resolve.ts` memoises the lookup for a minute
+(`memoizeManagerLookup`), which covers what the hint cannot — a cold navigation,
+several tabs, several readers — caching the in-flight promise rather than the
+settled answer (so simultaneous reads collapse), remembering a `null` (the answer
+an abusive caller can manufacture endlessly) and never remembering a failure (a
+502 should be retryable at once). The decision half is pure and takes its lookup
+as an argument, which is what lets the request *count* be the assertion.
+
 Two details it carries so callers don't have to. It returns `username` **as
 spelled in the URL**, because Sleeper resolves a user id as readily as a name and
 that is the string worth putting in a log line (the `ktc` route does). And it
@@ -407,6 +432,31 @@ warns when the stalest league is past twice the active TTL, heartbeats when idle
 `CRAWL_LEAGUE_BATCH` moves on that telemetry rather than on intuition — the tick
 interval is execution granularity, not the freshness period, and halving it
 doubles cost for nothing a bigger batch wouldn't do better.
+
+**And once the corpus outgrows that capacity claim, *which* league goes first
+starts to matter — `manager/crawl-priority` is the ordering, not a bigger
+batch.** Strictly oldest-first is fair and stops scaling: at a thousand leagues
+a rotation is over an hour, and the league a reader has open waits behind nine
+hundred discovered three hops out through a stranger's membership. So the leagues
+that are *already due* are ordered by five tiers — starved, demanded, live,
+known, cold — and nothing else about the crawl changes: same batch size, same
+tick, same TTLs, same upstream cost. Four things are load-bearing. **The
+starvation tier is what makes the rest safe**: past four TTLs overdue a league
+outranks everything, because pure demand-first fails silently — the leagues that
+stop being crawled are exactly the ones nobody is looking at, so nobody notices
+they are stale. Four rather than two, since two is where the scheduler already
+warns, and a tier every league enters at once is not a tier. **Demand is
+observed, never inferred**: `leagues.last_accessed_at` is stamped by a manager's
+league sync (someone searched them) and a league detail read (someone opened its
+panel), and deliberately *not* by the crawler — within one rotation every league
+would look demanded and the ordering would flatten back out. **The tiebreaker
+stays `sync_attempt_at`**, so a league whose fetch keeps failing rotates to the
+back of its own tier rather than being retried every tick. And **the `CASE` is
+generated from the same table the pure comparator reads**, since a five-armed
+ordering written twice is two orderings; the tests pin the arms against each
+other, which is the agreement no type can carry. "Recent transaction activity" is
+folded into the live-status tier rather than given a column of its own — that is
+the one part of the priority list deliberately deferred.
 
 ## Operating safety
 
@@ -1359,8 +1409,18 @@ stops holding, a comment saying it does would not have caught it.
     rows across the seam). `transactions_trade_adds_idx` is the GIN index behind
     the player filter, partial on the same predicate for the same reason —
     `adds` on a waiver is as big as on a trade and there are twenty times as
-    many. The older `transactions_trade_recency_idx` is left in place; it is what
-    a `NULLS LAST` ordering would still use.
+    many. **The older `transactions_trade_recency_idx` is not redundant and must
+    not be dropped without a change beside it**: it is ordered on
+    `coalesce(status_updated, created)` — the *two*-argument coalesce — which is
+    a different expression to the planner from the keyset index's three-argument
+    one, and it is exactly what the date window in `tradeNarrowingClauses` is
+    written on. The board itself never needs it (its `ORDER BY` pins it to the
+    keyset walk), but `countTradeTotals` and the facet aggregates have no
+    `ORDER BY` at all, so a windowed board's denominators can take it as an index
+    range instead of a filter over the season. Spelling the window as
+    `TRADE_SORT_SQL` would make the old index droppable and those counts a scan;
+    `sql.test.ts` pins each expression to the migration that indexes it, so the
+    pair cannot drift apart unnoticed.
   - **The filter menus are their own route and their own aggregate**, kept apart
     from any number counted *with* the selection. That split is not fussiness:
     the menus are counted **without** it (a menu counted over its own selection
@@ -1399,19 +1459,42 @@ stops holding, a comment saying it does would not have caught it.
     `leaguesById` are `useMemo`s, `metric` is a catalogue entry, a `trade` is an
     object off a cached page), which is why the default shallow comparison is
     enough and a custom `areEqual` would only restate it.
-  - **`useInfiniteQuery`, with a bounded page count.** The cursor is the query's
-    own state, so it survives a remount and a navigation away and back; a filter
-    change is a *different key* rather than an invalidation, so widening back
-    finds the old board still loaded with its scroll position. `maxPages` (20,
-    or 4,000 trades) is the memory half of the same argument — an unbounded
-    infinite query is the season download arriving one scroll at a time — and
-    the board carries its own `gcTime` of five minutes against the client-wide
-    thirty, because a scrolled board plus every name it resolved is a different
-    order of thing from a manager's leagues.
+  - **`useInfiniteQuery`, and its pages are never evicted.** The cursor is the
+    query's own state, so it survives a remount and a navigation away and back;
+    a filter change is a *different key* rather than an invalidation, so widening
+    back finds the old board still loaded with its scroll position. It carried
+    `maxPages` (20, or 4,000 trades) as the memory half of the same argument, and
+    that was wrong for **this** query: React Query drops the *oldest* page past
+    the bound, and a keyset walk resumes forwards only, so there is no
+    previous-page path to read a dropped one back with. Everything else here
+    assumes pages append — the fold reads `total`/`scopeTotal` off the first page,
+    the virtualizer keys its measurements by trade id, and `advanceFiltered`
+    judges a prefix once — so at page 21 trades a reader had scrolled past
+    vanished, the list shrank under the scroll position, and the headline
+    denominators blanked. Memory is bounded where it can be bounded honestly:
+    `gcTime` of five minutes against the client-wide thirty retires an abandoned
+    board (a scrolled board plus every name it resolved is a different order of
+    thing from a manager's leagues), and the DOM stays bounded at any depth
+    because the list is windowed. The fold itself is `features/trades/trades-data`,
+    pure and tested, which is where those assumptions are pinned.
+  - **A league set too large for a query string travels in a POST body, not to
+    the browser.** Past `MAX_LEAGUE_IDS` (500) the request used to go
+    *unnarrowed* and the page filtered the pages as they arrived, which is not a
+    degradation but a wrong answer: a first page whose two hundred trades are all
+    excluded leaves `visible` empty, which renders the "no trades" note, which
+    unmounts `TradesList` — and the list is what would have asked for page two,
+    so matching trades further down were unreachable and the counts described a
+    population the reader could not see. `/api/trades` and `/api/trades/facets`
+    take a POST whose body is the same `leagues`/`xleagues` lists, parsed by
+    `parseTradeScopeBody` into the same `TradeQuery`; the query string, the
+    keyset cursor, the SQL and the counts are byte-for-byte the GET's, so the two
+    methods cannot answer differently. The cache key still inlines the ids —
+    two league sets that differ are two boards whatever transport carried them.
   - **The client's residual filter is three-state** (`features/trades/incremental`,
-    pure and tested). With the narrowing in SQL there is usually nothing to
-    decide, and two cases keep it: a page that arrives before the league list
-    does, and a league set too large to put in a query string. Two states forced
+    pure and tested). With every narrowing in SQL there is nothing left for it to
+    deny; what keeps it is that a page which admits everything hands the previous
+    arrays back, which is what stops each page from invalidating the
+    virtualizer's measurement cache. Two states forced
     an undecidable trade to count as *out*, and the only way to correct that later
     was to discard the whole answer and re-walk — which is exactly what the old
     page's `n${allowedLeagues.size}` generation segment did, once per league that
@@ -3922,6 +4005,24 @@ stops holding, a comment saying it does would not have caught it.
 
 ## External API gotchas
 
+- **Every request to Sleeper passes one process-wide limiter, and that is the
+  only bound that adds up.** `sleeperGet` is the choke point, so the cap lives
+  there (`sleeper/limiter`, `SLEEPER_MAX_CONCURRENCY`, default 24 — above the
+  largest single fan-out any one path takes, so nothing that used to run in
+  parallel is serialised by arithmetic). Every *other* concurrency constant here
+  is local — the crawler's four leagues, a manager sync's six, eight weeks within
+  each — and local bounds do not sum: two manager syncs plus a crawl tick was
+  three times the fan-out anyone chose, and the advisory locks cannot help
+  because they are per manager and those are different managers. Two properties
+  are what a test asserts: the slot is released in a `finally` (a slot leaked on
+  a thrown request is a limiter that tightens by one per Sleeper timeout and
+  eventually admits nobody), and the queue is FIFO (a busy page must not defer a
+  background tick that has been waiting since before it started). The other half
+  of the same problem is *admission*: `/api/user/[username]/leagues` caps
+  concurrent **cold** syncs per process (`MANAGER_COLD_SYNC_LIMIT`, default 3)
+  and sheds past it with a 503 rather than queueing, since a cold caller has
+  nothing cached to fall back on and would hold a streaming response open through
+  a wait it cannot be answered within.
 - **Sleeper answers 200 with a `null` body** for "no such thing" (unknown user,
   deleted league) rather than 404. `sleeperGet` normalises this to a fallback —
   use it rather than calling axios directly.

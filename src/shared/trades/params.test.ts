@@ -3,12 +3,14 @@ import { describe, test } from "node:test";
 
 import {
   DEFAULT_TRADE_PAGE_SIZE,
+  MAX_BODY_LEAGUE_IDS,
   MAX_TRADE_PAGE_SIZE,
   MAX_TRADE_SIDES,
   hasTradeNarrowing,
   isUnnarrowed,
   leagueScopeQuery,
   parseTradeQuery,
+  parseTradeScopeBody,
 } from "./params.ts";
 
 const parse = (query: string) =>
@@ -172,5 +174,95 @@ describe("what counts as narrowed", () => {
     assert.equal(hasTradeNarrowing(parse("circle=mine&user=u1")), false);
     assert.equal(hasTradeNarrowing(parse("leagues=a&from=1")), true);
     assert.equal(hasTradeNarrowing(parse("s1players=p1")), true);
+  });
+});
+
+/**
+ * The league scope as a POST body carries it — the path a filter set too long
+ * for a request line takes.
+ *
+ * What is pinned here is that a body and a query string produce the *same*
+ * {@link TradeQuery}: the SQL, the cursor and the counts below it cannot tell
+ * which arrived, which is what stops a large scope from being a second code path
+ * that narrows differently from the small one.
+ */
+describe("parseTradeScopeBody", () => {
+  test("an unreadable body narrows nothing", () => {
+    for (const body of [null, undefined, "", 7, [], "not json"]) {
+      assert.deepEqual(parseTradeScopeBody(body), {
+        leagues: null,
+        excludeLeagues: null,
+      });
+    }
+  });
+
+  test("absent and empty stay different answers", () => {
+    assert.equal(parseTradeScopeBody({ xleagues: ["a"] }).leagues, null);
+    assert.deepEqual(parseTradeScopeBody({ leagues: [] }).leagues, []);
+  });
+
+  test("carries 500 included ids", () => {
+    const ids = Array.from({ length: 500 }, (_, i) => `L${i}`);
+    assert.deepEqual(parseTradeScopeBody({ leagues: ids }).leagues, ids);
+  });
+
+  test("carries 500 excluded ids", () => {
+    const ids = Array.from({ length: 500 }, (_, i) => `L${i}`);
+    const scope = parseTradeScopeBody({ xleagues: ids });
+    assert.deepEqual(scope.excludeLeagues, ids);
+    assert.equal(scope.leagues, null);
+  });
+
+  test("carries both lists at once", () => {
+    const scope = parseTradeScopeBody({
+      leagues: Array.from({ length: 600 }, (_, i) => `I${i}`),
+      xleagues: Array.from({ length: 600 }, (_, i) => `X${i}`),
+    });
+    assert.equal(scope.leagues?.length, 600);
+    assert.equal(scope.excludeLeagues?.length, 600);
+  });
+
+  test("drops entries that are not id-shaped, and deduplicates", () => {
+    const scope = parseTradeScopeBody({
+      leagues: ["a", "a", 7, null, "b c", "x".repeat(200), "b"],
+    });
+    assert.deepEqual(scope.leagues, ["a", "b"]);
+  });
+
+  test("is capped, so a body cannot ask for an unbounded ANY()", () => {
+    const ids = Array.from({ length: MAX_BODY_LEAGUE_IDS + 10 }, (_, i) => `L${i}`);
+    assert.equal(parseTradeScopeBody({ leagues: ids }).leagues?.length, MAX_BODY_LEAGUE_IDS);
+  });
+});
+
+describe("parseTradeQuery with a scope body", () => {
+  const body = (b: unknown, query = "") =>
+    parseTradeQuery(new URLSearchParams(query), "2026", parseTradeScopeBody(b));
+
+  test("a body scope reads exactly as the query-string one would", () => {
+    const ids = Array.from({ length: 600 }, (_, i) => `L${i}`);
+    const fromBody = body({ leagues: ids });
+    const fromQuery = parse(`leagues=${ids.join(",")}`);
+    assert.deepEqual(fromBody.leagues, fromQuery.leagues);
+    assert.equal(isUnnarrowed(fromBody), false);
+  });
+
+  test("the rest of the query string is still read", () => {
+    // Pagination and the selection never move to the body, so the keyset walk
+    // is identical under both methods.
+    const query = body({ leagues: ["a"] }, "cursor=abc&limit=25&from=100&s1players=p1");
+    assert.equal(query.cursor, "abc");
+    assert.equal(query.limit, 25);
+    assert.equal(query.from, 100);
+    assert.deepEqual(query.sides[0].players, ["p1"]);
+  });
+
+  test("a body list overrides the query string rather than merging", () => {
+    const query = body({ leagues: ["b"] }, "leagues=a");
+    assert.deepEqual(query.leagues, ["b"]);
+  });
+
+  test("an absent body list leaves the query string's alone", () => {
+    assert.deepEqual(body({ xleagues: ["z"] }, "leagues=a").leagues, ["a"]);
   });
 });

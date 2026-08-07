@@ -44,7 +44,14 @@ export function useManagerMatchups(userId: string | null): ManagerMatchupsState 
     queryKey: lineupQueryKeys.matchups(userId ?? ""),
     queryFn: ({ signal }) =>
       fetchJson<ManagerMatchupsPayload>(
-        `/api/user/${encodeURIComponent(userId ?? "")}/matchups`,
+        // The id rides the query string as well as the path segment, and that is
+        // not a duplication: the segment is `[username]`, which Sleeper would
+        // have to be asked about because a name and an id are indistinguishable
+        // there. `?user_id=` says "this one is already canonical", so a read that
+        // is pure Postgres costs no upstream request — see
+        // `resolveManagerIdRequest`.
+        `/api/user/${encodeURIComponent(userId ?? "")}/matchups` +
+          `?user_id=${encodeURIComponent(userId ?? "")}`,
         "Failed to load matchups",
         signal,
       ),

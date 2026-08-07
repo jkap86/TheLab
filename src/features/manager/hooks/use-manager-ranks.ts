@@ -23,12 +23,19 @@ export type ManagerRanksState = ManagerResourceState<ManagerRanksResult>;
  */
 export function useManagerRanks(
   searched: string,
+  /**
+   * The manager's canonical Sleeper id, off the leagues stream. Sent with the
+   * read so the route needn't resolve the searched name through Sleeper again —
+   * see {@link useManagerResource}.
+   */
+  userId: string | null,
   leagues: ManagerLeague[] | null,
 ): ManagerRanksState {
   const queryKey = useMemo(() => managerQueryKeys.ranks(searched), [searched]);
   return useManagerResource<ManagerRanksResult>(
     queryKey,
     searched,
+    userId,
     leagues,
     "ranks",
     "Failed to load ranks",

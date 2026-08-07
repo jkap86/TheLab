@@ -9,7 +9,9 @@ import {
   getTradeManagers,
   lookupPlayers,
   parseTradeQuery,
+  parseTradeScopeBody,
 } from "@/shared/trades";
+import type { TradeScopeBody } from "@/shared/trades";
 
 import { readFailureResponse } from "../../read-failure";
 
@@ -40,6 +42,23 @@ export const dynamic = "force-dynamic";
  *   counted over the selection.
  */
 export async function GET(request: Request) {
+  return readFacets(request);
+}
+
+/**
+ * The same menus, for a league scope too long for a request line.
+ *
+ * It exists for the reason `/api/trades`'s POST does and answers identically —
+ * the menus have to be counted over the *same* population the board is read
+ * from, so a scope the board narrows by and the facets don't would offer options
+ * that match nothing.
+ */
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => null);
+  return readFacets(request, parseTradeScopeBody(body));
+}
+
+async function readFacets(request: Request, scope?: TradeScopeBody) {
   const url = new URL(request.url);
   const requested = url.searchParams.get("season");
   const season =
@@ -47,7 +66,7 @@ export async function GET(request: Request) {
 
   // The selection is lifted out whatever the caller sent, which is what keeps a
   // menu from collapsing to its own selection the moment one is made.
-  const query = parseTradeQuery(url.searchParams, season);
+  const query = parseTradeQuery(url.searchParams, season, scope);
 
   try {
     const facets = await getTradeFacets({ ...query, sides: [] });

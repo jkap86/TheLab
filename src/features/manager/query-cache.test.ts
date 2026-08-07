@@ -39,6 +39,9 @@ function mount<T>(client: QueryClient, options: QueryObserverOptions<T, Error>) 
   return { observer, unmount: unsubscribe };
 }
 
+/** A canonical Sleeper id, as the leagues stream reports one. */
+const USER_ID = "12345678901234567";
+
 const ktcOptions = (searched: string) => ({
   queryKey: managerQueryKeys.ktc(searched),
   queryFn: () =>
@@ -95,6 +98,82 @@ test("navigating between sibling manager routes", async (t) => {
     assert.equal(mock.countOf("/ktc"), 1);
     assert.ok(returned.observer.getCurrentResult().data);
     returned.unmount();
+    mock.restore();
+  });
+
+  await t.test(
+    "sends the canonical id, so a page is one Sleeper lookup",
+    async () => {
+      // The five database-backed reads take a `user_id` and join it against what
+      // the leagues sync wrote; without it each route opens by asking Sleeper who
+      // the searched name is, which is four upstream requests per page load for
+      // an id the leagues stream has already sent. See `resolveManagerIdRequest`.
+      const client = createTestQueryClient();
+      const mock = installFetchMock((url) => jsonResponse({ ok: url }));
+
+      for (const path of ["players", "leaguemates", "ranks", "ktc"]) {
+        const view = mount(client, {
+          queryKey: [...managerQueryKeys.manager("alice"), path],
+          queryFn: () =>
+            fetchManagerResource<{ ok: string }>(
+              "alice",
+              path,
+              "Failed",
+              undefined,
+              USER_ID,
+            ),
+        });
+        await flush();
+        view.unmount();
+      }
+
+      assert.equal(mock.calls.length, 4);
+      for (const url of mock.calls) {
+        assert.ok(url.includes(`user_id=${USER_ID}`), url);
+      }
+      mock.restore();
+    },
+  );
+
+  await t.test("appends the id to a path that already has a query", async () => {
+    // The ADP valuation's path *is* a query string — the drawer's whole board —
+    // so the separator is chosen rather than assumed.
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ ok: url }));
+
+    const view = mount(client, {
+      queryKey: managerQueryKeys.adpValue("alice", undefined, "steepness=3"),
+      queryFn: () =>
+        fetchManagerResource<{ ok: string }>(
+          "alice",
+          "adp-value?steepness=3",
+          "Failed",
+          undefined,
+          USER_ID,
+        ),
+    });
+    await flush();
+
+    assert.equal(mock.calls[0], `/api/user/alice/adp-value?steepness=3&user_id=${USER_ID}`);
+    view.unmount();
+    mock.restore();
+  });
+
+  await t.test("asks without the id when there is none to send", async () => {
+    // Direct navigation and older clients still work; the route resolves the
+    // name exactly as it always did.
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ ok: url }));
+
+    const view = mount(client, {
+      queryKey: managerQueryKeys.ranks("alice"),
+      queryFn: () =>
+        fetchManagerResource<{ ok: string }>("alice", "ranks", "Failed"),
+    });
+    await flush();
+
+    assert.equal(mock.calls[0], "/api/user/alice/ranks");
+    view.unmount();
     mock.restore();
   });
 

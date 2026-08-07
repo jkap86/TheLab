@@ -23,12 +23,19 @@ export type ManagerKtcState = ManagerResourceState<ManagerKtcResult>;
  */
 export function useManagerKtc(
   searched: string,
+  /**
+   * The manager's canonical Sleeper id, off the leagues stream. Sent with the
+   * read so the route needn't resolve the searched name through Sleeper again —
+   * see {@link useManagerResource}.
+   */
+  userId: string | null,
   leagues: ManagerLeague[] | null,
 ): ManagerKtcState {
   const queryKey = useMemo(() => managerQueryKeys.ktc(searched), [searched]);
   return useManagerResource<ManagerKtcResult>(
     queryKey,
     searched,
+    userId,
     leagues,
     "ktc",
     "Failed to load values",

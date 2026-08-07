@@ -41,7 +41,7 @@ export function PlayerSharesSheet({
   // Off until the sheet is opened, and the same query key the rail's panel and
   // the Players tab already name — so a reader who has been to either pays
   // nothing, and a reader who never opens this costs no request.
-  const rosters = useManagerPlayers(view.searched, leagues, open);
+  const rosters = useManagerPlayers(view.searched, view.userId, leagues, open);
 
   // The board the ADP columns read, behind the same gate. It is not keyed to the
   // manager, so the drawer and the Players tab share this entry with the sheet.

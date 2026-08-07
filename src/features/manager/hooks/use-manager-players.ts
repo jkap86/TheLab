@@ -18,6 +18,12 @@ export type ManagerPlayersState = ManagerResourceState<ManagerPlayersResult>;
  */
 export function useManagerPlayers(
   searched: string,
+  /**
+   * The manager's canonical Sleeper id, off the leagues stream. Sent with the
+   * read so the route needn't resolve the searched name through Sleeper again —
+   * see {@link useManagerResource}.
+   */
+  userId: string | null,
   leagues: ManagerLeague[] | null,
   /** Off until a subject filter needs it — see {@link useManagerResource}. */
   enabled = true,
@@ -26,6 +32,7 @@ export function useManagerPlayers(
   return useManagerResource<ManagerPlayersResult>(
     queryKey,
     searched,
+    userId,
     leagues,
     "players",
     "Failed to load rosters",

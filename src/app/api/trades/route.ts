@@ -5,6 +5,7 @@ import { isSeason } from "@/shared/query";
 import { getActiveSeason } from "@/shared/season";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 import {
+  collectEnrichmentIds,
   countTradeTotals,
   draftOrderKey,
   getDraftSlots,
@@ -16,10 +17,11 @@ import {
   lookupKtcPickBoard,
   lookupPlayers,
   parseTradeQuery,
+  parseTradeScopeBody,
   pickSlotKey,
   refreshTradeStats,
 } from "@/shared/trades";
-import type { Trade, TradeQuery } from "@/shared/trades";
+import type { Trade, TradeQuery, TradeScopeBody } from "@/shared/trades";
 
 import { readFailureResponse } from "../read-failure";
 
@@ -68,12 +70,37 @@ export const dynamic = "force-dynamic";
  * turning a stale bookmark into a 400.
  */
 export async function GET(request: Request) {
+  return readTrades(request);
+}
+
+/**
+ * The same read, for a league scope too long to put on a request line.
+ *
+ * **It exists so that "too many leagues to name" stops meaning "don't narrow".**
+ * The client used to fall back to filtering pages in the browser past ~500 ids,
+ * which is not a degradation but a wrong answer: a page whose two hundred trades
+ * are all excluded renders as an empty board, the list unmounts, nothing asks
+ * for page two, and the counts describe a population the reader cannot see.
+ *
+ * It is a POST only because a body is where a long list fits — nothing about it
+ * is a write. Everything else is byte-for-byte the GET: the same query string,
+ * the same {@link parseTradeQuery}, the same keyset cursor, the same SQL and the
+ * same counts, so the two methods cannot answer differently. A body that isn't
+ * readable JSON narrows nothing rather than failing the request, the rule every
+ * other field here follows.
+ */
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => null);
+  return readTrades(request, parseTradeScopeBody(body));
+}
+
+async function readTrades(request: Request, scope?: TradeScopeBody) {
   const url = new URL(request.url);
   const requested = url.searchParams.get("season");
   const season =
     requested && isSeason(requested) ? requested : await getActiveSeason();
 
-  const query = parseTradeQuery(url.searchParams, season);
+  const query = parseTradeQuery(url.searchParams, season, scope);
 
   try {
     const page = await listTrades(query);
@@ -159,32 +186,13 @@ async function resolveTotals(
  * per-chunk league resolution entirely.
  */
 async function resolveNames(trades: readonly Trade[]) {
-  const playerIds: string[] = [];
-  const managerIds: string[] = [];
-  // The `(league, season)` pairs whose draft order would name a pick on this
-  // page. Deduplicated like the ids: a busy league's page carries dozens of
-  // picks out of the same two drafts.
-  const draftKeys: string[] = [];
-  const seen = new Set<string>();
-  const take = (id: string, out: string[]) => {
-    if (seen.has(id)) return;
-    seen.add(id);
-    out.push(id);
-  };
-
-  for (const trade of trades) {
-    for (const side of trade.sides) {
-      for (const id of side.players) take(id, playerIds);
-      if (side.user_id) take(side.user_id, managerIds);
-      for (const pick of side.picks) {
-        take(draftOrderKey(trade.league_id, pick.season), draftKeys);
-        // A pick's original owner need not be a participant, so this is not
-        // covered by the side ids above — and it is exactly the case the card
-        // names an owner for.
-        if (pick.user_id) take(pick.user_id, managerIds);
-      }
-    }
-  }
+  // Deduplicated per namespace rather than across all three — see
+  // {@link collectEnrichmentIds} for the collision one shared `Set` allowed.
+  const {
+    players: playerIds,
+    managers: managerIds,
+    draftKeys,
+  } = collectEnrichmentIds(trades);
 
   const [players, managers, ktc, pickKtc, draftSlots] = await Promise.all([
     lookupPlayers(playerIds),

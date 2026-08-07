@@ -266,39 +266,35 @@ export function TradesHome({ season }: { season: string }) {
     [season, scope, tradeFilters, bounds, account],
   );
 
+  // Built once per request rather than per render: with a large league scope the
+  // key carries every id in it, and it is read twice below — as the board's
+  // cache key and as the residual pass's generation.
+  const requestKey = useMemo(() => tradeQueryKey(request), [request]);
+
   const { data, loading, loadingMore, stale, hasMore, loadMore, error } =
-    useTrades(request);
+    useTrades(request, requestKey);
 
   const trades = data?.trades ?? EMPTY_TRADES;
 
   /**
    * The residual verdict — see `../incremental` for why it has three answers.
    *
-   * In the ordinary case there is nothing to decide: the server applied the
-   * league narrowing, so every trade that came back is allowed. The two cases
-   * that are left are the two the third state exists for — a page that arrived
-   * before the league list did, and a league set too large to send as ids.
+   * **There is nothing left for it to deny.** Every narrowing this page offers
+   * is applied in SQL now, including a league set too large for a query string
+   * (which travels as a POST body rather than falling back to the browser — the
+   * false-empty bug that fallback caused is why it is gone). What survives is
+   * the accumulator itself, which is what keeps the list's identity stable as
+   * pages append: a page that admits everything hands the previous arrays back,
+   * so the virtualizer's measurement cache rides through untouched.
    */
-  const judge = useCallback(
-    (trade: { league_id: string }): Verdict => {
-      if (scope.kind === "client") {
-        return scope.allowed.has(trade.league_id) ? "allowed" : "denied";
-      }
-      // The server already narrowed, so nothing here can be denied — but while
-      // the league list is still loading a card cannot be *named*, and the page
-      // draws it either way (a league falls back to its id). Allowing it keeps
-      // the first paint what it was under the stream.
-      return "allowed";
-    },
-    [scope],
-  );
+  const judge = useCallback((): Verdict => "allowed", []);
 
   const { visible } = useFilteredTrades(
     trades,
     // Everything the verdict closes over except the leagues, which is its own
     // generation below — a change here throws the accumulated answer away, a
     // change there only revisits what was never decided.
-    tradeQueryKey(request),
+    requestKey,
     leaguesLoading ? "loading" : `n${leagues.length}`,
     judge,
   );

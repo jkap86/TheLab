@@ -5,8 +5,8 @@ import type {
 } from "@/shared/contract";
 
 import { apiFetch } from "../shared/api.ts";
-import { tradeQueryParams } from "./trade-query.ts";
-import type { TradeRequest } from "./trade-query.ts";
+import { tradeHttpRequest } from "./trade-query.ts";
+import type { TradeHttpRequest, TradeRequest } from "./trade-query.ts";
 
 /**
  * The three fetches the trades board is built from.
@@ -27,6 +27,34 @@ import type { TradeRequest } from "./trade-query.ts";
  * follow the scroll rather than the connection.
  */
 
+/**
+ * Send one trades read, as a GET or — where the league scope is too long for a
+ * request line — as a POST carrying the ids as JSON.
+ *
+ * The two are one function because they must stay one *question*: the query
+ * string is identical either way, the route parses it the same way, and the only
+ * difference is where the league ids were read from. A caller never chooses;
+ * {@link tradeHttpRequest} does, off the size of the scope.
+ */
+async function sendTradeRequest(
+  path: string,
+  http: TradeHttpRequest,
+  fallbackError: string,
+  signal?: AbortSignal,
+): Promise<Response> {
+  return apiFetch(`${path}?${http.search}`, {
+    signal,
+    fallbackError,
+    ...(http.body
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(http.body),
+        }
+      : null),
+  });
+}
+
 /** One page of the board. `cursor` is null for the first. */
 export async function fetchTradesPage({
   request,
@@ -39,14 +67,12 @@ export async function fetchTradesPage({
   limit?: number;
   signal?: AbortSignal;
 }): Promise<TradesPagePayload> {
-  const params = tradeQueryParams(request);
-  if (cursor) params.set("cursor", cursor);
-  if (limit) params.set("limit", String(limit));
-
-  const res = await apiFetch(`/api/trades?${params}`, {
+  const res = await sendTradeRequest(
+    "/api/trades",
+    tradeHttpRequest(request, { cursor, limit }),
+    "Failed to load trades",
     signal,
-    fallbackError: "Failed to load trades",
-  });
+  );
   return (await res.json()) as TradesPagePayload;
 }
 
@@ -87,9 +113,11 @@ export async function fetchTradeFacets({
   request: TradeRequest;
   signal?: AbortSignal;
 }): Promise<TradeFacetsPayload> {
-  const res = await apiFetch(`/api/trades/facets?${tradeQueryParams(request)}`, {
+  const res = await sendTradeRequest(
+    "/api/trades/facets",
+    tradeHttpRequest(request),
+    "Failed to load filter options",
     signal,
-    fallbackError: "Failed to load filter options",
-  });
+  );
   return (await res.json()) as TradeFacetsPayload;
 }

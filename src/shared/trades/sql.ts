@@ -148,6 +148,27 @@ const asArray = (column: string) =>
 const PICK_TOKEN_SQL = `((p->>'season') || '-' || (p->>'round'))`;
 
 /**
+ * A jsonb roster id as the integer `rosters.roster_id` is, or null where it
+ * isn't one.
+ *
+ * **Guarded with `CASE`, never with a `WHERE` beside the cast**, and the
+ * difference is not stylistic: Postgres does not promise to evaluate a `WHERE`
+ * predicate before an expression elsewhere in the same query, so
+ * `… = ri::int WHERE ri ~ '^[0-9]+$'` can reach the cast with a value the regex
+ * was there to remove — and an invalid-input error fails the *whole* read rather
+ * than skipping one league. `CASE` short-circuits by definition, so a junk id
+ * yields null, matches nothing, and costs that trade its manager rather than
+ * costing every reader the board.
+ *
+ * It is one function because three reads ask it — the sides filter, the circle's
+ * `traders` shape and the managers facet — and two spellings of the same guard
+ * is how one of them came to be missing it.
+ */
+export function rosterIdIntSql(alias: string): string {
+  return `(CASE WHEN ${alias} ~ '^[0-9]+$' THEN ${alias}::int END)`;
+}
+
+/**
  * The reader's narrowing, as `AND`-joined SQL, pushing its values onto `params`.
  *
  * Every fragment is a *narrowing*, so an absent one contributes nothing — which
@@ -253,6 +274,18 @@ function tradeNarrowingClauses(query: TradeQuery, params: unknown[]): string[] {
   // same one `/api/adp` makes about an undated draft, and the one the client's
   // `tradeMatches` makes. `coalesce(…, 0)` would put it in 1970 and let a
   // `to` bound keep it.
+  //
+  // **It is deliberately not {@link TRADE_SORT_SQL}, and that is what keeps
+  // `transactions_trade_recency_idx` earning its place.** That index is ordered
+  // on this two-argument expression; the keyset index is ordered on the
+  // three-argument one, and to the planner those are different expressions, so
+  // only the older index can serve a *range* on this. The board itself never
+  // needs that — its `ORDER BY` pins it to the keyset walk — but the narrowed
+  // counts and the facet aggregates have no `ORDER BY` at all, so a windowed
+  // board's denominators read this as an index range rather than as a filter
+  // over every trade in the season. Changing the spelling here to match the sort
+  // would make the old index droppable and those counts a full scan; see
+  // `sql.test.ts`, which pins each expression to the migration that indexes it.
   const at = `coalesce(t.status_updated, t.created)`;
   if (query.from !== null) {
     clauses.push(`(${at} IS NOT NULL AND ${at} >= ${bind(query.from)})`);
@@ -361,7 +394,7 @@ function sidesSql(
       conditions.push(`EXISTS (
         SELECT 1 FROM rosters r
          WHERE r.league_id = t.league_id
-           AND r.roster_id = (CASE WHEN ${alias} ~ '^[0-9]+$' THEN ${alias}::int END)
+           AND r.roster_id = ${rosterIdIntSql(alias)}
            AND r.owner_id = ${bind(side.manager)})`);
     }
 
@@ -417,7 +450,7 @@ function tradedByOwnersSql(owners: string, select: string): string {
       FROM jsonb_array_elements_text(${asArray("t.roster_ids")}) ri
       JOIN rosters r
         ON r.league_id = t.league_id
-       AND r.roster_id = (CASE WHEN ri ~ '^[0-9]+$' THEN ri::int END)
+       AND r.roster_id = ${rosterIdIntSql("ri")}
      WHERE r.owner_id = ANY(${owners}::varchar[])`;
 }
 
@@ -488,5 +521,61 @@ export function tradeCursorSql(
 
 /** `ORDER BY` for the board — the ordering the keyset index is built on. */
 export const TRADE_ORDER_SQL = `ORDER BY ${TRADE_SORT_SQL} DESC, t.transaction_id DESC`;
+
+/**
+ * The three filter-menu aggregates, each read over a `pop` CTE the caller
+ * builds.
+ *
+ * They live beside the population they count rather than inside `./queries`
+ * because they are SQL with rules in them — which asset a menu is counted by,
+ * whether a trade naming something twice counts twice, and how a roster becomes
+ * a person — and because the managers branch casts a jsonb roster id, which is
+ * the one thing in this module that has to be guarded the same way in three
+ * places. Kept as strings the tests can read, for the same reason the rest of
+ * this module is: a mistake here is not an error but *the wrong rows*.
+ */
+export const TRADE_FACET_SQL = {
+  /**
+   * `adds` is player id → the roster that received them, so its keys *are* the
+   * players who moved, pooled across the sides. Keys are unique within an
+   * object, so a plain `count(*)` is already a count of trades.
+   */
+  players: `SELECT k AS value, count(*)::bigint AS count
+       FROM pop, LATERAL jsonb_object_keys(
+              CASE WHEN jsonb_typeof(pop.adds) = 'object'
+                   THEN pop.adds ELSE '{}'::jsonb END
+            ) k
+      GROUP BY k`,
+
+  /**
+   * Distinctly, because a trade can carry two 2027 firsts and the menu's number
+   * is "trades that name it".
+   */
+  picks: `SELECT ${PICK_TOKEN_SQL} AS value,
+            count(DISTINCT pop.transaction_id)::bigint AS count
+       FROM pop, LATERAL jsonb_array_elements(${asArray("pop.draft_picks")}) p
+      WHERE p ? 'season' AND p ? 'round'
+      GROUP BY 1`,
+
+  /**
+   * A trade names rosters and a reader names people, so this is the only branch
+   * that has to join. Distinctly again: a manager can hold two rosters in one
+   * league, and a three-way trade can name both.
+   *
+   * The cast is guarded **inside the join condition** rather than by a `WHERE`
+   * beside it — see {@link rosterIdIntSql}. Written the other way it was one
+   * junk roster id away from failing the whole menu with an invalid-input error,
+   * because the regex is not promised to run first.
+   */
+  managers: `SELECT r.owner_id AS value,
+            count(DISTINCT pop.transaction_id)::bigint AS count
+       FROM pop
+       CROSS JOIN LATERAL jsonb_array_elements_text(${asArray("pop.roster_ids")}) ri
+       JOIN rosters r
+         ON r.league_id = pop.league_id
+        AND r.roster_id = ${rosterIdIntSql("ri")}
+      WHERE r.owner_id IS NOT NULL
+      GROUP BY 1`,
+} as const;
 
 export { asArray as jsonbArraySql, PICK_TOKEN_SQL };

@@ -31,6 +31,12 @@ export type ManagerAdpValueState = ManagerResourceState<ManagerAdpValueResult>;
  */
 export function useManagerAdpValue(
   searched: string,
+  /**
+   * The manager's canonical Sleeper id, off the leagues stream. Sent with the
+   * read so the route needn't resolve the searched name through Sleeper again —
+   * see {@link useManagerResource}.
+   */
+  userId: string | null,
   leagues: ManagerLeague[] | null,
   board: string,
 ): ManagerAdpValueState {
@@ -41,6 +47,7 @@ export function useManagerAdpValue(
   return useManagerResource<ManagerAdpValueResult>(
     queryKey,
     searched,
+    userId,
     leagues,
     `adp-value?${board}`,
     "Failed to load draft values",

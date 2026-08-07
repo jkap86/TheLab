@@ -8,6 +8,7 @@ import { getNflState, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague, SleeperNflState } from "@/shared/sleeper";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
+import { markLeaguesAccessed } from "./crawl-queue";
 import { fetchLeagueGraph, type GraphWeeks, type WeekRange } from "./graph";
 import {
   getStoredMaxMatchupWeekByLeague,
@@ -265,16 +266,22 @@ async function syncManagerLeaguesLocked(
   const currentWeek = await getCurrentWeek();
   const leagues = await getUserLeagues(userId, season);
 
+  const leagueIds = leagues.map((l) => l.league_id);
+
   // Recorded before the graphs are fetched, and over *every* league Sleeper
   // listed rather than the ones that synced: the order is what the enumeration
   // said, and a league whose graph fails this pass is still stored from an
   // earlier one — dropping it from the ordering would move it to the end of the
   // list until the next successful sync.
-  await replaceManagerLeagueOrder(
-    userId,
-    season,
-    leagues.map((l) => l.league_id),
-  );
+  await replaceManagerLeagueOrder(userId, season, leagueIds);
+
+  // Somebody searched this manager, which is the strongest demand signal this
+  // app has: these leagues are on a page a person is looking at. It moves them
+  // up the crawler's refresh queue and nothing else, so it is fired off rather
+  // than awaited — a scheduling hint is not worth a failure mode.
+  void markLeaguesAccessed(leagueIds).catch((error) => {
+    console.warn("[leagues] demand stamp failed:", errorMessage(error));
+  });
 
   const { loaded, failed, counts } = await syncLeagueGraphs(
     leagues,
