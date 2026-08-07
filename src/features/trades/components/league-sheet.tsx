@@ -147,26 +147,39 @@ export function LeagueSheet({
           </button>
         </div>
 
-        {/* The box that scrolls — the standings and a deep dynasty roster run
-            past any sheet. `tabIndex={-1}` is what lets the effect above put
-            focus here, so a keyboard reader can page through the panel on
-            arrival; `outline-none` because that focus is programmatic and this
-            is not a control. */}
+        {/* **This box does not scroll, and that is what the panel needs from
+            whoever holds it.** The panel is a fixed head over two independently
+            scrolling halves, and every `min-h-0` in that chain has to resolve
+            against a definite height — so what a holder owes it is a bound, not
+            a scroller. `overflow-y-auto` here would satisfy nothing and quietly
+            turn the whole panel back into one long scroll with its telemetry
+            strip and both sets of column headings riding away. The leagues list
+            supplies the same bound by capping its open card at the viewport;
+            this dialog is a fixed height, so `min-h-0 flex-1` is the whole of
+            it.
+
+            `tabIndex={-1}` is what lets the effect above put focus here rather
+            than on the close key, and `outline-none` because that focus is
+            programmatic and this is not a control. The halves' own scroll boxes
+            are what a keyboard reader Tabs into from here. */}
         <div
           ref={bodyRef}
           tabIndex={-1}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none"
+          className="flex min-h-0 flex-1 flex-col outline-none"
         >
           {/* `.lab-plate` because that is the face this panel is drawn on in the
               leagues list — an expanded card *becomes* the plate rather than
               holding one, so a second surface here would make one panel two
               materials on two pages. Opaque, which is the half of the glass rule
               that matters: the frame says the board is still underneath, and the
-              rows must never be read over it. `min-h-full` so a short league
-              (one still loading, or a shallow one) still lands on the plate
-              rather than on the glass. */}
+              rows must never be read over it.
+
+              `flex-1` here and nowhere inside the panel: the plate is the
+              *ground*, so it fills the sheet whatever the league has to say —
+              where a short panel inside it is still exactly as tall as its
+              contents, which is what the panel's own `0 1 auto` chain is for. */}
           {open && league && (
-            <div className="lab-plate min-h-full">
+            <div className="lab-plate flex min-h-0 flex-1 flex-col overflow-hidden">
               <LeagueDetailPanel
                 leagueId={league.leagueId}
                 focusRosterId={league.rosterId ?? undefined}

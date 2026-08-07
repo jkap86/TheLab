@@ -36,6 +36,15 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
  * sentence: they are the values worth comparing down the table, and a total buried
  * in a run of text under each name can't be.
  *
+ * **The heading and the footer are fixed and the rows scroll between them.** The
+ * half is one of two that scroll independently inside the card's cap (see
+ * {@link LeagueDetailPanel}), and what stays put is what a scrolled list can't
+ * do without: the column headings, which are also the pickers that aim those
+ * columns, and the footer's week range, which is what the numbers above it are
+ * over. It is a twelve-row table beside a forty-row roster, so it usually has no
+ * scrollbar at all — the point of the split is that the roster's does not move
+ * it.
+ *
  * The two value columns are slots the reader points at a team-level metric —
  * projected points and projected bench to start with, swappable to the season
  * optimal, points for, or the roster's whole KTC / ADP total from the heading's
@@ -149,9 +158,13 @@ export function Standings({
     // clip, because a column picker's menu overhangs the rows under it, which is
     // why the sink is inset shadow (`.lab-trough`) rather than a bordered box
     // that would want `overflow-hidden` to round its corners.
-    <div className={`lab-trough relative rounded-lg p-1 @lg:p-2 ${elevated ? "z-30" : ""}`}>
+    <div
+      className={`lab-trough relative flex min-h-0 flex-col rounded-lg p-1 @lg:p-2 ${
+        elevated ? "z-30" : ""
+      }`}
+    >
       <div
-        className={`grid ${grid} items-center gap-x-2 px-1 pb-2 pt-1 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:px-2 @lg:text-xs`}
+        className={`grid shrink-0 ${grid} items-center gap-x-2 px-1 pb-2 pt-1 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:px-2 @lg:text-xs`}
       >
         <span className="text-center">#</span>
         <span className="truncate">Manager</span>
@@ -173,7 +186,14 @@ export function Standings({
             />
           ))}
       </div>
-      <ul className="flex flex-col gap-1">
+      {/* The list is what scrolls, and only the list: the heading above it holds
+          the column pickers, whose menus overhang the rows — inside a scroll
+          box they would be clipped by it and would scroll away from the trigger
+          that opened them, which is the same reason this half sinks with an
+          inset shadow rather than a bordered box that would want a clip of its
+          own. The 2px of bottom padding is the last row's own wall
+          (`.lab-row`'s `0 2px 0`), which a scroll box would otherwise cut off. */}
+      <ul className="flex min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain pb-0.5">
         {teams.map((team, i) => (
           <StandingsRow
             key={team.roster_id}
@@ -193,7 +213,7 @@ export function Standings({
         // The horizon travels with the number, as it does on the roster panel:
         // "rest of season" is however many weeks are actually stored, and a total
         // over three weeks next to one over eighteen is a different claim.
-        <p className="px-1 pb-0.5 pt-2 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-2">
+        <p className="shrink-0 px-1 pb-0.5 pt-2 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-2">
           Projected over the rest of the season · {formatWeekRange(outlook.weeks)}
         </p>
       )}

@@ -43,6 +43,13 @@ import type { LeagueOutlook, TeamOutlook } from "./types";
  * standings' value columns sit behind; a team with no outlook of its own inside
  * one still keeps the strip, with em dashes, because the panel must not change
  * height as the selection moves down the table.
+ *
+ * **It does not scroll.** What it states is a fact about the *selected* team,
+ * and the row that selects one is in the table below — so a strip carried off
+ * the top by the roster it is describing left three numbers on screen with
+ * nothing naming whose they are. `shrink-0` is what holds it there: the two
+ * halves under it are the panel's scrolling parts, and this is the head they
+ * scroll under.
  */
 export function PanelTelemetry({
   outlook,
@@ -66,7 +73,7 @@ export function PanelTelemetry({
   return (
     // The left inset clears the same cyan rail the card's name line clears, so
     // the dial starts under the league's name rather than under its chevron.
-    <div className="flex flex-wrap items-center gap-2 border-t border-black/40 py-2 pl-5 pr-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] @lg:gap-3 @lg:py-2.5 @lg:pr-4">
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-black/40 py-2 pl-5 pr-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] @lg:gap-3 @lg:py-2.5 @lg:pr-4">
       <RankDial rank={rank} />
       <Readout
         label="Projected"
