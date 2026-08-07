@@ -79,8 +79,8 @@ export function LineupCheckerHome() {
    * Which league is open, if any.
    *
    * Held here rather than in the card, the leagues list's own rule: opening one
-   * is a claim about the whole page — the card takes the screen and the plate
-   * above lets go of the top — and two cards making that claim at once is two
+   * is a claim about the whole page — the card pins under the header and caps at
+   * what is left of the screen — and two cards making that claim at once is two
    * things each asking to be the thing being read.
    */
   const [openId, setOpenId] = useState<string | null>(null);
@@ -163,10 +163,13 @@ export function LineupCheckerHome() {
           // only moving number on the card — is exactly inverted on this page:
           // all offseason the timer was covering the number the tool is for.
           countdown={false}
-          // The header lets go of the top while a league is open — the open card
-          // is sized to the screen, and a plate pinned over it would be taking a
-          // quarter of the panel to restate facts about the account.
-          pinned={open === null}
+          // The header keeps the top through an open league — the filter row and
+          // the heading rail below both ride in it, and losing them at the moment
+          // a reader goes a level deeper is what the plate letting go used to
+          // cost. What it gives up instead is the fade below itself: an open card
+          // pins flush against the plate, so those 64px of near-solid background
+          // land on the card's own head rather than on the page.
+          fade={open === null}
           // The filter row and the heading rail ride in the plate for the reason
           // they do on the leagues page: the card is pinned, so a rail left at
           // the top of the list would scroll away and leave the numbers under it

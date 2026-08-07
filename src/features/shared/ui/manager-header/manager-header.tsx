@@ -1,6 +1,7 @@
 import type { ManagerHeaderProps } from "./manager-header.types.ts";
 import { hasSyncState } from "./manager-header.utils.ts";
 import { ManagerSummary } from "./manager-summary.tsx";
+import { usePinnedHeight } from "./pinned-height.ts";
 import { SeasonTab, StatTab } from "./plate-corners.tsx";
 import { SyncStateLine } from "./sync-state.tsx";
 
@@ -48,6 +49,22 @@ const STATE_PADDING = "px-5 py-2 sm:px-6";
  * already listed them. This card is pinned below that bar, so a row spent on
  * navigation is a row of the list it would cover.
  *
+ * **It holds the top for as long as it is on the page, including through an open
+ * league.** It used to let go of it: an expanded card is capped at the viewport
+ * and given the screen, so a plate pinned over it was spending a quarter of the
+ * one thing being read on facts about the account. What that argument left out is
+ * that the plate is where both filter rows and the whole heading rail live — so
+ * a reader who opened a league lost the control that narrows the list, the names
+ * of the four columns the row above was being read on, and the way back to the
+ * account they were looking at, all at the moment they went a level deeper. The
+ * panel pays the height instead, and it pays it in a region that scrolls.
+ *
+ * That makes this card's height an offset something else has to know:
+ * {@link usePinnedHeight} publishes it, and the open card pins beneath it and
+ * caps at the remainder. It is the only measurement of its kind here, and the
+ * note on `columns` is still the rule — anything that belongs *with* the plate
+ * rides inside it rather than being offset below it.
+ *
  * Every `/manager/[searched]/…` view renders this. The identity, the season, the
  * sync state and the record are the same facts on all of them; only `stat` and
  * `columns` differ, which is why they are props rather than three copies of this
@@ -77,8 +94,10 @@ export function ManagerHeader({
   stat,
   columns,
   countdown = true,
-  pinned = true,
+  fade = true,
 }: ManagerHeaderProps) {
+  const ref = usePinnedHeight<HTMLElement>();
+
   return (
     // Pinned directly under the app bar, so who you are looking at and how their
     // season is going stay on screen while a several-hundred-row list scrolls
@@ -97,21 +116,20 @@ export function ManagerHeader({
     // horizontal line across the page, so the glows look clipped at the header's
     // edge instead of passing behind a pinned surface. Fading also lets a league
     // card dim into the plate as it scrolls under rather than being cut mid-row.
-    // `pointer-events-none` because it overhangs the list.
+    // `pointer-events-none` because it overhangs the list — and see {@link fade}
+    // for the one state that has nothing under it to blend into.
     //
     // The gap under it closes when the heading rail is riding here: the rail is
     // the list's own header, and 40px of background between a heading and the
     // first row it heads is what makes the two read as separate things. With the
     // rail absent the header is a card above a list and keeps the fuller gap.
     <header
-      className={`${
-        // `relative` rather than nothing when it lets go: the fade below the
-        // header is an `::after` on this box, and an unpositioned header would
-        // hand it to whatever ancestor happens to be positioned instead.
-        pinned ? "sticky top-[var(--site-header-h)]" : "relative"
-      } z-40 -mx-4 -mt-10 flex flex-col gap-1.5 bg-[var(--background)] px-4 pt-1.5 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent ${
-        columns ? "mb-3 pb-1.5" : "mb-6 pb-3"
-      }`}
+      ref={ref}
+      className={`sticky top-[var(--site-header-h)] z-40 -mx-4 -mt-10 flex flex-col gap-1.5 bg-[var(--background)] px-4 pt-1.5 ${
+        fade
+          ? "after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent"
+          : ""
+      } ${columns ? "mb-3 pb-1.5" : "mb-6 pb-3"}`}
     >
       {/* The plate keeps `overflow-hidden`: the accent rail and the specular
           sweep are square boxes drawn against its rounded corners. The wrapper

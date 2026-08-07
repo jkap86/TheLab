@@ -93,7 +93,7 @@ export function LeaguesViewLayout({
   view,
   stat,
   columns,
-  pinned = true,
+  fade = true,
   children,
 }: {
   view: FilteredLeagues;
@@ -107,12 +107,13 @@ export function LeaguesViewLayout({
    */
   columns?: ReactNode;
   /**
-   * Whether the header keeps the top of the screen — see {@link ManagerHeader}'s
-   * own note. A tab lowers it while one of its rows has opened into something
-   * that owns the viewport; only the leagues tab has such a row today, so the
-   * default is the pinned card every tab has always had.
+   * Whether the header's paint fades out below itself — see
+   * {@link ManagerHeader}'s own note. A tab lowers it while one of its rows has
+   * pinned an opaque surface flush against the card, where the fade has nothing
+   * to blend into and only washes out that row's own head; only the leagues tab
+   * has such a row today, so the default is the fade every tab has always had.
    */
-  pinned?: boolean;
+  fade?: boolean;
   /** The tab's content, rendered once at least one league passes the filters. */
   children: ReactNode;
 }) {
@@ -208,7 +209,7 @@ export function LeaguesViewLayout({
         // that emptied the list, which is the press that most needs undoing.
         // The fallback below is only for a tab whose list has not loaded yet.
         columns={hasLeagues ? (columns ?? <SubjectRail view={view} />) : undefined}
-        pinned={pinned}
+        fade={fade}
       />
 
       {/* The trigger is drawn in the app bar rather than in the header's dock —
