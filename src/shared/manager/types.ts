@@ -114,10 +114,12 @@ export type LeagueTeam = {
   reserve: string[];
   taxi: string[];
   /**
-   * The future draft picks this team currently owns, resolved from the league's
-   * traded picks (see {@link ownedDraftPicks}) — its own untraded picks plus any
-   * it acquired, each tagged with the roster it originally belonged to. Empty for
-   * a redraft league or a dynasty whose picks have never been traded.
+   * The future draft picks this team currently owns — its own untraded picks
+   * plus any it acquired, each tagged with the roster it originally belonged to
+   * (see {@link ownedDraftPicks}). A dynasty league spans the next three drafts,
+   * rolling forward as each rookie class is taken ({@link dynastyPickGrid});
+   * every other format shows only the seasons its picks have actually been
+   * traded in, which is nothing at all for a redraft league.
    */
   picks: DraftPickAsset[];
 };

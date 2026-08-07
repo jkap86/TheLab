@@ -54,8 +54,17 @@ export type {
 } from "./types";
 export { orderByProjectedPoints, projectedRank, rankOf, standingScore } from "./rank";
 export type { LeagueRank, ProjectedRank } from "./rank";
-export { ownedDraftPicks } from "./draft-picks";
-export type { DraftPickAsset, TradedPick } from "./draft-picks";
+export {
+  DYNASTY_PICK_SEASONS,
+  dynastyPickGrid,
+  ownedDraftPicks,
+} from "./draft-picks";
+export type {
+  DraftPickAsset,
+  DraftPickGrid,
+  LeagueDraft,
+  TradedPick,
+} from "./draft-picks";
 export {
   clearManagerLookupCache,
   isSleeperUserId,

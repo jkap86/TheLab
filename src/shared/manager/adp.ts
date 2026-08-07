@@ -64,12 +64,20 @@ export const LEAGUE_TYPE_SQL = `
         THEN (l.settings->>'type')::int ELSE 0 END)`;
 
 /**
+ * Sleeper's `settings.type` for a dynasty league (0 redraft, 1 keeper, 3 its
+ * native guillotine). Exported because `getLeagueDetail` asks the same question
+ * of a league it has already read, and the fragment below is written from this
+ * constant so the SQL and the TypeScript reading cannot drift apart.
+ */
+export const DYNASTY_LEAGUE_TYPE = 2;
+
+/**
  * Which of the two ADP boards a league's drafts count into: dynasty is
  * Sleeper's `settings.type` 2, and everything else — redraft and keeper — is
  * the redraft board. See `ADP_BOARDS` in `./adp-filters` for why keeper folds
  * into redraft rather than into a bucket of its own.
  */
-const DYNASTY_BOARD_SQL = `(${LEAGUE_TYPE_SQL} = 2)`;
+const DYNASTY_BOARD_SQL = `(${LEAGUE_TYPE_SQL} = ${DYNASTY_LEAGUE_TYPE})`;
 
 const BEST_BALL_SQL = `
   (CASE WHEN l.settings->>'best_ball' ~ '^[0-9]+$'

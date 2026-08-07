@@ -4641,11 +4641,36 @@ stops holding, a comment saying it does would not have caught it.
   tested, beside `shares` and `rank`). A pick is tagged with the roster it
   originally belonged to, so the client marks the ones a team *acquired* ("1st
   from Bob") apart from its own, resolving the source name from the teams it
-  already has rather than a per-pick field on the wire. The rounds run only as
-  deep as the deepest round anyone has traded, because Sleeper doesn't hand back a
-  league's rookie-draft round count and inventing rounds that may not exist is
-  worse than under-reporting a quiet tail; a redraft league (or a dynasty whose
-  picks have never moved) has no `traded_picks` and so shows nothing.
+  already has rather than a per-pick field on the wire.
+- **A dynasty league's seasons are a fixed horizon, not whatever has been
+  traded** (`dynastyPickGrid`). Sleeper carries the next three drafts and rolls
+  them forward the moment a rookie class is taken — 2026–2028 with the 2026
+  draft still ahead, 2027–2029 once it completes — so deriving the seasons from
+  `traded_picks` answered a different question and got the roll-over wrong in
+  *both* directions: a league whose 2026 picks had all been dealt months ago went
+  on listing a draft that had already happened, while a quiet league listed
+  nothing at all. Every other format keeps the derived grid, since only a dynasty
+  league has a standing horizon to read and a redraft league has no future picks
+  to list. Three readings hold it up, and each is the same "absent is not
+  evidence" rule this file keeps arriving at:
+  - **The startup is not this year's rookie draft.** An inaugural league runs
+    both under one season label, so `season = league season AND status =
+    'complete'` would roll the window forward the moment the *startup* ended and
+    hide a rookie class nobody has drafted. Which draft is the startup is
+    `STARTUP_DRAFT_SQL`'s rule asked in TypeScript — the earliest one, and only
+    in a league with no `previous_league_id` (spelled null, `''` or `'0'`).
+  - **Only `complete` counts as taken.** A draft in progress hasn't happened, and
+    neither has one the crawler has never stored — a season with no draft row
+    keeps the nearer year, which fails toward showing a pick that exists rather
+    than hiding one.
+  - **The depth is the last rookie draft's, and the startup's is worthless.**
+    Sleeper publishes no round count for a draft that doesn't exist yet, so the
+    grid runs as deep as the deepest traded pick *or* the most recent rookie
+    draft, whichever proves more — a traded 2026 fourth is evidence 2028 runs
+    four rounds too. An inaugural league that has only run its 25-round startup
+    reports null rather than inventing next May's shape, and a league offering
+    neither bound still shows nothing, which is the quiet tail this
+    deliberately under-reports rather than inventing rounds that may not exist.
 
 ## External API gotchas
 

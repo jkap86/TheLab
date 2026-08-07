@@ -1,10 +1,10 @@
 import { pool } from "@/shared/db";
 
-import { LEAGUE_TYPE_SQL } from "./adp";
+import { DYNASTY_LEAGUE_TYPE, LEAGUE_TYPE_SQL } from "./adp";
 import type { AdpBoardType } from "./adp-filters";
-import { ownedDraftPicks } from "./draft-picks";
+import { dynastyPickGrid, ownedDraftPicks } from "./draft-picks";
 import { standingScore } from "./rank";
-import type { TradedPick } from "./draft-picks";
+import type { LeagueDraft, TradedPick } from "./draft-picks";
 import type {
   LeagueDetail,
   Leaguemate,
@@ -642,39 +642,69 @@ export async function getLeagueDetail(
     status: string;
     roster_positions: string[] | null;
     scoring_settings: Record<string, number> | null;
+    league_type: number;
+    previous_league_id: string | null;
   }>(
-    `SELECT league_id, name, season, status, roster_positions, scoring_settings
-       FROM leagues WHERE league_id = $1`,
+    // The type is read through the same guarded fragment `/api/adp` groups
+    // leagues by, so "is this a dynasty league" has one answer across the app.
+    `SELECT league_id, name, season, status, roster_positions, scoring_settings,
+            ${LEAGUE_TYPE_SQL} AS league_type, previous_league_id
+       FROM leagues l WHERE league_id = $1`,
     [leagueId],
   );
   if (league.rows.length === 0) return null;
   const l = league.rows[0];
 
-  // The rosters and the traded picks are independent reads over the same league,
-  // so they go together; the picks are resolved into per-roster portfolios below.
-  const [{ rows }, { rows: tradedRows }] = await Promise.all([
-    pool.query<TeamRow>(
-      `SELECT
-          r.roster_id, r.owner_id, r.players, r.starters, r.reserve, r.taxi,
-          r.settings,
-          lu.display_name, lu.avatar, lu.team_name
-         FROM rosters r
-         LEFT JOIN league_users lu
-           ON lu.league_id = r.league_id AND lu.user_id = r.owner_id
-        WHERE r.league_id = $1`,
-      [leagueId],
-    ),
-    pool.query<TradedPick>(
-      `SELECT season, round, roster_id, owner_id
-         FROM traded_picks WHERE league_id = $1`,
-      [leagueId],
-    ),
-  ]);
+  // The rosters, the traded picks and the league's own drafts are independent
+  // reads over the same league, so they go together; the picks are resolved into
+  // per-roster portfolios below.
+  const [{ rows }, { rows: tradedRows }, { rows: draftRows }] =
+    await Promise.all([
+      pool.query<TeamRow>(
+        `SELECT
+            r.roster_id, r.owner_id, r.players, r.starters, r.reserve, r.taxi,
+            r.settings,
+            lu.display_name, lu.avatar, lu.team_name
+           FROM rosters r
+           LEFT JOIN league_users lu
+             ON lu.league_id = r.league_id AND lu.user_id = r.owner_id
+          WHERE r.league_id = $1`,
+        [leagueId],
+      ),
+      pool.query<TradedPick>(
+        `SELECT season, round, roster_id, owner_id
+           FROM traded_picks WHERE league_id = $1`,
+        [leagueId],
+      ),
+      pool.query<LeagueDraft>(
+        // Two casts, for the two reasons this file already casts. `start_time` is
+        // a BIGINT, which `pg` hands back as a string, so it is a number by the
+        // time it leaves the query — epoch milliseconds sit well inside float64's
+        // exact range, which is why `/api/adp`'s density read spells it the same
+        // way. And `rounds` is regex-guarded before its cast like every other
+        // numeric read off a Sleeper blob: one league holding junk there must not
+        // fail the whole panel, and unparseable reads as "depth unknown" rather
+        // than as zero rounds.
+        `SELECT draft_id, season, status, start_time::float8 AS start_time,
+                CASE WHEN settings->>'rounds' ~ '^[0-9]+$'
+                     THEN (settings->>'rounds')::int END AS rounds
+           FROM drafts WHERE league_id = $1`,
+        [leagueId],
+      ),
+    ]);
 
+  // A dynasty league's pick market runs a fixed horizon of future drafts, so its
+  // grid is resolved from the league's own drafts rather than derived from
+  // whatever has been traded. Every other format keeps the derived grid: there
+  // is no standing horizon to read, and a redraft league has no future picks at
+  // all.
   const picksByRoster = ownedDraftPicks(
     tradedRows,
     rows.map((r) => r.roster_id),
     l.season,
+    l.league_type === DYNASTY_LEAGUE_TYPE
+      ? dynastyPickGrid(l.season, draftRows, l.previous_league_id)
+      : null,
   );
 
   const teams: LeagueTeam[] = rows.map((r) => {
