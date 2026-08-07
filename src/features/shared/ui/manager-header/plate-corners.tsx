@@ -3,14 +3,15 @@ import type { ReactNode } from "react";
 import type { HeaderStat } from "./manager-header.types.ts";
 
 /**
- * The plate's four corners, which are one family at one scale split by material:
- * two wells at the top you read, one key at the bottom you press.
+ * The plate's top corners: two wells, at one scale, in one material.
  *
- * **The key is raised and not a tab, and that is the whole of the styling
- * argument.** The top corners are `lab-well`, because on this card recessed means
- * *read me*. A filter is pressed, so a tab-shaped well down there would be the
- * plate telling you to read its filter. They are kept in one file because that
- * pairing is the rule — a corner added on either edge has to pick a side of it.
+ * **Recessed, because on this card that means *read me*.** The plate's four
+ * corners were briefly three readouts and a filters' key, and the pairing was the
+ * rule this file existed to hold — a well is read, a raised part is pressed, so a
+ * tab-shaped well carrying a filter would have been the plate telling you to read
+ * its control. The key leads the subject rail below now, which leaves every
+ * corner a fact and the rule with nothing left to arbitrate. A corner added on
+ * either edge still has to pick a side of it.
  */
 
 /**
@@ -82,43 +83,4 @@ export function StatTab({ stat }: { stat: HeaderStat }) {
       {stat.sub && <span className="text-foreground/35">{stat.sub}</span>}
     </CornerTab>
   );
-}
-
-/**
- * The filters' key, machined into the plate's bottom-right corner — the top
- * tabs' geometry in the raised material.
- *
- * It is anchored to the *plate* rather than to the body, so it follows the
- * plate's bottom down when the transient state line appears rather than being
- * left floating in the middle of the card.
- *
- * Right rather than left for two reasons: the accent rail runs down the left edge
- * and a key started over it would stop the accent at a button, and the plate's
- * right edge then reads read-then-press — the stat count's well above, the
- * control below it.
- *
- * **Flush rather than straddling, which is the change.** Hanging half below the
- * border made the key a part rising out of the edge, and cost 20px of clearance
- * to keep its lit face off the columns rail's lit face — on a card that is pinned
- * over the list, which is 20px of league rows covered for a gap. Flush it costs
- * the 4px its wall stands on, and the corner it fills was empty plate. The wall
- * is why this is a sibling *outside* the plate's clip and not a {@link CornerTab}:
- * a clipped wall is a part with no thickness, which is the one thing a pressable
- * part must not be.
- *
- * The key keeps `.lab-chip`'s wall and its press travel, which is the other half
- * of that: a part you press has to travel when pressed, and the wall is what it
- * travels into.
- *
- * Seated 3px up, `flex` so no inline baseline adds its own descender.
- * `.lab-chip`'s wall is a `0 3px 0` shadow — the face's own shape shifted down —
- * so a face resting 3px above the border puts the *wall* on the plate's
- * bottom-right corner, tracing its radius. The part is then exactly contained by
- * the plate: thickness visible, nothing overhanging, which is the whole of what
- * flush buys over straddling. At `bottom-0` the face would fill the corner and
- * the wall would hang below it, which is a smaller overhang than before but still
- * an overhang to be cleared.
- */
-export function FilterSeat({ children }: { children: ReactNode }) {
-  return <div className="absolute bottom-[3px] right-0 flex">{children}</div>;
 }

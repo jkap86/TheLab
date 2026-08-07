@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { playerShares } from "./shares.ts";
-import type { ManagerLeague, PlayerSummary } from "./types.ts";
+import type { ManagerLeague } from "@/shared/manager";
+import type { PlayerSummary } from "@/shared/players";
 
 const league = (league_id: string, name = `League ${league_id}`): ManagerLeague => ({
   league_id,

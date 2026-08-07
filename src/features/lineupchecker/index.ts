@@ -1,5 +1,5 @@
 export { LineupCheckerHome } from "./components/lineup-checker-home";
-export { LineupRow } from "./components/lineup-row";
+export { LineupCard } from "./components/lineup-card";
 export {
   LineupStatColumns,
   LineupStatHeadings,
@@ -7,6 +7,8 @@ export {
 export { matchupState, opponentLabel } from "./opponent";
 export type { MatchupState } from "./opponent";
 export { projectedRecord } from "./projected-record";
+export { useLineupView } from "./hooks/use-lineup-view";
+export type { LineupView } from "./hooks/use-lineup-view";
 export { MATCHUPS_STALE_TIME, useManagerMatchups } from "./hooks/use-manager-matchups";
 export type { ManagerMatchupsState } from "./hooks/use-manager-matchups";
 export { lineupQueryKeys } from "./query-keys";

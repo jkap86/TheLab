@@ -4,25 +4,23 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 
 import dynamic from "next/dynamic";
 
-import { LeagueFiltersPlaceholder } from "@/features/shared";
+import type { AdpPlayerPayload } from "@/shared/contract";
 
-import { useSubjectFilters } from "../filters-context";
-import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
-import type { ColumnPreset } from "../metric-cell";
-import { rankByName } from "../name-search";
-import type { ShareMetric, ShareMetricContext } from "../share-metrics";
+import type { ColumnPreset } from "../../metric-cell.ts";
+import { rankByName } from "../../name-search.ts";
+import type { ShareMetric, ShareMetricContext } from "../../share-metrics.ts";
+import type { SubjectView } from "../../subject-view.ts";
 import {
   type SubjectKind,
   removeSubjectAt,
   subjectKey,
   toggleSubject,
-} from "../subjects";
-import type { AdpPlayerPayload } from "../types";
-import { ColumnsBar } from "./columns-bar";
-import { ErrorCard } from "./manager-leagues-status";
+} from "../../subjects.ts";
+import { ColumnsBar } from "../columns-bar";
+import { LeagueFiltersPlaceholder } from "../league-filters-seat";
+import { ErrorCard, PanelLoading, PanelMessage } from "../panel-message";
+import { MatchToggle, SubjectToken } from "../subject-parts";
 import type { ShareRow } from "./share-list";
-import { MatchToggle, SubjectToken } from "./subject-parts";
-import { PanelLoading, PanelMessage } from "./ui";
 
 /**
  * The league filters, split from this sheet the way both other call sites split
@@ -33,10 +31,7 @@ import { PanelLoading, PanelMessage } from "./ui";
  * title bar while the chunk lands.
  */
 const LeagueFiltersModal = dynamic(
-  () =>
-    import("@/features/shared/ui/league-filters-modal").then(
-      (m) => m.LeagueFiltersModal,
-    ),
+  () => import("../league-filters-modal").then((m) => m.LeagueFiltersModal),
   {
     ssr: false,
     loading: () => <LeagueFiltersPlaceholder label="Filters" seat="bar" />,
@@ -134,7 +129,7 @@ export function SharesSheet<T extends ShareRow>({
   onReset,
   children,
 }: {
-  view: FilteredLeagues;
+  view: SubjectView;
   open: boolean;
   onClose: () => void;
   /** Which half of the selection a row of this list is — see {@link Subject}. */
@@ -188,7 +183,7 @@ export function SharesSheet<T extends ShareRow>({
   // a literal id in a component is a duplicate waiting for a second mount.
   const titleId = useId();
   const [query, setQuery] = useState("");
-  const { subjects, setSubjects } = useSubjectFilters();
+  const { subjects, setSubjects } = view;
 
   // The field is live over the whole list rather than capped, which is the point
   // of the browse: what the search panel's top eight leaves out is the tail a
@@ -239,7 +234,7 @@ export function SharesSheet<T extends ShareRow>({
     onClose();
   }, [onClose]);
 
-  const leagues = view.data?.leagues ?? null;
+  const leagues = view.leagues;
   const total = view.leagueFiltered.length;
   const picked = subjects.subjects.length;
   const noun = subject.toLowerCase();

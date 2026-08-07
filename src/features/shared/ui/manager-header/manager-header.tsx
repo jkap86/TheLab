@@ -1,41 +1,41 @@
 import type { ManagerHeaderProps } from "./manager-header.types.ts";
-import { bodyPadding, hasSyncState, statePadding } from "./manager-header.utils.ts";
+import { hasSyncState } from "./manager-header.utils.ts";
 import { ManagerSummary } from "./manager-summary.tsx";
-import { FilterSeat, SeasonTab, StatTab } from "./plate-corners.tsx";
+import { SeasonTab, StatTab } from "./plate-corners.tsx";
 import { SyncStateLine } from "./sync-state.tsx";
 
 /**
- * Who is being looked at, how their season is going, and the control that
- * narrows it.
+ * The padding under the plate's body, and around the transient state line.
  *
- * **One plate, with the filters' key machined into its bottom-right corner.** It
- * was one block stacking identity, season, both control pills, a 108px dial, the
- * record and two stat cells — about 470px of a 700px phone before the first row
- * of the list — then a plate with a recessed dock under it, which fixed the
- * stacking and left a ~50px trough holding a single control. This card is pinned
- * over the list, so that trough was 50px of league rows covered on all three tabs
- * for a part that is usually pressed once.
+ * They were a function of whether a filters' key was seated in the corner: the
+ * key's lit face had to be held clear of the readout above it — a narrowed key
+ * glows and so does the countdown's running cell, and two lit faces a few pixels
+ * apart read as one crowded part. With the key on the subject rail there is
+ * nothing to clear, so both are the unencumbered spelling and the seam argument
+ * lives here as history rather than as a branch.
+ */
+const BODY_PADDING = "pb-2 sm:pb-3";
+const STATE_PADDING = "px-5 py-2 sm:px-6";
+
+/**
+ * Who is being looked at, how their season is going, and the list's own header
+ * pinned under it.
  *
- * The key moved onto the plate's own bottom edge, and then into its corner. The
- * intermediate form straddled the border — half in padding the avatar's row
- * already paid for, half hanging below — which read well and cost 24px, **20 of
- * them pure clearance**: the next thing down is the columns rail, and two lit
- * faces 3px apart read as one crowded part. Flush in the corner nothing
- * overhangs, so that 20px goes back to the list and the wrapper keeps 4.
+ * **One plate, and its four corners are readouts.** It was one block stacking
+ * identity, season, both control pills, a 108px dial, the record and two stat
+ * cells — about 470px of a 700px phone before the first row of the list — then a
+ * plate with a recessed dock under it, which fixed the stacking and left a ~50px
+ * trough holding a single control. This card is pinned over the list, so that
+ * trough was 50px of league rows covered for a part that is usually pressed once.
  *
- * What the corner buys back it partly spends upward, and the trade is worth
- * knowing before anyone "tidies" the padding. The key now sits under the
- * readout — the win-pct dial, or the kickoff countdown — so the plate's bottom
- * padding is the seam between them (`bodyPadding`, and `statePadding` where the
- * state line has taken over as the bottom edge). Net **8px of league rows
- * returned**, on all three tabs, and the key stops moving when a refresh line
- * appears under it.
- *
- * The scale follows from the same seam. At the pill's own `text-sm` the part is
- * 32px tall and crosses the dial outright, so it runs at the top tabs' type size
- * instead — which is what makes the four corners one family rather than three
- * machined tabs and a chip parked near one. Which material each corner wears, and
- * why, is `plate-corners`.
+ * The filters' key then spent a while machined into the plate's bottom-right
+ * corner, and left. **What that move taught is worth keeping even though the seat
+ * is gone**: three of these corners are facts, so the one control among them was
+ * seated in the wrong company, and the row directly below — the subject rail — was
+ * already a filter row with a hole at its leading end. So the key leads that row
+ * on every page that draws one, the plate keeps its readouts, and the clearance
+ * the key needed above it (the seam between a lit face and the dial) goes back to
+ * the list this card is pinned over.
  *
  * The plate absorbs the `Rostered` cell that used to stand on its own: how many
  * of the leagues on screen carry a record is the record's denominator, so it
@@ -49,8 +49,9 @@ import { SyncStateLine } from "./sync-state.tsx";
  * navigation is a row of the list it would cover.
  *
  * Every `/manager/[searched]/…` view renders this. The identity, the season, the
- * sync state and the record are the same facts on all of them; only `stat`
- * differs, which is why it is a prop rather than three copies of this card.
+ * sync state and the record are the same facts on all of them; only `stat` and
+ * `columns` differ, which is why they are props rather than three copies of this
+ * card.
  *
  * **The lineup checker renders it too, which is why the card is in
  * `features/shared`.** What it swaps is the *aggregation* behind `record` — the
@@ -74,13 +75,10 @@ export function ManagerHeader({
   scope,
   leagueCount,
   stat,
-  filters,
   columns,
   countdown = true,
   pinned = true,
 }: ManagerHeaderProps) {
-  const hasFilters = Boolean(filters);
-
   return (
     // Pinned directly under the app bar, so who you are looking at and how their
     // season is going stay on screen while a several-hundred-row list scrolls
@@ -115,20 +113,14 @@ export function ManagerHeader({
         columns ? "mb-3 pb-1.5" : "mb-6 pb-3"
       }`}
     >
-      {/* The plate and the key are siblings in an unclipped wrapper, which is
-          the one structural cost of seating a *raised* part in the edge. The
-          plate has to keep `overflow-hidden` — the rail and the specular sweep
-          are square boxes drawn against its rounded corners — and a key inside
-          that clip would lose the wall and the drop shadow that are its whole
-          claim to being pressable.
-
-          The margin is now the key's wall and nothing else. It used to be 20px,
-          because the key hung half-way below the plate and the next thing down
-          is the columns rail — a raised billet of its own, and two lit faces 3px
-          apart read as one crowded part. Seated flush there is no overhang to
-          clear, so the clearance goes back to the list this card is pinned
-          over. */}
-      <div className={`relative ${hasFilters ? "mb-1" : ""}`}>
+      {/* The plate keeps `overflow-hidden`: the accent rail and the specular
+          sweep are square boxes drawn against its rounded corners. The wrapper
+          around it is what a part seated *outside* that clip would need — the
+          filters' key used to be one, and the wall that made it read as
+          pressable is exactly what the clip would have cut off. Nothing is
+          seated there now (the key leads the subject rail below), so the wrapper
+          is a plain positioning box. */}
+      <div className="relative">
         <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.075),rgba(255,255,255,0.02)_60%,rgba(255,255,255,0.008))] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.12),inset_0_-2px_8px_rgba(0,0,0,0.5),0_18px_40px_-22px_rgba(0,0,0,0.9)]">
           {/* The cyan rail down the plate, echoing the league rows' accent. */}
           <span
@@ -152,7 +144,7 @@ export function ManagerHeader({
             scope={scope}
             leagueCount={leagueCount}
             countdown={countdown}
-            padding={bodyPadding(hasFilters)}
+            padding={BODY_PADDING}
           />
 
           {hasSyncState({ refreshing, summary, refreshError }) && (
@@ -161,12 +153,10 @@ export function ManagerHeader({
               progress={progress}
               summary={summary}
               refreshError={refreshError}
-              padding={statePadding(hasFilters)}
+              padding={STATE_PADDING}
             />
           )}
         </div>
-
-        {filters && <FilterSeat>{filters}</FilterSeat>}
       </div>
 
       {columns}

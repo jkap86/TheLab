@@ -2,44 +2,14 @@ import type { OverallRecord } from "../../record";
 import type { HeaderProgress, HeaderSyncSummary } from "./manager-header.types.ts";
 
 /**
- * The decisions the header makes before it draws anything: which of two paddings
- * a seam wants, whether the transient state line has anything to say, what the
- * refresh pill's digits are, and which segments the record bar carries.
+ * The decisions the header makes before it draws anything: whether the transient
+ * state line has anything to say, what the refresh pill's digits are, which
+ * segments the record bar carries, and which instant the readout counts to.
  *
  * They live here rather than inline for the usual reason — each is a rule with a
  * reason behind it, and a rule spelled out in markup is a rule nothing tests. The
  * module value-imports nothing, so its tests run under Node's own runner.
  */
-
-/**
- * The padding under the plate's body.
- *
- * The key is machined into the plate's bottom-right corner, so this is the seam
- * between it and the readout directly above — the dial, or the kickoff
- * countdown. It is measured against the *lit* case rather than the boxes: a
- * narrowed key glows and so does the countdown's running cell, and two lit faces
- * a few pixels apart read as one crowded part (the rule the old straddling key
- * spent 20px of clearance on downward). At `pb-5` that seam was 3px on a laptop,
- * which is exactly the failure; `pb-6` makes it 7px. Charged only where there is
- * a key.
- */
-export function bodyPadding(hasFilters: boolean): string {
-  return hasFilters ? "pb-6 sm:pb-6" : "pb-2 sm:pb-3";
-}
-
-/**
- * The padding around the transient state line.
- *
- * That line becomes the plate's bottom edge whenever it is drawn, so the key
- * seats itself in *its* corner instead and it needs the same clearance as
- * {@link bodyPadding}. It buys that below rather than to the right: reserving a
- * right-hand gutter wide enough for the key left ~190px of a 390px screen for two
- * pills that fit on one line before, so the one state the reader most wants to
- * read at a glance was the one that wrapped.
- */
-export function statePadding(hasFilters: boolean): string {
-  return hasFilters ? "px-5 pb-6 pt-2 sm:px-6" : "px-5 py-2 sm:px-6";
-}
 
 /**
  * Whether the state line has anything to say.

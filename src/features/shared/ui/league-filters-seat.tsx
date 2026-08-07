@@ -5,8 +5,8 @@
  * be static while the dialog is not.** `LeagueFiltersModal` is loaded through
  * `dynamic()` at both its call sites — it is a trigger and a `<dialog>`, and
  * nobody has opened the dialog at first paint — but something has to occupy the
- * trigger's box until the chunk arrives, or the header plate's corner and the
- * trades board's controls row both reflow when it lands. A fallback that lived in the
+ * trigger's box until the chunk arrives, or the subject rail and the trades
+ * board's controls row both reflow when it lands. A fallback that lived in the
  * dialog's own module would pull that module back into the static graph and
  * split nothing, which is the trap `AdpTrigger` was moved out of `AdpDrawer`'s
  * file to avoid.
@@ -28,14 +28,13 @@
  * part in both. What differs is the edge it is seated against.
  *
  * `free` stands on a page — the trades board's controls row, where nothing
- * bounds it, so it is the pill `.lab-chip` was written for. `corner` is machined into the bottom
- * right of the manager header's plate: two of its corners are square because
- * they meet the plate's own edges, the outer one takes the plate's `rounded-2xl`
- * so it traces that corner exactly, and the inner one is the small return the
- * plate's top tabs already use. It runs at those tabs' type scale rather than
- * the pill's for a plain geometric reason — the plate's bottom padding is what
- * holds it clear of the win-pct dial above it, and at `text-sm` the part is
- * 32px tall and crosses the dial instead.
+ * bounds it, so it is the pill `.lab-chip` was written for. (There was a
+ * `corner` seat too, machined into the bottom right of the manager header's
+ * plate; it went when the key moved onto the subject rail, and what it leaves
+ * behind is the reason a seat may only change *shape*: it had to run at the
+ * plate's tab scale rather than the pill's, because at `text-sm` the part was
+ * 32px tall and crossed the win-pct dial above it. A seat is a fact about the
+ * edge, never about the control.)
  *
  * `bar` rides in the shares sheet's title bar, beside a search field and a close
  * mark. It is `free`'s pill at the smaller of the two type scales, because a
@@ -64,15 +63,6 @@ export const SEATS = {
     key: "gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm",
     icon: "h-3.5 w-3.5",
     badge: "px-1.5 py-0.5 text-[11px]",
-  },
-  corner: {
-    key: "gap-1.5 rounded-br-2xl rounded-tl-lg py-1 pl-3 pr-3.5 text-[11px] leading-none",
-    icon: "h-3 w-3",
-    // `py-px`, so the badge is no taller than the icon beside it and the key is
-    // the same 20px narrowed or not. A trigger seated in an edge must not change
-    // height with its own state: it is anchored to that edge, so growing moves
-    // its top into whatever the plate's bottom padding was holding it clear of.
-    badge: "px-1 py-px text-[10px]",
   },
   bar: {
     key: "gap-1.5 rounded-full py-1 pl-2.5 pr-3 text-[11px] leading-none",

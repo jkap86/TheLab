@@ -85,9 +85,9 @@ import { PanelMessage } from "./ui";
  *
  * **What this layout no longer renders is the filters' key.** It was seated in
  * the header plate's corner and is on the rail now ({@link SubjectRail}), which
- * is why `filters` is destructured here for the scope line alone. The header's
- * own `filters` prop stays — the lineup checker has no rail and still seats a
- * key in that corner — so what changed is one call site, not the seat.
+ * is why `filters` is destructured here for the scope line alone. The corner
+ * seat itself is retired: the lineup checker was the last page in it and grew
+ * the same rail, so `ManagerHeader` has no `filters` prop at all now.
  */
 export function LeaguesViewLayout({
   view,
@@ -193,14 +193,13 @@ export function LeaguesViewLayout({
         scope={scope}
         leagueCount={filtered.length}
         stat={stat}
-        // No key in the plate's corner: the league filters are seated at the
-        // leading end of the subject rail below, beside the *who is in it* half
-        // of the same question — see {@link SubjectRail}. The plate keeps its
-        // three readout corners, gives back the corner key's clearance, and this
-        // card is pinned over the list, so that clearance is league rows.
+        // No key in the plate's corner — there is no corner seat any more. The
+        // league filters are at the leading end of the subject rail below, beside
+        // the *who is in it* half of the same question (see {@link SubjectRail}),
+        // which leaves the plate four readout corners and gives back the key's
+        // clearance; this card is pinned over the list, so that clearance is
+        // league rows.
         //
-        // The prop stays on the header for the lineup checker, which has no such
-        // rail and seats its own copy in the corner.
         // Drawn whenever there are leagues, and it is the *tab* that says
         // whether the heading billet under the subject rail has rows to head —
         // see `ColumnsBar`'s `headings`. What must not happen is this slot

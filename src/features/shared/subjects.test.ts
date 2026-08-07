@@ -16,7 +16,9 @@ import {
   subjectSummary,
   toggleSubject,
 } from "./subjects.ts";
-import type { LeaguemateView, ManagerLeague, PlayerSummary } from "./types.ts";
+import type { LeaguematePayload as LeaguemateView } from "@/shared/contract";
+import type { ManagerLeague } from "@/shared/manager";
+import type { PlayerSummary } from "@/shared/players";
 
 const league = (league_id: string): ManagerLeague => ({
   league_id,

@@ -9,7 +9,8 @@ import {
   PLAYER_SHARE_METRICS,
   type ShareMetricContext,
 } from "./share-metrics.ts";
-import type { AdpPlayerPayload, ManagerLeague } from "./types.ts";
+import type { AdpPlayerPayload } from "@/shared/contract";
+import type { ManagerLeague } from "@/shared/manager";
 
 /** A league with the settings a metric reads, and nothing it doesn't. */
 function league(

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { leaguemateShares } from "./leaguemates.ts";
-import type { LeaguemateView, ManagerLeague } from "./types.ts";
+import type { LeaguematePayload as LeaguemateView } from "@/shared/contract";
+import type { ManagerLeague } from "@/shared/manager";
 
 const SELF = "me";
 

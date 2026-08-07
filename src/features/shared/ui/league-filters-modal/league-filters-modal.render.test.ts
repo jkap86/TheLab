@@ -314,18 +314,20 @@ describe("the trigger", () => {
   });
 
   test("each seat draws the same part at its own metrics", () => {
-    for (const seat of ["free", "corner", "bar"] as const) {
+    for (const seat of ["free", "bar", "rail"] as const) {
       const html = renderToStaticMarkup(
         createElement(FiltersTrigger, { label: "Filters", seat, active: 1, onOpen: () => {} }),
       );
       assert.match(html, /lab-chip-on/, `${seat} keeps the lit material`);
       assert.match(html, />1</, `${seat} keeps the badge`);
     }
-    // `corner` is the one machined into an edge, so it is the one that differs.
-    const corner = renderToStaticMarkup(
-      createElement(FiltersTrigger, { label: "Filters", seat: "corner" as const, active: 1, onOpen: () => {} }),
+    // `rail` is the one seated among two other keys, so it is the one that
+    // reaches past shape — it takes their thinner wall as well as their metrics,
+    // since a key standing a pixel prouder than its neighbours reads as a state.
+    const rail = renderToStaticMarkup(
+      createElement(FiltersTrigger, { label: "Filters", seat: "rail" as const, active: 1, onOpen: () => {} }),
     );
-    assert.match(corner, /rounded-br-2xl/);
+    assert.match(rail, /lab-chip-sm/);
   });
 
   test("the label defaults to Filters, which is the placeholder's word too", () => {

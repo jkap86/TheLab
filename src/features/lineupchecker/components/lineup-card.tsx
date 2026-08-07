@@ -1,0 +1,145 @@
+"use client";
+
+import type { ManagerLeague } from "@/shared/manager";
+
+import { Avatar } from "@/features/shared/ui/avatar";
+import { CardLedge, LeagueCard } from "@/features/shared/ui/league-card";
+
+import { matchupState, opponentLabel } from "../opponent";
+import type { LeagueMatchup } from "../types";
+import { LineupStatColumns } from "./lineup-columns";
+
+/**
+ * One league in the lineup checker's list: which league, who it is playing this
+ * week, and what today's lineup is costing there.
+ *
+ * **It is the leagues list's card** — `features/shared/ui/league-card`, the same
+ * slab with the same two plates on its top edge, the same head inset, the same
+ * pull-to-the-top-and-cap on expand. It was a glass row before, and the swap is
+ * the argument that card was built on applied to this list: a row that is the
+ * whole of what one league has to say, four columns deep, is an object rather
+ * than a line of a table. The two lists read as one instrument now, which is what
+ * a reader crossing between the two tools experiences.
+ *
+ * **What it puts on the trailing plate is the opponent, where the leagues list
+ * puts the record**, and that is the whole of the difference between the two
+ * cards. The record is what a season-long list is about; who you are playing is
+ * what a week's list is about. Both are one fact in one housing, opposite the
+ * name.
+ *
+ * **The panel opens on this manager's own roster.** `focusRosterId` is the one
+ * thing this card knows that the leagues list doesn't: a reader arrives at a
+ * league here *because of their own lineup*, so landing on the projected leader's
+ * bench — the panel's own default, which is right for someone who arrived at a
+ * league — would answer a question nobody asked. Absent where the week isn't
+ * stored, which falls back to that default.
+ */
+export function LineupCard({
+  league,
+  week,
+  matchup,
+  expanded,
+  onToggle,
+}: {
+  league: ManagerLeague;
+  /** The week the read is for, or null when none is stored — see {@link matchupState}. */
+  week: number | null;
+  /** This league's matchup, or undefined where the week isn't stored for it. */
+  matchup: LeagueMatchup | undefined;
+  /** Whether this is the league currently open — one at a time, list-wide. */
+  expanded: boolean;
+  /** Open this league, or close it if it is the one already open. */
+  onToggle: () => void;
+}) {
+  return (
+    <LeagueCard
+      leagueId={league.league_id}
+      name={league.name}
+      status={league.status}
+      ledge={<OpponentLedge week={week} matchup={matchup} />}
+      columns={<LineupStatColumns matchup={matchup} />}
+      focusRosterId={matchup?.roster_id}
+      expanded={expanded}
+      onToggle={onToggle}
+    />
+  );
+}
+
+/**
+ * Who this league is playing, on the plate holding the card's trailing corner.
+ *
+ * **It is always drawn, which is where it parts company with the leagues list's
+ * record ledge.** That one renders no plate when there is neither a record nor a
+ * standing, because a league this manager holds no roster in has nothing to
+ * report and an empty housing would be the card saying so. Here "nothing" is
+ * itself the answer the card exists to give: a bye, a week the crawler has not
+ * reached, a season with nothing stored ahead of today. Each of those is a
+ * different fact, and {@link matchupState} is shaped to keep them apart — so the
+ * plate names which, rather than three kinds of nothing collapsing into one
+ * absent plate and a reader concluding their league has no game when what it has
+ * is no data.
+ *
+ * The three of them wear the same `.lab-readout` cut the record does, dimmed: a
+ * cut into the plate's lit face is what makes the plate a housing rather than a
+ * label, and the state is a readout either way. An opponent gets the avatar and
+ * the name instead, which is a subject rather than a reading.
+ *
+ * The name is the Sleeper username, and the team name is demoted to the hover —
+ * the standings' own rule. This list spans a manager's whole portfolio, so the
+ * same opponent turns up in several leagues, and a team name is a nickname
+ * someone picked for one of them and changes at will.
+ */
+function OpponentLedge({
+  week,
+  matchup,
+}: {
+  week: number | null;
+  matchup: LeagueMatchup | undefined;
+}) {
+  const state = matchupState(week, matchup);
+
+  if (state.kind === "opponent") {
+    const label = opponentLabel(state.opponent);
+    return (
+      <CardLedge>
+        {/* `vs` rather than nothing: the plate opposite a league's name could
+            otherwise be read as a second name for the league itself, which is
+            the exact confusion the record ledge avoids by being digits. */}
+        <span
+          aria-hidden="true"
+          className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground/40"
+        >
+          vs
+        </span>
+        <Avatar url={state.opponent.avatar_url} name={label} size="sm" />
+        <span
+          title={state.opponent.team_name ?? undefined}
+          className="min-w-0 truncate text-[12.5px] font-semibold leading-4 text-foreground/85"
+        >
+          <span className="sr-only">Playing </span>
+          {label}
+        </span>
+      </CardLedge>
+    );
+  }
+
+  const note =
+    state.kind === "bye"
+      ? "Bye"
+      : state.kind === "no-week"
+        ? "No week scheduled"
+        : "Not synced yet";
+
+  return (
+    <CardLedge>
+      {/* `min-w-0 truncate` rather than `shrink-0`: the plate is capped at a
+          share of the edge (see {@link CardLedge}), so a note wider than that
+          share has to give — and a readout hanging past its own housing is what
+          the cap exists to prevent. None of the three reaches the cap at 390px;
+          this is what happens if one ever does. */}
+      <span className="lab-readout min-w-0 truncate rounded px-1.5 py-px text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-foreground/45">
+        {note}
+      </span>
+    </CardLedge>
+  );
+}
