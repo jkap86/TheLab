@@ -27,8 +27,7 @@ export function ColumnPicker({
   open,
   onToggle,
   onSelect,
-  className = "",
-  wrapperClassName = "inline-flex",
+  className = "uppercase tracking-wide",
 }: {
   options: ColumnOption[];
   /** The selected metric's key; falls back to the first option if unknown. */
@@ -39,23 +38,20 @@ export function ColumnPicker({
   onToggle: () => void;
   /** Point this column at another metric. */
   onSelect: (key: string) => void;
-  /** Applied to the trigger — the heading cell sets the font size here. */
-  className?: string;
   /**
-   * Applied to the heading *cell* rather than the trigger, for the display and
-   * placement rules a grid column needs — both tables hide their second column
-   * below @lg with `hidden @lg:inline-flex`, which has to reach this element
-   * because it is the grid item.
+   * Applied to the trigger — the heading's size *and its type treatment*, which
+   * is why the uppercase and the tracking are a default here rather than
+   * hardcoded below.
    *
-   * It carries the cell's `display` for that reason, and the default is what a
-   * caller with nothing to hide passes back. Owning `inline-flex` here instead
-   * would silently defeat every one of those callers: Tailwind v4 emits the
-   * display utilities in *alphabetical* order, so `.hidden` is written before
-   * `.inline-flex` and loses to it — the second standings heading was never
-   * hidden at all, and wrapped onto a row of its own where `justify-self-end`
-   * in the rank gutter pushed it off the left edge of the panel.
+   * Both rails set sentence case at their narrow tiers, because a heading is
+   * what sizes a fixed value track and the widest one doesn't fit: `Optimal`
+   * measures 43.8px uppercase and tracked against a 42px standings track, where
+   * sentence case is 33.1px. A caller that has to say that needs to say it
+   * without fighting a utility the component already wrote — two
+   * `text-transform` utilities on one element are decided by their order in the
+   * stylesheet, not in the attribute.
    */
-  wrapperClassName?: string;
+  className?: string;
 }) {
   const active = options.find((o) => o.key === activeKey) ?? options[0];
   const menuId = useId();
@@ -66,7 +62,11 @@ export function ColumnPicker({
   useReturnFocus(open, trigger);
 
   return (
-    <span className={`relative justify-self-end ${wrapperClassName}`}>
+    // `inline-flex` is the component's own now that no caller hides a heading:
+    // both tables draw both value columns at every width, so the prop that used
+    // to carry a cell's `display` — and the alphabetical-order trap that came
+    // with it — has nothing left to express.
+    <span className="relative inline-flex justify-self-end">
       <button
         ref={trigger}
         type="button"
@@ -74,7 +74,7 @@ export function ColumnPicker({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        className={`group/pick inline-flex items-center gap-0.5 whitespace-nowrap uppercase tracking-wide transition-colors ${
+        className={`group/pick inline-flex min-w-0 items-center gap-0.5 whitespace-nowrap transition-colors ${
           open ? "text-foreground/80" : "text-foreground/40 hover:text-foreground/70"
         } ${className}`}
       >

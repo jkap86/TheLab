@@ -789,6 +789,45 @@ body {
     background: linear-gradient(180deg, #c2fff8, #14e8d1);
   }
 
+  /* The mark riding a row's leading corner — a standings rank, a lineup slot.
+
+     Both used to sit in a fixed grid track spanning the row's two lines, which
+     spent 24–28px of a 137px row on one numeral or four letters, and spent it
+     on the line the *numbers* are on as well as the line the name is on. As a
+     part on the corner it rides in the row's own inset and its radius instead,
+     so the numbers line gives up nothing and the name line gives up only the
+     overhang. What that bought is the second value column: the gutter and its
+     gap were 24px and a second standings track plus its gap is 48px, which the
+     two narrow tiers pay for by stepping the numbers down a size.
+
+     It is a *plate*, not a chip — rectangular into the corner, no press travel
+     — because it is read rather than pressed, and "raised means press me" is
+     the grammar the app bar holds everywhere else. What makes a raised part
+     legible here anyway is that it is not a control's shape: the nameplate on a
+     league card and the filters key in the header plate are the same device,
+     a part rising out of an edge to label what is inside it.
+
+     Two faces, because a row has two. `.lab-tab-on` is the darkened cut for the
+     lit row: on cyan, a shade of the foreground token is a shade of the wrong
+     colour (the reason the rows' own dimmed cells switch to `opacity-*`), so
+     the face inverts rather than the text taking a second palette that would
+     have to be kept in step with the one above it.
+
+     Material only, per the layer's rule: the box, the radius and the type all
+     come from utilities at the call site. */
+  .lab-tab {
+    background: linear-gradient(160deg, #24405a, #12293a);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      1px 1px 0 rgba(0, 0, 0, 0.6);
+  }
+  .lab-tab-on {
+    background: linear-gradient(160deg, #0b6a61, #045049);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      1px 1px 0 rgba(0, 60, 55, 0.6);
+  }
+
   /* The cyan key, for a control that is currently narrowing something. */
   .lab-chip-on {
     background: linear-gradient(180deg, #a8fff4, #00ddc6);

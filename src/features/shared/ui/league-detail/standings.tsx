@@ -51,54 +51,45 @@ const TEAM_METRIC_OPTIONS: ColumnOption[] = TEAM_METRICS.map((m) => ({
  * picker. Which metric each shows is held above this table (in the panel) so both
  * columns line up down the list and one picker moves the whole column.
  *
- * Below @xl only the *first* of those two columns is drawn. The panel stays a
- * 50/50 split at every width, which on a phone leaves this half ~150px: the rank
- * and the name have their own line, so what has to fit on the second is the
- * record, the points-for and the value columns — two of them ran into each other
- * (`0-0 · 0.00 PF  2,905.73 1,041.16`), one fits with room. It is the second slot
- * that goes rather than the first because the reader's leading choice is the one
- * they aimed first, and both are still there the moment there is width for them.
+ * **Both of them are drawn at every width, and the rank is what paid for it.**
+ * The second used to wait for @xl, because the row had no room: a fixed rank
+ * gutter spanning both lines took 24px of a 137px row on a phone, and it took it
+ * from the line the numbers are on as much as from the line the name is on. As a
+ * tab on the row's corner (see `.lab-tab`) the rank rides in the row's own inset
+ * and its radius, and 24px reclaimed is almost exactly one more track plus its
+ * gap. The name is unaffected either way, which is the part worth keeping hold
+ * of: the name line spans every value column, so it is exactly as wide with two
+ * as with one — 103px at a 352px phone, against 97px before this.
  *
- * **@xl, though the gutters widen at @lg — three tiers, not two.** A container
- * tier measures the *panel* and each half is barely half of it, so at @lg a half
- * is ~230px and two value columns left the record-and-name track at ~48px: the
- * `Manager` heading clipped inside its own word. Widening the gutters and adding
- * a column look like one decision at one breakpoint and are two; @lg buys the
- * first, @xl the second. `roster-layout` splits on exactly the same reasoning.
+ * **Four tiers, and every figure in them is measured rather than rounded**, because
+ * the narrow one has no slack to round with: at a 320px panel the row has 131px of
+ * content and the template below spends 127. In Arial with tabular figures,
+ * `3,270.11` is 39.7px at 0.65rem and 42.7px at 0.7rem, and `12-5-1` — the worst
+ * record a 17-game season makes — is 30px. A metric whose numbers run wider than
+ * those wants the tier re-measured, not the track nudged.
  *
- * Both halves of the panel carry the same column gutter, so the table and the
- * roster beside it read as one instrument rather than two that happen to be
- * adjacent. That gutter is what was actually short on a phone: at 4px the record
- * and the value beside it (`0-0 · 0.00 PF` against `2,399.87`) touched, which
- * reads as one run of digits — so it stays at 8px below @lg even though the
- * insets around it were trimmed, because a gutter is what separates two columns
- * where an inset only holds them off an edge nothing is written on.
+ * The two narrow tiers step the numbers down a size, which is what lets two sit
+ * where one sat, and the row's own inset goes to 4px at the base tier. Trimming
+ * an inset is the cheap half: nothing is written on the edge it holds content
+ * off, where the 8px column gap is the only thing separating two runs of digits
+ * (at 4px the record and the value beside it read as one number). Trim the
+ * padding, never the gap.
  *
- * The insets themselves are *not* the same on the two halves, and that is
- * arithmetic rather than a lapse: a row here carries its own `px` (it is a lit
- * key, and text hard against a key's edge reads as clipped) where a roster row
- * carries none, so this half's plate is a step tighter to land both lists on a
- * comparable left edge.
+ * The insets are *not* the same on the two halves, and that is arithmetic rather
+ * than a lapse: a row here carries its own `px` (it is a lit key, and text hard
+ * against a key's edge reads as clipped) where a roster row carries none, so this
+ * half's plate is a step tighter to land both lists on a comparable left edge.
  *
- * That still left the second line over-subscribed once a season is under way, so
- * the points-for sheds too — and it sheds *twice*, which is the part worth
- * reading before simplifying it to one breakpoint. Preseason hid the problem:
- * `0-0 · 0.00 PF` is short, where a played `12-5-1 · 1,842.36 PF` wants ~96px and
- * a 375px screen leaves this cell ~80, so it truncated inside its own number
- * (`12-5-1 · 1,84…`). A shortened name is still a name; a shortened total reads
- * as bad data, so what gives is a whole fact rather than half of one — and the
- * points-for is the fact to drop, since `PF` is a metric the value column beside
- * it can be pointed at.
- *
- * Twice, because the space it competes for doesn't grow monotonically: the second
- * value column arrives at @xl and takes back more width than the tier gained, so
- * the same line truncates again just above that breakpoint. Hence
- * `@sm:inline @xl:hidden @2xl:inline` — visible once one column leaves room for
- * it, gone again while two columns don't, back for good once they do. It tracks
- * whichever tier the second column arrives at, so moving one moves the other. The upper
- * tier is a step past where the line measures as fitting (~39rem of container
- * against @2xl's 42), because what it competes with is a *pickable* column and
- * the widest metric shouldn't be the one that reintroduces the clipping.
+ * **The points-for is monotonic now, and that is a consequence rather than a
+ * separate decision.** It used to be `@sm:inline @xl:hidden @2xl:inline` — on,
+ * off, on — because the second value column arrived at @xl and took back more
+ * width than the tier gained. With the column count fixed there is no reversal
+ * left to describe: the line waits for one tier and stays. That tier is @3xl
+ * rather than the @2xl it used to be, which is the honest price of two wide
+ * tracks — `12-5-1 · 1,842.36 PF` measures ~120px against ~114 of cell at @2xl,
+ * so it would clip there. What gives below it is still a whole fact rather than
+ * half of one, since a shortened name reads as long where a shortened total
+ * reads as bad data.
  */
 export function Standings({
   teams,
@@ -136,20 +127,21 @@ export function Standings({
     ? new Map(outlook.teams.map((t) => [t.roster_id, t]))
     : null;
 
-  // Written out rather than assembled, so Tailwind sees both class strings. The
-  // narrow template carries one value track to the wide one's two — the second
-  // column is `hidden @lg:*` on both the heading and the cell, so a track it can't
-  // fill would leave a dead gutter down the table.
-  //
-  // The rank gutter is `1rem` below @lg rather than the wide tier's `2rem`: it
-  // holds at most two digits at 0.65rem, so 20px was a track sized for the tier
-  // above it, and the 4px it gave back go to the name — the only track here
-  // whose content can't be shortened without losing information.
+  // Written out rather than assembled, so Tailwind sees every class string whole.
+  // No rank track in either: the rank is a tab on the row's corner now, so what
+  // is left is the name/meta column and the two value tracks — measured against
+  // the widest string each has to hold (see the note above), not rounded.
   const grid = outlookByRoster
-    ? "grid-cols-[1rem_minmax(0,1fr)_auto] @lg:grid-cols-[2rem_minmax(0,1fr)_auto] " +
-      "@xl:grid-cols-[2rem_minmax(0,1fr)_auto_auto]"
-    : "grid-cols-[1rem_minmax(0,1fr)] @lg:grid-cols-[2rem_minmax(0,1fr)]";
-  const nameSpan = outlookByRoster ? "col-span-2 @xl:col-span-3" : "col-span-1";
+    ? "grid-cols-[minmax(0,1fr)_2.625rem_2.625rem] " +
+      "@sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem] " +
+      "@lg:grid-cols-[minmax(0,1fr)_4rem_4rem] " +
+      "@xl:grid-cols-[minmax(0,1fr)_5rem_5rem]"
+    : "grid-cols-[minmax(0,1fr)]";
+  const nameSpan = outlookByRoster ? "col-span-3" : "col-span-1";
+
+  // The rail sits on the rows' own inset, or a heading lands a pixel or two off
+  // the number under it and the table reads as misaligned.
+  const inset = "px-1 @sm:px-1.5 @lg:px-3";
 
   return (
     // A recessed field: this half is the one being *read*, and the roster plate
@@ -164,20 +156,33 @@ export function Standings({
       }`}
     >
       <div
-        className={`grid shrink-0 ${grid} items-center gap-x-2 px-1 pb-2 pt-1 text-[0.65rem] uppercase tracking-wide text-foreground/40 @lg:px-2 @lg:text-xs`}
+        className={`grid shrink-0 ${grid} ${inset} items-center gap-x-2 pb-2 pt-1 text-[0.6rem] text-foreground/40 @lg:text-xs`}
       >
-        <span className="text-center">#</span>
-        <span className="truncate">Manager</span>
+        {/* `invisible`, not `hidden`: the cell has to keep its grid track below
+            @lg or the two headings slide left off the columns they name. What
+            it captions is a column of avatars and usernames, which is the same
+            reason the roster half leaves its own name track empty — and with
+            two headings to seat there is no longer room to say it twice.
+            A league with no projections has no headings to seat, so it keeps
+            its caption at every width. */}
+        <span
+          className={`truncate uppercase tracking-wide ${
+            outlookByRoster ? "invisible @lg:visible" : ""
+          }`}
+        >
+          Manager
+        </span>
         {outlookByRoster &&
           columns.map((key, slot) => (
             <ColumnPicker
               key={slot}
-              // The second column only exists once the half is wide enough for
-              // it — see the class strings above. The first passes its display
-              // back explicitly, because this prop owns the cell's `display`.
-              wrapperClassName={
-                slot === 0 ? "inline-flex" : "hidden @xl:inline-flex"
-              }
+              // Sentence case below @lg, and the reason is `Optimal`: uppercase
+              // and tracked it measures 43.8px at this rail's size, against a
+              // 42px track — and a heading clipped inside its own word reads as
+              // broken where a clipped name only reads as long. Written as
+              // base-then-variant so no two utilities of one property ever meet
+              // on this element.
+              className="normal-case tracking-normal @lg:uppercase @lg:tracking-wide"
               options={TEAM_METRIC_OPTIONS}
               activeKey={key}
               open={openPicker === `team-${slot}`}
@@ -285,18 +290,29 @@ function StandingsRow({
         // A raised key rather than a tinted row: pressing it drives the roster
         // half beside it, and the selected one is the part that is currently on
         // — the app bar's grammar, at row scale (see `.lab-row`).
-        className={`grid w-full ${grid} items-center gap-x-2 gap-y-0.5 rounded-md px-1.5 py-1.5 text-left @lg:px-3 @lg:py-2 ${
+        //
+        // `relative` is what the rank tab is positioned against.
+        className={`relative grid w-full ${grid} items-center gap-x-2 gap-y-0.5 rounded-md px-1 py-1.5 text-left @sm:px-1.5 @lg:px-3 @lg:py-2 ${
           active ? "lab-row-on" : "lab-row"
         }`}
       >
-        {/* Spans both lines, so the rank numbers a team rather than a line. */}
+        {/* Out of flow on the corner rather than in a track of its own, which is
+            what freed the second value column — see the note above and
+            `.lab-tab`. Square into the corner it sits in and rounded away from
+            it, so it reads as part of the row's own edge. */}
         <span
-          className={`row-span-2 self-center text-center text-[0.65rem] tabular-nums @lg:text-sm ${dim}`}
+          className={`absolute left-0 top-0 inline-flex h-[17px] min-w-[26px] items-center justify-center rounded-br-md rounded-tl-md px-[5px] font-mono text-[9px] font-bold leading-none tracking-[0.04em] ${
+            active ? "lab-tab-on text-foreground/90" : "lab-tab text-foreground/60"
+          }`}
         >
           {rank}
         </span>
 
-        <span className={`${nameSpan} flex min-w-0 items-center gap-1 @lg:gap-2`}>
+        {/* Indented past the tab's overhang, which is the only thing the name
+            gives up — and it gives it up on this line alone. */}
+        <span
+          className={`${nameSpan} flex min-w-0 items-center gap-1 pl-[22px] @lg:gap-2`}
+        >
           <TeamAvatar team={team} label={manager} />
           <span
             className={`min-w-0 truncate text-xs font-medium @lg:text-sm ${
@@ -308,16 +324,16 @@ function StandingsRow({
         </span>
 
         <span
-          className={`col-start-2 truncate text-[0.65rem] tabular-nums @lg:text-xs ${dim}`}
+          className={`col-start-1 truncate text-[0.6rem] tabular-nums @sm:text-[0.65rem] @lg:text-xs ${dim}`}
         >
           {record}
-          {/* The record keeps this line at every width; the points-for sheds
-              wherever the value columns beside it don't leave room — see the
-              two-tier rule above, which is not the monotonic one it looks like. */}
-          <span className="hidden @sm:inline @xl:hidden @2xl:inline">
-            {" "}
-            · {points} PF
-          </span>
+          {/* The record keeps this line at every width; the points-for waits for
+              the tier where it measures as fitting and then stays — see the note
+              above on why that is one threshold now rather than three.
+              @3xl rather than the @2xl it used to take, because two 5rem tracks
+              leave this line less than one 3.25rem track did: at @2xl the whole
+              string is ~120px against ~114 of cell, and it clips. */}
+          <span className="hidden @3xl:inline"> · {points} PF</span>
         </span>
 
         {columns?.map((key, slot) => {
@@ -334,11 +350,10 @@ function StandingsRow({
             <span
               key={slot}
               title={cell.title}
-              className={`text-right text-[0.7rem] tabular-nums @lg:text-sm ${
-                // Paired with the heading above and the grid template: the second
-                // column appears only once the half is wide enough to hold it.
-                slot === 0 ? "" : "hidden @xl:block "
-              }${
+              // A size step down at the two narrow tiers, which is what lets two
+              // numbers sit where one sat. `tabular-nums` holds the column
+              // either way.
+              className={`text-right text-[0.65rem] tabular-nums @sm:text-[0.7rem] @lg:text-[0.8125rem] @xl:text-sm ${
                 // Same reason as `dim` above: on the lit face a shade of the
                 // foreground token is a shade of the wrong colour.
                 active
