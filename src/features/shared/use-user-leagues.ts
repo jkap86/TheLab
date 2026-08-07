@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 
-import type { LeaguesStreamMessage } from "@/shared/contract";
 import type { ManagerLeague } from "@/shared/manager";
 import { errorMessage } from "@/shared/util";
 
-import { apiFetch, isAbortError } from "./api";
-import { takeLines } from "./ndjson";
+import { fetchManagerLeagues, type ManagerLeaguesData } from "./leagues-stream";
+import { MANAGER_STALE_TIMES, managerQueryKeys } from "./manager-query";
 
 export type UserLeaguesState = {
   leagues: ManagerLeague[] | null;
@@ -28,88 +28,129 @@ export type UserLeaguesState = {
 };
 
 /**
- * Streams a user's leagues from `/api/user/[username]/leagues` for the pick
- * tracker's league picker — just the list, none of the progress-bar machinery
- * the manager tool's own `useManagerLeagues` carries, which is why it's a
- * separate hook rather than that one reused: the two guarantee different things.
+ * A user's leagues off `/api/user/[username]/leagues`, for the pick tracker's
+ * league picker and the lineup checker's list — just the list, none of the
+ * progress-bar machinery the manager tool's own `useManagerLeagues` carries.
  *
- * The endpoint is the same stale-while-revalidate stream, so a cached `result`
- * arrives first and a post-refresh one may follow; each replaces the list. The
- * first one is enough to fill the menu, so `loading` clears then rather than
- * waiting for a refresh that may still be syncing behind it.
+ * **It is a query now, and that is the whole of the change.** It used to hold
+ * its answer in `useState` behind a `useEffect`, which meant this — the single
+ * most expensive route in the app, a blocking manager sync behind an advisory
+ * lock — was re-streamed in full on *every mount*: a trip out to `/tools` and
+ * back, a hop between the two tools that read it, or simply pressing back. Both
+ * of those tools are separate routes, so that is the ordinary way they are used.
+ * Filed in the cache it is one read per {@link MANAGER_STALE_TIMES.leagues}
+ * window however many times it is mounted, and two tools open on one account are
+ * one request rather than two.
  *
- * Keyed by `userId` (a Sleeper id resolves as readily as a name): passing null —
- * no account stored yet — fetches nothing and reports an empty, idle state,
- * which is the whole no-account path on this page (the id form still works).
+ * **It stays a separate hook from `useManagerLeagues`**, for the reason the four
+ * manager sub-resource hooks *are* one hook: the two differ in what they
+ * guarantee. That one reports per-league sync progress and a manual refresh,
+ * because its header is built around them; this one wants the list, and clears
+ * `loading` on the first `result` rather than waiting out a background refresh
+ * that may still be syncing — a menu is fillable from the cached copy. Two hooks
+ * that differ in what they promise are two hooks. What they no longer differ in
+ * is the *protocol*: {@link fetchManagerLeagues} is one decoder for one stream,
+ * the same line `takeLines` was already drawn along.
+ *
+ * That shared fetcher is what makes the mid-stream states work here, and they
+ * are the reason `loading` is not `isPending`. The stream is
+ * stale-while-revalidate, so the fetcher publishes each state it reaches
+ * straight into this entry and only *resolves* at the end; the query is still
+ * pending when the cached leagues arrive. Reading "have we a result yet" off the
+ * published data is what keeps this hook's promise — the menu fills at the first
+ * message, exactly as it did when this was `useState`.
+ *
+ * **Keyed by the account's username, which is what makes it the manager tool's
+ * own entry rather than a second one beside it.** These two pages hold a
+ * resolved account and could ask by either half of it; the manager tool has only
+ * the name searched in its URL, so the name is the one spelling the three can
+ * share — and `managerQueryKeys.leagues` lower-cases it, so `Jkap` typed into a
+ * URL and the canonical `jkap` off a resolved profile are one entry. A reader
+ * who has looked themselves up in the manager tool arrives here with the list
+ * already loaded, and the same holds in reverse. It asks by name for the same
+ * reason it files by name: Sleeper resolves a name as readily as an id, so
+ * splitting the two would be two requests for one answer with nothing gained.
+ *
+ * Passing null — no account stored yet — fetches nothing and reports an empty,
+ * idle state, which is the whole no-account path on the pick tracker's page (the
+ * id form still works).
+ *
+ * `retry: false` keeps what this hook has always done. The manager tool takes
+ * the client-wide single retry because its header can show a partial list behind
+ * a failure; here a failed stream is the whole page, and a second round trip
+ * only makes the error take longer to appear.
  */
-export function useUserLeagues(userId: string | null): UserLeaguesState {
-  const [leagues, setLeagues] = useState<ManagerLeague[] | null>(null);
-  const [season, setSeason] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
+/**
+ * The query's options, as a value rather than an inline literal.
+ *
+ * Separated so the cache's own behaviour can be driven by a `QueryObserver` in a
+ * test rather than through a renderer — the same argument `tradesBoardQuery`
+ * rests on, and the reason the assertions in `user-leagues-cache.test.ts` are
+ * about *request counts*. What it pins is that the config a test exercises is
+ * the config the two pages run.
+ *
+ * It takes the client rather than reading one from context because that is the
+ * only thing in here that is React's: `publish` writes each mid-stream state
+ * into this very entry, and `previousRevision` reads the last one back out.
+ */
+export function userLeaguesQuery(
+  /** The account's username — the spelling the manager tool files under too. */
+  username: string | null,
+  queryClient: QueryClient,
+) {
+  const queryKey = managerQueryKeys.leagues(username ?? "");
+  return {
+    queryKey,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      fetchManagerLeagues({
+        searched: username ?? "",
+        signal,
+        // Carried forward so a re-read continues the refresh sequence rather
+        // than restarting it — which the manager tool would read as a
+        // dependent-invalidating change if it were looking at the same entry.
+        previousRevision:
+          queryClient.getQueryData<ManagerLeaguesData>(queryKey)?.revision,
+        // Every state the stream reaches, published as it is learned. This is
+        // what fills the menu at the first `result` instead of at the last.
+        publish: (data: ManagerLeaguesData) =>
+          queryClient.setQueryData(queryKey, data),
+      }),
+    enabled: username !== null,
+    staleTime: MANAGER_STALE_TIMES.leagues,
+    retry: false,
+  };
+}
 
-    (async () => {
-      // Clear the previous account up front so a slow fetch never leaves the
-      // last one's leagues in the menu underneath a newly resolved id.
-      setLeagues(null);
-      setSeason(null);
-      setError(null);
-      if (!userId) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      try {
-        const res = await apiFetch(
-          `/api/user/${encodeURIComponent(userId)}/leagues`,
-          { signal: controller.signal, fallbackError: "Failed to load leagues" },
-        );
-        if (!res.body) throw new Error("Failed to load leagues");
+export function useUserLeagues(username: string | null): UserLeaguesState {
+  const queryClient = useQueryClient();
+  // Memoised on the name: the options carry the key the fetcher's `publish`
+  // closes over, and rebuilding them per render would rebuild that for nothing.
+  const options = useMemo(
+    () => userLeaguesQuery(username, queryClient),
+    [username, queryClient],
+  );
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
+  const query = useQuery(options);
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
+  const data = query.data ?? null;
+  const result = data?.result ?? null;
 
-          const { lines, rest } = takeLines(buffer);
-          buffer = rest;
-          if (!active) continue;
-
-          for (const line of lines) {
-            const message = JSON.parse(line) as LeaguesStreamMessage;
-            if (message.type === "result") {
-              setLeagues(message.leagues);
-              setSeason(message.season);
-              setLoading(false);
-            } else if (message.type === "error") {
-              // Keep the first error: later ones are usually knock-on effects.
-              setError((prev) => prev ?? message.error);
-              setLoading(false);
-            }
-          }
-        }
-      } catch (err: unknown) {
-        if (active && !isAbortError(err)) {
-          setError(errorMessage(err, "Something went wrong"));
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [userId]);
-
-  return { leagues, season, loading, error };
+  return {
+    leagues: result?.leagues ?? null,
+    season: result?.season ?? null,
+    // "Asked, and no leagues to show yet" — deliberately not `isPending`, which
+    // is wrong at both ends. A disabled query is pending forever, so a page with
+    // no account would read as loading rather than idle; and publishing *any*
+    // mid-stream state settles the query, so a cold account whose stream has so
+    // far sent only `progress` would read as loaded with an empty menu. The
+    // state this hook promises is about the payload, so it is read off the
+    // payload.
+    loading: username !== null && result === null && query.error === null,
+    // A refresh that failed behind a payload worth keeping is a field on the
+    // data; only a failure with nothing to show reaches the query's own error.
+    error:
+      data?.refreshError ??
+      (query.error ? errorMessage(query.error, "Something went wrong") : null),
+  };
 }
