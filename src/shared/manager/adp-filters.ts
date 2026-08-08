@@ -9,6 +9,8 @@
  */
 
 import {
+  type LeagueScopeBody,
+  NO_LEAGUE_SCOPE_BODY,
   booleanFilter,
   enumList,
   integer,
@@ -60,7 +62,24 @@ export type AdpFilters = {
   start_before: string | null;
   draft_types: DraftType[];
   draft_statuses: DraftStatus[];
+  /**
+   * The leagues whose drafts the board is averaged over, and the leagues it is
+   * averaged over *without* — null on either side meaning "don't narrow that
+   * way".
+   *
+   * Two lists because the client sends whichever is shorter: the league rules
+   * are a browser-side engine over Sleeper's blobs (see
+   * `features/shared/league-scope` for why they cannot be re-implemented here),
+   * so what crosses the wire is their answer, and "every league but these three"
+   * is three ids rather than three thousand.
+   *
+   * An **empty** include list is a real answer and not an absent one: the rules
+   * matched no league, so the honest board is empty. Folding it back to "not
+   * narrowing" would answer a question nobody asked, the same call
+   * `shared/trades/circle` makes for an account this database has never synced.
+   */
   league_ids: string[] | null;
+  exclude_league_ids: string[] | null;
   scoring: ScoringFormat[] | null;
   best_ball: boolean | null;
   superflex: boolean | null;
@@ -109,6 +128,19 @@ export type ParsedAdpFilters =
   | { ok: false; error: string };
 
 /**
+ * A query-string id list as a narrowing: **present** reads as a list, absent as
+ * null.
+ *
+ * The distinction is the whole of it, and `list` alone cannot make it: an empty
+ * `?league_id=` means the league rules matched no league, which is a real answer
+ * and an empty board, where the parameter not being sent means no narrowing.
+ * Collapsing the two shows every draft on file to a reader who asked for none.
+ * `parseTradeQuery` reads its own two lists this way for the same reason.
+ */
+const ids = (params: URLSearchParams, key: string): string[] | null =>
+  params.has(key) ? list(params, key) : null;
+
+/**
  * Whether {@link parseAdpFilters} will read its `defaultSeason` argument.
  *
  * **Exported so the route can decide whether to resolve one at all**, and used
@@ -149,10 +181,19 @@ export function usesDefaultSeason(params: URLSearchParams): boolean {
  * bug rather than a bad request, and it is refused rather than left to fall
  * through: an unbounded board with no season spans every season on file, which
  * is the one wrong answer here that looks like a working one.
+ *
+ * `scope` is the league ids read off a POST body, where the league rules
+ * resolved to more of them than a request line can carry (`MAX_LEAGUE_IDS`). A
+ * body list **overrides** the query-string one rather than merging with it: they
+ * are two spellings of one narrowing and the client sends exactly one of them,
+ * so everything downstream sees a single {@link AdpFilters} and cannot tell
+ * which arrived. `parseTradeQuery` takes its own scope on the same terms and for
+ * the same reason.
  */
 export function parseAdpFilters(
   params: URLSearchParams,
   defaultSeason: string | null,
+  scope: LeagueScopeBody = NO_LEAGUE_SCOPE_BODY,
 ): ParsedAdpFilters {
   const seasonValues = list(params, "season");
   const allSeasons = seasonValues.some((s) => s.toLowerCase() === "all");
@@ -223,7 +264,9 @@ export function parseAdpFilters(
   const offset = integer(params, "offset", { min: 0, fallback: ADP_FILTER_DEFAULTS.offset });
   if (!offset.ok) return offset;
 
-  const leagueIds = list(params, "league_id");
+  // A body list wins outright, including when it is empty — see the note above.
+  const leagueIds = scope.leagues ?? ids(params, "league_id");
+  const excludeLeagueIds = scope.excludeLeagues ?? ids(params, "xleague_id");
 
   // Written as a branch on {@link usesDefaultSeason} rather than as a chain
   // ending in a default, so the predicate the route gates on and the path that
@@ -253,7 +296,8 @@ export function parseAdpFilters(
       start_before: startBefore.value,
       draft_types: draftTypes.value ?? [],
       draft_statuses: draftStatuses.value ?? [],
-      league_ids: leagueIds.length > 0 ? leagueIds : null,
+      league_ids: leagueIds,
+      exclude_league_ids: excludeLeagueIds,
       scoring: scoring.value,
       best_ball: bestBall.value,
       superflex: superflex.value,

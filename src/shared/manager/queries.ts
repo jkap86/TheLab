@@ -1,6 +1,7 @@
 import { pool } from "@/shared/db";
 
 import { DYNASTY_LEAGUE_TYPE, LEAGUE_TYPE_SQL } from "./adp";
+import { ADP_FILTER_DEFAULTS } from "./adp-filters";
 import type { AdpBoardType } from "./adp-filters";
 import { dynastyPickGrid, ownedDraftPicks } from "./draft-picks";
 import { standingScore } from "./rank";
@@ -315,6 +316,68 @@ export async function getLeaguesByIds(
     [[...leagueIds]],
   );
 
+  return rows.map((r) => toManagerLeague(r));
+}
+
+/**
+ * Every league with a draft this board could average, for one season — or for
+ * every season on file when `seasons` is null.
+ *
+ * **The board's league rules are a browser-side engine and this is what they run
+ * over.** They are slot-group, scoring-key and size rules over Sleeper's JSONB
+ * blobs, derived from the solver's own slot tables so a new flex counts the
+ * moment the solver learns it; re-implementing that in SQL is the second copy
+ * that drifts silently, and the symptom would be a filter quietly returning the
+ * wrong leagues rather than an error. So the rules stay in one place, the client
+ * evaluates them over this, and sends the resulting ids back as
+ * `league_id`/`xleague_id`. The trades board's own league list exists for
+ * exactly this reason; the populations differ (a trade there, a draft here), so
+ * the two are two reads rather than one.
+ *
+ * **Narrowed by the season and by nothing else the drawer can change**, which is
+ * the density strip's rule for the same reason: this is what the dialog's
+ * per-option counts are taken over, and a population that reshaped under the
+ * hand choosing the filters is worse than one that holds still. The season is
+ * not one of those — it is the board's population rather than one of its
+ * filters, the same split the strip draws. The consequence worth knowing is that
+ * a league whose only draft in the season is a rookie draft is counted here even
+ * with the board cut to startups: the dialog describes the season's corpus, and
+ * the draft count in the drawer's own header is what describes the board.
+ *
+ * The two constants are the board's own: a draft that is neither snake nor
+ * linear has no draft position to average (an auction's `pick_no` is nomination
+ * order), and an unfinished one is never counted into an average whatever else
+ * is selected.
+ */
+export async function getAdpLeagues(
+  seasons: readonly string[] | null,
+): Promise<ManagerLeague[]> {
+  const params: unknown[] = [
+    [...ADP_FILTER_DEFAULTS.draft_types],
+    [...ADP_FILTER_DEFAULTS.draft_statuses],
+  ];
+  const seasonClause = seasons
+    ? `AND d.season = ANY($${params.push([...seasons])}::varchar[])`
+    : "";
+
+  const { rows } = await pool.query<LeagueRow>(
+    `SELECT ${LEAGUE_COLUMNS_SQL}
+       FROM leagues l
+      WHERE EXISTS (
+              SELECT 1
+                FROM drafts d
+               WHERE d.league_id = l.league_id
+                 AND d.type = ANY($1::varchar[])
+                 AND d.status = ANY($2::varchar[])
+                 ${seasonClause}
+            )
+      ORDER BY l.name`,
+    params,
+  );
+
+  // `record` is null on every row and that is the answer rather than a gap: a
+  // record is a *manager's* in a league, and this read deliberately has no
+  // manager in the question — the same call `getSeasonTradeLeagues` makes.
   return rows.map((r) => toManagerLeague(r));
 }
 
@@ -750,4 +813,93 @@ export async function getLeagueDetail(
     scoring_settings: l.scoring_settings,
     teams,
   };
+}
+
+/** One roster's scored week, as the league itself recorded it. */
+export type RosterWeekPoints = {
+  roster_id: number;
+  week: number;
+  points: number | null;
+};
+
+/**
+ * What each roster in a league actually scored, over a set of weeks.
+ *
+ * Read from `matchups` rather than summed from stat lines, which is `teamPpg`'s
+ * own argument in query form: the league already applied its scoring *and* the
+ * lineup the manager actually set when it recorded the week, so this is the one
+ * number that needs neither re-scoring nor a solve. Summing a roster's players
+ * would answer a different question — what everyone on the roster scored,
+ * including the three the manager benched.
+ *
+ * `points` is nullable because Sleeper stores a matchup row before the week is
+ * played; the average drops those rather than counting a shutout.
+ */
+export async function listRosterWeekPoints({
+  leagueId,
+  weeks,
+}: {
+  leagueId: string;
+  weeks: number[];
+}): Promise<RosterWeekPoints[]> {
+  if (weeks.length === 0) return [];
+
+  const { rows } = await pool.query<RosterWeekPoints>(
+    `SELECT roster_id, week, points
+       FROM matchups
+      WHERE league_id = $1 AND week = ANY($2::int[])`,
+    [leagueId, weeks],
+  );
+  return rows;
+}
+
+/**
+ * What each *manager* in this league's predecessor scored last season, keyed by
+ * the owner rather than by a roster id.
+ *
+ * The season rollover is why this exists: Sleeper mints a new league id every
+ * year and links it back through `previous_league_id`, and roster ids are
+ * re-issued rather than following anybody. So carrying "what did this team
+ * average" across the boundary means joining on the owner, which is the only id
+ * that survives it.
+ *
+ * It is the team-level half of the week-1 fallback — a points-per-game average
+ * counts the weeks *before* the one on screen, so in week 1 there are none and
+ * last season is the honest stand-in.
+ *
+ * An empty map is the answer for an inaugural league and for one whose previous
+ * season was never crawled. Both are honest absences and the panel draws an em
+ * dash for them, rather than a number from nowhere.
+ */
+export async function getPreviousLeagueScores(
+  leagueId: string,
+): Promise<Map<string, RosterWeekPoints[]>> {
+  const { rows } = await pool.query<{ previous_league_id: string | null }>(
+    `SELECT previous_league_id FROM leagues WHERE league_id = $1`,
+    [leagueId],
+  );
+  const previous = rows[0]?.previous_league_id;
+  // Sleeper spells "no predecessor" both ways, the same pair the crawler's own
+  // startup-draft test folds together.
+  if (!previous || previous === "0") return new Map();
+
+  const { rows: scored } = await pool.query<
+    RosterWeekPoints & { owner_id: string | null }
+  >(
+    `SELECT r.owner_id, m.roster_id, m.week, m.points
+       FROM matchups m
+       JOIN rosters r
+         ON r.league_id = m.league_id AND r.roster_id = m.roster_id
+      WHERE m.league_id = $1 AND r.owner_id IS NOT NULL`,
+    [previous],
+  );
+
+  const byOwner = new Map<string, RosterWeekPoints[]>();
+  for (const row of scored) {
+    if (!row.owner_id) continue;
+    let weeks = byOwner.get(row.owner_id);
+    if (!weeks) byOwner.set(row.owner_id, (weeks = []));
+    weeks.push({ roster_id: row.roster_id, week: row.week, points: row.points });
+  }
+  return byOwner;
 }

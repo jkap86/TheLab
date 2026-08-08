@@ -3,7 +3,8 @@ import { memo } from "react";
 import type { AdpBoardStats, AdpBoardType } from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
-import { type AdpControls, previewAdpValue } from "../../adp-controls";
+import { previewAdpValue } from "../../adp-controls";
+import type { LeagueFilters } from "../../league-filters";
 import { PositionBadge } from "../position-badge";
 import { AdpCell, ValueCell } from "./adp-board-cells";
 import { BOARD_ROW_CLASS, ADP_ROW_HEIGHT } from "./adp-drawer.constants.ts";
@@ -38,7 +39,7 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   soleDrafts,
   redraftDrafts,
   dynastyDrafts,
-  teams,
+  rules,
   steepness,
 }: {
   player: AdpPlayerPayload;
@@ -56,7 +57,8 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   soleDrafts: number | null;
   redraftDrafts: number | null;
   dynastyDrafts: number | null;
-  teams: AdpControls["teams"];
+  /** The board's league rules — what the value cell's pool is anchored to. */
+  rules: LeagueFilters;
   steepness: number;
 }) {
   // In single-board mode every kept row carries this board's entry
@@ -65,7 +67,7 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   const sole = player[soleBoard];
 
   const value = (entry: AdpBoardStats | null) =>
-    entry === null ? null : previewAdpValue(entry.adp, teams, steepness);
+    entry === null ? null : previewAdpValue(entry.adp, rules, steepness);
 
   return (
     <li

@@ -15,10 +15,16 @@
 export const lineupQueryKeys = {
   all: ["lineupchecker"] as const,
   /**
-   * This week's matchups for one account. Lower-cased for the reason the manager
+   * One week's matchups for one account. Lower-cased for the reason the manager
    * keys are: Sleeper resolves an id or a name to one account, so two spellings
    * of the same subject must not become two entries.
+   *
+   * `week` is null while the reader has stepped nowhere and the route is
+   * resolving it — a real state rather than a missing one, so it is spelled out
+   * as a segment instead of dropped. Dropping it would collide the resolved week
+   * with whichever week the reader first steps to, and stepping *back* onto the
+   * resolved week would then read a stale entry filed under a different question.
    */
-  matchups: (userId: string) =>
-    ["lineupchecker", "matchups", userId.toLowerCase()] as const,
+  matchups: (userId: string, week: number | null = null) =>
+    ["lineupchecker", "matchups", userId.toLowerCase(), week ?? "upcoming"] as const,
 };

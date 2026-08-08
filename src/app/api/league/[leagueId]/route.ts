@@ -4,6 +4,7 @@ import type {
   ApiErrorPayload,
   LeagueDetailPayload,
   LeagueRosterValues,
+  LeagueWeekViewPayload,
 } from "@/shared/contract";
 import {
   getKtcValuesBySleeperId,
@@ -25,10 +26,15 @@ import {
 } from "@/shared/manager";
 import type { AdpBoardChoices, AdpBoardType, PlayerBoardAdp } from "@/shared/manager";
 import { getPlayersByIds } from "@/shared/players";
-import { getLeagueOutlook } from "@/shared/projections";
+import { getLeagueOutlook, LAST_REGULAR_WEEK } from "@/shared/projections";
+import { integer } from "@/shared/query";
+import type { LeagueScopeBody } from "@/shared/query";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
+import { getLeagueWeekView } from "@/shared/stats";
+import type { LeagueWeekView } from "@/shared/stats";
 import { errorMessage } from "@/shared/util";
 
+import { readLeagueScope } from "../../league-scope";
 import { readFailureResponse } from "../../read-failure";
 
 export const runtime = "nodejs";
@@ -163,20 +169,44 @@ async function priceRosters(args: {
  */
 export async function GET(
   request: Request,
+  context: { params: Promise<{ leagueId: string }> },
+) {
+  return leagueDetail(request, context);
+}
+
+/**
+ * The same read, with the board's league scope in the body — see `/api/adp`'s
+ * own POST for why a read answers one at all. The rosters don't depend on the
+ * board; the panel's two value columns do, and they have to read the same board
+ * the card that opened them was priced on.
+ */
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ leagueId: string }> },
+) {
+  return leagueDetail(request, context);
+}
+
+async function leagueDetail(
+  request: Request,
   { params }: { params: Promise<{ leagueId: string }> },
 ) {
   const { leagueId } = await params;
   const searchParams = new URL(request.url).searchParams;
 
   try {
-    return await leaguePayload(leagueId, searchParams);
+    return await leaguePayload(leagueId, searchParams, await readLeagueScope(request));
   } catch (error) {
     console.error(`[league] query failed for ${leagueId}:`, error);
     return readFailureResponse(error, "Failed to load league");
   }
 }
 
-async function leaguePayload(leagueId: string, searchParams: URLSearchParams) {
+async function leaguePayload(
+  leagueId: string,
+  searchParams: URLSearchParams,
+  scope: LeagueScopeBody,
+) {
   const detail = await getLeagueDetail(leagueId);
   if (!detail) {
     const error: ApiErrorPayload = { error: "League not found" };
@@ -195,13 +225,23 @@ async function leaguePayload(leagueId: string, searchParams: URLSearchParams) {
   // unbounded board falls back to. Rejected rather than defaulted, the answer
   // `/api/adp` gives the same vocabulary — this string is one the client builds
   // from its own controls, so a 400 is a bug on that side of the wire.
-  const board = parseAdpBoardChoices(searchParams, detail.season);
+  const board = parseAdpBoardChoices(searchParams, detail.season, scope);
   if (!board.ok) return NextResponse.json({ error: board.error }, { status: 400 });
   const halvings = parseSteepness(searchParams.get(ADP_VALUE_PARAMS.steepness));
 
+  // Absent is the common case — the leagues list and the trades board open this
+  // panel on a season, not a week — so the whole week read below is skipped
+  // rather than run against a week nobody asked about.
+  const week = integer(searchParams, "week", {
+    min: 1,
+    max: LAST_REGULAR_WEEK,
+    fallback: null,
+  });
+  if (!week.ok) return NextResponse.json({ error: week.error }, { status: 400 });
+
   const playerIds = [...new Set(detail.teams.flatMap((t) => t.players))];
 
-  const [players, outlook, values] = await Promise.all([
+  const [players, outlook, values, weekView] = await Promise.all([
     getPlayersByIds(playerIds),
     // The rosters are the point of this route and the projections are a bonus on
     // top, so a projections read that fails costs the lineups, not the league.
@@ -224,6 +264,27 @@ async function leaguePayload(leagueId: string, searchParams: URLSearchParams) {
       board: board.board,
       halvings,
     }),
+    // Judged per read, like the outlook above it and for the same reason: this
+    // is two columns on top of a panel whose point is the rosters, so a week
+    // that can't be read costs the columns rather than the league. Undefined
+    // where none was asked for, which is what keeps "not requested" distinct
+    // from "requested and empty" on the wire.
+    week.value === null
+      ? Promise.resolve(undefined)
+      : getLeagueWeekView({
+          leagueId,
+          season: detail.season,
+          week: week.value,
+          teams: detail.teams,
+          rosterPositions: detail.roster_positions,
+          scoringSettings: detail.scoring_settings,
+        }).catch((error) => {
+          console.error(
+            `[league] week ${week.value} failed for ${leagueId}:`,
+            errorMessage(error),
+          );
+          return null;
+        }),
   ]);
 
   const payload: LeagueDetailPayload = {
@@ -247,7 +308,61 @@ async function leaguePayload(leagueId: string, searchParams: URLSearchParams) {
     players,
     outlook,
     values,
+    week_view: weekView === undefined ? undefined : serializeWeekView(weekView),
   };
 
   return NextResponse.json(payload);
+}
+
+/**
+ * The week view's `Map`s as JSON objects.
+ *
+ * Maps are the right shape in the domain — the keys are ids and the lookups are
+ * per row — and they serialise to `{}`, so the conversion has to be explicit.
+ * Roster ids are numbers there and become strings here, which is what JSON keys
+ * are; the client indexes with a template string rather than pretending
+ * otherwise.
+ *
+ * `ppg_source.weeks` crosses as a **count** rather than the list: what a reader
+ * needs is how much the average is out of, and each row already carries its own
+ * `games` for the case that actually varies (a player who missed two of them).
+ */
+function serializeWeekView(
+  view: LeagueWeekView | null,
+): LeagueDetailPayload["week_view"] {
+  if (!view) return null;
+
+  const projection: Record<string, number> = {};
+  for (const [id, points] of view.projection) projection[id] = points;
+
+  const ppg: Record<string, { average: number; games: number }> = {};
+  for (const [id, reading] of view.ppg) {
+    ppg[id] = { average: reading.average, games: reading.games };
+  }
+
+  const team_projection: LeagueWeekViewPayload["team_projection"] = {};
+  for (const [rosterId, lineup] of view.team_projection) {
+    team_projection[String(rosterId)] = lineup;
+  }
+
+  const team_ppg: LeagueWeekViewPayload["team_ppg"] = {};
+  for (const [rosterId, reading] of view.team_ppg) {
+    team_ppg[String(rosterId)] = {
+      average: reading.average,
+      games: reading.games,
+    };
+  }
+
+  return {
+    week: view.week,
+    ppg_source: {
+      season: view.ppg_source.season,
+      weeks: view.ppg_source.weeks.length,
+      prior: view.ppg_source.prior,
+    },
+    projection,
+    ppg,
+    team_projection,
+    team_ppg,
+  };
 }

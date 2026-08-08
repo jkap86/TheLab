@@ -1,6 +1,6 @@
 import type { AdpBoardType, ManagerLeague } from "@/shared/manager";
 
-import { LIVE_STATUSES, SLOT_GROUP_BY_KEY } from "./defaults.ts";
+import { LIVE_STATUSES, SIZE_KEY_BY_KEY, SLOT_GROUP_BY_KEY } from "./defaults.ts";
 import type { CompareOp, FilterRule, LeagueFilters } from "./types.ts";
 
 /**
@@ -84,6 +84,25 @@ export function scoringValue(
   return typeof value === "number" ? value : 0;
 }
 
+/**
+ * How big a league is on one size key, or null when it can't be known.
+ *
+ * Null for a key this build doesn't have a reader for, on the terms the other
+ * two follow: a rule naming something we cannot evaluate *fails* rather than
+ * passing on an assumed number, so a stored rule from a later build narrows to
+ * nothing here rather than quietly narrowing to everything.
+ *
+ * Zero is also unknown rather than a real size. Sleeper always reports
+ * `total_rosters` for a live league, so a 0 is a row this app stored before the
+ * league answered — and `teams < 10` sweeping in every such league is exactly
+ * the `k = 0` trap `slotCount` keeps null for.
+ */
+export function sizeValue(league: ManagerLeague, key: string): number | null {
+  if (!SIZE_KEY_BY_KEY.has(key)) return null;
+  const teams = league.total_rosters;
+  return typeof teams === "number" && teams > 0 ? teams : null;
+}
+
 /** Whether a league's lineup satisfies one slot rule. */
 export function matchesSlotRule(
   league: ManagerLeague,
@@ -99,6 +118,15 @@ export function matchesScoringRule(
   rule: FilterRule,
 ): boolean {
   const value = scoringValue(league, rule.key);
+  return value !== null && compare(value, rule.op, rule.value);
+}
+
+/** Whether a league's size satisfies one size rule. */
+export function matchesSizeRule(
+  league: ManagerLeague,
+  rule: FilterRule,
+): boolean {
+  const value = sizeValue(league, rule.key);
   return value !== null && compare(value, rule.op, rule.value);
 }
 
@@ -217,6 +245,15 @@ export function matchesFilters(
   // Every rule narrows — the lists are an AND, like the fixed filters above them.
   // An OR would need a rule to say which group it joins, and "dynasty leagues
   // that start two QBs" is the question people actually arrive with.
+  //
+  // Size leads the two blob rules for the reason the fixed filters lead all
+  // three: it is a bare field read, where the others walk `roster_positions` and
+  // `scoring_settings`. Over a whole season's leagues — which is what the trades
+  // board and the ADP board both run this over — a league rejected on its size
+  // never touches its lineup.
+  for (const rule of filters.size) {
+    if (!matchesSizeRule(league, rule)) return false;
+  }
   for (const rule of filters.slots) {
     if (!matchesSlotRule(league, rule)) return false;
   }

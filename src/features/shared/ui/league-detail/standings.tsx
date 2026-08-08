@@ -11,6 +11,7 @@ import type {
   LeagueOutlook,
   LeagueRosterValues,
   LeagueTeamView,
+  LeagueWeekView,
   TeamOutlook,
 } from "./types";
 
@@ -90,6 +91,7 @@ export function Standings({
   teams,
   outlook,
   values,
+  weekView,
   selectedId,
   onSelect,
   columns,
@@ -99,6 +101,8 @@ export function Standings({
   outlook: LeagueOutlook | null;
   /** Per-player KTC and ADP values on this league's board, summed per team here. */
   values: LeagueRosterValues;
+  /** The week's numbers, or null on a panel opened on a season — see {@link LeagueWeekView}. */
+  weekView: LeagueWeekView;
   selectedId: number;
   onSelect: (rosterId: number) => void;
   /** The metric key each of the two value columns shows. */
@@ -107,23 +111,29 @@ export function Standings({
   onOpenColumn: (slot: number) => void;
 }) {
   // Per-team outlook, so a metric can read any of its totals. Absent (rather than
-  // an empty object) when the league has no projections at all, which is what
-  // gates the value columns off entirely.
+  // an empty object) when the league has no projections at all.
   const outlookByRoster = outlook
     ? new Map(outlook.teams.map((t) => [t.roster_id, t]))
     : null;
+
+  // What gates the value columns off entirely: a league with nothing to put in
+  // them. It is **either** source, not the outlook alone — a panel opened on a
+  // week has numbers whether or not the rest of the season could be projected,
+  // and gating on the outlook would blank the two columns that panel exists for
+  // in exactly the league whose horizon is empty.
+  const hasNumbers = outlookByRoster !== null || weekView !== null;
 
   // Written out rather than assembled, so Tailwind sees every class string whole.
   // No rank track in either: the rank is a tab on the row's corner now, so what
   // is left is the name/meta column and the two value tracks — measured against
   // the widest string each has to hold (see the note above), not rounded.
-  const grid = outlookByRoster
+  const grid = hasNumbers
     ? "grid-cols-[minmax(0,1fr)_2.625rem_2.625rem] " +
       "@sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem] " +
       "@lg:grid-cols-[minmax(0,1fr)_4rem_4rem] " +
       "@xl:grid-cols-[minmax(0,1fr)_5rem_5rem]"
     : "grid-cols-[minmax(0,1fr)]";
-  const nameSpan = outlookByRoster ? "col-span-3" : "col-span-1";
+  const nameSpan = hasNumbers ? "col-span-3" : "col-span-1";
 
   // The rail sits on the rows' own inset, or a heading lands a pixel or two off
   // the number under it and the table reads as misaligned. Its *trailing* side
@@ -155,12 +165,12 @@ export function Standings({
             its caption at every width. */}
         <span
           className={`truncate uppercase tracking-wide ${
-            outlookByRoster ? "invisible @lg:visible" : ""
+            hasNumbers ? "invisible @lg:visible" : ""
           }`}
         >
           Manager
         </span>
-        {outlookByRoster &&
+        {hasNumbers &&
           columns.map((key, slot) => (
             <ColumnHeading
               key={slot}
@@ -196,25 +206,78 @@ export function Standings({
             rank={i + 1}
             grid={grid}
             nameSpan={nameSpan}
-            columns={outlookByRoster ? columns : null}
+            columns={hasNumbers ? columns : null}
             teamOutlook={outlookByRoster?.get(team.roster_id)}
             values={values}
+            weekView={weekView}
             active={team.roster_id === selectedId}
             onSelect={() => onSelect(team.roster_id)}
           />
         ))}
       </ul>
-      {outlook && (
-        // The horizon travels with the number, as it does on the roster panel:
-        // "rest of season" is however many weeks are actually stored, and a total
-        // over three weeks next to one over eighteen is a different claim.
-        <p className="shrink-0 px-1 pb-0.5 pt-2 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-2">
-          Projected over the rest of the season · {formatWeekRange(outlook.weeks)}
-        </p>
-      )}
+      <StandingsFootnote outlook={outlook} weekView={weekView} columns={columns} />
     </div>
   );
 }
+
+/**
+ * The dim line under the table saying what its two numbers are over.
+ *
+ * **It names the columns actually selected, not the payload that arrived.** A
+ * panel opened on a week can still have a rest-of-season column aimed at it (the
+ * catalogue is one catalogue), and a footer that announced a week under a column
+ * of season totals would be the one kind of caption worse than none. So the week
+ * line shows only where a week column is on screen, and everything else falls
+ * through to the horizon line exactly as before — which is what keeps a panel
+ * opened on a season byte-for-byte unchanged.
+ *
+ * The season the average came from is the half worth spelling out: in week 1 it
+ * is *last* year's form sitting in the same units as the projection beside it,
+ * and a column that didn't say so would be quoting two seasons as one.
+ */
+function StandingsFootnote({
+  outlook,
+  weekView,
+  columns,
+}: {
+  outlook: LeagueOutlook | null;
+  weekView: LeagueWeekView;
+  columns: string[];
+}) {
+  const showsWeek =
+    weekView !== null && columns.some((key) => WEEK_METRIC_KEYS.has(key));
+
+  const className =
+    "shrink-0 px-1 pb-0.5 pt-2 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-2";
+
+  if (showsWeek) {
+    const { week, ppg_source: source } = weekView;
+    return (
+      <p className={className}>
+        Week {week} · points per game{" "}
+        {source.prior
+          ? `over the ${source.season} season`
+          : source.weeks > 0
+            ? `over ${source.weeks} completed week${source.weeks === 1 ? "" : "s"}`
+            : "unavailable — no completed weeks stored"}
+      </p>
+    );
+  }
+
+  if (!outlook) return null;
+
+  // The horizon travels with the number, as it does on the roster panel: "rest
+  // of season" is however many weeks are actually stored, and a total over three
+  // weeks next to one over eighteen is a different claim.
+  return (
+    <p className={className}>
+      Projected over the rest of the season · {formatWeekRange(outlook.weeks)}
+    </p>
+  );
+}
+
+/** The catalogue's week-grain keys, for deciding which footnote the table wants. */
+const WEEK_METRIC_KEYS = new Set(["week_proj", "ppg"]);
 
 function StandingsRow({
   team,
@@ -224,6 +287,7 @@ function StandingsRow({
   columns,
   teamOutlook,
   values,
+  weekView,
   active,
   onSelect,
 }: {
@@ -241,6 +305,8 @@ function StandingsRow({
   teamOutlook: TeamOutlook | undefined;
   /** Per-player KTC and ADP values, summed to this roster's totals for those metrics. */
   values: LeagueRosterValues;
+  /** The week's numbers, or null on a panel opened on a season. */
+  weekView: LeagueWeekView;
   active: boolean;
   onSelect: () => void;
 }) {
@@ -335,6 +401,12 @@ function StandingsRow({
             adpTotal,
             superflex: values.superflex,
             draftCount: values.adp_draft_count,
+            week: weekView?.week ?? null,
+            // Roster ids are numbers here and JSON keys there, so the lookup is
+            // by template string rather than pretending the map is numeric.
+            weekProjection: weekView?.team_projection[`${team.roster_id}`] ?? null,
+            ppg: weekView?.team_ppg[`${team.roster_id}`] ?? null,
+            ppgSource: weekView?.ppg_source ?? null,
           });
           return (
             <span

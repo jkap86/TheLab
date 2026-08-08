@@ -37,7 +37,7 @@
  *   key that dropped the segment would let one overwrite the other.
  */
 
-import { fetchJson } from "./api.ts";
+import { fetchJson, fetchScoped } from "./api.ts";
 import { normalizeAdpQuery } from "./adp-query.ts";
 
 /** A season segment, with the caller's omission spelled out rather than dropped. */
@@ -186,9 +186,30 @@ export function fetchManagerResource<T>(
   fallbackError: string,
   signal?: AbortSignal,
   userId?: string | null,
+  /**
+   * The ADP valuation's own request, where the board's league rules resolved to
+   * more ids than a request line can carry.
+   *
+   * Only that one resource has one, which is why it is the last argument rather
+   * than the shape of every read here: the other four are pure Postgres reads
+   * keyed on a user id and have nothing long to send. Given one, the query
+   * string is the request's — `path` carries only the resource name — and the
+   * method follows the body, so the route parses one query either way.
+   */
+  scoped?: { method: "GET" | "POST"; search: URLSearchParams; body: unknown } | null,
 ): Promise<T> {
-  // `path` already carries a query string for the ADP valuation, which is why
-  // the separator is chosen rather than assumed.
+  if (scoped) {
+    const search = new URLSearchParams(scoped.search);
+    if (userId) search.set("user_id", userId);
+    return fetchScoped<T>(
+      `/api/user/${encodeURIComponent(searched)}/${path}`,
+      { ...scoped, search },
+      fallbackError,
+      signal,
+    );
+  }
+  // `path` already carries a query string for some callers, which is why the
+  // separator is chosen rather than assumed.
   const hint = userId
     ? `${path.includes("?") ? "&" : "?"}user_id=${encodeURIComponent(userId)}`
     : "";

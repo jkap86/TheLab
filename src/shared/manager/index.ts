@@ -28,6 +28,7 @@ export type { CrawlCandidate, CrawlClock, CrawlPriority } from "./crawl-priority
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
   LEAGUE_COLUMNS_SQL,
+  getAdpLeagues,
   toManagerLeague,
   getLeagueDetail,
   getLeagueAdpBoards,
@@ -40,8 +41,10 @@ export {
   getManagerMatchups,
   getManagerRosters,
   getManagerSyncedAt,
+  getPreviousLeagueScores,
+  listRosterWeekPoints,
 } from "./queries";
-export type { LeagueRow } from "./queries";
+export type { LeagueRow, RosterWeekPoints } from "./queries";
 export type {
   LeagueDetail,
   Leaguemate,
@@ -73,7 +76,13 @@ export {
   toUserInfo,
 } from "./resolve";
 export type { ResolvedManager, ResolvedManagerId } from "./resolve";
-export { getDraftAdp, getDraftAdpForPlayers, getDraftDensity } from "./adp";
+export {
+  DYNASTY_LEAGUE_TYPE,
+  LEAGUE_TYPE_SQL,
+  getDraftAdp,
+  getDraftAdpForPlayers,
+  getDraftDensity,
+} from "./adp";
 export type {
   AdpBoardStats,
   AdpResult,

@@ -106,24 +106,25 @@ export function tabWrap(
  * What a keypress means while the drawer is open. `null` is every other key,
  * which the drawer has no opinion about.
  *
- * Escape's two answers are the reason this takes `panelOpen` at all: **Escape
- * closes the innermost thing that is up**, so a filter tray floating over the
- * board goes first and the drawer survives the press. Without it one keystroke
- * takes both.
+ * **Escape means the drawer, and nothing nearer.** It used to have two answers,
+ * because the drawer held a filter tray floating over its own board and Escape
+ * has to close the innermost thing that is up. That tray is the shared
+ * league-filters dialog now — a real `<dialog>`, in the top layer, which hears
+ * Escape itself and never lets the press reach this listener — so the inner case
+ * is the platform's and this is left with one. It is the same apparatus the
+ * columns editor retired for the same reason, one tool over: a `<dialog>`
+ * arrives with the focus trap, the inertness and the innermost-first Escape
+ * already written.
  */
 export type DrawerKeyAction =
-  | { readonly type: "close-panel" }
   | { readonly type: "close-drawer" }
   | { readonly type: "trap-tab"; readonly backwards: boolean };
 
 export function drawerKeyAction(
   key: string,
   shiftKey: boolean,
-  panelOpen: boolean,
 ): DrawerKeyAction | null {
-  if (key === "Escape") {
-    return panelOpen ? { type: "close-panel" } : { type: "close-drawer" };
-  }
+  if (key === "Escape") return { type: "close-drawer" };
   if (key === "Tab") return { type: "trap-tab", backwards: shiftKey };
   return null;
 }
@@ -140,9 +141,9 @@ export type DrawerKeyEvent = {
  *
  * Its dependencies are thunks rather than values because **every one of them is
  * read at press time, not at wiring time**. The listener is attached once per
- * open, and between two presses the reader can open the filter tray (six more
- * stops) or move focus anywhere at all — so a handler closing over a snapshot
- * would trap them outside the control they had just opened. That is also what
+ * open, and between two presses the reader can move focus anywhere at all, or
+ * the board's rows can change under them — so a handler closing over a snapshot
+ * would trap them outside a control that has since arrived. That is also what
  * keeps the effect keyed on `open` alone: nothing here has to be rebuilt when
  * the drawer's contents change.
  */
@@ -153,15 +154,11 @@ export function drawerKeydownHandler<T extends { focus: () => void }>(deps: {
   activeElement: () => T | null;
   /** The dialog panel itself — the fallback when it holds no stops. */
   focusContainer: () => void;
-  /** Whether a floating panel is up, which is what Escape asks. */
-  panelOpen: () => boolean;
-  closePanel: () => void;
   closeDrawer: () => void;
 }): (event: DrawerKeyEvent) => void {
   return (event) => {
-    const action = drawerKeyAction(event.key, event.shiftKey, deps.panelOpen());
+    const action = drawerKeyAction(event.key, event.shiftKey);
     if (action === null) return;
-    if (action.type === "close-panel") return deps.closePanel();
     if (action.type === "close-drawer") return deps.closeDrawer();
 
     const stops = deps.stops();

@@ -24,6 +24,7 @@ import { useManagerMatchups } from "../hooks/use-manager-matchups";
 import { projectedRecord } from "../projected-record";
 import { LineupCard } from "./lineup-card";
 import { LineupStatHeadings } from "./lineup-columns";
+import { WeekStepper } from "./week-stepper";
 
 /**
  * The lineup checker: every league this account plays in, who each one is playing
@@ -71,8 +72,23 @@ import { LineupStatHeadings } from "./lineup-columns";
 export function LineupCheckerHome() {
   const user = useStoredAccount();
   const view = useLineupView(user);
+
+  /**
+   * Which week the page is reading, or null to take the one the schedule points
+   * at.
+   *
+   * Null is the opening state and a real one rather than a missing value: the
+   * route resolves the upcoming week off stored game dates, which this page has
+   * no way to derive for itself, and the answer travels back on the payload. So
+   * the *displayed* week is always read off `matchups.data`, and this state is
+   * only ever "the reader has stepped somewhere". Stepping from null therefore
+   * steps from the week that actually arrived, which is what makes the first
+   * press land where a reader expects.
+   */
+  const [steppedWeek, setSteppedWeek] = useState<number | null>(null);
+
   // Null until an account is stored, which is this hook's idle state — no fetch.
-  const matchups = useManagerMatchups(user?.user_id ?? null);
+  const matchups = useManagerMatchups(user?.user_id ?? null, steppedWeek);
 
   /**
    * Which league is open, if any.
@@ -177,7 +193,16 @@ export function LineupCheckerHome() {
           up its fade there, since an open card pins flush against it. */}
       {all.length > 0 && (
         <>
-          <SubjectRail view={view} />
+          <SubjectRail
+            view={view}
+            // Ahead of both of the rail's own questions, which is the order the
+            // three narrowings are applied in and the order the plate's scope
+            // line names them. The week travels back from the payload rather
+            // than out of `steppedWeek`, so the control shows the week actually
+            // answered for — including the one the route resolved before the
+            // reader had stepped anywhere.
+            leading={<WeekStepper week={week} onChange={setSteppedWeek} />}
+          />
           {/* No rows is no billet: a heading rail with nothing to head is a lit
               face saying nothing, and the rail above it is where a reader who
               narrowed to zero goes to get back. */}

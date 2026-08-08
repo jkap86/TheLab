@@ -1,6 +1,6 @@
 import type { AdpBoardType } from "@/shared/manager";
 
-import type { AdpControls } from "../../adp-controls";
+import type { LeagueFilters } from "../../league-filters";
 import {
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
@@ -28,7 +28,7 @@ export function AdpBoardHeader({
   soleDrafts,
   redraftDrafts,
   dynastyDrafts,
-  teams,
+  rules,
   refreshing = false,
   onToggleBoard,
 }: {
@@ -38,7 +38,8 @@ export function AdpBoardHeader({
   soleDrafts: number | null;
   redraftDrafts: number | null;
   dynastyDrafts: number | null;
-  teams: AdpControls["teams"];
+  /** The board's league rules — the value headings' premise reads its size. */
+  rules: LeagueFilters;
   /**
    * The rows under this head belong to a previous filter set still on screen
    * while the new board loads. Said here, in the one part of the list that
@@ -89,10 +90,10 @@ export function AdpBoardHeader({
           <span className="text-right" title={boardTitle("dynasty", dynastyDrafts)}>
             ADP D
           </span>
-          <span className="hidden text-right @md:block" title={valueTitle(teams)}>
+          <span className="hidden text-right @md:block" title={valueTitle(rules)}>
             Val R
           </span>
-          <span className="hidden text-right @md:block" title={valueTitle(teams)}>
+          <span className="hidden text-right @md:block" title={valueTitle(rules)}>
             Val D
           </span>
         </div>
@@ -110,7 +111,7 @@ export function AdpBoardHeader({
           <span className="text-right" title={takenTitle(soleBoard)}>
             Taken
           </span>
-          <span className="text-right" title={valueTitle(teams)}>
+          <span className="text-right" title={valueTitle(rules)}>
             Value
           </span>
         </div>

@@ -11,8 +11,40 @@ import type { FilterRule } from "../../league-filters";
  * so it is erased entirely from the dialog's chunk.
  */
 
-/** Which of the three fixed filters a row edits — the open-state's identity. */
-export type SegmentKey = "status" | "type" | "format";
+/**
+ * Which fixed filter a row edits — the open-state's identity.
+ *
+ * `extra` is the caller's own row (see {@link ExtraSegment}), which is a fourth
+ * identity rather than a second mechanism: one row floats at a time, and a slot
+ * the dialog didn't name would be a row that couldn't take part in that.
+ */
+export type SegmentKey = "status" | "type" | "format" | "extra";
+
+/**
+ * A fourth segment row the caller owns, drafted and applied with the filters.
+ *
+ * **One caller has one**, and it is worth reading as the exception it is: the ADP
+ * board's filters *are* the league filters now, and the one thing left over is
+ * what kind of draft to average — startup or rookie — which is a fact about the
+ * room rather than about the league, so it has no business in `LeagueFilters`
+ * where the manager tabs and the trades board would inherit a control that means
+ * nothing to them. Seating it here instead of beside the trigger is what makes
+ * the board's filters one dialog rather than a dialog and a stray chip.
+ *
+ * It rides the dialog's own draft/apply contract rather than committing live:
+ * `value` seeds a draft on open, the row edits that draft, and `onApply` is
+ * called beside `onChange` when Apply is pressed. Reset returns it to
+ * `defaultValue`. Half-committing it would be the one control in the panel that
+ * moved the board while the counts beside it were being read.
+ */
+export type ExtraSegment = {
+  label: string;
+  options: readonly { value: string; label: string }[];
+  value: string;
+  /** What Reset puts it back to — the caller's default, not necessarily the first option. */
+  defaultValue: string;
+  onApply: (value: string) => void;
+};
 
 /**
  * One entry in a rule row's key menu.

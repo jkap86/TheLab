@@ -1,7 +1,8 @@
 import { ktcPickBoardRows } from "../../shared/ktc/picks.ts";
 import type { KtcPickPrice } from "../../shared/ktc/picks.ts";
 import { adpBoardRows } from "./adp-controls.ts";
-import type { AdpControls, AdpShownBoards } from "./adp-controls.ts";
+import type { AdpShownBoards } from "./adp-controls.ts";
+import type { LeagueFilters } from "./league-filters/types.ts";
 import { pickAdpStand, pickLabel, rookieLadder } from "./pick-value.ts";
 import type { AdpPlayerPayload } from "@/shared/contract";
 import type { AdpBoardType } from "@/shared/manager";
@@ -336,13 +337,26 @@ function compareEntries(
 /**
  * Which of KTC's boards the drawer's discount ratio is read on.
  *
- * A board narrowed to 1QB drafts reads the 1QB board; everything else reads
- * superflex, which is what the crawled corpus overwhelmingly is. It matters far
- * less here than it does for a roster — this is a *ratio* between two rows of
- * one board, and the two boards move a future first by a few percent where they
- * move a quarterback's price by a third — but reading the one the reader has
- * asked for costs nothing.
+ * A board whose league rules ask for one starting quarterback reads KTC's 1QB
+ * board; everything else reads superflex, which is what the crawled corpus
+ * overwhelmingly is. It matters far less here than it does for a roster — this
+ * is a *ratio* between two rows of one board, and the two boards move a future
+ * first by a few percent where they move a quarterback's price by a third — but
+ * reading the one the reader has asked for costs nothing.
+ *
+ * It reads the rules rather than the retired superflex chip, and it reads them
+ * through {@link slotCount}'s own group so the question is the one
+ * `isSuperflexLineup` asks: a rule that *caps* QB-eligible slots at one is a 1QB
+ * board, and everything else — including no rule at all, and including
+ * `qb+sf ≥ 2` — is superflex. The asymmetry is deliberate and matches what the
+ * chip did: "all" meant superflex, because an unnarrowed corpus is one.
  */
-export function pickDiscountBoard(superflex: AdpControls["superflex"]): boolean {
-  return superflex !== "no";
+export function pickDiscountBoard(leagues: LeagueFilters): boolean {
+  return !leagues.slots.some(
+    (rule) =>
+      rule.key === "QB+SF" &&
+      ((rule.op === "eq" && rule.value <= 1) ||
+        (rule.op === "lte" && rule.value <= 1) ||
+        (rule.op === "lt" && rule.value <= 2)),
+  );
 }

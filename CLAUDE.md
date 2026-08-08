@@ -45,8 +45,9 @@ src/shared/    Domain logic, one folder per concern.
   to *that* module and call it — don't write SQL against a table your module
   doesn't own. (`ktc/match` used to query `players` directly; it doesn't now.)
 - **A cache-backed route reads and nothing else.** `/api/projections`,
-  `/api/league/[leagueId]`, `/api/adp`, `/api/adp/density` and the three
-  `/api/trades*` routes answer from what the background syncs have stored; a slice that hasn't been synced comes back empty
+  `/api/league/[leagueId]`, `/api/adp`, `/api/adp/density`, `/api/adp/leagues`
+  and the three `/api/trades*` routes answer from what the background syncs have
+  stored; a slice that hasn't been synced comes back empty
   rather than fetched on demand. (`/api/user/[username]`, `…/leagues` and
   `/api/picktracker/[leagueId]` are the deliberate exceptions — resolving a
   manager and syncing their leagues is what the user routes are *for*, which is
@@ -655,8 +656,8 @@ keep from coming back:
 
 | File | Side | Job |
 | --- | --- | --- |
-| `shared/manager/adp-filters.ts` | server | validates `/api/adp`'s query string |
-| `features/shared/adp-controls.ts` | client, pure | *builds* that query string, resolves the date range, seeds it from a league |
+| `shared/manager/adp-filters.ts` | server | validates `/api/adp`'s query string, and the league ids off a POST body |
+| `features/shared/adp-controls.ts` | client, pure | *builds* that request, resolves the date range, seeds the league rules from a league |
 | `features/shared/ui/adp-drawer.tsx` | client, UI | the drawer that drives the controls |
 
 **The two client files are in `features/shared` and not `features/manager`,
@@ -673,17 +674,27 @@ did **not** move: it is the server half, and it was already outside the
 feature.
 
 The two ends are a matched pair with no compiler link between them — the client
-writes the vocabulary the server parses (the scoring buckets, the auction
-exclusion, the `start_after`/`start_before` dates), so a value
-added on one side and not the other fails as an ignored parameter rather than a
-type error. The league type left that vocabulary entirely: every `/api/adp`
-answer now carries the redraft and dynasty boards side by side and the display
-chooses, so there is no `league_type` parameter for the two ends to disagree on
-— see the drawer's board keys below for the shape of that. `adp-controls` derives
-its scoring bucket to mirror the endpoint's own `SCORING_SQL` for that reason:
-seeding a filter from a league has to land on the bucket that league would
-actually be counted in, or "match a league" quietly returns a board the league
-isn't in.
+writes the vocabulary the server parses (the auction exclusion, the
+`start_after`/`start_before` dates, the two league-id lists), so a value added on
+one side and not the other fails as an ignored parameter rather than a type
+error. The league type left that vocabulary entirely: every `/api/adp` answer now
+carries the redraft and dynasty boards side by side and the display chooses, so
+there is no `league_type` parameter for the two ends to disagree on — see the
+drawer's board keys below for the shape of that.
+
+**The board's league filters left it too, and in the other direction.** Scoring,
+superflex, best ball and size were four parameters the client wrote and the
+server parsed; they are the shared league *rules* now, which are a predicate
+engine over Sleeper's blobs and cannot be re-implemented in SQL without drifting
+silently. So the browser evaluates them over `/api/adp/leagues` — every league
+with a draft the board could average, the trades board's own arrangement for the
+same reason — and sends the answer as `league_id`/`xleague_id`. The server's four
+parameters survive because `adpBoardFor` still matches `scoring` and `superflex`
+*per league*; nothing on the client writes them any more. `adp-controls` still
+derives the scoring bucket to mirror `SCORING_SQL`, and it is now what
+`seedFromLeague` writes its `rec` rules as: seeding from a league has to land on
+the population that league would actually be counted in, or "match a league"
+quietly returns a board of a dozen drafts.
 
 `projections/filters` follows it. The `list`/`integer`/`enumList` primitives
 both filter modules use live once, in `shared/query` — a pure module they import
@@ -818,7 +829,9 @@ narrows on an *attribute* (`QB+SF ≥ 2`, `rec = 0.5`), and the question people
 arrive with is "dynasty leagues that start two QBs" — every rule narrowing. An OR
 there would additionally need each rule to say which group it joins, which is a
 control nobody asked for. Adding a mode to the league rules is not the small
-symmetry it looks like.
+symmetry it looks like — and the AND is load-bearing rather than merely
+sufficient: a size *band* is two rules on one key, which is only a band because
+they narrow together.
 
 Validation earns its keep when a value reaches SQL as anything but a bound
 parameter. `scoring` picks the column `projections/queries` interpolates into
@@ -1752,6 +1765,15 @@ stops holding, a comment saying it does would not have caught it.
     keyset cursor, the SQL and the counts are byte-for-byte the GET's, so the two
     methods cannot answer differently. The cache key still inlines the ids —
     two league sets that differ are two boards whatever transport carried them.
+    **All of that is shared now, because the ADP board is the second reader of
+    the same idea.** `resolveLeagueScope`, `MAX_LEAGUE_IDS` and the body's shape
+    are `features/shared/league-scope` (this module re-exports them, the mover's
+    usual habit) and the body parser is `shared/query`'s `parseLeagueScopeBody`,
+    which `parseTradeScopeBody` is now a name for: the body is JSON this app
+    writes and this app reads, so two shape checks would be two chances to be
+    wrong about the dedupe, the id pattern or the cap. What is *not* shared is
+    the query-string spelling — `/api/trades` reads `leagues`/`xleagues` and
+    `/api/adp` reads `league_id`/`xleague_id`, each its own route's vocabulary.
   - **The client's residual filter is three-state** (`features/trades/incremental`,
     pure and tested). With every narrowing in SQL there is nothing left for it to
     deny; what keeps it is that a page which admits everything hands the previous
@@ -1995,7 +2017,7 @@ stops holding, a comment saying it does would not have caught it.
     could cut the market to 2024 startups, or to 10-team half-PPR drafts, or
     flatten the value curve, and every card under it went on quoting one
     national dynasty board — the same two-answers-to-one-question that moved the
-    manager tool's team value onto `adpValueQueryString`, arriving on the page
+    manager tool's team value onto `adpValueRead`, arriving on the page
     whose whole premise is that it spans leagues playing different games. So the
     season, the window, the draft kind, the size, the format *and* the steepness
     reach these numbers, and the panel's slider reprices the board rather than
@@ -2495,14 +2517,18 @@ stops holding, a comment saying it does would not have caught it.
   the manager, the other about the market, and they are only adjacent on screen —
   a dynasty filter on the header means "count my dynasty leagues", the same word
   in the drawer means "average dynasty drafts, including strangers'". They stay
-  independent for that reason. Both are now provided from the same place —
+  independent for that reason. **That rule got harder to keep and no less true
+  when the two became the same *control***: `AdpControls.leagueRules` is a
+  `LeagueFilters`, edited in the same dialog, and it is still a different
+  selection over a different population. Two stores, one control definition — the
+  reverse of the arrangement above it, where one store drives one control. Both are now provided from the same place —
   `AdpControlsProvider` sits beside `LeagueFiltersProvider` in the manager layout,
   reset per manager by the same subtree key — because the ADP controls stopped
   being a Players-tab thing: they drive that tab's per-player ADP *and* the
   Leagues tab's team value, so a board chosen on one tab has to survive the trip
   to the other. It used to be only the *steepness* that reached the Leagues tab,
   which was the smaller half of that and left the drawer able to say one thing
-  while the cards under it said another — see `adpValueQueryString`.
+  while the cards under it said another — see `adpValueRead`.
 
   **The provider is per *tool*, not per app, and two other pages mount their
   own.** The trades page reads the same board (`app/trades/page.tsx` wraps
@@ -2518,12 +2544,23 @@ stops holding, a comment saying it does would not have caught it.
   sheet.) The temptation is to hoist one provider
   to the root layout so a board chosen anywhere follows you everywhere. That is
   wrong for the reason the two filter sets above are wrong to merge: what the two
-  boards *mean* differs. The manager drawer's size options are the sizes you
-  play and its "Match a league…" seeds from a league you play in; the trades
-  drawer has no account to read, draws no seed control at all (see below), and
-  reads its sizes off the whole crawled corpus. A shared selection would carry a
-  board seeded from one manager's league onto a page that is about nobody. Two
-  providers, one store definition.
+  boards *mean* differs. The manager drawer's "Match a league…" seeds from a
+  league you play in; the trades drawer has no account to read and draws no seed
+  control at all (see below). A shared selection would carry a board seeded from
+  one manager's league onto a page that is about nobody. Two providers, one store
+  definition.
+
+  **The provider resolves the league rules as well as holding them**, which is
+  the one thing in it that is not simply state: the rules are a browser-side
+  predicate engine and what the routes take is their answer, so somebody has to
+  run them — and it has to be *one* somebody, or the four reads priced off this
+  board (the board itself, the Players tab's column, the cards' team value and
+  the panel's two value columns) would be narrowed four ways. It also means the
+  league list they run over is fetched exactly when a rule is set rather than on
+  every page load; the drawer asks for the same entry whenever it is *open*, for
+  the dialog's own counts, so the two gates are one request. With nothing in hand
+  the scope is `all` rather than "no league matched" — a board that has not yet
+  been narrowed reads as unnarrowed rather than as empty.
 
   Unlike the league filters, whose
   provider holds a selection from the start, `AdpControls` used to open as
@@ -2610,18 +2647,45 @@ stops holding, a comment saying it does would not have caught it.
   Two things inside the
   drawer are load-bearing. The controls are **pinned** and only the board scrolls:
   the point of the shape is that changing a filter and watching the ADP move is one
-  glance, which a stacked panel loses by pushing the board below the fold. And the
-  filters are chips (`ChipSelect` — a real `<select>` under the styling, so
-  keyboard and touch come free) rather than eight labelled rows, because the pinned
-  block has to stay short enough to leave the board room. **A chip asks the
-  question, not the column behind it**: the draft-kind chip is `rounds` under
-  "All drafts / Startup / Rookie", because the round count is the evidence and
-  what kind of draft it was is what a reader wants — it replaced a
-  snake/linear/auction chip in that slot, which named how a room picked rather
-  than what market it priced, and left the startup-against-rookie cut spelled out
-  as `≤5 rds` in a second chip.
+  glance, which a stacked panel loses by pushing the board below the fold. And
+  the board's league filters **are the league filters** — the same
+  `LeagueFiltersModal` the manager tabs and the trades board open, behind one key
+  on that pinned row.
 
-  **That chip is the one filter the board *opens* narrowed
+  **They were four chips of the drawer's own — scoring, superflex, best ball and
+  league size — and each already had an exact equivalent in the rule vocabulary.**
+  `qb+sf ≥ 2` *is* `isSuperflexLineup`; the size chip is `teams = 12`; the
+  reception buckets are what `SCORING_PRESETS` writes. What the chips could not
+  express is everything else a reader arrives at a board with — "average the
+  drafts of leagues that start a linebacker", "half PPR with a TE bonus over half
+  a point" — so the weaker of two filter languages a few pixels apart was the
+  thing to fix, not the row's height. **League size joined the shared rules to
+  make that swap whole** (`LeagueFilters.size`, a third `RuleBay`): it is a fact
+  about a league like every other rule there, so the manager tabs and the trades
+  board read it too rather than it being a filter one page knows about. A rule
+  rather than a chip because a chip can only ask for an exact count, where "at
+  least ten teams" is the question a reader arrives with as often — and a *band*
+  is two rules, which is one of the things the lists being an AND is for.
+
+  **The one control left over is the draft kind, and it is seated inside that
+  dialog rather than beside it** (`ExtraSegment`, `ROUNDS_SEGMENT`). How many
+  rounds a room ran is a fact about the room, not about the league, so it has no
+  business in `LeagueFilters` where two other pages would inherit a filter that
+  means nothing to them; and a dialog plus a stray chip is the arrangement this
+  replaced. It rides the dialog's own draft/apply contract — seeded on open,
+  applied beside `onChange` — rather than committing live, or it would be the one
+  control in the panel moving the board while the counts beside it were being
+  read. It carries **no per-option counts**, unlike the three rows above it: it
+  cuts drafts *inside* a league rather than leagues, so every option would show
+  the identical league count and that number would be about something the row
+  does not narrow (`SegmentRow`'s `probe` is optional for exactly this).
+  **A chip asks the question, not the column behind it** still, and this one is
+  `rounds` under "All drafts / Startup / Rookie": the round count is the evidence
+  and what kind of draft it was is what a reader wants. It replaced a
+  snake/linear/auction chip in that slot, which named how a room picked rather
+  than what market it priced.
+
+  **That row is the one filter the board *opens* narrowed
   (`DEFAULT_ADP_ROUNDS`), and "unnarrowed" was the wrong default because the
   population is two games.** It used to open on "All drafts", on the reasoning
   that a default should cut nothing and let the reader choose — which reads as
@@ -2636,17 +2700,15 @@ stops holding, a comment saying it does would not have caught it.
   labelled "Startup", so the ambiguous 6–11 round middle the two buckets
   deliberately leave to `all` stays out of a board named for startups too.
 
-  Two knock-ons, and they pull in opposite directions on purpose. The trigger's
-  `adpNarrowingCount` compares every field to **its default** rather than to
-  "all" — the season already worked that way and this is the precedent it set —
-  or the bars would light for every reader on every page and stop meaning "your
-  board differs from theirs". The drawer's own closed filter row keeps comparing
-  to `"all"` (`narrowingFilters`), so the Startup chip is on it from the start:
-  that row says what the population in front of the reader is cut by, and a
-  startup-only board saying nothing would leave its largest fact about itself
-  unsaid — the chip is also the only way back to every draft. Two questions, two
-  comparisons; collapsing them to one is how either the badge lies or the cut
-  goes unmentioned.
+  The trigger's `adpNarrowingCount` compares every field to **its default**
+  rather than to "all" — the season already worked that way and this is the
+  precedent it set — or the bars would light for every reader on every page and
+  stop meaning "your board differs from theirs". It counts the league rules
+  through `activeFilterCount`, one per rule, which is the same arithmetic the
+  filters' own trigger does: the two badges count alike because the dialog behind
+  them is one dialog. Inside it, the draft-kind row still reads as narrowed from
+  the start, since it is not sitting on its first option — which is the honest
+  reading, and it is also the only way back to every draft.
 
   It reaches the Leagues tab's team value too, which took a second change and is
   the rule below.
@@ -2693,24 +2755,27 @@ stops holding, a comment saying it does would not have caught it.
       cast shadow by being *over* the rows below it; nothing floats now, so the
       face keeps its grade — the channel is a cut, and a cut is read against the
       face it is cut into — and trades the drop shadow for a wall. The three
-      behaviours a floating control owed go with the float: `openPanel` is down
-      to the filter tray alone (`AdpDrawerPanel` is a union of one, which is
-      what keeps a second floating control from arriving as its own boolean),
-      and **Escape closes the innermost thing that is up** now means the tray.
+      behaviours a floating control owed go with the float, and the last of them
+      went when the filter tray became the shared `<dialog>`: the drawer holds no
+      floating panel at all now, so `openPanel`, its reset on reopen and the two
+      thunks `drawerKeydownHandler` read it through are gone, and **Escape closes
+      the innermost thing that is up** is the platform's — a dialog in the top
+      layer hears the press and never lets it reach the drawer. The same
+      apparatus the columns editor retired when it became one.
     - **The block is taller and the phone still fits.** ~360px of an 844px
       screen against ~200, with the two lens groups wrapping to their own lines
       below `sm` — the panel's own `flex-wrap`, unchanged from when it floated.
       That is the cost, stated rather than optimised away; trimming it is a
       trade against the instrument, not a free win.
-  - **The filter row shows only what is narrowing the board.** Seven chips
-    permanently reading "All" is seven controls' worth of height reporting that
-    nothing is set. `FilterRow` renders the narrowing ones plus one `Filters`
-    key badged with their count; the tray behind it holds **all** six so the
-    set doesn't reshuffle as it is used, and the summary chips step aside while
-    it is up rather than appearing twice. A filter already set stays a live
-    `<select>`, so changing one is the single press it always was — the second
-    press is only for reaching a filter that was off, which is the case the
-    drawer was previously spending the height on.
+  - **The filter row is one key and the seed chip.** It was seven chips
+    permanently reading "All" — seven controls' worth of height reporting that
+    nothing is set — then a badged `Filters` key over a tray of the same seven.
+    It is the shared league-filters key now, which retires the tray, the summary
+    chips and the `FilterSpec` table with it: what the tray held is a dialog with
+    per-option counts, quick-adds and a match rail, and what the summary chips
+    said the key's own badge says. "Match a league…" stays outside it and stays a
+    chip, because it is not a filter — it *writes* filters, from a league the
+    reader recognises by name — and the trades board passes it no leagues at all.
   - **The league type is not one of those filters — every fetch answers both
     markets, and two board keys over the list choose what is drawn.** A dynasty
     startup and a redraft price different games, which is exactly why the type
@@ -2847,7 +2912,8 @@ stops holding, a comment saying it does would not have caught it.
   and exactly what leaves a reader four hundred rows deep in a list about to be
   seventy-five rows long in a different order. `adpListIdentity` is the key that
   effect runs on, and it is deliberately **not** a list of fields: it is
-  `adpQueryString` (which *is* the population, so a filter added there resets the
+  `adpBoardRead`'s key (which *is* the population — the league rules included,
+  since what it carries is the ids they resolved to — so a filter added there resets the
   scroll without this being touched) plus `boards` (the one display selection that
   isn't merely one — `adpBoardRows` drops the rows a single board can't average
   and re-sorts on that board's column). The **steepness is the exception the whole
@@ -3482,18 +3548,18 @@ stops holding, a comment saying it does would not have caught it.
     dialog also carries how many leagues it would leave, which is why the
     selection is edited as a draft and committed on Apply: those counts can't be
     read while the list behind them moves.
-- **The league filters are three fixed segments and two lists of rules the reader
-  writes.** Status, type and format describe what a league *is*, and stay
-  segments because each is a closed set of three or four answers. What its lineup
-  starts and what its scoring pays are not closed sets, so they are rows —
-  `QB+SF ≥ 2`, `IDP = 0`, `rec = 0.5`, `bonus_rec_te > 0` — each a slot group or
-  a `scoring_settings` key, a comparison and a number, added with a `+` and
-  removed with an `×`. They replaced four fixed pairs (superflex/one-QB,
-  IDP/offense, the reception bucket, TE premium), which were four hard-coded
-  questions out of a space readers arrive with their own question in: "no
-  kicker", "three flexes", "half PPR with a TE bonus over half a point". One
-  dialog, so the trades page's league filter gained the rules with it. Six things
-  worth keeping:
+- **The league filters are three fixed segments and three lists of rules the
+  reader writes.** Status, type and format describe what a league *is*, and stay
+  segments because each is a closed set of three or four answers. How big it is,
+  what its lineup starts and what its scoring pays are not closed sets, so they
+  are rows — `teams ≥ 10`, `QB+SF ≥ 2`, `IDP = 0`, `rec = 0.5`,
+  `bonus_rec_te > 0` — each a size key, a slot group or a `scoring_settings` key,
+  a comparison and a number, added with a `+` and removed with an `×`. They
+  replaced four fixed pairs (superflex/one-QB, IDP/offense, the reception bucket,
+  TE premium), which were four hard-coded questions out of a space readers arrive
+  with their own question in: "no kicker", "three flexes", "half PPR with a TE
+  bonus over half a point". One dialog, so the trades page's league filter gained
+  the rules with it — and, later, the ADP board's. Seven things worth keeping:
   - **The four old chips survive as quick-adds that write the equivalent rule.**
     `qb+sf ≥ 2` *is* `isSuperflexLineup`; the preset is the one-click path and
     the row is what you edit it into. A preset already on the list is dimmed
@@ -3527,6 +3593,21 @@ stops holding, a comment saying it does would not have caught it.
     `"complete"`.** An end-of-season spelling this code doesn't know would
     otherwise be visible in the total and in none of the buckets, which reads as a
     filter losing leagues.
+  - **The size list arrived with the ADP board, and it is a rule rather than the
+    chip it replaced.** That board had its own `All sizes / 10 / 12 / 14`, which
+    can only ask for an exact count — where "at least ten teams" is the question a
+    reader arrives with as often, and a *band* is `teams ≥ 10` **and**
+    `teams ≤ 12`, which is one of the things the lists being an AND is for. It is
+    a fact about a league like every other rule here, so the manager tabs and the
+    trades board read it too rather than it being a filter one page knows about.
+    `sizeValue` keeps the null rule with a wrinkle of its own: **zero is unknown,
+    not a real size**, since Sleeper always reports `total_rosters` for a live
+    league — so a 0 is a row stored before the league answered, and `teams < 10`
+    sweeping in every such league is the `k = 0` trap one bullet up. It is one bay
+    at full width above the other two rather than a third equal column: it holds
+    one key and one number, so half a column of it would be air beside a scoring
+    bay carrying six rules, and it is the closest of the three to the segments
+    directly above it.
   `roster_positions` crosses the wire for this — it is what `settings` doesn't
   carry and the rules count over, which is also what retires the note on
   `seedFromLeague` that superflex had to stay manual for want of it. `IDP_SLOTS`
@@ -3534,8 +3615,20 @@ stops holding, a comment saying it does would not have caught it.
   that set says nothing about what game a league is playing while starting a
   linebacker does, and the wider set still gates the projections caveat.
   `deriveScoring` stays in this package — the filters no longer bucket anything,
-  but it is the bucket `/api/adp` groups by and `adp-controls` re-exports it,
-  since `features/shared` can't import a feature.
+  but it is the bucket `/api/adp` groups by, `adp-controls` re-exports it, and
+  `seedFromLeague` writes its `rec` rules *as* that bucket's two bounds, since
+  `features/shared` can't import a feature.
+
+  **A caller may seat a fourth segment row in the trough, and exactly one does**
+  (`ExtraSegment`). The ADP board's draft-kind chip is not a fact about a league —
+  how many rounds a room ran is a fact about the room — so it must not become a
+  `LeagueFilters` field that two other pages inherit and cannot use; seating it
+  in the dialog instead is what makes that board's filters one dialog rather than
+  a dialog and a stray chip. It rides the same draft/apply contract as everything
+  else in the panel, and it carries **no per-option counts**: it cuts drafts
+  inside a league rather than leagues, so every option would show the identical
+  league count and that number would be about something the row does not narrow.
+  `SegmentRow`'s `probe` is optional for that reason alone.
 
   **It is six modules and not one file** (`types`, `defaults`, `predicates`,
   `summaries`, `options`, `breakdown`, behind a barrel). It was one, at 640 lines
@@ -4425,10 +4518,14 @@ stops holding, a comment saying it does would not have caught it.
   re-fetches every league's team value, so a drag across the range would fire two
   dozen of those; the drawer holds the in-flight value locally and moves the store
   on pointer-up, key-up or blur. And **a preview needs a pool it doesn't have**:
-  the drawer's board belongs to no league, so `previewAdpPool` anchors on the size
-  filter when one is set and a typical 12-team lineup otherwise — an assumption,
-  which is why the footer states it rather than letting the column pass as a card's
-  own number.
+  the drawer's board belongs to no league, so `previewAdpPool` anchors on an
+  **exact** size rule where the reader has written one (`teams = 12`) and a
+  typical 12-team lineup otherwise — an assumption, which is why the footer states
+  it rather than letting the column pass as a card's own number. Only an equality
+  answers it: the size *chip* it reads in place of could say nothing but "12-team",
+  where a rule can also say `teams ≥ 12`, and that describes a range of pools
+  rather than one — a preview guessing at an end of it would quote a pool no
+  filter asked for.
 - **This is the third team-value lens, and the three answer different
   questions.** `ktc` prices a *dynasty* asset, `ranks` models a *season*, and
   `adp-value` reads the *market consensus* of the drafts this app crawled — which
@@ -4470,13 +4567,25 @@ stops holding, a comment saying it does would not have caught it.
   steepness, which let the panel be narrowed to startup drafts while every card
   under it went on being priced off every draft crawled, two answers to one
   question a few pixels apart. What crosses is the *population*: the season, the
-  window, the kind of draft, the league size and the format, all of which
-  `adpBoardFor` previously hard-nulled. What does **not** cross is `scoring` and
-  `superflex`, and the reason is not tidiness — the drawer's default for both is
-  "all", so honouring them would *widen* every league's board back into one pool
-  and misprice a superflex roster at every position, not just at quarterback. The
-  arrow between a league and those two runs the other way; that is what
-  `seedFromLeague` is.
+  window, the kind of draft, and the leagues the reader's rules resolved to — all
+  of which `adpBoardFor` previously hard-nulled. What does **not** cross is
+  `scoring` and `superflex`, and the reason is not tidiness: they are facts about
+  the league being priced, matched per league on the server, and a superflex
+  roster valued off 1QB drafts is wrong at every position rather than only at
+  quarterback. They are not even expressible from the drawer any more — its chips
+  for both became league *rules*, and a rule set says which leagues' drafts are on
+  the board without saying which board a given roster reads. The arrow between a
+  league and those two runs the other way; that is what `seedFromLeague` is.
+
+  **And it is why both those routes answer a POST.** The rules resolve to a list
+  of league ids that can outgrow a request line, and a card priced on a different
+  board from the drawer above it is the exact two-answers-to-one-question this
+  path exists to close — so `readLeagueScope` reads the body, the query string is
+  identical either way, and `parseAdpFilters` folds the body's list into the field
+  the query-string one would have filled. GET and POST are one question with one
+  handler, `/api/trades`' own arrangement. The **cache key inlines the ids
+  regardless** (`AdpRead.key`): two league sets that differ are two boards
+  whatever transport carried them.
 
   **The expanded panel reads the same board, and that is the point rather than a
   tidy-up.** `/api/league/[leagueId]` used to call `adpBoardFor` with no choices
@@ -4486,7 +4595,7 @@ stops holding, a comment saying it does would not have caught it.
   rookie drafts while the card that opened it was priced off startups. **A panel
   driven by a selection has to be driven by the *same* selection**, which is the
   roster panel's own rule about not restating the selection, run one level up.
-  So both routes take one query string (`adpValueQueryString`) through one parser
+  So both routes take one request (`adpValueRead`) through one parser
   (`parseAdpBoardChoices`), and the panel reads the drawer's curve too — its pool
   is still the league's own, since two leagues on one board are priced on their
   own size.
@@ -4868,7 +4977,7 @@ stops holding, a comment saying it does would not have caught it.
   - **An omitted `season` is not a season default — it is a default that
     switches itself off.** `DEFAULT_SEASON` applies only when the caller bounded
     the board *neither* way, so a client that leaves the season out and narrows a
-    window silently goes back to spanning every season. `adpQueryString` sends it
+    window silently goes back to spanning every season. `adpBoardRead` sends it
     every time, `"all"` included.
   - A date bound drops drafts Sleeper never gave a `start_time`, because there is
     no honest side of the boundary for them. An unbounded board still counts them,

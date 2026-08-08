@@ -14,7 +14,7 @@ import {
 } from "react";
 
 import { DEFAULT_LEAGUE_FILTERS, type LeagueFilters } from "../../league-filters";
-import type { SegmentKey } from "./league-filters-modal.types.ts";
+import type { ExtraSegment, SegmentKey } from "./league-filters-modal.types.ts";
 import {
   escapeTarget,
   isBackdropPress,
@@ -44,11 +44,30 @@ import {
 export function useLeagueFiltersModal(
   filters: LeagueFilters,
   onChange: (filters: LeagueFilters) => void,
+  /** The caller's own fourth row, drafted alongside — see {@link ExtraSegment}. */
+  extra?: ExtraSegment,
 ) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const troughRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(filters);
+
+  // The extra row's draft, held beside the filters' rather than inside them: it
+  // is not a `LeagueFilters` field and must not become one (see the type's own
+  // note), but it is committed on the same press, so it is seeded on the same
+  // open and reset by the same key.
+  const [extraDraft, setExtraDraft] = useState(extra?.value ?? "");
+
+  // Read through a ref so the three callbacks below can commit against whatever
+  // the caller last passed without re-creating on every render of a parent that
+  // rebuilds the object — the same reason `useAdpDrawerLifecycle` holds
+  // `onClose` in one, written the same way: an effect rather than an assignment
+  // during render, which the lint rule objects to and which would be read by a
+  // render that was thrown away.
+  const extraRef = useRef(extra);
+  useEffect(() => {
+    extraRef.current = extra;
+  }, [extra]);
 
   /**
    * Which segment row has its options open, if any — one at a time.
@@ -70,6 +89,7 @@ export function useLeagueFiltersModal(
   // two can disagree is the moment it opens.
   const open = useCallback(() => {
     setDraft(filters);
+    setExtraDraft(extraRef.current?.value ?? "");
     setOpenGroup(null);
     // **`showModal` on a dialog that is already open throws**, where `close` on
     // one already closed is a spec'd no-op — so this is the one of the pair that
@@ -111,10 +131,17 @@ export function useLeagueFiltersModal(
 
   const apply = useCallback(() => {
     onChange(draft);
+    // After `onChange`, so a caller writing both into one store lands on the
+    // filters' own update rather than on a stale copy of it.
+    const own = extraRef.current;
+    if (own && extraDraft !== own.value) own.onApply(extraDraft);
     dialogRef.current?.close();
-  }, [draft, onChange]);
+  }, [draft, extraDraft, onChange]);
 
-  const reset = useCallback(() => setDraft(DEFAULT_LEAGUE_FILTERS), []);
+  const reset = useCallback(() => {
+    setDraft(DEFAULT_LEAGUE_FILTERS);
+    setExtraDraft(extraRef.current?.defaultValue ?? "");
+  }, []);
 
   // Where a press outside the panel began. The backdrop is the dialog's own
   // pseudo-element, so such a press lands on the `<dialog>` box itself — but so
@@ -161,6 +188,8 @@ export function useLeagueFiltersModal(
     troughRef,
     draft,
     setDraft,
+    extraDraft,
+    setExtraDraft,
     openGroup,
     toggleGroup,
     closeGroup,

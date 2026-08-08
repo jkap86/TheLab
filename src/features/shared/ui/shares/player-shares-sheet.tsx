@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
 import { useAdpControls } from "../../adp-controls-context";
-import { adpQueryString } from "../../adp-controls";
+import { adpBoardRead } from "../../adp-controls";
 import { todayIso } from "../../date-range";
 import {
   DEFAULT_PLAYER_COLUMNS,
@@ -47,12 +47,12 @@ export function PlayerSharesSheet({
 
   // The board the ADP columns read, behind the same gate. It is not keyed to the
   // manager, so the drawer and the Players tab share this entry with the sheet.
-  const { controls } = useAdpControls();
-  const adpQuery = useMemo(
-    () => adpQueryString(controls, todayIso()),
-    [controls],
+  const { controls, scope } = useAdpControls();
+  const adpRead = useMemo(
+    () => adpBoardRead(controls, scope, todayIso()),
+    [controls, scope],
   );
-  const adp = useAdp(adpQuery, { enabled: open });
+  const adp = useAdp(adpRead, { enabled: open });
   const adpByPlayer = useMemo(() => {
     const map = new Map<string, AdpPlayerPayload>();
     for (const player of adp.data?.players ?? [])

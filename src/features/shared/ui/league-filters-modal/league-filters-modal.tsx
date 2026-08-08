@@ -16,6 +16,8 @@ import type { ManagerLeague } from "@/shared/manager";
 // into the static graph and split nothing. See that file's own note.
 import type { SeatName } from "../league-filters-seat";
 
+import type { ExtraSegment } from "./league-filters-modal.types.ts";
+
 import { FiltersDialogFooter } from "./filters-dialog-footer.tsx";
 import { FiltersDialogHeader } from "./filters-dialog-header.tsx";
 import { FiltersTrigger } from "./filters-trigger.tsx";
@@ -72,6 +74,7 @@ export function LeagueFiltersModal({
   leagues,
   label = "Filters",
   seat = "free",
+  extra,
 }: {
   filters: LeagueFilters;
   onChange: (filters: LeagueFilters) => void;
@@ -91,6 +94,14 @@ export function LeagueFiltersModal({
    * *shape* — see {@link SEATS}.
    */
   seat?: SeatName;
+  /**
+   * A fourth segment row the caller owns — see {@link ExtraSegment}. The ADP
+   * board seats its draft-kind chip here so that board's filters are one dialog
+   * rather than a dialog and a chip beside it; nothing else passes one, and the
+   * count on the trigger deliberately doesn't include it (the caller counts its
+   * own).
+   */
+  extra?: ExtraSegment;
 }) {
   const {
     dialogRef,
@@ -98,6 +109,8 @@ export function LeagueFiltersModal({
     troughRef,
     draft,
     setDraft,
+    extraDraft,
+    setExtraDraft,
     openGroup,
     toggleGroup,
     closeGroup,
@@ -108,7 +121,7 @@ export function LeagueFiltersModal({
     onBackdropPointerDown,
     onBackdropClick,
     onCancel,
-  } = useLeagueFiltersModal(filters, onChange);
+  } = useLeagueFiltersModal(filters, onChange, extra);
 
   /**
    * The dialog's own ids.
@@ -190,6 +203,9 @@ export function LeagueFiltersModal({
                   openGroup={openGroup}
                   onToggle={toggleGroup}
                   onClose={closeGroup}
+                  extra={extra}
+                  extraDraft={extraDraft}
+                  onExtraChange={setExtraDraft}
                 />
 
                 <RuleBays

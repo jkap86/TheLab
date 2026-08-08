@@ -59,6 +59,11 @@ export function LineupCard({
       ledge={<OpponentLedge week={week} matchup={matchup} />}
       columns={<LineupStatColumns matchup={matchup} />}
       focusRosterId={matchup?.roster_id}
+      // The panel opens on this week rather than on the rest of the season,
+      // which is the whole reason this tool draws the card at all: a reader here
+      // is setting one lineup, so the two numbers beside each player are what he
+      // projects for it and what he has been averaging coming into it.
+      week={week}
       expanded={expanded}
       onToggle={onToggle}
     />

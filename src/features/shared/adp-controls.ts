@@ -1,4 +1,3 @@
-import { isSuperflexLineup } from "../../shared/ktc/roster.ts";
 import {
   ADP_PEAK,
   ADP_VALUE_PARAMS,
@@ -15,7 +14,21 @@ import {
   shiftMonths,
   todayIso,
 } from "./date-range.ts";
-import { deriveScoring, leagueAdpBoard } from "./league-filters/predicates.ts";
+import { DEFAULT_LEAGUE_FILTERS } from "./league-filters/defaults.ts";
+import {
+  deriveScoring,
+  leagueAdpBoard,
+  slotCount,
+} from "./league-filters/predicates.ts";
+import { activeFilterCount } from "./league-filters/summaries.ts";
+import type { FilterRule, LeagueFilters } from "./league-filters/types.ts";
+import {
+  type LeagueScope,
+  type LeagueScopeBody,
+  leagueScopeBody,
+  scopeNeedsBody,
+  sortedIds,
+} from "./league-scope.ts";
 import { TYPICAL_DRAFT_TEAMS } from "./pick-value.ts";
 import type { AdpBoardType, ManagerLeague } from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
@@ -83,12 +96,36 @@ export type AdpControls = {
    * `adpNarrowingCount` never counts it, the same standing `steepness` has.
    */
   boards: AdpShownBoards;
-  /** Derived from the league's `scoring_settings.rec`, not stored as such. */
-  scoring: "all" | "std" | "half_ppr" | "ppr";
-  superflex: "all" | "yes" | "no";
-  bestBall: "all" | "yes" | "no";
-  /** `"all"`, or an exact team count (`teams_min` = `teams_max`). */
-  teams: "all" | string;
+  /**
+   * What the *leagues* behind these drafts are — the shared league filters, the
+   * same dialog and the same rules the manager tabs and the trades board narrow
+   * with.
+   *
+   * It replaced four chips of this drawer's own: scoring, superflex, best ball
+   * and league size. Each was a fixed question out of a space readers arrive at
+   * a board with their own question in — "average the drafts of leagues that
+   * start a linebacker", "half PPR with a TE bonus" — and each already had an
+   * exact equivalent in the rule vocabulary (`qb+sf ≥ 2` *is* `isSuperflexLineup`;
+   * the size chip is `teams = 12`). One control over one idea, rather than a
+   * second filter language a few pixels from the first.
+   *
+   * **It does not travel as itself.** The rules are a predicate engine over
+   * Sleeper's blobs, so the browser resolves them against the season's crawled
+   * leagues and sends the answer as league ids — see `./league-scope` for why
+   * that direction, and {@link adpBoardRead} for how they get on the wire. That
+   * is also why this is not part of the query string a cache key is built from
+   * and the resolved scope is: two rule sets that leave the same leagues are one
+   * board.
+   *
+   * The two filter sets on the manager tabs stay independent of it, which is the
+   * old rule unchanged and now easier to get wrong because both are the same
+   * control: the header's league filters narrow *which of this manager's leagues*
+   * a share is counted over, and these narrow *which leagues in the database* the
+   * average is taken from. A dynasty rule on the header means "count my dynasty
+   * leagues"; the same rule here means "average dynasty drafts, strangers'
+   * included".
+   */
+  leagueRules: LeagueFilters;
   /**
    * The draft's round count, bucketed — which is to say *what kind of draft* it
    * was: a rookie draft's pick 1 and a startup's pick 1 are different games, the
@@ -333,8 +370,8 @@ export function steepnessSummary(halvings: number): string {
  * typical 12-team lineup otherwise, which is a *preview* premise and says so:
  * the number beside a card is priced on that league's real slots.
  */
-export function previewAdpPool(teams: AdpControls["teams"]): number {
-  return previewDraftTeams(teams) * TYPICAL_STARTING_SLOTS;
+export function previewAdpPool(rules: LeagueFilters): number {
+  return previewDraftTeams(rules) * TYPICAL_STARTING_SLOTS;
 }
 
 /**
@@ -347,19 +384,30 @@ export function previewAdpPool(teams: AdpControls["teams"]): number {
  * curve while numbering picks out of twelve would put the same pick in two
  * places at once. The fallback is {@link TYPICAL_DRAFT_TEAMS}, the one the pick
  * ladder already falls back to for a league with no size on file.
+ *
+ * **Only an exact size answers it.** The size chip this replaced could say
+ * nothing but "12-team", so it was either a number or "all"; a size *rule* can
+ * also say `teams ≥ 12`, which describes a range of pools rather than one — and
+ * a preview that guessed at which end of it would be quoting a pool no filter
+ * asked for. So an equality is read and everything else falls back, which is
+ * what the footer's premise line states either way: the number beside a *card*
+ * is priced on that league's real slots, and this one is a preview.
  */
-export function previewDraftTeams(teams: AdpControls["teams"]): number {
-  const count = teams === "all" ? TYPICAL_DRAFT_TEAMS : Number(teams);
+export function previewDraftTeams(rules: LeagueFilters): number {
+  const exact = rules.size.find(
+    (rule) => rule.key === "teams" && rule.op === "eq",
+  );
+  const count = exact?.value ?? TYPICAL_DRAFT_TEAMS;
   return Number.isInteger(count) && count > 0 ? count : TYPICAL_DRAFT_TEAMS;
 }
 
 /** A board row's draft-capital value under the drawer's current curve. */
 export function previewAdpValue(
   adp: number,
-  teams: AdpControls["teams"],
+  rules: LeagueFilters,
   steepness: number,
 ): number {
-  return adpValue(adp, previewAdpPool(teams), steepness);
+  return adpValue(adp, previewAdpPool(rules), steepness);
 }
 
 /** The `rounds_min`/`rounds_max` bounds each rounds bucket sends. */
@@ -451,10 +499,7 @@ export function defaultAdpControls(season: string): AdpControls {
     season,
     range: DEFAULT_ADP_RANGE,
     boards: "both",
-    scoring: "all",
-    superflex: "all",
-    bestBall: "all",
-    teams: "all",
+    leagueRules: DEFAULT_LEAGUE_FILTERS,
     rounds: DEFAULT_ADP_ROUNDS,
     steepness: DEFAULT_ADP_STEEPNESS,
   };
@@ -580,13 +625,14 @@ export function adpNarrowingCount(
   const narrowing = [
     controls.season !== defaultSeason,
     !isUnboundedRange(controls.range),
-    controls.scoring !== "all",
-    controls.superflex !== "all",
-    controls.bestBall !== "all",
-    controls.teams !== "all",
     controls.rounds !== DEFAULT_ADP_ROUNDS,
   ];
-  return narrowing.filter(Boolean).length;
+  // Every league rule counts as one, the same arithmetic `activeFilterCount`
+  // does for the filters' own trigger: eight rules are eight narrowings, and
+  // rolling the list up as "1" would understate a selection doing most of the
+  // work. That the two triggers now count the same way is the point — the
+  // dialog behind them is one dialog.
+  return narrowing.filter(Boolean).length + activeFilterCount(controls.leagueRules);
 }
 
 /**
@@ -609,23 +655,35 @@ export function rangeSummary(range: AdpRange, today: string): string | null {
 }
 
 /**
- * Fill the league-setting controls from one of the manager's leagues — the
- * "associated league setting" shortcut. It sets what a league payload carries:
- * scoring, best ball, size and — since the leagues stream started sending
- * `roster_positions` for the league filters — whether it starts more than one
- * quarterback. The league's *type* is no longer a filter to seed; what it sets
- * instead is which board the list displays, so matching a dynasty league shows
- * the dynasty column alone — the market that league is actually in. `range` and
- * `rounds` are left as they were: neither is a league setting — when a draft
- * happened and what kind of draft it was are facts about the room, not about
- * the league it filled.
+ * Fill the board's league rules from one of the manager's leagues — the
+ * "associated league setting" shortcut. It writes what a league payload carries:
+ * the scoring bucket, whether it starts more than one quarterback, best ball and
+ * the size. `range` and `rounds` are left as they were: neither is a league
+ * setting — when a draft happened and what kind of draft it was are facts about
+ * the room, not about the league it filled. The league's *type* is not a rule it
+ * writes either; what it sets instead is which board the list displays, so
+ * matching a dynasty league shows the dynasty column alone — the market that
+ * league is actually in.
  *
- * Superflex was the one league setting this couldn't seed, and it is the one that
- * moves a board most: a superflex population prices quarterbacks like first-round
- * assets, so "match a league" that left it alone could hand a two-QB league the
- * board it is least like. It reads the same predicate `/api/adp` classifies
- * stored leagues with, so the seeded filter lands on the population the league
- * itself belongs to.
+ * **The rules it writes are the buckets, not the league's exact numbers**, and
+ * that is the whole subtlety of seeding. `rec = 0.5` off a half-PPR league is
+ * true and far narrower than the population that league belongs to: these boards
+ * are a mix of house rules, and matching one exactly hands back a board of a
+ * dozen drafts. The bucket is what the ADP endpoint groups by (`SCORING_SQL`),
+ * so a seed lands on the population the league would actually have been counted
+ * in — the rule the retired scoring chip already carried, kept here by spelling
+ * the bucket as its two bounds. Superflex is the same: the predicate is "more
+ * than one QB-eligible slot", so the rule is `qb+sf >= 2` or `<= 1` rather than
+ * the exact count, which is what `isSuperflexLineup` asks and what `/api/adp`
+ * classified a stored league with.
+ *
+ * Everything it writes is a rule the reader can then *edit*, which is what the
+ * chips it replaced could not offer: a seeded `rec >= 0.5` becomes `rec >= 0.4`,
+ * and a seeded `teams = 12` becomes `teams >= 10`.
+ *
+ * It **replaces** the three rule lists rather than appending to them, because a
+ * seed answers "make this board look like that league" and rules left over from
+ * a previous seed would quietly narrow it further.
  *
  * The season is seeded too, unlike the range beside it, because it *is* a league
  * setting — a 2025 league's board is read from 2025 drafts, and matching a
@@ -639,6 +697,10 @@ export function seedFromLeague(
   league: ManagerLeague,
 ): AdpControls {
   const settings = league.settings ?? {};
+  // Null where the lineup was never synced, which is the one case with no honest
+  // rule to write: an unknown lineup is not evidence of a 1QB league, and a
+  // `qb+sf <= 1` on it would seed a board this league may well not belong to.
+  const qbSlots = slotCount(league, "QB+SF");
 
   return {
     ...controls,
@@ -649,19 +711,118 @@ export function seedFromLeague(
     // trade cards price a haul on the same question and two spellings of it is
     // how one of them ends up reading the wrong market.
     boards: leagueAdpBoard(league),
-    scoring: deriveScoring(league.scoring_settings),
-    superflex: isSuperflexLineup(league.roster_positions) ? "yes" : "no",
-    bestBall: settings.best_ball === 1 ? "yes" : "no",
-    teams: String(league.total_rosters),
+    leagueRules: {
+      ...controls.leagueRules,
+      bestBall: settings.best_ball === 1 ? "yes" : "no",
+      size: [{ key: "teams", op: "eq", value: league.total_rosters }],
+      slots:
+        qbSlots === null
+          ? []
+          : [{ key: "QB+SF", op: qbSlots > 1 ? "gte" : "lte", value: qbSlots > 1 ? 2 : 1 }],
+      scoring: SCORING_BUCKET_RULES[deriveScoring(league.scoring_settings)],
+    },
   };
 }
 
 /**
- * The `/api/adp` query string for a board. An `"all"` control is left out so the
- * route's tri-state parser reads it as "don't narrow"; `draft_type` is always
- * sent because a board is never over auctions. `limit` is the board's max so a
- * deep-roster player still gets a number — the tail past 1,000 is beyond any
- * real draft.
+ * Each scoring bucket as the rules that select it — the bounds `SCORING_SQL`
+ * groups by, written in the rule vocabulary.
+ *
+ * Half PPR is two rules because it is a band and the lists are an AND, which is
+ * one of the things that AND is for. Standard is `rec < 0.5` rather than
+ * `rec = 0` because Sleeper omits the key entirely for a league that pays
+ * nothing per reception and a stored blob's missing key reads as 0 — so the
+ * bound catches both spellings, and the quarter-point leagues between them.
+ */
+const SCORING_BUCKET_RULES: Record<
+  ReturnType<typeof deriveScoring>,
+  FilterRule[]
+> = {
+  ppr: [{ key: "rec", op: "gte", value: 1 }],
+  half_ppr: [
+    { key: "rec", op: "gte", value: 0.5 },
+    { key: "rec", op: "lt", value: 1 },
+  ],
+  std: [{ key: "rec", op: "lt", value: 0.5 }],
+};
+
+/**
+ * One read of an ADP board: the cache key it files under, and the HTTP request
+ * that fetches it.
+ *
+ * **The key and the wire differ in exactly one thing, which is the whole reason
+ * this is a shape rather than a string.** A board's league rules resolve to a
+ * list of ids (see `./league-scope`), and past `MAX_LEAGUE_IDS` that list is too
+ * long for a request line — so it travels as JSON instead. The *key* inlines it
+ * regardless, because two league sets that differ are two boards whatever
+ * transport carried them, and a key that dropped the ids would serve one board's
+ * rows under another's filters.
+ *
+ * GET and POST are otherwise the same request: identical query string, identical
+ * parser at the other end, identical SQL. A caller never chooses; the builders
+ * below do, off the size of the scope.
+ */
+export type AdpRead = {
+  /** The request as one normalised string — every parameter, ids included. */
+  key: string;
+  method: "GET" | "POST";
+  search: URLSearchParams;
+  body: LeagueScopeBody | null;
+};
+
+/** How `/api/adp` spells the two halves of a resolved scope. */
+const SCOPE_PARAMS = { include: "league_id", exclude: "xleague_id" } as const;
+
+/**
+ * Write a resolved scope onto a query string.
+ *
+ * `inline` is false only where the ids are about to travel in a body, and only
+ * for the *wire* — see {@link AdpRead}. The ids are sorted, which is not
+ * cosmetic: unsorted, a key would depend on the order the leagues happened to
+ * arrive in, so one rule set becomes two cache entries and two round trips
+ * through the same query.
+ */
+function writeScope(
+  params: URLSearchParams,
+  scope: LeagueScope,
+  inline: boolean,
+): void {
+  if (!inline || scope.kind === "all") return;
+  // An empty include list still writes the parameter — `league_id=` with nothing
+  // after it. That is not the same as leaving it out, and the route reads it
+  // that way: "the rules matched no league" is a real answer and an empty board,
+  // where an absent parameter is no narrowing at all.
+  params.set(SCOPE_PARAMS[scope.kind], sortedIds(scope.ids).join(","));
+}
+
+/** The key's string for a set of parameters: sorted, so order can't split it. */
+function readKey(params: URLSearchParams): string {
+  return [...params.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, value]) => `${name}=${value}`)
+    .join("&");
+}
+
+/** A parameter set plus a scope, as the pair of things a caller needs. */
+function readFor(params: URLSearchParams, scope: LeagueScope): AdpRead {
+  const keyParams = new URLSearchParams(params);
+  writeScope(keyParams, scope, true);
+
+  const body = leagueScopeBody(scope);
+  writeScope(params, scope, !scopeNeedsBody(scope));
+
+  return {
+    key: readKey(keyParams),
+    method: body ? "POST" : "GET",
+    search: params,
+    body,
+  };
+}
+
+/**
+ * The `/api/adp` read for a board. `draft_type` is always sent because a board
+ * is never over auctions; `limit` is the board's max so a deep-roster player
+ * still gets a number — the tail past 1,000 is beyond any real draft.
  *
  * `today` resolves the relative ranges. `season` is **always** sent, `"all"`
  * included: the route applies its own `DEFAULT_SEASON` only when the caller
@@ -670,8 +831,16 @@ export function seedFromLeague(
  * it every time is what makes the two cuts compose — the season picks the
  * market, the range picks when inside it — rather than one quietly cancelling
  * the other.
+ *
+ * The league rules do not appear here as rules. `scope` is their answer,
+ * resolved by the caller against the season's crawled leagues, and it is the
+ * only thing about them the route ever sees.
  */
-export function adpQueryString(controls: AdpControls, today: string): string {
+export function adpBoardRead(
+  controls: AdpControls,
+  scope: LeagueScope,
+  today: string,
+): AdpRead {
   const params = new URLSearchParams();
   params.set("limit", "1000");
   params.set("season", controls.season);
@@ -690,24 +859,16 @@ export function adpQueryString(controls: AdpControls, today: string): string {
   // display's business, not the query's.
   params.set("draft_type", "snake,linear");
 
-  if (controls.scoring !== "all") params.set("scoring", controls.scoring);
-  if (controls.superflex !== "all") {
-    params.set("superflex", controls.superflex === "yes" ? "1" : "0");
-  }
-  if (controls.bestBall !== "all") {
-    params.set("best_ball", controls.bestBall === "yes" ? "1" : "0");
-  }
-  if (controls.teams !== "all") {
-    params.set("teams_min", controls.teams);
-    params.set("teams_max", controls.teams);
-  }
-  if (controls.rounds !== "all") {
-    const { min, max } = ROUNDS_BOUNDS[controls.rounds];
-    if (min !== undefined) params.set("rounds_min", String(min));
-    if (max !== undefined) params.set("rounds_max", String(max));
-  }
+  writeRounds(params, controls.rounds);
+  return readFor(params, scope);
+}
 
-  return params.toString();
+/** The `rounds_min`/`rounds_max` a draft-kind bucket sends. */
+function writeRounds(params: URLSearchParams, rounds: AdpControls["rounds"]): void {
+  if (rounds === "all") return;
+  const { min, max } = ROUNDS_BOUNDS[rounds];
+  if (min !== undefined) params.set("rounds_min", String(min));
+  if (max !== undefined) params.set("rounds_max", String(max));
 }
 
 /**
@@ -721,12 +882,14 @@ export function adpQueryString(controls: AdpControls, today: string): string {
  * fields — it is exactly two things, and both are read from their canonical
  * definition rather than re-typed:
  *
- *   - **{@link adpQueryString}**, which *is* the population: every filter that
- *     narrows which drafts are averaged is in it by construction, so a filter
- *     added there resets the scroll without this function being touched. It also
- *     gets the near-misses right — moving from the `all` preset to a custom
- *     window with neither end set resolves to the same bounds, so the string is
- *     unchanged and the reader keeps their place.
+ *   - **{@link adpBoardRead}'s key**, which *is* the population: every filter
+ *     that narrows which drafts are averaged is in it by construction — the
+ *     league rules included, since what the key carries is the ids they resolved
+ *     to — so a filter added there resets the scroll without this function being
+ *     touched. It also gets the near-misses right: moving from the `all` preset
+ *     to a custom window with neither end set resolves to the same bounds, and
+ *     two different rule sets that leave the same leagues resolve to the same
+ *     ids, so the string is unchanged and the reader keeps their place.
  *   - **`boards`**, the one *display* selection that is not merely a display
  *     selection: {@link adpBoardRows} drops the rows a single board can't
  *     average and re-sorts on that board's column, so pressing a board key is a
@@ -738,27 +901,33 @@ export function adpQueryString(controls: AdpControls, today: string): string {
  * the reader watches one player's value bend — yanking the list to the top under
  * that hand is exactly the bug this exists to avoid.
  */
-export function adpListIdentity(controls: AdpControls, today: string): string {
-  return `${adpQueryString(controls, today)}|boards=${controls.boards}`;
+export function adpListIdentity(
+  controls: AdpControls,
+  scope: LeagueScope,
+  today: string,
+): string {
+  return `${adpBoardRead(controls, scope, today).key}|boards=${controls.boards}`;
 }
 
 /**
- * The `/api/user/[username]/adp-value` query string: the same board, minus the
- * axes that are facts about a league rather than choices about a market.
+ * The read that prices a *roster* off the same board: the card's team value, and
+ * the expanded panel's two value columns.
  *
  * The Leagues tab's team value used to take only the steepness off this drawer,
  * so the panel could be narrowed to startup drafts while every card went on
  * being priced off every draft crawled. It reads the whole board now — but not
- * by sending {@link adpQueryString}, because two of those parameters must not
+ * by sending {@link adpBoardRead}'s own parameters, because two things must not
  * cross:
  *
  *   - **`scoring` and `superflex` stay per league**, resolved server-side by
  *     `adpBoardFor` from the league's own settings. A superflex roster priced
  *     off 1QB drafts is wrong at *every* position, not just at quarterback (the
- *     lesson KTC's two boards already taught), and the drawer's default for both
- *     is `"all"` — so honouring them would mean pooling superflex and 1QB drafts
- *     for every reader who never opens the drawer. The arrow between a league
- *     and these two runs the other way, which is what {@link seedFromLeague} is.
+ *     lesson KTC's two boards already taught). They are not sent from here at
+ *     all — they never were, and now they are not even expressible: the drawer's
+ *     chips for both are league *rules*, and a rule set narrows which leagues'
+ *     drafts are on the board without saying anything about which board a given
+ *     roster reads. The arrow between a league and those two runs the other way,
+ *     which is what {@link seedFromLeague} is.
  *   - **The season travels as `board_season`**, not `season`. Every route under
  *     `/api/user/[username]` reads `?season` as *which season's leagues are on
  *     screen* — it picks the rosters to price and the weeks to project — so the
@@ -769,12 +938,22 @@ export function adpListIdentity(controls: AdpControls, today: string): string {
  *     query string is invisible to the compiler and a rename on one side alone
  *     would leave the board quietly unapplied rather than failing.
  *
- * Everything left is the population the reader chose, and `adpBoardFor` left all
- * of it broad: the window, the kind of draft, the league size and the format.
- * `draft_type`, `min_picks` and the statuses aren't sent because they are the
- * route's own constants, the same ones `adpQueryString` spells as literals.
+ * Everything left is the population the reader chose: the window, the kind of
+ * draft, and the leagues their rules resolved to. `draft_type`, `min_picks` and
+ * the statuses aren't sent because they are the route's own constants, the same
+ * ones {@link adpBoardRead} spells as literals.
+ *
+ * **It is an {@link AdpRead} rather than a string for the same reason the board
+ * is**, and this is the half that made both value routes answer a POST: a
+ * narrowed board resolves to more league ids than a request line can carry, and
+ * a card priced on a different board from the drawer above it is the exact
+ * two-answers-to-one-question this whole path exists to close.
  */
-export function adpValueQueryString(controls: AdpControls, today: string): string {
+export function adpValueRead(
+  controls: AdpControls,
+  scope: LeagueScope,
+  today: string,
+): AdpRead {
   const params = new URLSearchParams();
   params.set(ADP_VALUE_PARAMS.steepness, String(controls.steepness));
   params.set(ADP_VALUE_PARAMS.boardSeason, controls.season);
@@ -783,18 +962,6 @@ export function adpValueQueryString(controls: AdpControls, today: string): strin
   if (from) params.set("start_after", from);
   if (to) params.set("start_before", to);
 
-  if (controls.bestBall !== "all") {
-    params.set("best_ball", controls.bestBall === "yes" ? "1" : "0");
-  }
-  if (controls.teams !== "all") {
-    params.set("teams_min", controls.teams);
-    params.set("teams_max", controls.teams);
-  }
-  if (controls.rounds !== "all") {
-    const { min, max } = ROUNDS_BOUNDS[controls.rounds];
-    if (min !== undefined) params.set("rounds_min", String(min));
-    if (max !== undefined) params.set("rounds_max", String(max));
-  }
-
-  return params.toString();
+  writeRounds(params, controls.rounds);
+  return readFor(params, scope);
 }

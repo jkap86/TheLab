@@ -1,4 +1,5 @@
-import { type AdpControls, previewAdpPool } from "../../adp-controls";
+import { previewAdpPool } from "../../adp-controls";
+import type { LeagueFilters } from "../../league-filters";
 
 /**
  * The way out, and the board's own premise.
@@ -8,12 +9,13 @@ import { type AdpControls, previewAdpPool } from "../../adp-controls";
  * assumption says which one.
  */
 export function AdpDrawerFooter({
-  teams,
+  rules,
   premiseId,
   onReset,
   onClose,
 }: {
-  teams: AdpControls["teams"];
+  /** The board's league rules — an exact size rule is what anchors the pool. */
+  rules: LeagueFilters;
   /**
    * The drawer's `aria-describedby` target — this line is the caveat the whole
    * board rests on, so it is read on arrival rather than found at the bottom of
@@ -39,7 +41,7 @@ export function AdpDrawerFooter({
       </button>
       <p id={premiseId} className="min-w-0 flex-1 truncate text-xs text-foreground/35">
         This app’s crawled drafts, not market ADP · values on a{" "}
-        {previewAdpPool(teams)}-slot pool
+        {previewAdpPool(rules)}-slot pool
       </p>
       <button
         type="button"

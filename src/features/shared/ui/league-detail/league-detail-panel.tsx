@@ -11,16 +11,18 @@ import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 // The module paths rather than `features/shared`'s own barrel, which this file is
 // inside of: a barrel importing a subtree that imports the barrel is a cycle, and
 // this panel is deliberately absent from it in any case (see `./index.ts`).
-import { adpValueQueryString, todayIso } from "../../adp-controls";
+import { adpValueRead, todayIso } from "../../adp-controls";
 import { useAdpControls } from "../../adp-controls-context";
 import {
   DEFAULT_PLAYER_COLUMNS,
+  DEFAULT_WEEK_PLAYER_COLUMNS,
   PLAYER_COLUMN_PRESETS,
   PLAYER_METRICS,
   type PlayerMetricContext,
 } from "../../roster-metrics";
 import {
   DEFAULT_TEAM_COLUMNS,
+  DEFAULT_WEEK_TEAM_COLUMNS,
   rosterValueTotal,
   TEAM_COLUMN_PRESETS,
   TEAM_METRICS,
@@ -125,6 +127,7 @@ const ColumnsEditor = dynamic(
 export function LeagueDetailPanel({
   leagueId,
   focusRosterId,
+  week = null,
 }: {
   leagueId: string;
   /**
@@ -135,15 +138,33 @@ export function LeagueDetailPanel({
    * projected leader; a roster this league doesn't hold falls back to the same.
    */
   focusRosterId?: number;
+  /**
+   * Read this league **as one week** rather than as the rest of a season.
+   *
+   * The lineup checker passes its selected week; the leagues list and the trades
+   * board pass nothing, which is what they want — a reader who arrived at a
+   * league is asking about its shape, and a reader who arrived at a lineup is
+   * asking about one Sunday. What it changes is the two numbers each table opens
+   * on (this week's projection and points per game, against the rest-of-season
+   * split) and, because those numbers come off the same payload, what is
+   * requested and how the answer is keyed.
+   *
+   * The two selections are stored apart — see {@link DEFAULT_WEEK_TEAM_COLUMNS}
+   * — so aiming a column here is not aiming it on the leagues list.
+   */
+  week?: number | null;
 }) {
   // The same board the collapsed card above is priced on, read from the same
   // store — this panel has no controls of its own, so a selection made in the
   // drawer is the only thing that can move its two value columns, and being
   // driven by a *different* selection from the card that opened it is what this
   // replaced.
-  const { controls } = useAdpControls();
-  const board = useMemo(() => adpValueQueryString(controls, todayIso()), [controls]);
-  const { data, loading, error } = useLeagueDetail(leagueId, board);
+  const { controls, scope } = useAdpControls();
+  const board = useMemo(
+    () => adpValueRead(controls, scope, todayIso()),
+    [controls, scope],
+  );
+  const { data, loading, error } = useLeagueDetail(leagueId, board, week);
 
   // The query container is here rather than around the loaded panel alone, so
   // every state this can be in is measured against one width — including the
@@ -171,7 +192,7 @@ export function LeagueDetailPanel({
           <PanelMessage>No roster data yet.</PanelMessage>
         </PanelState>
       ) : (
-        <Panel data={data} focusRosterId={focusRosterId} />
+        <Panel data={data} focusRosterId={focusRosterId} week={week} />
       )}
     </div>
   );
@@ -185,9 +206,11 @@ function PanelState({ children }: { children: ReactNode }) {
 function Panel({
   data,
   focusRosterId,
+  week,
 }: {
   data: LeagueDetailResult;
   focusRosterId?: number;
+  week: number | null;
 }) {
   // Projected-points order, not standings order — the table's own Proj column
   // is what the rows are ranked on, so the numbers descend down the page and
@@ -225,18 +248,33 @@ function Panel({
   // mounts on expand and unmounts on collapse, which used to reset both tables
   // every time a different league was opened. One key per grain, not per league —
   // what a column means is a fact about the catalogue, not about this league.
+  //
+  // A panel opened on a *week* keys its two selections apart from one opened on
+  // a season, and that is the grain rule rather than an exception to it: "this
+  // team over the rest of the year" and "this team on Sunday" are two questions,
+  // so a column aimed at one is not a column aimed at the other. Same catalogue
+  // either way — both pairs are pickable from either panel — and only what each
+  // opens on differs.
   const {
     columns: teamColumns,
     setColumn: setTeamColumn,
     setColumns: setTeamColumns,
     reset: resetTeamColumns,
-  } = usePersistedColumns("standings", DEFAULT_TEAM_COLUMNS, TEAM_METRICS);
+  } = usePersistedColumns(
+    week === null ? "standings" : "standings-week",
+    week === null ? DEFAULT_TEAM_COLUMNS : DEFAULT_WEEK_TEAM_COLUMNS,
+    TEAM_METRICS,
+  );
   const {
     columns: rosterColumns,
     setColumn: setRosterColumn,
     setColumns: setRosterColumns,
     reset: resetRosterColumns,
-  } = usePersistedColumns("roster", DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS);
+  } = usePersistedColumns(
+    week === null ? "roster" : "roster-week",
+    week === null ? DEFAULT_PLAYER_COLUMNS : DEFAULT_WEEK_PLAYER_COLUMNS,
+    PLAYER_METRICS,
+  );
 
   // One editor per table, because they are two catalogues and two selections —
   // a team's aggregate and a player's number are not choices from one list. Each
@@ -250,7 +288,15 @@ function Panel({
   // are assumptions — every team and every player has its own numbers — so the
   // editor names its subject in the footer rather than letting one row's `41,320`
   // pass as the column's own answer.
-  const preview = useMemo(() => previewSubjects(data, selected), [data, selected]);
+  const preview = useMemo(
+    () => previewSubjects(data, selected, week),
+    [data, selected, week],
+  );
+
+  // Undefined (no `?week=` sent) and null (the week's read failed) both mean the
+  // week columns have nothing to say, and the metrics tell the two apart by
+  // whether a source came with them — so they collapse to one value here.
+  const weekView = data.week_view ?? null;
 
   // The panel is one milled instrument rather than two adjacent boxes: a plate
   // holding a recessed field (the standings, which is read) beside a raised one
@@ -314,6 +360,7 @@ function Panel({
             teams={teams}
             outlook={data.outlook}
             values={data.values}
+            weekView={weekView}
             selectedId={selected.roster_id}
             onSelect={setSelectedId}
             columns={teamColumns}
@@ -326,6 +373,7 @@ function Panel({
             rosterPositions={data.roster_positions}
             outlook={data.outlook}
             values={data.values}
+            weekView={weekView}
             columns={rosterColumns}
             onOpenColumn={rosterEditor.open}
           />
@@ -389,6 +437,7 @@ function Panel({
 function previewSubjects(
   data: LeagueDetailResult,
   selected: LeagueTeamView,
+  week: number | null,
 ): {
   team: TeamMetricContext;
   teamLabel: string;
@@ -398,6 +447,8 @@ function previewSubjects(
   const teamOutlook: TeamOutlook | undefined = data.outlook?.teams.find(
     (t) => t.roster_id === selected.roster_id,
   );
+  const weekView = data.week_view ?? null;
+  const ppgSource = weekView?.ppg_source ?? null;
 
   const team: TeamMetricContext = {
     team: selected,
@@ -406,6 +457,10 @@ function previewSubjects(
     adpTotal: rosterValueTotal(selected.players, data.values.adp),
     superflex: data.values.superflex,
     draftCount: data.values.adp_draft_count,
+    week,
+    weekProjection: weekView?.team_projection[selected.roster_id] ?? null,
+    ppg: weekView?.team_ppg[selected.roster_id] ?? null,
+    ppgSource,
   };
 
   // Sleeper pads an unfilled slot with an empty id or a literal "0", so a
@@ -432,6 +487,10 @@ function previewSubjects(
       adpPosition: data.values.adp_position[playerId] ?? null,
       superflex: data.values.superflex,
       draftCount: data.values.adp_draft_count,
+      week,
+      weekProjection: weekView?.projection[playerId] ?? null,
+      ppg: weekView?.ppg[playerId] ?? null,
+      ppgSource,
     },
     playerLabel: data.players[playerId]?.name ?? playerId,
   };

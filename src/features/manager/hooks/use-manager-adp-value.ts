@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 
+import type { AdpRead } from "@/features/shared";
+
 import { STALE_TIMES } from "../query-config";
 import { managerQueryKeys } from "../query-keys";
 import type { ManagerAdpValueResult, ManagerLeague } from "../types";
@@ -17,11 +19,16 @@ export type ManagerAdpValueState = ManagerResourceState<ManagerAdpValueResult>;
  * fetching a value would undo that. See {@link useManagerResource} for why it
  * takes the leagues and reads only whether there are any.
  *
- * `board` is the ADP drawer's whole selection as a query string
- * (`adpValueQueryString`): the value curve, and the population it is applied to
- * — the season, the window, the kind of draft, the league size and the format.
- * It used to be the steepness alone, which left the panel narrowable to startup
- * drafts while every card went on being priced off every draft crawled.
+ * `board` is the ADP drawer's whole selection as one request (`adpValueRead`):
+ * the value curve, and the population it is applied to — the season, the window,
+ * the kind of draft, and the leagues its rules resolved to. It used to be the
+ * steepness alone, which left the panel narrowable to startup drafts while every
+ * card went on being priced off every draft crawled.
+ *
+ * A request rather than a string because those league ids can outgrow a request
+ * line, which is why this route answers a POST as well as a GET. The key is
+ * `board.key`, which inlines them regardless — two league sets that differ are
+ * two boards whatever transport carried them.
  *
  * It rides in the **key** as well as the path, which is what makes the drawer
  * cheap to explore: every board already read is still in the cache, so dragging
@@ -38,19 +45,21 @@ export function useManagerAdpValue(
    */
   userId: string | null,
   leagues: ManagerLeague[] | null,
-  board: string,
+  board: AdpRead,
 ): ManagerAdpValueState {
   const queryKey = useMemo(
-    () => managerQueryKeys.adpValue(searched, undefined, board),
-    [searched, board],
+    () => managerQueryKeys.adpValue(searched, undefined, board.key),
+    [searched, board.key],
   );
   return useManagerResource<ManagerAdpValueResult>(
     queryKey,
     searched,
     userId,
     leagues,
-    `adp-value?${board}`,
+    "adp-value",
     "Failed to load draft values",
     STALE_TIMES.adpValue,
+    true,
+    board,
   );
 }

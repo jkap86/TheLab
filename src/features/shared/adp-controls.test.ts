@@ -6,11 +6,11 @@ import {
   ADP_RANGE_PRESETS,
   DEFAULT_ADP_ROUNDS,
   DEFAULT_ADP_STEEPNESS,
+  adpBoardRead,
   adpBoardRows,
   adpListIdentity,
   adpNarrowingCount,
-  adpQueryString,
-  adpValueQueryString,
+  adpValueRead,
   boardLabel,
   defaultAdpControls,
   deriveScoring,
@@ -33,6 +33,9 @@ import {
 // Relative with the extension, like `adp-controls` own import of this module:
 // Node's test runner strips types but does not know the `@/*` aliases.
 import { ADP_VALUE_PARAMS } from "../../shared/manager/adp-value.ts";
+import { DEFAULT_LEAGUE_FILTERS } from "./league-filters/defaults.ts";
+import type { FilterRule, LeagueFilters } from "./league-filters/types.ts";
+import { ALL_LEAGUES, type LeagueScope } from "./league-scope.ts";
 import type { ManagerLeague } from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
@@ -57,15 +60,37 @@ const league = (over: Partial<ManagerLeague>): ManagerLeague => ({
 });
 
 /** Parse a query string back to a plain object for order-independent asserts. */
-const params = (query: string) =>
+const params = (query: string | URLSearchParams) =>
   Object.fromEntries(new URLSearchParams(query).entries());
 
-describe("adpQueryString", () => {
+/**
+ * The board's read with no league rules resolved — the shape every one of these
+ * assertions is written against unless it is about the scope itself.
+ */
+const board = (controls: AdpControls, scope: LeagueScope = ALL_LEAGUES) =>
+  adpBoardRead(controls, scope, TODAY);
+
+/** Its query string, as a plain object. */
+const boardParams = (controls: AdpControls, scope: LeagueScope = ALL_LEAGUES) =>
+  params(board(controls, scope).search);
+
+/** League rules with one list written, over the neutral selection. */
+const rules = (over: Partial<LeagueFilters>): LeagueFilters => ({
+  ...DEFAULT_LEAGUE_FILTERS,
+  ...over,
+});
+
+/** Controls with those rules on them. */
+const withRules = (over: Partial<LeagueFilters>): AdpControls => ({
+  ...defaultAdpControls(SEASON),
+  leagueRules: rules(over),
+});
+
+describe("adpBoardRead", () => {
   test("the default board sends one whole season of startups, snake+linear, and nothing else", () => {
     // The rounds bound is the one filter the board opens *with*: pooling rookie
     // drafts into a startup average prices every rookie off two different games.
-    const query = params(adpQueryString(defaultAdpControls(SEASON), TODAY));
-    assert.deepEqual(query, {
+    assert.deepEqual(boardParams(defaultAdpControls(SEASON)), {
       limit: "1000",
       season: "2026",
       draft_type: "snake,linear",
@@ -73,13 +98,19 @@ describe("adpQueryString", () => {
     });
   });
 
+  test("an unnarrowed board is a GET with no body", () => {
+    const read = board(defaultAdpControls(SEASON));
+    assert.equal(read.method, "GET");
+    assert.equal(read.body, null);
+  });
+
   test("the default board is the startup bucket, not a second spelling of it", () => {
     // Pinned through the exported constant rather than the literal, so the
     // default and what the trigger measures departure from cannot drift apart.
     assert.equal(defaultAdpControls(SEASON).rounds, DEFAULT_ADP_ROUNDS);
     assert.equal(
-      adpQueryString(defaultAdpControls(SEASON), TODAY),
-      adpQueryString({ ...defaultAdpControls(SEASON), rounds: "full" }, TODAY),
+      board(defaultAdpControls(SEASON)).key,
+      board({ ...defaultAdpControls(SEASON), rounds: "full" }).key,
     );
   });
 
@@ -89,35 +120,31 @@ describe("adpQueryString", () => {
     // off the moment a date bound appears — and the board silently goes back to
     // pooling every season, which is what makes it wrong at every row.
     for (const preset of ["30d", "90d", "all"] as const) {
-      const query = params(
-        adpQueryString(
-          { ...defaultAdpControls(SEASON), range: { preset, from: null, to: null } },
-          TODAY,
-        ),
-      );
+      const query = boardParams({
+        ...defaultAdpControls(SEASON),
+        range: { preset, from: null, to: null },
+      });
       assert.equal(query.season, "2026");
     }
   });
 
   test("pooling every season is stated, not left to a missing parameter", () => {
-    const query = params(adpQueryString({ ...defaultAdpControls(SEASON), season: "all" }, TODAY));
+    const query = boardParams({ ...defaultAdpControls(SEASON), season: "all" });
     assert.equal(query.season, "all");
   });
 
   test("an unbounded range sends no date at all", () => {
-    const all = params(
-      adpQueryString(
-        { ...defaultAdpControls(SEASON), range: { preset: "all", from: null, to: null } },
-        TODAY,
-      ),
-    );
+    const all = boardParams({
+      ...defaultAdpControls(SEASON),
+      range: { preset: "all", from: null, to: null },
+    });
     assert.equal("start_after" in all, false);
     assert.equal("start_before" in all, false);
   });
 
   test("a custom range sends the ends it has, and only those", () => {
     const query = (range: AdpRange) =>
-      params(adpQueryString({ ...defaultAdpControls(SEASON), range }, TODAY));
+      boardParams({ ...defaultAdpControls(SEASON), range });
 
     assert.deepEqual(
       query({ preset: "custom", from: "2026-06-01", to: "2026-07-31" }),
@@ -134,63 +161,90 @@ describe("adpQueryString", () => {
     assert.equal("start_after" in query({ preset: "custom", from: null, to: "2026-07-31" }), false);
   });
 
-  test("an 'all' control is omitted, not sent empty", () => {
-    // Every league filter left on "all" must drop out entirely.
-    const query = params(adpQueryString(defaultAdpControls(SEASON), TODAY));
-    for (const key of ["scoring", "superflex", "best_ball"]) {
-      assert.equal(key in query, false);
+  test("the league rules never travel as themselves — only their answer does", () => {
+    // They are a predicate engine over Sleeper's blobs, so what reaches the
+    // route is the ids they resolved to. A board carrying rules and an empty
+    // scope is an *unnarrowed* board: the caller resolves them, and until it
+    // has a league list to resolve against there is nothing honest to send.
+    const narrowed = withRules({ type: "2", size: [{ key: "teams", op: "eq", value: 12 }] });
+    assert.deepEqual(
+      boardParams(narrowed),
+      boardParams(defaultAdpControls(SEASON)),
+    );
+    for (const key of ["scoring", "superflex", "best_ball", "teams_min", "type"]) {
+      assert.equal(key in boardParams(narrowed), false);
     }
   });
 
-  test("league settings map to the route's vocabulary", () => {
-    const controls: AdpControls = {
-      season: "2025",
-      range: { preset: "all", from: null, to: null },
-      boards: "dynasty",
-      scoring: "ppr",
-      superflex: "yes",
-      bestBall: "no",
-      teams: "12",
-      rounds: "full",
-      steepness: 5,
-    };
-    assert.deepEqual(params(adpQueryString(controls, TODAY)), {
-      limit: "1000",
-      season: "2025",
-      draft_type: "snake,linear",
-      scoring: "ppr",
-      superflex: "1",
-      best_ball: "0",
-      teams_min: "12",
-      teams_max: "12",
-      rounds_min: "12",
+  test("a resolved scope rides as league ids, sorted", () => {
+    // Sorted is not cosmetic: unsorted, the key would depend on the order the
+    // leagues happened to arrive in, so one rule set becomes two cache entries.
+    const include = boardParams(defaultAdpControls(SEASON), {
+      kind: "include",
+      ids: ["3", "1", "2"],
     });
+    assert.equal(include.league_id, "1,2,3");
+    const exclude = boardParams(defaultAdpControls(SEASON), {
+      kind: "exclude",
+      ids: ["9", "8"],
+    });
+    assert.equal(exclude.xleague_id, "8,9");
+    assert.equal("league_id" in exclude, false);
+  });
+
+  test("rules that matched nothing send an empty list, not no list at all", () => {
+    // The one case where the two spellings mean opposite things: an *absent*
+    // parameter is no narrowing, where a present-and-empty one is "no league
+    // matched", which is a real answer and an empty board.
+    const query = board(defaultAdpControls(SEASON), { kind: "include", ids: [] });
+    assert.equal(query.search.has("league_id"), true);
+    assert.equal(query.search.get("league_id"), "");
+  });
+
+  test("a scope too long for a request line moves to a body, and the key doesn't", () => {
+    // GET and POST are one question: the query string is identical bar the ids,
+    // and the *key* inlines them either way — two league sets that differ are
+    // two boards whatever transport carried them.
+    const ids = Array.from({ length: 600 }, (_, i) => String(i));
+    const read = board(defaultAdpControls(SEASON), { kind: "include", ids });
+    assert.equal(read.method, "POST");
+    assert.deepEqual(read.body, { leagues: [...ids].sort() });
+    assert.equal(read.search.has("league_id"), false);
+    assert.ok(read.key.includes("league_id="));
+
+    // And the same ids sent the short way file under the same key.
+    const short = board(defaultAdpControls(SEASON), { kind: "include", ids });
+    assert.equal(read.key, short.key);
+  });
+
+  test("two scopes that differ are two boards", () => {
+    const a = board(defaultAdpControls(SEASON), { kind: "include", ids: ["1"] });
+    const b = board(defaultAdpControls(SEASON), { kind: "include", ids: ["2"] });
+    const none = board(defaultAdpControls(SEASON));
+    assert.equal(new Set([a.key, b.key, none.key]).size, 3);
   });
 
   test("the boards selection is display state, never a query parameter", () => {
     // The route answers both league-type boards on every fetch; which is drawn
     // is the drawer's business. Sending it would also split the client cache
     // into two entries holding identical payloads.
-    const both = adpQueryString(defaultAdpControls(SEASON), TODAY);
-    const one = adpQueryString(
-      { ...defaultAdpControls(SEASON), boards: "dynasty" },
-      TODAY,
-    );
+    const both = board(defaultAdpControls(SEASON)).key;
+    const one = board({ ...defaultAdpControls(SEASON), boards: "dynasty" }).key;
     assert.equal(both, one);
-    assert.equal("league_type" in params(both), false);
+    assert.equal("league_type" in params(board(defaultAdpControls(SEASON)).search), false);
   });
 
   test("steepness is a value-curve knob, not a board filter — never sent here", () => {
     // It drives the Leagues-tab team value, not which drafts /api/adp averages.
-    const flat = adpQueryString({ ...defaultAdpControls(SEASON), steepness: 3 }, TODAY);
-    const steep = adpQueryString({ ...defaultAdpControls(SEASON), steepness: 6 }, TODAY);
-    assert.equal(flat, steep);
-    assert.equal("steepness" in params(flat), false);
+    const flat = board({ ...defaultAdpControls(SEASON), steepness: 3 });
+    const steep = board({ ...defaultAdpControls(SEASON), steepness: 6 });
+    assert.equal(flat.key, steep.key);
+    assert.equal("steepness" in params(flat.search), false);
   });
 
   test("the rounds buckets bound one side each, all-rounds neither", () => {
     const round = (rounds: AdpControls["rounds"]) =>
-      params(adpQueryString({ ...defaultAdpControls(SEASON), rounds }, TODAY));
+      boardParams({ ...defaultAdpControls(SEASON), rounds });
     assert.equal("rounds_min" in round("all"), false);
     assert.equal("rounds_max" in round("all"), false);
     assert.deepEqual(
@@ -203,23 +257,13 @@ describe("adpQueryString", () => {
     );
   });
 
-  test("a team count binds both bounds to an exact match", () => {
-    const query = params(
-      adpQueryString({ ...defaultAdpControls(SEASON), teams: "10" }, TODAY),
-    );
-    assert.equal(query.teams_min, "10");
-    assert.equal(query.teams_max, "10");
-  });
-
   test("a board is always over snake and linear drafts, never auctions", () => {
     // An auction's `pick_no` is nomination order rather than a draft slot, so
     // its "ADP" is not one. It stopped being a control when that chip became the
     // startup/rookie question readers were actually asking it, so the parameter
     // is now a constant — and this is what pins it.
     for (const rounds of ["all", "rookie", "full"] as const) {
-      const query = params(
-        adpQueryString({ ...defaultAdpControls(SEASON), rounds }, TODAY),
-      );
+      const query = boardParams({ ...defaultAdpControls(SEASON), rounds });
       assert.equal(query.draft_type, "snake,linear");
     }
   });
@@ -228,8 +272,8 @@ describe("adpQueryString", () => {
 describe("adpListIdentity", () => {
   /** The board as it opens, and that board with one field written. */
   const base = defaultAdpControls(SEASON);
-  const identity = (over: Partial<AdpControls> = {}) =>
-    adpListIdentity({ ...base, ...over }, TODAY);
+  const identity = (over: Partial<AdpControls> = {}, scope: LeagueScope = ALL_LEAGUES) =>
+    adpListIdentity({ ...base, ...over }, scope, TODAY);
 
   test("every change to the population is a different list", () => {
     // Each of these narrows *which drafts are averaged*, so the players on the
@@ -238,10 +282,6 @@ describe("adpListIdentity", () => {
     const changes: Partial<AdpControls>[] = [
       { season: "2025" },
       { season: "all" },
-      { scoring: "ppr" },
-      { superflex: "yes" },
-      { bestBall: "no" },
-      { teams: "10" },
       { rounds: "rookie" },
       { range: { preset: "30d", from: null, to: null } },
       { range: { preset: "lookback", from: null, to: null, days: 45 } },
@@ -261,12 +301,24 @@ describe("adpListIdentity", () => {
     assert.equal(new Set(all).size, all.length);
   });
 
+  test("a different set of leagues is a different list", () => {
+    // The rules themselves are not in the identity — their *answer* is, which is
+    // what makes two rule sets that leave the same leagues one board and keeps
+    // the reader's place through a rule respelled.
+    const ids = (values: string[]): LeagueScope => ({ kind: "include", ids: values });
+    assert.notEqual(identity({}, ids(["1", "2"])), identity());
+    assert.notEqual(identity({}, ids(["1", "2"])), identity({}, ids(["1", "3"])));
+    assert.equal(identity({}, ids(["1", "2"])), identity({}, ids(["2", "1"])));
+    // And the rules alone move nothing, because nothing about the fetch moved.
+    assert.equal(identity({ leagueRules: rules({ type: "2" }) }), identity());
+  });
+
   test("swapping the market shown is a different list, though it narrows nothing", () => {
     // The fetch is identical — `boards` is display state and never reaches the
     // query — but `adpBoardRows` drops the rows a single board can't average and
     // re-sorts on that board's column, so the list under the reader is not the
     // one they were reading.
-    assert.equal(adpQueryString(base, TODAY), adpQueryString({ ...base, boards: "dynasty" }, TODAY));
+    assert.equal(board(base).key, board({ ...base, boards: "dynasty" }).key);
     const seen = new Set([identity(), identity({ boards: "redraft" }), identity({ boards: "dynasty" })]);
     assert.equal(seen.size, 3);
   });
@@ -295,12 +347,14 @@ describe("adpListIdentity", () => {
     );
   });
 
-  test("it is the query string and the shown boards, and nothing retyped", () => {
-    // The agreement that keeps a filter added to `adpQueryString` resetting the
+  test("it is the read's key and the shown boards, and nothing retyped", () => {
+    // The agreement that keeps a filter added to `adpBoardRead` resetting the
     // scroll without this function being touched.
-    const controls: AdpControls = { ...base, scoring: "half_ppr", boards: "dynasty" };
-    assert.ok(adpListIdentity(controls, TODAY).startsWith(adpQueryString(controls, TODAY)));
-    assert.ok(adpListIdentity(controls, TODAY).endsWith("dynasty"));
+    const controls: AdpControls = { ...base, season: "2025", boards: "dynasty" };
+    const scope: LeagueScope = { kind: "include", ids: ["7"] };
+    const id = adpListIdentity(controls, scope, TODAY);
+    assert.ok(id.startsWith(adpBoardRead(controls, scope, TODAY).key));
+    assert.ok(id.endsWith("dynasty"));
   });
 });
 
@@ -315,8 +369,7 @@ describe("adpListIdentity", () => {
  * reads it as the most valuable asset in dynasty football.
  */
 describe("rookieOrderingBoard / startupPricingBoard", () => {
-  const rounds = (controls: AdpControls) =>
-    params(adpQueryString(controls, TODAY));
+  const rounds = (controls: AdpControls) => boardParams(controls);
 
   test("each fixes its own end of the round scale, whatever is displayed", () => {
     for (const shown of ["all", "rookie", "full"] as const) {
@@ -365,10 +418,10 @@ describe("rookieOrderingBoard / startupPricingBoard", () => {
       ...defaultAdpControls(SEASON),
       season: "2025",
       range: { preset: "custom", from: "2025-05-01", to: "2025-06-30" },
-      scoring: "half_ppr",
-      superflex: "yes",
-      bestBall: "no",
-      teams: "14",
+      // The league rules ride on both boards too, though they reach the wire as
+      // a resolved scope rather than as themselves — which is what the scope
+      // assertion below is for.
+      leagueRules: rules({ slots: [{ key: "QB+SF", op: "gte", value: 2 }] }),
       rounds: "all",
     };
     const shared = {
@@ -377,11 +430,6 @@ describe("rookieOrderingBoard / startupPricingBoard", () => {
       draft_type: "snake,linear",
       start_after: "2025-05-01",
       start_before: "2025-06-30",
-      scoring: "half_ppr",
-      superflex: "1",
-      best_ball: "0",
-      teams_min: "14",
-      teams_max: "14",
     };
     assert.deepEqual(rounds(rookieOrderingBoard(controls)), {
       ...shared,
@@ -391,6 +439,17 @@ describe("rookieOrderingBoard / startupPricingBoard", () => {
       ...shared,
       rounds_min: "12",
     });
+
+    // The rules survive as a scope, which is what keeps the ordering and the
+    // pricing about one population: an SF rookie order priced off a 1QB startup
+    // board is wrong at every quarterback on the ladder.
+    const scope: LeagueScope = { kind: "include", ids: ["4", "9"] };
+    for (const derived of [rookieOrderingBoard(controls), startupPricingBoard(controls)]) {
+      assert.equal(
+        params(adpBoardRead(derived, scope, TODAY).search).league_id,
+        "4,9",
+      );
+    }
   });
 
   /**
@@ -401,16 +460,10 @@ describe("rookieOrderingBoard / startupPricingBoard", () => {
   test("the pricing board is the displayed one on the default board", () => {
     const base = defaultAdpControls(SEASON);
     assert.equal(DEFAULT_ADP_ROUNDS, "full");
-    assert.equal(
-      adpQueryString(startupPricingBoard(base), TODAY),
-      adpQueryString(base, TODAY),
-    );
+    assert.equal(board(startupPricingBoard(base)).key, board(base).key);
     // And the ordering board is genuinely a different one, or there would be no
     // ordering to read.
-    assert.notEqual(
-      adpQueryString(rookieOrderingBoard(base), TODAY),
-      adpQueryString(base, TODAY),
-    );
+    assert.notEqual(board(rookieOrderingBoard(base)).key, board(base).key);
   });
 
   test("neither reads the display-only fields", () => {
@@ -423,15 +476,20 @@ describe("rookieOrderingBoard / startupPricingBoard", () => {
       steepness: 6,
     };
     assert.equal(
-      adpQueryString(rookieOrderingBoard(controls), TODAY),
-      adpQueryString(rookieOrderingBoard(defaultAdpControls(SEASON)), TODAY),
+      board(rookieOrderingBoard(controls)).key,
+      board(rookieOrderingBoard(defaultAdpControls(SEASON))).key,
     );
   });
 });
 
-describe("adpValueQueryString", () => {
+describe("adpValueRead", () => {
+  const value = (controls: AdpControls, scope: LeagueScope = ALL_LEAGUES) =>
+    adpValueRead(controls, scope, TODAY);
+  const valueParams = (controls: AdpControls, scope: LeagueScope = ALL_LEAGUES) =>
+    params(value(controls, scope).search);
+
   test("the default board is the curve, the season and the startup bound", () => {
-    assert.deepEqual(params(adpValueQueryString(defaultAdpControls(SEASON), TODAY)), {
+    assert.deepEqual(valueParams(defaultAdpControls(SEASON)), {
       steepness: String(DEFAULT_ADP_STEEPNESS),
       board_season: "2026",
       rounds_min: "12",
@@ -440,14 +498,12 @@ describe("adpValueQueryString", () => {
 
   test("scoring and superflex never cross — they are the league's, not the reader's", () => {
     // A superflex roster priced off 1QB drafts is wrong at every position, so
-    // `adpBoardFor` matches both per league. The drawer's default for each is
-    // "all", so sending them would *widen* every card's board rather than narrow
-    // it — which is why this is asserted against a board that sets them.
-    const query = params(
-      adpValueQueryString(
-        { ...defaultAdpControls(SEASON), scoring: "ppr", superflex: "no" },
-        TODAY,
-      ),
+    // `adpBoardFor` matches both per league. They are not expressible from here
+    // any more either: the drawer's chips for both became league *rules*, and a
+    // rule set says which leagues' drafts are on the board rather than which
+    // board a given roster reads.
+    const query = valueParams(
+      withRules({ slots: [{ key: "QB+SF", op: "lte", value: 1 }], scoring: [{ key: "rec", op: "gte", value: 1 }] }),
     );
     assert.equal("scoring" in query, false);
     assert.equal("superflex" in query, false);
@@ -458,7 +514,7 @@ describe("adpValueQueryString", () => {
     // the other is a filter that silently stops applying rather than an error —
     // the route would fall back to the unnarrowed board and every card would go
     // on answering with the wrong number. One definition, read from both sides.
-    const query = params(adpValueQueryString(defaultAdpControls(SEASON), TODAY));
+    const query = valueParams(defaultAdpControls(SEASON));
     assert.ok(ADP_VALUE_PARAMS.boardSeason in query);
     assert.ok(ADP_VALUE_PARAMS.steepness in query);
   });
@@ -468,56 +524,57 @@ describe("adpValueQueryString", () => {
     // prefix, where it picks which leagues' rosters are being priced. Sharing the
     // name would make moving the drawer to 2024 swap the card list out from
     // under itself.
-    const query = params(
-      adpValueQueryString({ ...defaultAdpControls(SEASON), season: "2024" }, TODAY),
-    );
+    const query = valueParams({ ...defaultAdpControls(SEASON), season: "2024" });
     assert.equal(query.board_season, "2024");
     assert.equal("season" in query, false);
   });
 
   test("the population axes are the ones `adpBoardFor` left broad", () => {
-    const query = params(
-      adpValueQueryString(
-        {
-          ...defaultAdpControls(SEASON),
-          range: { preset: "custom", from: "2026-06-01", to: "2026-07-31" },
-          rounds: "rookie",
-          teams: "10",
-          bestBall: "yes",
-        },
-        TODAY,
-      ),
-    );
+    const query = valueParams({
+      ...defaultAdpControls(SEASON),
+      range: { preset: "custom", from: "2026-06-01", to: "2026-07-31" },
+      rounds: "rookie",
+    });
     assert.deepEqual(query, {
       steepness: String(DEFAULT_ADP_STEEPNESS),
       board_season: "2026",
       start_after: "2026-06-01",
       start_before: "2026-07-31",
       rounds_max: "5",
-      teams_min: "10",
-      teams_max: "10",
-      best_ball: "1",
     });
+  });
+
+  test("the league scope reaches the cards, spelled exactly as the board spells it", () => {
+    // The whole reason these two routes answer a POST: a card priced on a
+    // different board from the drawer above it is the two-answers-to-one-question
+    // this path exists to close, and a narrowed board's ids outgrow a request
+    // line. One spelling, so the two reads cannot narrow differently.
+    const scope: LeagueScope = { kind: "exclude", ids: ["5", "2"] };
+    assert.equal(valueParams(defaultAdpControls(SEASON), scope).xleague_id, "2,5");
+
+    const ids = Array.from({ length: 600 }, (_, i) => String(i));
+    const long = value(defaultAdpControls(SEASON), { kind: "include", ids });
+    assert.equal(long.method, "POST");
+    assert.deepEqual(long.body, { leagues: [...ids].sort() });
+    assert.ok(long.key.includes("league_id="));
   });
 
   test("the display-only selection is not on it, the same as the board query", () => {
     // Which of the two markets is drawn is the drawer's business; the route
     // reads each league's own type (`getLeagueAdpBoards`) to pick a side.
     assert.equal(
-      adpValueQueryString(defaultAdpControls(SEASON), TODAY),
-      adpValueQueryString({ ...defaultAdpControls(SEASON), boards: "dynasty" }, TODAY),
+      value(defaultAdpControls(SEASON)).key,
+      value({ ...defaultAdpControls(SEASON), boards: "dynasty" }).key,
     );
   });
 
   test("the curve is on this one, where the board query refuses it", () => {
-    // The mirror of `adpQueryString`'s own rule: steepness converts an averaged
+    // The mirror of `adpBoardRead`'s own rule: steepness converts an averaged
     // ADP into value, so it means nothing to `/api/adp` and everything here.
-    const steep = params(
-      adpValueQueryString({ ...defaultAdpControls(SEASON), steepness: 6 }, TODAY),
-    );
+    const steep = valueParams({ ...defaultAdpControls(SEASON), steepness: 6 });
     assert.equal(steep.steepness, "6");
     assert.equal(
-      "steepness" in params(adpQueryString({ ...defaultAdpControls(SEASON), steepness: 6 }, TODAY)),
+      "steepness" in boardParams({ ...defaultAdpControls(SEASON), steepness: 6 }),
       false,
     );
   });
@@ -539,32 +596,47 @@ describe("steepnessSummary", () => {
 });
 
 describe("previewAdpPool", () => {
-  test("uses the size filter when the board is narrowed to one", () => {
-    assert.equal(previewAdpPool("10"), 10 * 9);
+  const size = (rule: FilterRule) => rules({ size: [rule] });
+
+  test("uses an exact size rule when the board carries one", () => {
+    assert.equal(previewAdpPool(size({ key: "teams", op: "eq", value: 10 })), 10 * 9);
   });
 
-  test("an unnarrowed or junk size falls back to a typical 12-team league", () => {
+  test("only an equality answers it — a bound is a range of pools, not one", () => {
+    // The chip this replaced could say nothing but "12-team", so it was a number
+    // or "all". A rule can also say `teams >= 12`, and a preview that guessed at
+    // an end of that would quote a pool no filter asked for.
+    for (const op of ["gte", "lte", "gt", "lt", "ne"] as const) {
+      assert.equal(previewAdpPool(size({ key: "teams", op, value: 10 })), 12 * 9);
+    }
+  });
+
+  test("no rule, or a junk size, falls back to a typical 12-team league", () => {
     // The drawer's board belongs to no league, so the preview needs a premise;
     // a zero or unparseable one would collapse the curve rather than pick a pool.
-    assert.equal(previewAdpPool("all"), 12 * 9);
-    assert.equal(previewAdpPool("0"), 12 * 9);
-    assert.equal(previewAdpPool("nonsense"), 12 * 9);
+    assert.equal(previewAdpPool(DEFAULT_LEAGUE_FILTERS), 12 * 9);
+    assert.equal(previewAdpPool(size({ key: "teams", op: "eq", value: 0 })), 12 * 9);
+    assert.equal(previewAdpPool(size({ key: "teams", op: "eq", value: 10.5 })), 12 * 9);
   });
 });
 
 describe("previewAdpValue", () => {
   test("the top of the board is the peak, and value falls down it", () => {
-    assert.equal(previewAdpValue(1, "all", DEFAULT_ADP_STEEPNESS), ADP_PEAK);
+    assert.equal(previewAdpValue(1, DEFAULT_LEAGUE_FILTERS, DEFAULT_ADP_STEEPNESS), ADP_PEAK);
     assert.ok(
-      previewAdpValue(50, "all", DEFAULT_ADP_STEEPNESS) >
-        previewAdpValue(120, "all", DEFAULT_ADP_STEEPNESS),
+      previewAdpValue(50, DEFAULT_LEAGUE_FILTERS, DEFAULT_ADP_STEEPNESS) >
+        previewAdpValue(120, DEFAULT_LEAGUE_FILTERS, DEFAULT_ADP_STEEPNESS),
     );
   });
 
   test("a steeper curve is worth less everywhere but the very top", () => {
     // What the slider does, and the reason the preview re-prices as it moves.
-    assert.ok(previewAdpValue(40, "all", 6) < previewAdpValue(40, "all", 3));
-    assert.equal(previewAdpValue(1, "all", 6), previewAdpValue(1, "all", 3));
+    assert.ok(previewAdpValue(40, DEFAULT_LEAGUE_FILTERS, 6) <
+        previewAdpValue(40, DEFAULT_LEAGUE_FILTERS, 3));
+    assert.equal(
+      previewAdpValue(1, DEFAULT_LEAGUE_FILTERS, 6),
+      previewAdpValue(1, DEFAULT_LEAGUE_FILTERS, 3),
+    );
   });
 });
 
@@ -580,12 +652,11 @@ describe("deriveScoring", () => {
 });
 
 describe("seedFromLeague", () => {
-  test("fills the league settings and leaves the rest", () => {
+  test("fills the league settings as rules, and leaves the rest", () => {
     const base: AdpControls = {
       ...defaultAdpControls(SEASON),
       range: { preset: "custom", from: "2025-05-01", to: null },
       rounds: "rookie",
-      superflex: "yes",
     };
     const seeded = seedFromLeague(
       base,
@@ -599,10 +670,17 @@ describe("seedFromLeague", () => {
     // The league's type seeds which board the list displays — the market this
     // league is actually in — since it is no longer a fetch filter to set.
     assert.equal(seeded.boards, "dynasty");
-    assert.equal(seeded.scoring, "half_ppr");
-    assert.equal(seeded.bestBall, "yes");
-    assert.equal(seeded.teams, "10");
-    assert.equal(seeded.superflex, "yes");
+    assert.equal(seeded.leagueRules.bestBall, "yes");
+    assert.deepEqual(seeded.leagueRules.size, [{ key: "teams", op: "eq", value: 10 }]);
+    // The *buckets*, not the league's exact numbers: `rec = 0.5` is true and far
+    // narrower than the population this league belongs to, which is what
+    // `SCORING_SQL` groups by — a seed has to land there or "match a league"
+    // hands back a board of a dozen drafts.
+    assert.deepEqual(seeded.leagueRules.scoring, [
+      { key: "rec", op: "gte", value: 0.5 },
+      { key: "rec", op: "lt", value: 1 },
+    ]);
+    assert.deepEqual(seeded.leagueRules.slots, [{ key: "QB+SF", op: "gte", value: 2 }]);
     // The season *is* a league setting: matching a 2025 league while leaving the
     // board on this year prices it against a market it was never in.
     assert.equal(seeded.season, "2026");
@@ -615,21 +693,51 @@ describe("seedFromLeague", () => {
     assert.equal(seeded.rounds, "rookie");
   });
 
-  test("seeds superflex off the slots, so a 1QB league resets it", () => {
+  test("seeds superflex off the slots, so a 1QB league writes the other bound", () => {
     // The board a two-QB league belongs to is the one thing this shortcut used
-    // to leave pointing at whatever was there before.
-    const base: AdpControls = { ...defaultAdpControls(SEASON), superflex: "yes" };
+    // to leave pointing at whatever was there before. It writes the *predicate*
+    // `isSuperflexLineup` asks — more than one QB-eligible slot — rather than the
+    // exact count, so the seed lands on the population, not on one lineup.
     const seeded = seedFromLeague(
-      base,
+      defaultAdpControls(SEASON),
       league({ roster_positions: ["QB", "RB", "WR", "TE", "FLEX", "BN"] }),
     );
-    assert.equal(seeded.superflex, "no");
+    assert.deepEqual(seeded.leagueRules.slots, [{ key: "QB+SF", op: "lte", value: 1 }]);
+  });
+
+  test("an unsynced lineup writes no slot rule at all", () => {
+    // Null and zero are different answers, the rule the whole filter package is
+    // built on: an unknown lineup is not evidence of a 1QB league, and a
+    // `qb+sf <= 1` on it would seed a board this league may not belong to.
+    const seeded = seedFromLeague(
+      defaultAdpControls(SEASON),
+      league({ roster_positions: null }),
+    );
+    assert.deepEqual(seeded.leagueRules.slots, []);
+  });
+
+  test("each scoring bucket is the bounds the endpoint groups by", () => {
+    const scoringOf = (rec: number | null) =>
+      seedFromLeague(
+        defaultAdpControls(SEASON),
+        league({ scoring_settings: rec === null ? null : { rec } }),
+      ).leagueRules.scoring;
+    assert.deepEqual(scoringOf(1), [{ key: "rec", op: "gte", value: 1 }]);
+    assert.deepEqual(scoringOf(0.5), [
+      { key: "rec", op: "gte", value: 0.5 },
+      { key: "rec", op: "lt", value: 1 },
+    ]);
+    // Standard is a bound rather than `rec = 0`, because Sleeper omits the key
+    // entirely for a league that pays nothing — so the bound catches both
+    // spellings, and the quarter-point leagues between them.
+    assert.deepEqual(scoringOf(0), [{ key: "rec", op: "lt", value: 0.5 }]);
+    assert.deepEqual(scoringOf(null), [{ key: "rec", op: "lt", value: 0.5 }]);
   });
 
   test("a league Sleeper omits `type` for reads as redraft, lineup", () => {
     const seeded = seedFromLeague(defaultAdpControls(SEASON), league({ settings: {} }));
     assert.equal(seeded.boards, "redraft");
-    assert.equal(seeded.bestBall, "no");
+    assert.equal(seeded.leagueRules.bestBall, "no");
   });
 
   test("a keeper league reads the redraft board, the server's own bucketing", () => {
@@ -646,10 +754,14 @@ describe("seedFromLeague", () => {
     // Every setting it can't read falls back the way an omitted field does.
     const seeded = seedFromLeague(defaultAdpControls(SEASON), league({ settings: null }));
     assert.equal(seeded.boards, "redraft");
-    assert.equal(seeded.bestBall, "no");
-    assert.equal(seeded.superflex, "no", "an unknown lineup is not a superflex one");
-    assert.equal(seeded.scoring, "std", "and an unknown rate is standard scoring");
-    assert.equal(seeded.teams, "12");
+    assert.equal(seeded.leagueRules.bestBall, "no");
+    assert.deepEqual(seeded.leagueRules.slots, [], "an unknown lineup writes no rule");
+    assert.deepEqual(
+      seeded.leagueRules.scoring,
+      [{ key: "rec", op: "lt", value: 0.5 }],
+      "and an unknown rate is standard scoring",
+    );
+    assert.deepEqual(seeded.leagueRules.size, [{ key: "teams", op: "eq", value: 12 }]);
   });
 
   test("a type Sleeper wrote as a string is not read as dynasty", () => {
@@ -664,10 +776,24 @@ describe("seedFromLeague", () => {
   });
 
   test("seeding twice from one league is the same board", () => {
-    // It writes every field it seeds rather than merging, so pressing the
-    // shortcut again can't accumulate a different answer.
+    // It *replaces* the three rule lists rather than appending to them, so
+    // pressing the shortcut again can't accumulate a different answer — and a
+    // rule left over from a previous seed can't quietly narrow the new one.
     const once = seedFromLeague(defaultAdpControls(SEASON), league({ total_rosters: 10 }));
     assert.deepEqual(seedFromLeague(once, league({ total_rosters: 10 })), once);
+  });
+
+  test("a second seed replaces the first league's rules rather than adding to them", () => {
+    const first = seedFromLeague(
+      defaultAdpControls(SEASON),
+      league({ total_rosters: 10, roster_positions: ["QB", "SUPER_FLEX", "BN"] }),
+    );
+    const second = seedFromLeague(
+      first,
+      league({ total_rosters: 14, roster_positions: ["QB", "RB", "BN"] }),
+    );
+    assert.deepEqual(second.leagueRules.size, [{ key: "teams", op: "eq", value: 14 }]);
+    assert.deepEqual(second.leagueRules.slots, [{ key: "QB+SF", op: "lte", value: 1 }]);
   });
 });
 
@@ -909,15 +1035,28 @@ describe("adpNarrowingCount", () => {
     assert.equal(adpNarrowingCount(defaultAdpControls(SEASON), SEASON), 0);
   });
 
-  test("each filter counts once", () => {
-    const base = defaultAdpControls(SEASON);
-    assert.equal(adpNarrowingCount({ ...base, superflex: "yes" }, SEASON), 1);
+  test("each filter counts once, and every league rule with them", () => {
+    assert.equal(
+      adpNarrowingCount(withRules({ type: "2" }), SEASON),
+      1,
+    );
+    // A rule counts as one, the same arithmetic `activeFilterCount` does for the
+    // filters' own trigger — eight rules are eight narrowings, and rolling the
+    // list up as "1" would understate a selection doing most of the work. That
+    // the two triggers count the same way is the point: one dialog behind them.
     assert.equal(
       adpNarrowingCount(
-        { ...base, superflex: "yes", rounds: "rookie", teams: "12" },
+        {
+          ...withRules({
+            type: "2",
+            slots: [{ key: "QB+SF", op: "gte", value: 2 }],
+            size: [{ key: "teams", op: "eq", value: 12 }],
+          }),
+          rounds: "rookie",
+        },
         SEASON,
       ),
-      3,
+      4,
     );
   });
 

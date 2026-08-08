@@ -22,6 +22,13 @@ const ctx = (over: Partial<PlayerMetricContext> = {}): PlayerMetricContext => ({
   adpPosition: 12.3,
   superflex: true,
   draftCount: 37,
+  // A season panel by default — the shape the leagues list and the trades board
+  // open on. The week cases below opt in, which is also how they assert that a
+  // week metric says "not asked for" rather than "no data" without one.
+  week: null,
+  weekProjection: null,
+  ppg: null,
+  ppgSource: null,
   ...over,
 });
 
@@ -97,5 +104,67 @@ describe("player-value metrics", () => {
 
   test("ADP is an em dash when the player has no average on the board", () => {
     assert.equal(cell("adp", { adp: null }).text, null);
+  });
+});
+
+describe("week metrics", () => {
+  const week = {
+    week: 5,
+    weekProjection: 18.4,
+    ppg: { average: 16.25, games: 4 },
+    ppgSource: { season: "2026", weeks: 4, prior: false },
+  };
+
+  test("week proj reads the week's projection, not a slice of the season", () => {
+    const c = cell("week_proj", week);
+    assert.equal(c.text, "18.40");
+    assert.match(c.title, /week 5/);
+  });
+
+  test("a projected zero is printed and dimmed; no projection is an em dash", () => {
+    // The distinction the whole catalogue keeps: a real 0.00 is a claim, and a
+    // bye or an unsynced week is the absence of one.
+    assert.equal(cell("week_proj", { ...week, weekProjection: 0 }).text, "0.00");
+    assert.equal(cell("week_proj", { ...week, weekProjection: 0 }).muted, true);
+    assert.equal(cell("week_proj", { ...week, weekProjection: null }).text, null);
+  });
+
+  test("ppg carries its denominator and the season it came from", () => {
+    const c = cell("ppg", week);
+    assert.equal(c.text, "16.25");
+    assert.match(c.title, /4 weeks/);
+    assert.match(c.title, /this season/);
+  });
+
+  test("the prior-season fallback says which season it is quoting", () => {
+    // Week 1 has nothing this season to average, so the column is last year's
+    // form in the same units as the projection beside it — and only the hover
+    // separates the two.
+    const c = cell("ppg", {
+      week: 1,
+      weekProjection: 18.4,
+      ppg: { average: 14.1, games: 16 },
+      ppgSource: { season: "2025", weeks: 18, prior: true },
+    });
+    assert.equal(c.text, "14.10");
+    assert.match(c.title, /2025 season/);
+  });
+
+  test("on a season panel both read as not asked for, not as no data", () => {
+    // The leagues list and the trades board open on a season, so a reader who
+    // aims a slot at one of these gets an em dash and a hover saying why —
+    // rather than one implying the league has no projection.
+    for (const key of ["week_proj", "ppg"]) {
+      const c = cell(key);
+      assert.equal(c.text, null);
+      assert.match(c.title, /opened on a week/);
+    }
+  });
+
+  test("a player who has not played inside a real window is an em dash", () => {
+    // Distinct from the case above: the window exists, he is simply not in it.
+    const c = cell("ppg", { ...week, ppg: null });
+    assert.equal(c.text, null);
+    assert.match(c.title, /No games played/);
   });
 });

@@ -4,13 +4,11 @@ import { describe, test } from "node:test";
 import type { ManagerLeague } from "@/shared/manager";
 import type { AdpBoardStats } from "@/shared/manager";
 
-import { defaultAdpControls, seedFromLeague } from "../../adp-controls.ts";
-import { FIXED_FILTERS } from "./adp-drawer.constants.ts";
+import { DEFAULT_ADP_ROUNDS, defaultAdpControls, seedFromLeague } from "../../adp-controls.ts";
+import { ROUNDS_SEGMENT } from "./adp-drawer.constants.ts";
 import {
   adpCellTitle,
   boardTitle,
-  leagueSizeFilter,
-  narrowingFilters,
   soleBoardOf,
   takenShare,
   takenTitle,
@@ -44,82 +42,22 @@ const stats = (over: Partial<AdpBoardStats> = {}): AdpBoardStats => ({
   ...over,
 });
 
-describe("the filter table", () => {
-  test("every fixed filter reads and writes its own field", () => {
-    const written = FIXED_FILTERS.map((f) => f.set(controls, f.options[1].value));
-    // Each write lands on exactly one field, and reads back through the same
-    // accessor — the whole point of `get`/`set` over a computed key. The others
-    // are checked against the *starting* controls rather than against "all",
-    // since `rounds` opens on the startup bucket.
-    for (const [i, next] of written.entries()) {
-      const spec = FIXED_FILTERS[i];
-      assert.equal(spec.get(next), spec.options[1].value);
-      const untouched = FIXED_FILTERS.filter((f) => f.key !== spec.key);
-      for (const other of untouched) assert.equal(other.get(next), other.get(controls));
-    }
-  });
-
-  test("the fixed filters are the four whose options are not data", () => {
+describe("the draft-kind row", () => {
+  test("it offers the three buckets the query string knows how to send", () => {
+    // The vocabulary the route parses, one side of a matched pair with no
+    // compiler link: a value dropped here is a filter that silently stops
+    // narrowing rather than a type error.
     assert.deepEqual(
-      FIXED_FILTERS.map((f) => f.key),
-      ["rounds", "scoring", "superflex", "bestBall"],
-    );
-    // The vocabulary the route parses — a value dropped here is a filter that
-    // silently stops narrowing rather than a type error.
-    assert.deepEqual(
-      FIXED_FILTERS.map((f) => f.options.map((o) => o.value)),
-      [
-        ["all", "full", "rookie"],
-        ["all", "std", "half_ppr", "ppr"],
-        ["all", "yes", "no"],
-        ["all", "no", "yes"],
-      ],
+      ROUNDS_SEGMENT.options.map((o) => o.value),
+      ["all", "full", "rookie"],
     );
   });
 
-  test("changing one filter leaves the rest of the controls alone", () => {
-    const scoring = FIXED_FILTERS.find((f) => f.key === "scoring");
-    assert.ok(scoring);
-    const next = scoring.set({ ...controls, teams: "12" }, "ppr");
-    assert.equal(next.scoring, "ppr");
-    assert.equal(next.teams, "12");
-    assert.equal(next.season, controls.season);
-    assert.deepEqual(next.range, controls.range);
-    assert.equal(next.steepness, controls.steepness);
-  });
-
-  test("the size options are the sizes the population actually holds", () => {
-    const spec = leagueSizeFilter([league("a", 12), league("b", 10), league("c", 12)]);
-    assert.deepEqual(spec.options, [
-      { value: "all", label: "All sizes" },
-      { value: "10", label: "10 teams" },
-      { value: "12", label: "12 teams" },
-    ]);
-    assert.equal(spec.set(controls, "10").teams, "10");
-  });
-
-  test("an empty population still offers 'all', and nothing else", () => {
-    assert.deepEqual(leagueSizeFilter([]).options, [
-      { value: "all", label: "All sizes" },
-    ]);
-  });
-
-  test("narrowing is everything that isn't 'all', the rounds default included", () => {
-    // Against "all" rather than against each field's default, which is where
-    // this parts company with `adpNarrowingCount`: the board opens on startups,
-    // so that chip is on the closed row from the start — it is the largest fact
-    // about the population, and the only way back to every draft.
-    const filters = [...FIXED_FILTERS, leagueSizeFilter([league("a", 12)])];
-    assert.deepEqual(
-      narrowingFilters(filters, controls).map((f) => f.key),
-      ["rounds"],
-    );
-    assert.deepEqual(narrowingFilters(filters, { ...controls, rounds: "all" }), []);
-    const narrowed = { ...controls, scoring: "ppr" as const, teams: "12" };
-    assert.deepEqual(
-      narrowingFilters(filters, narrowed).map((f) => f.key),
-      ["rounds", "scoring", "teams"],
-    );
+  test("Reset returns it to the board's own default, not to the first option", () => {
+    // The board opens on startups, which is not "All drafts" — see
+    // `DEFAULT_ADP_ROUNDS` for why an unnarrowed default is the wrong one here.
+    assert.equal(ROUNDS_SEGMENT.defaultValue, DEFAULT_ADP_ROUNDS);
+    assert.notEqual(ROUNDS_SEGMENT.defaultValue, ROUNDS_SEGMENT.options[0].value);
   });
 });
 
@@ -138,9 +76,10 @@ describe("the control writes", () => {
   });
 
   test("a season change touches nothing else", () => {
-    const next = withSeason({ ...controls, scoring: "ppr", teams: "10" }, "2025");
-    assert.equal(next.scoring, "ppr");
-    assert.equal(next.teams, "10");
+    const rules = { ...controls.leagueRules, bestBall: "yes" as const };
+    const next = withSeason({ ...controls, leagueRules: rules }, "2025");
+    assert.deepEqual(next.leagueRules, rules);
+    assert.equal(next.rounds, controls.rounds);
     assert.equal(next.boards, controls.boards);
   });
 
@@ -154,8 +93,12 @@ describe("the control writes", () => {
   });
 
   test("a board toggle narrows nothing else", () => {
-    const next = withBoardToggle({ ...controls, teams: "12" }, "redraft");
-    assert.equal(next.teams, "12");
+    const rules = {
+      ...controls.leagueRules,
+      size: [{ key: "teams", op: "eq" as const, value: 12 }],
+    };
+    const next = withBoardToggle({ ...controls, leagueRules: rules }, "redraft");
+    assert.deepEqual(next.leagueRules, rules);
     assert.equal(next.season, controls.season);
   });
 
@@ -190,9 +133,22 @@ describe("the board's own wording", () => {
       "Average draft position over 1,204 drafts in dynasty leagues",
     );
     assert.match(takenTitle("redraft"), /redraft board’s drafts/);
-    assert.match(valueTitle("all"), /12-slot pool|slot startable pool/);
-    // The premise is the pool the size filter implies, not a constant.
-    assert.notEqual(valueTitle("10"), valueTitle("12"));
+    assert.match(valueTitle(controls.leagueRules), /slot startable pool/);
+    // The premise is the pool an exact size *rule* implies, not a constant.
+    const sized = (teams: number) => ({
+      ...controls.leagueRules,
+      size: [{ key: "teams", op: "eq" as const, value: teams }],
+    });
+    assert.notEqual(valueTitle(sized(10)), valueTitle(sized(12)));
+    // A bound is a range of pools rather than one, so it falls back rather than
+    // guessing at an end of it — see `previewDraftTeams`.
+    assert.equal(
+      valueTitle({
+        ...controls.leagueRules,
+        size: [{ key: "teams", op: "gte", value: 14 }],
+      }),
+      valueTitle(controls.leagueRules),
+    );
   });
 
   test("an ADP cell's hover carries the spread and the sample", () => {
