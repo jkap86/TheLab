@@ -1073,6 +1073,25 @@
     pointer-events: none;
   }
 
+  /* --------------------------------------- D′ · the key in the rail */
+  /* The seek key stops floating and becomes the rail's trailing key. Its
+     plate keeps riding an edge — the rail's own bottom one, which is what
+     a nameplate is a device for, where today it rides the key's edge and
+     lands wherever the scroll has put a card. */
+  /* `.seek` is absolute at its floating seat; in the rail it is an ordinary
+     item of the row. The plate stays a *sibling* of the notched billet, since
+     `clip-path` clips its whole subtree — nested inside, the plate is severed
+     at the edge it is meant to straddle, which is the trade card's nameplate
+     rule and is exactly what this mock did wrong on its first render. */
+  .seek--inrail { position: relative; top: auto; right: auto; flex: none; display: flex; }
+  /* Measured against the rail rather than the key: the key is 34px inside
+     a rail whose padding is 8px below it, so the plate has to clear both
+     to sit *on* the rail's edge rather than inside its face. */
+  .seek--inrail .seek__plate { bottom: -16px; }
+  /* The rail has to let the plate out — and a rail that clipped it would
+     be the trade card's `clip-path` trap one part over. */
+  .ctlrail { overflow: visible; }
+
   /* ------------------------------------------------- E · dissolved */
   /* No card at all: the board's identity rides the chrome, the count and
      the triggers join the search bays' own rail. */
@@ -1113,6 +1132,7 @@
     <a class="bar__key" href="#b">B · Masthead</a>
     <a class="bar__key" href="#c">C · Bezel</a>
     <a class="bar__key" href="#d">D · Plate + rail</a>
+    <a class="bar__key" href="#d2">D′ · One rail</a>
     <a class="bar__key" href="#e">E · Dissolved</a>
     <a class="bar__key" href="#compare">Compare</a>
   </span>
@@ -1792,6 +1812,205 @@
     </div>
   </section>
 
+  <!-- ========================================================== OPTION D′ -->
+  <section class="opt opt--alt" id="d2">
+    <div class="opt__head">
+      <span class="opt__letter opt__letter--pair">D′</span>
+      <div>
+        <h2>One rail — the seek key folded in</h2>
+        <p class="opt__thesis">D's blocker is that its rail lands in the band the seek key already
+          holds: same 8px under the app bar, same trailing edge, both <code>z-30</code>. This is
+          the resolution rather than the workaround — <b>one pinned band holding both things a
+          reader reaches for while reading</b>: how far out the circle is drawn, and where in the
+          board they are standing. The key was already a key; what it gains is an edge for its
+          plate to ride.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>D′</b> · <span>864px · at rest</span> <span class="live">live stepper</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div data-measure="d2-desktop">
+              <div class="idplate">
+                <span class="idplate__rail"></span>
+                <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+                  <div style="flex:1 1 320px;min-width:0">
+                    <p style="font-family:var(--display);font-size:15px;font-weight:600;letter-spacing:0.03em;color:#eaf9ff" data-cap-name>Every league</p>
+                    <p style="margin-top:4px;font-size:12px;color:rgba(255,255,255,0.45)" data-note>The whole crawled market.</p>
+                  </div>
+                  <span class="mast__fig" style="margin-left:auto">
+                    <b class="eng" style="font-size:26px">54,504</b> <i>trades</i>
+                  </span>
+                </div>
+              </div>
+              <div class="ctlrail">
+                <div class="instr" style="flex:0 0 268px" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <span class="seam"></span>
+                <span class="scope" style="flex:1 1 auto">2026 · all leagues</span>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+                <span class="seam"></span>
+                <!-- At the top of the board there is no bound, so the key is
+                     unlit and draws no plate — `SeekKey`'s own rule, unchanged
+                     by the move: a plate reading "today" would put a bound on
+                     screen that the query string deliberately does not carry. -->
+                <span class="seek seek--inrail">
+                  <span class="billet notch">
+                    <span class="billet__face notch seek__face" data-cal></span>
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+          </div>
+
+          <div class="stage-inner">
+            <p class="stage-cap">Scrolled and travelled — one band under the bar, the date on its edge</p>
+            <div class="pinstage">
+              <div class="pinbar">
+                <span style="color:var(--active)">▮</span> THE LAB / TRADES
+                <span style="margin-left:auto;display:flex;gap:8px;align-items:center" data-adp=""></span>
+              </div>
+              <div class="ctlrail ctlrail--pinned" style="border-radius:0 0 12px 12px">
+                <div class="instr" style="flex:0 0 268px" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <span class="seam"></span>
+                <span class="scope" style="flex:1 1 auto">2026 · all leagues</span>
+                <span class="tally"><b style="font-size:14px">54,504</b></span>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+                <span class="seam"></span>
+                <!-- Travelled: the key is lit and the date rides the rail's
+                     bottom edge, which is the whole gain over the float — a
+                     nameplate is a part rising out of an *edge*, and today's
+                     seat gives it whichever card the scroll has put under it. -->
+                <span class="seek seek--inrail">
+                  <span class="billet billet--lit notch">
+                    <span class="billet__face notch seek__face" data-cal></span>
+                  </span>
+                  <span class="seek__plate">JUN 30, 2026</span>
+                </span>
+              </div>
+              <div class="clipped" style="height:150px;margin-top:16px">
+                <div data-cards="one"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>D′</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div data-measure="d2-phone">
+              <div class="idplate">
+                <span class="idplate__rail"></span>
+                <p style="font-family:var(--display);font-size:14px;font-weight:600;letter-spacing:0.03em;color:#eaf9ff" data-cap-name>Every league</p>
+                <div style="display:flex;align-items:flex-end;gap:10px;margin-top:5px">
+                  <p style="flex:1 1 auto;min-width:0;font-size:12px;color:rgba(255,255,255,0.45)" data-note>The whole crawled market.</p>
+                  <span class="mast__fig"><b class="eng" style="font-size:22px">54,504</b></span>
+                </div>
+              </div>
+              <div class="ctlrail">
+                <!-- The key stays on the stepper's line rather than joining the
+                     chips below it: when the rail wraps, what a reader must not
+                     lose is the pairing of *where am I* with *what am I looking
+                     at*. The chips are settings and can take the second line. -->
+                <div class="instr" style="flex:1 1 0;min-width:0" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <span class="seek seek--inrail">
+                  <span class="billet billet--lit notch">
+                    <span class="billet__face notch seek__face" data-cal></span>
+                  </span>
+                  <span class="seek__plate">JUN 30</span>
+                </span>
+                <!-- 13px, not the row's own gap: the plate hangs below the
+                     stepper's line, so a wrapped rail has to reserve room for
+                     it or the date lands on the chips underneath. That is the
+                     phone's share of the cost of folding the key in. -->
+                <span style="display:flex;gap:9px;flex-basis:100%;margin-top:13px">
+                  <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                  <span class="chip chip--sm">Leagues</span>
+                </span>
+              </div>
+            </div>
+            <div style="height:14px"></div>
+            <div data-bays></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>One pinned band instead of two.</b> The app bar, then this — where D would have made
+          three layers and left the seek key floating on top of its own trailing keys. Everything
+          reachable while reading is on one line, and the coverage charged to the board is paid
+          once.</p>
+        <p><b>The plate finally rides an edge that is always there.</b> A nameplate is a part
+          rising out of an edge to label what is inside it; today it rises out of a floating key
+          and lands over whichever card the scroll has put beneath it. On the rail's bottom edge it
+          labels the rail — which is exactly what the date is: the band saying what board this is,
+          and where in it you are.</p>
+        <p><b>The two questions asked while scrolling become adjacent.</b> "How far out is this
+          drawn" and "where am I standing" are one glance apart rather than at opposite ends of
+          the viewport, and both are one press.</p>
+        <p><b>It costs no new material.</b> The rail is <code>.lab-ledge</code>'s face, the key is
+          the billet it already is, the plate is <code>.lab-nameplate</code> where it already
+          was.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p><b>The key stops being at a fixed corner.</b> Floating, it is always at the same place
+          on screen; in the rail it moves with the row — and when the rail wraps at 390px the
+          reader has to find it again. It is kept on the stepper's line here for that reason,
+          which is a rule the phone layout now has to hold.</p>
+        <p><b>A wrapped rail has to reserve room for the plate.</b> The date hangs below the
+          stepper's line, so at 390px the row underneath is pushed 13px clear of it — a rule that
+          is invisible in the markup and shows up as a date sitting on a chip the first time
+          someone edits the row.</p>
+        <p><b>The rail must publish its own height.</b> Once it wraps, anything measuring the
+          chrome under the bar needs <code>--list-ledge-h</code>'s trick — a runtime measurement,
+          which is the app's only one and is worth not acquiring a second of lightly.</p>
+        <p><b>It re-opens a seat that was settled recently.</b> The float was itself the fix for
+          the key being filed with the settings, and its resting band above the first card was a
+          second fix on top of that. This is a third move for one control — worth making only
+          because the rail gives it a better edge than the one it has, not because the header
+          wanted the space.</p>
+        <p><b>The plate hangs into the board permanently.</b> ~10px of the first visible card,
+          for as long as the reader has travelled — where today's key pays that only while
+          pinned, and the resting band above the list was bought precisely to avoid it.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- =========================================================== OPTION E -->
   <section class="opt" id="e">
     <div class="opt__head">
@@ -1925,6 +2144,7 @@
             <th>B · Masthead</th>
             <th>C · Bezel</th>
             <th>D · Plate + rail</th>
+            <th>D′ · One rail</th>
             <th>E · Dissolved</th>
           </tr>
         </thead>
@@ -1936,6 +2156,7 @@
             <td data-cell="b-desktop">—</td>
             <td data-cell="c-desktop">—</td>
             <td data-cell="d-desktop">—</td>
+            <td data-cell="d2-desktop">—</td>
             <td data-cell="e-desktop">—</td>
           </tr>
           <tr>
@@ -1945,6 +2166,7 @@
             <td data-cell="b-phone">—</td>
             <td data-cell="c-phone">—</td>
             <td data-cell="d-phone">—</td>
+            <td data-cell="d2-phone">—</td>
             <td data-cell="e-phone">—</td>
           </tr>
           <tr>
@@ -1953,6 +2175,7 @@
             <td class="yes">Slab — the list's own</td>
             <td class="mid">Trough, new hierarchy</td>
             <td class="mid">Trough + bezel</td>
+            <td class="yes">Plate + billet rail</td>
             <td class="yes">Plate + billet rail</td>
             <td class="yes">Bar + rail, no block</td>
           </tr>
@@ -1963,6 +2186,7 @@
             <td class="yes">Yes — 34px, leads</td>
             <td class="mid">Yes, inside a run of five</td>
             <td class="yes">Yes — on the plate</td>
+            <td class="yes">Yes — on the plate</td>
             <td class="no">No — back to a tally</td>
           </tr>
           <tr>
@@ -1971,6 +2195,7 @@
             <td class="mid">Two, but ranked</td>
             <td class="yes">One caption block</td>
             <td class="yes">Facts, each captioned</td>
+            <td class="yes">One on the plate</td>
             <td class="yes">One on the plate</td>
             <td class="no">One line, truncates</td>
           </tr>
@@ -1981,6 +2206,7 @@
             <td class="yes">Caption only — the readout drops its name</td>
             <td class="no">Gauge <em>and</em> readout</td>
             <td class="no">Plate <em>and</em> readout</td>
+            <td class="no">Plate <em>and</em> readout</td>
             <td class="mid">Readout, in the bar</td>
           </tr>
           <tr>
@@ -1990,6 +2216,7 @@
             <td class="no">No — thesis needs ~700px</td>
             <td class="mid">Gauges drop below <code>sm</code></td>
             <td class="yes">Pinned half never wraps</td>
+            <td class="mid">Pinned half wraps at phone</td>
             <td class="mid">Rail wraps once</td>
           </tr>
           <tr>
@@ -1999,6 +2226,7 @@
             <td class="no">No</td>
             <td class="no">No</td>
             <td class="yes">Yes — pinned</td>
+            <td class="yes">Yes — pinned, beside the date</td>
             <td class="yes">Yes — in the bar</td>
           </tr>
           <tr>
@@ -2008,6 +2236,7 @@
             <td class="yes">None — sizes only</td>
             <td class="mid">Bezel ported to header scale</td>
             <td class="no">A pinned rail + its stacking</td>
+            <td class="mid">A pinned rail; the key moves into it</td>
             <td class="no">A two-occupant bar seat</td>
           </tr>
           <tr>
@@ -2017,6 +2246,7 @@
             <td class="mid">A 34px number dimming on stale</td>
             <td class="no">Second housing in view; breaks the card's own 3-level rule</td>
             <td class="no">Three pinned layers; collides with the seek key</td>
+            <td class="mid">A third move for one control</td>
             <td class="no">Bar crowding; the sentence is lost</td>
           </tr>
         </tbody>
@@ -2050,10 +2280,14 @@
         <li><b>Leave C's bezel on the card.</b> The gauges are right about captioning every fact
           and wrong about repeating a housing the row below already owns — the fourth countable
           depth is allowed there precisely because nothing else in view has one.</li>
-        <li><b>Hold D until the seek key is settled.</b> It is the only direction that answers
-          "reachable while reading", and it cannot be built next to a pinned key already sitting
-          where its own trailing keys would land. If the seek key folded <em>into</em> that rail,
-          D becomes the strongest option on the page.</li>
+        <li><b>D as drawn is not buildable, and D′ is why.</b> D's rail lands in the band the
+          seek key already holds — same offset, same trailing edge, both <code>z-30</code> — so
+          the choice is never "D or not D", it is whether that key folds into the rail. Folded, it
+          gains an edge for its plate and the board pays for one pinned band instead of two.</li>
+        <li><b>D′ is the strongest direction here and the biggest ask.</b> It is a third move for
+          one control in as many revisions, and it should be decided as a question about the seek
+          key rather than as a consequence of picking a header. If the answer is no, D goes with
+          it — and A + B stand on their own, since neither touches a pinned band at all.</li>
         <li><b>Keep E as the measurement, not the plan.</b> It is worth knowing exactly how much
           the block costs — but the sentence it deletes is the one that explains an inert control,
           and the bar seat is spoken for.</li>
@@ -2155,6 +2389,16 @@ const TOOLS_KEY = `
 document.querySelectorAll("[data-adp]").forEach((el) => {
   el.innerHTML = ADP_BLOCK + TOOLS_KEY;
 });
+
+/* The seek key's own glyph — D′ folds this part into the rail rather than
+   redrawing it, which is most of that direction's argument. */
+const CAL = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+  <rect x="1.5" y="3" width="13" height="11.5" rx="2" fill="none" stroke="#cfeef3" stroke-opacity=".9" stroke-width="1.2"/>
+  <path d="M1.5 6.5h13" stroke="#cfeef3" stroke-opacity=".9" stroke-width="1.2"/>
+  <path d="M5 1.5v3M11 1.5v3" stroke="#cfeef3" stroke-opacity=".9" stroke-width="1.2" stroke-linecap="round"/>
+  <rect x="6.6" y="9" width="2.8" height="2.8" rx=".6" fill="#00ffe5"/>
+</svg>`;
+document.querySelectorAll("[data-cal]").forEach((el) => { el.innerHTML = CAL; });
 
 /* The two search bays, for context: every direction is judged by what it looks
    like directly above them, since that is where it actually sits. */
