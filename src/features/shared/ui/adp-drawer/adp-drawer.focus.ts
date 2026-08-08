@@ -106,25 +106,32 @@ export function tabWrap(
  * What a keypress means while the drawer is open. `null` is every other key,
  * which the drawer has no opinion about.
  *
- * **Escape means the drawer, and nothing nearer.** It used to have two answers,
- * because the drawer held a filter tray floating over its own board and Escape
- * has to close the innermost thing that is up. That tray is the shared
- * league-filters dialog now — a real `<dialog>`, in the top layer, which hears
- * Escape itself and never lets the press reach this listener — so the inner case
- * is the platform's and this is left with one. It is the same apparatus the
- * columns editor retired for the same reason, one tool over: a `<dialog>`
- * arrives with the focus trap, the inertness and the innermost-first Escape
- * already written.
+ * **Escape closes the innermost thing that is up, so it has two answers again.**
+ * It had two, then one, and now two, and the reason it moved each time is worth
+ * keeping: what decides it is not how many parts the drawer contains but how many
+ * of them this listener can *hear*. The old filter tray was a plain floating
+ * panel, so Escape had to be routed past it; the shared league-filters dialog
+ * that replaced it is a real `<dialog>` in the top layer, which hears the press
+ * itself and never lets it reach here, so the inner case became the platform's.
+ * The bays are plain floating panels again — a `<dialog>` cannot be one, since a
+ * modal one makes the board behind it inert and the board is the thing a bay
+ * exists to be watched against — so the routing is ours once more.
+ *
+ * The `<dialog>` inside the Leagues bay is unaffected and needs no ordering
+ * against this: while it is open the press never arrives, so "innermost" resolves
+ * dialog, then bay, then drawer without this function knowing the dialog exists.
  */
 export type DrawerKeyAction =
   | { readonly type: "close-drawer" }
+  | { readonly type: "close-bay" }
   | { readonly type: "trap-tab"; readonly backwards: boolean };
 
 export function drawerKeyAction(
   key: string,
   shiftKey: boolean,
+  bayOpen: boolean,
 ): DrawerKeyAction | null {
-  if (key === "Escape") return { type: "close-drawer" };
+  if (key === "Escape") return { type: bayOpen ? "close-bay" : "close-drawer" };
   if (key === "Tab") return { type: "trap-tab", backwards: shiftKey };
   return null;
 }
@@ -154,11 +161,20 @@ export function drawerKeydownHandler<T extends { focus: () => void }>(deps: {
   activeElement: () => T | null;
   /** The dialog panel itself — the fallback when it holds no stops. */
   focusContainer: () => void;
+  /**
+   * Whether a bay is up **as of this press**, which is why it is a thunk like
+   * everything else here: a reader opens and shuts bays between two presses of
+   * Escape, and a handler closing over the answer would take the drawer down
+   * from under an open bay.
+   */
+  bayOpen: () => boolean;
+  closeBay: () => void;
   closeDrawer: () => void;
 }): (event: DrawerKeyEvent) => void {
   return (event) => {
-    const action = drawerKeyAction(event.key, event.shiftKey);
+    const action = drawerKeyAction(event.key, event.shiftKey, deps.bayOpen());
     if (action === null) return;
+    if (action.type === "close-bay") return deps.closeBay();
     if (action.type === "close-drawer") return deps.closeDrawer();
 
     const stops = deps.stops();
