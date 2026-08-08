@@ -1464,7 +1464,8 @@
         <p class="opt__thesis">
           Same bay, same rule shape, a much larger key list — and one genuinely new thing: a rule whose
           value is <em>named</em> rather than typed, because "Trades · is · Disabled" and
-          <code>disable_trades = 1</code> are not the same control.
+          <code>disable_trades = 1</code> are not the same control. Which turns out to have a second
+          half, since <code>trade_deadline</code>'s 99 is a name wearing a number.
         </p>
       </div>
     </div>
@@ -1497,7 +1498,7 @@
                   <span class="inset grow">Trade deadline</span>
                   <span class="inset inset--op">≥</span>
                   <span class="inset" style="width:52px; text-align:center">13</span>
-                  <span class="trail"><span class="num">71</span><span class="x">×</span></span>
+                  <span class="trail"><span class="num">24</span><span class="x">×</span></span>
                 </div>
                 <div class="addrule"><span style="font-size:13px; line-height:1">+</span> Rule</div>
               </div>
@@ -1581,9 +1582,10 @@
           <code>k = 0</code> trap the slot rules already keep null for.
         </p>
         <p>
-          <span class="tape tape--warn">unverified <b>value codings</b></span> — the enum spellings below
-          (<code>waiver_type</code> 0/1/2, whether "no deadline" is 99 or the final week) need one pass
-          over the stored blobs before they are named on screen. There is no database in this session.
+          <span class="tape tape--warn">unverified <b>enum codings</b></span> — <code>waiver_type</code>'s
+          0/1/2 and <code>pick_trading</code>'s flag still want one pass over the stored blobs before they
+          are named on screen. <code>trade_deadline</code> is settled: <b>99 means no deadline</b>, which is
+          a sentinel rather than a week and is the third value kind below.
         </p>
       </div>
     </div>
@@ -1655,6 +1657,104 @@
 
     <div class="opt__body" style="margin-top:34px">
       <div class="screen">
+        <div class="screen__tab">The third kind &nbsp;·&nbsp; <code>trade_deadline = 99</code> is not week 99</div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="duo">
+              <div>
+                <p class="stage-cap" style="margin-bottom:10px"><span class="cap">99 read as a week</span></p>
+                <div style="display:grid; gap:6px">
+                  <div class="rulerow">
+                    <span class="inset grow">Trade deadline</span>
+                    <span class="inset inset--op">≤</span>
+                    <span class="inset" style="width:52px; text-align:center">12</span>
+                    <span class="trail"><span class="num">47</span><span class="x">×</span></span>
+                  </div>
+                  <div class="rulerow">
+                    <span class="inset grow">Trade deadline</span>
+                    <span class="inset inset--op">≥</span>
+                    <span class="inset" style="width:52px; text-align:center">13</span>
+                    <span class="trail"><span class="num" style="color:var(--amber)">71</span><span class="x">×</span></span>
+                  </div>
+                </div>
+                <div class="tapes"><span class="tape tape--warn">of those 71, <b>47</b> have no deadline at all</span></div>
+                <p class="empty" style="margin-top:10px">
+                  One of these two is right by luck. <code>99 ≤ 12</code> is false, so the early-deadline
+                  question happens to work; <code>99 ≥ 13</code> is true, so "leagues that trade late"
+                  quietly answers with every league that never stops trading — a filter returning the
+                  wrong rows rather than an error.
+                </p>
+              </div>
+              <div>
+                <p class="stage-cap" style="margin-bottom:10px"><span class="cap">99 read as an absence</span></p>
+                <div style="display:grid; gap:6px">
+                  <div class="rulerow">
+                    <span class="inset grow">Trade deadline</span>
+                    <span class="inset inset--op">≥</span>
+                    <span class="inset" style="width:52px; text-align:center">13</span>
+                    <span class="trail"><span class="num">24</span><span class="x">×</span></span>
+                  </div>
+                  <div class="rulerow">
+                    <span class="inset grow">Trade deadline</span>
+                    <span class="inset inset--op" style="font-size:11px">is</span>
+                    <span class="inset vsel" style="min-width:104px">No deadline <span class="cv">▼</span></span>
+                    <span class="trail"><span class="num">47</span><span class="x">×</span></span>
+                  </div>
+                </div>
+                <div class="tapes"><span class="tape tape--good">both questions answerable, <b>neither</b> by luck</span></div>
+                <p class="empty" style="margin-top:10px">
+                  The reader returns null for 99, so every comparison fails on a league with no deadline —
+                  and the sentinel gets a named entry in the same value menu the flags use, matched by
+                  identity rather than through <code>compare</code>. That is what the
+                  <b>No trade deadline</b> quick-add writes.
+                </p>
+              </div>
+            </div>
+
+            <p class="prose" style="margin-top:20px; font-size:13.5px">
+              So there are <b>three</b> value kinds, not two: a <em>quantity</em> (teams, slots, budget), a
+              <em>label</em> (a flag, an enum), and a <em>quantity carrying a sentinel</em> — a real scale
+              with one value on it that isn't on the scale. Only the third needs both controls at once, and
+              <code>trade_deadline</code> is the only key on the table that is one.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <h3>Why this is the same bug twice</h3>
+        <p>
+          <code>sizeValue</code> already returns null for <code>total_rosters === 0</code>, because a zero
+          there is a row stored before the league answered and <code>teams &lt; 10</code> would sweep every
+          one of them in. <code>slotCount</code> returns null for an unsynced lineup so <code>k = 0</code>
+          doesn't mean "leagues without a kicker, plus every league we haven't read".
+        </p>
+        <p>
+          <b>99 is that shape a third time</b>, with one difference worth keeping: those two are genuinely
+          unknown and this one is a known answer wearing a number. So it is null for comparison
+          <em>and</em> reachable by name — the second half is what the other two don't need.
+        </p>
+      </div>
+
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p>
+          A third row shape, and a <code>sentinel</code> field on the key table beside <code>values</code>.
+          The rule underneath is still <code>{key, op, value}</code> — the sentinel rule is
+          <code>trade_deadline eq 99</code> stored, drawn as <b>is · No deadline</b> — so nothing changes
+          in <code>activeFilters</code>, the trigger count or the match rail's chip, which reads "no trade
+          deadline" rather than "trade deadline = 99".
+        </p>
+        <p>
+          It also means a key's value kind has to be <em>declared</em> rather than inferred. An unranked
+          key falling through to a plain quantity is still right — it just can't know about a sentinel
+          nobody has told it about, which is the honest default.
+        </p>
+      </div>
+    </div>
+
+    <div class="opt__body" style="margin-top:34px">
+      <div class="screen">
         <div class="screen__tab">Proposed key table &nbsp;·&nbsp; ranked, named, and read off the data</div>
         <div class="screen__stage">
           <div class="stage-inner">
@@ -1668,7 +1768,7 @@
                 <tbody>
                   <tr><th><code>teams</code></th><td>Teams</td><td><code>total_rosters</code> — the column, not the blob</td><td>quantity</td><td class="yes">in use today</td></tr>
                   <tr><th><code>disable_trades</code></th><td>Trades</td><td><code>settings.disable_trades</code></td><td>label · Enabled / Disabled</td><td class="mid">coding to verify</td></tr>
-                  <tr><th><code>trade_deadline</code></th><td>Trade deadline</td><td><code>settings.trade_deadline</code></td><td>quantity · week</td><td class="mid">"none" spelling to verify</td></tr>
+                  <tr><th><code>trade_deadline</code></th><td>Trade deadline</td><td><code>settings.trade_deadline</code></td><td>quantity · week, sentinel <code>99</code> = no deadline</td><td class="yes">confirmed</td></tr>
                   <tr><th><code>pick_trading</code></th><td>Pick trading</td><td><code>settings.pick_trading</code></td><td>label · On / Off</td><td class="mid">coding to verify</td></tr>
                   <tr><th><code>trade_review_days</code></th><td>Trade review</td><td><code>settings.trade_review_days</code></td><td>quantity · days</td><td class="mid">to verify</td></tr>
                   <tr><th><code>waiver_type</code></th><td>Waivers</td><td><code>settings.waiver_type</code></td><td>label · Rolling / Reverse / FAAB</td><td class="mid">coding to verify</td></tr>
@@ -2059,7 +2159,8 @@
         <li><b>Rails first.</b> <code>SegmentRow</code> becomes <code>FilterRail</code>; the trough, the counts and the probe are untouched. Delete <code>openGroup</code>, <code>toggleGroup</code>, <code>closeGroup</code>, the trough ref and the <code>cancel</code> guard. The ADP board's fourth row (draft kind) becomes a countless rail, unchanged in every other way.</li>
         <li><b>Settings bay.</b> <code>LeagueFilters.size</code> → <code>settings</code>; <code>SIZE_KEYS</code> → a ranked label table; a <code>settingKeyOptions(leagues)</code> beside <code>scoringKeyOptions</code>; <code>matchesSizeRule</code> → <code>matchesSettingRule</code> with the per-key absent rule. Presets rewritten.</li>
         <li><b>Named values.</b> <code>SettingKey.values</code> as an optional table; <code>RuleRow</code> renders a menu instead of a number field when it is present, and narrows the op menu to <code>eq</code>/<code>ne</code>.</li>
-        <li><b>Verify the codings</b> against the stored blobs before naming any enum on screen — one query over <code>leagues.settings</code>. Unverified keys ship as quantities, which is never wrong, only terse.</li>
+        <li><b>Sentinels.</b> <code>SettingKey.sentinel</code> beside it — <code>trade_deadline</code>'s 99. The reader returns null for it so every comparison fails, and the value menu carries it by name so "no trade deadline" is still askable. Without both halves, <code>trade_deadline ≥ 13</code> answers with 71 leagues of which 47 have no deadline at all.</li>
+        <li><b>Verify the remaining codings</b> against the stored blobs before naming any enum on screen — one query over <code>leagues.settings</code>. Unverified keys ship as plain quantities, which is never wrong, only terse. <code>trade_deadline</code> is confirmed; <code>waiver_type</code> and <code>pick_trading</code> are not.</li>
         <li><b>Season band</b>, options derived from the leagues in hand, hidden below two seasons. Add <code>season</code> to <code>FIXED_FILTERS</code> so the trigger count, the plate summary and the rail chip all follow.</li>
         <li><b>Then</b> the multi-season leagues read, as its own change.</li>
       </ol>
