@@ -6,6 +6,7 @@ import type { AdpBoardType } from "./adp-filters";
 import { dynastyPickGrid, ownedDraftPicks } from "./draft-picks";
 import { standingScore } from "./rank";
 import type { LeagueDraft, TradedPick } from "./draft-picks";
+import type { ManagerSyncState } from "./sync-freshness";
 import type {
   LeagueDetail,
   Leaguemate,
@@ -88,19 +89,34 @@ type Row = LeagueRow & {
 };
 
 /**
- * When this manager+season was last synced, or null if never. Used to decide
- * whether cached leagues can be served immediately and refreshed in the
- * background.
+ * Both of this manager+season's sync timestamps, or null if it has never been
+ * tried at all.
+ *
+ * It used to be `getManagerSyncedAt`, one column, and that was the whole of the
+ * bug {@link managerSyncGate} exists to fix: the caller could ask "when did we
+ * last try" or "when was this last complete" but got one answer to both. The
+ * two columns have always been in the table — see {@link ManagerSyncState} for
+ * what each means — and every reader now says which of them it is asking about.
+ *
+ * A row with `attempt_at` and a null `synced_at` is a real state and not a
+ * half-written one: a manager the crawler has enumerated but never fully synced,
+ * or one whose every sync so far has left leagues behind.
  */
-export async function getManagerSyncedAt(
+export async function getManagerSyncState(
   userId: string,
   season: string,
-): Promise<Date | null> {
-  const { rows } = await pool.query<{ synced_at: Date }>(
-    `SELECT synced_at FROM manager_syncs WHERE user_id = $1 AND season = $2`,
+): Promise<ManagerSyncState | null> {
+  const { rows } = await pool.query<{
+    synced_at: Date | null;
+    attempt_at: Date | null;
+  }>(
+    `SELECT synced_at, attempt_at FROM manager_syncs
+      WHERE user_id = $1 AND season = $2`,
     [userId, season],
   );
-  return rows[0]?.synced_at ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  return { syncedAt: row.synced_at ?? null, attemptAt: row.attempt_at ?? null };
 }
 
 /**

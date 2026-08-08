@@ -268,6 +268,33 @@ dependent reads against a list still being filled in). The rule generalises past
 this one caller: **whatever a lock-loser hands back, the thing it must never say
 is that the data is final.**
 
+**And a lock-loser is only one of the three ways a sync ends short, which is why
+"how fresh is this" and "how recently did we try" are two columns.**
+`manager_syncs` has carried `synced_at` and `attempt_at` since the crawler
+landed, with exactly those meanings, and `syncManagerLeaguesLocked` advanced
+both on every run — so a Sleeper timeout that dropped three of a hundred leagues
+left a partial graph indistinguishable from a complete one for the whole TTL.
+Advancing neither is the opposite failure and the more expensive one: the leagues
+route decides to refresh on that timestamp, so a sync that stamps nothing after a
+failure is the full ~11-requests-per-league fan-out on *every* request until
+Sleeper recovers. `shared/manager/sync-freshness` is the split — `attempt_at`
+always, `synced_at` only when no league failed — and four things hold it up.
+**The two TTLs are deliberately equal**: an attempt buys exactly the quiet the
+old lying `synced_at` bought, so a manager whose leagues keep half-failing never
+costs *more* upstream traffic than one whose leagues succeed. **One gate
+function answers both askers** — the route before it decides to refresh, the sync
+again inside the lock — because a throttle read correctly in one place and not
+the other is a throttle that isn't there. **A race is never overridden, not even
+by `force`**, and it now covers an *attempt* and not just a completed sync:
+re-running the fan-out a millisecond after the lock's winner tried is what the
+lock exists to prevent, whether or not that try got every league. And
+**`SyncSummary.complete` is the only field that licenses `stale: false`** —
+`failed === 0` is not it, since a run that did nothing has no failures to report
+and no claim to make either. The client shows the two counts (`97 of 100 leagues
+refreshed`) and only where leagues actually failed: a locked sync has its own
+note, and a throttled skip is ordinary operation, so warning on either would put
+a permanent band on the plate.
+
 **A per-key lock is computed, not listed** — `managerSyncLockKey(userId)` hashes
 the id into the object slot under one class id, because you cannot enumerate
 every manager in `LOCK_KEYS` ahead of time. The rule above still holds for the

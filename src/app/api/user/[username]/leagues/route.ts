@@ -1,14 +1,15 @@
 import {
   getManagerLeagues,
-  getManagerSyncedAt,
+  getManagerSyncState,
+  managerSyncGate,
   syncManagerLeagues,
   toUserInfo,
-  SYNC_TTL_MS,
 } from "@/shared/manager";
 import type { LeaguesStreamMessage } from "@/shared/contract";
 import { ensurePlayersFresh } from "@/shared/players";
 
 import { isInternalRequest } from "../../../internal-auth";
+import { readFailureResponse } from "../../../read-failure";
 import { resolveManagerRequest } from "../manager-request";
 
 export const runtime = "nodejs";
@@ -79,10 +80,52 @@ export async function GET(
   const userInfo = toUserInfo(user);
   const refreshKey = `${user.user_id}:${season}`;
 
-  const syncedAt = await getManagerSyncedAt(user.user_id, season);
-  const hasCache = syncedAt !== null;
-  const isStale = !syncedAt || Date.now() - syncedAt.getTime() >= SYNC_TTL_MS;
-  const wantRefresh = force || isStale;
+  // Both reads happen before the stream opens, because the cold-sync
+  // reservation below has to be taken with no await between the check and the
+  // reservation — and the check needs to know whether there is anything to
+  // serve. A failure here therefore can't be a message on the stream, so it
+  // takes the app's own read-failure answer: a busy pool is a 503 the client
+  // may retry, not a 500 telling it to stop.
+  let cached: Awaited<ReturnType<typeof getManagerLeagues>>;
+  let syncState: Awaited<ReturnType<typeof getManagerSyncState>>;
+  try {
+    [syncState, cached] = await Promise.all([
+      getManagerSyncState(user.user_id, season),
+      getManagerLeagues(user.user_id, season),
+    ]);
+  } catch (error) {
+    console.error("[leagues] cache read failed:", error);
+    return readFailureResponse(error, "Failed to load leagues");
+  }
+
+  // The same gate `syncManagerLeagues` applies inside the lock, asked here so a
+  // refresh that would only be skipped never opens a stream to be skipped on.
+  // `requestedAt: now` because nothing has been queued for yet — the race arms
+  // of the gate are for the caller that has just waited on the lock.
+  const now = Date.now();
+  const gate = managerSyncGate(syncState, { now, requestedAt: now, force });
+  /**
+   * Whether there is an honest answer to send immediately.
+   *
+   * Leagues we hold, **or** a complete sync inside its TTL saying this manager
+   * genuinely has none — the second half matters because without it a manager
+   * with no leagues would be re-synced in the foreground on every request. It is
+   * deliberately not "a `manager_syncs` row exists": with `synced_at` now
+   * advancing only on a complete sync, a manager whose graph keeps half-failing
+   * would otherwise read as cold forever and take the cold path — a full
+   * foreground fan-out — while 97 of their 100 leagues sat in the database.
+   */
+  const hasCache = cached.length > 0 || gate.complete;
+  /** Cached leagues that are not known-current, which is what `stale` promises. */
+  const isStale = !gate.complete;
+  // `gate.run` is what carries the retry throttle: after a partial or failed
+  // sync `synced_at` no longer advances, so `isStale` alone would ask Sleeper for
+  // the whole graph again on *every* request until it recovered. `attempt_at`
+  // is what buys the quiet the old always-advancing `synced_at` used to buy by
+  // lying. A caller with nothing to show is never throttled — there is no cache
+  // to serve instead, and that path is bounded by `MAX_COLD_SYNCS` below and by
+  // the per-manager advisory lock inside the sync.
+  const wantRefresh = gate.run || !hasCache;
   // Skip a duplicate background refresh only when we can still serve cache.
   // Check and reserve back-to-back with no await between them — the reservation
   // used to happen inside the stream, after the cached-leagues read, and two
@@ -140,12 +183,11 @@ export async function GET(
       try {
         // 1. Serve cached leagues immediately when we have them.
         if (hasCache) {
-          const leagues = await getManagerLeagues(user.user_id, season);
           send({
             type: "result",
             user: userInfo,
             season,
-            leagues,
+            leagues: cached,
             stale: isStale,
             refreshing: willRefresh,
           });
@@ -168,17 +210,18 @@ export async function GET(
             user: userInfo,
             season,
             leagues,
-            // **A sync that lost the lock did not write these leagues, and the
-            // holder has not finished writing them.** Every other outcome here
-            // leaves a complete graph — a real sync, or a skip because the
-            // winner finished while we queued — and only this one leaves
-            // whatever has been committed so far, which on a manager's first
-            // visit is a fraction of their leagues. Reported `stale: false` it
-            // was a partial list wearing the word "final": the client cached it,
-            // closed its progress bar and counted a refresh it never saw. It
+            // **`complete` is the only thing that licenses `stale: false`.**
+            // Three outcomes leave the list below short of final and they used
+            // to be spelled two different ways: a sync that lost the lock (the
+            // holder is mid-write, so on a first visit this is a fraction of the
+            // leagues), a sync that ran and dropped leagues to a Sleeper
+            // failure, and a skip that skipped because the last *attempt* is
+            // still inside its throttle window. Reported `stale: false` any of
+            // them is a partial list wearing the word "final": the client caches
+            // it, closes its progress bar and counts a refresh it never saw. It
             // still ships, because a partial list is worth more than an error
             // and the client's own stale time brings it back.
-            stale: summary.locked,
+            stale: !summary.complete,
             // False either way: no second `result` follows on this stream, and
             // that is exactly what this flag promises.
             refreshing: false,

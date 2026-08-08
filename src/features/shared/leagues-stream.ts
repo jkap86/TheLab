@@ -111,9 +111,10 @@ export type LeaguesStreamOptions = {
   searched: string;
   /**
    * `?refresh=1` — asks the server to sync even when its own cache is still
-   * fresh. Honoured only for an internally authorized caller; from a browser the
-   * parameter is ignored and the stream is simply re-read. See
-   * `useManagerLeagues`.
+   * fresh. Honoured only for an internally authorized caller, so it is the
+   * operator path and nothing else: from a browser it is ignored, which is why
+   * `useManagerLeagues` stopped sending it rather than keeping a parameter that
+   * described something the request could not have.
    */
   refresh?: boolean;
   signal?: AbortSignal;

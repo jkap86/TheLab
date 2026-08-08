@@ -638,6 +638,33 @@ describe("the startup boundary in the population", () => {
     assert.match(branch, /coalesce\(t\.status_updated, t\.created\) IS NULL\s*\n?\s*OR/);
   });
 
+  test("a completed startup's cutoff drops everything at or before its last pick", () => {
+    // The other half of the boundary: once the startup is over, its last pick is
+    // the cutoff, and a trade filed at exactly that instant is still a trade made
+    // in the draft room. `<=`, not `<`.
+    assert.match(
+      TRADES_POPULATION_SQL,
+      /coalesce\(t\.status_updated, t\.created\) <= sd\.last_picked/,
+    );
+  });
+
+  test("the cutoff reads the coalesce, never `status_updated` alone", () => {
+    // Sleeper leaves `created` as the only timestamp on some valid rows, so a
+    // bare `t.status_updated` would compare null against the cutoff, drop the
+    // predicate to unknown and keep every one of those trades regardless of when
+    // it happened. This is the same fold `TRADE_SORT_SQL` orders on.
+    const boundary = TRADES_POPULATION_SQL.slice(
+      TRADES_POPULATION_SQL.indexOf("startup_draft sd"),
+    );
+    const bare = [...boundary.matchAll(/t\.status_updated(?!,)/g)];
+    assert.deepEqual(bare, [], "every mention of it is inside a coalesce");
+    assert.equal(
+      [...boundary.matchAll(/coalesce\(t\.status_updated, t\.created\)/g)].length,
+      2,
+      "both the undated test and the cutoff comparison read it",
+    );
+  });
+
   test("the season is bound, not spliced, and both halves read the same $1", () => {
     assert.match(TRADES_POPULATION_SQL, /l\.season = \$1/);
     const used = new Set([...TRADES_POPULATION_SQL.matchAll(/\$(\d+)/g)].map((m) => m[1]));

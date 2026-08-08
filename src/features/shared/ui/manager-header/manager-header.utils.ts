@@ -34,6 +34,26 @@ export function hasSyncState({
 }
 
 /**
+ * What a partly-refreshed sync has to say, or null where it has nothing.
+ *
+ * A refresh that dropped leagues to a Sleeper failure leaves the list below
+ * mixed — most rows just refreshed, a few as old as the last pass — and the page
+ * cannot otherwise be told apart from a complete one. It states the two counts
+ * rather than the failure alone ("97 of 100 leagues refreshed" beats "3 failed
+ * to sync") because what a reader needs is how much of what they are looking at
+ * is current, and the failure count on its own leaves that to arithmetic.
+ *
+ * **Gated on actual failures, not on `complete`.** A summary is incomplete for
+ * three reasons and only this one is worth a line: a sync that lost the lock has
+ * its own note, and a throttled skip is ordinary operation — a warning on that
+ * would sit on the plate through every quiet minute after an upstream hiccup.
+ */
+export function partialSyncNote(summary: HeaderSyncSummary): string | null {
+  if (!summary || summary.failed <= 0) return null;
+  return `${summary.leagues} of ${summary.total} leagues refreshed`;
+}
+
+/**
  * What follows the word "Refreshing" — the league count where the stream is
  * reporting one, an ellipsis otherwise.
  *
