@@ -75,7 +75,13 @@ export {
   toUserInfo,
 } from "./resolve";
 export type { ResolvedManager, ResolvedManagerId } from "./resolve";
-export { getDraftAdp, getDraftAdpForPlayers, getDraftDensity } from "./adp";
+export {
+  DYNASTY_LEAGUE_TYPE,
+  LEAGUE_TYPE_SQL,
+  getDraftAdp,
+  getDraftAdpForPlayers,
+  getDraftDensity,
+} from "./adp";
 export type {
   AdpBoardStats,
   AdpResult,
