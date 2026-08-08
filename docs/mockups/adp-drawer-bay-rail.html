@@ -1,0 +1,1408 @@
+<title>ADP drawer — the bay rail, and what the float covers</title>
+
+<style>
+  /* ------------------------------------------------------------------
+     Eleventh in the series and a direct sequel to
+     `adp-drawer-accordion.html`, which offered four arrangements; this
+     one takes the two that were liked — B's rail of bay keys and C's
+     floating body — and builds the hybrid, which is better than either
+     half measured on its own.
+
+     The number that decides it has changed. With a float, block height
+     is constant and small in every variant, so the thing that separates
+     them is **how much board the open bay hides**. Every panel below
+     measures that, per bay, live.
+     ------------------------------------------------------------------ */
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  :root {
+    color-scheme: dark;
+
+    --bench: #050b12;
+    --app-bg: rgb(10, 20, 30);
+    --panel: rgb(12, 23, 33);
+
+    --well: #07131e;
+    --slot: #040e17;
+
+    --active: #00ffe5;
+    --active-deep: #00b0a0;
+    --on-active: #052029;
+    --edge: #05121d;
+    --edge-active: #00776b;
+
+    --fg: #ffffff;
+    --amber: #fbbf24;
+    --fuchsia: #e879f9;
+
+    --measure: 68ch;
+
+    --display: "Orbitron", "Eurostile", "Bahnschrift", ui-sans-serif, system-ui, sans-serif;
+    --body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  }
+
+  /* Inlined rather than linked: the artifact CSP blocks font CDNs, and a
+     silent fallback here would lose the one face that makes the app the
+     app. Variable weight axis, subset latin. */
+  @font-face {
+    font-family: "Orbitron";
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: block;
+    src: url(data:font/woff2;base64,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) format("woff2");
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 620px at 12% -8%, rgba(0, 255, 229, 0.07), transparent 62%),
+      radial-gradient(900px 520px at 92% 4%, rgba(0, 120, 190, 0.09), transparent 60%),
+      var(--bench);
+    color: var(--fg);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------------------------------------------------------- shell */
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 0 20px 110px; }
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    margin-bottom: 38px;
+    background: linear-gradient(180deg, rgba(11, 24, 35, 0.94), rgba(8, 18, 27, 0.9));
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 255, 229, 0.14);
+    box-shadow: 0 6px 0 -3px rgba(0, 0, 0, 0.6);
+  }
+  .bar b {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    color: var(--active);
+  }
+  .bar span { font-size: 12.5px; color: rgba(255, 255, 255, 0.45); }
+  .bar nav { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .bar nav a {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-decoration: none;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .bar nav a:hover { color: var(--fg); background: rgba(0, 255, 229, 0.14); }
+
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(26px, 3.3vw, 40px);
+    font-weight: 900;
+    line-height: 1.08;
+    text-wrap: balance;
+    margin: 0 0 14px;
+    background: linear-gradient(96deg, #ffffff 12%, var(--active) 92%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lede { max-width: var(--measure); font-size: 16.5px; color: rgba(255, 255, 255, 0.66); margin: 0 0 18px; }
+  .lede strong { color: var(--fg); font-weight: 650; }
+
+  h2 {
+    font-family: var(--display);
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin: 0 0 6px;
+    color: rgba(255, 255, 255, 0.92);
+  }
+  h2 .n { font-size: 12px; color: var(--active); margin-right: 10px; vertical-align: 2px; }
+  section { margin-top: 56px; scroll-margin-top: 76px; }
+  section > p { max-width: var(--measure); color: rgba(255, 255, 255, 0.62); font-size: 15px; margin: 0 0 10px; }
+  section > p strong { color: rgba(255, 255, 255, 0.92); font-weight: 650; }
+  section > p code, .verdict code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    color: var(--active);
+    background: rgba(0, 255, 229, 0.08);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  .rule {
+    border-left: 2px solid rgba(0, 255, 229, 0.4);
+    padding: 2px 0 2px 16px;
+    margin: 18px 0 22px;
+    max-width: var(--measure);
+    font-size: 14.5px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  .rule em { color: rgba(255, 255, 255, 0.9); font-style: normal; font-weight: 600; }
+  .rule .src { display: block; margin-top: 6px; font-family: var(--mono); font-size: 11px; color: rgba(255, 255, 255, 0.3); }
+
+  /* ------------------------------------------------------------- materials */
+  .chip {
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+    border: 0;
+    color: rgba(255, 255, 255, 0.72);
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .chip:hover { background: linear-gradient(170deg, #34586f, #162b38); color: var(--fg); }
+  .chip:active {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -2px 5px rgba(0, 0, 0, 0.5),
+      0 1px 0 var(--edge),
+      0 3px 7px -4px rgba(0, 0, 0, 0.75);
+  }
+  .chip-sm {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.4),
+      0 2px 0 var(--edge),
+      0 4px 8px -4px rgba(0, 0, 0, 0.7);
+  }
+  .chip-sm:active {
+    transform: translateY(1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.45),
+      0 1px 0 var(--edge),
+      0 2px 5px -3px rgba(0, 0, 0, 0.7);
+  }
+  .chip-on {
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    color: var(--on-active);
+    font-weight: 700;
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9),
+      0 2px 0 var(--edge-active),
+      0 5px 12px -5px rgba(0, 255, 229, 0.5);
+  }
+  .chip-on:hover { background: linear-gradient(180deg, #b6fff6, #06e6ce); color: var(--on-active); }
+
+  .readout {
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.85),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .channel {
+    background: var(--slot);
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.9),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .cbar-lit {
+    background: linear-gradient(180deg, #b9fff7, #00d6c0);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      1px 1px 0 rgba(0, 60, 55, 0.9),
+      0 0 8px rgba(0, 255, 229, 0.75);
+  }
+  .trough {
+    background: #06111b;
+    box-shadow:
+      inset 0 6px 14px -4px rgba(0, 0, 0, 0.9),
+      inset 0 -2px 6px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  /* The recessed spelling of a rail key: the app bar's current-page well.
+     Raised means press me, sunk means you are here — so the key you opened
+     drops into the rail and the bay it opened is what stands above it. */
+  .well {
+    background: var(--well);
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.8),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.24);
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  /* --------------------------------------------------------------- layout */
+  .decks {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 26px;
+    margin-top: 22px;
+  }
+  .deck {
+    max-width: 1000px;
+    display: grid;
+    grid-template-columns: 460px minmax(280px, 1fr);
+    gap: 0 28px;
+  }
+  .deck > header { grid-column: 1 / -1; grid-row: 1; margin-bottom: 10px; }
+  .deck > .panel { grid-column: 1; grid-row: 2; }
+  .deck > .meter { grid-column: 1; grid-row: 3; }
+  .deck > .side { grid-column: 2; grid-row: 2 / 4; align-self: start; }
+  @media (max-width: 900px) {
+    .deck { grid-template-columns: minmax(0, 1fr); }
+    .deck > .panel, .deck > .meter, .deck > .side { grid-column: 1; }
+    .deck > .side { grid-row: auto; margin-top: 14px; }
+  }
+
+  .deck h3 {
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin: 0 0 4px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .deck h3 .tag {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-family: var(--body);
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    vertical-align: 1px;
+  }
+  .tag-pick { background: rgba(0, 255, 229, 0.16); color: var(--active); }
+  .tag-base { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.5); }
+  .deck .pitch { font-size: 13.5px; color: rgba(255, 255, 255, 0.55); margin: 0; max-width: 74ch; }
+
+  .panel {
+    height: 660px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid rgba(0, 255, 229, 0.2);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.9);
+  }
+
+  .pinned {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .idline { display: flex; align-items: center; gap: 10px; }
+  .idline h4 {
+    font-family: var(--display);
+    font-size: 12.8px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    margin: 0;
+    color: rgba(0, 255, 229, 0.85);
+  }
+  .seasons { display: flex; gap: 4px; }
+  .seasons button { border-radius: 999px; padding: 3px 11px; font-size: 11.5px; font-weight: 700; }
+  .count { margin-left: auto; display: flex; align-items: baseline; gap: 6px; border-radius: 5px; padding: 3px 10px; }
+  .count b {
+    font-family: var(--display);
+    font-size: 12.8px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--active);
+  }
+  .count i {
+    font-style: normal;
+    font-size: 8.8px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+  }
+  .x {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .x:hover { border-color: rgba(255, 255, 255, 0.25); color: var(--fg); }
+
+  /* ------------------------------------------------------------- the rail */
+  .rail { display: flex; align-items: stretch; gap: 5px; padding: 4px; border-radius: 10px; }
+  .railkey {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    align-items: flex-start;
+    border-radius: 7px;
+    padding: 4px 9px;
+    border: 0;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .railkey .cap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 8.4px;
+    font-weight: 800;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+  }
+  .railkey .v {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.82);
+  }
+  /* Cyan is *narrowed*, never *open* — the same test the app-bar trigger's
+     bars already make. Open is the sunk key; two signals, two meanings. */
+  .railkey .v.narrowed { color: var(--active); }
+  .railkey.well .cap { color: rgba(0, 255, 229, 0.55); }
+
+  /* The curve, riding in the rail as its own key — H3 and H4. */
+  /* Wider than a key, because a slider needs travel — but only just. At 1.5 it
+     truncated "3 rules · Startup" on the key beside it, which is a resident
+     control taking width off a readout to buy itself precision. */
+  .railslider { flex: 1.2 1 0; padding: 3px 9px 2px; cursor: default; }
+  .railslider .row { display: flex; align-items: center; gap: 6px; width: 100%; }
+
+  .spark { display: flex; align-items: flex-end; gap: 1.5px; height: 10px; }
+  .spark i { display: block; width: 3px; border-radius: 1px 1px 0 0; }
+
+  /* ------------------------------------------------------------- the bays */
+  .bay {
+    position: absolute;
+    z-index: 20;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 255, 229, 0.25);
+    background: linear-gradient(to bottom, #1b3040, #0d1c27);
+    padding: 10px;
+    box-shadow: 0 24px 50px -20px rgba(0, 0, 0, 0.95), 0 0 36px -16px rgba(0, 255, 229, 0.35);
+    animation: bay-rise 0.16s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  @keyframes bay-rise {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: none; }
+  }
+  .bay.up { animation-name: bay-rise-up; }
+  @keyframes bay-rise-up {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* A tongue joining the open bay to the key that opened it — the one thing a
+     float owes a rail, since the bay is otherwise a panel from nowhere. */
+  .bay::after {
+    content: "";
+    position: absolute;
+    top: -5px;
+    width: 10px;
+    height: 10px;
+    transform: rotate(45deg);
+    background: #1b3040;
+    border-left: 1px solid rgba(0, 255, 229, 0.25);
+    border-top: 1px solid rgba(0, 255, 229, 0.25);
+    left: var(--tongue, 40px);
+  }
+  .bay.up::after {
+    top: auto;
+    bottom: -5px;
+    border: 0;
+    border-right: 1px solid rgba(0, 255, 229, 0.25);
+    border-bottom: 1px solid rgba(0, 255, 229, 0.25);
+    background: #0d1c27;
+  }
+
+  /* window control -------------------------------------------------------- */
+  .windowface { position: relative; }
+  .windowface::before {
+    content: "";
+    position: absolute;
+    left: -4px;
+    top: 12%;
+    bottom: 12%;
+    width: 3px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, transparent, rgba(0, 255, 229, 0.7) 30%, rgba(0, 255, 229, 0.7) 70%, transparent);
+    box-shadow: 0 0 10px rgba(0, 255, 229, 0.4);
+  }
+  .lenses { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+  .lensgrp { display: flex; align-items: flex-start; gap: 6px; }
+  .lenscol { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .lens {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 46px;
+    border-radius: 8px;
+    font-family: var(--display);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--active);
+    text-shadow: 0 0 14px rgba(0, 255, 229, 0.45);
+  }
+  .lens-days { width: 84px; font-size: 21px; }
+  .lens-days.empty { color: rgba(255, 255, 255, 0.25); font-weight: 400; text-shadow: none; }
+  .lens-date { padding: 0 8px; font-size: 15px; letter-spacing: -0.025em; }
+  .unit {
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.35);
+    text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .stepkey { margin-top: 8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; font-size: 15px; font-weight: 600; }
+  .panelkey { display: flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 10px; font-size: 10.5px; font-weight: 700; }
+  .diamond {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    transform: rotate(45deg);
+    border-radius: 1px;
+    background: var(--fuchsia);
+    box-shadow: 0 0 5px rgba(232, 121, 249, 0.7);
+  }
+  .chan { position: relative; height: 54px; margin-top: 10px; border-radius: 6px; }
+  .chan .bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 3px; padding: 0 5px 6px; }
+  .chan .bars i { display: block; flex: 1; border-radius: 2px 2px 0 0; }
+  .chan .flag {
+    position: absolute;
+    top: -5px;
+    width: 10px;
+    height: 10px;
+    transform: translateX(-50%) rotate(45deg);
+    border-radius: 2px;
+    background: var(--fuchsia);
+    box-shadow: 0 0 8px rgba(232, 121, 249, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  .chan .hair { position: absolute; top: 4px; bottom: 4px; width: 1px; background: rgba(232, 121, 249, 0.5); }
+  .caption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    margin: 8px 0 0;
+    font-size: 11.2px;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.45);
+  }
+  .caption b { color: var(--active); font-weight: 700; }
+  .caption span { color: rgba(255, 255, 255, 0.3); }
+
+  .filterrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .filterkey { display: flex; align-items: center; gap: 7px; border-radius: 999px; padding: 5px 13px; font-size: 12.5px; font-weight: 700; }
+  .filterkey svg { width: 12px; height: 12px; opacity: 0.7; }
+  .badge {
+    display: grid;
+    place-items: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: rgba(0, 255, 229, 0.9);
+    color: var(--on-active);
+    font-size: 9.5px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .seed {
+    flex: 1 1 150px;
+    min-width: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.55);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 5px 11px;
+  }
+  .rulechips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .rulechip {
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: rgba(0, 255, 229, 0.85);
+    background: rgba(0, 255, 229, 0.09);
+    box-shadow: inset 0 0 0 1px rgba(0, 255, 229, 0.2);
+  }
+
+  .curverow { display: flex; align-items: center; gap: 9px; }
+  .curverow .cap {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    flex: 0 0 auto;
+  }
+  .curverow .end { font-size: 9.6px; color: rgba(255, 255, 255, 0.25); flex: 0 0 auto; }
+  .curverow .out { font-size: 10px; font-variant-numeric: tabular-nums; color: rgba(255, 255, 255, 0.42); flex: 0 0 auto; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    flex: 1 1 auto;
+    height: 16px;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 5px;
+    border-radius: 999px;
+    background: var(--slot);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.9), inset 0 0 0 1px rgba(0, 255, 229, 0.12);
+  }
+  input[type="range"]::-moz-range-track {
+    height: 5px;
+    border-radius: 999px;
+    background: var(--slot);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.9), inset 0 0 0 1px rgba(0, 255, 229, 0.12);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    margin-top: -4px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #b9fff7, #00d6c0);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 0 var(--edge-active), 0 0 10px rgba(0, 255, 229, 0.6);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border: 0;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #b9fff7, #00d6c0);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 0 var(--edge-active), 0 0 10px rgba(0, 255, 229, 0.6);
+  }
+  input[type="range"]:focus-visible { outline: 2px solid var(--active); outline-offset: 3px; }
+
+  /* ---------------------------------------------------------------- board */
+  .board { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .boardhead { padding: 7px 16px 5px; background: var(--panel); border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+  .boardkeys { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .boardkeys .cap {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.32);
+  }
+  .boardkeys button { border-radius: 999px; padding: 2px 9px; font-size: 10.5px; font-weight: 700; }
+  .boardkeys button .n { font-family: var(--mono); font-size: 9.5px; opacity: 0.65; margin-left: 4px; }
+
+  .brow, .bhead {
+    display: grid;
+    grid-template-columns: 17px minmax(0, 1fr) 32px 38px 38px 46px 46px;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 16px;
+  }
+  .bhead {
+    padding-top: 0;
+    padding-bottom: 4px;
+    font-size: 8.6px;
+    font-weight: 800;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.3);
+  }
+  .bhead span:nth-child(n + 4) { text-align: right; }
+  .rows { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .brow { border-top: 1px solid rgba(255, 255, 255, 0.045); font-size: 12.5px; }
+  .brow .rank { font-family: var(--mono); font-size: 10px; color: rgba(255, 255, 255, 0.3); }
+  .brow .pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255, 255, 255, 0.9); }
+  .brow .pname em { font-style: normal; font-size: 10px; color: rgba(255, 255, 255, 0.35); margin-left: 5px; }
+  .pos { display: grid; place-items: center; height: 17px; border-radius: 4px; font-size: 9px; font-weight: 800; }
+  .pos.RB { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; }
+  .pos.WR { background: rgba(56, 130, 246, 0.2); color: #93c5fd; }
+  .pos.QB { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
+  .pos.TE { background: rgba(251, 191, 36, 0.18); color: #fcd34d; }
+  .brow .num { text-align: right; font-variant-numeric: tabular-nums; color: rgba(255, 255, 255, 0.82); }
+  .brow .val {
+    text-align: right;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.72);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .panelfoot {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.015);
+  }
+  .panelfoot .reset, .panelfoot .done {
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .panelfoot .reset { border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.75); }
+  .panelfoot .done { border: 1px solid rgba(0, 255, 229, 0.35); background: rgba(0, 255, 229, 0.08); color: var(--active); font-weight: 700; }
+  .panelfoot p {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The foot rail (H4) sits between board and footer. */
+  .footrail { padding: 6px 16px 0; background: rgba(255, 255, 255, 0.02); border-top: 1px solid rgba(255, 255, 255, 0.08); }
+
+  /* ------------------------------------------------------------------ meta */
+  .meter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 7px 11px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.42);
+  }
+  .meter b { color: var(--active); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .meter b.warn { color: var(--amber); }
+
+  .side h4 {
+    font-size: 9.6px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.35);
+    margin: 0 0 8px;
+  }
+  .cover { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; margin-bottom: 18px; }
+  .cover th, .cover td { padding: 5px 8px; text-align: right; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+  .cover th:first-child, .cover td:first-child { text-align: left; }
+  .cover thead th { font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; color: rgba(255, 255, 255, 0.32); font-weight: 800; }
+  .cover td { color: rgba(255, 255, 255, 0.6); }
+  .cover td:first-child { color: rgba(255, 255, 255, 0.86); font-weight: 600; }
+  .cover td.ok { color: var(--active); font-weight: 700; }
+  .cover td.bad { color: var(--amber); font-weight: 700; }
+
+  .cost { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .cost li { display: grid; grid-template-columns: 15px 1fr; gap: 8px; font-size: 13px; line-height: 1.5; color: rgba(255, 255, 255, 0.58); }
+  .cost li b { color: rgba(255, 255, 255, 0.88); font-weight: 650; }
+  .cost li .m { font-weight: 800; font-size: 13px; line-height: 1.45; }
+  .cost li.buys .m { color: var(--active); }
+  .cost li.costs .m { color: var(--amber); }
+
+  .verdict {
+    margin-top: 20px;
+    padding: 20px 24px;
+    border-radius: 14px;
+    background: linear-gradient(168deg, #16293a, #0a1622 62%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -24px 44px -26px rgba(0, 0, 0, 0.9),
+      0 4px 0 var(--edge),
+      0 20px 34px -16px rgba(0, 0, 0, 0.85);
+    max-width: 880px;
+  }
+  .verdict h3 {
+    font-family: var(--display);
+    font-size: 15px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0 0 10px;
+    color: var(--active);
+  }
+  .verdict p { margin: 0 0 12px; font-size: 14.5px; color: rgba(255, 255, 255, 0.7); }
+  .verdict p:last-child { margin-bottom: 0; }
+  .verdict strong { color: var(--fg); font-weight: 650; }
+  .verdict ol { margin: 0 0 12px; padding-left: 20px; font-size: 14px; color: rgba(255, 255, 255, 0.65); }
+  .verdict ol li { margin-bottom: 7px; }
+
+  :focus-visible { outline: 2px solid var(--active); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+  @media (max-width: 720px) {
+    .panel { height: 600px; }
+    h1 { font-size: 27px; }
+  }
+</style>
+
+<div class="bar">
+  <b>THE LAB</b>
+  <span>ADP drawer · bay rail</span>
+  <nav>
+    <a href="#h1">H1 · Rail + float</a>
+    <a href="#h2">H2 · Keyed</a>
+    <a href="#h3">H3 · Live curve</a>
+    <a href="#h4">H4 · Foot rail</a>
+    <a href="#verdict">Verdict</a>
+  </nav>
+</div>
+
+<div class="wrap">
+  <h1>The bay rail, and what the float covers</h1>
+
+  <p class="lede">
+    B's rail of keys and C's floating body, built together — and the pair beats
+    both halves, because <strong>B's rail is one line where C's rows are
+    three</strong>. The pinned block goes from today's 314px to roughly
+    <strong>100</strong>, and the board from 9 rows to <strong>17</strong>.
+  </p>
+
+  <p class="lede">
+    Which changes what there is left to argue about. Every variant below has the
+    same small constant block, so the number that decides between them is
+    <strong>how much board the open bay hides</strong>. Each panel measures that
+    per bay, live — open a bay and watch the coverage table fill in.
+  </p>
+
+  <p class="lede">
+    Measuring it retired the objection I raised against a floating bay last time.
+    The tallest bay — the window — is 197px, so it hides five rows and
+    <strong>twelve are still readable underneath it</strong>. Today's block shows
+    nine, with nothing open at all. <strong>A float over this rail leaves more
+    board than the current design ever offers</strong>, which means "it covers the
+    board" was an argument about the wrong quantity: what matters is what is
+    <em>left</em>, and there is more of it here in every state.
+  </p>
+
+  <div class="rule">
+    <em>Raised means press me; recessed means you are here.</em> So a rail key is
+    a raised pill, and the key you opened <em>sinks into the rail</em> while its
+    bay stands above it. Cyan stays reserved for <em>narrowed</em> — never for
+    open — which is the same test the app-bar trigger's bars already make.
+    <span class="src">CLAUDE.md — the app bar's material grammar</span>
+  </div>
+
+  <section id="h1">
+    <h2><span class="n">01</span>H1 — Rail + float, as drawn</h2>
+    <p>
+      The straight hybrid: three keys in a milled rail, the open bay hanging
+      full-width underneath with a tongue pointing back at the key that opened
+      it. Press a key to open, press it again — or press the board — to close.
+    </p>
+
+    <div class="decks">
+      <div class="deck">
+        <header>
+          <h3>H1 · full-width float <span class="tag tag-base">baseline</span></h3>
+          <p class="pitch">One line of chrome. The bay covers whatever it is tall enough to cover.</p>
+        </header>
+        <div class="panel" data-panel data-variant="h1"></div>
+        <div class="meter">
+          block <b data-mblock>—</b> · board <b data-mboard>—</b> · covered
+          <b class="warn" data-mcover>0 rows</b>
+        </div>
+        <div class="side">
+          <h4>Rows hidden, by bay</h4>
+          <table class="cover" data-cover>
+            <thead><tr><th>Bay</th><th>Height</th><th>Hidden</th><th>Readable</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <ul class="cost">
+            <li class="buys"><span class="m">+</span><span><b>The block is one line of chrome</b> over the identity row — the smallest any arrangement here gets.</span></li>
+            <li class="buys"><span class="m">+</span><span><b>Nothing reflows, ever.</b> The board is the same 17 rows whether a bay is open or shut.</span></li>
+            <li class="costs"><span class="m">−</span><span><b>The window bay lands on the top of the board</b> — the rows a reader is watching move. Five of them, with twelve left; the sting is that they are rows 1–5.</span></li>
+            <li class="costs"><span class="m">−</span><span><b>A full-width panel says nothing about which key it belongs to</b> beyond the tongue. At three keys that is survivable and it is what H2 fixes.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="h2">
+    <h2><span class="n">02</span>H2 — Keyed floats</h2>
+    <p>
+      Same rail, but each bay is <strong>as wide as it needs to be and aligned to
+      its own key</strong> rather than spanning the panel. The window still needs
+      the full width — it is an instrument — but Leagues and Curve are small
+      panels that sit under their key and leave most of the board legible beside
+      them.
+    </p>
+
+    <div class="decks">
+      <div class="deck">
+        <header>
+          <h3>H2 · sized and aligned to the key</h3>
+          <p class="pitch">The open key sinks into the rail; the bay stands over it.</p>
+        </header>
+        <div class="panel" data-panel data-variant="h2"></div>
+        <div class="meter">
+          block <b data-mblock>—</b> · board <b data-mboard>—</b> · covered
+          <b class="warn" data-mcover>0 rows</b>
+        </div>
+        <div class="side">
+          <h4>Rows hidden, by bay</h4>
+          <table class="cover" data-cover>
+            <thead><tr><th>Bay</th><th>Height</th><th>Hidden</th><th>Readable</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <ul class="cost">
+            <li class="buys"><span class="m">+</span><span><b>Two of the three bays get small.</b> Leagues hides one row and Curve hides none — and neither spans the board, so the value columns stay readable beside them.</span></li>
+            <li class="buys"><span class="m">+</span><span><b>The tongue and the sunk key say where a bay came from</b>, which a full-width panel can only imply.</span></li>
+            <li class="costs"><span class="m">−</span><span><b>The window is unchanged</b> — 197px of instrument whatever you align it to, so it still takes the full width and the five rows under it.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="h3">
+    <h2><span class="n">03</span>H3 — Keyed floats, curve in the rail</h2>
+    <p>
+      H2, with the curve's key replaced by the slider itself — the one control
+      whose whole purpose is to be dragged while the value column bends under it,
+      so it is the one bay that must never cover the board. Two bays float; the
+      third is resident and costs the rail no height at all.
+    </p>
+
+    <div class="decks">
+      <div class="deck">
+        <header>
+          <h3>H3 · the curve never opens <span class="tag tag-pick">pick</span></h3>
+          <p class="pitch">Drag the slider in the rail. Nothing covers anything.</p>
+        </header>
+        <div class="panel" data-panel data-variant="h3"></div>
+        <div class="meter">
+          block <b data-mblock>—</b> · board <b data-mboard>—</b> · covered
+          <b class="warn" data-mcover>0 rows</b>
+        </div>
+        <div class="side">
+          <h4>Rows hidden, by bay</h4>
+          <table class="cover" data-cover>
+            <thead><tr><th>Bay</th><th>Height</th><th>Hidden</th><th>Readable</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <ul class="cost">
+            <li class="buys"><span class="m">+</span><span><b>The curve covers nothing and costs no press.</b> Its readout moves as you drag, in the rail, with the whole board visible.</span></li>
+            <li class="buys"><span class="m">+</span><span><b>Same block height as H2</b> — the slider is shorter than the two-line keys beside it, so it rides in the space they already take.</span></li>
+            <li class="costs"><span class="m">−</span><span><b>Three keys, two behaviours.</b> Two open a bay and one is the control; the caret on the first two is the only thing that says so.</span></li>
+            <li class="costs"><span class="m">−</span><span><b>A ~145px slider is a coarse instrument, and it takes the width off its neighbours.</b> Arrow keys still land every notch and the board is the readout, but the drag is shorter than today's and the Leagues key beside it is a step closer to truncating its value.</span></li>
+            <li class="costs"><span class="m">−</span><span><b>One row of board.</b> The slider's key is 7px taller than the two beside it, which is 16 rows against H2's 17.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="h4">
+    <h2><span class="n">04</span>H4 — Rail at the foot</h2>
+    <p>
+      The one arrangement that answers the coverage problem outright. The rail
+      sits above the footer, so bays <strong>rise</strong> — and what they cover is
+      the <em>bottom</em> of the board. This board is sorted by ADP, so the rows a
+      reader is watching are the top ones; hiding rows 9–17 to set a window costs
+      almost nothing, where hiding 1–9 costs the answer.
+    </p>
+
+    <div class="decks">
+      <div class="deck">
+        <header>
+          <h3>H4 · bays rise from a foot rail</h3>
+          <p class="pitch">Every control in thumb reach, and the top of the board never covered.</p>
+        </header>
+        <div class="panel" data-panel data-variant="h4"></div>
+        <div class="meter">
+          block <b data-mblock>—</b> · board <b data-mboard>—</b> · covered
+          <b class="warn" data-mcover>0 rows</b>
+        </div>
+        <div class="side">
+          <h4>Rows hidden, by bay</h4>
+          <table class="cover" data-cover>
+            <thead><tr><th>Bay</th><th>Height</th><th>Hidden</th><th>Readable</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <ul class="cost">
+            <li class="buys"><span class="m">+</span><span><b>The rows that matter survive every bay.</b> Rows 1–8 are never covered, whichever bay is open.</span></li>
+            <li class="costs"><span class="m">−</span><span><b>It hides <em>more</em> rows, not fewer</b> — 7 against 5 for the same 197px bay. Hanging from the head, part of a bay's height lands on the board's column headings; rising from the foot, all of it lands on rows. What H4 buys is <em>which</em> rows, and it pays two of them for the privilege.</span></li>
+            <li class="buys"><span class="m">+</span><span><b>Controls sit where the thumb is</b>, next to Reset and Done, which is the half of the panel a phone can actually reach.</span></li>
+            <li class="costs"><span class="m">−</span><span><b>The needle is at the far end from the control.</b> The draft count is the number the window moves, and it is up in the identity line — a press at the bottom, an answer at the top.</span></li>
+            <li class="costs"><span class="m">−</span><span><b>It is two chrome strips, not one.</b> The identity line still holds the top, so the drawer is framed rather than headed.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="verdict">
+    <h2><span class="n">05</span>Verdict</h2>
+
+    <div class="verdict">
+      <h3>H3 — and H4 if the coverage bothers you</h3>
+      <p>
+        The hybrid is right, and it is a bigger win than either half: the block
+        drops from <strong>314px to ~100</strong> and the board from 9 rows to
+        <strong>17</strong>, with nothing ever reflowing. That is C's constant
+        height, B's single line, and none of B's dead space.
+      </p>
+      <p>
+        And the objection I raised against the float last time does not survive
+        being measured. The window bay hides five rows and leaves twelve;
+        <strong>the current design shows nine with nothing open</strong>. There is
+        no state of this drawer where a reader sees less board than they see
+        today, which is what makes the float affordable rather than merely
+        tolerable.
+      </p>
+      <p>
+        Between the four, <strong>H2's keyed floats are strictly better than H1's
+        full-width one</strong> — same window bay, much smaller Leagues and Curve,
+        and a tongue that says which key a panel belongs to. That part is not
+        really a choice.
+      </p>
+      <p>
+        <strong>H3 is H2 with the one control that must not float taken out of the
+        float.</strong> The curve is a slider, so it fits the rail; a reader drags
+        it with the whole board visible and the value columns bending underneath,
+        which is the drawer's entire premise. What is left floating is Leagues and
+        Window — both genuinely settings, both read-then-dismiss, both fine behind
+        a press.
+      </p>
+      <p>
+        <strong>H4 lost most of its case to the measurement.</strong> It was built
+        to answer "the bay covers the rows you are watching", and the answer turned
+        out to be that five rows are covered and twelve remain — more than today
+        shows with nothing open. H4 protects rows 1–8 absolutely, but it hides
+        <em>seven</em> rows to do it (a bay hanging from the head spends some of
+        its height on the column headings; one rising from the foot spends all of
+        it on rows), and it costs a second strip of chrome and the distance
+        between the window control and the draft count that control moves. Take it
+        if seeing H2 in use says the top five rows matter more than that; the
+        measurement says they don't.
+      </p>
+      <p>Whichever way, five things to hold to:</p>
+      <ol>
+        <li>
+          <strong>Sunk means open, cyan means narrowed.</strong> Two signals, two
+          meanings — a key that went cyan on open would spend the accent on a
+          state the tongue and the sink already say.
+        </li>
+        <li>
+          <strong>A key states its value, always.</strong> Leagues carries the rule
+          count and the draft kind; Window carries its label and a density
+          sparkline; Curve carries what it does to a board. A rail of three bare
+          nouns is the trades ledge mistake in a smaller box.
+        </li>
+        <li>
+          <strong>The board stays live under an open bay</strong> — it scrolls, the
+          rows re-price as the bay is used, and a press on it closes the bay. A
+          float that freezes the board is a modal wearing a panel's clothes.
+        </li>
+        <li>
+          <strong>Escape closes the innermost thing.</strong> The bay first, the
+          drawer second — the league-filters dialog already owes this to its
+          segment rows, so the drawer's own <code>cancel</code> has to be
+          preventDefaulted while a bay is up.
+        </li>
+        <li>
+          <strong>The window bay opens on a cold drawer.</strong> It is the first
+          thing the drawer is opened for, and the one bay whose collapse this whole
+          exercise is in tension with. Once a window is set, it remembers being
+          shut.
+        </li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<script>
+  /* ------------------------------------------------------------------
+     One set of fragments for all four variants — a mock comparing how
+     much board each bay hides is only worth reading if every variant is
+     hiding it with the same bay.
+     ------------------------------------------------------------------ */
+
+  const IDLINE = `
+    <div class="idline">
+      <h4>ADP</h4>
+      <div class="seasons">
+        <button class="chip chip-sm chip-on">2026</button>
+        <button class="chip chip-sm">All</button>
+      </div>
+      <span class="count readout"><b>5,425</b><i>drafts</i></span>
+      <button class="x" aria-label="Close">&#10005;</button>
+    </div>`;
+
+  const WINDOWBODY = `
+    <div class="windowface">
+      <div class="lenses">
+        <div class="lensgrp">
+          <button class="chip stepkey" aria-label="One day less">&minus;</button>
+          <div class="lenscol">
+            <span class="lens lens-days readout empty">&mdash;</span>
+            <span class="unit">Days back</span>
+            <button class="chip chip-sm panelkey"><span class="diamond"></span>Draft</button>
+          </div>
+          <button class="chip stepkey" aria-label="One day more">+</button>
+        </div>
+        <div class="lenscol">
+          <span class="lens lens-date readout">08/08/2026</span>
+          <span class="unit">Ending</span>
+          <button class="chip chip-sm panelkey chip-on">Today</button>
+        </div>
+      </div>
+      <div class="chan channel">
+        <div class="bars">
+          <i class="cbar-lit" style="height: 14%"></i>
+          <i class="cbar-lit" style="height: 18%"></i>
+          <i class="cbar-lit" style="height: 26%"></i>
+          <i class="cbar-lit" style="height: 47%"></i>
+          <i class="cbar-lit" style="height: 72%"></i>
+          <i class="cbar-lit" style="height: 55%"></i>
+          <i class="cbar-lit" style="height: 50%"></i>
+          <i class="cbar-lit" style="height: 44%"></i>
+        </div>
+        <span class="hair" style="left: 40%"></span>
+        <span class="flag" style="left: 40%"></span>
+      </div>
+      <p class="caption"><b>All of 2026</b><span>&middot; rolls forward daily</span></p>
+    </div>`;
+
+  const FILTERBODY = `
+    <div class="filterrow">
+      <button class="chip filterkey">
+        <svg viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M1.5 3h11M3.5 7h7M5.5 11h3" />
+        </svg>
+        Leagues
+        <span class="badge">3</span>
+      </button>
+      <select class="seed" aria-label="Match a league">
+        <option>Match a league&hellip;</option>
+        <option>Dynasty Warriors 12</option>
+      </select>
+    </div>
+    <div class="rulechips">
+      <span class="rulechip">qb+sf &ge; 2</span>
+      <span class="rulechip">teams &ge; 10</span>
+      <span class="rulechip">rec = 0.5</span>
+    </div>`;
+
+  const CURVEBODY = `
+    <div class="curverow">
+      <span class="cap">Curve</span>
+      <span class="end">Flat</span>
+      <input type="range" min="1" max="8" step="0.1" value="4" aria-label="Value curve steepness" />
+      <span class="end">Top-heavy</span>
+      <span class="out">last starter &asymp; 6% of the 1.01</span>
+    </div>`;
+
+  /* One board row, measured. Declared up here rather than beside `measure`
+     because the setup pass calls that during the behave block — a `const`
+     below it is still in its dead zone and throws. */
+  const ROW = 27;
+
+  const PLAYERS = [
+    ["Bijan Robinson", "ATL", "RB", "3.2", "3.2", "9,461", "9,453"],
+    ["Jahmyr Gibbs", "DET", "RB", "3.7", "4.7", "9,335", "9,085"],
+    ["Ja&rsquo;Marr Chase", "CIN", "WR", "5.6", "5.9", "8,877", "8,820"],
+    ["Puka Nacua", "LAR", "WR", "6.8", "7.4", "8,621", "8,494"],
+    ["Jaxon Smith-Njigba", "SEA", "WR", "8.3", "9.1", "8,455", "8,301"],
+    ["Christian McCaffrey", "SF", "RB", "8.7", "31.8", "8,208", "4,536"],
+    ["Jonathan Taylor", "IND", "RB", "11.3", "22.5", "7,680", "5,755"],
+    ["Amon-Ra St. Brown", "DET", "WR", "11.8", "11.6", "7,588", "7,618"],
+    ["Josh Allen", "BUF", "QB", "12.7", "6.2", "7,411", "8,741"],
+    ["James Cook", "BUF", "RB", "14.3", "25.1", "7,100", "5,393"],
+    ["Malik Nabers", "NYG", "WR", "15.1", "10.2", "6,980", "7,905"],
+    ["Brian Thomas Jr.", "JAX", "WR", "16.4", "12.8", "6,742", "7,410"],
+    ["Trey McBride", "ARI", "TE", "18.2", "16.9", "6,510", "6,884"],
+    ["De&rsquo;Von Achane", "MIA", "RB", "19.0", "20.4", "6,388", "6,015"],
+    ["Nico Collins", "HOU", "WR", "20.6", "19.7", "6,201", "6,190"],
+    ["Drake London", "ATL", "WR", "21.9", "18.3", "6,044", "6,402"],
+    ["Ashton Jeanty", "LV", "RB", "22.4", "7.8", "5,970", "8,140"],
+    ["Garrett Wilson", "NYJ", "WR", "24.1", "21.2", "5,802", "6,020"],
+    ["Marvin Harrison Jr.", "ARI", "WR", "25.7", "22.9", "5,690", "5,880"],
+    ["Kyren Williams", "LAR", "RB", "27.2", "35.6", "5,540", "4,210"],
+  ];
+
+  const BOARD = `
+    <div class="board">
+      <div class="boardhead">
+        <div class="boardkeys">
+          <span class="cap">Boards</span>
+          <button class="chip chip-sm chip-on">Redraft <span class="n">2,737</span></button>
+          <button class="chip chip-sm chip-on">Dynasty <span class="n">2,688</span></button>
+        </div>
+        <div class="bhead">
+          <span>#</span><span>Player</span><span></span>
+          <span>ADP R</span><span>ADP D</span><span>Val R</span><span>Val D</span>
+        </div>
+      </div>
+      <div class="rows">
+        ${PLAYERS.map(
+          (p, i) => `<div class="brow">
+            <span class="rank">${i + 1}</span>
+            <span class="pname">${p[0]}<em>${p[1]}</em></span>
+            <span class="pos ${p[2]}">${p[2]}</span>
+            <span class="num">${p[3]}</span>
+            <span class="num">${p[4]}</span>
+            <span class="val">${p[5]}</span>
+            <span class="val">${p[6]}</span>
+          </div>`,
+        ).join("")}
+      </div>
+    </div>`;
+
+  const FOOT = `
+    <div class="panelfoot">
+      <button class="reset">Reset</button>
+      <p>This app&rsquo;s crawled drafts, not market ADP &middot; values on a 108-slot pool</p>
+      <button class="done">Done</button>
+    </div>`;
+
+  const caret = `<svg viewBox="0 0 12 12" aria-hidden="true" style="width:10px;height:10px;margin-left:auto;flex:0 0 auto;color:rgba(255,255,255,0.35)"><path d="M3 4.5 6 8l3-3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+  const spark = `<span class="spark" aria-hidden="true">${[26, 34, 48, 72, 100, 80, 72, 62]
+    .map((h) => `<i class="cbar-lit" style="height: ${h}%"></i>`)
+    .join("")}</span>`;
+
+  /* A rail key: caption over value, the caret only where a bay opens. */
+  function key(id, cap, value, narrowed, extra) {
+    return `<button class="chip chip-sm railkey" data-bay="${id}" aria-expanded="false">
+      <span class="cap">${cap}${extra ?? ""}${caret}</span>
+      <span class="v${narrowed ? " narrowed" : ""}">${value}</span>
+    </button>`;
+  }
+
+  /* The curve riding in the rail, H3 and H4 — a well rather than a key, since
+     it is a field you work in and not a part you press to go elsewhere. */
+  const railSlider = `
+    <div class="well railkey railslider">
+      <span class="cap">Curve<span style="margin-left:auto;font-weight:600;letter-spacing:0;text-transform:none;font-size:8.6px;color:rgba(255,255,255,0.4)">6% of 1.01</span></span>
+      <span class="row">
+        <span style="font-size:8px;color:rgba(255,255,255,0.25)">Flat</span>
+        <input type="range" min="1" max="8" step="0.1" value="4" aria-label="Value curve steepness" />
+        <span style="font-size:8px;color:rgba(255,255,255,0.25)">Top</span>
+      </span>
+    </div>`;
+
+  function rail(variant) {
+    const live = variant === "h3" || variant === "h4";
+    return `<div class="rail trough">
+      ${key("filters", "Leagues", "3 rules &middot; Startup", true)}
+      ${key("window", "Window", "All of 2026", false, spark)}
+      ${live ? railSlider : key("curve", "Curve", "6% of the 1.01", false)}
+    </div>`;
+  }
+
+  const BAYS = {
+    filters: { label: "Leagues", html: FILTERBODY },
+    window: { label: "Window", html: WINDOWBODY },
+    curve: { label: "Curve", html: CURVEBODY },
+  };
+
+  /* --------------------------------------------------------------- build */
+  document.querySelectorAll("[data-panel]").forEach((panel) => {
+    const v = panel.dataset.variant;
+    const foot = v === "h4";
+    panel.innerHTML =
+      `<div class="pinned" data-pinned>${IDLINE}${foot ? "" : rail(v)}</div>` +
+      BOARD +
+      (foot ? `<div class="footrail" data-pinned-foot>${rail(v)}</div>` : "") +
+      FOOT +
+      Object.entries(BAYS)
+        .map(
+          ([id, bay]) =>
+            `<div class="bay" data-body="${id}" role="group" aria-label="${bay.label}" hidden>${bay.html}</div>`,
+        )
+        .join("");
+  });
+
+  /* --------------------------------------------------------------- behave */
+  function place(panel, id) {
+    const v = panel.dataset.variant;
+    const bay = panel.querySelector(`[data-body="${id}"]`);
+    const head = panel.querySelector(`[data-bay="${id}"]`);
+    if (!bay || !head) return;
+    const panelBox = panel.getBoundingClientRect();
+    const keyBox = head.getBoundingClientRect();
+
+    // H1 spans the panel; the others take their own width, aligned to the key
+    // that opened them and clamped inside the panel's own inset.
+    const inset = 16;
+    const wide = v === "h1" || id === "window";
+    bay.style.width = wide ? `calc(100% - ${inset * 2}px)` : "max-content";
+    bay.style.maxWidth = `calc(100% - ${inset * 2}px)`;
+
+    if (wide) {
+      bay.style.left = inset + "px";
+      bay.style.right = inset + "px";
+    } else {
+      bay.style.right = "auto";
+      bay.style.left = inset + "px";
+      // Measured after the width lands, so the clamp uses the real box.
+      const w = bay.getBoundingClientRect().width;
+      const want = keyBox.left - panelBox.left;
+      bay.style.left =
+        Math.max(inset, Math.min(want, panelBox.width - inset - w)) + "px";
+    }
+
+    // Rising from a foot rail, or hanging from the head one.
+    const up = v === "h4";
+    bay.classList.toggle("up", up);
+    if (up) {
+      const railBox = panel.querySelector("[data-pinned-foot]").getBoundingClientRect();
+      bay.style.top = "auto";
+      bay.style.bottom = panelBox.bottom - railBox.top + 6 + "px";
+    } else {
+      bay.style.bottom = "auto";
+      bay.style.top = panel.querySelector("[data-pinned]").offsetHeight + 6 + "px";
+    }
+
+    // The tongue points back at the key, in the bay's own coordinates.
+    const bayLeft = bay.getBoundingClientRect().left;
+    bay.style.setProperty(
+      "--tongue",
+      Math.max(12, Math.min(keyBox.left + keyBox.width / 2 - bayLeft - 5, bay.getBoundingClientRect().width - 22)) + "px",
+    );
+  }
+
+  function setOpen(panel, id) {
+    panel.dataset.open = id ?? "";
+    panel.querySelectorAll("[data-bay]").forEach((head) => {
+      const on = head.dataset.bay === id;
+      head.setAttribute("aria-expanded", String(on));
+      // Sunk means "you are here" — so the open key loses the raised pill.
+      head.classList.toggle("well", on);
+      head.classList.toggle("chip", !on);
+      head.classList.toggle("chip-sm", !on);
+    });
+    panel.querySelectorAll("[data-body]").forEach((bay) => {
+      bay.hidden = bay.dataset.body !== id;
+    });
+    if (id) place(panel, id);
+    measure(panel);
+  }
+
+  document.querySelectorAll("[data-panel]").forEach((panel) => {
+    panel.addEventListener("click", (e) => {
+      const head = e.target.closest("[data-bay]");
+      if (head) {
+        const id = head.dataset.bay;
+        setOpen(panel, panel.dataset.open === id ? null : id);
+        return;
+      }
+      // A press anywhere that isn't the open bay dismisses it — the board
+      // stays live underneath, which is what separates this from a modal.
+      if (panel.dataset.open && !e.target.closest("[data-body]")) {
+        setOpen(panel, null);
+      }
+    });
+    panel.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && panel.dataset.open) setOpen(panel, null);
+    });
+    setOpen(panel, null);
+  });
+
+  /* --------------------------------------------------------------- measure */
+  function coveredRows(panel, bay) {
+    const rows = panel.querySelector(".rows").getBoundingClientRect();
+    const box = bay.getBoundingClientRect();
+    const overlap =
+      Math.min(rows.bottom, box.bottom) - Math.max(rows.top, box.top);
+    return Math.max(0, Math.round(overlap / ROW));
+  }
+
+  function measure(panel) {
+    const deck = panel.closest(".deck");
+    if (!deck) return;
+    const chrome =
+      panel.querySelector("[data-pinned]").offsetHeight +
+      (panel.querySelector("[data-pinned-foot]")?.offsetHeight ?? 0);
+    const rows = panel.querySelector(".rows").getBoundingClientRect().height;
+    deck.querySelector("[data-mblock]").textContent = Math.round(chrome) + "px";
+    deck.querySelector("[data-mboard]").textContent =
+      Math.round(rows) + "px / " + Math.floor(rows / ROW) + " rows";
+
+    const open = panel.dataset.open;
+    const openBay = open ? panel.querySelector(`[data-body="${open}"]`) : null;
+    deck.querySelector("[data-mcover]").textContent = openBay
+      ? coveredRows(panel, openBay) + " rows"
+      : "0 rows";
+
+    // The coverage table is filled by opening each bay once, off screen, so the
+    // numbers are measured rather than asserted.
+    const body = deck.querySelector("[data-cover] tbody");
+    if (!body) return;
+    const was = panel.dataset.open || null;
+    const total = Math.floor(rows / ROW);
+    // Readable is the number that decides this, and it is read against
+    // TODAY_ROWS: a bay that still leaves more board than the current design
+    // shows with nothing open has not cost the reader anything.
+    const TODAY_ROWS = 9;
+    const rowsHtml = Object.keys(BAYS)
+      .map((id) => {
+        const head = panel.querySelector(`[data-bay="${id}"]`);
+        if (!head) {
+          return `<tr><td>${BAYS[id].label}</td><td>in the rail</td><td class="ok">0</td><td class="ok">${total}</td></tr>`;
+        }
+        const bay = panel.querySelector(`[data-body="${id}"]`);
+        bay.hidden = false;
+        place(panel, id);
+        const h = Math.round(bay.getBoundingClientRect().height);
+        const c = coveredRows(panel, bay);
+        bay.hidden = id !== was;
+        const left = total - c;
+        return `<tr><td>${BAYS[id].label}</td><td>${h}px</td><td>${c}</td><td class="${
+          left >= TODAY_ROWS ? "ok" : "bad"
+        }">${left}</td></tr>`;
+      })
+      .join("");
+    body.innerHTML = rowsHtml;
+    if (was) place(panel, was);
+  }
+
+  document.querySelectorAll("[data-panel]").forEach(measure);
+  window.addEventListener("resize", () =>
+    document.querySelectorAll("[data-panel]").forEach((p) => {
+      if (p.dataset.open) place(p, p.dataset.open);
+      measure(p);
+    }),
+  );
+</script>
