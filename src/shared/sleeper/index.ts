@@ -30,6 +30,7 @@ export { getNflState } from "./state";
 export { getAllPlayers } from "./players";
 export { fetchWeekProjections } from "./projections";
 export { getNflSchedule } from "./schedule";
+export { fetchWeekStats } from "./stats";
 export type {
   SleeperUser,
   SleeperLeague,

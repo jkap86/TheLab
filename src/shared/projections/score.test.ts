@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { derivedScoring, scoreProjection, unprojectedScoring } from "./score.ts";
+import {
+  derivedScoring,
+  scoreProjection,
+  scoreStatLine,
+  unprojectedScoring,
+} from "./score.ts";
 
 /**
  * The whole point of scoring a projection ourselves is that Sleeper's `pts_ppr`
@@ -214,5 +219,45 @@ describe("derivedScoring", () => {
   test("says nothing for a league that doesn't score them", () => {
     assert.deepEqual(derivedScoring(ppr), []);
     assert.deepEqual(derivedScoring(null), []);
+  });
+});
+
+describe("scoreStatLine", () => {
+  /**
+   * The one thing that separates it from {@link scoreProjection}, and the reason
+   * they are two exported functions rather than one with a flag: picking the
+   * wrong one is a wrong number, never an error.
+   */
+  test("scores the first-down keys a projection has to skip", () => {
+    // In a played week `rush_fd` is a count of first downs. In a projection it
+    // is the yardage over ten, which is why the other scorer drops it.
+    const line = { gp: 1, rush_yd: 100, rush_fd: 6, rush_td: 1 };
+    const scoring = { rush_yd: 0.1, rush_fd: 0.5, rush_td: 6 };
+
+    assert.equal(scoreStatLine(line, scoring), 19);
+    assert.equal(scoreProjection(line, scoring), 16);
+  });
+
+  test("the reception splits are real buckets once the week is played", () => {
+    const line = { gp: 1, rec: 6, rec_40p: 1 };
+    assert.equal(scoreStatLine(line, { rec: 1, rec_40p: 2 }), 8);
+    assert.equal(scoreProjection(line, { rec: 1, rec_40p: 2 }), 6);
+  });
+
+  test("it still refuses to score Sleeper's own totals", () => {
+    // NOT_SCORABLE is shared: scoring `pts_ppr` would add the whole line to
+    // itself, which is as wrong for a stat line as for a projection.
+    assert.equal(scoreStatLine({ pts_ppr: 24, rec: 4 }, { pts_ppr: 1, rec: 1 }), 4);
+  });
+
+  test("the two agree wherever no derived key is scored", () => {
+    // Which is the common case — most leagues score neither — so the split
+    // costs nothing except where it is load-bearing.
+    assert.equal(scoreStatLine(receiver, ppr), scoreProjection(receiver, ppr));
+  });
+
+  test("a missing line or missing settings is zero, not a throw", () => {
+    assert.equal(scoreStatLine(null, ppr), 0);
+    assert.equal(scoreStatLine({ rec: 4 }, null), 0);
   });
 });

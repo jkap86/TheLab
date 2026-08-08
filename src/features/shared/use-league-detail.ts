@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 import type { LeagueDetailPayload } from "@/shared/contract";
 import { errorMessage } from "@/shared/util";
@@ -33,25 +34,44 @@ export type LeagueDetailState = {
  * POST as readily as a GET. The key still holds those ids inlined
  * ({@link AdpRead}), since two league sets that differ are two boards.
  *
- * **It clears on a new league and holds through a new board**, which is one rule
- * rather than two exceptions. This is the read whose previous answer can be about
- * something else: a new id must show nothing rather than leave the last league's
- * rosters on screen under the new name. A new *board* of the same league is the
- * opposite case — the rows are right, two columns are about to move — and
- * blanking several hundred of them to redraw them nearly unchanged is the flash
- * every other hook here refuses. So the placeholder is kept only when the
- * previous key names this same league.
+ * `week` narrows the same payload to one week, which the lineup checker asks for
+ * and the leagues list and trades board do not: it adds each subject's
+ * projection for that week and its points per game coming into it, the two
+ * columns a panel opened on a *lineup* is read on. Null means "as a season",
+ * which is the answer those two want and the shape this route has always given.
+ *
+ * **It clears on a new league and holds through a new board or a new week**,
+ * which is one rule rather than three exceptions. This is the read whose previous
+ * answer can be about something else: a new id must show nothing rather than
+ * leave the last league's rosters on screen under the new name. A new board or
+ * week of the same league is the opposite case — the rows are right, two columns
+ * are about to move — and blanking several hundred of them to redraw them nearly
+ * unchanged is the flash every other hook here refuses. So the placeholder is
+ * kept only when the previous key names this same league, which is exactly what
+ * comparing against the *league* prefix buys.
  */
 export function useLeagueDetail(
   leagueId: string,
   board: AdpRead,
+  week: number | null = null,
 ): LeagueDetailState {
+  // The week rides on the *request* rather than on the path, because the board
+  // may arrive as a POST body and a hand-built URL would have nowhere to put it.
+  // Copied rather than written onto the read's own params, which the caller
+  // memoises and shares with the card above this panel.
+  const request = useMemo(() => {
+    if (week === null) return board;
+    const search = new URLSearchParams(board.search);
+    search.set("week", String(week));
+    return { ...board, search };
+  }, [board, week]);
+
   const detail = useQuery({
-    queryKey: leagueQueryKeys.detail(leagueId, board.key),
+    queryKey: leagueQueryKeys.detail(leagueId, board.key, week),
     queryFn: ({ signal }) =>
       fetchScoped<LeagueDetailPayload>(
         `/api/league/${encodeURIComponent(leagueId)}`,
-        board,
+        request,
         "Failed to load league",
         signal,
       ),
