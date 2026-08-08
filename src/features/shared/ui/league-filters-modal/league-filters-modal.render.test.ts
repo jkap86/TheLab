@@ -204,6 +204,37 @@ describe("what is on screen", () => {
     assert.match(html, /All formats/);
   });
 
+  test("omitType drops that row and leaves the others where they were", () => {
+    // The ADP board's call. The type is a *display* question there — every fetch
+    // answers both markets and the board keys choose — so a row narrowing the
+    // population on the same axis is a second answer to one question.
+    const html = modal({ omitType: true });
+    for (const label of ["Status", "Format"]) {
+      assert.ok(html.includes(`>${label}</span>`), `expected a ${label} row`);
+    }
+    assert.ok(!html.includes(">Type</span>"), "expected no Type row");
+    // Its selection goes with it — the caption check alone would pass on a row
+    // that had merely lost its label. Not `Dynasty`, which the breakdown below
+    // still counts: that describes the survivors rather than narrowing them.
+    for (const word of ["All types", "Redraft", "Keeper", "Chopped"]) {
+      assert.ok(!html.includes(word), `expected ${word} to be off the panel`);
+    }
+    // The row's absence is the only thing that changed.
+    assert.match(html, /Any status/);
+    assert.match(html, /All formats/);
+  });
+
+  test("a type the omitted row can't reach is still named and clearable", () => {
+    // What keeps the omission from being a filter a reader can neither see nor
+    // undo: the rail walks `activeFilters`, which is a fact about the selection
+    // rather than about which controls happen to be drawn.
+    const html = modal({
+      omitType: true,
+      filters: { ...DEFAULT_LEAGUE_FILTERS, type: "2" },
+    });
+    assert.match(html, /aria-label="Stop filtering by dynasty"/);
+  });
+
   test("an open row lists every option, marked and counted", () => {
     const html = statusRow(true, "in_season");
     for (const option of STATUS_OPTIONS) {
@@ -376,6 +407,26 @@ describe("what the controls do", () => {
       press(row, "onToggle")();
     }
     assert.deepEqual(toggled, ["status", "type", "format"]);
+  });
+
+  test("omitting the type row leaves the others reporting their own keys", () => {
+    // The keys are the open-state's identity, so the assertion worth making is
+    // that dropping a row renumbers nothing — `format` is still `format`.
+    const toggled: SegmentKey[] = [];
+    const tree = SegmentTrough({
+      troughRef: { current: null },
+      draft: DEFAULT_LEAGUE_FILTERS,
+      onChange: () => {},
+      leagues,
+      openGroup: null,
+      onToggle: (key) => toggled.push(key),
+      onClose: () => {},
+      omitType: true,
+    });
+    for (const row of elements(tree).filter((el) => typeof el.props.probe === "function")) {
+      press(row, "onToggle")();
+    }
+    assert.deepEqual(toggled, ["status", "format"]);
   });
 
   test("a row's probe describes the whole draft with one field changed", () => {

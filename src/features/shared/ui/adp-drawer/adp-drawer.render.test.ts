@@ -655,6 +655,10 @@ describe("what the controls do", () => {
     const row = elements(tree).filter((el) => typeof el.type !== "string");
     assert.equal(row.length, 2);
     assert.equal(row[0].props.label, "Leagues");
+    // Minus the Type row: every fetch answers both markets and the board's own
+    // keys choose which is drawn, so narrowing the population on that axis would
+    // be a second control over a question the display already owns.
+    assert.equal(row[0].props.omitType, true);
     assert.deepEqual(row[1].props.leagues, leagues);
     assert.equal(row[1].type, AdpLeagueSeedControl);
   });
@@ -670,7 +674,8 @@ describe("what the controls do", () => {
         next = value;
       },
     });
-    const rules = { ...controls.leagueRules, type: "2" as const };
+    // A rule this dialog can actually write — its Type row is dropped here.
+    const rules = { ...controls.leagueRules, status: "pre_draft" as const };
     press(only(tree, "label", "Leagues"), "onChange")(rules);
     assert.deepEqual(next, { ...controls, leagueRules: rules });
   });

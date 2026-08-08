@@ -2805,6 +2805,21 @@ stops holding, a comment saying it does would not have caught it.
     for the type is therefore *which board is displayed* — the market that
     league is actually in — and the Players tab asks the same question through
     its own column picker instead, where the ADP metrics come one per board.
+    **The last place it survived as a *population* question was the shared
+    dialog's own Type row, and this caller drops it** (`omitType` on
+    `LeagueFiltersModal`, threaded to `SegmentTrough`). It was a second control
+    over the axis the board keys already own, and the two disagree in a way that
+    looks like a bug rather than a selection: narrow to dynasty leagues with the
+    redraft column up and the answer is an empty column with nothing on screen
+    saying which control emptied it. Nothing about `LeagueFilters` changes — the
+    field stays, the manager tabs and the trades board keep the row, and this
+    board simply never writes it (its controls open on
+    `DEFAULT_LEAGUE_FILTERS`, and `seedFromLeague` already wrote a league's type
+    as `boards` rather than as a rule). It is dropped as a **row** and not as a
+    field for the reason a hidden filter is otherwise unanswerable: the match
+    rail walks `activeFilters`, which is a fact about the selection rather than
+    about which controls are drawn, so a `type` that somehow arrived is still
+    named and still clearable there.
   - **The keys are `.lab-chip`, not the drawer's own outlined `Segment`.** This
     was the last place in the app still drawing flat bordered buttons for
     something you press; the season keys, the window counter's own keys (± ,
