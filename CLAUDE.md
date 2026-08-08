@@ -2687,12 +2687,13 @@ stops holding, a comment saying it does would not have caught it.
   drafts of leagues that start a linebacker", "half PPR with a TE bonus over half
   a point" — so the weaker of two filter languages a few pixels apart was the
   thing to fix, not the row's height. **League size joined the shared rules to
-  make that swap whole** (`LeagueFilters.size`, a third `RuleBay`): it is a fact
-  about a league like every other rule there, so the manager tabs and the trades
-  board read it too rather than it being a filter one page knows about. A rule
-  rather than a chip because a chip can only ask for an exact count, where "at
-  least ten teams" is the question a reader arrives with as often — and a *band*
-  is two rules, which is one of the things the lists being an AND is for.
+  make that swap whole** (`LeagueFilters.settings`, a third `RuleBay` — it
+  arrived as `size` and has since widened to the whole `settings` blob): it is a
+  fact about a league like every other rule there, so the manager tabs and the
+  trades board read it too rather than it being a filter one page knows about. A
+  rule rather than a chip because a chip can only ask for an exact count, where
+  "at least ten teams" is the question a reader arrives with as often — and a
+  *band* is two rules, which is one of the things the lists being an AND is for.
 
   **The one control left over is the draft kind, and it is seated inside that
   dialog rather than beside it** (`ExtraSegment`, `ROUNDS_SEGMENT`). How many
@@ -2705,7 +2706,7 @@ stops holding, a comment saying it does would not have caught it.
   read. It carries **no per-option counts**, unlike the three rows above it: it
   cuts drafts *inside* a league rather than leagues, so every option would show
   the identical league count and that number would be about something the row
-  does not narrow (`SegmentRow`'s `probe` is optional for exactly this).
+  does not narrow (`FilterRail`'s `probe` is optional for exactly this).
   **A chip asks the question, not the column behind it** still, and this one is
   `rounds` under "All drafts / Startup / Rookie": the round count is the evidence
   and what kind of draft it was is what a reader wants. It replaced a
@@ -2852,7 +2853,7 @@ stops holding, a comment saying it does would not have caught it.
     league is actually in — and the Players tab asks the same question through
     its own column picker instead, where the ADP metrics come one per board.
     **The last place it survived as a *population* question was the shared
-    dialog's own Type row, and this caller drops it** (`omitType` on
+    dialog's own Type row, and this caller drops it** (`omit` on
     `LeagueFiltersModal`, threaded to `SegmentTrough`). It was a second control
     over the axis the board keys already own, and the two disagree in a way that
     looks like a bug rather than a selection: narrow to dynasty leagues with the
@@ -2865,7 +2866,12 @@ stops holding, a comment saying it does would not have caught it.
     field for the reason a hidden filter is otherwise unanswerable: the match
     rail walks `activeFilters`, which is a fact about the selection rather than
     about which controls are drawn, so a `type` that somehow arrived is still
-    named and still clearable there.
+    named and still clearable there. **It drops the shared dialog's Season band
+    for the same argument twice over**, which is why `omit` is a list of rows
+    rather than the boolean it started as: this block leads with a season row of
+    its own that decides which leagues are fetched at all, so a second season
+    inside the dialog is a finer cut on an axis already answered a few pixels
+    above.
   - **The keys are `.lab-chip`, not the drawer's own outlined `Segment`.** This
     was the last place in the app still drawing flat bordered buttons for
     something you press; the season keys, the window counter's own keys (± ,
@@ -3609,18 +3615,38 @@ stops holding, a comment saying it does would not have caught it.
     dialog also carries how many leagues it would leave, which is why the
     selection is edited as a draft and committed on Apply: those counts can't be
     read while the list behind them moves.
-- **The league filters are three fixed segments and three lists of rules the
-  reader writes.** Status, type and format describe what a league *is*, and stay
-  segments because each is a closed set of three or four answers. How big it is,
-  what its lineup starts and what its scoring pays are not closed sets, so they
-  are rows — `teams ≥ 10`, `QB+SF ≥ 2`, `IDP = 0`, `rec = 0.5`,
-  `bonus_rec_te > 0` — each a size key, a slot group or a `scoring_settings` key,
-  a comparison and a number, added with a `+` and removed with an `×`. They
+- **The league filters are a season band, three fixed rails and three lists of
+  rules the reader writes.** Status, type and format describe what a league *is*,
+  and stay closed sets of three to five answers. How it is configured, what its
+  lineup starts and what its scoring pays are not closed sets, so they are rows —
+  `teams ≥ 10`, `trade_deadline ≤ 12`, `QB+SF ≥ 2`, `IDP = 0`, `rec = 0.5`,
+  `bonus_rec_te > 0` — each a settings key, a slot group or a `scoring_settings`
+  key, a comparison and a number, added with a `+` and removed with an `×`. They
   replaced four fixed pairs (superflex/one-QB, IDP/offense, the reception bucket,
   TE premium), which were four hard-coded questions out of a space readers arrive
   with their own question in: "no kicker", "three flexes", "half PPR with a TE
   bonus over half a point". One dialog, so the trades page's league filter gained
-  the rules with it — and, later, the ADP board's. Seven things worth keeping:
+  the rules with it — and, later, the ADP board's.
+
+  **The season is the one filter here that is not an attribute of a league**, and
+  it is seated accordingly: a band above the trough with a lit leading rail, not
+  a fourth row in it. It is the *population* the rest are read against — the ADP
+  drawer's own rule ("the season is the board's population; the window is a cut
+  inside it") one control over — and filed as a peer a reader reads it as a
+  fourth attribute and never notices that changing it swaps the corpus out from
+  under every count below. It is a `LeagueFilters` field like any other, so
+  `activeFilters` names it and the rail clears it; the band is a seating decision
+  and not a second mechanism. **It draws nothing where there is only one season
+  in hand**, which is every caller but the ADP board's widest setting — those
+  resolve a season server-side, so the row would be one key, permanently lit,
+  reporting a fact rather than offering a choice, which is what every other row
+  in this panel was shortened to stop doing. Its options come off the leagues in
+  hand (`seasonOptions`), so it turns on by itself the day a caller widens its
+  fetch. Making it *do* something on the manager tabs is a route change and not a
+  dialog one: `/api/user/[username]/leagues` answers one season, and
+  `manager_league_order` is keyed per manager *per season*.
+
+  Seven things worth keeping:
   - **The four old chips survive as quick-adds that write the equivalent rule.**
     `qb+sf ≥ 2` *is* `isSuperflexLineup`; the preset is the one-click path and
     the row is what you edit it into. A preset already on the list is dimmed
@@ -3654,21 +3680,71 @@ stops holding, a comment saying it does would not have caught it.
     `"complete"`.** An end-of-season spelling this code doesn't know would
     otherwise be visible in the total and in none of the buckets, which reads as a
     filter losing leagues.
-  - **The size list arrived with the ADP board, and it is a rule rather than the
-    chip it replaced.** That board had its own `All sizes / 10 / 12 / 14`, which
-    can only ask for an exact count — where "at least ten teams" is the question a
-    reader arrives with as often, and a *band* is `teams ≥ 10` **and**
-    `teams ≤ 12`, which is one of the things the lists being an AND is for. It is
-    a fact about a league like every other rule here, so the manager tabs and the
-    trades board read it too rather than it being a filter one page knows about.
-    `sizeValue` keeps the null rule with a wrinkle of its own: **zero is unknown,
-    not a real size**, since Sleeper always reports `total_rosters` for a live
-    league — so a 0 is a row stored before the league answered, and `teams < 10`
-    sweeping in every such league is the `k = 0` trap one bullet up. It is one bay
-    at full width above the other two rather than a third equal column: it holds
-    one key and one number, so half a column of it would be air beside a scoring
-    bay carrying six rules, and it is the closest of the three to the segments
-    directly above it.
+  - **The settings list arrived as `size` and widened into the blob, which cost
+    nothing structural.** That board had its own `All sizes / 10 / 12 / 14`,
+    which can only ask for an exact count — where "at least ten teams" is the
+    question a reader arrives with as often, and a *band* is `teams ≥ 10` **and**
+    `teams ≤ 12`, which is one of the things the lists being an AND is for. So it
+    was a rule list from the start, and widening it to the rest of Sleeper's
+    `settings` was a key menu and a reader: the blob already crosses the wire
+    whole (`ManagerLeague.settings`) and was being read for exactly two fields,
+    so the bay costs no route change, no migration and no payload growth. It is
+    one bay at full width above the other two rather than a third equal column —
+    it is the bay a reader builds three rules in, and a rule row at a third of
+    the panel could not hold `Trade deadline · = · No deadline · 24 · ×` without
+    truncating the key it is named by. (The scoring bay lost its second word with
+    it: `Scoring settings` beside a bay called `Settings` is one word doing two
+    jobs.)
+  - **The key menu is read off the leagues in hand, exactly as the scoring keys
+    are.** How a league is configured is a house rule, and a fixed list would
+    offer keys nobody sets while hiding the one someone wants. `SETTING_KEYS`
+    only *ranks and names*: an unranked key is still offered, spelled with its
+    underscores opened out and read as a plain quantity, which is what makes the
+    bay safe to ship without a survey of the corpus. Two keys are dropped
+    outright (`NON_SETTING_KEYS`): `type` and `best_ball` are the Type and Format
+    rails four inches above, and a second way to ask one question is the failure
+    this codebase keeps closing — `type = 2` as a rule with Redraft lit on the
+    rail is an empty list with nothing on screen saying which control emptied it.
+    Only numbers are offered, since a rule is a comparison against one.
+  - **`teams` is the one key not in the blob**, reading `total_rosters` off the
+    league row — so it is always offered, and it keeps the null rule with a
+    wrinkle of its own: **zero is unknown, not a real size**, since Sleeper
+    always reports it for a live league. A 0 is a row stored before the league
+    answered, and `teams < 10` sweeping in every such league is the `k = 0` trap
+    one bullet up.
+  - **What an *absent* key means is read per key, and cannot have one rule.**
+    Sleeper omits what a league doesn't set, so a count or a flag missing is a
+    real `0` — `taxi_slots` absent is no taxi squad, `disable_trades` absent is
+    trades enabled — which is `scoringValue`'s rule and the reason
+    `bonus_rec_te > 0` is how TE premium is asked. A **week** has no zero on its
+    scale, so absent there is unknown and fails the rule rather than reporting
+    week 0. `SettingKey.absent` is that decision, declared per key; an unranked
+    key reads as `"zero"`, the common case. A whole missing blob is unknown for
+    every key.
+  - **There are three value kinds, not two, and the third is the interesting
+    one.** A *quantity* (teams, slots, budget) gets a number field and every
+    comparison. A *label* — a key whose numbers are names, `disable_trades` and
+    `pick_trading` — gets a value menu and only `=` / `≠`, because `>` on an enum
+    is a question with no meaning and `disable_trades = 1` is a rule a reader
+    cannot check. A *quantity carrying a sentinel* needs **both controls at
+    once**: `trade_deadline: 99` is Sleeper's "no deadline", so `≤ 12` has to
+    stay typeable while 99 stays reachable. `settingValue` reads the sentinel as
+    **null**, or `trade_deadline ≥ 13` answers "leagues that trade late" with
+    every league that never stops trading — a filter returning the wrong rows
+    rather than an error, and the same shape as the `total_rosters` of 0 above.
+    Unlike that zero it is a *known* answer rather than an absence, so it is also
+    **reachable by name**: `isSentinelRule` matches it by identity, the row draws
+    it as a lit key beside the number field (lit, it *is* the value and the field
+    stands down), and the chip reads `trade deadline is no deadline` rather than
+    quoting 99. Both halves are needed — null alone makes it unaskable, name
+    alone leaves the comparison lying.
+  - **Where a `values` table is a reading and where it would be a guess.**
+    `disable_trades` and `pick_trading` are flags whose own names say which way
+    they read — a `disable_*` at 1 is disabled — so naming them costs nothing.
+    `waiver_type`'s 0/1/2 is an *ordering*, which the key's name does not carry,
+    so it stays a quantity until somebody has read the stored blobs. A quantity
+    is never wrong here, only terse; a wrong name is a filter that lies. That is
+    also why there is no waiver quick-add: a chip states its rule as a fact.
   `roster_positions` crosses the wire for this — it is what `settings` doesn't
   carry and the rules count over, which is also what retires the note on
   `seedFromLeague` that superflex had to stay manual for want of it. `IDP_SLOTS`
@@ -3689,7 +3765,7 @@ stops holding, a comment saying it does would not have caught it.
   else in the panel, and it carries **no per-option counts**: it cuts drafts
   inside a league rather than leagues, so every option would show the identical
   league count and that number would be about something the row does not narrow.
-  `SegmentRow`'s `probe` is optional for that reason alone.
+  `FilterRail`'s `probe` is optional for that reason alone.
 
   **It is six modules and not one file** (`types`, `defaults`, `predicates`,
   `summaries`, `options`, `breakdown`, behind a barrel). It was one, at 640 lines
@@ -3915,26 +3991,32 @@ stops holding, a comment saying it does would not have caught it.
   lists — the rules fell below a 60vh scroll box, so a reader who wanted
   "superflex leagues that pay a TE bonus" scrolled past everything they *didn't*
   want to reach the control that asks it, and the feature read as missing. The
-  segments are facts about a league and compress into one trough; the rule lists
-  sit side by side under it as equal bays, which on a laptop puts every rule and
-  both quick-add trays on screen at once. Five things worth keeping:
-  - **A segment group is a collapsed row, and its options float over the panel
-    rather than expanding into it.** Three captions and thirteen keys on screen
-    at all times was ~290px of a 700px phone spent on what is usually one
-    selection — the same crowding the bay layout was fixing, one layer in — so a
-    row now states its own selection (in the words the trigger and the header
-    already use, cyan when it narrows) with the count behind it, and opens on
-    press. The float is the load-bearing half: a row that pushed the rule bays
-    down as it opened would reintroduce the original problem one group at a time.
-    It is a raised face over the recessed trough, which is the material grammar
-    everywhere else here — the thing you are working *in* sits above the thing
-    you are working *on* — and the trough carries `relative z-10` for it, since a
-    later sibling would otherwise paint over the panel whatever its own z-index.
-    Three behaviours go with a floating control and all three are the platform's
-    everywhere else: one row open at a time, a press outside dismisses it, and
-    **Escape closes the innermost thing that is up** — the dialog's own `cancel`
-    is preventDefaulted while a row is open, or one keypress would take the whole
-    dialog with it.
+  fixed filters are facts about a league and compress into one trough; the rule
+  lists sit under it, which on a laptop puts every rule and every quick-add tray
+  on screen at once. Five things worth keeping:
+  - **A fixed filter is a rail with every option's count on it, and the collapse
+    that stood between was a correction of the layout rather than of the
+    control.** Three captions and thirteen keys stacked as three *sections* was
+    ~290px of a 700px phone — the same crowding the bay layout was fixing, one
+    layer in — so the rows were collapsed to a summary and a popover. What that
+    got wrong is that a caption and its options on **one line** is shorter than
+    the collapsed row was (118px against 124 on a laptop), and the collapse cost
+    the thing the dialog is opened for: the counts. Behind a press they were
+    three of thirteen, and comparing two of them meant two presses and two panels
+    that could not be on screen together. Every `probe` closes over the draft, so
+    a trough of rails is a **live cross-tab** — lighting Dynasty moves the Format
+    row's numbers underneath it, which is exactly what the popovers were hiding.
+    The phone pays ~120px for that and the bays still open above the fold, so the
+    failure that produced the collapse does not come back.
+    **The rails are rails at every width**, which is the half most likely to be
+    "simplified": a collapsed row on a phone and a rail on a laptop would be two
+    different controls either side of a breakpoint, the mistake the league cards'
+    own per-card column labels were removed for. What legitimately changes at a
+    width is geometry — the keys wrap after the caption.
+    Four behaviours went with the popovers and are owed by nothing now: the
+    one-open-at-a-time state, the outside-press dismissal, the focus return, and
+    the `preventDefault` on the dialog's own `cancel` that made Escape close the
+    innermost thing that was up. Escape is the platform's again.
   - **The rail is beside the controls, not under them.** The match count was a
     line of footer text next to Apply, and it is the number the whole dialog
     exists to move — it changes while you edit, and a number you have to scroll
@@ -3942,9 +4024,12 @@ stops holding, a comment saying it does would not have caught it.
     account it came out of, and the footer restates it only below the width where
     the rail is stacked (same `matched`, so the two can't disagree).
   - **The chips are the selection restated outside the controls that built it.**
-    That matters most for the rules: a slot rule and a scoring rule live in
+    That matters most for the rules: a settings rule and a scoring rule live in
     different bays, so a reader who narrowed to nothing otherwise has two lists to
-    audit. Each strikes itself out in place, which is what `clearFilter` is —
+    audit. A settings chip reads the *sentence* the row shows rather than the
+    digits underneath it (`trade deadline is no deadline`, not `= 99`), off the
+    same table the row renders from — a chip a reader cannot check is the whole
+    reason those keys have names. Each strikes itself out in place, which is what `clearFilter` is —
     and it addresses a rule by **position**, since two identical rules are
     indistinguishable and "remove the matching one" would be ambiguous.
   - **`activeFilters` is one walk, and the count, the summary and the chips are

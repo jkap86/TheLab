@@ -14,7 +14,10 @@ import {
   matchesFilters,
   scoringKeyOptions,
   scoringValue,
-  sizeValue,
+  seasonOptions,
+  settingIsSentinel,
+  settingKeyOptions,
+  settingValue,
   slotCount,
 } from "./league-filters/index.ts";
 import type { ManagerLeague } from "@/shared/manager";
@@ -53,7 +56,7 @@ const only = (filters: Partial<LeagueFilters>): LeagueFilters => ({
 /** The three rule lists, spelled the way the dialog writes them. */
 const slots = (...rules: FilterRule[]) => only({ slots: rules });
 const scoring = (...rules: FilterRule[]) => only({ scoring: rules });
-const size = (...rules: FilterRule[]) => only({ size: rules });
+const settings = (...rules: FilterRule[]) => only({ settings: rules });
 
 /** A one-QB lineup, the base the roster-position cases vary from. */
 const ONE_QB = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "BN", "BN"];
@@ -315,28 +318,25 @@ describe("slotCount and scoringValue", () => {
 });
 
 /**
- * The size rule, which arrived with the ADP board — its own `All sizes / 10 /
- * 12` chip, in the vocabulary every other league filter is already written in.
- * A rule rather than a chip because a chip can only ask for an exact count,
- * where "at least ten teams" is the question a reader arrives with as often.
+ * The settings rules. They arrived as one key — `teams`, the ADP board's own
+ * `All sizes / 10 / 12` chip in the vocabulary every other league filter is
+ * already written in — and widened to the rest of Sleeper's `settings` blob,
+ * which is already on the wire and was being read for exactly two fields.
+ *
+ * The interesting cases are all about what a *number* means: an absent key, a
+ * zero that is a real answer, and a zero that is not.
  */
-describe("the size rule", () => {
-  test("reads the league's roster count, and only for a key it knows", () => {
-    assert.equal(sizeValue(league(null, { total_rosters: 10 }), "teams"), 10);
-    // A key this build has no reader for is unknown rather than assumed: a rule
-    // stored by a later build narrows to nothing here rather than to everything.
-    assert.equal(sizeValue(league(null), "rosters"), null);
-  });
-
-  test("zero is unknown, not a real size", () => {
+describe("the settings rules", () => {
+  test("teams reads the league's roster count, which is not in the blob", () => {
+    assert.equal(settingValue(league(null, { total_rosters: 10 }), "teams"), 10);
     // Sleeper always reports `total_rosters` for a live league, so a 0 is a row
     // stored before the league answered — and `teams < 10` sweeping in every
     // such league is the `k = 0` trap `slotCount` keeps null for.
-    assert.equal(sizeValue(league(null, { total_rosters: 0 }), "teams"), null);
+    assert.equal(settingValue(league(null, { total_rosters: 0 }), "teams"), null);
     assert.equal(
       matchesFilters(
         league(null, { total_rosters: 0 }),
-        size({ key: "teams", op: "lt", value: 10 }),
+        settings({ key: "teams", op: "lt", value: 10 }),
       ),
       false,
     );
@@ -345,12 +345,12 @@ describe("the size rule", () => {
   test("an exact size and a bound both narrow, and a band is two rules", () => {
     const twelve = league(null, { total_rosters: 12 });
     const ten = league(null, { total_rosters: 10 });
-    assert.equal(matchesFilters(twelve, size({ key: "teams", op: "eq", value: 12 })), true);
-    assert.equal(matchesFilters(ten, size({ key: "teams", op: "eq", value: 12 })), false);
-    assert.equal(matchesFilters(ten, size({ key: "teams", op: "lte", value: 10 })), true);
+    assert.equal(matchesFilters(twelve, settings({ key: "teams", op: "eq", value: 12 })), true);
+    assert.equal(matchesFilters(ten, settings({ key: "teams", op: "eq", value: 12 })), false);
+    assert.equal(matchesFilters(ten, settings({ key: "teams", op: "lte", value: 10 })), true);
     // A band is `>= 10` *and* `<= 12`, which is what the lists being an AND is
     // for — and is the thing a pair of bounds on one field could not express.
-    const band = size(
+    const band = settings(
       { key: "teams", op: "gte", value: 10 },
       { key: "teams", op: "lte", value: 12 },
     );
@@ -359,13 +359,230 @@ describe("the size rule", () => {
     assert.equal(matchesFilters(league(null, { total_rosters: 14 }), band), false);
   });
 
+  test("reads any numeric key out of the blob, ranked or not", () => {
+    const l = league({ taxi_slots: 3, house_rule: 7 });
+    assert.equal(settingValue(l, "taxi_slots"), 3);
+    // An unranked key is still evaluable — the table names and orders, it does
+    // not gate. A rule on it narrows exactly as one on a named key does.
+    assert.equal(settingValue(l, "house_rule"), 7);
+    assert.equal(matchesFilters(l, settings({ key: "house_rule", op: "eq", value: 7 })), true);
+  });
+
+  test("an absent key is read per key: a count is zero, a week is unknown", () => {
+    // Sleeper omits what a league doesn't set, so a count or a flag missing is a
+    // real 0 — which is what makes `taxi_slots = 0` mean "no taxi squad" and
+    // `disable_trades = 0` mean "trades enabled".
+    const bare = league({});
+    assert.equal(settingValue(bare, "taxi_slots"), 0);
+    assert.equal(settingValue(bare, "disable_trades"), 0);
+    assert.equal(matchesFilters(bare, settings({ key: "disable_trades", op: "eq", value: 0 })), true);
+    // A week has no zero on its scale, so nothing stored is unknown rather than
+    // week 0 — and an unknown fails the rule, as every unknown here does.
+    assert.equal(settingValue(bare, "trade_deadline"), null);
+    assert.equal(settingValue(bare, "playoff_week_start"), null);
+    assert.equal(matchesFilters(bare, settings({ key: "trade_deadline", op: "lte", value: 12 })), false);
+  });
+
+  test("a whole missing blob is unknown for every key", () => {
+    const l = league(null);
+    assert.equal(settingValue(l, "taxi_slots"), null);
+    assert.equal(settingValue(l, "disable_trades"), null);
+    assert.equal(matchesFilters(l, settings({ key: "disable_trades", op: "eq", value: 0 })), false);
+  });
+
+  test("a non-numeric value is read as absent, not coerced", () => {
+    const junk = league({ taxi_slots: "3", trade_deadline: null });
+    assert.equal(settingValue(junk, "taxi_slots"), 0);
+    assert.equal(settingValue(junk, "trade_deadline"), null);
+  });
+
   test("it counts, names and clears itself like the other two lists", () => {
-    const filters = size({ key: "teams", op: "gte", value: 12 });
+    const filters = settings({ key: "teams", op: "gte", value: 12 });
     assert.equal(activeFilterCount(filters), 1);
     assert.equal(filterSummary(filters), "teams ≥ 12");
     const [active] = activeFilters(filters);
-    assert.deepEqual(active, { kind: "size", index: 0, label: "teams ≥ 12" });
-    assert.deepEqual(clearFilter(filters, active).size, []);
+    assert.deepEqual(active, { kind: "setting", index: 0, label: "teams ≥ 12" });
+    assert.deepEqual(clearFilter(filters, active).settings, []);
+  });
+
+  test("a named value reads as a sentence rather than as a digit", () => {
+    // `disable_trades = 1` is correct and unreadable: the chip is the only thing
+    // outside the dialog saying what a settings rule narrowed to, so it has to
+    // be the sentence the row shows.
+    assert.equal(
+      filterSummary(settings({ key: "disable_trades", op: "eq", value: 1 })),
+      "trades is disabled",
+    );
+    assert.equal(
+      filterSummary(settings({ key: "disable_trades", op: "ne", value: 1 })),
+      "trades is not disabled",
+    );
+    // A comparison a name has no reading for falls back to the symbol form
+    // rather than inventing one.
+    assert.equal(
+      filterSummary(settings({ key: "disable_trades", op: "gte", value: 1 })),
+      "trades ≥ 1",
+    );
+  });
+});
+
+/**
+ * `trade_deadline: 99` is Sleeper's spelling of "no deadline" — a name wearing a
+ * number, and the reason the settings bay has a third value kind.
+ *
+ * Read as a week, one of the two obvious rules is right by luck and the other is
+ * silently wrong. That is the whole of what these pin.
+ */
+describe("the trade-deadline sentinel", () => {
+  const none = league({ trade_deadline: 99 });
+  const week12 = league({ trade_deadline: 12 });
+  const week14 = league({ trade_deadline: 14 });
+
+  test("it does not compare as a place on the scale", () => {
+    assert.equal(settingValue(none, "trade_deadline"), null);
+    assert.equal(settingValue(week12, "trade_deadline"), 12);
+  });
+
+  test("a late-deadline rule excludes it — the case a raw 99 gets wrong", () => {
+    const late = settings({ key: "trade_deadline", op: "gte", value: 13 });
+    assert.equal(matchesFilters(week14, late), true);
+    // The bug this exists to stop: `99 >= 13` is true, so "leagues that trade
+    // late" would answer with every league that never stops trading.
+    assert.equal(matchesFilters(none, late), false);
+  });
+
+  test("an early-deadline rule excludes it too — right, but not by luck", () => {
+    const early = settings({ key: "trade_deadline", op: "lte", value: 12 });
+    assert.equal(matchesFilters(week12, early), true);
+    assert.equal(matchesFilters(none, early), false);
+  });
+
+  test("it is still reachable by name, which is what a plain null would cost", () => {
+    const isNone = settings({ key: "trade_deadline", op: "eq", value: 99 });
+    assert.equal(matchesFilters(none, isNone), true);
+    assert.equal(matchesFilters(week12, isNone), false);
+    const hasOne = settings({ key: "trade_deadline", op: "ne", value: 99 });
+    assert.equal(matchesFilters(week12, hasOne), true);
+    assert.equal(matchesFilters(none, hasOne), false);
+  });
+
+  test("an unknown fails a sentinel rule, as it fails every rule here", () => {
+    for (const l of [league(null), league({})]) {
+      assert.equal(settingIsSentinel(l, "trade_deadline"), null);
+      assert.equal(matchesFilters(l, settings({ key: "trade_deadline", op: "eq", value: 99 })), false);
+      assert.equal(matchesFilters(l, settings({ key: "trade_deadline", op: "ne", value: 99 })), false);
+    }
+  });
+
+  test("only = and ≠ address it; a comparison against 99 stays a comparison", () => {
+    // `trade_deadline >= 99` has no reading as a name, so it is read on the
+    // scale — where the sentinel is absent and nothing matches.
+    const odd = settings({ key: "trade_deadline", op: "gte", value: 99 });
+    assert.equal(matchesFilters(none, odd), false);
+    assert.equal(matchesFilters(week14, odd), false);
+  });
+
+  test("a key with no sentinel is never read as having one", () => {
+    assert.equal(settingIsSentinel(league({ taxi_slots: 99 }), "taxi_slots"), null);
+    assert.equal(settingValue(league({ taxi_slots: 99 }), "taxi_slots"), 99);
+  });
+
+  test("the chip names it rather than quoting the number", () => {
+    assert.equal(
+      filterSummary(settings({ key: "trade_deadline", op: "eq", value: 99 })),
+      "trade deadline is no deadline",
+    );
+    assert.equal(
+      filterSummary(settings({ key: "trade_deadline", op: "ne", value: 99 })),
+      "trade deadline is not no deadline",
+    );
+  });
+});
+
+/**
+ * The season, which is the one filter here that is not an attribute of a league
+ * but the population the rest are read against.
+ */
+describe("the season filter", () => {
+  const y2026 = league(null, { season: "2026" });
+  const y2025 = league(null, { season: "2025" });
+
+  test("narrows to one season, and `all` narrows nothing", () => {
+    assert.equal(matchesFilters(y2026, only({ season: "2026" })), true);
+    assert.equal(matchesFilters(y2025, only({ season: "2026" })), false);
+    assert.equal(matchesFilters(y2025, only({ season: "all" })), true);
+  });
+
+  test("a season no league carries matches nothing rather than everything", () => {
+    // A stored selection outlives the population that produced it, and the
+    // honest answer there is an empty list rather than an ignored filter.
+    assert.equal(matchesFilters(y2026, only({ season: "2019" })), false);
+  });
+
+  test("it counts, names and clears itself like the other fixed filters", () => {
+    const filters = only({ season: "2026" });
+    assert.equal(activeFilterCount(filters), 1);
+    assert.equal(filterSummary(filters), "2026");
+    const [active] = activeFilters(filters);
+    assert.deepEqual(active, { kind: "fixed", field: "season", label: "2026" });
+    assert.equal(clearFilter(filters, active).season, "all");
+  });
+
+  test("it leads the summary, because everything else narrows within it", () => {
+    const filters = only({ season: "2026", type: "2" });
+    assert.equal(filterSummary(filters), "2026 · dynasty");
+  });
+});
+
+describe("seasonOptions", () => {
+  test("offers the seasons in hand, newest first, deduplicated", () => {
+    assert.deepEqual(
+      seasonOptions([
+        league(null, { season: "2025" }),
+        league(null, { season: "2026" }),
+        league(null, { season: "2025" }),
+        league(null, { season: "2024" }),
+      ]),
+      ["2026", "2025", "2024"],
+    );
+  });
+
+  test("one season is one option, which is what the band reads as no choice", () => {
+    // Every caller but the ADP board's widest setting resolves a single season
+    // server-side, so this is the ordinary answer and the band draws nothing.
+    assert.deepEqual(seasonOptions([league(null), league(null)]), ["2026"]);
+    assert.deepEqual(seasonOptions([]), []);
+  });
+});
+
+describe("settingKeyOptions", () => {
+  test("offers teams always, since it is the one key not in the blob", () => {
+    assert.deepEqual(settingKeyOptions([]), ["teams"]);
+  });
+
+  test("offers the numeric keys the leagues in hand carry, ranked", () => {
+    const keys = settingKeyOptions([
+      league({ house_rule: 3, taxi_slots: 2 }),
+      league({ trade_deadline: 12 }),
+    ]);
+    // Ranked ones in table order, then everything else alphabetically.
+    assert.deepEqual(keys, ["teams", "trade_deadline", "taxi_slots", "house_rule"]);
+  });
+
+  test("drops type and best_ball, which the rails four inches above already ask", () => {
+    const keys = settingKeyOptions([league({ type: 2, best_ball: 1, taxi_slots: 2 })]);
+    assert.equal(keys.includes("type"), false);
+    assert.equal(keys.includes("best_ball"), false);
+    assert.deepEqual(keys, ["teams", "taxi_slots"]);
+  });
+
+  test("drops what a rule could not evaluate", () => {
+    // A rule is a comparison against a number, so a key holding a string or an
+    // object is a key no rule could read.
+    const keys = settingKeyOptions([
+      league({ division_names: ["a", "b"], name: "x", taxi_slots: 1 }),
+    ]);
+    assert.deepEqual(keys, ["teams", "taxi_slots"]);
   });
 });
 

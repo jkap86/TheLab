@@ -82,6 +82,7 @@ export function RuleBay({
             rule={rule}
             keyOptions={keyOptions}
             step={step}
+            fallback={newRule.value}
             // A preset can write a key no league in view scores (`bonus_rec_te`
             // where nobody pays it), and a select whose value isn't among its
             // options silently shows the first one instead — so the rule's own

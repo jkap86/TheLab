@@ -13,6 +13,7 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   type FilterRule,
   type LeagueFilters,
+  NO_TRADE_DEADLINE,
   SLOT_GROUPS,
   STATUS_OPTIONS,
   activeFilterCount,
@@ -21,14 +22,15 @@ import {
 } from "../../league-filters/index.ts";
 import type { ManagerLeague } from "@/shared/manager";
 
+import { FilterRail } from "./filter-rail.tsx";
 import { FiltersDialogFooter } from "./filters-dialog-footer.tsx";
 import { FiltersDialogHeader } from "./filters-dialog-header.tsx";
 import { FiltersTrigger } from "./filters-trigger.tsx";
 import { LeagueFiltersModal } from "./league-filters-modal.tsx";
 import { SLOT_PRESETS } from "./league-filters-modal.constants.ts";
-import type { SegmentKey } from "./league-filters-modal.types.ts";
 import { RuleBay } from "./rule-bay.tsx";
-import { SegmentRow } from "./segment-row.tsx";
+import { RuleRow } from "./rule-row.tsx";
+import { SeasonBand } from "./season-band.tsx";
 import { SegmentTrough } from "./segment-trough.tsx";
 import { useLeagueFiltersModal } from "./use-league-filters-modal.ts";
 
@@ -44,10 +46,12 @@ import { useLeagueFiltersModal } from "./use-league-filters-modal.ts";
  * dismissal and Escape's innermost-first rule all need a real dialog element.
  * Those live in `use-league-filters-modal` and are documented there.
  *
- * The **open** segment popover is the state worth naming here: it is unreachable
- * through the modal (nothing can press a row without a document), so it is
- * reached by rendering `SegmentRow` with `open` set. That is the branch carrying
- * the panel's animation, its option keys and their counts.
+ * **There is no longer a state that the modal cannot reach.** While the fixed
+ * filters were collapsed rows, the open popover had to be rendered on its own —
+ * nothing can press a row without a document — so the branch carrying its
+ * option keys and their counts was reached through `SegmentRow` directly. Drawn
+ * as rails, every option and every count is in the modal's own markup, which is
+ * why the cases below read it there.
  */
 
 type Props = Record<string, unknown> & { children?: ReactNode };
@@ -102,14 +106,10 @@ const leagues: ManagerLeague[] = [
 
 const superflex: FilterRule = { key: "QB+SF", op: "gte", value: 2 };
 
-/**
- * The status row on its own, which is the only way to reach the **open**
- * popover: nothing can press a row without a document, so the modal always
- * renders it closed.
- */
-function statusRow(open: boolean, value: LeagueFilters["status"] = "all"): string {
+/** The status rail on its own, for the cases about one row's own markup. */
+function statusRail(value: LeagueFilters["status"] = "all"): string {
   return renderToStaticMarkup(
-    createElement(SegmentRow, {
+    createElement(FilterRail, {
       label: "Status",
       options: STATUS_OPTIONS,
       value: value as string,
@@ -119,11 +119,36 @@ function statusRow(open: boolean, value: LeagueFilters["status"] = "all"): strin
         status: next as LeagueFilters["status"],
       }),
       onPick: () => {},
-      open,
-      onToggle: () => {},
-      onClose: () => {},
     }),
   );
+}
+
+/**
+ * Leagues spanning two seasons — the one population the season band draws for,
+ * and the ADP board's widest setting is the only caller that produces it.
+ */
+const twoSeasons: ManagerLeague[] = [
+  ...leagues,
+  league("d", { season: "2025" }),
+];
+
+/**
+ * A section that uses hooks, run for its returned tree rather than its markup.
+ *
+ * Calling it inside a probe's body is the same technique `mountHook` uses on
+ * `useLeagueFiltersModal`: React's dispatcher is live during
+ * `renderToStaticMarkup`, so the section's own `useState` binds to the probe's
+ * hook slot. That is what lets a row's handlers be pressed — markup carries the
+ * options and the pressed states, but not the callbacks.
+ */
+function treeOf<P>(section: (props: P) => ReactNode, props: P): ReactNode {
+  let captured: ReactNode = null;
+  function Probe() {
+    captured = section(props);
+    return null;
+  }
+  renderToStaticMarkup(createElement(Probe));
+  return captured;
 }
 
 function modal(over: Partial<Parameters<typeof LeagueFiltersModal>[0]> = {}): string {
@@ -175,44 +200,77 @@ describe("what is on screen", () => {
     assert.match(modal(), /aria-haspopup="dialog"/);
   });
 
-  test("the panel plays its entrance, and the popover its own", () => {
+  test("the panel plays its entrance, and nothing else animates", () => {
     assert.match(modal(), /animation:dialog-rise 0\.18s cubic-bezier\(0\.2,0\.9,0\.3,1\)/);
     assert.match(modal(), /filters-dialog-panel/);
-    // Both classes are named in the reduced-motion block in `globals.css`, which
-    // is what freezes them — so the class names are the contract, not decoration.
-    const open = statusRow(true);
-    assert.match(open, /filters-segment-pop/);
-    assert.match(open, /animation:dialog-rise 0\.14s cubic-bezier\(0\.2,0\.9,0\.3,1\)/);
-    // Closed, neither the panel nor its animation is in the tree at all.
-    assert.doesNotMatch(statusRow(false), /filters-segment-pop/);
+    // The class is named in the reduced-motion block in `globals.css`, which is
+    // what freezes it — so the name is the contract, not decoration.
+    //
+    // `filters-segment-pop` went with the popovers. A rail has nothing that
+    // arrives, so there is no second entrance to freeze.
+    assert.doesNotMatch(modal(), /filters-segment-pop/);
   });
 
-  test("a collapsed row states its selection, its count and its expanded state", () => {
+  test("every fixed filter is a labelled rail, with every option on it", () => {
     const html = modal();
-    assert.match(html, /aria-expanded="false"/);
-    // **No `aria-haspopup`**, which this used to assert. What a row opens is a
-    // list of radio-ish keys, not a menu, and `haspopup="true"` *means* menu —
-    // `expanded` plus `controls` is the disclosure this actually is. The
-    // reference is asserted where the popup exists, in the open case below.
-    assert.doesNotMatch(html, /aria-haspopup="true"/);
     for (const label of ["Status", "Type", "Format"]) {
-      assert.ok(html.includes(`>${label}</span>`), `expected a ${label} row`);
+      assert.match(
+        html,
+        new RegExp(`role="group" aria-label="${label}"`),
+        `expected a ${label} rail`,
+      );
     }
-    // The unnarrowed selection, named in the same words the header uses.
-    assert.match(html, /Any status/);
-    assert.match(html, /All types/);
-    assert.match(html, /All formats/);
+    // The whole of what the collapse cost: every option on screen at rest,
+    // rather than the three that happened to be selected.
+    for (const word of [
+      "Any status", "Pre-draft", "Drafting", "In season", "Complete",
+      "All types", "Redraft", "Keeper", "Dynasty", "Chopped",
+      "All formats", "Best ball", "Lineup",
+    ]) {
+      assert.ok(html.includes(word), `expected ${word} on the panel`);
+    }
+    // Nothing discloses any more, so nothing claims to.
+    assert.doesNotMatch(html, /aria-expanded/);
+    assert.doesNotMatch(html, /aria-haspopup="true"/);
   });
 
-  test("omitType drops that row and leaves the others where they were", () => {
+  test("a rail marks exactly one option and counts every one of them", () => {
+    const html = statusRail("in_season");
+    assert.equal((html.match(/aria-pressed="true"/g) ?? []).length, 1);
+    assert.equal(
+      (html.match(/aria-pressed="false"/g) ?? []).length,
+      STATUS_OPTIONS.length - 1,
+    );
+    // The counts are the dialog's whole argument over the bar it replaced, and
+    // behind a press they were three of thirteen. Every option carries one:
+    // two of these leagues are in season, one is pre-draft, none are complete.
+    for (const count of [">3<", ">2<", ">1<", ">0<"]) {
+      assert.ok(html.includes(count), `expected a ${count} count on the rail`);
+    }
+  });
+
+  test("the rails are a cross-tab: one row's pick moves the next row's counts", () => {
+    // Every probe closes over the draft, so lighting Dynasty rewrites the Format
+    // row's numbers underneath it. That is the thing two popovers could not show
+    // at once, and it is why they are rails.
+    const wide = modal();
+    const narrowed = modal({
+      filters: { ...DEFAULT_LEAGUE_FILTERS, type: "2" },
+    });
+    const formatCounts = (html: string) =>
+      html.slice(html.indexOf('aria-label="Format"')).match(/tabular-nums[^>]*>(\d+)</g);
+    assert.notDeepEqual(formatCounts(wide), formatCounts(narrowed));
+  });
+
+  test("omitting the type row drops it and leaves the others where they were", () => {
     // The ADP board's call. The type is a *display* question there — every fetch
     // answers both markets and the board keys choose — so a row narrowing the
     // population on the same axis is a second answer to one question.
-    const html = modal({ omitType: true });
+    const html = modal({ omit: ["type"] });
     for (const label of ["Status", "Format"]) {
-      assert.ok(html.includes(`>${label}</span>`), `expected a ${label} row`);
+      assert.match(html, new RegExp(`aria-label="${label}"`), `expected a ${label} rail`);
     }
-    assert.ok(!html.includes(">Type</span>"), "expected no Type row");
+    assert.doesNotMatch(html, /aria-label="Type"/);
     // Its selection goes with it — the caption check alone would pass on a row
     // that had merely lost its label. Not `Dynasty`, which the breakdown below
     // still counts: that describes the survivors rather than narrowing them.
@@ -229,20 +287,10 @@ describe("what is on screen", () => {
     // undo: the rail walks `activeFilters`, which is a fact about the selection
     // rather than about which controls happen to be drawn.
     const html = modal({
-      omitType: true,
+      omit: ["type"],
       filters: { ...DEFAULT_LEAGUE_FILTERS, type: "2" },
     });
     assert.match(html, /aria-label="Stop filtering by dynasty"/);
-  });
-
-  test("an open row lists every option, marked and counted", () => {
-    const html = statusRow(true, "in_season");
-    for (const option of STATUS_OPTIONS) {
-      assert.ok(html.includes(option.label), `expected ${option.label} on the menu`);
-    }
-    // Exactly one option is pressed, and the counts are probed against the draft.
-    assert.equal((html.match(/aria-pressed="true"/g) ?? []).length, 1);
-    assert.equal((html.match(/aria-pressed="false"/g) ?? []).length, STATUS_OPTIONS.length - 1);
   });
 
   test("every rule control keeps an accessible name", () => {
@@ -299,8 +347,9 @@ describe("what is on screen", () => {
     assert.match(modal(), /width:100%/);
   });
 
-  test("both empty bays say what a rule there would do", () => {
+  test("all three empty bays say what a rule there would do", () => {
     const html = modal();
+    assert.match(html, /Any settings\. Add a rule to narrow by how a league is set up\./);
     assert.match(html, /Any lineup\. Add a rule to narrow by what a league starts\./);
     assert.match(html, /Any scoring\. Add a rule to narrow by what a league pays\./);
   });
@@ -322,6 +371,237 @@ describe("what is on screen", () => {
       console.error = original;
     }
     assert.deepEqual(warnings, []);
+  });
+});
+
+/**
+ * The season band, which is drawn only where there is a season to choose — every
+ * caller but the ADP board's widest setting resolves one server-side.
+ */
+describe("the season band", () => {
+  test("one season is no choice, so nothing is drawn", () => {
+    // The ordinary case. A control with one option, permanently lit, reports a
+    // fact rather than offering a choice — which is the thing every other row in
+    // this panel was shortened to stop doing.
+    assert.doesNotMatch(modal(), /aria-label="Season"/);
+    assert.doesNotMatch(modal({ leagues: [] }), /aria-label="Season"/);
+  });
+
+  test("two seasons turn it on by themselves, with every season counted", () => {
+    const html = modal({ leagues: twoSeasons });
+    assert.match(html, /role="group" aria-label="Season"/);
+    for (const word of ["All seasons", "2026", "2025"]) {
+      assert.ok(html.includes(word), `expected ${word} on the band`);
+    }
+    // And it says which way the arrow points between it and the counts below.
+    assert.match(html, /Everything below narrows across all of them\./);
+  });
+
+  test("a chosen season names itself in the sentence under the keys", () => {
+    const html = modal({
+      leagues: twoSeasons,
+      filters: { ...DEFAULT_LEAGUE_FILTERS, season: "2025" },
+    });
+    assert.match(html, /Everything below narrows within 2025\./);
+  });
+
+  test("omitting it drops the band even where there are seasons to pick", () => {
+    // The ADP board's call: its pinned block leads with its own season row, and
+    // a second one inside the dialog is a finer cut on an axis already answered.
+    const html = modal({ leagues: twoSeasons, omit: ["season"] });
+    assert.doesNotMatch(html, /aria-label="Season"/);
+    assert.ok(!html.includes("All seasons"), "its keys go with it");
+  });
+
+  test("a season the omitted band can't reach is still named and clearable", () => {
+    const html = modal({
+      leagues: twoSeasons,
+      omit: ["season"],
+      filters: { ...DEFAULT_LEAGUE_FILTERS, season: "2025" },
+    });
+    assert.match(html, /aria-label="Stop filtering by 2025"/);
+  });
+
+  test("picking a season writes that field and nothing else", () => {
+    let next: LeagueFilters | null = null;
+    const draft: LeagueFilters = { ...DEFAULT_LEAGUE_FILTERS, slots: [superflex] };
+    const tree = SeasonBand({
+      draft,
+      onChange: (value) => {
+        next = value;
+      },
+      leagues: twoSeasons,
+      seasons: ["2026", "2025"],
+    });
+    const [rail] = elements(tree).filter((el) => typeof el.props.probe === "function");
+    press(rail, "onPick")("2025");
+    assert.deepEqual(next, { ...draft, season: "2025" });
+  });
+});
+
+/**
+ * The settings bay, which was `League size` holding one key. What is new is the
+ * vocabulary and the two things a bare number field cannot say.
+ */
+describe("the settings bay", () => {
+  /** A league carrying the settings the bay is about. */
+  const configured = league("cfg", {
+    settings: { type: 2, best_ball: 0, disable_trades: 0, trade_deadline: 12, taxi_slots: 3 },
+  });
+
+  const withSettings = (rules: FilterRule[], over: Partial<ManagerLeague>[] = []) =>
+    modal({
+      leagues: [configured, ...over.map((o, i) => league(`x${i}`, o))],
+      filters: { ...DEFAULT_LEAGUE_FILTERS, settings: rules },
+    });
+
+  test("it leads the panel under its own name, with the pair below it", () => {
+    const html = modal();
+    for (const label of ["Settings", "Roster slots", "Scoring"]) {
+      assert.ok(html.includes(`>${label}</span>`), `expected a ${label} bay`);
+    }
+    // `Scoring` rather than `Scoring settings`, which would be one word doing
+    // two jobs beside a bay now called Settings.
+    assert.ok(!html.includes("Scoring settings"), "the scoring bay dropped its second word");
+  });
+
+  test("the key menu offers teams plus what the leagues in hand carry", () => {
+    const html = withSettings([{ key: "teams", op: "eq", value: 12 }]);
+    for (const key of ["teams", "disable_trades", "trade_deadline", "taxi_slots"]) {
+      assert.match(html, new RegExp(`<option value="${key}"`), `expected ${key} on the menu`);
+    }
+    // Not the two the rails four inches above already ask about.
+    assert.doesNotMatch(html, /<option value="type"/);
+    assert.doesNotMatch(html, /<option value="best_ball"/);
+  });
+
+  test("a key whose numbers are names gets a menu, and only = and ≠", () => {
+    const html = withSettings([{ key: "disable_trades", op: "eq", value: 1 }]);
+    // The value is the name, selected — not a `1` a reader has to decode.
+    assert.match(html, /<option value="1" selected="">Disabled<\/option>/);
+    assert.match(html, /<option value="0">Enabled<\/option>/);
+    // And the comparison narrows to the two that have a reading. An ordering on
+    // an enum is a rule that reads as a sentence and narrows by an accident of
+    // the coding.
+    assert.match(html, /<option value="eq"/);
+    assert.match(html, /<option value="ne"/);
+    for (const op of ["gt", "lt", "gte", "lte"]) {
+      assert.doesNotMatch(html, new RegExp(`<option value="${op}"`));
+    }
+  });
+
+  test("a value the names don't cover is still shown rather than silently swapped", () => {
+    // The `unlistedKey` failure one field over: a `<select>` whose value is
+    // absent from its options renders the first one instead, so the row would
+    // read as `Enabled` while the rule says 7.
+    const html = withSettings([{ key: "disable_trades", op: "eq", value: 7 }]);
+    assert.match(html, /<option value="7" selected="">7<\/option>/);
+  });
+
+  test("a quantity keeps its number field and every comparison", () => {
+    const html = withSettings([{ key: "taxi_slots", op: "gt", value: 0 }]);
+    assert.match(html, /aria-label="Value"[^>]*type="number"/);
+    // The symbol form, and every comparison on the menu — the text is `>`, so
+    // the option's own value is what identifies it.
+    assert.match(html, /<option value="gt"/);
+    assert.match(html, /<option value="lt"/);
+  });
+
+  test("switching to a named key lands on a rule that means something", () => {
+    // A key with names has no reading for the number the old key was comparing
+    // against, and none for `>` either.
+    let next: FilterRule | null = null;
+    const tree = treeOf(RuleRow, {
+      rule: { key: "taxi_slots", op: "gt", value: 3 } as FilterRule,
+      keyOptions: [
+        { value: "taxi_slots", label: "Taxi slots" },
+        { value: "disable_trades", label: "Trades" },
+      ],
+      extraKey: null,
+      step: 1,
+      fallback: 12,
+      count: 0,
+      onChange: (rule) => {
+        next = rule;
+      },
+      onRemove: () => {},
+    });
+    const [keyMenu] = elements(tree).filter((el) => el.props["aria-label"] === "Filter on");
+    press(keyMenu, "onChange")({ target: { value: "disable_trades" } });
+    assert.deepEqual(next, { key: "disable_trades", op: "eq", value: 0 });
+  });
+});
+
+/**
+ * The sentinel row. `trade_deadline: 99` is Sleeper's "no deadline", so the row
+ * needs both controls at once: a number field for the weeks, and a way to reach
+ * the one value that is not a week.
+ */
+describe("the trade-deadline row", () => {
+  const row = (rule: FilterRule, onChange: (next: FilterRule) => void = () => {}) =>
+    treeOf(RuleRow, {
+      rule,
+      keyOptions: [{ value: "trade_deadline", label: "Trade deadline" }],
+      extraKey: null,
+      step: 1,
+      fallback: 12,
+      count: 0,
+      onChange,
+      onRemove: () => {},
+    });
+
+  const html = (rule: FilterRule) => renderToStaticMarkup(row(rule));
+
+
+  test("a week rule keeps the number field, with the sentinel beside it unlit", () => {
+    const markup = html({ key: "trade_deadline", op: "lte", value: 12 });
+    assert.match(markup, /aria-label="Value"[^>]*type="number"/);
+    assert.match(markup, /aria-pressed="false"[^>]*>No deadline</);
+  });
+
+  test("on the sentinel, the field stands down and the key is lit", () => {
+    // Lit, the sentinel *is* the value — a number field showing 99 beside it
+    // would be the one place a reader meets the bare digits.
+    const markup = html({ key: "trade_deadline", op: "eq", value: NO_TRADE_DEADLINE });
+    assert.doesNotMatch(markup, /aria-label="Value"/);
+    assert.match(markup, /aria-pressed="true"[^>]*>No deadline</);
+    // And the comparison narrows with it: `≥ 99` is a comparison nothing reads.
+    assert.doesNotMatch(markup, /<option value="gt"/);
+  });
+
+  test("pressing it writes the sentinel rule; pressing it lit returns to the scale", () => {
+    let next: FilterRule | null = null;
+    const into = elements(row({ key: "trade_deadline", op: "lte", value: 12 }, (rule) => {
+      next = rule;
+    })).find((el) => el.props["aria-pressed"] !== undefined);
+    assert.ok(into, "expected the sentinel key");
+    press(into, "onClick")();
+    assert.deepEqual(next, { key: "trade_deadline", op: "eq", value: NO_TRADE_DEADLINE });
+
+    const back = elements(row({ key: "trade_deadline", op: "eq", value: NO_TRADE_DEADLINE }, (rule) => {
+      next = rule;
+    })).find((el) => el.props["aria-pressed"] !== undefined);
+    assert.ok(back, "expected the sentinel key");
+    press(back, "onClick")();
+    // Back at the bay's own starting number, never at 99 — which on this scale
+    // does not mean a week.
+    assert.deepEqual(next, { key: "trade_deadline", op: "eq", value: 12 });
+  });
+
+  test("a key with no sentinel draws no such control", () => {
+    const markup = renderToStaticMarkup(
+      treeOf(RuleRow, {
+        rule: { key: "taxi_slots", op: "gt", value: 0 } as FilterRule,
+        keyOptions: [{ value: "taxi_slots", label: "Taxi slots" }],
+        extraKey: null,
+        step: 1,
+        fallback: 12,
+        count: 0,
+        onChange: () => {},
+        onRemove: () => {},
+      }),
+    );
+    assert.doesNotMatch(markup, /aria-pressed/);
   });
 });
 
@@ -368,78 +648,39 @@ describe("the trigger", () => {
 });
 
 describe("what the controls do", () => {
-  test("picking a segment option writes that one field and closes the row", () => {
+  test("picking a rail option writes that one field and no other", () => {
     let next: LeagueFilters | null = null;
-    let closed = 0;
     const tree = SegmentTrough({
-      troughRef: { current: null },
       draft: { ...DEFAULT_LEAGUE_FILTERS, type: "2" },
       onChange: (value) => {
         next = value;
       },
       leagues,
-      openGroup: "status",
-      onToggle: () => {},
-      onClose: () => {
-        closed += 1;
-      },
     });
-    const rows = elements(tree).filter((el) => typeof el.props.probe === "function");
-    assert.equal(rows.length, 3);
-    press(rows[0], "onPick")("pre_draft");
-    // The rest of the draft survives — a row edits its own field and no other.
+    const rails = elements(tree).filter((el) => typeof el.props.probe === "function");
+    assert.equal(rails.length, 3);
+    press(rails[0], "onPick")("pre_draft");
+    // The rest of the draft survives — a rail edits its own field and no other.
     assert.deepEqual(next, { ...DEFAULT_LEAGUE_FILTERS, type: "2", status: "pre_draft" });
-    assert.equal(closed, 0, "closing is the row's own business, on its onClose");
   });
 
-  test("each row reports its own key when toggled", () => {
-    const toggled: SegmentKey[] = [];
+  test("omitting the type rail renumbers nothing — Format still edits Format", () => {
+    const edits: LeagueFilters[] = [];
     const tree = SegmentTrough({
-      troughRef: { current: null },
       draft: DEFAULT_LEAGUE_FILTERS,
-      onChange: () => {},
+      onChange: (next) => edits.push(next),
       leagues,
-      openGroup: null,
-      onToggle: (key) => toggled.push(key),
-      onClose: () => {},
+      omit: ["type"],
     });
-    for (const row of elements(tree).filter((el) => typeof el.props.probe === "function")) {
-      press(row, "onToggle")();
-    }
-    assert.deepEqual(toggled, ["status", "type", "format"]);
-  });
-
-  test("omitting the type row leaves the others reporting their own keys", () => {
-    // The keys are the open-state's identity, so the assertion worth making is
-    // that dropping a row renumbers nothing — `format` is still `format`.
-    const toggled: SegmentKey[] = [];
-    const tree = SegmentTrough({
-      troughRef: { current: null },
-      draft: DEFAULT_LEAGUE_FILTERS,
-      onChange: () => {},
-      leagues,
-      openGroup: null,
-      onToggle: (key) => toggled.push(key),
-      onClose: () => {},
-      omitType: true,
-    });
-    for (const row of elements(tree).filter((el) => typeof el.props.probe === "function")) {
-      press(row, "onToggle")();
-    }
-    assert.deepEqual(toggled, ["status", "format"]);
+    const rails = elements(tree).filter((el) => typeof el.props.probe === "function");
+    assert.deepEqual(rails.map((rail) => rail.props.label), ["Status", "Format"]);
+    press(rails[1], "onPick")("yes");
+    assert.deepEqual(edits, [{ ...DEFAULT_LEAGUE_FILTERS, bestBall: "yes" }]);
   });
 
   test("a row's probe describes the whole draft with one field changed", () => {
     const draft: LeagueFilters = { ...DEFAULT_LEAGUE_FILTERS, slots: [superflex] };
-    const tree = SegmentTrough({
-      troughRef: { current: null },
-      draft,
-      onChange: () => {},
-      leagues,
-      openGroup: null,
-      onToggle: () => {},
-      onClose: () => {},
-    });
+    const tree = SegmentTrough({ draft, onChange: () => {}, leagues });
     const [status] = elements(tree).filter((el) => typeof el.props.probe === "function");
     const probe = status.props.probe as (value: string) => LeagueFilters;
     // The counts are the answer to "what would this leave", not "what does this
@@ -651,12 +892,6 @@ describe("the draft the dialog edits", () => {
     assert.deepEqual(mountHook(applied).draft, applied);
   });
 
-  test("nothing is floating on arrival", () => {
-    // A row left open from last time would cover the rule bays the moment the
-    // dialog reappeared.
-    assert.equal(mountHook(DEFAULT_LEAGUE_FILTERS).openGroup, null);
-  });
-
   test("Apply emits the draft as it stands, and nothing else does", () => {
     const applied: LeagueFilters = { ...DEFAULT_LEAGUE_FILTERS, status: "in_season" };
     const emitted: LeagueFilters[] = [];
@@ -689,13 +924,9 @@ describe("the draft the dialog edits", () => {
     const edits: LeagueFilters[] = [];
 
     const tree = SegmentTrough({
-      troughRef: { current: null },
       draft: applied,
       onChange: (next) => edits.push(next),
       leagues,
-      openGroup: null,
-      onToggle: () => {},
-      onClose: () => {},
     });
     const [status] = elements(tree).filter((el) => typeof el.props.probe === "function");
     press(status, "onPick")("in_season");

@@ -166,7 +166,7 @@ describe("adpBoardRead", () => {
     // route is the ids they resolved to. A board carrying rules and an empty
     // scope is an *unnarrowed* board: the caller resolves them, and until it
     // has a league list to resolve against there is nothing honest to send.
-    const narrowed = withRules({ type: "2", size: [{ key: "teams", op: "eq", value: 12 }] });
+    const narrowed = withRules({ type: "2", settings: [{ key: "teams", op: "eq", value: 12 }] });
     assert.deepEqual(
       boardParams(narrowed),
       boardParams(defaultAdpControls(SEASON)),
@@ -596,7 +596,7 @@ describe("steepnessSummary", () => {
 });
 
 describe("previewAdpPool", () => {
-  const size = (rule: FilterRule) => rules({ size: [rule] });
+  const size = (rule: FilterRule) => rules({ settings: [rule] });
 
   test("uses an exact size rule when the board carries one", () => {
     assert.equal(previewAdpPool(size({ key: "teams", op: "eq", value: 10 })), 10 * 9);
@@ -671,7 +671,7 @@ describe("seedFromLeague", () => {
     // league is actually in — since it is no longer a fetch filter to set.
     assert.equal(seeded.boards, "dynasty");
     assert.equal(seeded.leagueRules.bestBall, "yes");
-    assert.deepEqual(seeded.leagueRules.size, [{ key: "teams", op: "eq", value: 10 }]);
+    assert.deepEqual(seeded.leagueRules.settings, [{ key: "teams", op: "eq", value: 10 }]);
     // The *buckets*, not the league's exact numbers: `rec = 0.5` is true and far
     // narrower than the population this league belongs to, which is what
     // `SCORING_SQL` groups by — a seed has to land there or "match a league"
@@ -761,7 +761,7 @@ describe("seedFromLeague", () => {
       [{ key: "rec", op: "lt", value: 0.5 }],
       "and an unknown rate is standard scoring",
     );
-    assert.deepEqual(seeded.leagueRules.size, [{ key: "teams", op: "eq", value: 12 }]);
+    assert.deepEqual(seeded.leagueRules.settings, [{ key: "teams", op: "eq", value: 12 }]);
   });
 
   test("a type Sleeper wrote as a string is not read as dynasty", () => {
@@ -792,7 +792,7 @@ describe("seedFromLeague", () => {
       first,
       league({ total_rosters: 14, roster_positions: ["QB", "RB", "BN"] }),
     );
-    assert.deepEqual(second.leagueRules.size, [{ key: "teams", op: "eq", value: 14 }]);
+    assert.deepEqual(second.leagueRules.settings, [{ key: "teams", op: "eq", value: 14 }]);
     assert.deepEqual(second.leagueRules.slots, [{ key: "QB+SF", op: "lte", value: 1 }]);
   });
 });
@@ -1050,7 +1050,7 @@ describe("adpNarrowingCount", () => {
           ...withRules({
             type: "2",
             slots: [{ key: "QB+SF", op: "gte", value: 2 }],
-            size: [{ key: "teams", op: "eq", value: 12 }],
+            settings: [{ key: "teams", op: "eq", value: 12 }],
           }),
           rounds: "rookie",
         },

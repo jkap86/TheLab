@@ -5,6 +5,7 @@ import type { ManagerLeague } from "@/shared/manager";
 import type { AdpControls } from "../../adp-controls";
 import type { LeagueFilters } from "../../league-filters";
 import { LeagueFiltersPlaceholder } from "../league-filters-seat";
+import type { LeagueFilterRow } from "../league-filters-modal/league-filters-modal.types.ts";
 import { AdpLeagueSeedControl } from "./adp-league-seed-control";
 import { ROUNDS_SEGMENT } from "./adp-drawer.constants.ts";
 
@@ -53,6 +54,13 @@ const LeagueFiltersModal = dynamic(
   { ssr: false, loading: () => <LeagueFiltersPlaceholder label="Leagues" /> },
 );
 
+/**
+ * Hoisted rather than written inline, so the array is one value across renders —
+ * it is a prop of a `dynamic()` component and a fresh literal each time would
+ * defeat any memoisation downstream for a list that never changes.
+ */
+const ADP_OMITTED_ROWS: readonly LeagueFilterRow[] = ["season", "type"];
+
 export function AdpFilterBar({
   controls,
   leagues,
@@ -82,7 +90,10 @@ export function AdpFilterBar({
         label="Leagues"
         filters={controls.leagueRules}
         leagues={leagues}
-        omitType
+        // Both rows this board answers with a control of its own: the board keys
+        // choose the redraft or dynasty column, and the pinned block's own
+        // season row decides which leagues are fetched at all.
+        omit={ADP_OMITTED_ROWS}
         onChange={(next: LeagueFilters) =>
           onChange({ ...controls, leagueRules: next })
         }

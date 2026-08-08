@@ -5,16 +5,13 @@ import type { ActiveFilter, FilterRule } from "../../league-filters/index.ts";
 import {
   appendRule,
   chipKey,
-  escapeTarget,
   hasRule,
   isBackdropPress,
   matchShare,
-  nextOpenGroup,
   parseRuleValue,
   removeRule,
   replaceRule,
   sameRule,
-  selectedSegment,
   unlistedKey,
 } from "./league-filters-modal.utils.ts";
 
@@ -133,43 +130,6 @@ describe("unlistedKey", () => {
   });
 });
 
-describe("selectedSegment", () => {
-  const options = [
-    { value: "all", label: "Any status" },
-    { value: "pre_draft", label: "Pre-draft" },
-    { value: "in_season", label: "In season" },
-  ] as const;
-
-  test("the first option is the unnarrowed one", () => {
-    const picked = selectedSegment(options, "all");
-    assert.equal(picked.index, 0);
-    assert.equal(picked.selected?.label, "Any status");
-    assert.equal(picked.narrowed, false);
-  });
-
-  test("any other option reads as narrowing", () => {
-    const picked = selectedSegment(options, "in_season");
-    assert.equal(picked.index, 2);
-    assert.equal(picked.selected?.label, "In season");
-    assert.equal(picked.narrowed, true);
-  });
-
-  test("a value off the table names the first option but still reads narrowed", () => {
-    // The honest pair: the row can't name a value it has no label for, and must
-    // not claim the list is unnarrowed when it isn't.
-    const picked = selectedSegment(options, "bogus" as (typeof options)[number]["value"]);
-    assert.equal(picked.index, 0);
-    assert.equal(picked.selected?.label, "Any status");
-    assert.equal(picked.narrowed, true);
-  });
-
-  test("an empty table has no label and nothing to be narrowed against", () => {
-    const picked = selectedSegment([] as { value: string; label: string }[], "all");
-    assert.equal(picked.selected, undefined);
-    assert.equal(picked.narrowed, true);
-  });
-});
-
 describe("matchShare", () => {
   test("a share of the account it came out of", () => {
     assert.equal(matchShare(17, 68), 0.25);
@@ -209,54 +169,6 @@ describe("parseRuleValue", () => {
     assert.equal(parseRuleValue("abc"), null);
     assert.equal(parseRuleValue("Infinity"), null);
     assert.equal(parseRuleValue("1e999"), null);
-  });
-});
-
-describe("which segment row is open", () => {
-  test("pressing a closed row opens it, and closes whichever was", () => {
-    // One at a time: a second popover floating over the first is two panels
-    // covering the rule bays, which is the crowding the collapse was for.
-    assert.equal(nextOpenGroup(null, "status"), "status");
-    assert.equal(nextOpenGroup("type", "status"), "status");
-  });
-
-  test("pressing the open row closes it", () => {
-    assert.equal(nextOpenGroup("status", "status"), null);
-  });
-
-  test("every row is reachable from every state", () => {
-    // The rule behind `aria-expanded`: exactly one key can be expanded, and the
-    // answer is never two.
-    for (const key of ["status", "type", "format"] as const) {
-      for (const current of [null, "status", "type", "format"] as const) {
-        const next = nextOpenGroup(current, key);
-        assert.equal(next, current === key ? null : key);
-      }
-    }
-  });
-});
-
-describe("what Escape means in the dialog", () => {
-  test("with a row floating, the row goes first and the dialog survives", () => {
-    // The nested rule: a row's options float *over* the panel, so one keypress
-    // taking both is one press too many. This is what the dialog's own `cancel`
-    // is preventDefaulted on.
-    for (const key of ["status", "type", "format"] as const) {
-      assert.equal(escapeTarget(key), "group");
-    }
-  });
-
-  test("with nothing floating, Escape is the dialog's", () => {
-    assert.equal(escapeTarget(null), "dialog");
-  });
-
-  test("the two answers are exhaustive, so `cancel` is never left undecided", () => {
-    // A third answer would mean a keypress the handler neither prevents nor
-    // passes on, which is a dialog that ignores Escape.
-    const answers = new Set(
-      ([null, "status", "type", "format"] as const).map(escapeTarget),
-    );
-    assert.deepEqual([...answers].sort(), ["dialog", "group"]);
   });
 });
 

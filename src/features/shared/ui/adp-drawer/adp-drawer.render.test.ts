@@ -655,10 +655,12 @@ describe("what the controls do", () => {
     const row = elements(tree).filter((el) => typeof el.type !== "string");
     assert.equal(row.length, 2);
     assert.equal(row[0].props.label, "Leagues");
-    // Minus the Type row: every fetch answers both markets and the board's own
-    // keys choose which is drawn, so narrowing the population on that axis would
-    // be a second control over a question the display already owns.
-    assert.equal(row[0].props.omitType, true);
+    // Minus two rows, for one argument twice over: every fetch answers both
+    // markets and the board's own keys choose which is drawn, and the pinned
+    // block above leads with its own season row that decides which leagues are
+    // fetched at all. Either row inside the dialog would be a second control
+    // over a question this page already owns.
+    assert.deepEqual(row[0].props.omit, ["season", "type"]);
     assert.deepEqual(row[1].props.leagues, leagues);
     assert.equal(row[1].type, AdpLeagueSeedControl);
   });

@@ -12,13 +12,24 @@ import type { FilterRule } from "../../league-filters";
  */
 
 /**
- * Which fixed filter a row edits — the open-state's identity.
+ * A row of fixed keys a caller may drop from the panel.
  *
- * `extra` is the caller's own row (see {@link ExtraSegment}), which is a fourth
- * identity rather than a second mechanism: one row floats at a time, and a slot
- * the dialog didn't name would be a row that couldn't take part in that.
+ * **Both entries are the same argument** — the caller already asks that question
+ * with a control of its own, and two controls over one axis disagree in a way
+ * that reads as a bug rather than a selection. The ADP board owns both: its
+ * board keys choose the redraft or dynasty column, so narrowing the *population*
+ * on type as well is an empty column with nothing on screen saying which control
+ * emptied it; and its pinned block leads with a season row that decides which
+ * leagues are fetched at all, so a second season inside the dialog would be a
+ * finer cut on an axis already answered a few pixels above.
+ *
+ * It was `omitType`, a boolean, until the second instance turned up. A row is
+ * dropped and not a *field*: nothing about `LeagueFilters` changes, the other
+ * callers keep both rows, and the match rail still names and clears a value that
+ * somehow arrived — which is what keeps this from being a filter a reader cannot
+ * see or undo.
  */
-export type SegmentKey = "status" | "type" | "format" | "extra";
+export type LeagueFilterRow = "season" | "type";
 
 /**
  * A fourth segment row the caller owns, drafted and applied with the filters.
