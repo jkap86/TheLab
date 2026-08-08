@@ -1,6 +1,7 @@
 import { pool } from "@/shared/db";
 
 import { DYNASTY_LEAGUE_TYPE, LEAGUE_TYPE_SQL } from "./adp";
+import { ADP_FILTER_DEFAULTS } from "./adp-filters";
 import type { AdpBoardType } from "./adp-filters";
 import { dynastyPickGrid, ownedDraftPicks } from "./draft-picks";
 import { standingScore } from "./rank";
@@ -315,6 +316,68 @@ export async function getLeaguesByIds(
     [[...leagueIds]],
   );
 
+  return rows.map((r) => toManagerLeague(r));
+}
+
+/**
+ * Every league with a draft this board could average, for one season — or for
+ * every season on file when `seasons` is null.
+ *
+ * **The board's league rules are a browser-side engine and this is what they run
+ * over.** They are slot-group, scoring-key and size rules over Sleeper's JSONB
+ * blobs, derived from the solver's own slot tables so a new flex counts the
+ * moment the solver learns it; re-implementing that in SQL is the second copy
+ * that drifts silently, and the symptom would be a filter quietly returning the
+ * wrong leagues rather than an error. So the rules stay in one place, the client
+ * evaluates them over this, and sends the resulting ids back as
+ * `league_id`/`xleague_id`. The trades board's own league list exists for
+ * exactly this reason; the populations differ (a trade there, a draft here), so
+ * the two are two reads rather than one.
+ *
+ * **Narrowed by the season and by nothing else the drawer can change**, which is
+ * the density strip's rule for the same reason: this is what the dialog's
+ * per-option counts are taken over, and a population that reshaped under the
+ * hand choosing the filters is worse than one that holds still. The season is
+ * not one of those — it is the board's population rather than one of its
+ * filters, the same split the strip draws. The consequence worth knowing is that
+ * a league whose only draft in the season is a rookie draft is counted here even
+ * with the board cut to startups: the dialog describes the season's corpus, and
+ * the draft count in the drawer's own header is what describes the board.
+ *
+ * The two constants are the board's own: a draft that is neither snake nor
+ * linear has no draft position to average (an auction's `pick_no` is nomination
+ * order), and an unfinished one is never counted into an average whatever else
+ * is selected.
+ */
+export async function getAdpLeagues(
+  seasons: readonly string[] | null,
+): Promise<ManagerLeague[]> {
+  const params: unknown[] = [
+    [...ADP_FILTER_DEFAULTS.draft_types],
+    [...ADP_FILTER_DEFAULTS.draft_statuses],
+  ];
+  const seasonClause = seasons
+    ? `AND d.season = ANY($${params.push([...seasons])}::varchar[])`
+    : "";
+
+  const { rows } = await pool.query<LeagueRow>(
+    `SELECT ${LEAGUE_COLUMNS_SQL}
+       FROM leagues l
+      WHERE EXISTS (
+              SELECT 1
+                FROM drafts d
+               WHERE d.league_id = l.league_id
+                 AND d.type = ANY($1::varchar[])
+                 AND d.status = ANY($2::varchar[])
+                 ${seasonClause}
+            )
+      ORDER BY l.name`,
+    params,
+  );
+
+  // `record` is null on every row and that is the answer rather than a gap: a
+  // record is a *manager's* in a league, and this read deliberately has no
+  // manager in the question — the same call `getSeasonTradeLeagues` makes.
   return rows.map((r) => toManagerLeague(r));
 }
 

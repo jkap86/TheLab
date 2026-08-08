@@ -32,9 +32,11 @@ export {
   COMMON_SCORING_KEYS,
   COMPARE_OPS,
   DEFAULT_LEAGUE_FILTERS,
+  SIZE_KEYS,
   SLOT_GROUPS,
   STATUS_OPTIONS,
   TYPE_OPTIONS,
+  sizeKeyLabel,
   slotGroupLabel,
 } from "./defaults.ts";
 export { leagueBreakdown } from "./breakdown.ts";
@@ -46,8 +48,10 @@ export {
   leagueType,
   matchesFilters,
   matchesScoringRule,
+  matchesSizeRule,
   matchesSlotRule,
   scoringValue,
+  sizeValue,
   slotCount,
 } from "./predicates.ts";
 export {

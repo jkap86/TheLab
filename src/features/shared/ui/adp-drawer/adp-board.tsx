@@ -11,6 +11,7 @@ import {
   shownAdpBoards,
 } from "../../adp-controls";
 import { adpBoardEntries, adpPickRows, pickDiscountBoard } from "../../adp-picks";
+import type { LeagueScope } from "../../league-scope";
 import type { AdpState } from "../../use-adp";
 import { AdpBoardHeader } from "./adp-board-header";
 import { AdpBoardRows } from "./adp-board-rows";
@@ -44,6 +45,7 @@ import { soleBoardOf, withBoardToggle } from "./adp-drawer.utils.ts";
 export function AdpBoard({
   board,
   controls,
+  scope,
   classSeason,
   steepness,
   today,
@@ -51,6 +53,15 @@ export function AdpBoard({
 }: {
   board: AdpState;
   controls: AdpControls;
+  /**
+   * The league rules' *answer* — which crawled leagues the board is narrowed to.
+   *
+   * Read for one thing only: whether the list in front of the reader has become
+   * a different list. Two rule sets that leave the same leagues are one board, so
+   * it is the resolved scope and not `controls.leagueRules` that belongs in
+   * {@link adpListIdentity} — the same reason the cache key inlines the ids.
+   */
+  scope: LeagueScope;
   /**
    * The season the rookies on this board belong to — the active one, which is
    * the class `AdpPlayerPayload.rookie` names whatever season the board is cut
@@ -78,8 +89,8 @@ export function AdpBoard({
   // carries an average and a discount rather than a value: the slider is dragged
   // a notch at a time and reorders nothing, so the rows it moves are the cells,
   // never this list. `adpPickRows` reads no curve at all.
-  const teams = previewDraftTeams(controls.teams);
-  const superflex = pickDiscountBoard(controls.superflex);
+  const teams = previewDraftTeams(controls.leagueRules);
+  const superflex = pickDiscountBoard(controls.leagueRules);
   const picks = useMemo(
     () => adpPickRows({ players, ktcPicks: pickKtc, classSeason, teams, superflex }),
     [players, pickKtc, classSeason, teams, superflex],
@@ -108,7 +119,10 @@ export function AdpBoard({
   // where that distinction is drawn and tested. The steepness is the one it
   // keeps out: it is dragged a notch at a time while the reader watches one
   // player's value bend, and it reorders nothing.
-  const identity = useMemo(() => adpListIdentity(controls, today), [controls, today]);
+  const identity = useMemo(
+    () => adpListIdentity(controls, scope, today),
+    [controls, scope, today],
+  );
   useEffect(() => {
     // `auto`, never smooth: this is not a gesture the reader made, and a glide
     // under a list that is being replaced is two motions fighting.
@@ -153,7 +167,7 @@ export function AdpBoard({
             soleDrafts={soleDrafts}
             redraftDrafts={redraft_drafts}
             dynastyDrafts={dynasty_drafts}
-            teams={controls.teams}
+            rules={controls.leagueRules}
             refreshing={board.stale}
             onToggleBoard={(next) => onChange(withBoardToggle(controls, next))}
           />
@@ -182,7 +196,7 @@ export function AdpBoard({
                 soleDrafts={soleDrafts}
                 redraftDrafts={redraft_drafts}
                 dynastyDrafts={dynasty_drafts}
-                teams={controls.teams}
+                rules={controls.leagueRules}
                 steepness={steepness}
               />
             )}

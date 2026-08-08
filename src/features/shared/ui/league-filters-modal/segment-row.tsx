@@ -44,10 +44,20 @@ export function SegmentRow<T extends string>({
   onClose,
 }: {
   label: string;
-  options: { value: T; label: string }[];
+  options: readonly { value: T; label: string }[];
   value: T;
   leagues: readonly ManagerLeague[];
-  probe: (value: T) => LeagueFilters;
+  /**
+   * This selection with one option substituted, for the per-option counts.
+   *
+   * **Optional, because not every row here narrows leagues.** The three fixed
+   * filters do, and the count is what makes the dialog worth the press; the ADP
+   * board seats a fourth row for the *kind of draft* it averages, which cuts
+   * drafts within a league rather than leagues — so every option would carry the
+   * identical league count, which is a number that looks like an answer and is
+   * about something else. A row with no probe draws no counts.
+   */
+  probe?: (value: T) => LeagueFilters;
   onPick: (value: T) => void;
   open: boolean;
   onToggle: () => void;
@@ -62,11 +72,14 @@ export function SegmentRow<T extends string>({
 
   const counts = useMemo(
     () =>
-      options.map(
-        (option) =>
-          leagues.filter((league) => matchesFilters(league, probe(option.value)))
-            .length,
-      ),
+      probe
+        ? options.map(
+            (option) =>
+              leagues.filter((league) =>
+                matchesFilters(league, probe(option.value)),
+              ).length,
+          )
+        : null,
     // `probe` closes over the draft, so it is the dependency that matters.
     [options, leagues, probe],
   );
@@ -100,9 +113,11 @@ export function SegmentRow<T extends string>({
         >
           {selected?.label}
         </span>
-        <span className="font-mono text-[10px] tabular-nums text-foreground/35">
-          {counts[selectedIndex]}
-        </span>
+        {counts && (
+          <span className="font-mono text-[10px] tabular-nums text-foreground/35">
+            {counts[selectedIndex]}
+          </span>
+        )}
         <Caret open={open} />
       </button>
 
@@ -148,13 +163,15 @@ export function SegmentRow<T extends string>({
                   }`}
                 >
                   <span className="truncate">{option.label}</span>
-                  <span
-                    className={`ml-auto font-mono text-[10px] tabular-nums ${
-                      isSelected ? "text-[#052029]/60" : "text-foreground/35"
-                    }`}
-                  >
-                    {counts[i]}
-                  </span>
+                  {counts && (
+                    <span
+                      className={`ml-auto font-mono text-[10px] tabular-nums ${
+                        isSelected ? "text-[#052029]/60" : "text-foreground/35"
+                      }`}
+                    >
+                      {counts[i]}
+                    </span>
+                  )}
                 </button>
               );
             })}

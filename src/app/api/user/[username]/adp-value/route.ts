@@ -21,6 +21,7 @@ import type { AdpBoardChoices, AdpBoardType, AdpFilters } from "@/shared/manager
 import { getOptimalLineups } from "@/shared/projections";
 import { collectWithConcurrency, errorMessage } from "@/shared/util";
 
+import { readLeagueScope } from "../../../league-scope";
 import { readFailureResponse } from "../../../read-failure";
 import { resolveManagerIdRequest } from "../manager-request";
 
@@ -62,6 +63,30 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(
   request: Request,
+  context: { params: Promise<{ username: string }> },
+) {
+  return adpValues(request, context);
+}
+
+/**
+ * The same read, with the board's league scope in the body.
+ *
+ * A read answering a POST, for the reason `/api/adp` and `/api/trades` do: the
+ * drawer's league rules resolve to a list of ids that a request line cannot
+ * carry, and the whole point of the board reaching these cards is that they are
+ * priced on the board the drawer is showing. Nothing else about the request
+ * differs — same query string, same parser, same handler — which is what keeps
+ * the long-scope case from being a second code path.
+ */
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ username: string }> },
+) {
+  return adpValues(request, context);
+}
+
+async function adpValues(
+  request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {
   const resolved = await resolveManagerIdRequest(request, params);
@@ -78,7 +103,11 @@ export async function GET(
   // unparseable date has no nearest sane value to fall back to. The same answer
   // `/api/adp` gives the same vocabulary, and this string is one the client
   // builds from its own controls — a 400 here is a bug on this side of the wire.
-  const board = parseAdpBoardChoices(searchParams, season);
+  const board = parseAdpBoardChoices(
+    searchParams,
+    season,
+    await readLeagueScope(request),
+  );
   if (!board.ok) return NextResponse.json({ error: board.error }, { status: 400 });
 
   try {

@@ -35,12 +35,29 @@ export const boardQueryKeys = {
   all: ["adp"] as const,
   adp: (query: string) => [...boardQueryKeys.all, "board", normalizeAdpQuery(query)] as const,
   density: () => [...boardQueryKeys.all, "density"] as const,
+  /**
+   * The crawled leagues the board's rules run over, per season.
+   *
+   * Keyed on the season alone because that is the only thing narrowing the list
+   * — it is deliberately not cut by anything else the drawer can change, so that
+   * the dialog's per-option counts hold still while a reader edits the rules
+   * they describe. Two consumers name it (the drawer, for the dialog's counts,
+   * and the controls store, for the scope the board is fetched with) and one
+   * request answers both.
+   */
+  leagues: (season: string) => [...boardQueryKeys.all, "leagues", season] as const,
 };
 
-/** How long the board and its density strip are worth reusing, client-side. */
+/** How long the board, its density strip and its league list are worth reusing. */
 export const ADP_STALE_TIMES = {
   /** The board itself: an average over thousands of crawled drafts. */
   board: 15 * 60 * 1000,
   /** The density strip: a month-grain histogram of the same drafts. */
   density: 30 * 60 * 1000,
+  /**
+   * The league list: the crawler's own corpus, which changes when a league is
+   * discovered rather than when a draft is made — so it outlives a board by a
+   * good margin, and it is much the larger of the two to fetch.
+   */
+  leagues: 30 * 60 * 1000,
 } as const;

@@ -8,11 +8,12 @@ import {
   PageShell,
   activeFilterCount,
   adpNarrowingCount,
-  adpQueryString,
+  adpBoardRead,
   filterSummary,
   todayIso,
   useAdp,
   useAdpDensity,
+  useAdpLeagues,
 } from "@/features/shared";
 import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 
@@ -117,7 +118,16 @@ export function LeaguesViewLayout({
   // *writes* it is seated on the subject rail, which takes both halves off the
   // view it is already handed.
   const { data, searched, progress, refreshing, error, filters, filtered } = view;
-  const { controls, setControls, resetControls, defaultSeason } = useAdpControls();
+  const {
+    controls,
+    setControls,
+    resetControls,
+    defaultSeason,
+    // The league rules' answer — what the board and every number priced off it
+    // are narrowed to. Named apart from this page's own `scope` line below,
+    // which is the *manager* filters stated in words.
+    scope: boardScope,
+  } = useAdpControls();
   const { subjects } = useSubjectFilters();
   const [boardOpen, setBoardOpen] = useState(false);
   const [everOpened, setEverOpened] = useState(false);
@@ -128,11 +138,19 @@ export function LeaguesViewLayout({
   // is what the shared cache buys — on the Players tab, whose own column already
   // reads this board, opening the drawer now shows it immediately and asks for
   // nothing. (It used to be two fetches of an identical query, one per hook.)
-  const query = useMemo(
-    () => adpQueryString(controls, todayIso()),
-    [controls],
+  const read = useMemo(
+    () => adpBoardRead(controls, boardScope, todayIso()),
+    [controls, boardScope],
   );
-  const board = useAdp(query, { enabled: boardOpen });
+  const board = useAdp(read, { enabled: boardOpen });
+
+  // The crawled leagues the board's rules run over, asked for only once the
+  // drawer has been opened — the dialog inside it counts its options over this,
+  // and the store beside it asks for the same entry whenever a rule is set, so
+  // the two gates are one request.
+  const { leagues: boardLeagues } = useAdpLeagues(controls.season, {
+    enabled: everOpened,
+  });
 
   // The density the window control draws, behind the same gate. It takes no
   // query and re-fetches on nothing: it describes the crawled population
@@ -243,12 +261,13 @@ export function LeaguesViewLayout({
       {everOpened && (
       <AdpDrawer
         open={boardOpen}
+        scope={boardScope}
         onClose={() => setBoardOpen(false)}
         controls={controls}
         onChange={setControls}
         onReset={resetControls}
         defaultSeason={defaultSeason}
-        leagues={data.leagues}
+        leagues={boardLeagues}
         // The manager's own leagues, so "Match a league…" is a name they
         // recognise — see the prop's note for why the trades board passes none.
         seedLeagues={data.leagues}

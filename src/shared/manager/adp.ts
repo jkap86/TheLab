@@ -162,8 +162,15 @@ function draftSelection(filters: AdpFilters): { where: string; params: unknown[]
   if (filters.rounds_min !== null) clauses.push(`${ROUNDS_SQL} >= ${bind(filters.rounds_min)}`);
   if (filters.rounds_max !== null) clauses.push(`${ROUNDS_SQL} <= ${bind(filters.rounds_max)}`);
 
+  // The league rules' answer, in whichever of its two spellings was shorter on
+  // the wire (see `AdpFilters.league_ids`). An empty include list is left as an
+  // empty `ANY`, which matches nothing — the honest board for rules that matched
+  // no league, and the reason this is not guarded on `length`.
   if (filters.league_ids) {
     clauses.push(`l.league_id = ANY(${bind(filters.league_ids)}::varchar[])`);
+  }
+  if (filters.exclude_league_ids && filters.exclude_league_ids.length > 0) {
+    clauses.push(`l.league_id <> ALL(${bind(filters.exclude_league_ids)}::varchar[])`);
   }
   if (filters.scoring) clauses.push(`${SCORING_SQL} = ANY(${bind(filters.scoring)}::varchar[])`);
   if (filters.best_ball !== null) clauses.push(`${BEST_BALL_SQL} = ${bind(filters.best_ball)}`);

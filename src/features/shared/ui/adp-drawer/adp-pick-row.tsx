@@ -2,7 +2,8 @@ import { memo } from "react";
 
 import type { AdpBoardType } from "@/shared/manager";
 
-import { type AdpControls, previewAdpValue } from "../../adp-controls";
+import { previewAdpValue } from "../../adp-controls";
+import type { LeagueFilters } from "../../league-filters";
 import type { AdpPickRow as AdpPick, AdpPickStats } from "../../adp-picks";
 import { ordinal } from "../../format";
 import { AdpCell, ValueCell } from "./adp-board-cells";
@@ -35,7 +36,7 @@ export const AdpPickBoardRow = memo(function AdpPickBoardRow({
   offset,
   both,
   soleBoard,
-  teams,
+  rules,
   steepness,
 }: {
   pick: AdpPick;
@@ -47,7 +48,8 @@ export const AdpPickBoardRow = memo(function AdpPickBoardRow({
   offset: number;
   both: boolean;
   soleBoard: AdpBoardType;
-  teams: AdpControls["teams"];
+  /** The board's league rules — what the value cell's pool is anchored to. */
+  rules: LeagueFilters;
   steepness: number;
 }) {
   const sole = pick[soleBoard];
@@ -55,7 +57,7 @@ export const AdpPickBoardRow = memo(function AdpPickBoardRow({
   const value = (stats: AdpPickStats | null) =>
     stats === null
       ? null
-      : Math.round(previewAdpValue(stats.adp, teams, steepness) * stats.discount);
+      : Math.round(previewAdpValue(stats.adp, rules, steepness) * stats.discount);
 
   return (
     <li
@@ -87,12 +89,12 @@ export const AdpPickBoardRow = memo(function AdpPickBoardRow({
           <AdpCell adp={pick.dynasty?.adp ?? null} title={cellTitle(pick.dynasty, "dynasty")} />
           <ValueCell
             value={value(pick.redraft)}
-            title={pick.redraft ? pickValueTitle(teams, pick, pick.redraft) : undefined}
+            title={pick.redraft ? pickValueTitle(rules, pick, pick.redraft) : undefined}
             collapsible
           />
           <ValueCell
             value={value(pick.dynasty)}
-            title={pick.dynasty ? pickValueTitle(teams, pick, pick.dynasty) : undefined}
+            title={pick.dynasty ? pickValueTitle(rules, pick, pick.dynasty) : undefined}
             collapsible
           />
         </>
@@ -107,7 +109,7 @@ export const AdpPickBoardRow = memo(function AdpPickBoardRow({
           </span>
           <ValueCell
             value={value(sole)}
-            title={sole ? pickValueTitle(teams, pick, sole) : undefined}
+            title={sole ? pickValueTitle(rules, pick, sole) : undefined}
           />
         </>
       )}

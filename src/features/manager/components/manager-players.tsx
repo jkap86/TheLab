@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 
-import { adpQueryString, todayIso, useAdp } from "@/features/shared";
+import { adpBoardRead, todayIso, useAdp } from "@/features/shared";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { useAdpControls } from "../filters-context";
@@ -60,12 +60,12 @@ export function ManagerPlayers({ searched }: { searched: string }) {
   // The board this tab's ADP column reads. Unlike the roster resources beside
   // it, it doesn't wait on the leagues stream: the board is a fact about the
   // crawled drafts, so it can be asked for the moment the page mounts.
-  const { controls } = useAdpControls();
-  const adpQuery = useMemo(
-    () => adpQueryString(controls, todayIso()),
-    [controls],
+  const { controls, scope } = useAdpControls();
+  const adpRead = useMemo(
+    () => adpBoardRead(controls, scope, todayIso()),
+    [controls, scope],
   );
-  const adp = useAdp(adpQuery);
+  const adp = useAdp(adpRead);
 
   const adpByPlayer = useMemo(() => {
     const map = new Map<string, AdpPlayerPayload>();

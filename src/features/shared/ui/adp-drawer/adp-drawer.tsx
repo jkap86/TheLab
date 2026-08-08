@@ -1,11 +1,11 @@
 "use client";
 
-import { memo, useCallback, useId, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useId, useMemo, useState } from "react";
 
 import type { ManagerLeague } from "@/shared/manager";
 
 import { type AdpControls, seasonOptions, todayIso } from "../../adp-controls";
-import { useReturnFocus } from "../../use-return-focus";
+import type { LeagueScope } from "../../league-scope";
 import type { AdpState } from "../../use-adp";
 import type { AdpDensityState } from "../../use-adp-density";
 import { AdpBoard } from "./adp-board";
@@ -18,10 +18,8 @@ import {
   ADP_DRAWER_ENTER_MS,
   ADP_DRAWER_EXIT_MS,
   EMPTY_LEAGUES,
-  FIXED_FILTERS,
 } from "./adp-drawer.constants.ts";
-import type { FilterSpec } from "./adp-drawer.types.ts";
-import { leagueSizeFilter, withSeason } from "./adp-drawer.utils.ts";
+import { withSeason } from "./adp-drawer.utils.ts";
 import { useAdpDrawerLifecycle } from "./use-adp-drawer-lifecycle.ts";
 
 /**
@@ -72,6 +70,7 @@ export function AdpDrawer({
   onReset,
   defaultSeason,
   leagues,
+  scope,
   seedLeagues = EMPTY_LEAGUES,
   board,
   density,
@@ -85,10 +84,25 @@ export function AdpDrawer({
   /** The season a board opens on; decides which relative presets can mean anything. */
   defaultSeason: string;
   /**
-   * The population the **size filter's** options are read off — the sizes that
-   * actually occur, so a chosen size always matches something.
+   * The crawled leagues the board's rules run over — every league with a draft
+   * this board could average, off `/api/adp/leagues`.
+   *
+   * It is what the filters dialog counts its options over and what the caller
+   * resolved the scope from, so the two describe one population. Empty until it
+   * loads, or where nothing has asked for it: with no leagues in hand the rules
+   * narrow nothing, which is the honest opening state rather than an empty board.
+   *
+   * It used to be whatever population the *size chip's* options were read off —
+   * the manager's own leagues on one page and the season's traded ones on the
+   * other, neither of which is the corpus this board averages.
    */
   leagues: readonly ManagerLeague[];
+  /**
+   * What the league rules resolved to over those leagues — the caller's, because
+   * the caller is what fetches the board with it. The drawer reads it for one
+   * thing: whether a filter change has made its list a *different* list.
+   */
+  scope: LeagueScope;
   /**
    * Leagues offered to "Match a league…", which seeds the board's settings from
    * one of them. **Only leagues the reader plays in belong here**, which is why
@@ -109,8 +123,7 @@ export function AdpDrawer({
   /** Crawled drafts per month and season, for the window control's density. */
   density: AdpDensityState;
 }) {
-  const { onScreen, closing, panelRef, openPanel, togglePanel } =
-    useAdpDrawerLifecycle({ open, onClose });
+  const { onScreen, closing, panelRef } = useAdpDrawerLifecycle({ open, onClose });
 
   // Resolved once for the whole drawer rather than at each call site: the window
   // control reads it to place its handles and the board reads it to know when it
@@ -122,15 +135,6 @@ export function AdpDrawer({
   // assumed pool is exactly the caveat a reader should hear on arrival rather
   // than have to find at the bottom of a panel that scrolls.
   const premiseId = useId();
-
-  // The filter tray's id and its trigger. They live here rather than in
-  // `AdpFilterBar` because *this* is where the tray is closed from — Escape goes
-  // through the lifecycle hook's document listener — so this is where the focus
-  // has to be put back; and because keeping that section a pure function of its
-  // props is what lets `adp-drawer.render.test` call it directly.
-  const filterTrayId = useId();
-  const filterTrigger = useRef<HTMLButtonElement>(null);
-  useReturnFocus(openPanel === "filters", filterTrigger);
 
   // The curve the slider is *currently* sitting on, while it is being dragged.
   // The preview below has to re-price on every notch — watching the board bend
@@ -147,14 +151,6 @@ export function AdpDrawer({
     () => seasonOptions(density.months, controls.season, defaultSeason),
     [density.months, controls.season, defaultSeason],
   );
-  // The size filter is the one whose options are data, so the table is completed
-  // here rather than at module scope. Memoised because the filter bar walks it on
-  // every render to decide what is narrowing the board.
-  const filters = useMemo<readonly FilterSpec[]>(
-    () => [...FIXED_FILTERS, leagueSizeFilter(leagues)],
-    [leagues],
-  );
-
   const seasonMonths = useMemo(
     () =>
       controls.season === "all"
@@ -173,8 +169,6 @@ export function AdpDrawer({
     (range: AdpControls["range"]) => onChange({ ...controls, range }),
     [controls, onChange],
   );
-  const toggleFilters = useCallback(() => togglePanel("filters"), [togglePanel]);
-
   if (!onScreen) return null;
 
   return (
@@ -270,12 +264,8 @@ export function AdpDrawer({
 
           <PinnedFilterBar
             controls={controls}
-            filters={filters}
+            leagues={leagues}
             seedLeagues={seedLeagues}
-            open={openPanel === "filters"}
-            trayId={filterTrayId}
-            triggerRef={filterTrigger}
-            onToggle={toggleFilters}
             onChange={onChange}
           />
 
@@ -297,6 +287,7 @@ export function AdpDrawer({
         <AdpBoard
           board={board}
           controls={controls}
+          scope={scope}
           // The active season, not `controls.season`: the rookie flag on these
           // rows names the class that is a rookie *now*, so that is the season
           // its picks are numbered under. A board cut to a past season holds
@@ -308,7 +299,7 @@ export function AdpDrawer({
         />
 
         <PinnedFooter
-          teams={controls.teams}
+          rules={controls.leagueRules}
           premiseId={premiseId}
           onReset={onReset}
           onClose={onClose}

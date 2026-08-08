@@ -10,13 +10,14 @@ import {
   LeagueFiltersPlaceholder,
   activeFilterCount,
   adpNarrowingCount,
-  adpQueryString,
+  adpBoardRead,
   rookieOrderingBoard,
   startupPricingBoard,
   todayIso,
   useAdp,
   useAdpControls,
   useAdpDensity,
+  useAdpLeagues,
   useStoredAccount,
 } from "@/features/shared";
 import type { LeagueFilters } from "@/features/shared";
@@ -203,13 +204,20 @@ export function TradesHome({ season }: { season: string }) {
     setControls: setAdpControls,
     resetControls: resetAdpControls,
     defaultSeason,
+    scope: adpScope,
   } = useAdpControls();
   const [boardOpen, setBoardOpen] = useState(false);
   const [everOpenedBoard, setEverOpenedBoard] = useState(false);
   if (boardOpen && !everOpenedBoard) setEverOpenedBoard(true);
+  // Asked for only once the drawer has been opened — the dialog inside it counts
+  // its options over this, and the controls store asks for the same entry
+  // whenever a rule is set, so the two gates are one request.
+  const { leagues: boardLeagues } = useAdpLeagues(adpControls.season, {
+    enabled: everOpenedBoard,
+  });
   const adpQuery = useMemo(
-    () => adpQueryString(adpControls, todayIso()),
-    [adpControls],
+    () => adpBoardRead(adpControls, adpScope, todayIso()),
+    [adpControls, adpScope],
   );
   // The two boards a rookie *pick* is valued off, which are deliberately not
   // whichever one the panel is displaying — see `rookieOrderingBoard`. They are
@@ -224,12 +232,12 @@ export function TradesHome({ season }: { season: string }) {
   // fetch of its own. No board is fetched per card, per trade or per pick: both
   // are read once into the ladders below.
   const rookieQuery = useMemo(
-    () => adpQueryString(rookieOrderingBoard(adpControls), todayIso()),
-    [adpControls],
+    () => adpBoardRead(rookieOrderingBoard(adpControls), adpScope, todayIso()),
+    [adpControls, adpScope],
   );
   const startupQuery = useMemo(
-    () => adpQueryString(startupPricingBoard(adpControls), todayIso()),
-    [adpControls],
+    () => adpBoardRead(startupPricingBoard(adpControls), adpScope, todayIso()),
+    [adpControls, adpScope],
   );
   // **Not gated on the drawer being open**, unlike the manager tool's Leagues
   // and Leaguemates tabs: the cards' value column reads this board, so it is on
@@ -667,12 +675,18 @@ export function TradesHome({ season }: { season: string }) {
       {everOpenedBoard && (
         <AdpDrawer
           open={boardOpen}
+          scope={adpScope}
           onClose={() => setBoardOpen(false)}
           controls={adpControls}
           onChange={setAdpControls}
           onReset={resetAdpControls}
           defaultSeason={defaultSeason}
-          leagues={leagues}
+          // The crawled leagues the *board's* rules run over, which is not this
+          // page's own league list: that one is every league with a trade this
+          // season, and this one is every league with a draft the board could
+          // average. Two questions, two populations — the drawer's dialog counts
+          // its options over the one it actually narrows.
+          leagues={boardLeagues}
           board={board}
           density={density}
         />

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { adpValueQueryString, todayIso } from "@/features/shared";
+import { adpValueRead, todayIso } from "@/features/shared";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { useAdpControls } from "../filters-context";
@@ -51,13 +51,16 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   const ranks = useManagerRanks(searched, view.userId, leagues);
   const ktc = useManagerKtc(searched, view.userId, leagues);
   // The whole shared ADP drawer drives the team value, not just its curve: the
-  // window, the kind of draft, the league size and the format all narrow the
-  // population these cards are priced against, so a panel showing startup ADP
-  // and a column priced off every draft crawled can't be two answers to one
-  // question any more. Scoring and superflex are the exception and stay behind
-  // on the server, matched per league — see `adpValueQueryString`.
-  const { controls } = useAdpControls();
-  const adpBoard = useMemo(() => adpValueQueryString(controls, todayIso()), [controls]);
+  // window, the kind of draft and the league rules all narrow the population
+  // these cards are priced against, so a panel showing startup ADP and a column
+  // priced off every draft crawled can't be two answers to one question any
+  // more. Scoring and superflex are the exception and stay behind on the server,
+  // matched per league — see `adpValueRead`.
+  const { controls, scope } = useAdpControls();
+  const adpBoard = useMemo(
+    () => adpValueRead(controls, scope, todayIso()),
+    [controls, scope],
+  );
   const adp = useManagerAdpValue(searched, view.userId, leagues, adpBoard);
 
   // Which metric each of the four stat columns shows, shared by every card so the

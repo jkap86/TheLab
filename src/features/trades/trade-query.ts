@@ -1,6 +1,10 @@
-import { matchesFilters } from "../shared/league-filters/predicates.ts";
-import type { LeagueFilters } from "../shared/league-filters/types.ts";
-import type { ManagerLeague } from "@/shared/manager";
+import {
+  MAX_LEAGUE_IDS,
+  type LeagueScope,
+  type LeagueScopeBody,
+  resolveLeagueScope,
+  scopeNeedsBody,
+} from "../shared/league-scope.ts";
 
 import type { TradeBounds, TradeFilters } from "./filters.ts";
 
@@ -20,85 +24,24 @@ import type { TradeBounds, TradeFilters } from "./filters.ts";
  * itself is how two identical requests become two cache entries.
  */
 
-/** How the league rules are sent: the smaller of the two lists, or neither. */
-export type LeagueScope =
-  | { kind: "all" }
-  | { kind: "include"; ids: string[] }
-  | { kind: "exclude"; ids: string[] };
-
 /**
- * How many league ids will go in a query string before the request switches to
- * carrying them in a POST body instead.
+ * The league-scope vocabulary, re-exported from where it now lives.
  *
- * At ~19 characters an id plus a separator, 500 is ~10KB on the request line —
- * past what several proxies and CDNs accept, and the failure mode is a 414 that
- * reads as the page being broken. Past it the ids travel as JSON and the route
- * reads them there; nothing else about the request changes, which is the point
- * (see {@link tradeHttpRequest}).
- *
- * **It used to be the point at which the narrowing gave up and moved to the
- * browser, and that was a correctness bug rather than a degradation.** The page
- * asked for an *unnarrowed* board and filtered the pages as they arrived, so a
- * first page whose two hundred trades all came from excluded leagues left
- * `visible` empty — which renders the "no trades" note, which unmounts
- * `TradesList`, which is what would have asked for page two. Matching trades on
- * pages three and four were unreachable, and the headline counts described the
- * unfiltered population while the list described the filtered one. The database
- * is where a `WHERE` belongs, and a body is how a long list gets there.
+ * It was written here and moved to `features/shared/league-scope` when the ADP
+ * board became its second reader — the mover's usual rule, so this page's own
+ * consumers keep one import and there is one definition of what a scope is. See
+ * that module for why the rules are resolved in the browser at all, and why the
+ * long ones travel in a body.
  */
-export const MAX_LEAGUE_IDS = 500;
+export {
+  MAX_LEAGUE_IDS,
+  type LeagueScope,
+  resolveLeagueScope,
+  scopeNeedsBody,
+};
 
-/**
- * Resolve the league rules against the season's leagues.
- *
- * **The rules run here and not in SQL**, which is the decision the whole design
- * rests on: they are a slot-group and scoring-key engine over Sleeper's JSONB
- * blobs, derived from the solver's own slot tables so a new flex counts the
- * moment the solver learns it, and a second implementation in the database would
- * drift silently — the symptom being a filter that quietly returns the wrong
- * leagues. So the client evaluates them over the league list it already needs
- * for the dialog's counts, and sends the *answer*.
- *
- * Include or exclude, whichever is shorter, because the two express the same
- * narrowing and a query string has a length: filtering to all but three leagues
- * is three ids, not four hundred. Whichever is chosen, the narrowing is always
- * the server's — how the ids get there is {@link tradeHttpRequest}'s problem
- * and nothing else's.
- *
- * An empty allowed set is `include: []`, not `all`. The rules matching nothing
- * is a real answer and the honest response to it is an empty board — collapsing
- * it to "no narrowing" would show every trade to a reader who asked for none.
- */
-export function resolveLeagueScope(
-  leagues: readonly ManagerLeague[],
-  filters: LeagueFilters,
-  active: boolean,
-): LeagueScope {
-  if (!active || leagues.length === 0) return { kind: "all" };
-
-  const allowed: string[] = [];
-  const denied: string[] = [];
-  for (const league of leagues) {
-    if (matchesFilters(league, filters)) allowed.push(league.league_id);
-    else denied.push(league.league_id);
-  }
-
-  if (denied.length === 0) return { kind: "all" };
-  return allowed.length <= denied.length
-    ? { kind: "include", ids: allowed }
-    : { kind: "exclude", ids: denied };
-}
-
-/**
- * Whether this scope's ids are too long to put on a request line — the one
- * thing {@link MAX_LEAGUE_IDS} decides now.
- */
-export function scopeNeedsBody(scope: LeagueScope): boolean {
-  return scope.kind !== "all" && scope.ids.length > MAX_LEAGUE_IDS;
-}
-
-/** The league ids a large scope sends as JSON, spelled as the route reads them. */
-export type TradeScopeBody = { leagues?: string[]; xleagues?: string[] };
+/** The league ids a large scope sends as JSON, under this route's own name. */
+export type TradeScopeBody = LeagueScopeBody;
 
 /**
  * One HTTP request for a trades read: the method, the query string and the body.

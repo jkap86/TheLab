@@ -13,6 +13,8 @@ import {
   pickDiscountBoard,
 } from "./adp-picks.ts";
 import type { AdpBoardEntry, AdpPickRow } from "./adp-picks.ts";
+import { DEFAULT_LEAGUE_FILTERS } from "./league-filters/defaults.ts";
+import type { FilterRule, LeagueFilters } from "./league-filters/types.ts";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
 /**
@@ -338,12 +340,26 @@ describe("adpBoardEntries", () => {
 });
 
 describe("pickDiscountBoard", () => {
+  const rules = (slots: FilterRule[]): LeagueFilters => ({
+    ...DEFAULT_LEAGUE_FILTERS,
+    slots,
+  });
+
   // A ratio between two rows of one board, so which board matters far less than
-  // it does for a roster — but a reader who has narrowed to 1QB drafts gets the
-  // 1QB board, and everything else reads superflex.
-  test("only a 1QB board reads the 1QB rows", () => {
-    assert.equal(pickDiscountBoard("no"), false);
-    assert.equal(pickDiscountBoard("yes"), true);
-    assert.equal(pickDiscountBoard("all"), true);
+  // it does for a roster — but a reader whose rules cap the QB slots at one gets
+  // the 1QB board, and everything else reads superflex.
+  test("only a rule capping QB slots at one reads the 1QB rows", () => {
+    assert.equal(pickDiscountBoard(rules([{ key: "QB+SF", op: "eq", value: 1 }])), false);
+    assert.equal(pickDiscountBoard(rules([{ key: "QB+SF", op: "lte", value: 1 }])), false);
+    assert.equal(pickDiscountBoard(rules([{ key: "QB+SF", op: "lt", value: 2 }])), false);
+  });
+
+  test("superflex is the default, and what every other rule leaves", () => {
+    // Unnarrowed reads superflex because the crawled corpus overwhelmingly is —
+    // the asymmetry the retired chip already had, where "all" meant superflex.
+    assert.equal(pickDiscountBoard(DEFAULT_LEAGUE_FILTERS), true);
+    assert.equal(pickDiscountBoard(rules([{ key: "QB+SF", op: "gte", value: 2 }])), true);
+    // A rule about something else says nothing about the quarterback market.
+    assert.equal(pickDiscountBoard(rules([{ key: "IDP", op: "gt", value: 0 }])), true);
   });
 });

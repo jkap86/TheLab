@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { ADP_DRAWER_EXIT_MS } from "./adp-drawer.constants.ts";
 import {
@@ -12,8 +12,6 @@ import {
   resumeFocusRestore,
   tabbableStops,
 } from "./adp-drawer.focus.ts";
-import type { AdpDrawerPanel } from "./adp-drawer.types.ts";
-
 export type AdpDrawerLifecycle = {
   /** The drawer is rendered: open, or still playing its exit. */
   onScreen: boolean;
@@ -25,25 +23,23 @@ export type AdpDrawerLifecycle = {
    * the overlay around it.
    */
   panelRef: RefObject<HTMLDivElement | null>;
-  /** Which floating panel is up, if any. */
-  openPanel: AdpDrawerPanel | null;
-  togglePanel: (which: AdpDrawerPanel) => void;
 };
 
 /**
  * Everything about the drawer being on screen, in one place: the beat it stays
- * mounted for its exit, the page's scroll lock, the modal's keyboard contract —
- * the focus move on open, Escape, Tab held inside the dialog, and focus handed
- * back to the opener once the exit has played — and which of its floating panels
- * is up.
+ * mounted for its exit, the page's scroll lock, and the modal's keyboard
+ * contract — the focus move on open, Escape, Tab held inside the dialog, and
+ * focus handed back to the opener once the exit has played.
  *
  * **The handback keys on `onScreen`, not on `open`, and the two are not the same
  * moment.** See the two slots below.
  *
- * The panel selection is here rather than in the component because **Escape
- * closes the innermost thing that is up**, so the key handler has to know
- * whether a panel is open before it can decide whether the drawer is what a
- * keypress means.
+ * It used to hold a floating-panel selection too, because Escape has to close the
+ * innermost thing that is up and the drawer carried its own filter tray. That
+ * tray is the shared league-filters `<dialog>` now, which hears Escape in the top
+ * layer and never lets the press reach this hook — so the selection, its reset on
+ * reopen and the two thunks the key handler read it through are all gone, the way
+ * the columns editor's own apparatus went when it became a dialog.
  *
  * What it does *not* hold is any of the deciding: which keys mean what, where
  * Tab goes next, whether an opener may be focused again and what the scroll lock
@@ -61,29 +57,16 @@ export function useAdpDrawerLifecycle({
 }): AdpDrawerLifecycle {
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const [openPanel, setOpenPanel] = useState<AdpDrawerPanel | null>(null);
-  // Stable, so a handler built on it survives the drawer's own re-renders —
-  // the memo'd filter bar reads it through one, and a steepness drag re-renders
-  // this hook's caller on every notch.
-  const togglePanel = useCallback(
-    (which: AdpDrawerPanel) =>
-      setOpenPanel((current) => (current === which ? null : which)),
-    [],
-  );
-
   // The drawer is on its way out: closed as far as everything else is
   // concerned, still mounted so `adp-drawer-out` has something to play on.
   const [closing, setClosing] = useState(false);
 
-  // A drawer reopened is a drawer at rest: the filter tray floats over the
-  // board, so one left hanging open covers the thing the drawer was opened to
-  // show. Adjusted during render against the previous `open` rather than in an
-  // effect — the pattern `useFilteredTrades` and `ColumnsEditor` use, and the
-  // cascading render the lint rule objects to.
+  // Adjusted during render against the previous `open` rather than in an effect
+  // — the pattern `useFilteredTrades` and `ColumnsEditor` use, and the cascading
+  // render the lint rule objects to.
   const [wasOpen, setWasOpen] = useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
-    if (openPanel !== null) setOpenPanel(null);
     // Reopening cancels an exit still in flight, so a second press lands on the
     // panel sliding back in rather than on one finishing its way off screen.
     setClosing(!open);
@@ -96,12 +79,6 @@ export function useAdpDrawerLifecycle({
     const timer = setTimeout(() => setClosing(false), ADP_DRAWER_EXIT_MS);
     return () => clearTimeout(timer);
   }, [closing]);
-
-  // Read by the Escape handler below, which depends on `open` alone.
-  const latestPanel = useRef(openPanel);
-  useEffect(() => {
-    latestPanel.current = openPanel;
-  }, [openPanel]);
 
   // Held in a ref so the effect below can depend on `open` alone. Callers pass a
   // fresh arrow every render, so depending on `onClose` re-ran the whole effect
@@ -178,10 +155,10 @@ export function useAdpDrawerLifecycle({
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
     }
 
-    // Every dependency is a thunk, so the stops are re-read per press: opening
-    // the filter tray adds controls the reader must be able to Tab into, and a
-    // list captured when the listener was attached would hold them outside it.
-    // See {@link drawerKeydownHandler}.
+    // Every dependency is a thunk, so the stops are re-read per press: the
+    // board's rows arrive and change under the reader, and a list captured when
+    // the listener was attached would hold the new ones outside the trap. See
+    // {@link drawerKeydownHandler}.
     const onKey = drawerKeydownHandler<HTMLElement>({
       stops: () => {
         const container = panelRef.current;
@@ -192,8 +169,6 @@ export function useAdpDrawerLifecycle({
       activeElement: () =>
         document.activeElement instanceof HTMLElement ? document.activeElement : null,
       focusContainer: () => panelRef.current?.focus(),
-      panelOpen: () => latestPanel.current !== null,
-      closePanel: () => setOpenPanel(null),
       closeDrawer: () => latestClose.current(),
     });
 
@@ -233,5 +208,5 @@ export function useAdpDrawerLifecycle({
     [],
   );
 
-  return { onScreen, closing, panelRef, openPanel, togglePanel };
+  return { onScreen, closing, panelRef };
 }

@@ -1,4 +1,9 @@
-import { COMPARE_OPS, FIXED_FILTERS, slotGroupLabel } from "./defaults.ts";
+import {
+  COMPARE_OPS,
+  FIXED_FILTERS,
+  sizeKeyLabel,
+  slotGroupLabel,
+} from "./defaults.ts";
 import { scoringKeyLabel } from "./options.ts";
 import type { ActiveFilter, FilterRule, LeagueFilters } from "./types.ts";
 
@@ -61,7 +66,14 @@ export function activeFilters(filters: LeagueFilters): ActiveFilter[] {
       label: ruleText(rule, scoringKeyLabel).toLowerCase(),
     }),
   );
-  return [...fixed, ...slots, ...scoring];
+  const size = filters.size.map(
+    (rule, index): ActiveFilter => ({
+      kind: "size",
+      index,
+      label: ruleText(rule, sizeKeyLabel).toLowerCase(),
+    }),
+  );
+  return [...fixed, ...size, ...slots, ...scoring];
 }
 
 /**
@@ -88,6 +100,12 @@ export function clearFilter(
       scoring: filters.scoring.filter((_, i) => i !== active.index),
     };
   }
+  if (active.kind === "size") {
+    return {
+      ...filters,
+      size: filters.size.filter((_, i) => i !== active.index),
+    };
+  }
   switch (active.field) {
     case "type":
       return { ...filters, type: "all" };
@@ -111,7 +129,7 @@ export function clearFilter(
  * would allocate are never looked at.
  */
 export function activeFilterCount(filters: LeagueFilters): number {
-  let count = filters.slots.length + filters.scoring.length;
+  let count = filters.slots.length + filters.scoring.length + filters.size.length;
   for (const { key } of FIXED_FILTERS) if (filters[key] !== "all") count += 1;
   return count;
 }

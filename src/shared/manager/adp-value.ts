@@ -21,6 +21,8 @@
 
 import { isSuperflexLineup } from "../ktc/roster.ts";
 import { NON_STARTING_SLOTS, SLOT_POSITIONS } from "../projections/slots.ts";
+import { NO_LEAGUE_SCOPE_BODY } from "../query/parse.ts";
+import type { LeagueScopeBody } from "../query/parse.ts";
 import { ADP_FILTER_DEFAULTS, parseAdpFilters } from "./adp-filters.ts";
 import type { AdpFilters, ScoringFormat } from "./adp-filters.ts";
 
@@ -239,6 +241,15 @@ function scoringBucket(scoring: Record<string, number> | null): ScoringFormat {
  * both is "don't narrow", so accepting them would pool the two boards for every
  * reader who never touched the control.
  *
+ * **The two league-id lists are the largest of the reader's choices and the last
+ * to arrive**, and they are why a request carrying one comes in as a POST. The
+ * drawer's own scoring, superflex, best-ball and size chips are league rules
+ * now — the shared dialog the manager tabs and the trades board already use —
+ * and those rules are a browser-side engine, so what reaches here is their
+ * answer. It composes with the two axes above rather than competing with them: a
+ * rule set narrows *which leagues' drafts* are on the board, and each league is
+ * still priced against the scoring and superflex population it belongs to.
+ *
  * The rest of `AdpFilters` is omitted for a duller reason: the draft types, the
  * statuses, `min_picks` and the paging are this route's own constants.
  */
@@ -266,6 +277,8 @@ export type AdpBoardChoices = Pick<
   | "seasons"
   | "start_after"
   | "start_before"
+  | "league_ids"
+  | "exclude_league_ids"
   | "best_ball"
   | "rounds_min"
   | "rounds_max"
@@ -283,6 +296,8 @@ export function defaultBoardChoices(season: string): AdpBoardChoices {
     seasons: [season],
     start_after: null,
     start_before: null,
+    league_ids: null,
+    exclude_league_ids: null,
     best_ball: null,
     rounds_min: null,
     rounds_max: null,
@@ -316,23 +331,32 @@ export function defaultBoardChoices(season: string): AdpBoardChoices {
  * for the batch route, the league's own for the panel. `parseAdpFilters` reads it
  * only when the caller bounded the board neither by season nor by date, which a
  * live drawer never does.
+ *
+ * `scope` is the league ids off a POST body, on the same terms `/api/adp` takes
+ * them — see {@link AdpBoardChoices}. Both routes reading this answer a POST for
+ * that reason alone: the drawer's league rules resolve to a list that a request
+ * line cannot carry, and a board the cards are priced on has to be the board the
+ * drawer is showing.
  */
 export function parseAdpBoardChoices(
   params: URLSearchParams,
   defaultSeason: string,
+  scope: LeagueScopeBody = NO_LEAGUE_SCOPE_BODY,
 ): { ok: true; board: AdpBoardChoices } | { ok: false; error: string } {
   const boardParams = new URLSearchParams(params);
   boardParams.delete("season");
   const boardSeason = boardParams.get(ADP_VALUE_PARAMS.boardSeason);
   if (boardSeason) boardParams.set("season", boardSeason);
 
-  const parsed = parseAdpFilters(boardParams, defaultSeason);
+  const parsed = parseAdpFilters(boardParams, defaultSeason, scope);
   if (!parsed.ok) return parsed;
 
   const {
     seasons,
     start_after,
     start_before,
+    league_ids,
+    exclude_league_ids,
     best_ball,
     rounds_min,
     rounds_max,
@@ -345,6 +369,8 @@ export function parseAdpBoardChoices(
       seasons,
       start_after,
       start_before,
+      league_ids,
+      exclude_league_ids,
       best_ball,
       rounds_min,
       rounds_max,
@@ -395,7 +421,6 @@ export function adpBoardFor({
     ...chosen,
     draft_types: [...ADP_FILTER_DEFAULTS.draft_types],
     draft_statuses: [...ADP_FILTER_DEFAULTS.draft_statuses],
-    league_ids: null,
     // The two the reader may not set — see {@link AdpBoardChoices}.
     scoring: [scoringBucket(scoringSettings)],
     superflex: isSuperflexLineup(rosterPositions),
@@ -423,10 +448,41 @@ export function boardSignature(filters: AdpFilters): string {
     filters.superflex,
     filters.start_after ?? "",
     filters.start_before ?? "",
+    leagueScopePart(filters.league_ids),
+    leagueScopePart(filters.exclude_league_ids),
     filters.best_ball,
     filters.rounds_min ?? "",
     filters.rounds_max ?? "",
     filters.teams_min ?? "",
     filters.teams_max ?? "",
   ].join("|");
+}
+
+/**
+ * A league-id list as a signature segment: its length and its contents, joined
+ * once per array rather than once per league.
+ *
+ * The contents and not a digest, because the whole point of the signature is
+ * that it stands for the board *exactly* — a hash would trade a silent collision
+ * for a shorter string, and a collision here is leagues priced off somebody
+ * else's board with nothing in the payload to say so. What makes that
+ * affordable is the memo: the reader's scope is one array shared by every league
+ * in a request, so this joins a few thousand ids once and hands the same string
+ * back for each of the hundred-odd leagues that read it. Without it the join ran
+ * per league, which for a narrowed board is megabytes of identical string.
+ *
+ * A `WeakMap` rather than a cache with a policy: the key is the array the
+ * request is holding, so the entry dies with the request.
+ */
+const joinedLeagueScopes = new WeakMap<readonly string[], string>();
+
+function leagueScopePart(ids: readonly string[] | null): string {
+  if (ids === null) return "";
+  const memo = joinedLeagueScopes.get(ids);
+  if (memo !== undefined) return memo;
+  // The length leads so an empty list is still a segment — "the rules matched
+  // nothing" is a board, and it must not read as the absent one above.
+  const joined = `${ids.length}:${ids.join(",")}`;
+  joinedLeagueScopes.set(ids, joined);
+  return joined;
 }

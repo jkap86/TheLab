@@ -17,6 +17,7 @@ import {
   rosterAdpValue,
   startingSlotCount,
 } from "./adp-value.ts";
+import type { AdpBoardChoices } from "./adp-value.ts";
 
 // A 12-team league starting 9 — 108 startable slots — at the default steepness.
 const POOL = 108;
@@ -282,6 +283,29 @@ describe("adpBoardFor", () => {
     assert.notEqual(boardSignature(a), boardSignature(c));
   });
 
+  test("the league scope is part of the signature, contents and all", () => {
+    // A signature that stood for less than its board is a collision waiting for
+    // the caller that starts varying one, and the failure would be silent:
+    // leagues priced off somebody else's board with nothing in the payload to
+    // say so. The ids are the largest of the reader's choices, so they are the
+    // one worth pinning — contents rather than a digest, for the same reason.
+    const board = (over: Partial<AdpBoardChoices>) =>
+      boardSignature(
+        adpBoardFor({
+          season: "2025",
+          rosterPositions: ["QB", "RB", "WR"],
+          scoringSettings: null,
+          board: { ...defaultBoardChoices("2025"), ...over },
+        }),
+      );
+    assert.notEqual(board({ league_ids: ["1", "2"] }), board({}));
+    assert.notEqual(board({ league_ids: ["1", "2"] }), board({ league_ids: ["1", "3"] }));
+    assert.notEqual(board({ league_ids: ["1"] }), board({ exclude_league_ids: ["1"] }));
+    // "The rules matched nothing" is a board of its own, and must not read as
+    // the absent one — which is what the length leading the segment is for.
+    assert.notEqual(board({ league_ids: [] }), board({}));
+  });
+
   test("with no board supplied it is this season, whole — the old behaviour", () => {
     // The league detail route has no drawer behind it, so the fallback has to be
     // the board this function produced before a reader could narrow one.
@@ -394,6 +418,8 @@ describe("adpBoardFor", () => {
       seasons: ["2026"],
       start_after: "2026-06-01",
       start_before: "2026-07-31",
+      league_ids: null,
+      exclude_league_ids: null,
       best_ball: false,
       rounds_min: 12,
       rounds_max: null,
