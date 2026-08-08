@@ -25,10 +25,16 @@ import {
  *
  * **The measurement that made the float affordable is worth keeping written
  * down**, because "a panel over the board" reads as obviously wrong and isn't:
- * the tallest bay is the window at ~197px, so it hides five rows and leaves
- * twelve — where the stacked block showed nine with nothing open at all. There
- * is no state of this drawer that shows a reader less board than the design it
- * replaced.
+ * the window bay is ~197px, so it hides five rows and leaves twelve — where the
+ * stacked block showed nine with nothing open at all.
+ *
+ * **The Leagues bay is the exception, and the exception is earned rather than
+ * overlooked.** It is the whole league-filters panel, capped at `min(66svh,
+ * 32rem)`, so it covers most of the board. What makes that fine is that it is
+ * the one bay whose selection is a *draft*: nothing under it moves until Apply,
+ * so there is no board to be watching while it is up — and Apply shuts it, which
+ * is the press that makes the board worth looking at again. The curve and the
+ * window commit live and are short, which is the same fact from the other side.
  *
  * Two signals, and they must not be merged:
  *

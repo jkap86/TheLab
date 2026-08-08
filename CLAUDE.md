@@ -2676,8 +2676,45 @@ stops holding, a comment saying it does would not have caught it.
   the point of the shape is that changing a filter and watching the ADP move is one
   glance, which a stacked panel loses by pushing the board below the fold. And
   the board's league filters **are the league filters** — the same
-  `LeagueFiltersModal` the manager tabs and the trades board open, behind one key
-  on that pinned row.
+  `LeagueFiltersPanel` the manager tabs and the trades board open, in the Leagues
+  bay of that pinned rail.
+
+  **They are drawn *in* the bay, not behind a key in it, and the difference is
+  the modality rather than the press.** They arrived here as the whole
+  `LeagueFiltersModal` — trigger and `<dialog>` — which made the Leagues bay a
+  panel holding one key that opened another panel, and made that panel a **modal
+  over the board it narrows**: 1040px of sheet, everything behind it inert,
+  including the drawer whose footer and season row a reader was mid-thought in.
+  That is the one thing every bay is built not to do. So `LeagueFiltersPanel` is
+  the dialog's body extracted whole — season band, fixed rails, rule bays, match
+  rail, footer — and the two hosts keep only what is theirs: the dialog keeps
+  `showModal`, the backdrop and the focus move; the bay keeps the cap on its own
+  height and shuts itself on Apply. Three things follow:
+  - **The layout is container-queried, and that is the load-bearing half.** The
+    two-column grid, the sticky match rail and the footer's restated count were
+    viewport breakpoints — correct while the one host was a ~1000px sheet, and
+    exactly wrong inside a 32rem drawer *on the same laptop*, where all three
+    would have fired in a box less than half the width they were written for.
+    They measure the panel now (`@4xl`, and `@2xl` on the rule bays' own box), so
+    the dialog is byte-for-byte what it was and the bay lays out as the one-column
+    arrangement the dialog already had for phones. `MatchRail` gave its
+    `lg:sticky lg:top-0 lg:self-start` up to the grid item that holds it, the
+    usual rule: a shared component that hard-codes a property a caller has to
+    override is a component no caller can override it on.
+  - **The draft is the host's, not the panel's.** Both hosts hold one — the
+    counts beside every option are unreadable if the population moves while they
+    are being read, and this board is a network read besides — but what a commit
+    *writes* differs, and that difference is why there is no shared hook: the
+    dialog emits filters and closes itself, where the bay writes the rules and
+    its own draft-kind row into one stored `AdpControls`.
+  - **One write, which fixed a silent bug.** That row used to ride the dialog's
+    `extra.onApply`, called beside `onChange`; both closed over the same stored
+    controls, so the second landed `{...controls, rounds}` on top of the first and
+    took the rules back out with it. Changing a rule *and* the draft kind in one
+    press applied the draft kind and dropped the rule — and changing either alone
+    worked, which is why it survived. `withLeagueFilters` takes both, which makes
+    it unrepresentable, and `ExtraSegment` is the row alone now (label, options,
+    default) with no `value`/`onApply` for a caller to commit separately.
 
   **They were four chips of the drawer's own — scoring, superflex, best ball and
   league size — and each already had an exact equivalent in the rule vocabulary.**
@@ -2696,14 +2733,14 @@ stops holding, a comment saying it does would not have caught it.
   *band* is two rules, which is one of the things the lists being an AND is for.
 
   **The one control left over is the draft kind, and it is seated inside that
-  dialog rather than beside it** (`ExtraSegment`, `ROUNDS_SEGMENT`). How many
+  panel rather than beside it** (`ExtraSegment`, `ROUNDS_SEGMENT`). How many
   rounds a room ran is a fact about the room, not about the league, so it has no
   business in `LeagueFilters` where two other pages would inherit a filter that
-  means nothing to them; and a dialog plus a stray chip is the arrangement this
-  replaced. It rides the dialog's own draft/apply contract — seeded on open,
-  applied beside `onChange` — rather than committing live, or it would be the one
-  control in the panel moving the board while the counts beside it were being
-  read. It carries **no per-option counts**, unlike the three rows above it: it
+  means nothing to them; and a panel plus a stray chip is the arrangement this
+  replaced. It rides the panel's own draft/apply contract — seeded on mount,
+  applied *with* the rules in one write — rather than committing live, or it
+  would be the one control in the panel moving the board while the counts beside
+  it were being read. It carries **no per-option counts**, unlike the three rows above it: it
   cuts drafts *inside* a league rather than leagues, so every option would show
   the identical league count and that number would be about something the row
   does not narrow (`FilterRail`'s `probe` is optional for exactly this).
@@ -2817,12 +2854,15 @@ stops holding, a comment saying it does would not have caught it.
   - **The filter row is one key and the seed chip.** It was seven chips
     permanently reading "All" — seven controls' worth of height reporting that
     nothing is set — then a badged `Filters` key over a tray of the same seven.
-    It is the shared league-filters key now, which retires the tray, the summary
-    chips and the `FilterSpec` table with it: what the tray held is a dialog with
-    per-option counts, quick-adds and a match rail, and what the summary chips
-    said the key's own badge says. "Match a league…" stays outside it and stays a
-    chip, because it is not a filter — it *writes* filters, from a league the
-    reader recognises by name — and the trades board passes it no leagues at all.
+    It is the shared league-filters *panel* now, which retires the tray, the
+    summary chips and the `FilterSpec` table with it: what the tray held is a
+    panel with per-option counts, quick-adds and a match rail, and what the
+    summary chips said the Leagues key's own value line says. It arrived as a
+    key opening that panel as a modal and is drawn in the bay itself now — see
+    the bullet above on why a bay may hold anything except a second dialog.
+    "Match a league…" stays outside it and stays a chip, because it is not a
+    filter — it *writes* filters, from a league the reader recognises by name —
+    and the trades board passes it no leagues at all.
   - **The league type is not one of those filters — every fetch answers both
     markets, and two board keys over the list choose what is drawn.** A dynasty
     startup and a redraft price different games, which is exactly why the type
@@ -2853,8 +2893,8 @@ stops holding, a comment saying it does would not have caught it.
     league is actually in — and the Players tab asks the same question through
     its own column picker instead, where the ADP metrics come one per board.
     **The last place it survived as a *population* question was the shared
-    dialog's own Type row, and this caller drops it** (`omit` on
-    `LeagueFiltersModal`, threaded to `SegmentTrough`). It was a second control
+    panel's own Type row, and this caller drops it** (`omit` on
+    `LeagueFiltersPanel`, threaded to `SegmentTrough`). It was a second control
     over the axis the board keys already own, and the two disagree in a way that
     looks like a bug rather than a selection: narrow to dynasty leagues with the
     redraft column up and the answer is an empty column with nothing on screen
@@ -2870,12 +2910,12 @@ stops holding, a comment saying it does would not have caught it.
     for the same argument twice over**, which is why `omit` is a list of rows
     rather than the boolean it started as: this block leads with a season row of
     its own that decides which leagues are fetched at all, so a second season
-    inside the dialog is a finer cut on an axis already answered a few pixels
+    inside the panel is a finer cut on an axis already answered a few pixels
     above.
   - **The keys are `.lab-chip`, not the drawer's own outlined `Segment`.** This
     was the last place in the app still drawing flat bordered buttons for
     something you press; the season keys, the window counter's own keys (± ,
-    `Today`, ◆ `Draft`) and the filters trigger all wear the raised pill and
+    `Today`, ◆ `Draft`) and the filters' own rails all wear the raised pill and
     `.lab-chip-on` for lit, the same grammar as the trigger that opened the
     drawer.
   - **The board's column headings are `sticky`** inside the one region that
@@ -3540,7 +3580,8 @@ stops holding, a comment saying it does would not have caught it.
     part added to this plate has to ask which of the two it is before it picks a
     material.
 - **The plate's record readout is where the filter bar used to be.** The two rows
-  of segment buttons are behind a modal (`LeagueFiltersModal`) whose trigger has
+  of segment buttons are behind a modal (`LeagueFiltersModal`, which is that
+  panel's other host) whose trigger has
   moved twice since — into the dock beside `AdpTrigger`, into this plate's own
   bottom edge when the board went up to the app bar and the dock followed it out,
   and finally off the plate altogether on the manager tabs, to the head of the
@@ -3760,12 +3801,16 @@ stops holding, a comment saying it does would not have caught it.
   (`ExtraSegment`). The ADP board's draft-kind chip is not a fact about a league —
   how many rounds a room ran is a fact about the room — so it must not become a
   `LeagueFilters` field that two other pages inherit and cannot use; seating it
-  in the dialog instead is what makes that board's filters one dialog rather than
-  a dialog and a stray chip. It rides the same draft/apply contract as everything
+  in the panel instead is what makes that board's filters one control rather than
+  a control and a stray chip. It rides the same draft/apply contract as everything
   else in the panel, and it carries **no per-option counts**: it cuts drafts
   inside a league rather than leagues, so every option would show the identical
   league count and that number would be about something the row does not narrow.
-  `FilterRail`'s `probe` is optional for that reason alone.
+  `FilterRail`'s `probe` is optional for that reason alone. **It is the row and
+  not the commit** — label, options, and what Reset returns it to, with the draft
+  and the write left to the host, because that host writes this row and the
+  filters into one stored object and a callback of its own is how one of those
+  two writes silently reverts the other.
 
   **It is six modules and not one file** (`types`, `defaults`, `predicates`,
   `summaries`, `options`, `breakdown`, behind a barrel). It was one, at 640 lines

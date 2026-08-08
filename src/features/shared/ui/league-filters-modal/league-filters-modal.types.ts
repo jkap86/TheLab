@@ -32,29 +32,32 @@ import type { FilterRule } from "../../league-filters";
 export type LeagueFilterRow = "season" | "type";
 
 /**
- * A fourth segment row the caller owns, drafted and applied with the filters.
+ * A fourth segment row the host owns, drafted and applied with the filters.
  *
- * **One caller has one**, and it is worth reading as the exception it is: the ADP
+ * **One host has one**, and it is worth reading as the exception it is: the ADP
  * board's filters *are* the league filters now, and the one thing left over is
  * what kind of draft to average — startup or rookie — which is a fact about the
  * room rather than about the league, so it has no business in `LeagueFilters`
  * where the manager tabs and the trades board would inherit a control that means
- * nothing to them. Seating it here instead of beside the trigger is what makes
- * the board's filters one dialog rather than a dialog and a stray chip.
+ * nothing to them. Seating it in the trough instead of beside the panel is what
+ * makes the board's filters one control rather than a control and a stray chip.
  *
- * It rides the dialog's own draft/apply contract rather than committing live:
- * `value` seeds a draft on open, the row edits that draft, and `onApply` is
- * called beside `onChange` when Apply is pressed. Reset returns it to
- * `defaultValue`. Half-committing it would be the one control in the panel that
- * moved the board while the counts beside it were being read.
+ * It rides the panel's own draft/apply contract rather than committing live —
+ * half-committing it would be the one control in the panel that moved the board
+ * while the counts beside it were being read.
+ *
+ * **It is the row and not the commit.** The draft it edits and the write that
+ * lands it belong to the host, because that host writes this row and the filters
+ * into *one* stored object: threaded through as a callback of its own, the two
+ * writes each close over the same value and the second reverts the first's field
+ * rather than adding to it — which is what the ADP board's draft-kind row did for
+ * as long as it was applied separately from the rules beside it.
  */
 export type ExtraSegment = {
   label: string;
   options: readonly { value: string; label: string }[];
-  value: string;
-  /** What Reset puts it back to — the caller's default, not necessarily the first option. */
+  /** What Reset puts it back to — the host's default, not necessarily the first option. */
   defaultValue: string;
-  onApply: (value: string) => void;
 };
 
 /**

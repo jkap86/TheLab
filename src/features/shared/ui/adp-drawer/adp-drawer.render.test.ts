@@ -14,6 +14,7 @@ import type { AdpPayload, AdpPlayerPayload } from "@/shared/contract";
 
 import {
   type AdpControls,
+  DEFAULT_ADP_ROUNDS,
   defaultAdpControls,
   seedFromLeague,
 } from "../../adp-controls.ts";
@@ -26,7 +27,7 @@ import { AdpBoardHeader } from "./adp-board-header.tsx";
 import { AdpDrawer } from "./adp-drawer.tsx";
 import { AdpDrawerFooter } from "./adp-drawer-footer.tsx";
 import { AdpDrawerHeader } from "./adp-drawer-header.tsx";
-import { AdpFilterBar } from "./adp-filter-bar.tsx";
+import { AdpLeagueFiltersPanel } from "./adp-league-filters-panel.tsx";
 import { AdpLeagueSeedControl } from "./adp-league-seed-control.tsx";
 import { SteepnessSlider } from "./adp-steepness-slider.tsx";
 import {
@@ -38,7 +39,7 @@ import {
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
 } from "./adp-drawer.constants.ts";
-import { PICK_TAKEN_TITLE } from "./adp-drawer.utils.ts";
+import { PICK_TAKEN_TITLE, withLeagueFilters } from "./adp-drawer.utils.ts";
 
 /**
  * The drawer without a DOM.
@@ -87,6 +88,32 @@ function press(el: ReactElement<Props>, name: string): (...args: unknown[]) => v
   const handler = el.props[name];
   assert.equal(typeof handler, "function", `expected ${name} to be a handler`);
   return handler as (...args: unknown[]) => void;
+}
+
+/**
+ * A section's returned tree, for one that holds state of its own.
+ *
+ * Most of this file's sections are hook-free and can be called as plain
+ * functions; the Leagues bay is not — it holds the draft its Apply commits. A
+ * probe puts the call inside `renderToStaticMarkup`, so React's dispatcher is
+ * live and the section's own `useState` binds to the probe's hook slot. That is
+ * what lets its children's handlers be pressed: markup carries the options and
+ * the pressed states, but not the callbacks. The same helper the league-filters
+ * dialog's own render test uses, for the same reason.
+ *
+ * What it cannot reach is a *setter*: a state update outside a render has
+ * nothing to re-render on the server, so what a press of Apply sees is the draft
+ * as it was seeded. The write it makes from there is pure and pinned in
+ * `adp-drawer.utils.test`.
+ */
+function treeOf<P>(section: (props: P) => ReactNode, props: P): ReactNode {
+  let captured: ReactNode = null;
+  function Probe() {
+    captured = section(props);
+    return null;
+  }
+  renderToStaticMarkup(createElement(Probe));
+  return captured;
 }
 
 const league = (id: string, teams: number): ManagerLeague => ({
@@ -411,9 +438,19 @@ describe("the bays", () => {
     // tested separately. What is checked here is the other half: each of the
     // three really is a control with a name, so a bay is somewhere Tab can land.
     const filters = renderToStaticMarkup(
-      AdpFilterBar({ controls, leagues, seedLeagues: leagues, onChange: () => {} }),
+      createElement(AdpLeagueFiltersPanel, {
+        controls,
+        leagues,
+        seedLeagues: leagues,
+        onChange: () => {},
+        onApplied: () => {},
+      }),
     );
     assert.match(filters, /Match a league…/);
+    // And the filters themselves, inline rather than behind a second press:
+    // the rule bays and the readout the shared panel draws, in the bay.
+    assert.match(filters, /Any scoring\. Add a rule to narrow by what a league pays\./);
+    assert.match(filters, /Leagues matching/);
 
     const curve = renderToStaticMarkup(
       SteepnessSlider({
@@ -744,14 +781,15 @@ describe("the league seed control", () => {
   });
 
   test("it is drawn, and names every offered league, when there are some", () => {
-    // Rendered through the filter bay rather than the whole drawer: the row is
+    // Rendered through the Leagues bay rather than the whole drawer: the chip is
     // behind the Leagues key now, and a static render cannot press one.
     const html = renderToStaticMarkup(
-      AdpFilterBar({
+      createElement(AdpLeagueFiltersPanel, {
         controls: defaultAdpControls("2026"),
         leagues,
         seedLeagues: leagues,
         onChange: () => {},
+        onApplied: () => {},
       }),
     );
     assert.match(html, /Match a league…/);
@@ -788,76 +826,108 @@ describe("the league seed control", () => {
 });
 
 describe("what the controls do", () => {
-  test("the filters row is the shared dialog, plus the seed chip and nothing else", () => {
-    // The four chips this row used to carry — scoring, superflex, best ball and
-    // league size — are league *rules* now, so what is left here is one trigger
-    // and the shortcut that writes rules from a league the reader recognises.
-    const tree = AdpFilterBar({
+  test("the Leagues bay is the shared filters panel, plus the seed chip and nothing else", () => {
+    // The four chips this bay used to carry — scoring, superflex, best ball and
+    // league size — are league *rules* now, and the key that used to open them
+    // in a modal over the whole page is gone with them: the panel is drawn here,
+    // so the board it narrows stays live behind it.
+    const tree = treeOf(AdpLeagueFiltersPanel, {
       controls: defaultAdpControls("2026"),
       leagues,
       seedLeagues: leagues,
       onChange: () => {},
+      onApplied: () => {},
     });
-    // The row's own children, unrendered: the dialog (named by its label) and
-    // the seed control (named by the leagues it was handed). Two parts, no
-    // chips — the row itself is the assertion.
-    // Everything but the wrapper the row is laid out in.
-    const row = elements(tree).filter((el) => typeof el.type !== "string");
-    assert.equal(row.length, 2);
-    assert.equal(row[0].props.label, "Leagues");
+    // The bay's own children, unrendered: the seed chip (named by the leagues it
+    // was handed) and the shared panel. Two parts, no trigger — the bay itself
+    // is the assertion.
+    const parts = elements(tree).filter((el) => typeof el.type !== "string");
+    assert.equal(parts.length, 2);
+    assert.equal(parts[0].type, AdpLeagueSeedControl);
+    assert.deepEqual(parts[0].props.leagues, leagues);
+    // Seated in the bay, which is the only thing about the panel this host
+    // changes — see `PANEL_SEATS`.
+    assert.equal(parts[1].props.seat, "bay");
     // Minus two rows, for one argument twice over: every fetch answers both
     // markets and the board's own keys choose which is drawn, and the pinned
     // block above leads with its own season row that decides which leagues are
-    // fetched at all. Either row inside the dialog would be a second control
+    // fetched at all. Either row inside the panel would be a second control
     // over a question this page already owns.
-    assert.deepEqual(row[0].props.omit, ["season", "type"]);
-    assert.deepEqual(row[1].props.leagues, leagues);
-    assert.equal(row[1].type, AdpLeagueSeedControl);
+    assert.deepEqual(parts[1].props.omit, ["season", "type"]);
   });
 
-  test("the dialog writes the league rules back onto the controls", () => {
-    const controls = defaultAdpControls("2026");
-    let next: AdpControls | null = null;
-    const tree = AdpFilterBar({
+  test("the draft kind rides inside that panel, seeded from the controls", () => {
+    // Seated in the panel's trough rather than beside it: what kind of draft to
+    // average is the one thing left that a league rule cannot say, and a panel
+    // plus a stray chip is the arrangement this replaced.
+    const controls = { ...defaultAdpControls("2026"), rounds: "rookie" as const };
+    const tree = treeOf(AdpLeagueFiltersPanel, {
       controls,
       leagues,
       seedLeagues: [],
-      onChange: (value) => {
-        next = value;
-      },
+      onChange: () => {},
+      onApplied: () => {},
     });
-    // A rule this dialog can actually write — its Type row is dropped here.
-    const rules = { ...controls.leagueRules, status: "pre_draft" as const };
-    press(only(tree, "label", "Leagues"), "onChange")(rules);
-    assert.deepEqual(next, { ...controls, leagueRules: rules });
-  });
-
-  test("the draft kind rides inside that dialog, and applies onto the controls", () => {
-    // Seated in the dialog's trough rather than beside its trigger: what kind of
-    // draft to average is the one thing left that a league rule cannot say, and
-    // a dialog plus a stray chip is the arrangement this replaced.
-    const controls = defaultAdpControls("2026");
-    let next: AdpControls | null = null;
-    const tree = AdpFilterBar({
-      controls,
-      leagues,
-      seedLeagues: [],
-      onChange: (value) => {
-        next = value;
-      },
-    });
-    const extra = only(tree, "label", "Leagues").props.extra as {
-      value: string;
-      options: { value: string }[];
-      onApply: (value: string) => void;
-    };
-    assert.equal(extra.value, controls.rounds);
+    const panel = elements(tree).filter((el) => el.props.seat === "bay")[0];
+    const extra = panel.props.extra as { options: { value: string }[] };
     assert.deepEqual(
       extra.options.map((o) => o.value),
       ["all", "full", "rookie"],
     );
-    extra.onApply("rookie");
-    assert.deepEqual(next, { ...controls, rounds: "rookie" });
+    // The draft is seeded at mount, which is all a bay that unmounts on close
+    // needs — there is no open state for the applied selection to drift under.
+    assert.equal(panel.props.extraDraft, "rookie");
+  });
+
+  test("Apply commits once and shuts the bay; nothing else here writes", () => {
+    const controls = defaultAdpControls("2026");
+    const written: AdpControls[] = [];
+    let applied = 0;
+    const tree = treeOf(AdpLeagueFiltersPanel, {
+      controls,
+      leagues,
+      seedLeagues: [],
+      onChange: (value: AdpControls) => written.push(value),
+      onApplied: () => {
+        applied += 1;
+      },
+    });
+    const panel = elements(tree).filter((el) => el.props.seat === "bay")[0];
+
+    // Editing the draft reaches this host's own state and never the store: the
+    // counts beside every option are unreadable if the population moves while
+    // they are being read, and this board is a network read besides.
+    press(panel, "onChange")({ ...controls.leagueRules, status: "pre_draft" });
+    press(panel, "onExtraChange")("rookie");
+    assert.deepEqual(written, []);
+    assert.equal(applied, 0);
+
+    // And Apply is **one** write carrying both halves — see `withLeagueFilters`,
+    // which is where the argument for why it must be one lives.
+    press(panel, "onApply")();
+    assert.deepEqual(written, [
+      withLeagueFilters(controls, controls.leagueRules, controls.rounds),
+    ]);
+    assert.equal(applied, 1);
+  });
+
+  test("Reset returns both halves to the board's defaults", () => {
+    const tree = treeOf(AdpLeagueFiltersPanel, {
+      controls: { ...defaultAdpControls("2026"), rounds: "rookie" as const },
+      leagues,
+      seedLeagues: [],
+      onChange: () => {},
+      onApplied: () => {},
+    });
+    const panel = elements(tree).filter((el) => el.props.seat === "bay")[0];
+    // The row's own default rather than its first option — the board opens
+    // narrowed to startups, which is the one filter here that does.
+    assert.equal(
+      (panel.props.extra as { defaultValue: string }).defaultValue,
+      DEFAULT_ADP_ROUNDS,
+    );
+    // Reset edits the draft and commits nothing, exactly as the rows do.
+    press(panel, "onReset")();
   });
 
   test("a board key toggles that market, and the last one lit stays lit", () => {

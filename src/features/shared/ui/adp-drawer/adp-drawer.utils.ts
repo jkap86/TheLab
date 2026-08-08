@@ -142,6 +142,27 @@ export function withSeason(controls: AdpControls, season: string): AdpControls {
 }
 
 /**
+ * Commit the Leagues bay: the rules a reader built, and the kind of draft to
+ * average them over.
+ *
+ * **The point of it is that it is one write.** They are two fields of one stored
+ * `AdpControls`, and they used to be applied as two calls — `onChange(rules)`
+ * from the filters dialog, then that dialog's `extra.onApply(rounds)` — each
+ * closing over the same store value, so the second landed
+ * `{...controls, rounds}` on top of the first and took the rules back out with
+ * it. Changing a rule *and* the draft kind in one press applied the draft kind
+ * and silently dropped the rule; changing either alone worked, which is why it
+ * survived. A function taking both is what makes that unrepresentable.
+ */
+export function withLeagueFilters(
+  controls: AdpControls,
+  leagueRules: LeagueFilters,
+  rounds: AdpControls["rounds"],
+): AdpControls {
+  return { ...controls, leagueRules, rounds };
+}
+
+/**
  * Flip one board's columns. The rule that the last lit board cannot be turned
  * off lives in `toggleAdpBoard`, which is where it is tested.
  */

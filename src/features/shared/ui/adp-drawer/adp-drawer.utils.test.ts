@@ -14,6 +14,7 @@ import {
   takenTitle,
   valueTitle,
   withBoardToggle,
+  withLeagueFilters,
   withSeason,
   withSeededLeague,
 } from "./adp-drawer.utils.ts";
@@ -100,6 +101,35 @@ describe("the control writes", () => {
     const next = withBoardToggle({ ...controls, leagueRules: rules }, "redraft");
     assert.deepEqual(next.leagueRules, rules);
     assert.equal(next.season, controls.season);
+  });
+
+  test("the Leagues bay lands both of its halves in one object", () => {
+    // The regression this exists for: the rules and the draft kind used to be
+    // applied as two calls closing over the same stored controls, so the second
+    // reverted the first's field. Changing either alone worked, which is why it
+    // survived — so the case worth pinning is changing *both*.
+    const rules = {
+      ...controls.leagueRules,
+      settings: [{ key: "teams", op: "eq" as const, value: 12 }],
+    };
+    const next = withLeagueFilters(controls, rules, "rookie");
+    assert.deepEqual(next.leagueRules, rules);
+    assert.equal(next.rounds, "rookie");
+  });
+
+  test("committing the Leagues bay moves nothing the other bays own", () => {
+    const narrowed = {
+      ...controls,
+      season: "2024",
+      range: { preset: "30d" as const, from: null, to: null },
+      steepness: 4,
+      boards: "dynasty" as const,
+    };
+    const next = withLeagueFilters(narrowed, controls.leagueRules, "all");
+    assert.equal(next.season, "2024");
+    assert.deepEqual(next.range, narrowed.range);
+    assert.equal(next.steepness, 4);
+    assert.equal(next.boards, "dynasty");
   });
 
   test("seeding by id is exactly seedFromLeague", () => {

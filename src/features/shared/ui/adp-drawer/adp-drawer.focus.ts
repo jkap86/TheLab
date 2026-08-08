@@ -117,9 +117,12 @@ export function tabWrap(
  * modal one makes the board behind it inert and the board is the thing a bay
  * exists to be watched against — so the routing is ours once more.
  *
- * The `<dialog>` inside the Leagues bay is unaffected and needs no ordering
- * against this: while it is open the press never arrives, so "innermost" resolves
- * dialog, then bay, then drawer without this function knowing the dialog exists.
+ * **There is no third thing now**, and the note here used to say there was: the
+ * Leagues bay held a key that opened the shared `<dialog>`, which resolved
+ * "innermost" as dialog, then bay, then drawer without this function knowing the
+ * dialog existed. That bay draws the filters panel inline instead — a modal over
+ * the board a reader is narrowing is the one thing every bay is built not to do —
+ * so the two answers below are the whole ladder.
  */
 export type DrawerKeyAction =
   | { readonly type: "close-drawer" }

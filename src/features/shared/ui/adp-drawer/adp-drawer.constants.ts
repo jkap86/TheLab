@@ -123,7 +123,7 @@ export const ADP_DRAWER_ENTER_MS = 460;
 export const ADP_DRAWER_EXIT_MS = 340;
 
 /**
- * The draft-kind row the board seats inside the league-filters dialog.
+ * The draft-kind row the board seats inside the league-filters panel.
  *
  * What *kind* of draft, which is a round count underneath: a startup fills a
  * roster, a rookie draft is a handful of rounds. It replaced a
@@ -135,10 +135,13 @@ export const ADP_DRAWER_EXIT_MS = 340;
  * why it is an `ExtraSegment` rather than a field of `LeagueFilters`: how many
  * rounds a room ran is a fact about the room, and the manager tabs and the
  * trades board would inherit a filter that means nothing to them. Seated in the
- * dialog's trough rather than beside its trigger, so the board's filters are one
- * dialog rather than a dialog and a stray chip.
+ * panel's trough rather than beside it, so the board's filters are one control
+ * rather than a control and a stray chip.
  *
- * `value` and `onApply` are the caller's — this is the half that doesn't vary.
+ * The row and nothing else: the draft it edits and the write that lands it are
+ * {@link AdpLeagueFiltersPanel}'s, because this row and the rules beside it are
+ * two fields of one stored `AdpControls` and applying them separately is how one
+ * of the two writes reverts the other.
  */
 export const ROUNDS_SEGMENT = {
   label: "Drafts",

@@ -4,13 +4,11 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
   useCallback,
-  useEffect,
   useRef,
   useState,
 } from "react";
 
 import { DEFAULT_LEAGUE_FILTERS, type LeagueFilters } from "../../league-filters";
-import type { ExtraSegment } from "./league-filters-modal.types.ts";
 import { isBackdropPress } from "./league-filters-modal.utils.ts";
 
 /**
@@ -25,6 +23,13 @@ import { isBackdropPress } from "./league-filters-modal.utils.ts";
  * the row that had just vanished. Drawn as rails, nothing floats, so Escape is
  * the platform's again and all four are owed by nothing.
  *
+ * **It also used to carry a second draft, for the caller's fourth segment row**,
+ * and that left with the ADP board: the row is still seated in the panel's
+ * trough, but the host that owns it now draws the panel inline and writes the
+ * rules and the row into one stored object — see {@link ExtraSegment}, which is
+ * where the argument for why that must be one write lives. Nothing that opens
+ * the *dialog* has ever had one, so what is left here is the filters alone.
+ *
  * **The calls are unreachable without a document; the decisions behind them are
  * not**, which is the same line `use-adp-drawer-lifecycle` draws. `showModal`,
  * the focus move onto the panel and the `close` that three paths share all need
@@ -35,29 +40,10 @@ import { isBackdropPress } from "./league-filters-modal.utils.ts";
 export function useLeagueFiltersModal(
   filters: LeagueFilters,
   onChange: (filters: LeagueFilters) => void,
-  /** The caller's own fourth row, drafted alongside — see {@link ExtraSegment}. */
-  extra?: ExtraSegment,
 ) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(filters);
-
-  // The extra row's draft, held beside the filters' rather than inside them: it
-  // is not a `LeagueFilters` field and must not become one (see the type's own
-  // note), but it is committed on the same press, so it is seeded on the same
-  // open and reset by the same key.
-  const [extraDraft, setExtraDraft] = useState(extra?.value ?? "");
-
-  // Read through a ref so the three callbacks below can commit against whatever
-  // the caller last passed without re-creating on every render of a parent that
-  // rebuilds the object — the same reason `useAdpDrawerLifecycle` holds
-  // `onClose` in one, written the same way: an effect rather than an assignment
-  // during render, which the lint rule objects to and which would be read by a
-  // render that was thrown away.
-  const extraRef = useRef(extra);
-  useEffect(() => {
-    extraRef.current = extra;
-  }, [extra]);
 
   // Seeding on open rather than syncing the applied filters into the draft with
   // an effect: while the dialog is up it holds the focus and the page behind it
@@ -65,7 +51,6 @@ export function useLeagueFiltersModal(
   // two can disagree is the moment it opens.
   const open = useCallback(() => {
     setDraft(filters);
-    setExtraDraft(extraRef.current?.value ?? "");
     // **`showModal` on a dialog that is already open throws**, where `close` on
     // one already closed is a spec'd no-op — so this is the one of the pair that
     // needs asking first. A modal makes everything outside it inert, so the
@@ -92,17 +77,10 @@ export function useLeagueFiltersModal(
 
   const apply = useCallback(() => {
     onChange(draft);
-    // After `onChange`, so a caller writing both into one store lands on the
-    // filters' own update rather than on a stale copy of it.
-    const own = extraRef.current;
-    if (own && extraDraft !== own.value) own.onApply(extraDraft);
     dialogRef.current?.close();
-  }, [draft, extraDraft, onChange]);
+  }, [draft, onChange]);
 
-  const reset = useCallback(() => {
-    setDraft(DEFAULT_LEAGUE_FILTERS);
-    setExtraDraft(extraRef.current?.defaultValue ?? "");
-  }, []);
+  const reset = useCallback(() => setDraft(DEFAULT_LEAGUE_FILTERS), []);
 
   // Where a press outside the panel began. The backdrop is the dialog's own
   // pseudo-element, so such a press lands on the `<dialog>` box itself — but so
@@ -134,8 +112,6 @@ export function useLeagueFiltersModal(
     panelRef,
     draft,
     setDraft,
-    extraDraft,
-    setExtraDraft,
     open,
     close,
     apply,

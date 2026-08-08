@@ -23,9 +23,9 @@ import {
 import type { ManagerLeague } from "@/shared/manager";
 
 import { FilterRail } from "./filter-rail.tsx";
-import { FiltersDialogFooter } from "./filters-dialog-footer.tsx";
 import { FiltersDialogHeader } from "./filters-dialog-header.tsx";
 import { FiltersTrigger } from "./filters-trigger.tsx";
+import { LeagueFiltersFooter } from "./league-filters-footer.tsx";
 import { LeagueFiltersModal } from "./league-filters-modal.tsx";
 import { SLOT_PRESETS } from "./league-filters-modal.constants.ts";
 import { RuleBay } from "./rule-bay.tsx";
@@ -356,8 +356,19 @@ describe("what is on screen", () => {
 
   test("the footer states the count for the width the rail is stacked at", () => {
     const html = modal();
-    assert.match(html, /lg:hidden/);
+    // `@4xl`, which measures the panel rather than the viewport — the same
+    // container the grid splits on, so the width at which the rail steps beside
+    // the controls is the width at which this stops restating its count.
+    assert.match(html, /@4xl:hidden/);
     assert.match(html, /Every filter narrows — a league has to pass all of them\./);
+  });
+
+  test("every layout threshold in the panel measures a container, not the screen", () => {
+    // The panel is drawn at ~450px inside the ADP drawer's Leagues bay on a
+    // laptop, so a viewport breakpoint here is a two-column grid in a box less
+    // than half the width it was written for. What is asserted is the absence:
+    // one `lg:` or `md:` survivor is a layout that silently breaks in one host.
+    assert.doesNotMatch(modal(), /(?:^|["\s])(?:sm|md|lg|xl|2xl):/);
   });
 
   test("rows and options have unique keys — React would warn otherwise", () => {
@@ -827,7 +838,7 @@ describe("what the controls do", () => {
     let reset = 0;
     let applied = 0;
     const footer = elements(
-      FiltersDialogFooter({
+      LeagueFiltersFooter({
         matched: 3,
         total: 12,
         hintId: "hint",

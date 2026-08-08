@@ -1,15 +1,8 @@
 "use client";
 
-import { useId, useMemo } from "react";
+import { useId } from "react";
 
-import {
-  type LeagueFilters,
-  activeFilterCount,
-  matchesFilters,
-  scoringKeyOptions,
-  seasonOptions,
-  settingKeyOptions,
-} from "../../league-filters";
+import { type LeagueFilters, activeFilterCount } from "../../league-filters";
 import type { ManagerLeague } from "@/shared/manager";
 
 // The seat table and the placeholder that stands in for this key live in
@@ -18,18 +11,11 @@ import type { ManagerLeague } from "@/shared/manager";
 // into the static graph and split nothing. See that file's own note.
 import type { SeatName } from "../league-filters-seat";
 
-import type {
-  ExtraSegment,
-  LeagueFilterRow,
-} from "./league-filters-modal.types.ts";
+import type { LeagueFilterRow } from "./league-filters-modal.types.ts";
 
-import { FiltersDialogFooter } from "./filters-dialog-footer.tsx";
 import { FiltersDialogHeader } from "./filters-dialog-header.tsx";
 import { FiltersTrigger } from "./filters-trigger.tsx";
-import { MatchRail } from "./match-rail.tsx";
-import { RuleBays } from "./rule-bays.tsx";
-import { SeasonBand } from "./season-band.tsx";
-import { SegmentTrough } from "./segment-trough.tsx";
+import { LeagueFiltersPanel } from "./league-filters-panel.tsx";
 import { useLeagueFiltersModal } from "./use-league-filters-modal.ts";
 
 /**
@@ -43,36 +29,18 @@ import { useLeagueFiltersModal } from "./use-league-filters-modal.ts";
  * active filters, and the header names the selection in words beside the
  * numbers it scopes (`filterSummary`).
  *
- * **The panel is a bay layout with a readout rail.** The three fixed segments
- * are facts about a league and compress into one trough at the top; the two rule
- * lists — what a lineup starts, what a scoring page pays — sit side by side
- * underneath as equal bays. Stacked, as they were, the rules fell below a 60vh
- * scroll box and the feature read as missing: the segments alone filled the
- * panel, so a reader who wanted "superflex leagues that pay a TE bonus" had to
- * scroll past everything they *didn't* want to find the control that asks it.
- *
- * The rail on the right is the other half of that. The match count used to be a
- * line of footer text next to Apply; it is the number the whole dialog exists to
- * move, so it is a readout with a meter, the active selection as chips that
- * strike themselves out, and a note on what the survivors actually are. It is
- * beside the controls rather than under them because it changes while you edit
- * — a number you have to scroll to is a number you check once.
- *
  * A native `<dialog>` rather than a hand-rolled overlay: the focus trap, the
  * inert background, Esc-to-close and the backdrop are all the platform's, and
  * the two behaviours it doesn't give — closing on a backdrop *click*, and
  * discarding an unapplied edit — are `useLeagueFiltersModal`'s handlers.
  *
- * The selection is edited as a draft and committed on Apply, because the counts
- * beside every option and rule are only readable if the list behind the dialog
- * isn't moving while you read them.
- *
- * **This file is the composition root and nothing else.** It was one 994-line
- * module holding the trigger, the dialog's lifecycle, three kinds of control and
- * the readout — six audiences for one import, and the reason the panel's own
- * layout was hard to see. What is left here is the shell, the two derived
- * values every section reads, and the wiring; each section owns its own note on
- * why it is shaped the way it is.
+ * **This file is the trigger, the dialog and nothing else.** The controls it
+ * frames are {@link LeagueFiltersPanel}, which came out of here the moment the
+ * ADP drawer's Leagues bay wanted the same filters *without* a second modal over
+ * the board they narrow. What is left is the modality: opening, the way out, and
+ * the box those two live in. Every question about what the filters say — why the
+ * fixed rows are a trough, why the rules are lists, why the readout is beside the
+ * controls — is answered in that file and in the sections under it.
  */
 export function LeagueFiltersModal({
   filters,
@@ -81,7 +49,6 @@ export function LeagueFiltersModal({
   label = "Filters",
   seat = "free",
   omit,
-  extra,
 }: {
   filters: LeagueFilters;
   onChange: (filters: LeagueFilters) => void;
@@ -112,61 +79,31 @@ export function LeagueFiltersModal({
    * this from being a filter a reader cannot see or undo.
    */
   omit?: readonly LeagueFilterRow[];
-  /**
-   * A fourth segment row the caller owns — see {@link ExtraSegment}. The ADP
-   * board seats its draft-kind chip here so that board's filters are one dialog
-   * rather than a dialog and a chip beside it; nothing else passes one, and the
-   * count on the trigger deliberately doesn't include it (the caller counts its
-   * own).
-   */
-  extra?: ExtraSegment;
 }) {
   const {
     dialogRef,
     panelRef,
     draft,
     setDraft,
-    extraDraft,
-    setExtraDraft,
     open,
     close,
     apply,
     reset,
     onBackdropPointerDown,
     onBackdropClick,
-  } = useLeagueFiltersModal(filters, onChange, extra);
+  } = useLeagueFiltersModal(filters, onChange);
 
   /**
    * The dialog's own ids.
    *
    * Generated rather than written out, because **two of these are on the page at
    * once**: the manager Leagues tab renders one in the header plate's corner and
-   * the shares sheet opened from its rail renders a second in its title bar. With
-   * a literal id both dialogs pointed their `aria-labelledby` at whichever
-   * heading came first in the document.
+   * the shares sheet opened from its rail renders a second. With a literal id
+   * both dialogs pointed their `aria-labelledby` at whichever heading came first
+   * in the document.
    */
   const titleId = useId();
   const hintId = useId();
-
-  // The scoring vocabulary is whatever these leagues actually pay for, so it is
-  // derived from the list rather than listed — see `scoringKeyOptions`.
-  const scoringKeys = useMemo(() => scoringKeyOptions(leagues), [leagues]);
-
-  // The settings vocabulary likewise: `teams` is always offered because it is
-  // not in the blob at all, and everything else has to be stored by some league
-  // on screen.
-  const settingKeys = useMemo(() => settingKeyOptions(leagues), [leagues]);
-
-  // And the seasons, which is the one menu that also decides whether its own
-  // control is drawn at all — fewer than two is no choice to offer.
-  const seasons = useMemo(() => seasonOptions(leagues), [leagues]);
-
-  // The survivors, not just how many: the rail breaks them down, and the footer
-  // counts them. One walk, so the two can't report different totals.
-  const matched = useMemo(
-    () => leagues.filter((league) => matchesFilters(league, draft)),
-    [leagues, draft],
-  );
 
   return (
     <>
@@ -180,7 +117,7 @@ export function LeagueFiltersModal({
       <dialog
         ref={dialogRef}
         aria-labelledby={titleId}
-        // The rule the whole dialog encodes, stated on arrival — the same line
+        // The rule the whole panel encodes, stated on arrival — the same line
         // the footer draws where the rail isn't beside the controls.
         aria-describedby={hintId}
         // Both ends of the press, because only the pair says whether it was a
@@ -192,7 +129,13 @@ export function LeagueFiltersModal({
         <div
           ref={panelRef}
           tabIndex={-1}
-          className="filters-dialog-panel relative overflow-hidden outline-none rounded-2xl border border-active/20 bg-gradient-to-b from-[#14242f] to-[#0a1520] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),0_0_60px_-20px_rgba(0,255,229,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]"
+          // The height is bounded here rather than on the scroll box inside,
+          // which is what lets the panel own one `min-h-0` chain: header and
+          // footer take what they need and the controls between them scroll.
+          // Bounding the *box* rather than the box's contents is also the only
+          // spelling that can't overrun a short screen — the old `72vh` cap on
+          // the scroll box alone was 72vh **plus** a header and a footer.
+          className="filters-dialog-panel relative flex max-h-[min(88vh,44rem)] flex-col overflow-hidden outline-none rounded-2xl border border-active/20 bg-gradient-to-b from-[#14242f] to-[#0a1520] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95),0_0_60px_-20px_rgba(0,255,229,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]"
           style={{ animation: "dialog-rise 0.18s cubic-bezier(0.2,0.9,0.3,1)" }}
         >
           {/*
@@ -207,55 +150,11 @@ export function LeagueFiltersModal({
 
           <FiltersDialogHeader titleId={titleId} onClose={close} />
 
-          {/*
-            The controls scroll and the footer — where Apply is — stays put below
-            them. On a laptop nothing needs to scroll at all, which is the point
-            of the two-column bay; on a phone the whole grid collapses to one
-            column and this is what keeps Apply reachable.
-          */}
-          <div className="max-h-[min(72vh,36rem)] overflow-y-auto p-5">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_15rem]">
-              <div className="flex min-w-0 flex-col gap-3">
-                {!omit?.includes("season") && (
-                  <SeasonBand
-                    draft={draft}
-                    onChange={setDraft}
-                    leagues={leagues}
-                    seasons={seasons}
-                  />
-                )}
-
-                <SegmentTrough
-                  draft={draft}
-                  onChange={setDraft}
-                  leagues={leagues}
-                  omit={omit}
-                  extra={extra}
-                  extraDraft={extraDraft}
-                  onExtraChange={setExtraDraft}
-                />
-
-                <RuleBays
-                  draft={draft}
-                  onChange={setDraft}
-                  leagues={leagues}
-                  scoringKeys={scoringKeys}
-                  settingKeys={settingKeys}
-                />
-              </div>
-
-              <MatchRail
-                matched={matched}
-                total={leagues.length}
-                filters={draft}
-                onChange={setDraft}
-              />
-            </div>
-          </div>
-
-          <FiltersDialogFooter
-            matched={matched.length}
-            total={leagues.length}
+          <LeagueFiltersPanel
+            draft={draft}
+            onChange={setDraft}
+            leagues={leagues}
+            omit={omit}
             hintId={hintId}
             onReset={reset}
             onApply={apply}
