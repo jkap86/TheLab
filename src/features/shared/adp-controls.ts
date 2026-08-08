@@ -14,7 +14,7 @@ import {
   shiftMonths,
   todayIso,
 } from "./date-range.ts";
-import { DEFAULT_LEAGUE_FILTERS } from "./league-filters/defaults.ts";
+import { DEFAULT_LEAGUE_FILTERS, TEAMS_KEY } from "./league-filters/defaults.ts";
 import {
   deriveScoring,
   leagueAdpBoard,
@@ -394,8 +394,8 @@ export function previewAdpPool(rules: LeagueFilters): number {
  * is priced on that league's real slots, and this one is a preview.
  */
 export function previewDraftTeams(rules: LeagueFilters): number {
-  const exact = rules.size.find(
-    (rule) => rule.key === "teams" && rule.op === "eq",
+  const exact = rules.settings.find(
+    (rule) => rule.key === TEAMS_KEY && rule.op === "eq",
   );
   const count = exact?.value ?? TYPICAL_DRAFT_TEAMS;
   return Number.isInteger(count) && count > 0 ? count : TYPICAL_DRAFT_TEAMS;
@@ -714,7 +714,7 @@ export function seedFromLeague(
     leagueRules: {
       ...controls.leagueRules,
       bestBall: settings.best_ball === 1 ? "yes" : "no",
-      size: [{ key: "teams", op: "eq", value: league.total_rosters }],
+      settings: [{ key: TEAMS_KEY, op: "eq", value: league.total_rosters }],
       slots:
         qbSlots === null
           ? []

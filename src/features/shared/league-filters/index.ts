@@ -28,30 +28,43 @@
  * resolve under Node's test runner.
  */
 export {
+  ALL,
   BEST_BALL_OPTIONS,
   COMMON_SCORING_KEYS,
   COMPARE_OPS,
   DEFAULT_LEAGUE_FILTERS,
-  SIZE_KEYS,
+  NO_TRADE_DEADLINE,
+  SETTING_KEYS,
+  SETTING_KEY_BY_KEY,
   SLOT_GROUPS,
   STATUS_OPTIONS,
+  TEAMS_KEY,
   TYPE_OPTIONS,
-  sizeKeyLabel,
+  settingKeyLabel,
+  settingSentinel,
+  settingValueOptions,
   slotGroupLabel,
 } from "./defaults.ts";
 export { leagueBreakdown } from "./breakdown.ts";
-export { scoringKeyLabel, scoringKeyOptions } from "./options.ts";
+export {
+  scoringKeyLabel,
+  scoringKeyOptions,
+  seasonOptions,
+  settingKeyOptions,
+} from "./options.ts";
 export {
   compare,
   deriveScoring,
+  isSentinelRule,
   leagueAdpBoard,
   leagueType,
   matchesFilters,
   matchesScoringRule,
-  matchesSizeRule,
+  matchesSettingRule,
   matchesSlotRule,
   scoringValue,
-  sizeValue,
+  settingIsSentinel,
+  settingValue,
   slotCount,
 } from "./predicates.ts";
 export {
@@ -67,5 +80,7 @@ export type {
   FilterRule,
   LeagueBreakdownRow,
   LeagueFilters,
+  SettingKey,
+  SettingValue,
   SlotGroup,
 } from "./types.ts";

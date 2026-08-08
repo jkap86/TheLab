@@ -95,7 +95,7 @@ describe("the control writes", () => {
   test("a board toggle narrows nothing else", () => {
     const rules = {
       ...controls.leagueRules,
-      size: [{ key: "teams", op: "eq" as const, value: 12 }],
+      settings: [{ key: "teams", op: "eq" as const, value: 12 }],
     };
     const next = withBoardToggle({ ...controls, leagueRules: rules }, "redraft");
     assert.deepEqual(next.leagueRules, rules);
@@ -137,7 +137,7 @@ describe("the board's own wording", () => {
     // The premise is the pool an exact size *rule* implies, not a constant.
     const sized = (teams: number) => ({
       ...controls.leagueRules,
-      size: [{ key: "teams", op: "eq" as const, value: teams }],
+      settings: [{ key: "teams", op: "eq" as const, value: teams }],
     });
     assert.notEqual(valueTitle(sized(10)), valueTitle(sized(12)));
     // A bound is a range of pools rather than one, so it falls back rather than
@@ -145,7 +145,7 @@ describe("the board's own wording", () => {
     assert.equal(
       valueTitle({
         ...controls.leagueRules,
-        size: [{ key: "teams", op: "gte", value: 14 }],
+        settings: [{ key: "teams", op: "gte", value: 14 }],
       }),
       valueTitle(controls.leagueRules),
     );

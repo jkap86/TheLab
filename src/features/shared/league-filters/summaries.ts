@@ -1,10 +1,12 @@
 import {
   COMPARE_OPS,
   FIXED_FILTERS,
-  sizeKeyLabel,
+  SETTING_KEY_BY_KEY,
+  settingKeyLabel,
   slotGroupLabel,
 } from "./defaults.ts";
 import { scoringKeyLabel } from "./options.ts";
+import { isSentinelRule } from "./predicates.ts";
 import type { ActiveFilter, FilterRule, LeagueFilters } from "./types.ts";
 
 /**
@@ -36,6 +38,28 @@ function ruleText(rule: FilterRule, label: (key: string) => string): string {
 }
 
 /**
+ * A settings rule in words, which is the one family where the *number* may have
+ * a name: `trade deadline is no deadline`, `trades is disabled`, `teams ≥ 12`.
+ *
+ * The chip in the readout rail is the only place outside the dialog that says
+ * what a settings rule narrowed to, so it has to be the sentence the row shows
+ * rather than the pair of digits underneath it — "trade deadline = 99" is a
+ * filter a reader cannot check, and it is the same rule the row renders as a
+ * menu. Both read the one table, so neither can name it differently.
+ */
+function settingRuleText(rule: FilterRule): string {
+  const spec = SETTING_KEY_BY_KEY.get(rule.key);
+  const named =
+    (isSentinelRule(rule) ? spec?.sentinel : undefined) ??
+    spec?.values?.find((option) => option.value === rule.value);
+  if (named && (rule.op === "eq" || rule.op === "ne")) {
+    const verb = rule.op === "eq" ? "is" : "is not";
+    return `${settingKeyLabel(rule.key)} ${verb} ${named.label}`;
+  }
+  return ruleText(rule, settingKeyLabel);
+}
+
+/**
  * Every filter narrowing the list, fixed ones first, in the dialog's order.
  *
  * `label` is already lower case, because the summary reads mid-sentence
@@ -44,6 +68,15 @@ function ruleText(rule: FilterRule, label: (key: string) => string): string {
  * the reason the rows do: a list of six is scanned, not read.
  */
 export function activeFilters(filters: LeagueFilters): ActiveFilter[] {
+  // The season is a fixed filter that is not in `FIXED_FILTERS`, because its
+  // options are whatever the leagues in hand carry rather than a table this
+  // build can enumerate — and it needs no table anyway, since a season's label
+  // *is* its value. It leads for the reason the band leads the panel: it is the
+  // population the rest of the list narrows within.
+  const season: ActiveFilter[] =
+    filters.season === "all"
+      ? []
+      : [{ kind: "fixed", field: "season", label: filters.season }];
   const fixed = FIXED_FILTERS.flatMap(({ key, options }): ActiveFilter[] => {
     const value = filters[key];
     if (value === "all") return [];
@@ -66,14 +99,14 @@ export function activeFilters(filters: LeagueFilters): ActiveFilter[] {
       label: ruleText(rule, scoringKeyLabel).toLowerCase(),
     }),
   );
-  const size = filters.size.map(
+  const settings = filters.settings.map(
     (rule, index): ActiveFilter => ({
-      kind: "size",
+      kind: "setting",
       index,
-      label: ruleText(rule, sizeKeyLabel).toLowerCase(),
+      label: settingRuleText(rule).toLowerCase(),
     }),
   );
-  return [...fixed, ...size, ...slots, ...scoring];
+  return [...season, ...fixed, ...settings, ...slots, ...scoring];
 }
 
 /**
@@ -100,13 +133,15 @@ export function clearFilter(
       scoring: filters.scoring.filter((_, i) => i !== active.index),
     };
   }
-  if (active.kind === "size") {
+  if (active.kind === "setting") {
     return {
       ...filters,
-      size: filters.size.filter((_, i) => i !== active.index),
+      settings: filters.settings.filter((_, i) => i !== active.index),
     };
   }
   switch (active.field) {
+    case "season":
+      return { ...filters, season: "all" };
     case "type":
       return { ...filters, type: "all" };
     case "bestBall":
@@ -129,7 +164,9 @@ export function clearFilter(
  * would allocate are never looked at.
  */
 export function activeFilterCount(filters: LeagueFilters): number {
-  let count = filters.slots.length + filters.scoring.length + filters.size.length;
+  let count =
+    filters.slots.length + filters.scoring.length + filters.settings.length;
+  if (filters.season !== "all") count += 1;
   for (const { key } of FIXED_FILTERS) if (filters[key] !== "all") count += 1;
   return count;
 }

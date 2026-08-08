@@ -2,11 +2,7 @@
 
 import {
   type MouseEvent,
-  // Aliased, because the document listener further down takes the *DOM*
-  // `PointerEvent` and React's synthetic one would shadow it — two types with
-  // one name, where the compiler's complaint names neither.
   type PointerEvent as ReactPointerEvent,
-  type SyntheticEvent,
   useCallback,
   useEffect,
   useRef,
@@ -14,32 +10,27 @@ import {
 } from "react";
 
 import { DEFAULT_LEAGUE_FILTERS, type LeagueFilters } from "../../league-filters";
-import type { ExtraSegment, SegmentKey } from "./league-filters-modal.types.ts";
-import {
-  escapeTarget,
-  isBackdropPress,
-  nextOpenGroup,
-} from "./league-filters-modal.utils.ts";
+import type { ExtraSegment } from "./league-filters-modal.types.ts";
+import { isBackdropPress } from "./league-filters-modal.utils.ts";
 
 /**
- * Everything the dialog *is* over time: the draft being edited, which segment
- * row is floating, and the four gestures the platform doesn't wire up for you.
+ * Everything the dialog *is* over time: the draft being edited, and the two
+ * gestures the platform doesn't wire up for you.
  *
- * It is one hook rather than state in the composition root because the pieces
- * are not independent — Escape has to close the innermost thing that is up, so
- * the key handler has to know whether a row is open, and opening the dialog has
- * to reseed the draft *and* drop any row left floating from last time. Split
- * across the sections that render them, those two facts would be read in three
- * places and written in one.
+ * **It used to owe four more, and they left with the segment popovers.** While
+ * the fixed filters were collapsed rows whose options floated over the panel,
+ * this hook held which row was open, dismissed it on a press outside the trough,
+ * and preventDefaulted the dialog's own `cancel` so Escape closed the innermost
+ * thing that was up rather than taking both at once — plus a focus return for
+ * the row that had just vanished. Drawn as rails, nothing floats, so Escape is
+ * the platform's again and all four are owed by nothing.
  *
  * **The calls are unreachable without a document; the decisions behind them are
  * not**, which is the same line `use-adp-drawer-lifecycle` draws. `showModal`,
- * the focus move onto the panel and the `close` that four paths share all need a
- * real dialog element and are covered by the manual checklist. What each of them
- * is *conditioned on* — which row a press toggles to, whether Escape means the
- * row or the dialog, and whether a completed press was on the backdrop — is in
- * `league-filters-modal.utils` and tested there, because those are the parts
- * that can be wrong while the DOM calls stay right.
+ * the focus move onto the panel and the `close` that three paths share all need
+ * a real dialog element and are covered by the manual checklist. What is left to
+ * be wrong independently of the DOM — whether a completed press was on the
+ * backdrop — is in `league-filters-modal.utils` and tested there.
  */
 export function useLeagueFiltersModal(
   filters: LeagueFilters,
@@ -49,7 +40,6 @@ export function useLeagueFiltersModal(
 ) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const troughRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(filters);
 
   // The extra row's draft, held beside the filters' rather than inside them: it
@@ -69,20 +59,6 @@ export function useLeagueFiltersModal(
     extraRef.current = extra;
   }, [extra]);
 
-  /**
-   * Which segment row has its options open, if any — one at a time.
-   *
-   * The options float over the panel rather than expanding into it: pushing the
-   * rule bays down as a row opens is what made them hard to find in the first
-   * place, so a row that opens must not move the thing underneath it.
-   */
-  const [openGroup, setOpenGroup] = useState<SegmentKey | null>(null);
-  const closeGroup = useCallback(() => setOpenGroup(null), []);
-  const toggleGroup = useCallback(
-    (key: SegmentKey) => setOpenGroup((current) => nextOpenGroup(current, key)),
-    [],
-  );
-
   // Seeding on open rather than syncing the applied filters into the draft with
   // an effect: while the dialog is up it holds the focus and the page behind it
   // is inert, so nothing can move the selection under it — the only moment the
@@ -90,7 +66,6 @@ export function useLeagueFiltersModal(
   const open = useCallback(() => {
     setDraft(filters);
     setExtraDraft(extraRef.current?.value ?? "");
-    setOpenGroup(null);
     // **`showModal` on a dialog that is already open throws**, where `close` on
     // one already closed is a spec'd no-op — so this is the one of the pair that
     // needs asking first. A modal makes everything outside it inert, so the
@@ -114,20 +89,6 @@ export function useLeagueFiltersModal(
   // `close` on a dialog with no `open` attribute returns without doing anything,
   // so the asymmetry is the platform's rather than an oversight.
   const close = useCallback(() => dialogRef.current?.close(), []);
-
-  // A press anywhere outside the trough dismisses an open row. Pointer-down
-  // rather than click, so dragging out of the popover doesn't leave it up. The
-  // listener is on the document because that is where a press on the dialog's
-  // own backdrop is heard; the page *behind* is inert while a modal is up, so
-  // the wide target costs nothing — there is nothing back there to hear.
-  useEffect(() => {
-    if (!openGroup) return;
-    const dismiss = (event: PointerEvent) => {
-      if (!troughRef.current?.contains(event.target as Node)) setOpenGroup(null);
-    };
-    document.addEventListener("pointerdown", dismiss);
-    return () => document.removeEventListener("pointerdown", dismiss);
-  }, [openGroup]);
 
   const apply = useCallback(() => {
     onChange(draft);
@@ -168,37 +129,18 @@ export function useLeagueFiltersModal(
       dialogRef.current?.close();
   }, []);
 
-  // Escape closes the innermost thing that is up: an open segment row first, the
-  // dialog only once nothing is floating over it. The platform fires `cancel`
-  // before it closes, which is the one hook for that — and `cancel` is not
-  // delegated by React, so the listener is on the element itself and this
-  // `preventDefault` is the real one.
-  const onCancel = useCallback(
-    (event: SyntheticEvent<HTMLDialogElement>) => {
-      if (escapeTarget(openGroup) === "dialog") return;
-      event.preventDefault();
-      setOpenGroup(null);
-    },
-    [openGroup],
-  );
-
   return {
     dialogRef,
     panelRef,
-    troughRef,
     draft,
     setDraft,
     extraDraft,
     setExtraDraft,
-    openGroup,
-    toggleGroup,
-    closeGroup,
     open,
     close,
     apply,
     reset,
     onBackdropPointerDown,
     onBackdropClick,
-    onCancel,
   };
 }

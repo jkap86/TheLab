@@ -1,5 +1,5 @@
 import type { ActiveFilter, FilterRule } from "../../league-filters";
-import type { RuleKeyOption, SegmentKey } from "./league-filters-modal.types.ts";
+import type { RuleKeyOption } from "./league-filters-modal.types.ts";
 
 /**
  * The decisions the dialog's markup used to make inline.
@@ -100,32 +100,6 @@ export function unlistedKey(
 }
 
 /**
- * What a collapsed segment row states about itself: which option is picked, and
- * whether picking it narrowed anything.
- *
- * The unnarrowed option is the first in every one of these tables, and it is the
- * default the reset returns to — so "is this row narrowing anything" is the same
- * question as "is this not the first option". A value off the table falls back
- * to the *first option's label* while still reading as narrowed, which is the
- * honest pair: the row can't name a value it has no label for, and must not
- * claim the list is unnarrowed when it isn't.
- */
-export function selectedSegment<T extends string>(
-  options: readonly { value: T; label: string }[],
-  value: T,
-): { index: number; selected: { value: T; label: string } | undefined; narrowed: boolean } {
-  const index = Math.max(
-    0,
-    options.findIndex((option) => option.value === value),
-  );
-  return {
-    index,
-    selected: options[index],
-    narrowed: value !== options[0]?.value,
-  };
-}
-
-/**
  * The matched count as a share of the account it came out of, for the rail's
  * meter and its percentage.
  *
@@ -154,36 +128,6 @@ export function parseRuleValue(raw: string): number | null {
   if (raw.trim() === "") return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-/**
- * Which segment row is open after pressing `key` — one at a time, and pressing
- * the open one closes it.
- *
- * It is the rule behind every row's `aria-expanded`, which is why it is a
- * function rather than a ternary inside the state setter: two rows reporting
- * themselves expanded is a claim the markup can make and no type can catch.
- */
-export function nextOpenGroup(
-  current: SegmentKey | null,
-  key: SegmentKey,
-): SegmentKey | null {
-  return current === key ? null : key;
-}
-
-/**
- * What Escape means, given whether a segment row is floating over the panel.
- *
- * **Escape closes the innermost thing that is up** — the drawer's rule one
- * folder over, and the reason the dialog's own `cancel` is preventDefaulted
- * rather than left to the platform: a row's options float *over* the panel, so
- * one keypress taking both is one press too many. The dialog is the answer only
- * once nothing is floating.
- */
-export type EscapeTarget = "group" | "dialog";
-
-export function escapeTarget(openGroup: SegmentKey | null): EscapeTarget {
-  return openGroup === null ? "dialog" : "group";
 }
 
 /**

@@ -7,6 +7,8 @@ import {
   activeFilterCount,
   matchesFilters,
   scoringKeyOptions,
+  seasonOptions,
+  settingKeyOptions,
 } from "../../league-filters";
 import type { ManagerLeague } from "@/shared/manager";
 
@@ -16,13 +18,17 @@ import type { ManagerLeague } from "@/shared/manager";
 // into the static graph and split nothing. See that file's own note.
 import type { SeatName } from "../league-filters-seat";
 
-import type { ExtraSegment } from "./league-filters-modal.types.ts";
+import type {
+  ExtraSegment,
+  LeagueFilterRow,
+} from "./league-filters-modal.types.ts";
 
 import { FiltersDialogFooter } from "./filters-dialog-footer.tsx";
 import { FiltersDialogHeader } from "./filters-dialog-header.tsx";
 import { FiltersTrigger } from "./filters-trigger.tsx";
 import { MatchRail } from "./match-rail.tsx";
 import { RuleBays } from "./rule-bays.tsx";
+import { SeasonBand } from "./season-band.tsx";
 import { SegmentTrough } from "./segment-trough.tsx";
 import { useLeagueFiltersModal } from "./use-league-filters-modal.ts";
 
@@ -74,7 +80,7 @@ export function LeagueFiltersModal({
   leagues,
   label = "Filters",
   seat = "free",
-  omitType = false,
+  omit,
   extra,
 }: {
   filters: LeagueFilters;
@@ -96,24 +102,16 @@ export function LeagueFiltersModal({
    */
   seat?: SeatName;
   /**
-   * Drop the **Type** row from the trough.
+   * Rows the caller already answers with a control of its own — see
+   * {@link LeagueFilterRow}, which is where the argument for each of them is.
    *
-   * One caller does, and for the reason the ADP board has no `league_type`
-   * parameter at all: every fetch answers the redraft and dynasty markets side
-   * by side and the board's own two keys choose which is drawn, so the type is
-   * already a *display* question there. Narrowing the population on the same
-   * axis is the two-answers-to-one-question this app keeps having to close — a
-   * board cut to dynasty leagues with the redraft column showing is an empty
-   * column, and neither control says which one is winning.
-   *
-   * It is a row and not a field, so nothing about `LeagueFilters` changes: the
-   * ADP controls open on `DEFAULT_LEAGUE_FILTERS` and `seedFromLeague`
-   * deliberately writes the league's type as `boards` rather than as a rule, so
-   * `type` is `"all"` on that board with the row gone. The match rail still
-   * names and clears a type it somehow arrived with, which is what keeps this
-   * from being a filter a reader cannot see or undo.
+   * It was `omitType`, a boolean, until the ADP board's season row made it two
+   * of the same thing. Nothing about `LeagueFilters` changes either way: a row
+   * is dropped, not a field, so the other callers keep both and the match rail
+   * still names and clears a value that somehow arrived — which is what keeps
+   * this from being a filter a reader cannot see or undo.
    */
-  omitType?: boolean;
+  omit?: readonly LeagueFilterRow[];
   /**
    * A fourth segment row the caller owns — see {@link ExtraSegment}. The ADP
    * board seats its draft-kind chip here so that board's filters are one dialog
@@ -126,21 +124,16 @@ export function LeagueFiltersModal({
   const {
     dialogRef,
     panelRef,
-    troughRef,
     draft,
     setDraft,
     extraDraft,
     setExtraDraft,
-    openGroup,
-    toggleGroup,
-    closeGroup,
     open,
     close,
     apply,
     reset,
     onBackdropPointerDown,
     onBackdropClick,
-    onCancel,
   } = useLeagueFiltersModal(filters, onChange, extra);
 
   /**
@@ -158,6 +151,15 @@ export function LeagueFiltersModal({
   // The scoring vocabulary is whatever these leagues actually pay for, so it is
   // derived from the list rather than listed — see `scoringKeyOptions`.
   const scoringKeys = useMemo(() => scoringKeyOptions(leagues), [leagues]);
+
+  // The settings vocabulary likewise: `teams` is always offered because it is
+  // not in the blob at all, and everything else has to be stored by some league
+  // on screen.
+  const settingKeys = useMemo(() => settingKeyOptions(leagues), [leagues]);
+
+  // And the seasons, which is the one menu that also decides whether its own
+  // control is drawn at all — fewer than two is no choice to offer.
+  const seasons = useMemo(() => seasonOptions(leagues), [leagues]);
 
   // The survivors, not just how many: the rail breaks them down, and the footer
   // counts them. One walk, so the two can't report different totals.
@@ -185,7 +187,6 @@ export function LeagueFiltersModal({
         // press on the backdrop — see `isBackdropPress`.
         onPointerDown={onBackdropPointerDown}
         onClick={onBackdropClick}
-        onCancel={onCancel}
         className="m-auto w-[min(1040px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
       >
         <div
@@ -214,16 +215,21 @@ export function LeagueFiltersModal({
           */}
           <div className="max-h-[min(72vh,36rem)] overflow-y-auto p-5">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_15rem]">
-              <div className="flex min-w-0 flex-col gap-4">
+              <div className="flex min-w-0 flex-col gap-3">
+                {!omit?.includes("season") && (
+                  <SeasonBand
+                    draft={draft}
+                    onChange={setDraft}
+                    leagues={leagues}
+                    seasons={seasons}
+                  />
+                )}
+
                 <SegmentTrough
-                  troughRef={troughRef}
                   draft={draft}
                   onChange={setDraft}
                   leagues={leagues}
-                  openGroup={openGroup}
-                  onToggle={toggleGroup}
-                  onClose={closeGroup}
-                  omitType={omitType}
+                  omit={omit}
                   extra={extra}
                   extraDraft={extraDraft}
                   onExtraChange={setExtraDraft}
@@ -234,6 +240,7 @@ export function LeagueFiltersModal({
                   onChange={setDraft}
                   leagues={leagues}
                   scoringKeys={scoringKeys}
+                  settingKeys={settingKeys}
                 />
               </div>
 

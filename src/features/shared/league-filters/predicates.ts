@@ -1,6 +1,11 @@
 import type { AdpBoardType, ManagerLeague } from "@/shared/manager";
 
-import { LIVE_STATUSES, SIZE_KEY_BY_KEY, SLOT_GROUP_BY_KEY } from "./defaults.ts";
+import {
+  LIVE_STATUSES,
+  SETTING_KEY_BY_KEY,
+  SLOT_GROUP_BY_KEY,
+  TEAMS_KEY,
+} from "./defaults.ts";
 import type { CompareOp, FilterRule, LeagueFilters } from "./types.ts";
 
 /**
@@ -85,22 +90,71 @@ export function scoringValue(
 }
 
 /**
- * How big a league is on one size key, or null when it can't be known.
+ * A league's stored number for a settings key, exactly as it is stored — the
+ * sentinel included — or null when nothing is.
  *
- * Null for a key this build doesn't have a reader for, on the terms the other
- * two follow: a rule naming something we cannot evaluate *fails* rather than
- * passing on an assumed number, so a stored rule from a later build narrows to
- * nothing here rather than quietly narrowing to everything.
- *
- * Zero is also unknown rather than a real size. Sleeper always reports
- * `total_rosters` for a live league, so a 0 is a row this app stored before the
- * league answered — and `teams < 10` sweeping in every such league is exactly
- * the `k = 0` trap `slotCount` keeps null for.
+ * Two keys' worth of quirk live here and nowhere else. `teams` is not in the
+ * blob at all: it reads `total_rosters` off the league row, where a **0 is
+ * unknown rather than a real size**, since Sleeper always reports it for a live
+ * league and a 0 is a row this app stored before the league answered —
+ * `teams < 10` sweeping in every such league is exactly the `k = 0` trap
+ * `slotCount` keeps null for. And an **absent key is read per key**: Sleeper
+ * omits what a league doesn't set, so a count or a flag is a real 0 (the rule
+ * `scoringValue` follows) while a week has no zero on its scale and is unknown.
  */
-export function sizeValue(league: ManagerLeague, key: string): number | null {
-  if (!SIZE_KEY_BY_KEY.has(key)) return null;
-  const teams = league.total_rosters;
-  return typeof teams === "number" && teams > 0 ? teams : null;
+function storedSetting(league: ManagerLeague, key: string): number | null {
+  if (key === TEAMS_KEY) {
+    const teams = league.total_rosters;
+    return typeof teams === "number" && teams > 0 ? teams : null;
+  }
+  const settings = league.settings;
+  if (!settings) return null;
+  const raw = settings[key];
+  if (typeof raw === "number") return raw;
+  return SETTING_KEY_BY_KEY.get(key)?.absent === "unknown" ? null : 0;
+}
+
+/**
+ * Whether this league's value for `key` is that key's sentinel, or null when it
+ * can't be known — and null for a key that has no sentinel at all, since "is it
+ * the sentinel" is not a question that key answers.
+ *
+ * Its own function because two callers must agree: {@link matchesSettingRule}
+ * decides a sentinel rule with it, and the dialog's row renders the sentinel by
+ * name off the same table.
+ */
+export function settingIsSentinel(
+  league: ManagerLeague,
+  key: string,
+): boolean | null {
+  const sentinel = SETTING_KEY_BY_KEY.get(key)?.sentinel;
+  if (!sentinel) return null;
+  const stored = storedSetting(league, key);
+  return stored === null ? null : stored === sentinel.value;
+}
+
+/**
+ * A league's *comparable* number for a settings key, or null when there isn't
+ * one — nothing stored, or a value that is a name rather than a place on the
+ * scale.
+ *
+ * **The sentinel reads as null, and that is the whole of the fix.** Sleeper
+ * spells "no trade deadline" as `trade_deadline: 99`; read as a week, one of
+ * the two obvious rules is right by luck and the other is silently wrong —
+ * `99 ≤ 12` is false so "an early deadline" works, while `99 ≥ 13` is true so
+ * "leagues that trade late" answers with every league that never stops trading.
+ * A filter returning the wrong rows rather than an error. Null for comparison
+ * costs the sentinel nothing, because {@link matchesSettingRule} reaches it by
+ * name instead.
+ */
+export function settingValue(
+  league: ManagerLeague,
+  key: string,
+): number | null {
+  const stored = storedSetting(league, key);
+  if (stored === null) return null;
+  const sentinel = SETTING_KEY_BY_KEY.get(key)?.sentinel;
+  return sentinel && stored === sentinel.value ? null : stored;
 }
 
 /** Whether a league's lineup satisfies one slot rule. */
@@ -121,12 +175,40 @@ export function matchesScoringRule(
   return value !== null && compare(value, rule.op, rule.value);
 }
 
-/** Whether a league's size satisfies one size rule. */
-export function matchesSizeRule(
+/**
+ * Whether a rule is addressing a key's sentinel by name rather than comparing
+ * against the scale — "trade deadline **is** no deadline".
+ *
+ * Only `=` and `≠` can mean that: the sentinel is not a place on the scale, so
+ * `trade_deadline ≥ 99` is a comparison a reader could type and would have no
+ * reading. Exported because the dialog's row draws itself from the same answer —
+ * a menu and an is / is not, rather than a number field — and a row that
+ * disagreed with the predicate about which of the two a rule was would be the
+ * usual two spellings of one question.
+ */
+export function isSentinelRule(rule: FilterRule): boolean {
+  const sentinel = SETTING_KEY_BY_KEY.get(rule.key)?.sentinel;
+  return (
+    sentinel !== undefined &&
+    rule.value === sentinel.value &&
+    (rule.op === "eq" || rule.op === "ne")
+  );
+}
+
+/** Whether a league's configuration satisfies one settings rule. */
+export function matchesSettingRule(
   league: ManagerLeague,
   rule: FilterRule,
 ): boolean {
-  const value = sizeValue(league, rule.key);
+  if (isSentinelRule(rule)) {
+    // Matched by identity, never through `compare` — and an unknown still fails,
+    // on the terms every other rule here fails one: a league whose settings were
+    // never synced is not evidence either way.
+    const isSentinel = settingIsSentinel(league, rule.key);
+    if (isSentinel === null) return false;
+    return rule.op === "eq" ? isSentinel : !isSentinel;
+  }
+  const value = settingValue(league, rule.key);
   return value !== null && compare(value, rule.op, rule.value);
 }
 
@@ -228,6 +310,9 @@ export function matchesFilters(
   league: ManagerLeague,
   filters: LeagueFilters,
 ): boolean {
+  // First because it is the cheapest read here — a string compare against a
+  // column — and because it is the population the rest are narrowing *within*.
+  if (filters.season !== "all" && league.season !== filters.season) return false;
   if (filters.type !== "all") {
     if (leagueType(league) !== Number(filters.type)) return false;
   }
@@ -246,13 +331,13 @@ export function matchesFilters(
   // An OR would need a rule to say which group it joins, and "dynasty leagues
   // that start two QBs" is the question people actually arrive with.
   //
-  // Size leads the two blob rules for the reason the fixed filters lead all
-  // three: it is a bare field read, where the others walk `roster_positions` and
-  // `scoring_settings`. Over a whole season's leagues — which is what the trades
-  // board and the ADP board both run this over — a league rejected on its size
-  // never touches its lineup.
-  for (const rule of filters.size) {
-    if (!matchesSizeRule(league, rule)) return false;
+  // Settings lead the two blob-walking rules for the reason the fixed filters
+  // lead all three: a settings rule is one property read, where the others walk
+  // `roster_positions` and `scoring_settings`. Over a whole season's leagues —
+  // which is what the trades board and the ADP board both run this over — a
+  // league rejected on its size never touches its lineup.
+  for (const rule of filters.settings) {
+    if (!matchesSettingRule(league, rule)) return false;
   }
   for (const rule of filters.slots) {
     if (!matchesSlotRule(league, rule)) return false;

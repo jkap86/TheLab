@@ -5,7 +5,13 @@ import {
   SLOT_POSITIONS,
 } from "../../../shared/projections/slots.ts";
 
-import type { CompareOp, LeagueFilters, SlotGroup } from "./types.ts";
+import type {
+  CompareOp,
+  LeagueFilters,
+  SettingKey,
+  SettingValue,
+  SlotGroup,
+} from "./types.ts";
 
 /**
  * The tables a reader picks from: the neutral selection, the fixed filters'
@@ -23,13 +29,17 @@ import type { CompareOp, LeagueFilters, SlotGroup } from "./types.ts";
  * resolve the `@/*` aliases — and neither drags `pg` into the bundle.
  */
 
+/** The neutral value every fixed filter opens on and resets to. */
+export const ALL = "all";
+
 export const DEFAULT_LEAGUE_FILTERS: LeagueFilters = {
-  type: "all",
-  bestBall: "all",
-  status: "all",
+  season: ALL,
+  type: ALL,
+  bestBall: ALL,
+  status: ALL,
   slots: [],
   scoring: [],
-  size: [],
+  settings: [],
 };
 
 /**
@@ -192,25 +202,195 @@ export function slotGroupLabel(key: string): string {
 }
 
 /**
- * What a size rule can count. One key today — how many rosters the league holds
- * — and a table rather than that one string spelled at the four places that
- * need it (the menu, the label, the reader, the tests).
+ * The one settings key that is not in Sleeper's `settings` blob: how many
+ * rosters the league holds, which is `total_rosters` on the league row.
  *
- * It is a *rule* family rather than a segment of fixed sizes, which is what the
- * ADP board's own `All sizes / 10 / 12 / …` chip was: a chip can only ask for an
- * exact count, where "at least ten teams" is the question a reader arrives with
- * as often. The reader itself is in `./predicates` beside the other two, since
- * that is where every read of a league lives.
+ * Named rather than spelled at the three places that read it (the reader, the
+ * seed, the preview pool), and exported because `adp-controls` writes a rule on
+ * it when it seeds a board from a league.
  */
-export const SIZE_KEYS: { key: string; label: string; hint: string }[] = [
-  { key: "teams", label: "Teams", hint: "rosters in the league" },
+export const TEAMS_KEY = "teams";
+
+/**
+ * What Sleeper stores for a league that never stops trading.
+ *
+ * A sentinel and not a week — see {@link SettingKey.sentinel} for why that
+ * distinction has to be carried rather than left as a number.
+ */
+export const NO_TRADE_DEADLINE = 99;
+
+/**
+ * The two settings keys the bay must not offer, because the dialog already asks
+ * about them four inches higher.
+ *
+ * `settings.type` is the Type rail and `settings.best_ball` is the Format rail.
+ * A rule on either would be a second control over one axis, and the two
+ * disagreeing reads as a bug rather than a selection: `type = 2` as a rule with
+ * Redraft lit on the rail is an empty list with nothing on screen saying which
+ * of them emptied it. The same argument `omit` makes for a whole row, at the
+ * grain of one key.
+ */
+export const NON_SETTING_KEYS: ReadonlySet<string> = new Set([
+  "type",
+  "best_ball",
+]);
+
+/**
+ * The settings keys the menu ranks and names, and what their numbers mean.
+ *
+ * **A ranking and a vocabulary, not a whitelist.** `settingKeyOptions` builds
+ * the menu from the keys the leagues in hand actually carry, so a key absent
+ * from this table is still offered — spelled with its underscores opened out and
+ * read as a plain quantity. What the table adds is an order worth scanning, a
+ * name worth reading, and the two things a number alone cannot say: what an
+ * *absent* key means, and which of its numbers are names rather than
+ * quantities.
+ *
+ * **Where a `values` table is a reading and where it would be a guess.**
+ * `disable_trades` and `pick_trading` are flags whose own names say which way
+ * they read — a `disable_*` at 1 is disabled — so naming them costs nothing and
+ * buys a row a reader can check. `waiver_type`'s 0/1/2 is an *ordering*, which
+ * the key's name does not carry, so it stays a quantity until somebody has read
+ * the stored blobs. A quantity is never wrong here, only terse; a wrong name is
+ * a filter that lies.
+ *
+ * `type` and `best_ball` are deliberately absent, and `settingKeyOptions` drops
+ * them from the menu too: they are the Type and Format rails at the top of the
+ * same dialog, and a second way to ask one question is the failure this codebase
+ * keeps closing — a reader could set `type = 2` as a rule and Redraft as a rail
+ * and get an empty list with nothing on screen saying which control emptied it.
+ */
+export const SETTING_KEYS: readonly SettingKey[] = [
+  {
+    key: TEAMS_KEY,
+    label: "Teams",
+    hint: "rosters in the league",
+    // A live league always reports `total_rosters`, so a 0 is a row stored
+    // before the league answered rather than a real size — see `settingValue`.
+    absent: "unknown",
+  },
+  {
+    key: "disable_trades",
+    label: "Trades",
+    hint: "whether the league allows trading at all",
+    absent: "zero",
+    values: [
+      { value: 0, label: "Enabled" },
+      { value: 1, label: "Disabled" },
+    ],
+  },
+  {
+    key: "trade_deadline",
+    label: "Trade deadline",
+    hint: "the last week trades are allowed",
+    absent: "unknown",
+    sentinel: { value: NO_TRADE_DEADLINE, label: "No deadline" },
+  },
+  {
+    key: "pick_trading",
+    label: "Pick trading",
+    hint: "whether draft picks can be traded",
+    absent: "zero",
+    values: [
+      { value: 0, label: "Off" },
+      { value: 1, label: "On" },
+    ],
+  },
+  {
+    key: "trade_review_days",
+    label: "Trade review",
+    hint: "days a trade sits before it processes",
+    absent: "zero",
+  },
+  {
+    key: "waiver_type",
+    label: "Waiver type",
+    hint: "Sleeper's waiver code — 0, 1 or 2, unverified here",
+    absent: "zero",
+  },
+  {
+    key: "waiver_budget",
+    label: "FAAB budget",
+    hint: "free-agent budget per manager",
+    absent: "zero",
+  },
+  {
+    key: "playoff_teams",
+    label: "Playoff teams",
+    hint: "how many teams make the postseason",
+    absent: "zero",
+  },
+  {
+    key: "playoff_week_start",
+    label: "Playoffs start",
+    hint: "the first week of the postseason",
+    absent: "unknown",
+  },
+  {
+    key: "taxi_slots",
+    label: "Taxi slots",
+    hint: "taxi-squad places",
+    absent: "zero",
+  },
+  {
+    key: "reserve_slots",
+    label: "IR slots",
+    hint: "injured-reserve places",
+    absent: "zero",
+  },
+  {
+    key: "max_keepers",
+    label: "Keepers",
+    hint: "players held over from last season",
+    absent: "zero",
+  },
+  {
+    key: "draft_rounds",
+    label: "Draft rounds",
+    hint: "rounds in the league's draft",
+    absent: "zero",
+  },
 ];
 
-export const SIZE_KEY_BY_KEY = new Map(SIZE_KEYS.map((size) => [size.key, size]));
+export const SETTING_KEY_BY_KEY = new Map(
+  SETTING_KEYS.map((setting) => [setting.key, setting]),
+);
 
-/** A size key's label, or the raw key for one this build doesn't know. */
-export function sizeKeyLabel(key: string): string {
-  return SIZE_KEY_BY_KEY.get(key)?.label ?? key;
+/** A settings key's label, or the raw key with its underscores opened out. */
+export function settingKeyLabel(key: string): string {
+  return SETTING_KEY_BY_KEY.get(key)?.label ?? key.replace(/_/g, " ");
+}
+
+/**
+ * The named values a rule's value menu offers for a key, or null where that
+ * key's numbers are quantities and the row wants a number field.
+ *
+ * **A sentinel is deliberately not in here**, which is the whole of what
+ * separates the third value kind from the second. A label key is *only* names —
+ * every number `disable_trades` can hold has one, so a menu loses nothing. A
+ * sentinel key is a real scale with one value beside it: `trade_deadline ≤ 12`
+ * has to stay typeable, and a menu that swallowed the weeks would only offer the
+ * eighteen someone thought of. So the row keeps its number field and reaches the
+ * sentinel with a key of its own — see {@link settingSentinel}.
+ */
+export function settingValueOptions(
+  key: string,
+): readonly SettingValue[] | null {
+  const values = SETTING_KEY_BY_KEY.get(key)?.values;
+  return values && values.length ? values : null;
+}
+
+/**
+ * The one value on a key's scale that is not on the scale, or null for a key
+ * with none.
+ *
+ * The row draws it as a key beside the number field rather than as a menu entry:
+ * lit, it *is* the value and the number field stands down; unlit, it is the way
+ * in. Both halves are needed because {@link settingValue} reads the sentinel as
+ * an absence, so a reader who cannot press it by name cannot ask about it at all.
+ */
+export function settingSentinel(key: string): SettingValue | null {
+  return SETTING_KEY_BY_KEY.get(key)?.sentinel ?? null;
 }
 
 /**

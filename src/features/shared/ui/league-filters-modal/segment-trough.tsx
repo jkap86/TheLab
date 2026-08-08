@@ -1,5 +1,3 @@
-import type { RefObject } from "react";
-
 import {
   BEST_BALL_OPTIONS,
   type LeagueFilters,
@@ -8,21 +6,26 @@ import {
 } from "../../league-filters";
 import type { ManagerLeague } from "@/shared/manager";
 
-import type { ExtraSegment, SegmentKey } from "./league-filters-modal.types.ts";
-import { SegmentRow } from "./segment-row.tsx";
+import { FilterRail } from "./filter-rail.tsx";
+import type {
+  ExtraSegment,
+  LeagueFilterRow,
+} from "./league-filters-modal.types.ts";
 
 /**
  * The fixed filters, in one trough.
  *
  * They are grouped because they are the same kind of question — what a league
  * *is*, each a closed set of three or four answers — where the rule bays below
- * are lists a reader writes. Status, type and format each get a row rather than
- * a section, which is what let the bays come up out of the fold.
+ * are lists a reader writes, and the season band above is the population all of
+ * them are read against.
  *
  * Every `probe` closes over the draft, so each row's counts describe *this*
  * selection with one field changed rather than that filter in isolation: the
  * numbers say what picking an option would leave, which is the question the
- * dialog is opened to answer.
+ * dialog is opened to answer. Drawn as rails rather than as collapsed rows, that
+ * makes the trough a live cross-tab — lighting Dynasty moves the Format row's
+ * numbers underneath it, which is exactly what the popovers were hiding.
  *
  * A caller may seat a fourth row here ({@link ExtraSegment}) — the ADP board's
  * draft-kind chip, and nothing else. It is last because it is the one row that
@@ -31,89 +34,59 @@ import { SegmentRow } from "./segment-row.tsx";
  * number and that number would be about something the row does not narrow.
  */
 export function SegmentTrough({
-  troughRef,
   draft,
   onChange,
   leagues,
-  openGroup,
-  onToggle,
-  onClose,
-  omitType = false,
+  omit,
   extra,
   extraDraft = "",
   onExtraChange,
 }: {
-  /** Held by the modal, which dismisses an open row on a press outside this box. */
-  troughRef: RefObject<HTMLDivElement | null>;
   draft: LeagueFilters;
   onChange: (filters: LeagueFilters) => void;
   leagues: readonly ManagerLeague[];
-  openGroup: SegmentKey | null;
-  onToggle: (key: SegmentKey) => void;
-  onClose: () => void;
-  /** Drop the Type row — see {@link LeagueFiltersModal}'s own prop. */
-  omitType?: boolean;
+  /** Rows the caller answers with a control of its own — see {@link LeagueFilterRow}. */
+  omit?: readonly LeagueFilterRow[];
   /** The caller's fourth row; the fixed rows above it are drawn either way. */
   extra?: ExtraSegment;
   extraDraft?: string;
   onExtraChange?: (value: string) => void;
 }) {
   return (
-    /*
-      One trough for the three fixed segments, as three collapsed rows.
-      `relative z-10` is what lets an open row's options paint over the rule
-      bays below it — a later sibling would otherwise win, whatever the
-      popover's own z-index.
-    */
-    <div
-      ref={troughRef}
-      className="lab-well relative z-10 flex flex-col gap-0.5 rounded-xl p-1.5"
-    >
-      <SegmentRow
+    <div className="lab-well flex flex-col gap-0.5 rounded-xl p-1.5">
+      <FilterRail
         label="Status"
         options={STATUS_OPTIONS}
         value={draft.status}
         leagues={leagues}
-        probe={(value) => ({ ...draft, status: value })}
+        probe={(status) => ({ ...draft, status })}
         onPick={(status) => onChange({ ...draft, status })}
-        open={openGroup === "status"}
-        onToggle={() => onToggle("status")}
-        onClose={onClose}
       />
-      {!omitType && (
-        <SegmentRow
+      {!omit?.includes("type") && (
+        <FilterRail
           label="Type"
           options={TYPE_OPTIONS}
           value={draft.type}
           leagues={leagues}
-          probe={(value) => ({ ...draft, type: value })}
+          probe={(type) => ({ ...draft, type })}
           onPick={(type) => onChange({ ...draft, type })}
-          open={openGroup === "type"}
-          onToggle={() => onToggle("type")}
-          onClose={onClose}
         />
       )}
-      <SegmentRow
+      <FilterRail
         label="Format"
         options={BEST_BALL_OPTIONS}
         value={draft.bestBall}
         leagues={leagues}
-        probe={(value) => ({ ...draft, bestBall: value })}
+        probe={(bestBall) => ({ ...draft, bestBall })}
         onPick={(bestBall) => onChange({ ...draft, bestBall })}
-        open={openGroup === "format"}
-        onToggle={() => onToggle("format")}
-        onClose={onClose}
       />
       {extra && onExtraChange && (
-        <SegmentRow
+        <FilterRail
           label={extra.label}
           options={extra.options}
           value={extraDraft}
           leagues={leagues}
           onPick={onExtraChange}
-          open={openGroup === "extra"}
-          onToggle={() => onToggle("extra")}
-          onClose={onClose}
         />
       )}
     </div>
