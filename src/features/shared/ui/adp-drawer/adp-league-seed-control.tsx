@@ -30,10 +30,12 @@ export function AdpLeagueSeedControl({
       value=""
       placeholder="Match a league…"
       ariaLabel="Match one of this manager's leagues"
-      // Right-aligned where the row has room to spare, and simply next in
-      // line where it wraps — `ml-auto` on a wrapped item strands it alone
-      // on its own line with a hole to its left.
-      className="sm:ml-auto"
+      // No seating of its own. It used to right-align itself (`sm:ml-auto`),
+      // which was right while it shared a row with the key that opened the
+      // filters dialog and is wrong now the filters are drawn under it: alone in
+      // its row it would sit against the far edge, reading as detached from the
+      // panel it writes into. It also measured the *viewport*, in a drawer that
+      // is 32rem wide on every screen wide enough for that class to fire.
       options={leagues.map((league) => ({
         value: league.league_id,
         label: league.name,

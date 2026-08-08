@@ -48,11 +48,23 @@ const TONGUE: Record<AdpBayId, string> = {
  * the bay before the drawer ({@link drawerKeyAction}), a press outside dismisses
  * it, and focus goes back to the key it came from.
  *
+ * **That argument is what the Leagues bay leans on hardest**, since what it holds
+ * is the whole league-filters panel — a control that was a modal `<dialog>` over
+ * the entire page at its two other call sites, and that reached this drawer as a
+ * key opening one *over the board it narrows*. Drawn here it is the same panel
+ * with its modality dropped: the board is not inert, the drawer's own footer and
+ * header are still there, and Escape and a press outside still resolve to the bay
+ * first. A bay's contents may be as large as they need to be; what they may not
+ * be is a second modal.
+ *
  * It hangs off the pinned block rather than being positioned in the panel:
  * `top-full` is the block's own bottom edge, so nothing measures anything and a
  * block that grows a line still puts its bays directly under itself. The board
  * below is untouched — it keeps scrolling, keeps re-pricing, and a press on it
- * closes the bay.
+ * closes the bay. **A bay bounds its own height**, since this box does not: the
+ * window and curve bays are short by construction and the Leagues bay caps
+ * itself, which is what keeps a panel that hangs off a fixed edge from running
+ * off the bottom of the drawer.
  */
 export function AdpBay({
   id,

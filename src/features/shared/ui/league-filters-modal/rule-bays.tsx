@@ -24,7 +24,10 @@ import { RuleBay } from "./rule-bay.tsx";
  *
  * The two big ones are side by side as equal bays rather than stacked, which is
  * the layout decision the whole panel is arranged around — stacked, they fell
- * below a 60vh scroll box and the feature read as missing.
+ * below a 60vh scroll box and the feature read as missing. **Where there is no
+ * room to put them side by side they stack anyway**, which is what the container
+ * query below is for: the ADP drawer draws this panel at ~450px, and a bay that
+ * insisted on its pair there would be the same failure spelled the other way.
  *
  * **Settings leads, full width, and is not a third equal bay.** It was `League
  * size`, holding one key, and it led for a smaller reason then: one key and one
@@ -63,61 +66,70 @@ export function RuleBays({
   settingKeys: string[];
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {/* Full width above the pair, not a third column — see the note above. */}
-      <div className="md:col-span-2">
+    // A bare `@container` wrapper, so the pair splits on **this box's** width
+    // rather than the viewport's. It was `md:` (768px of screen), which is the
+    // right answer in a 1000px dialog and the wrong one in a 32rem ADP drawer on
+    // the same laptop — two rule rows in ~215px each, every key menu truncated.
+    // `@2xl` is 42rem, which reproduces where `md:` used to fire inside the
+    // dialog (its left column is ~696px at that viewport, ~744px once the match
+    // rail steps beside it) and never fires in the drawer.
+    <div className="@container">
+      <div className="grid gap-4 @2xl:grid-cols-2">
+        {/* Full width above the pair, not a third column — see the note above. */}
+        <div className="@2xl:col-span-2">
+          <RuleBay
+            label="Settings"
+            empty="Any settings. Add a rule to narrow by how a league is set up."
+            rules={draft.settings}
+            onChange={(settings) => onChange({ ...draft, settings })}
+            keyOptions={settingKeys.map((key) => ({
+              value: key,
+              label: settingKeyLabel(key),
+              hint: SETTING_KEY_BY_KEY.get(key)?.hint,
+            }))}
+            newRule={{ key: TEAMS_KEY, op: "eq", value: 12 }}
+            presets={SETTING_PRESETS}
+            step={1}
+            leagues={leagues}
+            match={matchesSettingRule}
+          />
+        </div>
+
         <RuleBay
-          label="Settings"
-          empty="Any settings. Add a rule to narrow by how a league is set up."
-          rules={draft.settings}
-          onChange={(settings) => onChange({ ...draft, settings })}
-          keyOptions={settingKeys.map((key) => ({
-            value: key,
-            label: settingKeyLabel(key),
-            hint: SETTING_KEY_BY_KEY.get(key)?.hint,
+          label="Roster slots"
+          empty="Any lineup. Add a rule to narrow by what a league starts."
+          rules={draft.slots}
+          onChange={(slots) => onChange({ ...draft, slots })}
+          keyOptions={SLOT_GROUPS.map((group) => ({
+            value: group.key,
+            label: group.label,
+            hint: group.hint,
           }))}
-          newRule={{ key: TEAMS_KEY, op: "eq", value: 12 }}
-          presets={SETTING_PRESETS}
+          newRule={{ key: "QB+SF", op: "gte", value: 2 }}
+          presets={SLOT_PRESETS}
           step={1}
           leagues={leagues}
-          match={matchesSettingRule}
+          match={matchesSlotRule}
+        />
+
+        <RuleBay
+          // `Scoring` rather than `Scoring settings`, which is one word doing two
+          // jobs beside a bay now called Settings.
+          label="Scoring"
+          empty="Any scoring. Add a rule to narrow by what a league pays."
+          rules={draft.scoring}
+          onChange={(scoring) => onChange({ ...draft, scoring })}
+          keyOptions={scoringKeys.map((key) => ({
+            value: key,
+            label: scoringKeyLabel(key),
+          }))}
+          newRule={{ key: scoringKeys[0] ?? "rec", op: "eq", value: 1 }}
+          presets={SCORING_PRESETS}
+          step={0.5}
+          leagues={leagues}
+          match={matchesScoringRule}
         />
       </div>
-
-      <RuleBay
-        label="Roster slots"
-        empty="Any lineup. Add a rule to narrow by what a league starts."
-        rules={draft.slots}
-        onChange={(slots) => onChange({ ...draft, slots })}
-        keyOptions={SLOT_GROUPS.map((group) => ({
-          value: group.key,
-          label: group.label,
-          hint: group.hint,
-        }))}
-        newRule={{ key: "QB+SF", op: "gte", value: 2 }}
-        presets={SLOT_PRESETS}
-        step={1}
-        leagues={leagues}
-        match={matchesSlotRule}
-      />
-
-      <RuleBay
-        // `Scoring` rather than `Scoring settings`, which is one word doing two
-        // jobs beside a bay now called Settings.
-        label="Scoring"
-        empty="Any scoring. Add a rule to narrow by what a league pays."
-        rules={draft.scoring}
-        onChange={(scoring) => onChange({ ...draft, scoring })}
-        keyOptions={scoringKeys.map((key) => ({
-          value: key,
-          label: scoringKeyLabel(key),
-        }))}
-        newRule={{ key: scoringKeys[0] ?? "rec", op: "eq", value: 1 }}
-        presets={SCORING_PRESETS}
-        step={0.5}
-        leagues={leagues}
-        match={matchesScoringRule}
-      />
     </div>
   );
 }

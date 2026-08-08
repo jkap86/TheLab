@@ -28,6 +28,13 @@ import { chipKey, matchShare } from "./league-filters-modal.utils.ts";
  *
  * It edits the same draft the controls do rather than holding state, so a chip's
  * `×` and the row it names are one selection seen twice.
+ *
+ * **Where it sits is the panel's, not its own.** It used to carry
+ * `lg:sticky lg:top-0 lg:self-start`, which are facts about being a grid item
+ * *beside* the controls — a thing it only is on a wide host. Held here they were
+ * unoverridable by the ADP drawer, which draws this panel in one ~450px column
+ * where all three are wrong; `LeagueFiltersPanel` wears them on the grid item it
+ * puts this in.
  */
 export function MatchRail({
   matched,
@@ -52,7 +59,7 @@ export function MatchRail({
     <div
       role="group"
       aria-label="Matching leagues"
-      className="lab-well flex flex-col gap-4 rounded-xl p-4 lg:sticky lg:top-0 lg:self-start"
+      className="lab-well flex flex-col gap-4 rounded-xl p-4"
     >
       {/* The one number the dialog exists to move, so it is announced when it
           moves rather than only when a reader goes looking for it. `polite`, and

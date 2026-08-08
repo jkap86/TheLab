@@ -1,7 +1,7 @@
 /**
  * The dialog's public face, and deliberately only that.
  *
- * All three call sites reach it as
+ * Both call sites reach it as
  * `import("@/features/shared/ui/league-filters-modal")`, so this file is what
  * that path resolves to now the modal is a folder — the dynamic import is
  * unchanged and the chunk is still split at the same seam. Nothing else in here
@@ -9,6 +9,13 @@
  * barrel could pick up is how a lazily-loaded part ends up back in the static
  * graph of every page (see `features/shared/index.ts`, and the drawer's own
  * `index.ts` next door for the same rule stated twice).
+ *
+ * **The panel this frames is deliberately not exported here either**, and the
+ * reason is the same one stated the other way round: it has a second host — the
+ * ADP drawer's Leagues bay, which draws the filters inline rather than opening a
+ * modal over the board they narrow — and that host's own lazy module names
+ * `./league-filters-panel.tsx` directly. Behind this barrel it would be reached
+ * only through the dialog, which is the whole of what that host is not using.
  *
  * The trigger's placeholder is **not** here — it stays in
  * `../league-filters-seat`, which is static precisely because this module is

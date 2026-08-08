@@ -14,7 +14,7 @@ import { AdpBayRail } from "./adp-bay-rail";
 import { AdpBoard } from "./adp-board";
 import { AdpDrawerFooter } from "./adp-drawer-footer";
 import { AdpDrawerHeader } from "./adp-drawer-header";
-import { AdpFilterBar } from "./adp-filter-bar";
+import { AdpLeagueFilters } from "./adp-league-filters";
 import { AdpRangeControl } from "./adp-range-control";
 import { SteepnessSlider } from "./adp-steepness-slider";
 import {
@@ -47,7 +47,7 @@ import { useAdpDrawerLifecycle } from "./use-adp-drawer-lifecycle.ts";
 const PinnedHeader = memo(AdpDrawerHeader);
 const PinnedRail = memo(AdpBayRail);
 const PinnedRange = memo(AdpRangeControl);
-const PinnedFilterBar = memo(AdpFilterBar);
+const PinnedLeagueFilters = memo(AdpLeagueFilters);
 const PinnedFooter = memo(AdpDrawerFooter);
 
 /** What each bay's group is called, for a reader who tabs into one. */
@@ -302,9 +302,10 @@ export function AdpDrawer({
             board's population read as already answered; its key here carries the
             board's own label and the density behind it, which is the fact the
             presets were hiding. See {@link AdpBayRail} for the coverage
-            arithmetic that makes the float affordable — the tallest bay leaves
+            arithmetic that makes the float affordable — the window bay leaves
             twelve rows readable, three more than this block used to show with
-            nothing open at all.
+            nothing open at all, and the Leagues bay covers the board on purpose
+            because nothing under it moves until its Apply.
 
             `relative` is what the bay hangs off (`top-full` is this block's own
             bottom edge, so nothing is measured), and `z-20` is what puts it over
@@ -336,11 +337,15 @@ export function AdpDrawer({
           {bay !== null && (
             <AdpBay id={bayId} bay={bay} label={BAY_LABELS[bay]}>
               {bay === "leagues" && (
-                <PinnedFilterBar
+                <PinnedLeagueFilters
                   controls={controls}
                   leagues={leagues}
                   seedLeagues={seedLeagues}
                   onChange={onChange}
+                  // Apply shuts the bay, which is what the float is for: the
+                  // board is underneath, and the press that commits a narrowing
+                  // is the moment a reader wants to watch it move.
+                  onApplied={closeBay}
                 />
               )}
               {bay === "window" && (

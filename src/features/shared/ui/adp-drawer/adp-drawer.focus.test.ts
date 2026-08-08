@@ -202,12 +202,12 @@ describe("what a keypress means", () => {
     });
   });
 
-  test("the league-filters dialog needs no ordering against either", () => {
-    // It is a real `<dialog>` in the top layer, so while it is open the press
-    // never arrives here at all — which is what makes "innermost" resolve
-    // dialog, then bay, then drawer without this function knowing it exists.
-    // The rule that keeps that true is that a bay is *not* one of those, which
-    // the two answers above are the consequence of.
+  test("a bay is the innermost thing there is — nothing nests inside one", () => {
+    // The Leagues bay used to hold a key opening the shared `<dialog>`, which
+    // is in the top layer and hears Escape itself, so "innermost" resolved
+    // dialog, then bay, then drawer without this function knowing the dialog
+    // existed. It draws that panel inline now, so the ladder is two rungs and
+    // both are answered here.
     assert.notEqual(drawerKeyAction("Escape", false, true), null);
   });
 
