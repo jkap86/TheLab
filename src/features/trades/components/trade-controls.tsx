@@ -133,8 +133,13 @@ export function TradeIdentity({
  *   out of an edge, and what keeps a travelled board's date off the search bays
  *   beneath it.
  *
- * Nothing here expands, so there is no `dynamic()` to be had: what is left is
- * one stepper, one count and three keys.
+ * **Two of the keys open something, and neither opens it here.** The league
+ * filters are a `<dialog>` and the search is a control seated above the list, so
+ * this rail carries triggers and no panels — which is what keeps it a fixed band
+ * rather than one that grows under the app bar. Nothing in *this* module is
+ * behind a press, so there is still no `dynamic()` to be had at this seam: what
+ * is left is one stepper, one count and four keys, and each of the two that
+ * expand is split at its own module by the page that seats it.
  */
 export function TradeControls({
   filters,
@@ -190,12 +195,25 @@ export function TradeControls({
           **Dropped below `sm`**, where it is a line of a permanently pinned
           band and the only thing on this rail that is neither a control nor the
           feedback for one — the season and the rules are restated by the dialog
-          that sets them, and the search selection by the bays below. `max-sm:`
-          rather than `hidden sm:block`, because Tailwind emits the display
-          utilities alphabetically and `.hidden` would then win at every width. */}
+          that sets them, and the search selection by the key that opens it.
+          `max-sm:` rather than `hidden sm:block`, because Tailwind emits the
+          display utilities alphabetically and `.hidden` would then win at every
+          width.
+
+          **Its basis is zero, and that is what makes "truncates rather than
+          wraps" true rather than merely intended.** Flex wraps on the items'
+          *hypothetical* sizes and only shrinks within a line afterwards, so a
+          basis of `auto` — this line's own text — put the whole sentence on the
+          line before anything gave way, and the last member of the row went to a
+          second one instead. Measured at 960px, adding the search key wrapped
+          the seek key and cost 40px of permanently pinned band; at basis zero
+          the row holds one line and this contracts into whatever slack is left.
+          It is allowed to contract to nothing, which is the same call as
+          dropping it below `sm`: everything it says is said by the controls it
+          sits among. */}
       <p
         title={narrowing}
-        className="min-w-0 flex-1 basis-full truncate text-xs text-foreground/45 max-sm:hidden sm:basis-auto"
+        className="min-w-0 flex-1 truncate text-xs text-foreground/45 max-sm:hidden"
       >
         {narrowing}
       </p>

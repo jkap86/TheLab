@@ -12,6 +12,7 @@ import {
   pickLabel,
   pickToken,
   setSideManager,
+  sideSelectionCount,
   stepCircle,
   swapSides,
   toggleSideAsset,
@@ -284,6 +285,48 @@ describe("activeTradeFilterCount", () => {
         }),
       ),
       2,
+    );
+  });
+});
+
+describe("sideSelectionCount", () => {
+  test("counts every manager and asset in both bays", () => {
+    assert.equal(sideSelectionCount(DEFAULT_TRADE_FILTERS), 0);
+    assert.equal(
+      sideSelectionCount(
+        filters({
+          sides: [
+            side({ manager: "u1", players: ["a", "b"] }),
+            side({ picks: ["2027-1"] }),
+          ],
+        }),
+      ),
+      4,
+    );
+  });
+
+  test("the circle and the seek are not in it", () => {
+    // Each has its own control on the same rail, and this is the badge on the
+    // key that opens the bays — a count including them would report a press on
+    // the stepper or the date as work the search key had done.
+    assert.equal(
+      sideSelectionCount(filters({ circle: "mine", seek: "2026-06-30" })),
+      0,
+    );
+  });
+
+  test("it is the sides term of the count `Clear` is drawn against", () => {
+    // Two walks over the same fields is how a bay ends up counted by one and
+    // not the other, which reads as a narrowing with nothing on screen saying
+    // it is there — so the badge and `Clear` read one definition.
+    const narrowed = filters({
+      circle: "mine",
+      seek: "2026-06-30",
+      sides: [side({ manager: "u1" }), side({ players: ["a"] })],
+    });
+    assert.equal(
+      activeTradeFilterCount(narrowed),
+      sideSelectionCount(narrowed) + 2,
     );
   });
 });
