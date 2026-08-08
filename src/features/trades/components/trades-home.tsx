@@ -41,7 +41,7 @@ import { resolveLeagueScope, tradeQueryKey } from "../trade-query";
 import type { AdpPlayerPayload, Trade } from "../types";
 import type { OpenLeague } from "./league-sheet";
 import { SeekKey } from "./seek-key";
-import { TradeControls } from "./trade-controls";
+import { TRADE_RAIL_BOX, TradeControls, TradeIdentity } from "./trade-controls";
 import { TradeSearch } from "./trade-search";
 import { TradeValuePicker } from "./trade-value";
 import { TradesList } from "./trades-list";
@@ -168,10 +168,23 @@ export function TradesHome({ season }: { season: string }) {
     DEFAULT_TRADE_FILTERS,
   );
 
-  // Everything laid out above the list, so the virtualizer can watch *this* for
-  // the size changes that move the list down the page — rather than the body,
+  // The three boxes laid out above the list, watched by the virtualizer for the
+  // size changes that move the board down the page — rather than the body,
   // whose box the list's own growth changes on every measured card.
-  const headerRef = useRef<HTMLDivElement>(null);
+  //
+  // **Three rather than one, because the rail pins.** They used to be one
+  // wrapper, and could not stay one: a sticky element travels only as far as its
+  // own parent's box, so a rail seated inside a box that scrolls off unpins with
+  // it. The rail is a sibling now, which means the run above the list is no
+  // longer a single element to observe — each of these can change height on its
+  // own (the plate with the filter summary, the rail when it wraps, the bays
+  // when a token is added), and any of them moves the list.
+  const plateRef = useRef<HTMLDivElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  // Stable identity: the list's measuring effect depends on this, and a fresh
+  // array per render would tear down and re-attach three observers each time.
+  const above = useMemo(() => [plateRef, railRef, searchRef], []);
 
   // The cards' value column, chosen once for the whole list and remembered on
   // the device — the same mechanism the league and share lists use, at the grain
@@ -331,14 +344,20 @@ export function TradesHome({ season }: { season: string }) {
    *
    * Three decisions in it:
    *
-   * - **It scrolls the page header, not the list.** The list is unmounted
+   * - **It scrolls the identity plate, not the list.** The list is unmounted
    *   whenever the board is empty — the "no trades" note takes its place — so a
    *   travel that lands on nothing has no list to scroll to, and a list that
-   *   unmounts mid-change takes its own scroll target with it. The header is
-   *   always mounted and its top edge is where the board begins, so the reader
-   *   arrives looking at the control they just used with the date's first cards
-   *   directly beneath it.
-   * - **It only fires once the header has scrolled off.** A reader still looking
+   *   unmounts mid-change takes its own scroll target with it. The plate is
+   *   always mounted and its top edge is where the board begins.
+   *
+   *   **Its `scroll-mt` clears the app bar and nothing else, even though a rail
+   *   pins below the bar.** A sticky part is only pinned while its natural
+   *   position would sit above the offset, and the rail comes *after* the plate:
+   *   at the moment the plate's top is flush under the bar, the rail is at its
+   *   resting place further down the page and is covering nothing. That is also
+   *   why this page publishes no pinned height — nothing here has to clear the
+   *   rail, so there is no second `--list-ledge-h` to measure and keep honest.
+   * - **It only fires once the plate has scrolled off.** A reader still looking
    *   at the controls is already at the top, and pulling the page to hide the
    *   control they just pressed is worse than not moving at all.
    * - **It is skipped on mount**, since a board arriving is not a reader
@@ -354,9 +373,9 @@ export function TradesHome({ season }: { season: string }) {
   useEffect(() => {
     if (travelledTo.current === seek) return;
     travelledTo.current = seek;
-    const header = headerRef.current;
-    if (header && header.getBoundingClientRect().top < 0) {
-      header.scrollIntoView({ block: "start", behavior: "auto" });
+    const plate = plateRef.current;
+    if (plate && plate.getBoundingClientRect().top < 0) {
+      plate.scrollIntoView({ block: "start", behavior: "auto" });
     }
   }, [seek]);
 
@@ -456,29 +475,32 @@ export function TradesHome({ season }: { season: string }) {
         />
       </HeaderSlot>
 
-      {/* Everything above the list, watched by the virtualizer — a control row
-          that rewraps at a narrower width moves the board down, and the observer
-          on this element is how the list is told.
+      {/* What board this is, in words — read once at the top and then scrolled
+          away. It leads the page because the scope is its widest claim (every
+          crawled league, or one account's corner of it) and because a bay
+          reading `+ anyone` means "anyone *in this circle*": a reader who meets
+          the search first is composing a question with no population stated to
+          ask it of.
 
           It is also what the date control scrolls back to (see the effect
           above), which is what the `scroll-mt` is for: the app bar is pinned, so
-          a header scrolled flush to the viewport top would sit under it. */}
-      <div ref={headerRef} className="scroll-mt-[var(--site-header-h)]">
-        {/* The page deliberately leads with its controls rather than a title —
-            the app bar already names the tool, which is the whole argument for
-            deleting the masthead. What that left was a document whose first
-            heading was a trade card, so the name it dropped is kept where only
-            a heading outline can see it. */}
+          a plate scrolled flush to the viewport top would sit under it. */}
+      <div ref={plateRef} className="scroll-mt-[var(--site-header-h)]">
+        {/* The page deliberately leads with its own description rather than a
+            title — the app bar already names the tool, which is the whole
+            argument for deleting the masthead. What that left was a document
+            whose first heading was a trade card, so the name it dropped is kept
+            where only a heading outline can see it. */}
         <h1 className="sr-only">Trades</h1>
 
-        {/* Which board this is, above the search that asks a question of it.
-            The scope is the page's widest claim — every crawled league, or one
-            account's corner of it — and a bay reading `+ anyone` means "anyone
-            *in this circle*", so a reader who meets the bays first is composing
-            a question without knowing what population it will be asked over.
-            The count and the two triggers ride here for the same reason: they
-            are the board's own description, and they belong with the control
-            that sets it. */}
+        <TradeIdentity filters={tradeFilters} account={account} />
+      </div>
+
+      {/* Everything a reader reaches for while reading, on one band pinned under
+          the app bar — see {@link TradeControls} for why this is a sibling of
+          the plate rather than a child of it, and for why the seek key is in it
+          rather than floating over the board on a second pinned layer. */}
+      <div ref={railRef} className={TRADE_RAIL_BOX}>
         <TradeControls
           filters={tradeFilters}
           onChange={setTradeFilters}
@@ -488,17 +510,18 @@ export function TradesHome({ season }: { season: string }) {
           names={names}
           trailing={
             <>
-              {/* The board's size, which is what the deleted heading's slot is
-                  now spent on: a constant nobody re-reads, replaced by the one
-                  number on the page that answers "did that filter do anything".
-                  It leads the trailing group because the two triggers beside it
-                  are what move it. */}
+              {/* The board's size — the one number on the page that answers
+                  "did that filter do anything", which is why it rides the rail
+                  with the keys that move it rather than the plate that
+                  describes it. */}
               <p
                 // The number every filter on this page is pressed to move, and
                 // the only feedback a press gives — the board itself is a
-                // windowed list a reader may be nowhere near.
+                // windowed list a reader may be nowhere near. On the rail it is
+                // feedback the reader can still see at row nine hundred, which
+                // the old block could not offer at all.
                 role="status"
-                className={`flex shrink-0 items-baseline gap-1.5 text-sm text-foreground/55 transition-opacity ${
+                className={`flex shrink-0 items-baseline gap-1.5 text-sm text-foreground/60 transition-opacity ${
                   // Dimmed while a narrowed board is on its way, so the number
                   // reads as the one being replaced rather than the answer to
                   // the filter just pressed. One small element rather than the
@@ -534,15 +557,23 @@ export function TradesHome({ season }: { season: string }) {
               />
             </>
           }
+          seek={
+            <SeekKey
+              value={tradeFilters.seek}
+              today={today}
+              onChange={(seek) => setTradeFilters({ ...tradeFilters, seek })}
+            />
+          }
         />
+      </div>
 
-        {/* The page's front door, under the scope it is asked within. Two bays
-            wearing the trade card's own side plate: things in the same bay were
-            on the same side of the trade, so a manager and a player together
-            means he received him and on opposite sides means he gave him. It
-            sits directly above the list because it is what a reader arrives
-            wanting and what the cards below are the answer to — the block above
-            it is chosen once and then read. */}
+      {/* The page's front door, under the rail that says what it is asked
+          within. Two bays wearing the trade card's own side plate: things in the
+          same bay were on the same side of the trade, so a manager and a player
+          together means he received him and on opposite sides means he gave him.
+          It sits directly above the list because it is what a reader arrives
+          wanting and what the cards below are the answer to. */}
+      <div ref={searchRef}>
         <TradeSearch
           filters={tradeFilters}
           onChange={setTradeFilters}
@@ -555,44 +586,6 @@ export function TradesHome({ season }: { season: string }) {
         />
 
         {error && <Note tone="error">{error}</Note>}
-      </div>
-
-      {/* Where in the board the reader is standing, pinned under the app bar for
-          as long as there is board left — see {@link SeekKey} for why a position
-          is not a setting and does not belong in the block above.
-
-          Four things about this wrapper are load-bearing:
-
-          - **It is a sibling of the header rather than a child of it.** A sticky
-            element travels only as far as its own parent's box, and the header
-            is a few hundred pixels tall; here the parent is `PageShell`'s
-            `<main>`, which spans the whole list, so the key stays reachable at
-            any depth.
-          - **It has its own height, so its resting position is above the
-            board.** It used to be `h-0` — no space in the flow, which reads as
-            free and is not: the key's *first* frame was already sitting on the
-            first card's instant ledge, a plate at the same corner, so a reader
-            met the two overlapping before scrolling at all. Given a band of its
-            own it covers nothing until it is pinned, which is the moment
-            covering something is what it is for, and the coverage is transient
-            from there on since the card under it is whichever one the scroll has
-            put there. The `mb-5` is the plate's overhang plus clearance, paid as
-            margin rather than as a negative offset — the trade card's own rule
-            for a part rising out of an edge.
-          - **The wrapper takes no pointer events and the key takes them back**,
-            or a zero-height box stretched across the column would swallow
-            presses aimed at the cards beneath it.
-          - **`z-30`, under the app bar's `z-50`**: the key pins *below* the bar,
-            and a floating part that could cover the way home would be the one
-            piece of chrome this page is not allowed to obscure. */}
-      <div className="pointer-events-none sticky top-[calc(var(--site-header-h)+0.5rem)] z-30 mb-5 flex justify-end">
-        <div className="pointer-events-auto">
-          <SeekKey
-            value={tradeFilters.seek}
-            today={today}
-            onChange={(seek) => setTradeFilters({ ...tradeFilters, seek })}
-          />
-        </div>
       </div>
 
       {loading ? (
@@ -638,7 +631,7 @@ export function TradesHome({ season }: { season: string }) {
             adpLadders={adpLadders}
             steepness={adpControls.steepness}
             pickSlots={pickSlots}
-            headerRef={headerRef}
+            above={above}
             hasMore={hasMore}
             loadingMore={loadingMore}
             onLoadMore={loadMore}

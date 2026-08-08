@@ -8,8 +8,7 @@ import { MONTH_ABBREVIATIONS } from "@/features/shared/date-range";
 import type { TradeSeek } from "../filters";
 
 /**
- * Where in the board to start reading: one date, behind a key pinned under the
- * app bar.
+ * Where in the board to start reading: one date, on the pinned control rail.
  *
  * **It is a position, not a window, and every decision here follows from that.**
  * The board is a keyset walk newest-first, so a date is a place to resume it and
@@ -18,35 +17,34 @@ import type { TradeSeek } from "../filters";
  * the list back to its top when this moves, which is what makes it read as
  * travelling to the date rather than as slicing the board at it.
  *
- * **It is pinned because a position is not a setting.** It used to be a labelled
- * date field in the controls block, filed with the scope and the league rules —
- * the right seat for something chosen once and then read, and the wrong one for
- * the one control here worth reaching for *while reading*. That is exactly when
- * the block holding it is three screens up: the board is a hundred thousand rows
- * deep, so travelling meant scrolling back to a control last touched an hour
- * ago. The sticky wrapper is the page's (see `TradesHome`), because a sticky
- * element only travels as far as its own parent's box and this one has to travel
- * the whole list.
+ * **It is on the pinned rail because a position is not a setting.** It began as
+ * a labelled date field filed with the scope and the league rules — the right
+ * seat for something chosen once and then read, and the wrong one for the one
+ * control here worth reaching for *while reading*, which is exactly when a block
+ * at the top of the page is three screens up. That earned it a pinned seat of
+ * its own, floating at the board's trailing edge; the seat is now the rail,
+ * which is the same argument arriving at a better answer once a second control
+ * needed pinning too.
  *
- * **It rests above the board and only then travels over it**, which is the one
- * thing about the seat that changed after it shipped. The wrapper was `h-0`, so
- * the key's resting position was already *on* the first card — and what is at
- * that corner is the card's own instant ledge, a plate at the same edge, so a
- * reader met the two overlapping before scrolling at all. Given its own height
- * above the list it covers nothing until it is pinned, which is the moment
- * covering something is what it is for. The size follows from that: 40px rather
- * than the 34 a part that floats from the first frame could afford.
+ * **What the rail gives it is an edge.** Floating, the key was a part with
+ * nothing under it, so its plate rose out of a 40px block and landed over
+ * whichever card the scroll had put beneath — a nameplate labelling whatever it
+ * happened to be over. On the rail it labels the rail, which is what a date on
+ * this page is a fact about: the band saying what board this is, and where in it
+ * you are standing. Two things follow. The block is 34px rather than 40 — the
+ * larger size was bought to keep a floating part off the first card's own instant
+ * ledge, which is not a hazard it can meet seated in a row — and its plate hangs
+ * `-bottom-[17px]`, measured against the *rail's* edge rather than the block's,
+ * so it straddles the thing it names. Those two numbers are a pair: change the
+ * block's height or the rail's padding and the plate no longer rides an edge.
  *
- * **Its date rides the bottom edge on a nameplate** — the trade card's own
- * device, a part rising out of an edge to label what is inside it. That is what
- * keeps a travelled board from lying about where it is: an icon alone says a
- * control exists, where the plate says the board begins at June 30. At the top
- * of the board there is no bound, so the key is unlit and no plate is drawn —
- * absent rather than a plate reading "today", which would be a bound on screen
- * that the query string does not carry. It wears `.lab-nameplate` directly
- * rather than reaching for `Nameplate`, on that component's own terms: what is
- * shared is the plate's *material*, and `Nameplate` is the plate with an `h2` in
- * it — a heading around a date would be announcing this key as a section.
+ * **The plate is drawn only on a travelled board.** At the top there is no
+ * bound, so the key is unlit and there is no plate — absent rather than one
+ * reading "today", which would be a bound on screen that the query string
+ * deliberately does not carry. It wears `.lab-nameplate` directly rather than
+ * reaching for `Nameplate`, on that component's own terms: what is shared is the
+ * plate's *material*, and `Nameplate` is the plate with an `h2` in it — a
+ * heading around a date would be announcing this key as a section.
  *
  * Three details are load-bearing:
  *
@@ -129,9 +127,10 @@ export function SeekKey({
             : `Jump to a date — showing trades from ${plateDate(value)} back`
         }
         title="Jump to a date"
-        // The ADP block's material at 40px: the one part in the app that is a
-        // *solid* rather than a face, so it reads as an object floating over the
-        // board rather than as a rectangle drawn on it. Lit once the board is
+        // The ADP block's material at 34px: the one part in the app that is a
+        // *solid* rather than a face, so it reads as an object standing on the
+        // rail rather than as a rectangle drawn in it — the same block the bar's
+        // own ADP trigger wears, one seat over. Lit once the board is
         // positioned, which is the same signal that trigger uses for a narrowed
         // board — a state worth carrying because the alternative is a reader
         // scrolling a board that begins in June with nothing saying so.
@@ -139,18 +138,23 @@ export function SeekKey({
           value === null ? "" : "lab-billet-lit"
         }`}
       >
-        <span className="lab-billet-face lab-notch-all grid h-[40px] w-[40px] place-items-center">
+        <span className="lab-billet-face lab-notch-all grid h-[34px] w-[34px] place-items-center">
           <CalendarGlyph seeking={value !== null} />
         </span>
       </button>
 
       {/* Outside the billet, never inside it: `clip-path` clips a whole subtree,
           so a plate rendered within the notched face would be severed at the
-          exact edge it exists to straddle. */}
+          exact edge it exists to straddle. The rail carries no clip of its own
+          for the same reason, one box out. */}
       {value !== null && (
         <span
           aria-hidden
-          className="lab-nameplate pointer-events-none absolute -bottom-[10px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[3px] px-[7px] pb-[2.5px] pt-[2px] font-display text-[9px] font-semibold uppercase tracking-[0.045em] text-foreground/90"
+          // 17px, not the 10 this wore while floating: the offset is measured to
+          // the *rail's* bottom edge, which is the block's own 34px plus the
+          // rail's padding beneath it — see the note above on why those numbers
+          // are a pair.
+          className="lab-nameplate pointer-events-none absolute -bottom-[17px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[3px] px-[7px] pb-[2.5px] pt-[2px] font-display text-[9px] font-semibold uppercase tracking-[0.045em] text-foreground/90"
         >
           {plateLabel(value, today)}
         </span>
@@ -159,10 +163,12 @@ export function SeekKey({
       {open && (
         <div
           id={panelId}
-          // Right-aligned under the key, because the key is pinned to the
-          // board's trailing edge and a panel opening the other way would run
-          // off the page at 390px.
-          className="lab-plate absolute right-0 top-full z-10 mt-3 w-[15rem] rounded-2xl p-3"
+          // Right-aligned under the key, because the key sits at the rail's
+          // trailing edge and a panel opening the other way would run off the
+          // page at 390px. The top margin clears the plate rather than the
+          // block: the panel is wider than the key and would otherwise paint
+          // over the lower half of the date it was opened to change.
+          className="lab-plate absolute right-0 top-full z-10 mt-5 w-[15rem] rounded-2xl p-3"
         >
           <p
             id={labelId}

@@ -1,0 +1,2504 @@
+<title>Trades top card — five directions for the block above the board</title>
+
+<style>
+  /* ------------------------------------------------------------------
+     Ninth in the series, so the palette, the faces and the section
+     grammar are lifted from `trades-scope-and-seek.html` — which took
+     them from src/app/globals.css. A mock that looked like a different
+     product from the eight before it would be arguing about the wrong
+     thing.
+
+     What is new here is below, under NINTH IN THE SERIES: the five ways
+     of building the block that sits above the board.
+     ------------------------------------------------------------------ */
+  *, *::before, *::after { box-sizing: border-box; }
+  /* A class that sets `display` outranks the UA's `[hidden]` rule, and every
+     floating part here sets one. Stated once rather than per component. */
+  [hidden] { display: none !important; }
+
+  :root {
+    color-scheme: dark;
+
+    --bench: #050b12;
+    --app-bg: rgb(10, 20, 30);
+
+    --well: #07131e;
+    --slot: #040e17;
+
+    --active: #00ffe5;
+    --active-deep: #00b0a0;
+    --on-active: #052029;
+    --edge: #05121d;
+    --edge-active: #00776b;
+
+    --fg: #ffffff;
+    --amber: #fbbf24;
+
+    --measure: 66ch;
+
+    --display: "Orbitron", "Eurostile", "Bahnschrift", ui-sans-serif, system-ui, sans-serif;
+    --body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  }
+
+  /* Inlined rather than linked: the artifact CSP blocks font CDNs, and a
+     silent fallback here would lose the one face that makes the app the
+     app. Variable weight axis, subset latin. */
+  @font-face {
+    font-family: "Orbitron";
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: block;
+    src: url(data:font/woff2;base64,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) format("woff2");
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 620px at 12% -8%, rgba(0, 255, 229, 0.07), transparent 62%),
+      radial-gradient(900px 520px at 92% 4%, rgba(0, 120, 190, 0.09), transparent 60%),
+      var(--bench);
+    color: var(--fg);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------------------------------------------------------- shell */
+  .wrap { max-width: 1380px; margin: 0 auto; padding: 0 20px 96px; }
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    margin-bottom: 40px;
+    background: linear-gradient(180deg, rgba(14, 32, 45, 0.92), rgba(6, 16, 24, 0.92));
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 255, 229, 0.16);
+    box-shadow: 0 6px 0 -1px #030a11, 0 12px 26px -14px rgba(0, 0, 0, 0.9);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .bar::-webkit-scrollbar { display: none; }
+  .bar__mark {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--active);
+    text-shadow: 0 0 16px rgba(0, 255, 229, 0.5);
+    white-space: nowrap;
+  }
+  .bar__keys { display: flex; gap: 6px; margin-left: auto; }
+  .bar__key {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.72);
+    text-decoration: none;
+    white-space: nowrap;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+    transition: background 0.15s, color 0.15s;
+  }
+  .bar__key:hover { background: linear-gradient(170deg, #34586f, #162b38); color: #fff; }
+  .bar__key:active { transform: translateY(2px); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.18), 0 1px 0 var(--edge); }
+
+  /* ------------------------------------------------------------ masthead */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: rgba(255, 255, 255, 0.38);
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.07;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 12px 0 0;
+    background: linear-gradient(96deg, #ffffff 18%, var(--active) 92%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lede {
+    max-width: var(--measure);
+    margin: 20px 0 0;
+    font-size: 17px;
+    color: rgba(255, 255, 255, 0.74);
+  }
+  .lede b { color: #fff; font-weight: 600; }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 20px;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; margin: 0 0 6px; color: #fff; }
+  p { margin: 0; }
+  .prose { max-width: var(--measure); color: rgba(255, 255, 255, 0.72); }
+  .prose + .prose { margin-top: 14px; }
+  .prose b { color: #fff; font-weight: 600; }
+  em { color: rgba(255, 255, 255, 0.88); font-style: italic; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 255, 229, 0.08);
+    border: 1px solid rgba(0, 255, 229, 0.14);
+    color: #9ffff2;
+    white-space: nowrap;
+  }
+
+  section { margin-top: 64px; }
+  .rule { height: 1px; background: linear-gradient(90deg, rgba(0, 255, 229, 0.5), rgba(255, 255, 255, 0.08) 40%, transparent); }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .sec-head .eyebrow { margin-left: auto; }
+
+  /* ---------------------------------------------------------- prose cards */
+  .cards {
+    display: grid;
+    gap: 14px;
+    margin-top: 26px;
+    grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  }
+  .card {
+    padding: 16px 17px 17px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+  .card p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .card p + p { margin-top: 9px; }
+  .card__tag {
+    display: inline-block;
+    margin-bottom: 9px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--active);
+    background: rgba(0, 255, 229, 0.09);
+    border: 1px solid rgba(0, 255, 229, 0.22);
+  }
+  .card--warn .card__tag { color: var(--amber); background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.28); }
+
+  /* -------------------------------------------------------------- options */
+  .opt { margin-top: 76px; scroll-margin-top: 76px; }
+  .opt__head { display: flex; align-items: flex-start; gap: 14px; }
+  .opt__letter {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 3px 0 var(--edge-active),
+      0 8px 18px -6px rgba(0, 255, 229, 0.45);
+  }
+  .opt__letter--pair { font-size: 13px; letter-spacing: -0.02em; }
+  .opt--alt .opt__letter {
+    color: rgba(255, 255, 255, 0.8);
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.22), 0 3px 0 var(--edge);
+  }
+  .opt__thesis { margin-top: 5px; font-size: 15px; color: rgba(255, 255, 255, 0.6); max-width: var(--measure); }
+  .opt__body { display: grid; gap: 16px; margin-top: 22px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .opt__body { grid-template-columns: 1fr 1fr; } }
+  /* A grid item's `min-width: auto` is its min-content width, so one nowrap run
+     inside a note widens the track past the page. */
+  .opt__body > * { min-width: 0; }
+  .note h3 { display: flex; align-items: center; gap: 7px; }
+  .note h3::before {
+    content: "";
+    width: 3px;
+    height: 13px;
+    border-radius: 2px;
+    background: var(--active);
+    box-shadow: 0 0 8px rgba(0, 255, 229, 0.7);
+  }
+  .note--cost h3::before { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, 0.6); }
+  .note p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .note p + p { margin-top: 10px; }
+
+  .price {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    max-width: 100%;
+  }
+  .price--good { color: var(--active); background: rgba(0, 255, 229, 0.09); border-color: rgba(0, 255, 229, 0.28); }
+
+  /* --------------------------------------------------- the mock enclosure */
+  .screen {
+    margin-top: 26px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    background: var(--app-bg);
+    box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+  }
+  .screen__tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.34);
+  }
+  .screen__tab b { color: rgba(0, 255, 229, 0.8); font-weight: 600; }
+  .screen__tab .live {
+    margin-left: auto;
+    color: var(--active);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .screen__tab .live::before {
+    content: "";
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--active);
+    box-shadow: 0 0 8px rgba(0, 255, 229, 0.9);
+  }
+  .screen__stage { padding: 22px; overflow-x: auto; }
+  /* The trades page is `PageShell width="wide"` — `max-w-4xl` with `px-4` — so
+     the board lays out at 864px. The stage is held to that rather than to its
+     frame, or every row below would wrap at a width no reader has. */
+  .stage-inner { min-width: 864px; }
+  .stage-inner + .stage-inner { margin-top: 28px; }
+  .stage-cap {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 9px;
+  }
+
+  /* The phone column: the same option at 390px, because the row's wrapping is
+     most of the argument and it only shows up at the width it happens at. */
+  .split { display: grid; gap: 24px; }
+  @media (min-width: 1300px) { .split { grid-template-columns: minmax(0, 1fr) 388px; align-items: start; } }
+  .phone .stage-inner { min-width: 0; width: 358px; }
+  .phone .screen__stage { padding: 14px; overflow: visible; }
+
+  /* ------------------------------------------------------ the page's parts */
+  /* `.lab-trough`: the recessed block the trades controls are seated in. */
+  .trough {
+    border-radius: 16px;
+    padding: 12px;
+    background: #06111b;
+    box-shadow:
+      inset 0 6px 14px -4px rgba(0, 0, 0, 0.9),
+      inset 0 -2px 6px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .trow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+  .trow + .trow { margin-top: 10px; }
+
+  /* `.lab-chip`: the raised pill every trigger on the page wears. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: none;
+    padding: 5px 13px 6px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+  }
+  .chip--on {
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9),
+      0 3px 0 var(--edge-active),
+      0 6px 14px -5px rgba(0, 255, 229, 0.4);
+  }
+  /* `.lab-chip-sm`: the thinner wall, for a key that sets a value rather than
+     opening a dialog. `.lab-chip-on.lab-chip-sm` re-states the thin wall, or a
+     lit key in a row of small ones stands a pixel prouder than its neighbours. */
+  .chip--sm { padding: 3px 10px 4px; font-size: 11.5px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -2px 4px rgba(0,0,0,0.4), 0 2px 0 var(--edge), 0 4px 8px -4px rgba(0,0,0,0.7); }
+  .chip--sm.chip--on { box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -5px 9px -8px rgba(0,90,82,0.9), 0 2px 0 var(--edge-active), 0 4px 10px -4px rgba(0,255,229,0.35); }
+  /* A key with nothing behind it: flat and unlit, the app bar's rule at this
+     size — a part that does nothing when pressed must not look pressable. */
+  .chip--dead { color: rgba(255, 255, 255, 0.25); background: none; box-shadow: none; cursor: not-allowed; }
+  .caret { font-size: 8px; opacity: 0.6; }
+
+  .tally { display: inline-flex; align-items: baseline; gap: 6px; flex: none; color: rgba(255, 255, 255, 0.55); }
+  .tally b { font-size: 18px; font-weight: 600; color: #fff; font-variant-numeric: tabular-nums; }
+  .tally span { font-size: 12px; }
+  .scope { flex: 1 1 200px; min-width: 0; font-size: 12px; color: rgba(255, 255, 255, 0.5); }
+  .lab { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255, 255, 255, 0.4); flex: none; }
+
+  /* A recessed field — `.lab-readout`'s cut at input scale. */
+  .field {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    padding: 5px 10px;
+    border-radius: 9px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.9);
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.85),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .field .cal { opacity: 0.5; font-size: 11px; }
+
+  /* The note under the keys — what a circle means, in one line. */
+  .circle-note { margin-top: 9px; font-size: 12px; color: rgba(255, 255, 255, 0.45); }
+  .circle-note b { color: rgba(255, 255, 255, 0.75); font-weight: 600; }
+
+  /* ------------------------------------------------------- A · the rail */
+  /* `.lab-channel` at control width: a slot milled into the trough, with the
+     detents riding in it. The flood is the *length* of the board — everything
+     the selection contains — and the thumb is the selection itself. */
+  .rail {
+    display: flex;
+    align-items: stretch;
+    position: relative;
+    padding: 3px;
+    border-radius: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+    background: #040e17;
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.9),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .rail__flood {
+    position: absolute;
+    left: 3px; top: 3px; bottom: 3px;
+    z-index: 1;
+    border-radius: 7px;
+    background: linear-gradient(180deg, rgba(0, 255, 229, 0.2), rgba(0, 255, 229, 0.07));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(0, 255, 229, 0.18);
+    transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .rail__thumb {
+    position: absolute;
+    top: 3px; bottom: 3px;
+    z-index: 1;
+    border-radius: 7px;
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9),
+      0 0 14px -2px rgba(0, 255, 229, 0.5);
+    transition: left 0.22s cubic-bezier(0.4, 0, 0.2, 1), width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .rail__seg {
+    position: relative;
+    z-index: 2;
+    flex: 1 1 auto;
+    min-width: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    padding: 6px 8px 7px;
+    border-radius: 7px;
+    font-family: var(--body);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    color: rgba(255, 255, 255, 0.55);
+    transition: color 0.14s;
+  }
+  .rail__seg:hover { color: rgba(255, 255, 255, 0.9); }
+  .rail__seg[aria-pressed="true"] { color: var(--on-active); }
+  .rail__seg[aria-disabled="true"] { color: rgba(255, 255, 255, 0.22); cursor: not-allowed; }
+  .rail-cap { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+  .rail-cap .axis { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0, 255, 229, 0.5); }
+
+  /* ------------------------------------------------- B · the scope sheet */
+  .sheet {
+    margin-top: 8px;
+    width: 320px;
+    max-width: 100%;
+    padding: 9px;
+    border-radius: 14px;
+    display: grid;
+    gap: 5px;
+    background: linear-gradient(168deg, #16293a, #0a1622 62%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.14),
+      0 4px 0 var(--edge),
+      0 20px 34px -16px rgba(0, 0, 0, 0.85);
+  }
+  .sheet--float { position: absolute; left: 12px; right: 12px; top: calc(100% - 8px); width: auto; z-index: 5; }
+  .sheet__cap { font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255, 255, 255, 0.3); padding: 2px 4px 3px; }
+  /* `.lab-row`: a row that is a key. 2px wall and no bloom, because there are
+     four of them stacked. */
+  .sheet__row {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    text-align: left;
+    border: 0;
+    cursor: pointer;
+    padding: 7px 9px;
+    border-radius: 9px;
+    color: var(--fg);
+    background: linear-gradient(170deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 0 rgba(0, 0, 0, 0.5);
+  }
+  .sheet__row[aria-pressed="true"] {
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 2px 0 var(--edge-active),
+      0 6px 14px -6px rgba(0, 255, 229, 0.45);
+  }
+  .sheet__t { display: block; font-size: 13px; font-weight: 600; }
+  .sheet__d { display: block; font-size: 11px; color: rgba(255, 255, 255, 0.45); margin-top: 1px; }
+  .sheet__row[aria-pressed="true"] .sheet__d { color: rgba(5, 32, 41, 0.62); }
+
+  /* --------------------------------------------- C · two keys, then depth */
+  .depth {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px;
+    border-radius: 9px;
+    background: #040e17;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.9), inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .depth button {
+    border: 0;
+    background: none;
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 4px 10px 5px;
+    font-family: var(--body);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .depth button:hover { color: rgba(255, 255, 255, 0.9); }
+  .depth button[aria-pressed="true"] {
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+
+  /* ------------------------------------------------- D · the instrument */
+  .instr { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+  .instr__step {
+    flex: none;
+    border: 0;
+    cursor: pointer;
+    width: 26px;
+    height: 30px;
+    border-radius: 7px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.75);
+    display: grid;
+    place-items: center;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 2px 0 var(--edge), 0 4px 8px -4px rgba(0,0,0,0.7);
+  }
+  .instr__disp {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 10px 7px;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.85),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  /* `.lab-billet-rail`: the lit edge that means "a readout follows". */
+  .instr__rail {
+    flex: none;
+    width: 2.5px;
+    align-self: stretch;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #c8fff9, #00b0a0);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95), 3px 0 14px rgba(0, 255, 229, 0.5);
+  }
+  .instr__val {
+    font-family: var(--display);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: #dffdf8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pips { display: flex; gap: 4px; margin-left: auto; flex: none; }
+  .pips i { width: 5px; height: 5px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); }
+  .pips i.on { background: var(--active); box-shadow: 0 0 6px rgba(0, 255, 229, 0.85); }
+
+  /* ------------------------------------------------------ the app bar */
+  /* The pinned chrome, drawn because two of the three seats below are in it. */
+  .appbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    height: 54px;
+    border-bottom: 6px solid var(--edge);
+    background: linear-gradient(180deg, rgba(17, 35, 48, 0.94), rgba(8, 20, 30, 0.94));
+  }
+  .appbar__mark { width: 28px; height: 28px; display: grid; place-items: center; font-size: 15px; }
+  .appbar__slash { color: rgba(255, 255, 255, 0.22); font-size: 13px; }
+  /* `.lab-well`: recessed, because it says where you are rather than inviting a press. */
+  .appbar__chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 8px;
+    font-size: 12.5px; font-weight: 700; color: #cfe6ef;
+    background: #07131e;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(0,255,229,0.14);
+  }
+  .appbar__right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  /* `.lab-billet`: the one part in the bar extruded far enough that its wall is
+     a surface — 6px down *and* right, graded from a lit near corner. Its
+     chamfer is on both layers, or the wall shows a square corner. */
+  .notch { clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px); }
+  .billet {
+    display: block;
+    background: linear-gradient(128deg, #12545a 0%, #0a2b33 42%, var(--edge) 78%);
+    filter:
+      drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 8px 12px rgba(0, 0, 0, 0.85))
+      drop-shadow(0 0 14px rgba(0, 255, 229, 0.2));
+  }
+  .billet--lit {
+    filter:
+      drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 8px 12px rgba(0, 0, 0, 0.85))
+      drop-shadow(0 0 20px rgba(0, 255, 229, 0.55));
+  }
+  .billet__face {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    background: linear-gradient(152deg, #3d6884 0%, #1d3a4d 46%, #0c1f2d 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 3px 0 -1px rgba(255, 255, 255, 0.16),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.16),
+      inset 0 -6px 11px rgba(0, 0, 0, 0.66),
+      inset -6px 0 12px -6px rgba(0, 0, 0, 0.8);
+  }
+  .billet__face::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(108deg, transparent 22%, rgba(255, 255, 255, 0.1) 46%, transparent 60%);
+  }
+  .billet__rail { flex: none; width: 2.5px; align-self: stretch; background: linear-gradient(180deg, #c8fff9, #00b0a0); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.95), 3px 0 14px rgba(0,255,229,0.5); }
+  /* `.lab-channel`: the slot the signal bars stand in — depth read from the
+     inside of the part rather than from its outline. */
+  .channel { display: flex; align-items: flex-end; gap: 2px; padding: 3px; border-radius: 3px; background: #040e17; box-shadow: inset 0 2px 4px rgba(0,0,0,0.9), inset 0 0 0 1px rgba(0,255,229,0.1); }
+  .channel i { width: 3px; border-radius: 1px; background: linear-gradient(180deg, #b9fff7, #00d6c0); box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 1px 1px 0 rgba(0,60,55,0.9); }
+  .adp-word { font-family: var(--display); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #e6f6fb; }
+  /* `.lab-key` + `.lab-face-active`: the tools key, the bar's one lit part. */
+  .key-notch { clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+  .toolskey { display: block; padding-bottom: 3px; background: var(--edge-active); filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6)) drop-shadow(0 0 16px rgba(0,255,229,0.45)); }
+  .toolskey__face { display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px; font-size: 12px; font-weight: 700; color: var(--on-active); background: linear-gradient(180deg, #a8fff4, #00ddc6); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.85); }
+
+  /* ---------------------------------------------------- the pinned seat */
+  .board { position: relative; }
+  .seek {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 12;
+    border: 0;
+    padding: 0;
+    background: none;
+    cursor: pointer;
+  }
+  .seek__face { width: 34px; height: 34px; justify-content: center; }
+  /* `.lab-nameplate`: a plate riding an edge to label the part it belongs to.
+     Rectangular and with no press travel, because "raised means press me" is
+     about keys and pills. It has to sit outside the notched face — a clip-path
+     clips its whole subtree. */
+  .seek__plate {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -9px;
+    padding: 1.5px 6px 2px;
+    border-radius: 3px;
+    white-space: nowrap;
+    font-family: var(--display);
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #eaf6fb;
+    background: linear-gradient(172deg, #4d7d9c 0%, #2f566f 55%, #1f3b50 100%);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.4), 0 2px 0 var(--edge), 0 5px 10px -4px rgba(0, 0, 0, 0.8);
+  }
+  .seek-panel {
+    position: absolute;
+    top: 44px;
+    right: 0;
+    z-index: 14;
+    width: 232px;
+    padding: 11px;
+    border-radius: 14px;
+    display: grid;
+    gap: 9px;
+    background: linear-gradient(168deg, #16293a, #0a1622 62%);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.14), 0 4px 0 var(--edge), 0 20px 34px -16px rgba(0,0,0,0.85);
+  }
+  .seek-panel .row { display: flex; align-items: center; gap: 8px; }
+  .seek-panel .hint { font-size: 10.5px; color: rgba(255, 255, 255, 0.35); }
+
+  /* The rider: the same seat, reporting the date of the card at the top of the
+     viewport. `.lab-slab-face-rail` — the slab's fill re-laid for a part that
+     is wider than it is tall. */
+  .rider {
+    position: absolute;
+    top: 0;
+    right: -14px;
+    z-index: 12;
+    border: 0;
+    padding: 0;
+    background: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 18px 7px 10px;
+    border-radius: 10px 0 0 10px;
+    background:
+      repeating-linear-gradient(101deg, rgba(255,255,255,0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 70%),
+      linear-gradient(100deg, #23445f 0%, #1a3145 45%, #142534 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      inset 0 -8px 14px -12px rgba(0, 0, 0, 0.85),
+      -2px 0 0 rgba(0, 255, 229, 0.55),
+      0 8px 16px -8px rgba(0, 0, 0, 0.9);
+  }
+  .rider__ticks { display: grid; gap: 2px; }
+  .rider__ticks i { height: 1.5px; border-radius: 1px; background: rgba(0, 255, 229, 0.6); }
+  .rider__ticks i:nth-child(1) { width: 10px; }
+  .rider__ticks i:nth-child(2) { width: 7px; opacity: 0.6; }
+  .rider__ticks i:nth-child(3) { width: 4px; opacity: 0.35; }
+  .rider__date { font-family: var(--display); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: #dffdf8; }
+
+  /* ------------------------------------------------------- the trade card */
+  /* `.lab-slab`: the board's own row, at rest. Only as much of it as the seats
+     need to be read against. */
+  .plate {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 3px 10px 4px;
+    border-radius: 4px;
+    position: relative;
+    z-index: 2;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 600;
+    color: #eaf6fb;
+    background: linear-gradient(172deg, #4d7d9c 0%, #2f566f 55%, #1f3b50 100%);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.4), 0 2px 0 var(--edge), 0 5px 10px -4px rgba(0, 0, 0, 0.8);
+  }
+  .slab {
+    margin-top: -9px;
+    padding: 0 6px 6px 0;
+    clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+    background: linear-gradient(128deg, #14545c 0%, #0a2b33 38%, var(--edge) 76%);
+    filter: drop-shadow(0 1px 0 rgba(0,0,0,0.9)) drop-shadow(0 10px 16px rgba(0,0,0,0.75)) drop-shadow(0 0 20px rgba(0,255,229,0.1));
+  }
+  .slab__face {
+    position: relative;
+    padding: 14px 12px 12px;
+    clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+    background:
+      repeating-linear-gradient(101deg, rgba(255,255,255,0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(168deg, #1b3245 0%, #122534 46%, #0a1723 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 2.5px 0 -1px rgba(255, 255, 255, 0.14),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
+      inset 0 -20px 38px -22px rgba(0, 0, 0, 0.9);
+  }
+  .stamp { float: right; padding: 3px 8px; border-radius: 5px; font-size: 10.5px; color: rgba(255,255,255,0.6); font-variant-numeric: tabular-nums; background: linear-gradient(180deg, #04101a, #0b1b28); box-shadow: inset 0 2px 7px rgba(0,0,0,0.85), inset 0 0 0 1px rgba(0,255,229,0.1); }
+  .toks { display: flex; flex-wrap: wrap; gap: 5px; clear: both; padding-top: 10px; }
+  .tok { font-family: var(--display); font-size: 8.5px; letter-spacing: 0.06em; padding: 3px 6px; border-radius: 3px; color: rgba(255,255,255,0.62); background: linear-gradient(180deg, #04101a, #0b1b28); box-shadow: inset 0 2px 7px rgba(0,0,0,0.85), inset 0 0 0 1px rgba(0,255,229,0.1); }
+  .who { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .who .av { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(150deg, #2b6f7e, #123); flex: none; }
+  .who .nm { font-size: 13px; font-weight: 600; }
+  .who .val { margin-left: auto; padding: 3px 8px; border-radius: 5px; font-family: var(--display); font-size: 11px; color: #dff; background: linear-gradient(180deg, #04101a, #0b1b28); box-shadow: inset 0 2px 7px rgba(0,0,0,0.85), inset 0 0 0 1px rgba(0,255,229,0.1); text-shadow: 0 -1px 1px rgba(0,0,0,0.95), 0 1px 0 rgba(255,255,255,0.16); }
+  .got { margin-top: 8px; font-size: 12.5px; color: rgba(255,255,255,0.85); }
+  .got .pos { color: rgba(255,255,255,0.45); font-size: 11px; }
+  /* `.lab-groove`: what a side gave up, cut into the card's face. */
+  .gave { margin-top: 7px; padding: 7px 9px; border-radius: 7px; font-size: 12px; color: rgba(255,255,255,0.42); background: linear-gradient(180deg, #050e17, #081722); box-shadow: inset 0 2px 5px rgba(0,0,0,0.95), inset 0 -1px 0 rgba(255,255,255,0.07); }
+  .cardgap { height: 18px; }
+
+  /* the two search bays above the controls, for context only */
+  .bays { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: rgba(255,255,255,0.07); border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
+  .bays > div { background: #0d1d2a; padding: 10px 11px; display: grid; gap: 12px; }
+  .bays .anyone { color: var(--active); font-size: 13px; font-weight: 600; }
+  .bays .cap { font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; color: rgba(255,255,255,0.3); float: right; }
+  .bays .add { color: var(--active); opacity: 0.75; font-size: 12.5px; }
+
+  /* ------------------------------------------------------------- compare */
+  .tablewrap { margin-top: 26px; overflow-x: auto; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.09); }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); vertical-align: top; }
+  thead th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.03); }
+  tbody th { font-weight: 600; color: rgba(255, 255, 255, 0.72); width: 210px; }
+  td { color: rgba(255, 255, 255, 0.62); }
+  .yes { color: #7dffe9; }
+  .mid { color: rgba(255, 255, 255, 0.6); }
+  .no { color: #ff9a9a; }
+  tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+
+  /* ------------------------------------------------------------- verdict */
+  .verdict {
+    margin-top: 26px;
+    padding: 22px 24px 24px;
+    border-radius: 16px;
+    background: linear-gradient(168deg, rgba(0, 255, 229, 0.07), rgba(0, 255, 229, 0.015));
+    box-shadow: inset 0 0 0 1px rgba(0, 255, 229, 0.18);
+  }
+  .verdict ol { margin: 16px 0 0; padding-left: 20px; display: grid; gap: 10px; color: rgba(255, 255, 255, 0.72); font-size: 15px; }
+  .verdict ol b { color: #fff; }
+  .verdict .prose { max-width: 70ch; }
+
+  footer { margin-top: 72px; padding-top: 22px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 13px; color: rgba(255, 255, 255, 0.4); max-width: 78ch; }
+
+  a { color: var(--active); }
+  :focus-visible { outline: 2px solid var(--active); outline-offset: 2px; border-radius: 4px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  /* ==================================================================
+     NINTH IN THE SERIES — the trades board's top card.
+
+     Everything above is lifted unchanged from
+     `trades-scope-and-seek.html`, which took it from
+     `src/app/globals.css`: the palette, the trough, the chips, the
+     instrument, the billet, the nameplate and the trade card are the
+     real materials at their real sizes. What follows is only the
+     vocabulary this file adds — five ways of building the block that
+     sits above the board.
+     ================================================================== */
+
+  /* A cut number: the trade card's own engraving, at whatever size the
+     call site sets. Two strengths, because a 10px caption takes the
+     full-strength lower lip as a blur — the card's own rule. */
+  .eng { text-shadow: 0 -1px 1px rgba(0, 0, 0, 0.95), 0 1px 0 rgba(255, 255, 255, 0.16); }
+  .eng-faint { text-shadow: 0 -1px 1px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.08); }
+
+  /* A readout cell — `.lab-readout` at any size. The one recess every
+     option here reaches for. */
+  .cut {
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.85),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+
+  /* ------------------------------------------------ A · the panel */
+  /* The trough's contents on a slab: the trade card's construction at
+     header scale, so the block above the list and the first row of it
+     are the same object. The nameplate rides the top edge and must be
+     a *sibling* of the clipped face — `clip-path` clips its subtree,
+     so a plate seated inside would be severed at the edge it straddles. */
+  .panel { padding-top: 9px; }
+  .panel__face {
+    position: relative;
+    padding: 15px 16px 13px;
+    clip-path: polygon(13px 0, 100% 0, 100% calc(100% - 13px), calc(100% - 13px) 100%, 0 100%, 0 13px);
+    background:
+      repeating-linear-gradient(101deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(168deg, #1b3245 0%, #122534 46%, #0a1723 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 2.5px 0 -1px rgba(255, 255, 255, 0.14),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
+      inset 0 -22px 40px -24px rgba(0, 0, 0, 0.9);
+  }
+  .panel__wall {
+    margin-top: -9px;
+    padding: 0 6px 6px 0;
+    clip-path: polygon(13px 0, 100% 0, 100% calc(100% - 13px), calc(100% - 13px) 100%, 0 100%, 0 13px);
+    background: linear-gradient(128deg, #14545c 0%, #0a2b33 38%, var(--edge) 76%);
+    filter:
+      drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 10px 16px rgba(0, 0, 0, 0.75))
+      drop-shadow(0 0 20px rgba(0, 255, 229, 0.1));
+  }
+  /* The two plates share the edge as one flex row, so the board's name
+     truncates *against* the count rather than against a width guessed
+     ahead of it — `CardLedge`'s rule, one part up. */
+  .panel__edge { display: flex; align-items: flex-end; gap: 10px; padding: 0 12px; }
+  .panel__edge .plate { margin-left: 0; }
+  .plate--count { margin-left: auto; display: inline-flex; align-items: baseline; gap: 6px; }
+  .plate--count b { font-size: 13px; font-variant-numeric: tabular-nums; }
+  .plate--count span { font-family: var(--body); font-size: 10px; font-weight: 500; opacity: 0.62; }
+  .panel__row { display: flex; align-items: center; flex-wrap: wrap; gap: 9px 12px; }
+  .panel__row + .panel__row { margin-top: 11px; }
+  .panel__note { flex: 1 1 220px; min-width: 0; font-size: 12px; color: rgba(255, 255, 255, 0.45); }
+
+  /* ---------------------------------------------- B · the masthead */
+  /* The count is the object and everything else is its caption. One row
+     at every width — the figure is `flex: none`, the caption block
+     shrinks, and the keys sit at the trailing end. */
+  .mast { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .mast__fig {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex: none;
+    font-family: var(--display);
+    font-variant-numeric: tabular-nums;
+  }
+  .mast__fig b {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #eaf9ff;
+    line-height: 1;
+  }
+  .mast__fig i {
+    font-style: normal;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.42);
+    font-family: var(--body);
+  }
+  .mast__cap { flex: 1 1 240px; min-width: 0; }
+  .mast__cap .l1 { font-size: 12.5px; color: rgba(255, 255, 255, 0.72); }
+  .mast__cap .l1 b { color: #fff; font-weight: 600; }
+  .mast__cap .l2 { margin-top: 3px; font-size: 11.5px; color: rgba(255, 255, 255, 0.4); }
+  .mast__keys { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+  /* The lit rail that means "a readout follows", turned upright beside a
+     figure rather than run down a cut's leading edge. */
+  .mast__rail {
+    flex: none;
+    width: 3px;
+    align-self: stretch;
+    min-height: 40px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #c8fff9, #00b0a0);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95), 3px 0 16px rgba(0, 255, 229, 0.45);
+  }
+
+  /* ------------------------------------------------ C · the bezel */
+  /* `.lab-bezel` / `.lab-gauge` at header scale — the trade card's league
+     run, holding the board's own facts. Down twice: a trough milled into
+     the face, each gauge a window sunk into its floor. Nothing in it is
+     raised, so the two triggers beside it are unmistakably the controls. */
+  .bezel {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0;
+    padding: 4px;
+    border-radius: 9px;
+    background: linear-gradient(180deg, #0a1825, #0d2130);
+    box-shadow:
+      inset 0 3px 8px rgba(0, 0, 0, 0.8),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  }
+  .gauge {
+    display: grid;
+    gap: 2px;
+    padding: 5px 11px 6px;
+    border-radius: 5px;
+    min-width: 0;
+  }
+  .gauge + .gauge { box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.55), inset 2px 0 0 rgba(255, 255, 255, 0.05); }
+  .gauge__cap {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.34);
+    white-space: nowrap;
+  }
+  .gauge__val {
+    font-family: var(--display);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #e4f7fd;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .gauge__val.dim { color: rgba(255, 255, 255, 0.55); }
+  /* The one gauge that is the headline: wider, brighter, and the only
+     place the accent is spent inside the housing. */
+  .gauge--head .gauge__val { font-size: 17px; color: #ffffff; }
+  .gauge--wide { min-width: 148px; }
+  .gauge--wide .gauge__val { overflow: hidden; text-overflow: ellipsis; }
+
+  /* ------------------------------------------- D · plate + rail */
+  .idplate {
+    position: relative;
+    padding: 13px 15px 12px;
+    border-radius: 14px 14px 0 0;
+    overflow: hidden;
+    background:
+      repeating-linear-gradient(101deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(168deg, #17293a 0%, #101f2c 50%, #0a1622 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+  .idplate::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(104deg, transparent 38%, rgba(255, 255, 255, 0.05) 50%, transparent 62%);
+    pointer-events: none;
+  }
+  .idplate__rail {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, #c8fff9, #00b0a0);
+    box-shadow: 3px 0 16px rgba(0, 255, 229, 0.4);
+  }
+  /* The control rail: the heading billet's face, held under the app bar
+     while the plate above it scrolls away. */
+  .ctlrail {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    padding: 7px 11px 8px;
+    border-radius: 0 0 12px 12px;
+    background: linear-gradient(180deg, #16293a 0%, #102030 62%, #0d1c29 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.26),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.8),
+      0 3px 0 var(--edge),
+      0 7px 12px -6px rgba(0, 0, 0, 0.8);
+  }
+  .ctlrail--pinned { border-radius: 12px; }
+  /* The pinned-state demo: the plate slid under the bar, rail left behind. */
+  .pinstage { position: relative; }
+  .pinbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 10px 10px 0 0;
+    background: linear-gradient(180deg, rgba(12, 32, 44, 0.94), rgba(8, 22, 32, 0.94));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 3px 0 #041019;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.32);
+  }
+  .clipped { position: relative; overflow: hidden; }
+  .clipped::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 30px;
+    background: linear-gradient(180deg, rgba(5, 11, 18, 0.92), transparent);
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  /* --------------------------------------- D′ · the key in the rail */
+  /* The seek key stops floating and becomes the rail's trailing key. Its
+     plate keeps riding an edge — the rail's own bottom one, which is what
+     a nameplate is a device for, where today it rides the key's edge and
+     lands wherever the scroll has put a card. */
+  /* `.seek` is absolute at its floating seat; in the rail it is an ordinary
+     item of the row. The plate stays a *sibling* of the notched billet, since
+     `clip-path` clips its whole subtree — nested inside, the plate is severed
+     at the edge it is meant to straddle, which is the trade card's nameplate
+     rule and is exactly what this mock did wrong on its first render. */
+  .seek--inrail { position: relative; top: auto; right: auto; flex: none; display: flex; }
+  /* Measured against the rail rather than the key: the key is 34px inside
+     a rail whose padding is 8px below it, so the plate has to clear both
+     to sit *on* the rail's edge rather than inside its face. */
+  .seek--inrail .seek__plate { bottom: -16px; }
+  /* The rail has to let the plate out — and a rail that clipped it would
+     be the trade card's `clip-path` trap one part over. */
+  .ctlrail { overflow: visible; }
+
+  /* ------------------------------------------------- E · dissolved */
+  /* No card at all: the board's identity rides the chrome, the count and
+     the triggers join the search bays' own rail. */
+  .bayrail {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    padding: 8px 11px;
+    border-radius: 12px 12px 0 0;
+    background: linear-gradient(180deg, #14273a 0%, #0f1f2d 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.7);
+  }
+  .bays--railed { border-radius: 0 0 12px 12px; margin-bottom: 0; }
+  .seam { flex: none; width: 1px; height: 15px; background: rgba(0, 0, 0, 0.55); box-shadow: 1px 0 0 rgba(255, 255, 255, 0.09); }
+
+  /* A gap where a block used to be, so the saving is visible rather than
+     asserted. */
+  .saved {
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    border: 1px dashed rgba(0, 255, 229, 0.3);
+    background: rgba(0, 255, 229, 0.035);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(0, 255, 229, 0.7);
+  }
+</style>
+
+<nav class="bar">
+  <span class="bar__mark">THE LAB · TRADES TOP CARD</span>
+  <span class="bar__keys">
+    <a class="bar__key" href="#now">Today</a>
+    <a class="bar__key" href="#a">A · Panel</a>
+    <a class="bar__key" href="#b">B · Masthead</a>
+    <a class="bar__key" href="#c">C · Bezel</a>
+    <a class="bar__key" href="#d">D · Plate + rail</a>
+    <a class="bar__key" href="#d2">D′ · One rail</a>
+    <a class="bar__key" href="#e">E · Dissolved</a>
+    <a class="bar__key" href="#compare">Compare</a>
+  </span>
+</nav>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Trades board · the block above the list · five directions</p>
+    <h1>Four claims about one board, at four weights, in an order the width decides</h1>
+    <p class="lede">
+      The top card holds everything true about the board underneath it: <b>which population</b>
+      (the circle), <b>what it means</b> (the sentence), <b>how big it came out</b> (the count),
+      <b>what else is narrowing it</b> (the season and the league rules), and the two keys that
+      move any of it. Five facts and two controls, currently drawn as seven peers in a wrapping
+      row inside a recessed trough — which is the one material on this page that says
+      <em>nothing is here</em>.
+    </p>
+    <p class="lede" style="margin-top:14px">
+      Five directions, drawn in the app's own faces over the real board. Each is shown at the
+      trades page's own 864px and at 390px, because <b>the wrapping is most of the argument and it
+      only shows up at the width it happens at</b>. Every height in the compare table is measured
+      off these renders at load rather than typed in. The circle steppers are live — press them.
+    </p>
+  </header>
+
+  <!-- ========================================================== DIAGNOSIS -->
+  <section id="now">
+    <div class="sec-head">
+      <h2>What the block costs today</h2>
+      <span class="eyebrow">Read first</span>
+    </div>
+    <div class="rule"></div>
+
+    <p class="prose" style="margin-top:20px">
+      Nothing here is in the wrong place. The scope leads because it is the widest claim; the
+      count sits with the triggers that move it; the search follows because a bay means "anyone
+      <em>in this circle</em>". Those arguments are already won and none of the options below
+      re-opens them. What is left is <b>how the block is built</b> — and it is built as a
+      container rather than as an instrument.
+    </p>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>Today</b> · <span>864px · the trades page's own width</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough" data-measure="now-desktop">
+              <div class="trow">
+                <div class="instr" style="flex:0 0 304px" data-instr>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <p class="scope" data-note>The whole crawled market.</p>
+              </div>
+              <div class="trow">
+                <span class="scope">2026 · all leagues</span>
+                <span class="tally"><b>54,504</b> <span>trades</span></span>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>Today</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough" data-measure="now-phone">
+              <div class="trow">
+                <div class="instr" data-instr>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <p class="scope" style="flex-basis:100%" data-note>The whole crawled market.</p>
+              </div>
+              <div class="trow">
+                <span class="tally"><b>54,504</b> <span>trades</span></span>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+              </div>
+              <div class="trow">
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div class="trow"><span class="scope">2026 · all leagues</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <span class="card__tag">The material says nothing is here</span>
+        <p>Every object on this page is machined — the cards are slabs with nameplates riding
+          their edges, the seek is a corner-lit billet, the app bar is keys and wells. The block
+          that describes all of it is a <em>trough</em>: the one face in the vocabulary that means
+          "a recess things are seated in". It reads as leftover chrome above the product.</p>
+      </div>
+      <div class="card">
+        <span class="card__tag">Two sentences, one question</span>
+        <p><b>The whole crawled market.</b> and <b>2026 · all leagues</b> both describe the
+          population, in the same 12px grey, separated by the count and two keys. One is the
+          circle's gloss and the other the filters' summary — nothing on screen says they are
+          different questions, or that the second one moves when you press Leagues.</p>
+      </div>
+      <div class="card card--warn">
+        <span class="card__tag">The headline is not drawn as one</span>
+        <p><b>54,504</b> is the number every filter on the page is pressed to move and the only
+          feedback a press gives. It is 18px, mid-row, between a grey sentence and two keys, and
+          it dims on stale — so the one thing worth watching is the thing most easily missed.</p>
+      </div>
+      <div class="card card--warn">
+        <span class="card__tag">The height is whatever the width decides</span>
+        <p>Everything wraps. At 864px it is <b data-num="now-desktop">—</b>; at 390px the rows
+          break four ways and it is <b data-num="now-phone">—</b>, with the scope line landing
+          <em>last</em> because it is <code>order-last basis-full</code>. That height is charged
+          to every card on a windowed list, and it is not a number anyone chose.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== OPTION A -->
+  <section class="opt" id="a">
+    <div class="opt__head">
+      <span class="opt__letter">A</span>
+      <div>
+        <h2>The instrument panel</h2>
+        <p class="opt__thesis">The block becomes a <em>slab</em> — the trade card's own
+          construction at header scale. The board's name rides the top edge on a nameplate, the
+          count holds the opposite corner on a plate of its own, and the controls sit on the face
+          between them. The header and the first row of the list become one object made of one
+          material.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>A</b> · <span>864px</span> <span class="live">live stepper</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="panel" data-measure="a-desktop">
+              <div class="panel__edge">
+                <span class="plate" data-plate-name>EVERY LEAGUE</span>
+                <span class="plate plate--count"><b class="eng">54,504</b> <span>trades</span></span>
+              </div>
+              <div class="panel__wall">
+                <div class="panel__face">
+                  <div class="panel__row">
+                    <div class="instr" style="flex:0 0 300px" data-instr data-plate>
+                      <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                      <span class="instr__disp">
+                        <span class="instr__rail"></span>
+                        <span class="instr__val" data-val>EVERY LEAGUE</span>
+                        <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                      </span>
+                      <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                    </div>
+                    <p class="panel__note" data-note>The whole crawled market.</p>
+                    <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                    <span class="chip chip--sm">Leagues</span>
+                  </div>
+                  <div class="panel__row" style="margin-top:9px">
+                    <span class="scope">2026 · all leagues · no player or manager named</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+            <div style="height:14px"></div>
+            <div data-cards="one"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>A</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="panel" data-measure="a-phone">
+              <div class="panel__edge">
+                <span class="plate" data-plate-name>EVERY LEAGUE</span>
+                <span class="plate plate--count"><b class="eng">54,504</b></span>
+              </div>
+              <div class="panel__wall">
+                <div class="panel__face" style="padding:13px 12px 11px">
+                  <div class="panel__row">
+                    <div class="instr" data-instr data-plate>
+                      <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                      <span class="instr__disp">
+                        <span class="instr__rail"></span>
+                        <span class="instr__val" data-val>EVERY LEAGUE</span>
+                        <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                      </span>
+                      <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                    </div>
+                  </div>
+                  <div class="panel__row" style="margin-top:9px">
+                    <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                    <span class="chip chip--sm">Leagues</span>
+                  </div>
+                  <div class="panel__row" style="margin-top:9px">
+                    <p class="panel__note" data-note>The whole crawled market.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>The two facts that identify the board hold the two corners</b>, exactly as a trade
+          card's name and instant do — and they are one flex row, so a long circle name truncates
+          against the count rather than against a width guessed ahead of it.</p>
+        <p><b>The count stops being mid-row text.</b> On a plate, engraved, at the edge, it is the
+          first thing read and the last thing a scroll takes away.</p>
+        <p><b>It is the page's own grammar.</b> A reader scrolling from this block into the first
+          card crosses no material boundary — same wall, same chamfer, same nameplate.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p><b>Height.</b> A slab pays for its wall and its plate overhang; measured here it is
+          <b data-delta="a-desktop">—</b> against today at 864px and
+          <b data-delta="a-phone">—</b> at 390px.</p>
+        <p><b>It looks pressable.</b> A slab on this page is a card you press, and this one opens
+          nothing. It has to wear the fixed variant (<code>.lab-slab-fixed</code>, no lift, no
+          bloom) — the rail's own precedent, and easy to lose in a later edit.</p>
+        <p><b>The nameplate is now a second place the circle is named</b>, beside the readout. The
+          note has to drop the name and carry only the meaning — which is what it already does.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== OPTION B -->
+  <section class="opt" id="b">
+    <div class="opt__head">
+      <span class="opt__letter">B</span>
+      <div>
+        <h2>The masthead — the count leads and everything else is its caption</h2>
+        <p class="opt__thesis">Invert the hierarchy. The number is the object: display face, 34px,
+          engraved, with the lit rail beside it that means "a readout follows". The circle, the
+          season and the rules become the two lines that qualify it, and the controls hold the
+          trailing end. One row, one height, at every width.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>B</b> · <span>864px</span> <span class="live">live stepper</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough" style="padding:13px 15px" data-measure="b-desktop">
+              <div class="mast" style="gap:14px">
+                <span class="mast__rail"></span>
+                <span class="mast__fig">
+                  <b class="eng">54,504</b>
+                  <i>trades</i>
+                </span>
+                <div class="mast__cap" style="flex:1 1 150px">
+                  <p class="l1"><b data-cap-name>Every league</b> · <span data-note>the whole crawled market.</span></p>
+                  <p class="l2">2026 · all leagues</p>
+                </div>
+                <span class="mast__keys">
+                  <!-- **The readout loses its name here, and that is the thesis
+                       rather than a concession to the width.** One row at 864px
+                       leaves ~130px for the instrument, which truncates
+                       `LEAGUEMATE LEAGUES` to `LEAGU…` — the exact failure the
+                       aperture was built to fix. But B's caption *already* names
+                       the circle in words, a few pixels to the left, so the
+                       readout was saying it twice: what is left is the rail, the
+                       pips and the two steps, and the name is read where it is
+                       written. Press it — the caption is what moves. -->
+                  <div class="instr" style="flex:0 0 116px" data-instr data-cap>
+                    <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                    <span class="instr__disp" style="justify-content:center;padding:7px 9px 8px">
+                      <span class="instr__rail"></span>
+                      <span class="pips" data-pips style="margin-left:0"><i></i><i></i><i></i><i class="on"></i></span>
+                    </span>
+                    <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                  </div>
+                  <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                  <span class="chip chip--sm">Leagues</span>
+                </span>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+            <div style="height:14px"></div>
+            <div data-cards="one"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>B</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough" style="padding:12px" data-measure="b-phone">
+              <div class="mast" style="gap:11px">
+                <span class="mast__rail" style="min-height:34px"></span>
+                <span class="mast__fig"><b class="eng" style="font-size:28px">54,504</b> <i>trades</i></span>
+                <div class="mast__cap" style="flex-basis:100%">
+                  <p class="l1"><b data-cap-name>Every league</b> · <span data-note>the whole crawled market.</span></p>
+                  <p class="l2">2026 · all leagues</p>
+                </div>
+                <!-- The same nameless instrument at 390px, deliberately: two
+                     spellings of one control either side of a breakpoint is the
+                     drift the stat columns' heading rail spent a paragraph
+                     retiring. The caption names the circle at both widths, so
+                     there is nothing for the readout to add at either. -->
+                <span class="mast__keys" style="flex-basis:100%;margin-left:0">
+                  <div class="instr" style="flex:0 0 116px" data-instr data-cap>
+                    <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                    <span class="instr__disp" style="justify-content:center;padding:7px 9px 8px">
+                      <span class="instr__rail"></span>
+                      <span class="pips" data-pips style="margin-left:0"><i></i><i></i><i></i><i class="on"></i></span>
+                    </span>
+                    <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                  </div>
+                  <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                  <span class="chip chip--sm">Leagues</span>
+                </span>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>The page finally has a subject.</b> Every filter here is pressed to move one number,
+          and that number is now the largest thing on the block instead of the fourth largest.</p>
+        <p><b>The two sentences become one.</b> The circle's name leads the caption and the rules
+          summary sits under it, so what is a gloss and what is a filter summary is settled by
+          position rather than left to a reader to work out.</p>
+        <p><b>The readout stops saying what the caption already says.</b> With the name in the
+          caption, the instrument is the rail, the pips and the two steps — ~116px rather than the
+          304px the aperture needs to hold <code>LEAGUEMATE LEAGUES</code> without truncating. That
+          is what actually buys the single row, and it is the same trade the app bar made when the
+          ADP block dropped its board name for a channel.</p>
+        <p><b>It is the cheapest of the four directions that keep a block</b>
+          (<b data-delta="b-desktop">—</b> against today at 864px), because the whole block is one
+          row — only E, which keeps no block at all, comes in under it.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p><b>The phone breaks the thesis, though not the saving.</b> One row needs ~700px; below
+          that the caption and the keys take lines of their own and it is three rows again —
+          <b data-delta="b-phone">—</b> than today, but no longer the single row the direction is
+          named for. "One height at every width" is a claim only the desktop keeps.</p>
+        <p><b>The nameless stepper is only legible next to its caption.</b> Move it, shrink the
+          caption, or let the caption wrap away from it and the control becomes four dots and two
+          arrows with nothing on screen saying what they set — which is the state the four keys
+          this instrument replaced could never get into.</p>
+        <p><b>A stale board dims the biggest thing on the page.</b> The count already fades while
+          a narrowed board lands — at 34px that flicker is the whole header rather than one small
+          element, and it may need a different treatment (the digits rolling, the way the ADP
+          drawer's draft count does).</p>
+        <p><b>It still sits in a trough.</b> This direction changes the hierarchy and not the
+          material — it can be combined with A, which is what the verdict does.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== OPTION C -->
+  <section class="opt opt--alt" id="c">
+    <div class="opt__head">
+      <span class="opt__letter">C</span>
+      <div>
+        <h2>The bezel — the board's own facts as a run of gauges</h2>
+        <p class="opt__thesis">The trade card already answers "what kind of league is this" as one
+          housed run of gauges, each value carrying the unit it counts cut into the floor above it.
+          The board can answer "what board is this" the same way: <span class="lab">scope</span>
+          <span class="lab">season</span> <span class="lab">rules</span>
+          <span class="lab">value</span> <span class="lab">trades</span>. Nothing in the housing is
+          raised, so the two keys beside it are unmistakably the only controls.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>C</b> · <span>864px</span> <span class="live">live stepper</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough" style="padding:12px 13px" data-measure="c-desktop">
+              <div class="trow" style="gap:10px">
+                <span class="bezel">
+                  <span class="gauge gauge--wide">
+                    <span class="gauge__cap">Scope</span>
+                    <span class="gauge__val eng-faint" data-cap-name>Every league</span>
+                  </span>
+                  <span class="gauge">
+                    <span class="gauge__cap">Season</span>
+                    <span class="gauge__val eng-faint">2026</span>
+                  </span>
+                  <span class="gauge">
+                    <span class="gauge__cap">Rules</span>
+                    <span class="gauge__val eng-faint dim">All leagues</span>
+                  </span>
+                  <span class="gauge">
+                    <span class="gauge__cap">Value</span>
+                    <span class="gauge__val eng-faint">KTC</span>
+                  </span>
+                  <span class="gauge gauge--head">
+                    <span class="gauge__cap">Trades</span>
+                    <span class="gauge__val eng">54,504</span>
+                  </span>
+                </span>
+                <div class="instr" style="flex:0 0 232px" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div class="trow" style="margin-top:9px">
+                <p class="scope" data-note>The whole crawled market.</p>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+            <div style="height:14px"></div>
+            <div data-cards="one"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>C</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="trough" style="padding:12px" data-measure="c-phone">
+              <div class="trow">
+                <span class="bezel" style="display:flex;width:100%">
+                  <span class="gauge" style="flex:1 1 0">
+                    <span class="gauge__cap">Scope</span>
+                    <span class="gauge__val eng-faint" style="overflow:hidden;text-overflow:ellipsis" data-cap-name>Every league</span>
+                  </span>
+                  <span class="gauge" style="flex:none">
+                    <span class="gauge__cap">Season</span>
+                    <span class="gauge__val eng-faint">2026</span>
+                  </span>
+                  <span class="gauge gauge--head" style="flex:none">
+                    <span class="gauge__cap">Trades</span>
+                    <span class="gauge__val eng">54,504</span>
+                  </span>
+                </span>
+              </div>
+              <div class="trow" style="margin-top:9px">
+                <div class="instr" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+              </div>
+              <div class="trow" style="margin-top:9px">
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div class="trow" style="margin-top:9px">
+                <p class="scope" data-note>The whole crawled market.</p>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>Every fact carries its unit.</b> Today <code>2026 · all leagues</code> is a sentence
+          a reader has to parse; here the season is under <span class="lab">season</span> and the
+          rules under <span class="lab">rules</span>, so nothing has to be inferred from a
+          separator.</p>
+        <p><b>One housing, not five readouts.</b> The card's own argument: five separate cells
+          read as perforation, and housed they are a single object a reader learns the shape of
+          once — and the same shape they already learned one row down.</p>
+        <p><b>What is pressable is unambiguous.</b> Everything in the run is sunk; the only raised
+          parts on the block are the stepper and the two keys.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p><b>The card's own rule says three z-levels.</b> The bezel is a fourth countable depth
+          and is only allowed on a trade card because it is nested inside the third. Repeating it
+          in the header is a second housing in view at the same time, which is exactly what that
+          rule was written to prevent.</p>
+        <p><b>The Value gauge and the Value key say the same thing</b> — the gauge reports what the
+          key is set to, a few pixels apart. Either the gauge goes or the key becomes the gauge
+          (which is direction D's rail).</p>
+        <p><b>The circle is named twice</b>, in the run and in the readout, and the phone can only
+          afford three gauges — so which three is a decision this direction has to make and today's
+          block never had to.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== OPTION D -->
+  <section class="opt opt--alt" id="d">
+    <div class="opt__head">
+      <span class="opt__letter">D</span>
+      <div>
+        <h2>Plate + rail — the identity scrolls, the controls stay</h2>
+        <p class="opt__thesis">Split the block by what a reader needs <em>when</em>. The identity —
+          the circle's name, its sentence, the count — is read once at the top and scrolls away.
+          The controls are a rail that pins under the app bar, so at row nine hundred the scope
+          stepper and both keys are still there. The leagues list already learned this: the plate
+          scrolls, the heading rail holds.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>D</b> · <span>864px · at rest</span> <span class="live">live stepper</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div data-measure="d-desktop">
+              <div class="idplate">
+                <span class="idplate__rail"></span>
+                <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+                  <div style="flex:1 1 320px;min-width:0">
+                    <p style="font-family:var(--display);font-size:15px;font-weight:600;letter-spacing:0.03em;color:#eaf9ff" data-cap-name>Every league</p>
+                    <p style="margin-top:4px;font-size:12px;color:rgba(255,255,255,0.45)" data-note>The whole crawled market.</p>
+                  </div>
+                  <span class="mast__fig" style="margin-left:auto">
+                    <b class="eng" style="font-size:26px">54,504</b> <i>trades</i>
+                  </span>
+                </div>
+              </div>
+              <div class="ctlrail">
+                <div class="instr" style="flex:0 0 268px" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <span class="seam"></span>
+                <span class="scope" style="flex:1 1 auto">2026 · all leagues</span>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+          </div>
+
+          <div class="stage-inner">
+            <p class="stage-cap">Scrolled — the plate has gone under the bar, the rail is holding</p>
+            <div class="pinstage">
+              <div class="pinbar">
+                <span style="color:var(--active)">▮</span> THE LAB / TRADES
+                <span style="margin-left:auto;display:flex;gap:8px;align-items:center" data-adp=""></span>
+              </div>
+              <div class="ctlrail ctlrail--pinned" style="border-radius:0 0 12px 12px">
+                <div class="instr" style="flex:0 0 268px" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <span class="seam"></span>
+                <span class="scope" style="flex:1 1 auto">2026 · all leagues</span>
+                <span class="tally"><b style="font-size:14px">54,504</b></span>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div class="clipped" style="height:150px;margin-top:14px">
+                <div data-cards="one"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>D</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div data-measure="d-phone">
+              <div class="idplate">
+                <span class="idplate__rail"></span>
+                <p style="font-family:var(--display);font-size:14px;font-weight:600;letter-spacing:0.03em;color:#eaf9ff" data-cap-name>Every league</p>
+                <div style="display:flex;align-items:flex-end;gap:10px;margin-top:5px">
+                  <p style="flex:1 1 auto;min-width:0;font-size:12px;color:rgba(255,255,255,0.45)" data-note>The whole crawled market.</p>
+                  <span class="mast__fig"><b class="eng" style="font-size:22px">54,504</b></span>
+                </div>
+              </div>
+              <div class="ctlrail">
+                <div class="instr" style="flex:1 1 100%" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>The scope becomes reachable while reading.</b> It is the page's most consequential
+          narrowing and today it is only reachable by scrolling back to the top — the exact
+          argument that pinned the seek key, applied to the control the seek key was split out
+          from.</p>
+        <p><b>The identity can be as generous as it likes</b>, because it is paid for once. A
+          26px count and a full sentence cost nothing at row nine hundred.</p>
+        <p><b>The pinned half is the one part that never wraps</b>, so the height charged to the
+          list while scrolling is fixed by construction.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p><b>A third pinned thing.</b> The app bar pins, the seek key pins, and this would make
+          three layers of chrome stacked at the top of a windowed board — and the seek key
+          currently floats at the trailing edge exactly where this rail's own keys would end.
+          Those two have to be reconciled before this is buildable.</p>
+        <p><b>It pays twice.</b> At rest it is <b data-delta="d-desktop">—</b> at 864px, and then
+          the rail is ~46px of <em>permanent</em> coverage on top of the app bar's own — the one
+          cost here that is charged for the whole length of the scroll rather than once at the
+          top.</p>
+        <p><b>A sticky part travels only as far as its own parent's box</b>, so the rail cannot be
+          a child of the header block — it has to be a sibling seated in <code>PageShell</code>'s
+          <code>&lt;main&gt;</code>, which is the trap the heading rail and the seek key each hit
+          once already.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================== OPTION D′ -->
+  <section class="opt opt--alt" id="d2">
+    <div class="opt__head">
+      <span class="opt__letter opt__letter--pair">D′</span>
+      <div>
+        <h2>One rail — the seek key folded in</h2>
+        <p class="opt__thesis">D's blocker is that its rail lands in the band the seek key already
+          holds: same 8px under the app bar, same trailing edge, both <code>z-30</code>. This is
+          the resolution rather than the workaround — <b>one pinned band holding both things a
+          reader reaches for while reading</b>: how far out the circle is drawn, and where in the
+          board they are standing. The key was already a key; what it gains is an edge for its
+          plate to ride.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>D′</b> · <span>864px · at rest</span> <span class="live">live stepper</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div data-measure="d2-desktop">
+              <div class="idplate">
+                <span class="idplate__rail"></span>
+                <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+                  <div style="flex:1 1 320px;min-width:0">
+                    <p style="font-family:var(--display);font-size:15px;font-weight:600;letter-spacing:0.03em;color:#eaf9ff" data-cap-name>Every league</p>
+                    <p style="margin-top:4px;font-size:12px;color:rgba(255,255,255,0.45)" data-note>The whole crawled market.</p>
+                  </div>
+                  <span class="mast__fig" style="margin-left:auto">
+                    <b class="eng" style="font-size:26px">54,504</b> <i>trades</i>
+                  </span>
+                </div>
+              </div>
+              <div class="ctlrail">
+                <div class="instr" style="flex:0 0 268px" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <span class="seam"></span>
+                <span class="scope" style="flex:1 1 auto">2026 · all leagues</span>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+                <span class="seam"></span>
+                <!-- At the top of the board there is no bound, so the key is
+                     unlit and draws no plate — `SeekKey`'s own rule, unchanged
+                     by the move: a plate reading "today" would put a bound on
+                     screen that the query string deliberately does not carry. -->
+                <span class="seek seek--inrail">
+                  <span class="billet notch">
+                    <span class="billet__face notch seek__face" data-cal></span>
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div style="height:12px"></div>
+            <div data-bays></div>
+          </div>
+
+          <div class="stage-inner">
+            <p class="stage-cap">Scrolled and travelled — one band under the bar, the date on its edge</p>
+            <div class="pinstage">
+              <div class="pinbar">
+                <span style="color:var(--active)">▮</span> THE LAB / TRADES
+                <span style="margin-left:auto;display:flex;gap:8px;align-items:center" data-adp=""></span>
+              </div>
+              <div class="ctlrail ctlrail--pinned" style="border-radius:0 0 12px 12px">
+                <div class="instr" style="flex:0 0 268px" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <span class="seam"></span>
+                <span class="scope" style="flex:1 1 auto">2026 · all leagues</span>
+                <span class="tally"><b style="font-size:14px">54,504</b></span>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+                <span class="seam"></span>
+                <!-- Travelled: the key is lit and the date rides the rail's
+                     bottom edge, which is the whole gain over the float — a
+                     nameplate is a part rising out of an *edge*, and today's
+                     seat gives it whichever card the scroll has put under it. -->
+                <span class="seek seek--inrail">
+                  <span class="billet billet--lit notch">
+                    <span class="billet__face notch seek__face" data-cal></span>
+                  </span>
+                  <span class="seek__plate">JUN 30, 2026</span>
+                </span>
+              </div>
+              <div class="clipped" style="height:150px;margin-top:16px">
+                <div data-cards="one"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>D′</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div data-measure="d2-phone">
+              <div class="idplate">
+                <span class="idplate__rail"></span>
+                <p style="font-family:var(--display);font-size:14px;font-weight:600;letter-spacing:0.03em;color:#eaf9ff" data-cap-name>Every league</p>
+                <div style="display:flex;align-items:flex-end;gap:10px;margin-top:5px">
+                  <p style="flex:1 1 auto;min-width:0;font-size:12px;color:rgba(255,255,255,0.45)" data-note>The whole crawled market.</p>
+                  <span class="mast__fig"><b class="eng" style="font-size:22px">54,504</b></span>
+                </div>
+              </div>
+              <div class="ctlrail">
+                <!-- The key stays on the stepper's line rather than joining the
+                     chips below it: when the rail wraps, what a reader must not
+                     lose is the pairing of *where am I* with *what am I looking
+                     at*. The chips are settings and can take the second line. -->
+                <div class="instr" style="flex:1 1 0;min-width:0" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </div>
+                <span class="seek seek--inrail">
+                  <span class="billet billet--lit notch">
+                    <span class="billet__face notch seek__face" data-cal></span>
+                  </span>
+                  <span class="seek__plate">JUN 30</span>
+                </span>
+                <!-- 13px, not the row's own gap: the plate hangs below the
+                     stepper's line, so a wrapped rail has to reserve room for
+                     it or the date lands on the chips underneath. That is the
+                     phone's share of the cost of folding the key in. -->
+                <span style="display:flex;gap:9px;flex-basis:100%;margin-top:13px">
+                  <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                  <span class="chip chip--sm">Leagues</span>
+                </span>
+              </div>
+            </div>
+            <div style="height:14px"></div>
+            <div data-bays></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>One pinned band instead of two.</b> The app bar, then this — where D would have made
+          three layers and left the seek key floating on top of its own trailing keys. Everything
+          reachable while reading is on one line, and the coverage charged to the board is paid
+          once.</p>
+        <p><b>The plate finally rides an edge that is always there.</b> A nameplate is a part
+          rising out of an edge to label what is inside it; today it rises out of a floating key
+          and lands over whichever card the scroll has put beneath it. On the rail's bottom edge it
+          labels the rail — which is exactly what the date is: the band saying what board this is,
+          and where in it you are.</p>
+        <p><b>The two questions asked while scrolling become adjacent.</b> "How far out is this
+          drawn" and "where am I standing" are one glance apart rather than at opposite ends of
+          the viewport, and both are one press.</p>
+        <p><b>It costs no new material.</b> The rail is <code>.lab-ledge</code>'s face, the key is
+          the billet it already is, the plate is <code>.lab-nameplate</code> where it already
+          was.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p><b>The key stops being at a fixed corner.</b> Floating, it is always at the same place
+          on screen; in the rail it moves with the row — and when the rail wraps at 390px the
+          reader has to find it again. It is kept on the stepper's line here for that reason,
+          which is a rule the phone layout now has to hold.</p>
+        <p><b>A wrapped rail has to reserve room for the plate.</b> The date hangs below the
+          stepper's line, so at 390px the row underneath is pushed 13px clear of it — a rule that
+          is invisible in the markup and shows up as a date sitting on a chip the first time
+          someone edits the row.</p>
+        <p><b>The rail must publish its own height.</b> Once it wraps, anything measuring the
+          chrome under the bar needs <code>--list-ledge-h</code>'s trick — a runtime measurement,
+          which is the app's only one and is worth not acquiring a second of lightly.</p>
+        <p><b>It re-opens a seat that was settled recently.</b> The float was itself the fix for
+          the key being filed with the settings, and its resting band above the first card was a
+          second fix on top of that. This is a third move for one control — worth making only
+          because the rail gives it a better edge than the one it has, not because the header
+          wanted the space.</p>
+        <p><b>The plate hangs into the board permanently.</b> ~10px of the first visible card,
+          for as long as the reader has travelled — where today's key pays that only while
+          pinned, and the resting band above the list was bought precisely to avoid it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="opt" style="margin-top:34px">
+    <div class="card card--warn" style="max-width:none">
+      <span class="card__tag">Shipped · what the build changed</span>
+      <p>D′ is built. Four things came out different from this drawing, each found by
+        rendering the real components rather than by reading them:</p>
+      <p><b>The rail is <code>.lab-plate</code>, not <code>.lab-ledge-face</code>.</b> This page
+        claimed "no new material" by pointing at the app's other pinned rail — which is a heading
+        rail over a list of cards: a bright face that sets its own engraving <code>text-shadow</code>
+        on everything inside it, so a row of lit chips read as keys already pressed. The surface for
+        a raised thing holding controls is the one the league panel and the tools menu already
+        wear.</p>
+      <p><b>The season · rules · selection line is on the rail, not the plate.</b> It reads as
+        description and is the one part of the description a press <em>moves</em> — pressing
+        Leagues changes it — so it is feedback, and feedback belongs where the control is. The
+        plate is the circle's name and its sentence, and nothing else.</p>
+      <p><b>The seek key is last at every width.</b> This page proposed keeping it on the stepper's
+        line at 390px, which saves 40px of permanently pinned band and costs the whole point of the
+        move: only the row's final member has the rail's bottom edge under it, so seated earlier on
+        a wrapped rail the date plate hangs over the line beneath — measured, it landed on
+        <code>Clear</code>.</p>
+      <p><b>Measured off the build:</b> 67px plate + 52px rail at 864px (against this page's
+        estimate of 121px for the pair), and a 126px rail at 390px while travelled — heavier than
+        drawn, and the direction's own argument for it is unchanged: the plate is paid once and the
+        rail is what a reader can still reach at row nine hundred.</p>
+    </div>
+  </section>
+
+  <!-- =========================================================== OPTION E -->
+  <section class="opt" id="e">
+    <div class="opt__head">
+      <span class="opt__letter">E</span>
+      <div>
+        <h2>Dissolved — no top card at all</h2>
+        <p class="opt__thesis">Ask whether the block should exist. The board's identity is a fact
+          about the <em>page</em>, so it goes in the chrome, beside the ADP block that already
+          describes the market. The count and the two triggers join the search bays' own rail,
+          which is a control surface that is already there. What is above the list is then the
+          search and nothing else.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="screen">
+        <div class="screen__tab"><b>E</b> · <span>864px</span> <span class="live">live stepper</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="pinbar" style="border-radius:10px">
+              <span style="color:var(--active)">▮</span> THE LAB / TRADES
+              <span class="seam" style="margin:0 4px"></span>
+              <span style="display:flex;align-items:center;gap:6px">
+                <span class="instr" style="flex:0 0 214px" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp" style="padding:4px 8px 5px">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </span>
+              </span>
+              <span style="margin-left:auto;display:flex;gap:8px;align-items:center" data-adp=""></span>
+            </div>
+            <div style="height:14px"></div>
+            <div>
+              <!-- Measured on the rail alone, because that is what replaces the
+                   top card: the bays are on the page in every direction here and
+                   counting them under E only would credit it with a block every
+                   other option also draws. The 12px gap between the block and
+                   the search goes too, and is not counted. -->
+              <div class="bayrail" data-measure="e-desktop">
+                <span class="tally"><b>54,504</b> <span>trades</span></span>
+                <span class="seam"></span>
+                <span class="scope" style="flex:1 1 auto" data-note>Every league · the whole crawled market · 2026 · all leagues</span>
+                <span class="chip chip--sm">Value&nbsp;&nbsp;KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div data-bays="railed"></div>
+            </div>
+            <div style="height:14px"></div>
+            <div data-cards="one"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen phone">
+        <div class="screen__tab"><b>E</b> · <span>390px</span></div>
+        <div class="screen__stage">
+          <div class="stage-inner">
+            <div class="pinbar" style="border-radius:10px">
+              <span style="color:var(--active)">▮</span> TRADES
+              <span style="margin-left:auto;display:flex;gap:6px;align-items:center" data-adp=""></span>
+            </div>
+            <div style="height:12px"></div>
+            <div>
+              <div class="bayrail" data-measure="e-phone">
+                <span class="instr" style="flex:1 1 100%" data-instr data-cap>
+                  <button class="instr__step" data-step="-1" aria-label="Narrow the scope">‹</button>
+                  <span class="instr__disp" style="padding:4px 8px 5px">
+                    <span class="instr__rail"></span>
+                    <span class="instr__val" data-val>EVERY LEAGUE</span>
+                    <span class="pips" data-pips><i></i><i></i><i></i><i class="on"></i></span>
+                  </span>
+                  <button class="instr__step" data-step="1" aria-label="Widen the scope">›</button>
+                </span>
+                <span class="tally"><b>54,504</b> <span>trades</span></span>
+                <span class="chip chip--sm" style="margin-left:auto">KTC <span class="caret">▼</span></span>
+                <span class="chip chip--sm">Leagues</span>
+              </div>
+              <div data-bays="railed"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p><b>The most valuable thing on a windowed board is the height above it</b>, and this is
+          the only direction that gives any back — <b data-delta="e-desktop">—</b> at 864px and
+          <b data-delta="e-phone">—</b> at 390px.</p>
+        <p><b>The search rail is a control surface that already exists.</b> Putting the count and
+          the two keys on its head makes one instrument out of two blocks that currently sit 12px
+          apart doing the same kind of work.</p>
+        <p><b>The circle beside the ADP block is honest.</b> Both describe a population rather than
+          a trade, and the bar's seat is the app's one sanctioned place for a page's own control.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p><b>The bar's rule is one occupant per route</b>, and the ADP block already holds it. A
+          second part means the seat becomes a group, the wordmark loses its text below
+          <code>sm</code>, and the bar has to be laid out for four parts on a 390px screen.</p>
+        <p><b>The sentence has nowhere to live.</b> It is what explains why a step key is inert
+          without an account and what separates the two leaguemate readings — compressed onto one
+          rail line it truncates, which is the failure the readout already had once.</p>
+        <p><b>It disperses the board's description across two surfaces.</b> A reader asking "what
+          am I looking at" now looks in the chrome for half the answer and above the list for the
+          other half.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ COMPARE -->
+  <section class="opt" id="compare">
+    <div class="sec-head">
+      <h2>Side by side</h2>
+      <span class="eyebrow">Heights measured at load</span>
+    </div>
+    <div class="rule"></div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Today</th>
+            <th>A · Panel</th>
+            <th>B · Masthead</th>
+            <th>C · Bezel</th>
+            <th>D · Plate + rail</th>
+            <th>D′ · One rail</th>
+            <th>E · Dissolved</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Height at 864px</th>
+            <td data-cell="now-desktop">—</td>
+            <td data-cell="a-desktop">—</td>
+            <td data-cell="b-desktop">—</td>
+            <td data-cell="c-desktop">—</td>
+            <td data-cell="d-desktop">—</td>
+            <td data-cell="d2-desktop">—</td>
+            <td data-cell="e-desktop">—</td>
+          </tr>
+          <tr>
+            <th>Height at 390px</th>
+            <td data-cell="now-phone">—</td>
+            <td data-cell="a-phone">—</td>
+            <td data-cell="b-phone">—</td>
+            <td data-cell="c-phone">—</td>
+            <td data-cell="d-phone">—</td>
+            <td data-cell="d2-phone">—</td>
+            <td data-cell="e-phone">—</td>
+          </tr>
+          <tr>
+            <th>Material</th>
+            <td class="no">Trough — "nothing is here"</td>
+            <td class="yes">Slab — the list's own</td>
+            <td class="mid">Trough, new hierarchy</td>
+            <td class="mid">Trough + bezel</td>
+            <td class="yes">Plate + billet rail</td>
+            <td class="yes">Plate + billet rail</td>
+            <td class="yes">Bar + rail, no block</td>
+          </tr>
+          <tr>
+            <th>Is the count the headline?</th>
+            <td class="no">No — 18px, mid-row</td>
+            <td class="yes">Yes — corner plate</td>
+            <td class="yes">Yes — 34px, leads</td>
+            <td class="mid">Yes, inside a run of five</td>
+            <td class="yes">Yes — on the plate</td>
+            <td class="yes">Yes — on the plate</td>
+            <td class="no">No — back to a tally</td>
+          </tr>
+          <tr>
+            <th>Two population sentences?</th>
+            <td class="no">Two, unrelated</td>
+            <td class="mid">Two, but ranked</td>
+            <td class="yes">One caption block</td>
+            <td class="yes">Facts, each captioned</td>
+            <td class="yes">One on the plate</td>
+            <td class="yes">One on the plate</td>
+            <td class="no">One line, truncates</td>
+          </tr>
+          <tr>
+            <th>Where the circle is named</th>
+            <td class="mid">Readout, once</td>
+            <td class="mid">Nameplate <em>and</em> readout</td>
+            <td class="yes">Caption only — the readout drops its name</td>
+            <td class="no">Gauge <em>and</em> readout</td>
+            <td class="no">Plate <em>and</em> readout</td>
+            <td class="no">Plate <em>and</em> readout</td>
+            <td class="mid">Readout, in the bar</td>
+          </tr>
+          <tr>
+            <th>Fixed height at all widths?</th>
+            <td class="no">No — wraps four ways</td>
+            <td class="mid">Wraps once at phone</td>
+            <td class="no">No — thesis needs ~700px</td>
+            <td class="mid">Gauges drop below <code>sm</code></td>
+            <td class="yes">Pinned half never wraps</td>
+            <td class="mid">Pinned half wraps at phone</td>
+            <td class="mid">Rail wraps once</td>
+          </tr>
+          <tr>
+            <th>Scope reachable at row 900?</th>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="yes">Yes — pinned</td>
+            <td class="yes">Yes — pinned, beside the date</td>
+            <td class="yes">Yes — in the bar</td>
+          </tr>
+          <tr>
+            <th>New vocabulary needed</th>
+            <td class="mid">—</td>
+            <td class="yes">None — slab + nameplate exist</td>
+            <td class="yes">None — sizes only</td>
+            <td class="mid">Bezel ported to header scale</td>
+            <td class="no">A pinned rail + its stacking</td>
+            <td class="mid">A pinned rail; the key moves into it</td>
+            <td class="no">A two-occupant bar seat</td>
+          </tr>
+          <tr>
+            <th>Risk</th>
+            <td class="mid">—</td>
+            <td class="mid">Reads pressable; needs the fixed slab</td>
+            <td class="mid">A 34px number dimming on stale</td>
+            <td class="no">Second housing in view; breaks the card's own 3-level rule</td>
+            <td class="no">Three pinned layers; collides with the seek key</td>
+            <td class="mid">A third move for one control</td>
+            <td class="no">Bar crowding; the sentence is lost</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="prose" style="margin-top:14px;font-size:13px;color:rgba(255,255,255,0.45)">
+      Every height is the block that sits <em>above the search bays</em>, measured at load. E is
+      measured on its rail alone, since the bays it is fused to are drawn in every direction here —
+      counting them under E only would credit it with a block the other four also pay for. The
+      12px gap between the block and the search goes with E too, and is not counted either.
+    </p>
+
+    <div class="verdict">
+      <h2 style="font-size:18px">If it were mine: A + B, and D only if the seek key moves</h2>
+      <p class="prose" style="margin-top:12px">
+        <b>A and B are not really competing</b> — one is the material and the other the hierarchy,
+        and each fixes a different half of the diagnosis. A slab with a nameplate on one corner and
+        the count engraved on the other <em>is</em> B's inversion, paid for in the page's existing
+        vocabulary rather than in a new one: the count leads because it holds an edge, not because
+        it is 34px. That combination needs no class that does not already ship, which is the
+        strongest thing that can be said for a header direction here.
+      </p>
+      <ol>
+        <li><b>Take A's construction.</b> <code>.lab-slab-fixed</code> for the face, the nameplate
+          for the circle, a second plate on the trailing corner for the count — the trade card's
+          <code>CardLedge</code> row, so the name truncates against the count.</li>
+        <li><b>Take B's ranking inside it.</b> The circle's sentence and the rules summary become
+          one caption block under the stepper, so the two grey lines that say overlapping things
+          today become one thing said once.</li>
+        <li><b>Leave C's bezel on the card.</b> The gauges are right about captioning every fact
+          and wrong about repeating a housing the row below already owns — the fourth countable
+          depth is allowed there precisely because nothing else in view has one.</li>
+        <li><b>D as drawn is not buildable, and D′ is why.</b> D's rail lands in the band the
+          seek key already holds — same offset, same trailing edge, both <code>z-30</code> — so
+          the choice is never "D or not D", it is whether that key folds into the rail. Folded, it
+          gains an edge for its plate and the board pays for one pinned band instead of two.</li>
+        <li><b>D′ is the strongest direction here and the biggest ask.</b> It is a third move for
+          one control in as many revisions, and it should be decided as a question about the seek
+          key rather than as a consequence of picking a header. If the answer is no, D goes with
+          it — and A + B stand on their own, since neither touches a pinned band at all.</li>
+        <li><b>Keep E as the measurement, not the plan.</b> It is worth knowing exactly how much
+          the block costs — but the sentence it deletes is the one that explains an inert control,
+          and the bar seat is spoken for.</li>
+      </ol>
+      <p class="prose" style="margin-top:16px">
+        What none of these change: the scope still leads the search, the search still leads the
+        list, the count is still counted server-side over the two populations, and the whole block
+        stays inside <code>headerRef</code> so the virtualizer is told when it rewraps.
+        <code>TradeControls</code> keeps its props; what changes is what it renders.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    Ninth in the mockups series, drawn in the app's own faces from <code>src/app/globals.css</code>
+    — so a part shown here is the part that ships. The trough, the chips, the instrument, the
+    billet, the nameplate, the slab and the trade card are the real materials at their real sizes;
+    the names and counts are representative. The 864px stages are the trades page's own content
+    width (<code>PageShell width="wide"</code> is <code>max-w-4xl</code> with <code>px-4</code>),
+    and every height in the compare table is measured off these renders at load rather than typed
+    in.
+  </footer>
+
+</div>
+
+<script>
+"use strict";
+
+/* The four circles, narrowest first — the order `TRADE_CIRCLES` is already in,
+   and the order every stepper here walks. */
+const CIRCLES = [
+  { name: "My leagues",         note: "Leagues you field a team in." },
+  { name: "Leaguemate trades",  note: "Trades a leaguemate was party to, in any league of theirs." },
+  { name: "Leaguemate leagues", note: "Any league a leaguemate plays in, whoever made the trade." },
+  { name: "Every league",       note: "The whole crawled market." },
+];
+
+/* Every stepper drives the block it is inside: the readout, the pips, the
+   sentence, and — where the direction has one — the nameplate or the caption
+   that names the same circle a second time. That second name is the point:
+   it is a cost each direction pays and it should be visible while pressing. */
+document.querySelectorAll("[data-instr]").forEach((instr) => {
+  const host = instr.closest("[data-measure]") || instr.closest(".stage-inner");
+  const val = instr.querySelector("[data-val]");
+  const pips = [...instr.querySelectorAll("[data-pips] i")];
+  let i = 3;
+
+  function paint() {
+    const circle = CIRCLES[i];
+    // B's stepper has no readout of its own — its caption is the readout — so
+    // the name is written wherever the direction chose to put it, and here that
+    // is nowhere.
+    if (val) val.textContent = circle.name.toUpperCase();
+    pips.forEach((p, at) => p.classList.toggle("on", at === i));
+    if (!host) return;
+    host.querySelectorAll("[data-note]").forEach((note) => {
+      // E folds the whole description onto one rail line, which is exactly the
+      // truncation its cost note claims — so it is written out rather than
+      // shortened for the demo.
+      note.textContent = note.closest(".bayrail")
+        ? `${circle.name} · ${circle.note.toLowerCase()} · 2026 · all leagues`
+        : circle.note;
+    });
+    host.querySelectorAll("[data-plate-name]").forEach((p) => {
+      p.textContent = circle.name.toUpperCase();
+    });
+    host.querySelectorAll("[data-cap-name]").forEach((p) => {
+      p.textContent = circle.name;
+    });
+  }
+
+  instr.querySelectorAll("[data-step]").forEach((b) =>
+    b.addEventListener("click", () => {
+      i = Math.min(3, Math.max(0, i + Number(b.dataset.step)));
+      paint();
+    }));
+});
+
+/* --------------------------------------------------- shared app chrome */
+/* Written once and cloned, so every direction is judged against the same bar.
+   The ADP block is the seat's existing occupant — E's stepper has to sit
+   beside it, which is most of E's cost. */
+const ADP_BLOCK = `
+  <span class="billet notch">
+    <span class="billet__face notch" style="gap:6px;height:30px;padding:0 9px 0 0">
+      <span class="billet__rail"></span>
+      <span class="channel" style="height:15px;margin-left:6px">
+        <i style="height:9px"></i><i style="height:6px"></i><i style="height:4px"></i>
+      </span>
+      <span class="adp-word">ADP</span>
+    </span>
+  </span>`;
+
+const TOOLS_KEY = `
+  <span class="toolskey key-notch">
+    <span class="toolskey__face key-notch">▦ ▾</span>
+  </span>`;
+
+document.querySelectorAll("[data-adp]").forEach((el) => {
+  el.innerHTML = ADP_BLOCK + TOOLS_KEY;
+});
+
+/* The seek key's own glyph — D′ folds this part into the rail rather than
+   redrawing it, which is most of that direction's argument. */
+const CAL = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+  <rect x="1.5" y="3" width="13" height="11.5" rx="2" fill="none" stroke="#cfeef3" stroke-opacity=".9" stroke-width="1.2"/>
+  <path d="M1.5 6.5h13" stroke="#cfeef3" stroke-opacity=".9" stroke-width="1.2"/>
+  <path d="M5 1.5v3M11 1.5v3" stroke="#cfeef3" stroke-opacity=".9" stroke-width="1.2" stroke-linecap="round"/>
+  <rect x="6.6" y="9" width="2.8" height="2.8" rx=".6" fill="#00ffe5"/>
+</svg>`;
+document.querySelectorAll("[data-cal]").forEach((el) => { el.innerHTML = CAL; });
+
+/* The two search bays, for context: every direction is judged by what it looks
+   like directly above them, since that is where it actually sits. */
+function bays(railed) {
+  return `
+    <div class="bays${railed ? " bays--railed" : ""}">
+      <div>
+        <div><span class="cap">Got</span><span class="anyone">+ anyone</span></div>
+        <div class="add">+ add</div>
+      </div>
+      <div>
+        <div><span class="cap">Got</span><span class="anyone">+ anyone</span></div>
+        <div class="add">+ add</div>
+      </div>
+    </div>`;
+}
+document.querySelectorAll("[data-bays]").forEach((el) => {
+  el.innerHTML = bays(el.dataset.bays === "railed");
+});
+
+/* One card, so a header is read against the board rather than against air. */
+function card(league, stamp, who, val, got, pos, gave) {
+  return `
+    <span class="plate">${league}</span>
+    <div class="slab">
+      <div class="slab__face">
+        <span class="stamp">${stamp}</span>
+        <div class="toks">
+          <span class="tok">KEEPER</span><span class="tok">16 TEAM</span>
+          <span class="tok">1QB</span><span class="tok">1TE</span>
+        </div>
+        <div class="who"><span class="av"></span><span class="nm">${who}</span><span class="val">${val}</span></div>
+        <div class="got">+ ${got} <span class="pos">${pos}</span></div>
+        <div class="gave">− ${gave}</div>
+      </div>
+    </div>`;
+}
+document.querySelectorAll("[data-cards]").forEach((el) => {
+  el.innerHTML = card(
+    "Not Your Granny’s Dynasty", "Aug 7, 2026 · 3:53 PM",
+    "Bsparky1352", "KTC 2,042", "2027 4th", "from franktormey", "2026 5.02");
+});
+
+/* --------------------------------------------------------- measurements */
+/* The compare table's heights are read off the renders at load rather than
+   typed in — the series' rule, and the reason the cheapest-looking direction
+   is not always the cheapest one. Every number in the prose comes from the
+   same pass, since a claim about a height and the render it describes have
+   already drifted apart once in this series. */
+const heights = {};
+function measure() {
+  document.querySelectorAll("[data-measure]").forEach((block) => {
+    const px = Math.round(block.getBoundingClientRect().height);
+    heights[block.dataset.measure] = px;
+    const cell = document.querySelector(`[data-cell="${block.dataset.measure}"]`);
+    if (cell) cell.textContent = px + "px";
+  });
+
+  document.querySelectorAll("[data-num]").forEach((el) => {
+    const px = heights[el.dataset.num];
+    if (px !== undefined) el.textContent = px + "px";
+  });
+  document.querySelectorAll("[data-delta]").forEach((el) => {
+    const key = el.dataset.delta;
+    const base = heights[key.endsWith("phone") ? "now-phone" : "now-desktop"];
+    const px = heights[key];
+    if (base === undefined || px === undefined) return;
+    const d = px - base;
+    el.textContent = d === 0 ? "level with today's"
+      : `${Math.abs(d)}px ${d < 0 ? "shorter" : "taller"}`;
+  });
+}
+requestAnimationFrame(measure);
+addEventListener("resize", measure);
+if (document.fonts) document.fonts.ready.then(measure);
+</script>
