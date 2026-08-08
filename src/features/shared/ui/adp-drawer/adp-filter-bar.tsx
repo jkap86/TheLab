@@ -28,13 +28,19 @@ import { ROUNDS_SEGMENT } from "./adp-drawer.constants.ts";
  * It goes inside rather than beside, because a dialog and a stray chip is the
  * arrangement this replaced.
  *
- * What it loses is the **Type** row (`omitType`), which is the same trade the
- * board's own `league_type` parameter already made: every fetch answers the
- * redraft and dynasty markets side by side and the board keys choose which is
- * drawn, so on this page the league type is a display question and not a
- * population one. Left in, it was a second control over the one axis the display
- * already owns — narrow to dynasty leagues with the redraft column up and the
- * answer is an empty column with nothing on screen saying why.
+ * What it loses is two rows (`omit`), for one argument twice over: this page
+ * already asks both questions with a control of its own, and two controls over
+ * one axis disagree in a way that reads as a bug rather than a selection.
+ *
+ * The **Type** row is the trade the board's own `league_type` parameter already
+ * made: every fetch answers the redraft and dynasty markets side by side and the
+ * board keys choose which is drawn, so on this page the league type is a display
+ * question and not a population one. Left in, it was a second control over the
+ * one axis the display already owns — narrow to dynasty leagues with the redraft
+ * column up and the answer is an empty column with nothing on screen saying why.
+ * The **Season** row is the same shape one level up: the pinned block leads with
+ * a season row that decides which leagues are fetched at all, so a season inside
+ * the dialog would be a finer cut on an axis already answered a few pixels above.
  *
  * The seed control stays outside it and stays a chip. It is not a filter — it
  * *writes* filters, from a league the reader recognises by name — and the trades
