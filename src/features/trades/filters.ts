@@ -410,11 +410,25 @@ export function activeTradeFilterCount(filters: TradeFilters): number {
   return (
     (filters.seek === null ? 0 : 1) +
     (filters.circle === "all" ? 0 : 1) +
-    filters.sides.reduce(
-      (count, side) =>
-        count + (side.manager === null ? 0 : 1) + sideAssetCount(side),
-      0,
-    )
+    sideSelectionCount(filters)
+  );
+}
+
+/**
+ * How many things the two bays hold — the badge on the key that opens them.
+ *
+ * **It is `activeTradeFilterCount`'s own sides term, named**, rather than a
+ * second walk over the same fields: the key is what stands in for the search
+ * while it is collapsed, so a bay it forgets to count is a narrowing with
+ * nothing on screen saying it is there. The circle and the seek are deliberately
+ * not in it — each has its own control on the same rail, and a badge counting
+ * them would report a press on one key as work done by another.
+ */
+export function sideSelectionCount(filters: TradeFilters): number {
+  return filters.sides.reduce(
+    (count, side) =>
+      count + (side.manager === null ? 0 : 1) + sideAssetCount(side),
+    0,
   );
 }
 

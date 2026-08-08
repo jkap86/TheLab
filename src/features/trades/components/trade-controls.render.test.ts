@@ -180,6 +180,18 @@ describe("the identity plate", () => {
     assert.ok(!plate().includes("2026"));
   });
 
+  test("the narrowing line contracts before the row wraps", () => {
+    // Flex wraps on hypothetical sizes and only shrinks *within* a line
+    // afterwards, so a basis of `auto` here puts the whole sentence on the row
+    // before anything gives way and the trailing key drops to a second line —
+    // 40px of permanently pinned band, spent on the one member of this row that
+    // is neither a control nor the feedback for one. A basis of zero is what
+    // makes this the part that gives way, which is what its own note claims.
+    const line = rail().slice(rail().indexOf("2026 · all leagues") - 300);
+    assert.ok(line.includes("min-w-0 flex-1 truncate"));
+    assert.ok(!line.slice(0, 300).includes("basis-"));
+  });
+
   test("the plate holds no controls at all", () => {
     // It is the half that is read once and scrolls away; every press on this
     // page is on the rail below, which is what makes pinning that rail worth

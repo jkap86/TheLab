@@ -99,8 +99,23 @@ export type PickedName = {
  * is "anyone in this circle", so the population has to be stated before the
  * question is composed against it. What it still leads is the list, which is
  * what the question is asked of.
+ *
+ * **It opens from the rail's `Search` key rather than standing on the page**,
+ * and what makes that safe is that the rail keeps saying what is in here while
+ * it is shut — the narrowing line in words, the key's badge in a number. See
+ * {@link SearchKey}.
+ *
+ * **Shut, it is hidden rather than unmounted, and the reason is `picked`.** The
+ * names a reader chose are held here precisely because the board's own lookup
+ * maps only carry what its loaded pages named — the search that returns nothing
+ * is exactly the one whose token would come back as a Sleeper id. Unmounting on
+ * every collapse would throw that away, so the page latches this mounted after
+ * the first press (the drawer and the league sheet's own habit) and the box
+ * takes `hidden`, which costs the layout nothing and makes reopening instant.
  */
 export function TradeSearch({
+  id,
+  expanded,
   filters,
   onChange,
   season,
@@ -110,6 +125,10 @@ export function TradeSearch({
   players,
   managers,
 }: {
+  /** What the rail's key points `aria-controls` at. */
+  id: string;
+  /** Whether the key has this open — see the note above on why shut is not gone. */
+  expanded: boolean;
   filters: TradeFilters;
   onChange: (filters: TradeFilters) => void;
   season: string;
@@ -129,6 +148,19 @@ export function TradeSearch({
   const panelId = useId();
 
   const close = useCallback(() => setOpen(null), []);
+
+  // A panel aimed at a bay nobody can see is a panel with no anchor, so
+  // collapsing takes it down. Adjusted during render against the previous
+  // `expanded` rather than in an effect, which would leave the panel floating
+  // over the board for a frame after the bays beneath it went away — the same
+  // reason the ADP drawer resets its floats this way. A press on the key closes
+  // it by the outside-pointerdown handler below anyway; this is what covers the
+  // keyboard, where no pointer event is ever sent.
+  const [wasExpanded, setWasExpanded] = useState(expanded);
+  if (wasExpanded !== expanded) {
+    setWasExpanded(expanded);
+    if (!expanded && open !== null) setOpen(null);
+  }
 
   // A press outside the control dismisses it. Pointer-down rather than click, so
   // dragging out of it doesn't leave it up — the gesture the subject rail's panel
@@ -178,8 +210,20 @@ export function TradeSearch({
   return (
     // `mb-4`, the gap the block above the list has always had: this is that
     // block now, and the cards want more ground under a control than the two
-    // controls want between themselves.
-    <div ref={boxRef} className="relative mb-4">
+    // controls want between themselves. Shut, the box is `display: none` and the
+    // margin goes with it — the gap belongs to the control rather than to the
+    // seat it sits in, so a collapsed search leaves no ghost of itself above the
+    // first card.
+    <div
+      id={id}
+      ref={boxRef}
+      className={expanded ? "relative mb-4" : "hidden"}
+      // Announced as a region rather than left as an anonymous box: it is what
+      // the rail's key expands, and a reader following `aria-controls` into it
+      // arrives at something with no name otherwise.
+      role="group"
+      aria-label="Search trades"
+    >
       {/* One part holding two regions, which is the card's own construction and
           not a resemblance to it: `SIDE_ZONE` and the seam come from the card
           itself, so the control cannot drift from the thing it filters. No gap

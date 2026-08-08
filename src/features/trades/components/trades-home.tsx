@@ -1,7 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   DEFAULT_LEAGUE_FILTERS,
@@ -28,6 +35,7 @@ import { focusRosterFor } from "../exchange";
 import {
   DEFAULT_TRADE_FILTERS,
   activeTradeFilterCount,
+  sideSelectionCount,
   tradeSeekBounds,
 } from "../filters";
 import type { TradeFilters, TradeNames } from "../filters";
@@ -41,8 +49,8 @@ import { resolveLeagueScope, tradeQueryKey } from "../trade-query";
 import type { AdpPlayerPayload, Trade } from "../types";
 import type { OpenLeague } from "./league-sheet";
 import { SeekKey } from "./seek-key";
+import { SearchKey } from "./search-key";
 import { TRADE_RAIL_BOX, TradeControls, TradeIdentity } from "./trade-controls";
-import { TradeSearch } from "./trade-search";
 import { TradeValuePicker } from "./trade-value";
 import { TradesList } from "./trades-list";
 
@@ -54,10 +62,12 @@ import { TradesList } from "./trades-list";
  * lines with the whole slot-group and scoring-rule editor, its option tables and
  * its breakdown counts behind it. Statically imported, all of that was parsed
  * and evaluated before the first card could be drawn. The trade *search* is
- * split the same way one layer in, at its panel rather than at its trigger,
- * since its bays and their tokens are not behind a press. The trade filters
- * proper are not split at all any more — a scope key row and a date field are
- * smaller than the placeholder a split would need.
+ * split at its own root now rather than one layer in: its bays used to be on
+ * screen at first paint, so the seam had to fall between them and their results
+ * panel; behind the rail's `Search` key the whole control is something a reader
+ * may never open, which is the rule for what gets split. The trade filters
+ * proper are not split at all — a scope key row and a date field are smaller
+ * than the placeholder a split would need.
  *
  * `ssr: false` because there is nothing to prerender: a `<dialog>` that opens on
  * a press has no server-rendered state worth having, and rendering it would put
@@ -89,6 +99,26 @@ const LeagueFiltersModal = dynamic(
  */
 const AdpDrawer = dynamic(
   () => import("@/features/shared/ui/adp-drawer").then((m) => m.AdpDrawer),
+  { ssr: false },
+);
+
+/**
+ * The board's search, loaded the first time the rail's key opens it.
+ *
+ * The bays, their tokens, the swap key and — one `dynamic()` further in — the
+ * results panel and its facets query. None of it is on screen until a press, so
+ * the seam is the whole control rather than the panel inside it, and it is a
+ * module boundary rather than an export name: the trigger is {@link SearchKey},
+ * a module of its own, so nothing static reaches this chunk.
+ *
+ * No `loading` fallback, for `LeagueSheet`'s reason: nothing is holding its
+ * place — the control appears where there was nothing — so a placeholder would
+ * be a flash rather than a reserved box. What holds the reader's place instead
+ * is the key itself, which is already lit and badged when there is a selection
+ * behind it.
+ */
+const TradeSearch = dynamic(
+  () => import("./trade-search").then((m) => m.TradeSearch),
   { ssr: false },
 );
 
@@ -167,6 +197,19 @@ export function TradesHome({ season }: { season: string }) {
   const [tradeFilters, setTradeFilters] = useState<TradeFilters>(
     DEFAULT_TRADE_FILTERS,
   );
+
+  // Whether the search bays are open, and whether they have ever been.
+  //
+  // Two pieces of state for the reason the league sheet and the ADP drawer keep
+  // two: the second is a *latch*, so a collapse doesn't unmount the control —
+  // which would go back through the `dynamic()` above on every reopen and, worse,
+  // throw away the names it remembered for tokens the loaded pages never named
+  // (see `TradeSearch`). Shut, the control is `display: none` and costs the page
+  // nothing but its own subtree.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [everOpenedSearch, setEverOpenedSearch] = useState(false);
+  if (searchOpen && !everOpenedSearch) setEverOpenedSearch(true);
+  const searchId = useId();
 
   // The three boxes laid out above the list, watched by the virtualizer for the
   // size changes that move the board down the page — rather than the body,
@@ -555,6 +598,19 @@ export function TradesHome({ season }: { season: string }) {
                 leagues={leagues}
                 label="Leagues"
               />
+              {/* Beside the league filters and after them, which is the order
+                  the narrowing line beside these keys already reads in: what
+                  these leagues are, then what happened in them. The two filter
+                  sets stay two keys for the same reason they stay two controls
+                  — one narrows leagues, the other trades — and they are the
+                  same part in the same seat so that the row reads as a pair
+                  rather than as a hierarchy. */}
+              <SearchKey
+                expanded={searchOpen}
+                active={sideSelectionCount(tradeFilters)}
+                controls={everOpenedSearch ? searchId : undefined}
+                onToggle={() => setSearchOpen(!searchOpen)}
+              />
             </>
           }
           seek={
@@ -567,23 +623,33 @@ export function TradesHome({ season }: { season: string }) {
         />
       </div>
 
-      {/* The page's front door, under the rail that says what it is asked
-          within. Two bays wearing the trade card's own side plate: things in the
-          same bay were on the same side of the trade, so a manager and a player
-          together means he received him and on opposite sides means he gave him.
-          It sits directly above the list because it is what a reader arrives
-          wanting and what the cards below are the answer to. */}
+      {/* The board's search, opened from the rail above it. Two bays wearing the
+          trade card's own side plate: things in the same bay were on the same
+          side of the trade, so a manager and a player together means he received
+          him and on opposite sides means he gave him. It opens *here* rather
+          than floating out of the key, because a bay is the card below it at the
+          same size — a panel over the list would be filtering the very thing it
+          was covering.
+
+          The wrapper stays mounted whether or not the search is: it is one of
+          the three boxes the list watches for the size changes that move the
+          board down the page, and an unmounted observer target is a
+          `scrollMargin` frozen at whatever it last read. */}
       <div ref={searchRef}>
-        <TradeSearch
-          filters={tradeFilters}
-          onChange={setTradeFilters}
-          season={season}
-          scope={scope}
-          account={account}
-          bounds={bounds}
-          players={players}
-          managers={managers}
-        />
+        {everOpenedSearch && (
+          <TradeSearch
+            id={searchId}
+            expanded={searchOpen}
+            filters={tradeFilters}
+            onChange={setTradeFilters}
+            season={season}
+            scope={scope}
+            account={account}
+            bounds={bounds}
+            players={players}
+            managers={managers}
+          />
+        )}
 
         {error && <Note tone="error">{error}</Note>}
       </div>
