@@ -27,6 +27,14 @@ import { ROUNDS_SEGMENT } from "./adp-drawer.constants.ts";
  * It goes inside rather than beside, because a dialog and a stray chip is the
  * arrangement this replaced.
  *
+ * What it loses is the **Type** row (`omitType`), which is the same trade the
+ * board's own `league_type` parameter already made: every fetch answers the
+ * redraft and dynasty markets side by side and the board keys choose which is
+ * drawn, so on this page the league type is a display question and not a
+ * population one. Left in, it was a second control over the one axis the display
+ * already owns — narrow to dynasty leagues with the redraft column up and the
+ * answer is an empty column with nothing on screen saying why.
+ *
  * The seed control stays outside it and stays a chip. It is not a filter — it
  * *writes* filters, from a league the reader recognises by name — and the trades
  * board passes no leagues to it at all, which is what keeps it out of a dialog
@@ -74,6 +82,7 @@ export function AdpFilterBar({
         label="Leagues"
         filters={controls.leagueRules}
         leagues={leagues}
+        omitType
         onChange={(next: LeagueFilters) =>
           onChange({ ...controls, leagueRules: next })
         }

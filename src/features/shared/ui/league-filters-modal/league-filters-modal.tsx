@@ -74,6 +74,7 @@ export function LeagueFiltersModal({
   leagues,
   label = "Filters",
   seat = "free",
+  omitType = false,
   extra,
 }: {
   filters: LeagueFilters;
@@ -94,6 +95,25 @@ export function LeagueFiltersModal({
    * *shape* — see {@link SEATS}.
    */
   seat?: SeatName;
+  /**
+   * Drop the **Type** row from the trough.
+   *
+   * One caller does, and for the reason the ADP board has no `league_type`
+   * parameter at all: every fetch answers the redraft and dynasty markets side
+   * by side and the board's own two keys choose which is drawn, so the type is
+   * already a *display* question there. Narrowing the population on the same
+   * axis is the two-answers-to-one-question this app keeps having to close — a
+   * board cut to dynasty leagues with the redraft column showing is an empty
+   * column, and neither control says which one is winning.
+   *
+   * It is a row and not a field, so nothing about `LeagueFilters` changes: the
+   * ADP controls open on `DEFAULT_LEAGUE_FILTERS` and `seedFromLeague`
+   * deliberately writes the league's type as `boards` rather than as a rule, so
+   * `type` is `"all"` on that board with the row gone. The match rail still
+   * names and clears a type it somehow arrived with, which is what keeps this
+   * from being a filter a reader cannot see or undo.
+   */
+  omitType?: boolean;
   /**
    * A fourth segment row the caller owns — see {@link ExtraSegment}. The ADP
    * board seats its draft-kind chip here so that board's filters are one dialog
@@ -203,6 +223,7 @@ export function LeagueFiltersModal({
                   openGroup={openGroup}
                   onToggle={toggleGroup}
                   onClose={closeGroup}
+                  omitType={omitType}
                   extra={extra}
                   extraDraft={extraDraft}
                   onExtraChange={setExtraDraft}

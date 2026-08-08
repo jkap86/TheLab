@@ -12,7 +12,7 @@ import type { ExtraSegment, SegmentKey } from "./league-filters-modal.types.ts";
 import { SegmentRow } from "./segment-row.tsx";
 
 /**
- * The three fixed filters, in one trough.
+ * The fixed filters, in one trough.
  *
  * They are grouped because they are the same kind of question — what a league
  * *is*, each a closed set of three or four answers — where the rule bays below
@@ -38,6 +38,7 @@ export function SegmentTrough({
   openGroup,
   onToggle,
   onClose,
+  omitType = false,
   extra,
   extraDraft = "",
   onExtraChange,
@@ -50,7 +51,9 @@ export function SegmentTrough({
   openGroup: SegmentKey | null;
   onToggle: (key: SegmentKey) => void;
   onClose: () => void;
-  /** The caller's fourth row; the three below it are drawn either way. */
+  /** Drop the Type row — see {@link LeagueFiltersModal}'s own prop. */
+  omitType?: boolean;
+  /** The caller's fourth row; the fixed rows above it are drawn either way. */
   extra?: ExtraSegment;
   extraDraft?: string;
   onExtraChange?: (value: string) => void;
@@ -77,17 +80,19 @@ export function SegmentTrough({
         onToggle={() => onToggle("status")}
         onClose={onClose}
       />
-      <SegmentRow
-        label="Type"
-        options={TYPE_OPTIONS}
-        value={draft.type}
-        leagues={leagues}
-        probe={(value) => ({ ...draft, type: value })}
-        onPick={(type) => onChange({ ...draft, type })}
-        open={openGroup === "type"}
-        onToggle={() => onToggle("type")}
-        onClose={onClose}
-      />
+      {!omitType && (
+        <SegmentRow
+          label="Type"
+          options={TYPE_OPTIONS}
+          value={draft.type}
+          leagues={leagues}
+          probe={(value) => ({ ...draft, type: value })}
+          onPick={(type) => onChange({ ...draft, type })}
+          open={openGroup === "type"}
+          onToggle={() => onToggle("type")}
+          onClose={onClose}
+        />
+      )}
       <SegmentRow
         label="Format"
         options={BEST_BALL_OPTIONS}
