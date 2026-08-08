@@ -94,7 +94,7 @@ export function TradesList({
   adpLadders,
   steepness,
   pickSlots,
-  headerRef,
+  above,
   hasMore,
   loadingMore,
   onLoadMore,
@@ -126,11 +126,17 @@ export function TradesList({
   /** Draft slots for the picks whose league has set an order, keyed per pick. */
   pickSlots: Record<string, number>;
   /**
-   * Everything laid out above the list. Watched for size changes, because how
-   * far down the page the list starts is exactly what `scrollMargin` is — see
-   * the effect below for why it is this element and not the body.
+   * The boxes laid out above the list. Watched for size changes, because how far
+   * down the page the list starts is exactly what `scrollMargin` is — see the
+   * effect below for why it is these elements and not the body.
+   *
+   * **Several rather than one, because the page's control rail pins.** A sticky
+   * element travels only as far as its own parent's box, so the rail cannot be a
+   * child of the block above the list and there is no single wrapper left to
+   * watch. Any of them can change height on its own, and any of them moving
+   * moves the board.
    */
-  headerRef: React.RefObject<HTMLElement | null>;
+  above: readonly React.RefObject<HTMLElement | null>[];
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
@@ -148,7 +154,7 @@ export function TradesList({
   // scroll offset into an index. A stale value offsets every card by however
   // much the header above moved, so it is re-read whenever that can happen.
   //
-  // **Observing the header rather than `document.body`**, which is what this
+  // **Observing what is above rather than `document.body`**, which is what this
   // used to do and is the wrong target twice over. The body's box grows and
   // shrinks with *this list's own* height — every measured card, every page
   // appended, every filter change — so the observer fired constantly, and each
@@ -156,7 +162,7 @@ export function TradesList({
   // was self-triggering (which is why the `setState` below has to be guarded
   // against a loop at all) and none of that traffic could tell it anything: the
   // list moving down the page is caused by what is *above* it, and nothing else.
-  // The header is that thing, so this now fires when the header actually
+  // Those boxes are that thing, so this now fires when one of them actually
   // rewraps — a handful of times in a session instead of once per card measured.
   //
   // Deliberately not re-measured every render. This component re-renders
@@ -178,13 +184,14 @@ export function TradesList({
     measure();
     window.addEventListener("resize", measure);
     const observer = new ResizeObserver(measure);
-    const header = headerRef.current;
-    if (header) observer.observe(header);
+    for (const box of above) {
+      if (box.current) observer.observe(box.current);
+    }
     return () => {
       window.removeEventListener("resize", measure);
       observer.disconnect();
     };
-  }, [headerRef]);
+  }, [above]);
 
   const virtualizer = useWindowVirtualizer({
     count: trades.length,
