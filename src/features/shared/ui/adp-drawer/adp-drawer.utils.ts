@@ -4,12 +4,18 @@ import {
   type AdpControls,
   type AdpShownBoards,
   DEFAULT_ADP_RANGE,
+  DEFAULT_ADP_ROUNDS,
+  boardLabel,
+  isUnboundedRange,
   previewAdpPool,
   seedFromLeague,
+  steepnessSummary,
   toggleAdpBoard,
 } from "../../adp-controls.ts";
 import type { AdpPickRow, AdpPickStats } from "../../adp-picks.ts";
+import { activeFilterCount } from "../../league-filters/summaries.ts";
 import type { LeagueFilters } from "../../league-filters/types.ts";
+import { ROUNDS_SEGMENT } from "./adp-drawer.constants.ts";
 
 /**
  * The drawer's own pure arithmetic and wording: the strings its cells and
@@ -144,6 +150,131 @@ export function withBoardToggle(
   board: AdpBoardType,
 ): AdpControls {
   return { ...controls, boards: toggleAdpBoard(controls.boards, board) };
+}
+
+/**
+ * The three bays of the pinned rail, and what each of their keys says while it
+ * is shut.
+ *
+ * **A shut bay states its value, or the rail is three nouns and the reader has
+ * to open all of them to find the one they meant.** That is the trades ledge's
+ * mistake in a smaller box, and it is the whole reason this is a function with
+ * tests rather than three strings in the markup: each value is the *same* wording
+ * the board already uses elsewhere, derived from the same helpers, so a key can
+ * never name a board the panel behind it would disagree with.
+ *
+ * **`narrowed` is not `open`.** It says this bay is moving the board away from
+ * the default one everybody else sees, which is what the accent means everywhere
+ * in this app — the app-bar trigger's bars run off the same question. Which bay
+ * is *open* is said by the key sinking into the rail instead, so the two signals
+ * never have to share the token. The curve is therefore never narrowed however
+ * far it has been dragged: it reprices a population it does not change, which is
+ * exactly why {@link adpNarrowingCount} leaves it out too.
+ */
+export type AdpBayId = "leagues" | "window" | "curve";
+
+export type AdpBayState = {
+  readonly id: AdpBayId;
+  /** The field, engraved over the answer. */
+  readonly label: string;
+  /** What this bay is set to, in the board's own words. */
+  readonly value: string;
+  /** This bay is narrowing the board away from the default. */
+  readonly narrowed: boolean;
+};
+
+export function adpBayStates(controls: AdpControls): AdpBayState[] {
+  return [
+    {
+      id: "leagues",
+      label: "Leagues",
+      value: leaguesBayValue(controls),
+      narrowed:
+        activeFilterCount(controls.leagueRules) > 0 ||
+        controls.rounds !== DEFAULT_ADP_ROUNDS,
+    },
+    {
+      id: "window",
+      label: "Window",
+      value: boardLabel(controls.range, controls.season),
+      narrowed: !isUnboundedRange(controls.range),
+    },
+    {
+      id: "curve",
+      label: "Curve",
+      value: curveBayValue(controls.steepness),
+      narrowed: false,
+    },
+  ];
+}
+
+/**
+ * What the Leagues key says: the rules and the kind of draft, and only the ones
+ * actually set.
+ *
+ * Naming a part that is not narrowing anything would put "All leagues · All
+ * drafts" permanently on a rail whose whole reason for existing is that the old
+ * block spent its height on controls reporting that nothing was set. With
+ * neither half set there is nothing to state but the population, so it says that.
+ */
+function leaguesBayValue(controls: AdpControls): string {
+  const rules = activeFilterCount(controls.leagueRules);
+  const parts: string[] = [];
+  if (rules > 0) parts.push(`${rules} rule${rules === 1 ? "" : "s"}`);
+  if (controls.rounds !== "all") parts.push(roundsLabel(controls.rounds));
+  return parts.length === 0 ? "All leagues" : parts.join(" · ");
+}
+
+/**
+ * The draft-kind option, in the shorter spelling a key has room for.
+ *
+ * Derived from the dialog's own option table rather than written out beside it,
+ * so the key cannot name a kind the row it opens doesn't offer: the parenthetical
+ * is the round count, which is the *evidence* for the name and belongs in the
+ * row where there is width for it.
+ */
+function roundsLabel(rounds: AdpControls["rounds"]): string {
+  const option = ROUNDS_SEGMENT.options.find((o) => o.value === rounds);
+  return (option?.label ?? rounds).replace(/\s*\(.*\)$/, "");
+}
+
+/**
+ * What the Curve key says — {@link steepnessSummary}'s fraction without the
+ * sentence around it.
+ *
+ * A rail key has room for the number and not for what it is a number *of*, and
+ * the bay one press away spells it out whole. Taken off that function rather
+ * than recomputed, because two spellings of one curve is the drift a shared
+ * helper exists to stop.
+ */
+export function curveBayValue(halvings: number): string {
+  return steepnessSummary(halvings).replace(/^last starter ≈ /, "");
+}
+
+/**
+ * The density behind the Window key, as bar heights in `0..1`.
+ *
+ * The key carries a picture of the months it is cut from, which is what keeps a
+ * shut window bay from being a bare label: the reader can see *where* the drafts
+ * are without opening anything. It is the resting line the panel used to draw
+ * before the window was seated permanently — honest again precisely because the
+ * expanded channel is not also on screen, which is the thing that retired it.
+ *
+ * The last `bars` months, since the recent end is the one a window is usually
+ * cut from. A month with drafts never rounds away to nothing (a bar the reader
+ * cannot see is a month that reads as empty), and a month with none draws
+ * nothing at all — that difference is the only thing the picture is for.
+ */
+export function densitySpark(
+  months: readonly { readonly month: string; readonly drafts: number }[],
+  bars = 8,
+): number[] {
+  const recent = [...months]
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .slice(-bars);
+  const peak = recent.reduce((max, m) => Math.max(max, m.drafts), 0);
+  if (peak <= 0) return [];
+  return recent.map((m) => (m.drafts === 0 ? 0 : Math.max(0.16, m.drafts / peak)));
 }
 
 /**

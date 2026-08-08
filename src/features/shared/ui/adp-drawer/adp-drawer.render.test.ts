@@ -20,12 +20,15 @@ import {
 import { DEFAULT_LEAGUE_FILTERS } from "../../league-filters/defaults.ts";
 import { ALL_LEAGUES } from "../../league-scope.ts";
 import type { AdpState } from "../../use-adp.ts";
+import { AdpBay } from "./adp-bay.tsx";
+import { AdpBayRail } from "./adp-bay-rail.tsx";
 import { AdpBoardHeader } from "./adp-board-header.tsx";
 import { AdpDrawer } from "./adp-drawer.tsx";
 import { AdpDrawerFooter } from "./adp-drawer-footer.tsx";
 import { AdpDrawerHeader } from "./adp-drawer-header.tsx";
 import { AdpFilterBar } from "./adp-filter-bar.tsx";
 import { AdpLeagueSeedControl } from "./adp-league-seed-control.tsx";
+import { SteepnessSlider } from "./adp-steepness-slider.tsx";
 import {
   ADP_BOARD_INITIAL_RECT,
   ADP_DRAWER_ENTER_MS,
@@ -236,9 +239,11 @@ describe("what is on screen", () => {
     // rather than falling through to its empty-dialog case.
     const html = drawer({ seedLeagues: leagues });
     const panel = html.slice(html.indexOf("<div role=\"dialog\""));
-    for (const tag of ["<button", "<select", "<input"]) {
-      assert.ok(panel.includes(tag), `the dialog should render a ${tag} tab stop`);
-    }
+    // Buttons and nothing else, at rest: the `<select>` and the two `<input>`s
+    // this used to look for are a bay's contents now, so they are behind a
+    // press. That they are real stops once a bay is up is asserted where a bay
+    // can actually be mounted — see "a bay's contents are real controls".
+    assert.ok(panel.includes("<button"), "the dialog should render a <button> tab stop");
     // And the dialog itself is not one of them: `tabindex="-1"` is on the same
     // element as `role="dialog"`, so the focus move on open lands somewhere the
     // trap reads as "not on a stop" and the first Tab goes to the first control.
@@ -247,16 +252,38 @@ describe("what is on screen", () => {
     assert.match(openingTag, /adp-drawer-panel/);
   });
 
-  test("the window counter is on screen at rest, not behind a press", () => {
-    // The drawer is merely open — nothing has been pressed — and both lenses are
-    // already there. This is the whole of the change that removed the window's
-    // trigger: it used to be a collapsed line, and re-collapsing it would put the
-    // board's *population* back behind a chevron a reader has to find.
+  test("the rail states what every bay is set to, and opens none of them", () => {
+    // The reversal of the rule this test used to hold, and the terms it was
+    // reversed on. The window really is behind a press again — but what the
+    // press opens is an *instrument*, and what the key in front of it carries is
+    // the board's own label plus a picture of the density behind it, which is
+    // the fact the old collapsed trigger hid behind a row of presets. A shut bay
+    // that named nothing would be the ledge mistake this rail exists to avoid.
     const html = drawer();
-    assert.match(html, /aria-label="Days back — empty means the whole season"/);
-    assert.match(html, /aria-label="Window ends"/);
-    // And the channel it is read against, likewise unpressed.
-    assert.match(html, /lab-channel/);
+    for (const label of [">Leagues<", ">Window<", ">Curve<"]) {
+      assert.ok(html.includes(label), `expected a ${label} key on the rail`);
+    }
+    // Each key's value, in the board's own words — `adpBayStates`' job, and the
+    // reason it is pure and tested beside this.
+    assert.match(html, /All of 2026/);
+    assert.match(html, /% of the 1\.01/);
+    // Every key shut, and therefore every bay's contents absent.
+    assert.equal((html.match(/aria-expanded="false"/g) ?? []).length, 3);
+    assert.doesNotMatch(html, /aria-expanded="true"/);
+    for (const inside of [
+      /aria-label="Days back/,
+      /aria-label="Window ends"/,
+      /aria-label="Value curve steepness"/,
+      /Match a league/,
+    ]) {
+      assert.doesNotMatch(html, inside);
+    }
+    // The one piece of the window that *is* on screen shut, and the reason this
+    // collapse is not the one that was reversed: the key carries the density as
+    // a mark, so a reader sees where the drafts are without opening anything.
+    // (It wears `lab-channel-bar-lit` without the channel around it, which is
+    // why "no channel" is not the way to ask whether the bay is shut.)
+    assert.match(html, /lab-channel-bar-lit/);
   });
 
   test("no preset chip states a window the lenses already state", () => {
@@ -271,17 +298,131 @@ describe("what is on screen", () => {
     for (const chip of [">30 days<", ">90 days<", ">12 mo<", ">All 2026<", ">All time<"]) {
       assert.ok(!html.includes(chip), `expected no ${chip} preset chip`);
     }
-    assert.match(html, />Today</);
-    // The board's own name is stated once, by the counter's caption — the
-    // trigger that used to carry `boardLabel` beside it is gone.
+    // `Today` and the ◆ draft key live inside the window bay, which is behind a
+    // press — see the bay tests below, where one can be mounted.
+    // The board's own name is stated once, by the Window key. Opening that bay
+    // adds the counter's caption, which is the same label a second time and is
+    // why the key and the caption have to keep agreeing: both read `boardLabel`.
     assert.equal((html.match(/All of 2026/g) ?? []).length, 1);
   });
 
   test("every control keeps an accessible name", () => {
+    // At rest that is the rail's own keys and the identity line; the bays'
+    // controls are checked in "a bay's contents are real controls", where they
+    // can be mounted.
     const html = drawer({ seedLeagues: leagues });
-    assert.match(html, /aria-label="Value curve steepness"/);
-    // The apostrophe arrives HTML-escaped, which is the markup being right.
-    assert.match(html, /aria-label="Match one of this manager(&#x27;|')s leagues"/);
+    assert.match(html, /aria-label="Close"/);
+    assert.match(html, /aria-label="Close ADP board"/);
+    assert.equal((html.match(/aria-expanded=/g) ?? []).length, 3);
+  });
+});
+
+describe("the bays", () => {
+  const controls = defaultAdpControls("2026");
+  const railProps = {
+    controls,
+    months: [],
+    open: null as "leagues" | "window" | "curve" | null,
+    bayId: "bay",
+    openKeyRef: { current: null },
+    onToggle: () => {},
+  };
+
+  test("a shut rail is three raised keys and no panel", () => {
+    const html = renderToStaticMarkup(AdpBayRail(railProps));
+    assert.equal((html.match(/lab-chip lab-chip-sm/g) ?? []).length, 3);
+    assert.doesNotMatch(html, /lab-well/);
+    // Nothing controls anything while nothing is open: an `aria-controls`
+    // pointing at an id that is not in the document is a reference resolving to
+    // nothing, which the markup test above forbids across the whole drawer.
+    assert.doesNotMatch(html, /aria-controls/);
+  });
+
+  test("the open key sinks into the rail and controls the bay", () => {
+    // Sunk means open — the app bar's grammar, and what says which key a
+    // floating panel came from. It is deliberately *not* the accent, which is
+    // spent on "narrowed" and would otherwise have to carry both.
+    const html = renderToStaticMarkup(AdpBayRail({ ...railProps, open: "window" as const }));
+    assert.equal((html.match(/lab-well/g) ?? []).length, 1);
+    assert.equal((html.match(/lab-chip lab-chip-sm/g) ?? []).length, 2);
+    assert.match(html, /aria-controls="bay"/);
+    assert.equal((html.match(/aria-expanded="true"/g) ?? []).length, 1);
+  });
+
+  test("the accent says narrowed, never open", () => {
+    // A default board: the Window key is open and still not accented, because
+    // it is not cutting anything. Narrow the range and it lights while shut.
+    const open = renderToStaticMarkup(AdpBayRail({ ...railProps, open: "window" as const }));
+    assert.doesNotMatch(open, /text-active">All of 2026/);
+
+    const narrowed = renderToStaticMarkup(
+      AdpBayRail({
+        ...railProps,
+        controls: {
+          ...controls,
+          range: { preset: "30d" as const, from: null, to: null },
+        },
+      }),
+    );
+    assert.match(narrowed, /text-active">2026 · Last 30 days/);
+  });
+
+  test("the Window key carries the density it is cut from", () => {
+    // The one thing that makes a shut window bay more than a label: the reader
+    // can see where the drafts are without opening anything.
+    const withDensity = renderToStaticMarkup(
+      AdpBayRail({
+        ...railProps,
+        months: [
+          { season: "2026", month: "2026-04", drafts: 10 },
+          { season: "2026", month: "2026-05", drafts: 40 },
+        ],
+      }),
+    );
+    assert.equal((withDensity.match(/lab-channel-bar-lit/g) ?? []).length, 2);
+    // And a season with nothing crawled draws no bars rather than an empty slot.
+    assert.doesNotMatch(
+      renderToStaticMarkup(AdpBayRail(railProps)),
+      /lab-channel-bar-lit/,
+    );
+  });
+
+  test("a bay is a labelled group, not a dialog", () => {
+    // Deliberately not a `<dialog>`: a modal one makes the board behind it
+    // inert, and the board is the thing a bay exists to be watched against.
+    const html = renderToStaticMarkup(
+      AdpBay({
+        id: "bay",
+        bay: "curve" as const,
+        label: "Value curve",
+        children: createElement("span", null, "x"),
+      }),
+    );
+    assert.match(html, /role="group"/);
+    assert.match(html, /aria-label="Value curve"/);
+    assert.match(html, /id="bay"/);
+    assert.doesNotMatch(html, /<dialog/);
+  });
+
+  test("a bay's contents are real controls, with their names", () => {
+    // What the drawer mounts inside each bay. The mapping from key to content is
+    // the composition root's and needs a press to reach, which this file cannot
+    // make — the same seam as the effects, and the reason `adp-drawer.focus` is
+    // tested separately. What is checked here is the other half: each of the
+    // three really is a control with a name, so a bay is somewhere Tab can land.
+    const filters = renderToStaticMarkup(
+      AdpFilterBar({ controls, leagues, seedLeagues: leagues, onChange: () => {} }),
+    );
+    assert.match(filters, /Match a league…/);
+
+    const curve = renderToStaticMarkup(
+      SteepnessSlider({
+        value: controls.steepness,
+        onPreview: () => {},
+        onCommit: () => {},
+      }),
+    );
+    assert.match(curve, /aria-label="Value curve steepness"/);
   });
 });
 
@@ -603,7 +744,16 @@ describe("the league seed control", () => {
   });
 
   test("it is drawn, and names every offered league, when there are some", () => {
-    const html = drawer({ seedLeagues: leagues });
+    // Rendered through the filter bay rather than the whole drawer: the row is
+    // behind the Leagues key now, and a static render cannot press one.
+    const html = renderToStaticMarkup(
+      AdpFilterBar({
+        controls: defaultAdpControls("2026"),
+        leagues,
+        seedLeagues: leagues,
+        onChange: () => {},
+      }),
+    );
     assert.match(html, /Match a league…/);
     assert.match(html, /League a/);
     assert.match(html, /League b/);

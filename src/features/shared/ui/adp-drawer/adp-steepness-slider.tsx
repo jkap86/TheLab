@@ -33,9 +33,10 @@ export function SteepnessSlider({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/40">
-        Curve
-      </span>
+      {/* No `Curve` caption: this sits inside the bay the Curve key opened, and
+          that key names the field eight pixels above it — a label beside a
+          control must not restate what the control already says. The axis ends
+          and the readout stay, because neither is on the key. */}
       <span aria-hidden className="text-[0.6rem] text-foreground/25">
         Flat
       </span>
@@ -57,7 +58,13 @@ export function SteepnessSlider({
         Top-heavy
       </span>
       {/* The halving count is the honest parameter and an unreadable label, so
-          the readout says what it does to a board instead. */}
+          the readout says what it does to a board instead.
+
+          It is not the same number as the Curve key above, though it reads as
+          one at rest: this is the value **being previewed**, and the key holds
+          the committed one until the handle is let go. Mid-drag the two differ
+          on purpose — the live figure belongs under the finger, and the key is
+          where the reader came from. */}
       <span className="shrink-0 text-[0.62rem] tabular-nums text-foreground/40">
         {steepnessSummary(value)}
       </span>

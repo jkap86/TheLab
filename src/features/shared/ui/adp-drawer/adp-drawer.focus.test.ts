@@ -191,28 +191,46 @@ describe("where Tab goes next", () => {
 });
 
 describe("what a keypress means", () => {
-  test("Escape closes the drawer", () => {
-    // One answer, where there used to be two. The drawer carried its own filter
-    // tray and Escape had to close the innermost thing that was up; that tray is
-    // the shared league-filters `<dialog>` now, which hears Escape in the top
-    // layer and never lets the press reach this handler at all.
-    assert.deepEqual(drawerKeyAction("Escape", false), { type: "close-drawer" });
+  test("Escape closes the innermost thing that is up", () => {
+    // Two answers, and which one applies is the whole of the rule: a bay is a
+    // plain floating panel over the board — it cannot be a `<dialog>`, since a
+    // modal one would make the board inert and the board is what a bay exists to
+    // be watched against — so the routing past it is this handler's again.
+    assert.deepEqual(drawerKeyAction("Escape", false, true), { type: "close-bay" });
+    assert.deepEqual(drawerKeyAction("Escape", false, false), {
+      type: "close-drawer",
+    });
   });
 
-  test("Tab carries its direction", () => {
-    assert.deepEqual(drawerKeyAction("Tab", false), {
-      type: "trap-tab",
-      backwards: false,
-    });
-    assert.deepEqual(drawerKeyAction("Tab", true), {
-      type: "trap-tab",
-      backwards: true,
-    });
+  test("the league-filters dialog needs no ordering against either", () => {
+    // It is a real `<dialog>` in the top layer, so while it is open the press
+    // never arrives here at all — which is what makes "innermost" resolve
+    // dialog, then bay, then drawer without this function knowing it exists.
+    // The rule that keeps that true is that a bay is *not* one of those, which
+    // the two answers above are the consequence of.
+    assert.notEqual(drawerKeyAction("Escape", false, true), null);
+  });
+
+  test("Tab carries its direction, whatever is up", () => {
+    for (const bayOpen of [false, true]) {
+      // A bay is inside the dialog, so the trap's boundary is unchanged by one
+      // being open — Tab runs through the bay's own controls as part of the
+      // drawer's sequence rather than being held inside the bay.
+      assert.deepEqual(drawerKeyAction("Tab", false, bayOpen), {
+        type: "trap-tab",
+        backwards: false,
+      });
+      assert.deepEqual(drawerKeyAction("Tab", true, bayOpen), {
+        type: "trap-tab",
+        backwards: true,
+      });
+    }
   });
 
   test("every other key is none of the drawer's business", () => {
     for (const key of ["a", "Enter", " ", "ArrowDown", "Home", "Esc"]) {
-      assert.equal(drawerKeyAction(key, false), null);
+      assert.equal(drawerKeyAction(key, false, false), null);
+      assert.equal(drawerKeyAction(key, false, true), null);
     }
   });
 });
@@ -223,16 +241,29 @@ describe("the composed keydown handler", () => {
     let active: Fake | null = null;
     let press = 0;
     let prevented = 0;
+    // Whether a bay is up is read *per press* rather than captured, which is the
+    // property the two Escapes below are actually checking: a reader opens and
+    // shuts bays between presses, and a handler holding the answer from wiring
+    // time would take the drawer down from under an open one.
+    let bayOpen = false;
     const handler = drawerKeydownHandler<Fake>({
       stops: () => stops[Math.min(press, stops.length - 1)],
       activeElement: () => active,
       focusContainer: () => log.push("container"),
+      bayOpen: () => bayOpen,
+      closeBay: () => {
+        log.push("close-bay");
+        bayOpen = false;
+      },
       closeDrawer: () => log.push("close-drawer"),
     });
     return {
       log,
       get prevented() {
         return prevented;
+      },
+      openBay() {
+        bayOpen = true;
       },
       focusOn(node: Fake | null) {
         active = node;
@@ -243,6 +274,16 @@ describe("the composed keydown handler", () => {
       },
     };
   }
+
+  test("two Escapes close the bay and then the drawer, in that order", () => {
+    // The one sequence a captured flag gets wrong: the first press shuts the
+    // bay, and the second has to find it shut and take the drawer.
+    const h = harness([[fake("a"), fake("b")]]);
+    h.openBay();
+    h.send("Escape");
+    h.send("Escape");
+    assert.deepEqual(h.log, ["close-bay", "close-drawer"]);
+  });
 
   test("Escape reaches the drawer", () => {
     const h = harness([[fake("a"), fake("b")]]);
