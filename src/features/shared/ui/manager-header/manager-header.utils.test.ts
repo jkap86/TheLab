@@ -8,6 +8,7 @@ import type {
 } from "./manager-header.types.ts";
 import {
   hasSyncState,
+  partialSyncNote,
   recordBarParts,
   refreshingSuffix,
   resolveKickoff,
@@ -58,6 +59,37 @@ describe("the state line only appears when it has something to say", () => {
   // has to open the line even with nothing failed.
   test("a locked sync opens it though nothing failed", () => {
     assert.equal(hasSyncState({ ...quiet, summary: summary({ locked: true }) }), true);
+  });
+});
+
+describe("what a partly-refreshed sync says", () => {
+  test("it states how much of the list is current, not how much isn't", () => {
+    // "3 failed to sync" leaves the number a reader actually wants — how much of
+    // what they are looking at just refreshed — to arithmetic.
+    assert.equal(
+      partialSyncNote(summary({ total: 100, leagues: 97, failed: 3 })),
+      "97 of 100 leagues refreshed",
+    );
+  });
+
+  test("a clean sync says nothing at all", () => {
+    // Only actual failures earn a line: a warning on ordinary operation is a
+    // permanent band on the plate.
+    assert.equal(partialSyncNote(summary({ total: 100, leagues: 100, failed: 0 })), null);
+    assert.equal(partialSyncNote(undefined), null);
+  });
+
+  test("an incomplete sync with nothing failed is not this line", () => {
+    // A locked sync has its own note and a throttled skip is ordinary operation.
+    // Both report `complete: false` and neither dropped a league.
+    assert.equal(
+      partialSyncNote(summary({ complete: false, locked: true, total: 0, leagues: 0 })),
+      null,
+    );
+    assert.equal(
+      partialSyncNote(summary({ complete: false, skipped: true, total: 0, leagues: 0 })),
+      null,
+    );
   });
 });
 

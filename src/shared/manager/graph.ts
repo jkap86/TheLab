@@ -17,7 +17,7 @@ import type {
   SleeperTradedPick,
   SleeperTransaction,
 } from "@/shared/sleeper";
-import { mapWithConcurrency } from "@/shared/util";
+import { collectWithConcurrency, mapWithConcurrency } from "@/shared/util";
 
 /** Inclusive week range of transactions fetched for a league this sync. */
 export type WeekRange = { from: number; to: number };
@@ -48,15 +48,25 @@ export type LeagueGraph = {
 export type GraphWeeks = { transactions: WeekRange; matchups: WeekRange };
 
 /**
- * Per-league cap on week requests in flight.
+ * Per-league cap on child requests in flight, for the two fan-outs whose width
+ * is *data* rather than a constant: the weeks of both week-keyed collections,
+ * and the league's drafts.
  *
  * Both weekly collections are fetched here, so an unbounded fan-out would put
  * two requests per week of the horizon on the wire at once — ~36 for a league
  * being backfilled mid-season, times the batch's own league concurrency. The
  * bound keeps the burst roughly where the transaction fetch alone used to leave
  * it; the cost is a couple of extra round-trip waves on a first sync.
+ *
+ * The draft-pick fetch takes the same budget rather than one of its own, and it
+ * can: the two fan-outs run one after the other, so nothing here doubles the
+ * per-league burst. A league's draft list grows with its history — a long-running
+ * dynasty carries a startup and a rookie draft per season — so
+ * `Promise.all(drafts.map(…))` was the shape this repo already names as the trap
+ * (see `collectWithConcurrency`): harmless-looking, and unbounded in a number
+ * nobody chose.
  */
-const WEEK_FETCH_CONCURRENCY = 8;
+const CHILD_FETCH_CONCURRENCY = 8;
 
 const weeksIn = ({ from, to }: WeekRange): number[] => {
   const weeks: number[] = [];
@@ -99,7 +109,7 @@ export async function fetchLeagueGraph(
     getLeagueUsers(league.league_id),
     getLeagueTradedPicks(league.league_id),
     getLeagueDrafts(league.league_id),
-    mapWithConcurrency(jobs, WEEK_FETCH_CONCURRENCY, async (job) => {
+    mapWithConcurrency(jobs, CHILD_FETCH_CONCURRENCY, async (job) => {
       if (job.kind === "tx") {
         transactions.push(
           ...(await getLeagueTransactions(league.league_id, job.week)),
@@ -113,8 +123,15 @@ export async function fetchLeagueGraph(
     }),
   ]);
 
+  // `collectWithConcurrency` rather than `mapWithConcurrency`, because the order
+  // of the flattened result is the drafts' own order and a caller zipping picks
+  // back against the drafts they came from is exactly what it keeps. A single
+  // draft's failure still rejects the whole graph, as before: a partial pick set
+  // would be persisted as if it were the draft's whole board.
   const draftPicks = (
-    await Promise.all(drafts.map((d) => getDraftPicks(d.draft_id)))
+    await collectWithConcurrency(drafts, CHILD_FETCH_CONCURRENCY, (d) =>
+      getDraftPicks(d.draft_id),
+    )
   ).flat();
 
   return {

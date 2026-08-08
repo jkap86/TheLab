@@ -62,3 +62,44 @@ test("mapWithConcurrency resolves on an empty list without running anything", as
     throw new Error("should not run");
   });
 });
+
+test("a flattened fan-out is the same array bounded as unbounded", async () => {
+  // The shape `fetchLeagueGraph` fetches a league's draft picks with: a list
+  // whose length is *data* — a long-running dynasty carries a startup and a
+  // rookie draft per season — each call returning a page that is then flattened.
+  // Bounding it must change when the requests go out and nothing about what
+  // comes back, since the picks are persisted per draft in the order the drafts
+  // were listed.
+  const drafts = ["d1", "d2", "d3", "d4", "d5", "d6", "d7"];
+  // Deliberately fastest-last, so completion order and input order disagree.
+  const picks = (id: string, index: number) =>
+    new Promise<string[]>((resolve) =>
+      setTimeout(() => resolve([`${id}.1`, `${id}.2`]), (drafts.length - index) * 2),
+    );
+
+  let inFlight = 0;
+  let peak = 0;
+  const bounded = (
+    await collectWithConcurrency(drafts, 3, async (id, index) => {
+      peak = Math.max(peak, ++inFlight);
+      const page = await picks(id, index);
+      inFlight--;
+      return page;
+    })
+  ).flat();
+
+  const unbounded = (await Promise.all(drafts.map(picks))).flat();
+
+  assert.deepEqual(bounded, unbounded);
+  assert.equal(peak, 3, "never more than the bound on the wire at once");
+});
+
+test("a fan-out shorter than its bound never over-spawns workers", async () => {
+  // A league with two drafts must not start eight workers to fetch them.
+  let started = 0;
+  await collectWithConcurrency([1, 2], 8, async (n) => {
+    started++;
+    return n;
+  });
+  assert.equal(started, 2);
+});

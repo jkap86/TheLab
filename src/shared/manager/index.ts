@@ -2,9 +2,14 @@ export {
   syncManagerLeagues,
   syncLeagueGraphs,
   getCurrentWeek,
+  managerSyncGate,
   SYNC_TTL_MS,
+  SYNC_ATTEMPT_TTL_MS,
 } from "./sync";
 export type {
+  ManagerSyncState,
+  SyncGate,
+  SyncGateReason,
   SyncSummary,
   SyncProgress,
   SyncOptions,
@@ -40,7 +45,7 @@ export {
   getManagerLeagues,
   getManagerMatchups,
   getManagerRosters,
-  getManagerSyncedAt,
+  getManagerSyncState,
   getPreviousLeagueScores,
   listRosterWeekPoints,
 } from "./queries";

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { HeaderProgress, HeaderSyncSummary } from "./manager-header.types.ts";
-import { refreshingSuffix } from "./manager-header.utils.ts";
+import { partialSyncNote, refreshingSuffix } from "./manager-header.utils.ts";
 
 /**
  * The plate's state line: a refresh in flight, and the two ways a sync can leave
@@ -28,6 +28,7 @@ export function SyncStateLine({
   /** The seam under the row — see `statePadding`, which is what sizes it. */
   padding: string;
 }) {
+  const partial = partialSyncNote(summary);
   return (
     <div
       // The one part of the plate that appears and disappears, and every line in
@@ -38,9 +39,10 @@ export function SyncStateLine({
       className={`relative flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 text-[11px] ${padding}`}
     >
       {refreshing && <RefreshingPill progress={progress} />}
-      {summary && summary.failed > 0 && (
-        <Warning>{summary.failed} failed to sync</Warning>
-      )}
+      {/* Some leagues could not be refreshed, so the list below is a mix of
+          just-synced rows and rows as old as the last pass. Stated as the two
+          counts rather than the failure alone — see `partialSyncNote`. */}
+      {partial && <Warning>{partial}</Warning>}
       {/* A sync running elsewhere kept this one from writing, so the list below
           is whatever that one has committed so far — on a first visit, a
           fraction of it. Said out loud for the reason the failed-league count

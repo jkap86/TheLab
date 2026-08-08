@@ -17,7 +17,8 @@ import {
   persistLeagueGraph,
   replaceManagerLeagueOrder,
 } from "./persist";
-import { getManagerSyncedAt } from "./queries";
+import { getManagerSyncState } from "./queries";
+import { MANAGER_SYNC_STAMP_SQL, managerSyncGate } from "./sync-freshness";
 
 /** Child rows persisted across a set of league graphs. */
 export type LeagueCounts = {
@@ -56,6 +57,18 @@ export type SyncSummary = LeagueCounts & {
   leagues: number;
   /** leagues that failed to sync (e.g. Sleeper timeout) and were skipped. */
   failed: number;
+  /**
+   * Whether the manager's whole league graph is now known-current.
+   *
+   * **The one field a caller may treat as "this list is final".** It is not
+   * `failed === 0`: a run that did nothing because it lost the lock, or because
+   * the last attempt is still inside its throttle window, has no failures to
+   * report and no claim to make either. It is true for a real run that dropped
+   * no league, and for a skip that was skipped *because a complete sync is still
+   * fresh* — and false everywhere else, which is the whole of the distinction
+   * `synced_at` and `attempt_at` are two columns for.
+   */
+  complete: boolean;
 };
 
 /** Incremental sync progress, reported after each league finishes. */
@@ -82,8 +95,14 @@ export type LeagueSyncResult = {
   failedIds: string[];
 };
 
-/** How long a manager's league sync stays fresh before we re-fetch Sleeper. */
-export const SYNC_TTL_MS = 10 * 60 * 1000;
+// Re-exported so the route and the barrel keep one import site for a constant
+// whose definition now sits beside the decision that reads it.
+export {
+  SYNC_TTL_MS,
+  SYNC_ATTEMPT_TTL_MS,
+  managerSyncGate,
+} from "./sync-freshness";
+export type { ManagerSyncState, SyncGate, SyncGateReason } from "./sync-freshness";
 
 /**
  * Leagues fetched+persisted at once. Power users have 100+ leagues; fanning out
@@ -225,7 +244,11 @@ export async function syncLeagueGraphs(
  * freshness decision lives inside the lock (the "take it around the freshness
  * check too" rule), and a sync that completed while we queued counts as this
  * request's sync even when `force` is set — force means "the caller decided a
- * refresh is due", and the winner just did that refresh.
+ * refresh is due", and the winner just did that refresh. So does one that merely
+ * *tried*: running the whole fan-out a millisecond after another caller's
+ * attempt is what the lock exists to prevent, whether or not that attempt got
+ * every league. What the loser must never do is claim the graph is complete, and
+ * {@link SyncSummary.complete} is where it says so.
  */
 export async function syncManagerLeagues(
   userId: string,
@@ -250,7 +273,8 @@ export async function syncManagerLeagues(
     // right now is whatever they have committed — the caller must not present it
     // as a finished sync. See {@link SyncSummary.locked}.
     return {
-      season, locked: true, skipped: true, total: 0, leagues: 0, failed: 0,
+      season, locked: true, skipped: true, complete: false,
+      total: 0, leagues: 0, failed: 0,
       ...emptyCounts(),
     };
   }
@@ -264,19 +288,26 @@ async function syncManagerLeaguesLocked(
 ): Promise<SyncSummary> {
   const { force = false, concurrency, onProgress } = options;
 
-  const syncedAt = await getManagerSyncedAt(userId, season);
-  if (syncedAt) {
-    const fresh = Date.now() - syncedAt.getTime() < SYNC_TTL_MS;
-    const finishedWhileWaiting = syncedAt >= requestedAt;
-    if (finishedWhileWaiting || (!force && fresh)) {
-      // Skipped with the graph complete — either it was still fresh, or the
-      // lock's winner finished writing it while this caller queued. Nothing is
-      // in flight, so this is a full answer and not a `locked` one.
-      return {
-        season, locked: false, skipped: true, total: 0, leagues: 0, failed: 0,
-        ...emptyCounts(),
-      };
-    }
+  // The freshness decision inside the lock, so two callers can't both decide a
+  // refresh is due and then run it in turn. It is the same function the leagues
+  // route asks before it decides to call at all — see {@link managerSyncGate}
+  // for why a race is never overridden by `force` and freshness is.
+  const gate = managerSyncGate(await getManagerSyncState(userId, season), {
+    now: Date.now(),
+    requestedAt: requestedAt.getTime(),
+    force,
+  });
+  if (!gate.run) {
+    // Skipped with nothing in flight, so this is not a `locked` answer — but
+    // whether it is a *complete* one is the gate's to say and not this branch's.
+    // "Still fresh" leaves a whole graph; "an attempt is still inside its
+    // throttle window" leaves whatever that attempt managed, which is exactly
+    // the case that used to be reported as fresh.
+    return {
+      season, locked: false, skipped: true, complete: gate.complete,
+      total: 0, leagues: 0, failed: 0,
+      ...emptyCounts(),
+    };
   }
 
   const currentWeek = await getCurrentWeek();
@@ -305,20 +336,20 @@ async function syncManagerLeaguesLocked(
     { concurrency, onProgress },
   );
 
-  // Stamp the sync so subsequent loads inside the TTL skip the re-fetch. Written
-  // even on partial failure to avoid hammering Sleeper; the TTL retries later.
-  // `attempt_at` moves too: this did everything the crawl's discovery pass would
-  // have, so it should rotate to the back of that queue as well.
-  await pool.query(
-    `INSERT INTO manager_syncs (user_id, season, synced_at, attempt_at)
-     VALUES ($1, $2, now(), now())
-     ON CONFLICT (user_id, season)
-     DO UPDATE SET synced_at = now(), attempt_at = now()`,
-    [userId, season],
-  );
+  // A league Sleeper dropped on the floor is a league this manager's graph is
+  // still missing, so the run only *completes* when none did. Both timestamps
+  // are stamped either way and they answer different questions — see
+  // {@link MANAGER_SYNC_STAMP_SQL}: `attempt_at` is what keeps the next caller
+  // off Sleeper for the throttle window (written even on failure, which is the
+  // protection this used to get by lying with `synced_at`), and `synced_at` is
+  // the claim that these leagues are current. `attempt_at` also does everything
+  // the crawl's discovery pass would have, so the manager rotates to the back of
+  // that queue as well.
+  const complete = failed === 0;
+  await pool.query(MANAGER_SYNC_STAMP_SQL, [userId, season, complete]);
 
   return {
-    season, locked: false, skipped: false, total: leagues.length,
+    season, locked: false, skipped: false, complete, total: leagues.length,
     leagues: loaded, failed, ...counts,
   };
 }

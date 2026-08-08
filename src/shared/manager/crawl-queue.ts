@@ -164,6 +164,16 @@ export async function markLeaguesGone(leagueIds: string[]): Promise<void> {
  * `synced_at` means "full graph sync" and stays owned by syncManagerLeagues, so
  * a discovery pass never makes the leagues route serve half-refreshed data as
  * fresh.
+ *
+ * **It does now hold that route's retry throttle off Sleeper, though**, which is
+ * a consequence worth knowing: `managerSyncGate` reads `attempt_at` to decide
+ * how soon a manager may be re-fetched, so a manager stamped here is suppressed
+ * for `SYNC_ATTEMPT_TTL_MS` even if their leagues are past `SYNC_TTL_MS`. That
+ * is the right reading rather than an accident — a stamp here means Sleeper was
+ * asked about this manager minutes ago and everything newly attributable to them
+ * synced — and it is bounded: a manager is enumerated at most once per
+ * `CRAWL_MANAGER_TTL_MS`. Their leagues are still reported `stale`, so nothing
+ * presents the wait as a completed refresh.
  */
 export async function stampManagers(
   season: string,

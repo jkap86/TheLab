@@ -202,7 +202,12 @@ export type LeaguesResultMessage = {
   user: UserInfo;
   season: string;
   leagues: ManagerLeague[];
-  /** true when the leagues sent are cached and a refresh is warranted. */
+  /**
+   * true when the leagues sent are **not known-current** — cached past their
+   * TTL, or left short by a sync that failed, lost the lock or was throttled.
+   * It is the negation of {@link SyncSummary.complete} on the post-refresh
+   * message, and never merely "a refresh is running".
+   */
   stale: boolean;
   /** true when a refresh is running and a second `result` will follow. */
   refreshing: boolean;
