@@ -2751,6 +2751,25 @@ stops holding, a comment saying it does would not have caught it.
       inside the panel because neither is a fixed window: `Today` re-opens the
       end, and ◆ `Draft` pins the start at a date that moves every April, the
       one anchor no chip and no typed number could ever carry.
+    - **And each of those two is seated under the lens it writes**, which is the
+      one thing about the row a reader must not have to work out. The window has
+      two ends and there is a key for each — `Today` moves the *end*, ◆ `Draft`
+      moves the *start* — and held together in a cluster at the trailing end of
+      the row they read as two spellings of one thing; worse, the cluster wrapped
+      onto a line of its own at every phone width, which put `Today` directly
+      under the `Days back` label it has nothing to do with. So `Today` stands
+      under `Ending` and the ◆ key under `Days back`. It costs the row **no
+      width**, because a key is narrower than the lens above it (~63px under 64,
+      ~51px under ~120), so the measured budgets in `lookback-panel` still hold
+      and the wrap still falls between the lenses — the only seam left, and the
+      one place a break costs no pairing. It costs no *height* at a phone width
+      either, since the cluster was already spending a line there; only a drawer
+      wide enough to have held all four on one line pays for the seat. Two
+      details ride along. The key is a **sibling of the `<label>`, never inside
+      it** — a label activates its control, so a nested button answers a press by
+      putting the caret in the field it has just written — and the pairing is
+      pinned as document order in `lookback-panel.render.test.ts`, because it is
+      a seat and a nesting rather than anything a type can carry.
     - **It is seated, not raised over anything.** The floating panel earned its
       cast shadow by being *over* the rows below it; nothing floats now, so the
       face keeps its grade — the channel is a cut, and a cut is read against the

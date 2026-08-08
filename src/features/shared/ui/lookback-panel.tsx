@@ -45,6 +45,13 @@ import {
  *     every April, so no typed number and no fixed chip can carry it; the ◆
  *     key fills the lens with the day count and pins the stored window at the
  *     draft itself (`sinceDraftRange`), so it doesn't drift with the calendar.
+ *   - **Each key is seated under the lens it writes**, which is the one thing
+ *     about the row a reader should not have to work out: the window has two
+ *     ends and there is a key for each, so `Today` — which moves the *end* —
+ *     stands under `Ending`, and the ◆ draft key — which moves the *start* —
+ *     stands under `Days back`. Held together in a cluster at the end of the
+ *     row they read as two spellings of one thing, and at a phone width, where
+ *     the cluster took a line of its own, they sat under neither lens.
  *   - **The number previews and the release commits** — the steepness slider's
  *     own rule. A committed window re-fetches the board, so typing "104" must
  *     not fetch three boards; the channel and caption re-read per keystroke
@@ -173,22 +180,30 @@ export function LookbackPanel({
         className="absolute -left-3 bottom-[12%] top-[12%] w-[3px] rounded-full bg-[linear-gradient(180deg,transparent,rgba(0,255,229,0.7)_30%,rgba(0,255,229,0.7)_70%,transparent)] shadow-[0_0_10px_rgba(0,255,229,0.4)]"
       />
 
-      {/* **The two lenses and the keys are three peers of one wrap**, which is
-          what decides *where* a panel too narrow for the row breaks it. Grouped
-          as [days] and [date + keys] the second item is 271px wide and cannot
-          sit beside the first at any phone width, so the break fell between the
-          lenses — "last N days" on one line and "ending" on the next, the two
-          halves of one sentence read as two controls. Split this way the lenses
-          hold the line and the **keys** take the second one, which is the part
-          that can afford it: they move the end date rather than state it, and
-          the lens above states where it landed either way.
+      {/* **A key is seated under the lens it moves**, and that pairing is what
+          the row is arranged around: `Today` writes the window's *end*, so it
+          sits under `Ending`; the ◆ draft key writes its *start*, so it sits
+          under `Days back`. They used to be a third peer of the wrap — one
+          cluster holding both, at the trailing end — which left a reader to
+          work out from two lenses and two keys which key filled which lens,
+          and the answer moved with the wrap: at a phone width the pair took a
+          line of their own, where neither key was beside anything at all.
 
-          The widths behind that are measured rather than judged, and at every
-          device pixel ratio rather than one — the date lens is a **native
-          control**, and its width moves ~6px per step of DPR and again with
-          whatever the platform makes of a date field. The panel is the viewport
-          below 512, so a 390px screen leaves this row 332px and a 360px screen
-          302px, against 454 for a full-width drawer.
+          Seating them costs the row **no width**, because a key is narrower
+          than the lens above it (the ◆ key measures ~63px under a 64px lens at
+          the narrow tier, `Today` ~51px under ~120px), so the two columns are
+          the widths the table below measures and the wrap still falls where it
+          fell. What it buys back is a line: at a phone width the keys were
+          already wrapping onto one, so the panel is *shorter* there, and only
+          a drawer wide enough to have held all four on one line pays the key's
+          height at all.
+
+          The widths are measured rather than judged, and at every device pixel
+          ratio rather than one — the date lens is a **native control**, and its
+          width moves ~6px per step of DPR and again with whatever the platform
+          makes of a date field. The panel is the viewport below 512, so a 390px
+          screen leaves this row 332px and a 360px screen 302px, against 454 for
+          a full-width drawer.
 
           **The date in it is set at 16px now** — the floor below which iOS
           Safari zooms the page on focus, and the reason there is no
@@ -207,18 +222,41 @@ export function LookbackPanel({
           | 454 (full drawer) | 329 | 296 / 302 / 308 | 312 / 318 / 324 |
 
           — four pixels below `@md` and sixteen above it, both inside the budget
-          at every ratio, so **the break lands exactly where it landed before**:
-          the lenses hold the line and the keys take the second one at 302 and
-          332, and all three share one line at 454. Nothing else about the
-          instrument moved — the day lens is the width it was at both tiers.
-          Below `@md` it still runs compact: the housing shrinks, the lens and
-          the two gaps, while every digit stays the size it was. */}
+          at every ratio, so **the two columns share one line at every width the
+          panel is drawn at**, which is what makes each key's seat under its own
+          lens hold rather than being an adjacency the wrap can take away. The
+          `flex-wrap` stays for the widths below the ones measured here, and it
+          breaks between the lenses — the only seam left, and the one place a
+          break costs no pairing. Below `@md` the row still runs compact: the
+          housing shrinks, the lens and the two gaps, while every digit stays
+          the size it was. */}
       <div className="flex flex-wrap items-start gap-x-2 gap-y-2 @md:gap-x-3">
         <div className="flex items-start gap-1 @md:gap-1.5">
           <StepKey label="One day less" onClick={() => step(-1)}>
             −
           </StepKey>
-          <label className="flex flex-col items-center gap-1">
+          <LensColumn
+            unit="Days back"
+            // The ◆ key fills *this* lens — it moves the window's start, which
+            // is what a day count is — so it is seated under it rather than in
+            // a cluster of keys at the end of the row. Drawn only where the
+            // strip's domain holds a draft.
+            seat={
+              anchor !== null && (
+                <PanelKey
+                  on={onDraft}
+                  label={`Start the window at the ${anchor.label}`}
+                  onClick={() => onChange(sinceDraftRange(anchor.date, view))}
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block h-1.5 w-1.5 rotate-45 rounded-[1px] bg-fuchsia-400 shadow-[0_0_5px_rgba(232,121,249,0.7)]"
+                  />
+                  Draft
+                </PanelKey>
+              )
+            }
+          >
             <span
               className={`lab-readout lab-lens block h-[46px] w-[64px] rounded-lg transition-shadow @md:w-[92px] ${
                 editing ? "lab-readout-live" : ""
@@ -260,14 +298,27 @@ export function LookbackPanel({
                 className="h-full w-full bg-transparent text-center font-display text-[1.35rem] font-bold tabular-nums text-active [appearance:textfield] [text-shadow:0_0_14px_rgba(0,255,229,0.45)] placeholder:font-normal placeholder:text-foreground/25 placeholder:[text-shadow:none] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </span>
-            <LensUnit>Days back</LensUnit>
-          </label>
+          </LensColumn>
           <StepKey label="One day more" onClick={() => step(1)}>
             +
           </StepKey>
         </div>
 
-        <label className="flex flex-col items-center gap-1">
+        <LensColumn
+          unit="Ending"
+          // `Today` writes the end date and nothing else — it is this lens's
+          // own key, and the one press that re-opens the window so it rolls
+          // forward again.
+          seat={
+            <PanelKey
+              on={view.endsToday}
+              label="End the window today and keep it rolling forward"
+              onClick={() => commit(shown.days, today)}
+            >
+              Today
+            </PanelKey>
+          }
+        >
           <span className="lab-readout lab-lens flex h-[46px] items-center rounded-lg px-0.5">
             <input
               type="date"
@@ -307,34 +358,7 @@ export function LookbackPanel({
               className={`date-field-tight @md:[&::-webkit-calendar-picker-indicator]:block bg-transparent px-0 font-display ${mobileInputText} font-bold tracking-[-0.025em] tabular-nums text-active [color-scheme:dark] [text-shadow:0_0_10px_rgba(0,255,229,0.4)] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active`}
             />
           </span>
-          <LensUnit>Ending</LensUnit>
-        </label>
-
-        {/* `mt-[11px]` centres the keys on the 46px lens while they share its
-            line; on the line of their own a narrow panel gives them, it is the
-            gap under the lens's unit label. */}
-        <span className="mt-[11px] flex flex-wrap gap-1.5">
-          <PanelKey
-            on={view.endsToday}
-            label="End the window today and keep it rolling forward"
-            onClick={() => commit(shown.days, today)}
-          >
-            Today
-          </PanelKey>
-          {anchor !== null && (
-            <PanelKey
-              on={onDraft}
-              label={`Start the window at the ${anchor.label}`}
-              onClick={() => onChange(sinceDraftRange(anchor.date, view))}
-            >
-              <span
-                aria-hidden
-                className="inline-block h-1.5 w-1.5 rotate-45 rounded-[1px] bg-fuchsia-400 shadow-[0_0_5px_rgba(232,121,249,0.7)]"
-              />
-              Draft
-            </PanelKey>
-          )}
-        </span>
+        </LensColumn>
       </div>
 
       {/* The density, standing in a milled slot. A readout, not a control: the
@@ -469,12 +493,40 @@ function StepKey({
   );
 }
 
-/** The unit engraved under a lens, the countdown cells' own habit. */
-function LensUnit({ children }: { children: string }) {
+/**
+ * One lens: the housing, the unit engraved under it, and the key that fills it.
+ *
+ * The key is a **sibling of the `<label>`, never inside it** — a label
+ * activates its control, so a button nested in one answers a press by focusing
+ * the input beside it, which on the day lens would put the caret in a field the
+ * key had just written. It is what the wrapper is for; the two nested columns
+ * are the price of that rule, not a stray div.
+ *
+ * `seat` takes `false` as well as an element so a caller can decline the key
+ * inline (the ◆ draft key is drawn only where the strip's domain holds a
+ * draft), and the seat is then simply absent — an empty box under a lens would
+ * make one column taller than the other for the sake of nothing.
+ */
+function LensColumn({
+  unit,
+  seat,
+  children,
+}: {
+  unit: string;
+  seat?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <span className="text-[0.5rem] font-bold uppercase tracking-[0.22em] text-foreground/35 [text-shadow:0_-1px_0_rgba(0,0,0,0.85),0_1px_0_rgba(255,255,255,0.06)]">
-      {children}
-    </span>
+    <div className="flex flex-col items-center gap-1">
+      <label className="flex flex-col items-center gap-1">
+        {children}
+        {/* The unit engraved under the lens, the countdown cells' own habit. */}
+        <span className="text-[0.5rem] font-bold uppercase tracking-[0.22em] text-foreground/35 [text-shadow:0_-1px_0_rgba(0,0,0,0.85),0_1px_0_rgba(255,255,255,0.06)]">
+          {unit}
+        </span>
+      </label>
+      {seat}
+    </div>
   );
 }
 
@@ -495,6 +547,10 @@ function PanelKey({
       type="button"
       aria-pressed={on}
       aria-label={label}
+      // The word on the key names the *value* it writes ("Today", "Draft") and
+      // the lens above it names the field; the hover is where the sentence is
+      // spelled out whole, the contracted player names' own backstop.
+      title={label}
       onClick={onClick}
       className={`lab-chip lab-chip-sm flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[0.66rem] font-semibold transition-colors ${
         on ? "lab-chip-on" : "text-foreground/70"
