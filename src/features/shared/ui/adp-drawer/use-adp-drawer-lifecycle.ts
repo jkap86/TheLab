@@ -34,12 +34,13 @@ export type AdpDrawerLifecycle = {
  * **The handback keys on `onScreen`, not on `open`, and the two are not the same
  * moment.** See the two slots below.
  *
- * It used to hold a floating-panel selection too, because Escape has to close the
- * innermost thing that is up and the drawer carried its own filter tray. That
- * tray is the shared league-filters `<dialog>` now, which hears Escape in the top
- * layer and never lets the press reach this hook — so the selection, its reset on
- * reopen and the two thunks the key handler read it through are all gone, the way
- * the columns editor's own apparatus went when it became a dialog.
+ * **It reads the open bay but does not own it.** Escape closes the innermost
+ * thing that is up, so the key listener has to know whether a bay is floating
+ * over the board — but *which* bay is a fact about the drawer's controls, so it
+ * lives in the component and arrives here as a thunk and a closer. Both go
+ * through refs for the same reason `onClose` does: callers pass fresh arrows, and
+ * an effect that re-ran on one would call `panel.focus()` again and take focus off
+ * the lookback field being typed into.
  *
  * What it does *not* hold is any of the deciding: which keys mean what, where
  * Tab goes next, whether an opener may be focused again and what the scroll lock
@@ -51,9 +52,14 @@ export type AdpDrawerLifecycle = {
 export function useAdpDrawerLifecycle({
   open,
   onClose,
+  bayOpen,
+  onCloseBay,
 }: {
   open: boolean;
   onClose: () => void;
+  /** A bay is floating over the board, so Escape means the bay. */
+  bayOpen: boolean;
+  onCloseBay: () => void;
 }): AdpDrawerLifecycle {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -91,6 +97,17 @@ export function useAdpDrawerLifecycle({
   useEffect(() => {
     latestClose.current = onClose;
   }, [onClose]);
+
+  // The bay's two halves, on the same terms and for the same reason. The flag is
+  // a ref rather than a dependency because the listener has to answer for the
+  // bay open *at press time* — re-attaching it on every bay toggle would move
+  // focus back to the panel each time, which is the bug the ref above documents.
+  const latestBayOpen = useRef(bayOpen);
+  const latestCloseBay = useRef(onCloseBay);
+  useEffect(() => {
+    latestBayOpen.current = bayOpen;
+    latestCloseBay.current = onCloseBay;
+  }, [bayOpen, onCloseBay]);
 
   // The page behind stops scrolling while the drawer is on screen — a
   // full-height panel over a scrolling page reads as a rendering bug. It holds
@@ -169,6 +186,8 @@ export function useAdpDrawerLifecycle({
       activeElement: () =>
         document.activeElement instanceof HTMLElement ? document.activeElement : null,
       focusContainer: () => panelRef.current?.focus(),
+      bayOpen: () => latestBayOpen.current,
+      closeBay: () => latestCloseBay.current(),
       closeDrawer: () => latestClose.current(),
     });
 
