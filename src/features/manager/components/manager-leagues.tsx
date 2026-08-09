@@ -14,6 +14,7 @@ import {
   DEFAULT_COLUMNS,
   LEAGUE_COLUMN_PRESETS,
   LEAGUE_METRICS,
+  managerDataRequirements,
   type MetricContext,
 } from "../league-metrics";
 import { ColumnsBar } from "./columns-bar";
@@ -41,6 +42,53 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   const view = useFilteredLeagues(searched);
   const [openId, setOpenId] = useState<string | null>(null);
 
+  // Which metric each of the four stat columns shows, shared by every card so the
+  // columns line up down the list — a change on any card's picker moves them all.
+  // Kept on the device rather than in state: they are aimed once and then read,
+  // so a reload or a trip out to another tool used to cost re-aiming all four.
+  const { columns, setColumn, setColumns, reset } = usePersistedColumns(
+    "league",
+    DEFAULT_COLUMNS,
+    LEAGUE_METRICS,
+  );
+
+  /**
+   * Whether the columns editor has ever been opened on this page.
+   *
+   * It previews every metric in the catalogue, not the four on screen, so from
+   * the moment it opens the two optional datasets are being drawn whatever the
+   * selection says. Latched rather than tracking whether it is open, for the
+   * reason `useColumnsEditor` latches its own mount: a preview that filled in and
+   * then emptied when the dialog closed would be worse than one that never
+   * emptied, and the read is cached either way.
+   */
+  const [editorOpened, setEditorOpened] = useState(false);
+
+  /**
+   * Which of the three batch reads anything on screen actually needs.
+   *
+   * The optional two are expensive at the far end — the KTC route solves every
+   * team's optimal lineup in every league, the ADP one prices every roster
+   * against a crawled board — and a reader can aim all four columns away from
+   * both, which used to cost the requests anyway and display neither. `ranks`
+   * comes back true unconditionally, because the record ledge on every card reads
+   * the standing off it and no column controls that; see
+   * {@link managerDataRequirements}.
+   *
+   * **The persisted selection is always in hand before either read can fire**,
+   * and the two ways onto this page reach that by different routes. On a client
+   * navigation there is no server render, so `useLocalValue` reads storage from
+   * the first render and the stored columns are what these are derived from. On a
+   * fresh load the store deliberately has no server snapshot — that is the
+   * hydration rule it exists to keep — so the first render *is* the defaults; but
+   * a fresh load starts with an empty `QueryClient`, so `leagues` is null and both
+   * reads are gated off it until a stream resolves, which is many frames after
+   * hydration has swapped the stored row in. Neither order needs an effect, and
+   * neither leaves a window where the defaults ask for something the stored
+   * columns would not.
+   */
+  const needs = useMemo(() => managerDataRequirements(columns), [columns]);
+
   // The card chips are a bonus on top of the list, so a fetch that fails costs
   // the chips and nothing else — the errors go deliberately unread. Three reads
   // rather than one because they answer different questions off different caches:
@@ -49,7 +97,9 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   // since the chips belong to every card the filters might later show.
   const leagues = view.data?.leagues ?? null;
   const ranks = useManagerRanks(searched, view.userId, leagues);
-  const ktc = useManagerKtc(searched, view.userId, leagues);
+  const ktc = useManagerKtc(searched, view.userId, leagues, {
+    enabled: needs.ktc || editorOpened,
+  });
   // The whole shared ADP drawer drives the team value, not just its curve: the
   // window, the kind of draft and the league rules all narrow the population
   // these cards are priced against, so a panel showing startup ADP and a column
@@ -61,17 +111,9 @@ export function ManagerLeagues({ searched }: { searched: string }) {
     () => adpValueRead(controls, scope, todayIso()),
     [controls, scope],
   );
-  const adp = useManagerAdpValue(searched, view.userId, leagues, adpBoard);
-
-  // Which metric each of the four stat columns shows, shared by every card so the
-  // columns line up down the list — a change on any card's picker moves them all.
-  // Kept on the device rather than in state: they are aimed once and then read,
-  // so a reload or a trip out to another tool used to cost re-aiming all four.
-  const { columns, setColumn, setColumns, reset } = usePersistedColumns(
-    "league",
-    DEFAULT_COLUMNS,
-    LEAGUE_METRICS,
-  );
+  const adp = useManagerAdpValue(searched, view.userId, leagues, adpBoard, {
+    enabled: needs.adp || editorOpened,
+  });
 
   const total = view.data?.leagues.length ?? 0;
   const showing = view.filtered.length;
@@ -128,6 +170,9 @@ export function ManagerLeagues({ searched }: { searched: string }) {
           onColumnChange={setColumn}
           onColumns={setColumns}
           onReset={reset}
+          // The editor previews the whole catalogue, so from here on the two
+          // optional reads are on screen whatever the four columns hold.
+          onEditorOpen={() => setEditorOpened(true)}
         />
       }
     >

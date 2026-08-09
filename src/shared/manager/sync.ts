@@ -249,6 +249,23 @@ export async function syncLeagueGraphs(
  * attempt is what the lock exists to prevent, whether or not that attempt got
  * every league. What the loser must never do is claim the graph is complete, and
  * {@link SyncSummary.complete} is where it says so.
+ *
+ * **The lock is held across the Sleeper work, not only across the writes, and
+ * that is the one thing about this shape worth defending explicitly.** It is
+ * exactly what `Limiter.run`'s own note warns against — a pool connection held
+ * over an upstream wait — and the obvious rearrangement is not available:
+ * released before the fetch, two instances both find the manager stale, both
+ * decide a refresh is due and both run the ~11-requests-per-league fan-out,
+ * which is the duplicate cross-instance work this lock is the only thing
+ * preventing. So the lifetime stays and the *number* of them is what is bounded:
+ * `shared/manager/sync-admission` caps how many manager syncs one process runs
+ * at once at a share of the pool, which is what keeps these held sessions from
+ * being most of it.
+ *
+ * **Admission is the caller's, not this function's.** It cannot be taken here:
+ * the leagues route has to know whether it may sync *before* it opens a stream,
+ * since a caller with nothing cached answers 503 rather than an empty list, and a
+ * decision made inside this call is a decision made after that answer was owed.
  */
 export async function syncManagerLeagues(
   userId: string,

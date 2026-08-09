@@ -4680,6 +4680,30 @@ stops holding, a comment saying it does would not have caught it.
   opens can't disagree about who starts. Its failure costs the split and not the
   value — pricing a roster needs no projection, so the totals still answer, which
   is why `split` is nullable rather than the whole league being dropped.
+- **Two of those three batch reads are asked for only when a column actually
+  draws them** (`managerDataRequirements`, and each metric's own `reads`). "A
+  collapsed card costs no request" is what the batching bought; what it left is
+  that the *batch* was unconditional — four columns out of a catalogue of
+  thirteen, so a reader can aim all four away from a dataset, and both optional
+  ones are the expensive kind at the far end (the KTC route solves every team's
+  optimal lineup in every league, the ADP one prices every one of those rosters
+  against a crawled board, per board). A projection-only board paid for both and
+  drew neither. Four things hold it up. **`reads` is declared per metric and not
+  inferred from `group`**, which agrees today and is a display caption — what a
+  bay is *called* has no business deciding whether a request is made — and it is
+  required, so a new metric cannot forget to say what it costs. **The agreement
+  is what the test pins**: for every metric, nulling a declared dataset must
+  change its cell and nulling an undeclared one must not, which catches
+  over-fetching and a silently-blank column with one property. **`ranks` is
+  unconditional**, and that is a fact about the card rather than a derivation: the
+  record ledge reads `ranks.standing`, which is deliberately not a metric, so no
+  column controls it — it is returned anyway so the rule has somewhere to be
+  asserted. And **the columns editor is a consumer too**: it previews the whole
+  catalogue against the first league, so `ColumnsBar`'s `onEditorOpen` latches
+  both reads on the first press of a heading — otherwise a reader about to pick a
+  KTC column would be choosing between em dashes. Nothing is invalidated either
+  way; re-aiming a slot re-enables the query against the same key, and an entry
+  inside its stale time is a cache read.
 - **ADP is ordinal, so it cannot be summed — `adp-value` makes it cardinal
   first.** A draft position is a rank where lower is better, so adding raw ADPs
   gives a deep roster a bigger (worse) number and lets a stud *lower* the total.
@@ -4986,12 +5010,40 @@ stops holding, a comment saying it does would not have caught it.
   are what a test asserts: the slot is released in a `finally` (a slot leaked on
   a thrown request is a limiter that tightens by one per Sleeper timeout and
   eventually admits nobody), and the queue is FIFO (a busy page must not defer a
-  background tick that has been waiting since before it started). The other half
-  of the same problem is *admission*: `/api/user/[username]/leagues` caps
-  concurrent **cold** syncs per process (`MANAGER_COLD_SYNC_LIMIT`, default 3)
-  and sheds past it with a 503 rather than queueing, since a cold caller has
-  nothing cached to fall back on and would hold a streaming response open through
-  a wait it cannot be answered within.
+  background tick that has been waiting since before it started).
+- **The other half of that problem is *admission*, and it took two goes because
+  the first one bounded the cheaper shape.** `shared/manager/sync-admission` is
+  the process's whole manager-sync budget — `MANAGER_SYNC_LIMIT`, defaulting to
+  `databaseBudget().fanout` (3 at the default pool size) — and `/api/user/…/leagues`
+  reserves from it for **every** sync it runs. It used to cap *cold* syncs only,
+  on the reasoning that a cold caller has nothing to serve and is the expensive
+  case. Half of that is true: a stale refresh is the *same*
+  ~11-requests-per-league fan-out holding the same advisory-lock connection for
+  its whole duration, and it skipped the counter entirely — so any number of
+  stale managers could refresh at once, take a ten-connection pool between them,
+  and then stall the persistence they were themselves queued to do. Four things
+  hold the fix up. **The cap is a share of the pool rather than a number of its
+  own**, for the reason `ADVISORY_LOCK_WAIT_MS` is a share of the request
+  deadline: a manager sync is a held Postgres session *plus* the reads and writes
+  each league needs, so what bounds it honestly is how much of the pool one
+  request may hold. **It is three layers and not one** — the semaphore bounds
+  total activity on this instance, the per-manager in-flight map dedupes the same
+  manager in this process, and the advisory lock is the only one of the three that
+  survives a second dyno; reading any one of them alone makes the other two look
+  redundant. **Acquisition never queues** (`Limiter.tryAcquire`, whose release is
+  idempotent because a doubled release widens a bound permanently where a leaked
+  one only tightens it): every caller here holds a streaming response open, so a
+  queued one would hold it through a wait the platform's deadline may end first —
+  a refused caller serves what is stored instead, stamps nothing, and the next
+  request is the retry. **Only the cold caller sheds with a 503**, since it is the
+  one with no cache to fall back on and an empty league list would read as "this
+  manager has none".
+- **The advisory lock still spans the whole sync, network included, and that is
+  deliberate.** It is the one thing the limiter's own note warns against — a pool
+  connection held across an upstream wait — and shortening it is not available:
+  released before the fetch, two instances both decide a refresh is due and both
+  run the fan-out, which is the duplicate work the lock exists to prevent. So the
+  connection lifetime is unchanged and the *number* of them is what got bounded.
 - **Sleeper answers 200 with a `null` body** for "no such thing" (unknown user,
   deleted league) rather than 404. `sleeperGet` normalises this to a fallback —
   use it rather than calling axios directly.
@@ -5012,6 +5064,23 @@ stops holding, a comment saying it does would not have caught it.
   assumed by whoever renders it. It matters for few leagues and matters a lot to
   them: 118 of the 122 stored here are superflex, so the four that aren't are
   exactly the ones a default would silently misprice.
+- **Two KTC rows can legitimately name one Sleeper player, so the read resolves
+  the two boards *independently*.** The match is by name (`ktc/match`), so an
+  alias, a suffix spelled differently or a retired entry beside a current one all
+  land on one `sleeper_id` — which is why the column carries no unique constraint
+  and why cleaning the table up would not stop the next scrape producing another
+  pair. The read used to be `DISTINCT ON (sleeper_id) … ORDER BY sf_value DESC`,
+  which takes *both* numbers off whichever row won on **superflex**: a player
+  carrying `(sf 9000, 1QB 5000)` and `(sf 8000, 1QB 7000)` was priced at 5000 on
+  the 1QB board with 7000 on file. Silent by construction — the number is a real
+  number from a real row — and wrong only on the 1QB board, which is the four
+  leagues in a hundred that a default already misprices. `ktc/values` is the fold
+  (`foldKtcValues`, order-independent, highest per board, treating null as "this
+  row says nothing" rather than as zero — the same semantics SQL's own `max()`
+  has, so the two spellings cannot disagree). It is a **pure fold rather than a
+  `GROUP BY` in the query** for the reason `ktc/parse` and `ktc/match` are pure:
+  a duplicate-resolution rule nothing can test is a rule that regresses, and the
+  rows a duplicate adds to the wire are a handful out of a board of ~500.
 - **KTC prices ~500 dynasty skill players, so a roster total is never the whole
   roster.** 93.7% of the players on rosters here carry a price; the shortfall is
   IDP (LB, DB, DL, DE) plus the deep end of every skill position, and kickers and

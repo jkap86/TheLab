@@ -67,13 +67,38 @@ export type MetricContext = {
 };
 
 /**
- * One selectable league metric — {@link Metric} bound to this catalogue's grain.
+ * Which of the leagues list's three batch reads a metric needs.
+ *
+ * `ranks`, `ktc` and `adp` are three separate routes and two of them are
+ * expensive in ways a column being *off* does not make cheaper: the KTC
+ * valuation solves every team's optimal lineup in every league, and the ADP one
+ * prices every roster against a crawled board. A reader whose four columns name
+ * none of them was paying for both anyway.
+ */
+export type ManagerDataset = "ranks" | "ktc" | "adp";
+
+/**
+ * One selectable league metric — {@link Metric} bound to this catalogue's grain,
+ * plus which batch read its cell reaches into.
  *
  * The cell shapes it can return, and the reason a rank and a value render
  * differently, live with {@link MetricCell}: they are shared with the share cards'
  * catalogue, which is drawn by the same column.
+ *
+ * `reads` is declared per metric rather than inferred from {@link Metric.group},
+ * which happens to agree today and is a display caption: what a bay is *called*
+ * has no business deciding whether a request is made. It is required, so a metric
+ * added here cannot forget to say what it costs — the failure otherwise is a
+ * column that quietly draws an em dash because nothing asked for its data.
+ *
+ * `Omit<…, never>` is not needed here — `reads` is a new property rather than a
+ * narrowing of `cell`, so the intersection cannot collapse into an overload the
+ * way `TeamMetricCell`'s did.
  */
-export type LeagueMetric = Metric<MetricContext>;
+export type LeagueMetric = Metric<MetricContext> & {
+  /** The batch reads this metric's cell needs to say anything. */
+  reads: readonly ManagerDataset[];
+};
 
 /**
  * The KTC column's hover, where the raw value, the board and the priced count
@@ -205,6 +230,7 @@ function adpValueMetric(market: AdpBoardType): LeagueMetric {
     key: `adp_total_${market}`,
     group: "Draft market",
     label: marketLabel(market),
+    reads: ["adp"],
     cell: ({ adp }) => {
       const board = adpBoard(adp, market);
       return {
@@ -225,6 +251,7 @@ function adpRankMetric(market: AdpBoardType): LeagueMetric {
     key: `adp_rank_${market}`,
     group: "Draft market",
     label: `${marketLabel(market)} #`,
+    reads: ["adp"],
     cell: ({ adp }) => ({
       kind: "rank",
       rank: adpBoard(adp, market)?.starters_rank ?? null,
@@ -247,6 +274,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "points",
     group: "Record",
     label: "Points",
+    reads: ["ranks"],
     cell: ({ ranks }) => {
       const points = ranks?.points ?? null;
       return {
@@ -264,6 +292,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "points_for",
     group: "Record",
     label: "Points for",
+    reads: ["ranks"],
     cell: ({ ranks }) => {
       const points = ranks?.points ?? null;
       return {
@@ -279,6 +308,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "proj",
     group: "Projection",
     label: "Proj start",
+    reads: ["ranks"],
     cell: ({ ranks, weeks }) => {
       const proj = ranks?.proj ?? null;
       return {
@@ -292,6 +322,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "proj_pts",
     group: "Projection",
     label: "Proj pts",
+    reads: ["ranks"],
     cell: ({ ranks, weeks }) => {
       const proj = ranks?.proj ?? null;
       return {
@@ -305,6 +336,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "proj_bench",
     group: "Projection",
     label: "Proj bench",
+    reads: ["ranks"],
     cell: ({ ranks, weeks }) => {
       const bench = ranks?.proj_bench ?? null;
       return {
@@ -318,6 +350,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "proj_bench_pts",
     group: "Projection",
     label: "Bench pts",
+    reads: ["ranks"],
     cell: ({ ranks, weeks }) => {
       const bench = ranks?.proj_bench ?? null;
       return {
@@ -331,6 +364,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "ktc_start",
     group: "Trade value",
     label: "KTC start",
+    reads: ["ktc"],
     cell: ({ ktc, valuedAt }) => ({
       kind: "rank",
       rank: ktc?.starters_rank ?? null,
@@ -341,6 +375,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "ktc_total",
     group: "Trade value",
     label: "KTC total",
+    reads: ["ktc"],
     cell: ({ ktc, valuedAt }) => ({
       kind: "value",
       // A priced count of zero is a real, empty roster rather than a value of
@@ -353,6 +388,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "ktc_bench",
     group: "Trade value",
     label: "KTC bench",
+    reads: ["ktc"],
     cell: ({ ktc, valuedAt }) => ({
       kind: "value",
       // `split` is null when there is no lineup to divide the value by — a league
@@ -374,6 +410,49 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
 /** The metric list keyed by id, for resolving a column's stored selection. */
 export const LEAGUE_METRICS_BY_KEY: Record<string, LeagueMetric> =
   Object.fromEntries(LEAGUE_METRICS.map((metric) => [metric.key, metric]));
+
+/** Which of the leagues list's three batch reads are worth making. */
+export type ManagerDataRequirements = Record<ManagerDataset, boolean>;
+
+/**
+ * Which batch reads a column selection actually needs.
+ *
+ * The stat columns are four slots out of a catalogue of thirteen, so a reader can
+ * — and does — aim all four away from a whole dataset. Both of the optional ones
+ * are expensive at the far end: `/api/user/…/ktc` solves every team's optimal
+ * lineup in every league the manager plays in, and `/api/user/…/adp-value` prices
+ * every one of those rosters against a crawled ADP board, per board. Neither was
+ * gated on anything but "are there leagues", so a board of four projection
+ * columns paid for both on every visit and drew neither.
+ *
+ * **`ranks` is unconditional, and that is a fact about the card rather than about
+ * this catalogue.** The record ledge on every card's trailing corner reads
+ * `ranks.standing` — the standing is deliberately *not* a metric, because it is
+ * what the record means in its league and belongs beside it — so the ranks read
+ * is load-bearing whatever the four columns say. It is returned rather than left
+ * implicit so the rule has somewhere to be asserted: a future edit that folds it
+ * into the same derivation as the other two would silently blank a fact no column
+ * controls.
+ *
+ * A key naming no metric (a selection stored by an older build) requires nothing,
+ * which is `resolveColumns`' fallback arriving here as well: a slot that cannot
+ * be drawn should not be a slot that fetches.
+ *
+ * Pure, so the mapping from a stored selection to a set of requests is checkable
+ * without a renderer — the whole point of extracting it, since the failure it
+ * prevents is invisible on screen in both directions.
+ */
+export function managerDataRequirements(
+  columns: readonly string[],
+): ManagerDataRequirements {
+  const needs: ManagerDataRequirements = { ranks: true, ktc: false, adp: false };
+  for (const key of columns) {
+    for (const dataset of LEAGUE_METRICS_BY_KEY[key]?.reads ?? []) {
+      needs[dataset] = true;
+    }
+  }
+  return needs;
+}
 
 /**
  * The four columns a card opens with — one ranking from each of the four

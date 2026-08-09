@@ -6,6 +6,8 @@ import {
   LEAGUE_COLUMN_PRESETS,
   LEAGUE_METRICS,
   LEAGUE_METRICS_BY_KEY,
+  managerDataRequirements,
+  type ManagerDataset,
   type MetricContext,
 } from "./league-metrics.ts";
 import { metricPreview } from "./metric-cell.ts";
@@ -268,5 +270,145 @@ describe("ADP market metrics", () => {
     const total = cell("adp_total_redraft", { adp: null });
     assert.equal(rank.kind === "rank" && rank.rank, null);
     assert.equal(total.kind === "value" && total.text, null);
+  });
+});
+
+/**
+ * Which of the leagues list's three batch reads a column selection needs.
+ *
+ * The regression these are written against runs both ways and neither is visible
+ * on screen. Over-declared, the page fetches a KTC valuation — every team's
+ * optimal lineup in every league the manager plays in — for a board of four
+ * projection columns that will never draw it. Under-declared, a column a reader
+ * *has* selected draws an em dash because nothing asked for its data, which reads
+ * as "nothing priced" rather than as "not fetched".
+ */
+describe("managerDataRequirements", () => {
+  /** The `MetricContext` fields each batch read supplies. */
+  const FIELDS: Record<ManagerDataset, Partial<MetricContext>> = {
+    ranks: { ranks: null, weeks: [] },
+    ktc: { ktc: null, valuedAt: null },
+    adp: { adp: null },
+  };
+  const DATASETS = Object.keys(FIELDS) as ManagerDataset[];
+
+  test("every metric declares exactly the reads its cell depends on", () => {
+    // The agreement no type can carry: `reads` is what decides whether a request
+    // is made, and the cell is what would silently blank without it.
+    for (const metric of LEAGUE_METRICS) {
+      const full = JSON.stringify(metric.cell(ctx()));
+      for (const dataset of DATASETS) {
+        const without = JSON.stringify(metric.cell(ctx(FIELDS[dataset])));
+        if (metric.reads.includes(dataset)) {
+          assert.notEqual(
+            without,
+            full,
+            `${metric.key} declares it reads ${dataset} but does not use it`,
+          );
+        } else {
+          assert.equal(
+            without,
+            full,
+            `${metric.key} reads ${dataset} without declaring it`,
+          );
+        }
+      }
+    }
+  });
+
+  test("the ranks read is required whatever the columns say", () => {
+    // Not a derivation: the record ledge on every card reads `ranks.standing`,
+    // which is deliberately not a metric — the standing is what the record means
+    // in its league — so no column controls it.
+    assert.equal(managerDataRequirements([]).ranks, true);
+    assert.equal(managerDataRequirements(["ktc_total"]).ranks, true);
+    assert.equal(managerDataRequirements(["adp_total_dynasty"]).ranks, true);
+  });
+
+  test("needs neither optional read for a projection-only board", () => {
+    assert.deepEqual(
+      managerDataRequirements(["proj", "proj_pts", "proj_bench", "points"]),
+      { ranks: true, ktc: false, adp: false },
+    );
+  });
+
+  test("needs KTC only when a visible column reads it", () => {
+    for (const key of ["ktc_start", "ktc_total", "ktc_bench"]) {
+      assert.equal(
+        managerDataRequirements(["points", "proj", "proj_pts", key]).ktc,
+        true,
+        key,
+      );
+    }
+    assert.equal(managerDataRequirements(["points", "proj"]).ktc, false);
+  });
+
+  test("needs the ADP valuation only when a visible column reads it", () => {
+    for (const key of [
+      "adp_total_redraft",
+      "adp_total_dynasty",
+      "adp_rank_redraft",
+      "adp_rank_dynasty",
+    ]) {
+      assert.equal(
+        managerDataRequirements(["points", "proj", "proj_pts", key]).adp,
+        true,
+        key,
+      );
+    }
+    assert.equal(managerDataRequirements(["points", "ktc_total"]).adp, false);
+  });
+
+  test("a mixed board asks for exactly the reads it draws", () => {
+    assert.deepEqual(
+      managerDataRequirements(["points", "proj", "ktc_bench", "points_for"]),
+      { ranks: true, ktc: true, adp: false },
+    );
+    assert.deepEqual(
+      managerDataRequirements(["points", "proj", "adp_rank_redraft", "proj_pts"]),
+      { ranks: true, ktc: false, adp: true },
+    );
+  });
+
+  test("re-aiming a slot back onto a metric asks for its read again", () => {
+    // What re-enabling the query looks like from here: the requirement follows
+    // the selection with no state of its own, so React Query re-enables against
+    // the same key and answers from cache where it can.
+    const off = ["points", "proj", "proj_pts", "proj_bench"];
+    assert.equal(managerDataRequirements(off).ktc, false);
+    const on = [...off.slice(0, 3), "ktc_start"];
+    assert.equal(managerDataRequirements(on).ktc, true);
+  });
+
+  test("the default columns ask for all three", () => {
+    // The opening view is a cross-section of every question the catalogue is
+    // grouped by, so it draws from each read — and this is the case that must not
+    // regress into fetching less than it displays.
+    assert.deepEqual(managerDataRequirements(DEFAULT_COLUMNS), {
+      ranks: true,
+      ktc: true,
+      adp: true,
+    });
+  });
+
+  test("every preset asks for what it displays", () => {
+    for (const preset of LEAGUE_COLUMN_PRESETS) {
+      const needs = managerDataRequirements(preset.columns);
+      for (const key of preset.columns) {
+        for (const dataset of LEAGUE_METRICS_BY_KEY[key].reads) {
+          assert.equal(needs[dataset], true, `${preset.name} needs ${dataset}`);
+        }
+      }
+    }
+  });
+
+  test("a stored key naming no metric asks for nothing", () => {
+    // `resolveColumns` falls a dropped metric back per slot; a slot that cannot
+    // be drawn should not be a slot that fetches.
+    assert.deepEqual(managerDataRequirements(["adp_rank", "ktc", "nope", ""]), {
+      ranks: true,
+      ktc: false,
+      adp: false,
+    });
   });
 });
