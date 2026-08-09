@@ -50,6 +50,28 @@ export type Limiter = {
    * `persistLeagueGraph` opens one.
    */
   run<T>(fn: () => Promise<T>): Promise<T>;
+  /**
+   * Take a slot if one is free *right now*, or answer null — the non-queueing
+   * half, for a caller that would rather shed than wait.
+   *
+   * {@link Limiter.run} is the right shape where waiting costs nothing but time.
+   * It is the wrong shape for a caller already holding something that expires:
+   * the manager leagues route has a streaming response open per request, so a
+   * caller that queued would hold it through a wait the platform's own deadline
+   * may end first — it sheds instead, and the manager sync admission built on
+   * this is why (`shared/manager/sync-admission`).
+   *
+   * Acquire and answer are one synchronous step, which is the property that
+   * makes the bound hold: a check followed by an `await` followed by a
+   * reservation is two requests both passing the check.
+   *
+   * The returned release is **idempotent** — called twice it does nothing the
+   * second time. A `finally` that can run on two paths is the ordinary way a
+   * release doubles up, and a doubled release does not merely miscount, it
+   * *widens* the bound permanently, which is the same failure as a leaked slot
+   * wearing the opposite sign.
+   */
+  tryAcquire(): (() => void) | null;
   /** In flight, waiting, and the high-water mark — for a log line or a test. */
   stats(): LimiterStats;
 };
@@ -76,21 +98,39 @@ export function createLimiter(limit: number): Limiter {
   let active = 0;
   let peak = 0;
 
+  const take = () => {
+    active += 1;
+    if (active > peak) peak = active;
+  };
+
+  /**
+   * Hand the slot to the next waiter, or give it back.
+   *
+   * **The slot is transferred rather than freed and re-taken**, which is what
+   * keeps {@link Limiter.tryAcquire} from stealing it. Decrementing here and
+   * letting the resumed caller increment leaves a synchronous window — the
+   * waiter is resolved but its continuation is still a microtask away — in which
+   * `active` reads below `max` and a non-queueing caller walks straight through,
+   * putting `max + 1` in flight the moment the waiter wakes. Kept counted, the
+   * slot belongs to the waiter from the instant it is shifted.
+   */
   const release = () => {
-    active -= 1;
     const next = waiting.shift();
     // Resumed rather than run here, so the slot handoff cannot recurse through
     // a long queue on one stack.
     if (next) next();
+    else active -= 1;
   };
 
   return {
     async run<T>(fn: () => Promise<T>): Promise<T> {
+      // Queued callers are handed a slot that is already counted (see
+      // `release`), so only the caller that finds room takes one for itself.
       if (active >= max) {
         await new Promise<void>((resolve) => waiting.push(resolve));
+      } else {
+        take();
       }
-      active += 1;
-      if (active > peak) peak = active;
       try {
         return await fn();
       } finally {
@@ -100,6 +140,19 @@ export function createLimiter(limit: number): Limiter {
         // often enough that this is a matter of hours, not of theory.
         release();
       }
+    },
+    tryAcquire() {
+      // Waiters count against `max` from the moment they are handed a slot, so
+      // this also declines while the queue is draining — a caller that sheds
+      // must never jump a caller that is waiting.
+      if (active >= max) return null;
+      take();
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        release();
+      };
     },
     stats: () => ({ limit: max, active, queued: waiting.length, peak }),
   };

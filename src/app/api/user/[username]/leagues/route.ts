@@ -1,6 +1,7 @@
 import {
   getManagerLeagues,
   getManagerSyncState,
+  managerSyncAdmission,
   managerSyncGate,
   syncManagerLeagues,
   toUserInfo,
@@ -15,35 +16,6 @@ import { resolveManagerRequest } from "../manager-request";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Managers whose background refresh is currently running (per server process). */
-const refreshInFlight = new Set<string>();
-
-/**
- * How many *cold* syncs this process will run at once.
- *
- * A cold sync is the expensive shape of this route: no cached leagues to serve,
- * so the full ~11-requests-per-league fan-out runs in the foreground, and its
- * size is the account's — a hundred-league power user is a thousand Sleeper
- * requests. `refreshInFlight` above dedupes *one manager* asked for twice; what
- * it cannot answer is a caller naming a hundred different uncached usernames,
- * which is a hundred unrelated fan-outs and a hundred advisory locks that never
- * contend.
- *
- * The global Sleeper limiter already bounds what reaches Sleeper. This bounds
- * what *queues* for it: without it those thousand-request syncs all get accepted
- * and sit in the limiter's queue behind each other, holding a streaming response
- * each, long past the platform deadline any of them will be answered within.
- *
- * `MANAGER_COLD_SYNC_LIMIT` overrides it. Small on purpose — a cold sync is a
- * rare event on a warm database, since the crawler is what fills it.
- */
-const MAX_COLD_SYNCS = (() => {
-  const parsed = Number(process.env.MANAGER_COLD_SYNC_LIMIT?.trim());
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 3;
-})();
-
-let coldSyncs = 0;
-
 /**
  * Streams newline-delimited JSON for a manager's leagues using
  * stale-while-revalidate:
@@ -52,6 +24,12 @@ let coldSyncs = 0;
  *     second `result` with fresh data is pushed over the same stream.
  *   - With no cache (first visit) it syncs in the foreground, emitting
  *     `progress` events so the client can show a bar for 100+ league accounts.
+ *
+ * Either shape of sync is admitted by `managerSyncAdmission` first, which is
+ * where the process-wide bound and the per-manager dedupe both live. A caller
+ * refused a permit degrades along the same axis it already sits on: one holding
+ * cache sends it, marked stale, and skips the refresh; one holding nothing
+ * answers 503, since an empty league list would read as "this manager has none".
  *
  * The message shapes are declared in `@/shared/contract`'s
  * {@link LeaguesStreamMessage}, which the client decodes against — see
@@ -80,12 +58,12 @@ export async function GET(
   const userInfo = toUserInfo(user);
   const refreshKey = `${user.user_id}:${season}`;
 
-  // Both reads happen before the stream opens, because the cold-sync
-  // reservation below has to be taken with no await between the check and the
-  // reservation — and the check needs to know whether there is anything to
-  // serve. A failure here therefore can't be a message on the stream, so it
-  // takes the app's own read-failure answer: a busy pool is a 503 the client
-  // may retry, not a 500 telling it to stop.
+  // Both reads happen before the stream opens, because the sync reservation
+  // below has to be taken with no await between the check and the reservation —
+  // and the check needs to know whether there is anything to serve. A failure
+  // here therefore can't be a message on the stream, so it takes the app's own
+  // read-failure answer: a busy pool is a 503 the client may retry, not a 500
+  // telling it to stop.
   let cached: Awaited<ReturnType<typeof getManagerLeagues>>;
   let syncState: Awaited<ReturnType<typeof getManagerSyncState>>;
   try {
@@ -123,35 +101,50 @@ export async function GET(
   // the whole graph again on *every* request until it recovered. `attempt_at`
   // is what buys the quiet the old always-advancing `synced_at` used to buy by
   // lying. A caller with nothing to show is never throttled — there is no cache
-  // to serve instead, and that path is bounded by `MAX_COLD_SYNCS` below and by
-  // the per-manager advisory lock inside the sync.
+  // to serve instead, and that path is bounded by the sync admission below and
+  // by the per-manager advisory lock inside the sync.
   const wantRefresh = gate.run || !hasCache;
-  // Skip a duplicate background refresh only when we can still serve cache.
-  // Check and reserve back-to-back with no await between them — the reservation
-  // used to happen inside the stream, after the cached-leagues read, and two
-  // requests in that window both passed the check and both ran the full forced
-  // sync. (Cold requests deliberately don't dedupe here: each caller needs a
-  // progress stream, and the per-manager advisory lock inside
-  // `syncManagerLeagues` keeps the losers from repeating the winner's fan-out.)
-  const deduped = hasCache && refreshInFlight.has(refreshKey);
-  // A cold caller takes a slot out of the process's cold-sync budget, and is
-  // *refused* rather than queued when there is none: it has nothing cached to
-  // fall back on, so queueing would hold a streaming response open through a
-  // wait it cannot be answered within. Reserved here, back-to-back with the
-  // check and with no await between them, for the same reason the dedupe
-  // reservation is.
-  const coldAdmitted = hasCache || coldSyncs < MAX_COLD_SYNCS;
-  const willRefresh = wantRefresh && !deduped && coldAdmitted;
-  if (willRefresh) refreshInFlight.add(refreshKey);
-  const heldColdSlot = willRefresh && !hasCache;
-  if (heldColdSlot) coldSyncs += 1;
+  // **Every sync this route runs is reserved, cold or not.** The reservation is
+  // two bounds at once — the process's whole manager-sync budget and the
+  // per-manager dedupe — and it is one call because the two have to be taken
+  // together: see `managerSyncAdmission`, which also explains why the advisory
+  // lock inside the sync is neither of them.
+  //
+  // It used to be a `refreshInFlight` set beside a counter that only cold
+  // callers consulted, which left the expensive half unbounded: a *stale*
+  // refresh is the same ~11-requests-per-league fan-out holding the same
+  // advisory-lock connection, and any number of stale managers could run at
+  // once — enough of them to take a ten-connection pool and then stall the
+  // persistence they were queued to do.
+  //
+  // Reserved here, back-to-back with the gate and with no await between them.
+  // The reservation used to happen inside the stream, after the cached-leagues
+  // read, and two requests in that window both passed the check and both ran the
+  // full forced sync.
+  //
+  // `dedupe: hasCache` is the one asymmetry, and it is the old behaviour intact:
+  // a cold caller is never refused as a duplicate, because it has nothing to
+  // serve instead and needs its own progress stream, and the advisory lock is
+  // what keeps those from repeating each other's fan-out.
+  const reservation = wantRefresh
+    ? managerSyncAdmission.reserve(refreshKey, { dedupe: hasCache })
+    : null;
+  const willRefresh = reservation?.ok === true;
 
-  // Nothing cached and no slot to fill it with: the only honest answer is to say
-  // so. An empty league list would read as "this manager has none", which is a
-  // different and permanent-looking claim.
-  if (!hasCache && !coldAdmitted) {
+  // Nothing cached and no permit to fill it with: the only honest answer is to
+  // say so. An empty league list would read as "this manager has none", which is
+  // a different and permanent-looking claim. A caller that *can* serve cache
+  // needs no such branch — it sends what is stored, marked stale, and the next
+  // request is the retry.
+  //
+  // Written against `willRefresh` rather than against the refusal's reason: a
+  // cold caller can only ever be refused for want of a permit (it is never
+  // deduped), and if that ever stops being true an empty stream is still the one
+  // answer this branch must not fall through to.
+  if (!hasCache && !willRefresh) {
     console.warn(
-      `[leagues] cold sync for ${user.user_id} shed; ${coldSyncs} already running.`,
+      `[leagues] cold sync for ${user.user_id} shed; ` +
+        `${managerSyncAdmission.stats().active} manager syncs already running.`,
     );
     const message: LeaguesStreamMessage = {
       type: "error",
@@ -234,9 +227,11 @@ export async function GET(
       } finally {
         // Released here rather than around the sync alone: the reservation is
         // taken before the stream starts, so a cache read that throws must
-        // still let a later request refresh this manager.
-        if (willRefresh) refreshInFlight.delete(refreshKey);
-        if (heldColdSlot) coldSyncs -= 1;
+        // still let a later request refresh this manager. It is idempotent, so
+        // this `finally` is safe on every path out of the stream — and a permit
+        // leaked on a thrown sync is a cap that tightens by one per Sleeper
+        // failure until it admits nobody.
+        if (reservation?.ok) reservation.release();
         if (!closed) {
           try {
             controller.close();

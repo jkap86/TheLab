@@ -2,6 +2,8 @@ import { pool } from "@/shared/db";
 
 import { ktcPickKey, parseKtcPickName } from "./picks";
 import type { KtcPickPrice } from "./picks";
+import { foldKtcValues } from "./values";
+import type { KtcValue, KtcValueRow, KtcValueSet } from "./values";
 
 /**
  * Reads of `ktc_values`, the table this module owns.
@@ -28,31 +30,9 @@ export async function countPricedKtcValues(): Promise<number> {
   return Number(rows[0].count);
 }
 
-/** One player's value on both of KTC's boards; null where KTC prices neither. */
-export type KtcValue = { sf: number | null; oneqb: number | null };
-
-export type KtcValueSet = {
-  /**
-   * Sleeper player id → both board values. An id KTC doesn't price is absent
-   * rather than zeroed — a kicker is off the board entirely, which is a
-   * different claim from being worth nothing.
-   */
-  values: Record<string, KtcValue>;
-  /**
-   * When the rows behind those values were scraped, ISO 8601; null when none
-   * matched. These are someone else's numbers on a fifteen-minute cache, so
-   * anything showing them should be able to say how old they are — the same
-   * reason `/api/projections` sends its own `updated_at`.
-   */
-  updated_at: string | null;
-};
-
-type Row = {
-  sleeper_id: string;
-  sf_value: number | null;
-  oneqb_value: number | null;
-  updated_at: Date;
-};
+// Re-exported from where every consumer already imports them: the shapes moved
+// to `./values` with the duplicate resolution that produces them.
+export type { KtcValue, KtcValueRow, KtcValueSet };
 
 /**
  * Values for the Sleeper player ids given, keyed by id.
@@ -62,36 +42,32 @@ type Row = {
  * both carries and could be tied to Sleeper — roughly the top 500 skill players.
  * Ids it can't answer for are simply absent.
  *
- * One row per player even though `sleeper_id` carries no unique constraint: the
- * match is name-based, so two KTC entries resolving to one Sleeper id is
- * possible, and summing a roster twice for the same player is worse than picking
- * the higher of two prices deterministically.
+ * One entry per player even though `sleeper_id` carries no unique constraint —
+ * the match is name-based, so two KTC entries resolving to one Sleeper id is
+ * legitimate — and **the two boards are resolved independently**, which is the
+ * part the SQL used to get wrong. It was `DISTINCT ON (sleeper_id) … ORDER BY
+ * sf_value DESC`, so both numbers came off whichever row won on *superflex*: a
+ * player with rows `(sf 9000, 1QB 5000)` and `(sf 8000, 1QB 7000)` was priced at
+ * 5000 on the 1QB board with 7000 on file. See {@link foldKtcValues} for the
+ * resolution and why it is a fold here rather than a `GROUP BY` in the query.
+ *
+ * The rows are therefore selected as they are and folded here, with no `ORDER BY`
+ * at all — the one the `DISTINCT ON` needed was doing the choosing, and a sort
+ * that no longer decides anything is a sort worth not asking for.
  */
 export async function getKtcValuesBySleeperId(
   ids: string[],
 ): Promise<KtcValueSet> {
   if (ids.length === 0) return { values: {}, updated_at: null };
 
-  const { rows } = await pool.query<Row>(
-    `SELECT DISTINCT ON (sleeper_id)
-            sleeper_id, sf_value, oneqb_value, updated_at
+  const { rows } = await pool.query<KtcValueRow>(
+    `SELECT sleeper_id, sf_value, oneqb_value, updated_at
        FROM ktc_values
-      WHERE sleeper_id = ANY($1)
-      ORDER BY sleeper_id, sf_value DESC NULLS LAST, ktc_id`,
+      WHERE sleeper_id = ANY($1)`,
     [ids],
   );
 
-  const values: Record<string, KtcValue> = {};
-  let newest: Date | null = null;
-  for (const r of rows) {
-    values[r.sleeper_id] = { sf: r.sf_value, oneqb: r.oneqb_value };
-    // The sync upserts the board and nulls what fell off it, all in one
-    // transaction, so every row it touched carries the same stamp; taking the
-    // newest keeps that from being something to rely on.
-    if (!newest || r.updated_at > newest) newest = r.updated_at;
-  }
-
-  return { values, updated_at: newest?.toISOString() ?? null };
+  return foldKtcValues(rows);
 }
 
 /** KTC's pick rows, keyed by {@link ktcPickKey} — see {@link getKtcPickBoard}. */

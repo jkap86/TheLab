@@ -103,6 +103,7 @@ export function ColumnsBar<C>({
   onColumnChange,
   onColumns,
   onReset,
+  onEditorOpen,
 }: {
   metrics: Metric<C>[];
   columns: string[];
@@ -162,6 +163,22 @@ export function ColumnsBar<C>({
   onColumnChange: (slot: number, key: string) => void;
   onColumns: (keys: readonly string[]) => void;
   onReset: () => void;
+  /**
+   * Called the first time a heading opens the editor, for a caller that fetches
+   * per *selected* column.
+   *
+   * The editor previews **every** metric in the catalogue against `ctx`, not just
+   * the four on screen, so a list that only reads the datasets its columns name
+   * would show an em dash under the columns a reader is about to pick. This is
+   * the signal that the whole catalogue is now being drawn; the caller decides
+   * what to do with it (the leagues list latches it, since a preview that filled
+   * in and then emptied again would be worse than one that never emptied).
+   *
+   * Optional, and the editor state stays here: the three lists that draw this
+   * rail keep one definition of how a heading opens it — see
+   * {@link useColumnsEditor}.
+   */
+  onEditorOpen?: () => void;
 }) {
   // Which heading opened the editor (and so which slot it opens armed on), plus
   // the latch that keeps the dialog mounted through its own close — see
@@ -177,7 +194,13 @@ export function ColumnsBar<C>({
       metrics={metrics}
       columns={columns}
       subject={subject}
-      onOpen={open}
+      // Reported from the press rather than from an effect watching `openSlot`:
+      // the caller's answer is "the catalogue is being previewed now", and a
+      // render-time signal is one an effect would deliver a frame late.
+      onOpen={(slot) => {
+        onEditorOpen?.();
+        open(slot);
+      }}
     />
   ) : undefined;
 

@@ -16,6 +16,16 @@ export type {
   LeagueCounts,
   LeagueSyncResult,
 } from "./sync";
+export {
+  createManagerSyncAdmission,
+  managerSyncAdmission,
+  managerSyncConcurrency,
+} from "./sync-admission";
+export type {
+  ManagerSyncAdmission,
+  ManagerSyncRefusal,
+  ManagerSyncReservation,
+} from "./sync-admission";
 export { runLeagueCrawl } from "./crawl";
 export type { CrawlSummary, CrawlOptions } from "./crawl";
 export { markLeaguesAccessed } from "./crawl-queue";

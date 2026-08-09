@@ -35,6 +35,12 @@ export type ManagerAdpValueState = ManagerResourceState<ManagerAdpValueResult>;
  * the steepness back a notch or widening a window and narrowing it again costs
  * nothing. That is also why a change here invalidates nothing — the boards are
  * separate entries, not versions of one.
+ *
+ * **`enabled` is what the market columns being off looks like from here**, and it
+ * composes with the key rather than fighting it: a reader who turns a column back
+ * on re-enables the query against the same board key, so a board already read is
+ * answered from the cache exactly as it would have been. See
+ * {@link managerDataRequirements} for who decides.
  */
 export function useManagerAdpValue(
   searched: string,
@@ -46,6 +52,7 @@ export function useManagerAdpValue(
   userId: string | null,
   leagues: ManagerLeague[] | null,
   board: AdpRead,
+  { enabled = true }: { enabled?: boolean } = {},
 ): ManagerAdpValueState {
   const queryKey = useMemo(
     () => managerQueryKeys.adpValue(searched, undefined, board.key),
@@ -59,7 +66,7 @@ export function useManagerAdpValue(
     "adp-value",
     "Failed to load draft values",
     STALE_TIMES.adpValue,
-    true,
+    enabled,
     board,
   );
 }

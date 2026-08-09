@@ -20,6 +20,12 @@ export type ManagerKtcState = ManagerResourceState<ManagerKtcResult>;
  * Fifteen minutes, the longest of the manager reads along with the ADP
  * valuation: the scrape behind it refreshes on the order of a day, so a value
  * re-read on every tab switch would be the same number every time.
+ *
+ * **`enabled` is what the KTC columns being off looks like from here.** Pricing
+ * a manager's leagues is not a cheap read — the route solves every team's optimal
+ * lineup in each of them — and none of it reaches the screen unless a stat column
+ * or the columns editor's preview is showing a KTC metric. See
+ * {@link managerDataRequirements} for who decides.
  */
 export function useManagerKtc(
   searched: string,
@@ -30,6 +36,7 @@ export function useManagerKtc(
    */
   userId: string | null,
   leagues: ManagerLeague[] | null,
+  { enabled = true }: { enabled?: boolean } = {},
 ): ManagerKtcState {
   const queryKey = useMemo(() => managerQueryKeys.ktc(searched), [searched]);
   return useManagerResource<ManagerKtcResult>(
@@ -40,5 +47,6 @@ export function useManagerKtc(
     "ktc",
     "Failed to load values",
     STALE_TIMES.ktc,
+    enabled,
   );
 }

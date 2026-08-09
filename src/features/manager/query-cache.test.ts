@@ -9,6 +9,10 @@ import {
 } from "@tanstack/react-query";
 
 import { ADP_STALE_TIMES } from "../shared/adp-query.ts";
+import {
+  DEFAULT_COLUMNS,
+  managerDataRequirements,
+} from "./league-metrics.ts";
 import { STALE_TIMES } from "./query-config.ts";
 import {
   fetchJson,
@@ -432,6 +436,110 @@ test("retention", async (t) => {
     await flush();
     assert.equal(mock.countOf("/ktc"), 2);
     later.unmount();
+    mock.restore();
+  });
+});
+
+/**
+ * What the optional card datasets cost when nothing on screen reads them.
+ *
+ * The leagues list's KTC and ADP-value reads are batch routes that solve every
+ * team's optimal lineup in every league the manager plays in, and price every one
+ * of those rosters against a crawled board. Both were gated on nothing but "are
+ * there leagues", so a reader whose four stat columns named neither paid for both
+ * on every visit and drew neither — which is invisible from the page, since the
+ * columns that are showing look exactly right.
+ *
+ * Driven through `QueryObserver` rather than a renderer for this file's usual
+ * reason: the assertion is a *request count*, which is what the work was for.
+ */
+test("optional card datasets", async (t) => {
+  /** `useManagerKtc`'s options, gated the way the leagues list gates them. */
+  const gatedKtc = (searched: string, columns: readonly string[]) => ({
+    ...ktcOptions(searched),
+    enabled: managerDataRequirements(columns).ktc,
+  });
+
+  const gatedAdpValue = (searched: string, columns: readonly string[]) => ({
+    queryKey: managerQueryKeys.adpValue(searched, undefined, "steepness=3"),
+    queryFn: () =>
+      fetchManagerResource<{ ok: string }>(
+        searched,
+        "adp-value",
+        "Failed to load draft values",
+      ),
+    staleTime: STALE_TIMES.adpValue,
+    enabled: managerDataRequirements(columns).adp,
+  });
+
+  const PROJECTIONS_ONLY = ["points", "points_for", "proj", "proj_pts"];
+
+  await t.test("asks for neither when no column reads one", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ ok: url }));
+
+    const ktc = mount(client, gatedKtc("alice", PROJECTIONS_ONLY));
+    const adp = mount(client, gatedAdpValue("alice", PROJECTIONS_ONLY));
+    await flush();
+
+    assert.equal(mock.countOf("/ktc"), 0);
+    assert.equal(mock.countOf("/adp-value"), 0);
+    ktc.unmount();
+    adp.unmount();
+    mock.restore();
+  });
+
+  await t.test("asks for each one a column does read", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ ok: url }));
+
+    const ktc = mount(client, gatedKtc("alice", DEFAULT_COLUMNS));
+    const adp = mount(client, gatedAdpValue("alice", DEFAULT_COLUMNS));
+    await flush();
+
+    assert.equal(mock.countOf("/ktc"), 1, "the default board shows a KTC rank");
+    assert.equal(mock.countOf("/adp-value"), 1, "and a market rank");
+    ktc.unmount();
+    adp.unmount();
+    mock.restore();
+  });
+
+  await t.test("asks for only the one a mixed board reads", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ ok: url }));
+
+    const mixed = ["points", "proj", "proj_pts", "ktc_bench"];
+    const ktc = mount(client, gatedKtc("alice", mixed));
+    const adp = mount(client, gatedAdpValue("alice", mixed));
+    await flush();
+
+    assert.equal(mock.countOf("/ktc"), 1);
+    assert.equal(mock.countOf("/adp-value"), 0);
+    ktc.unmount();
+    adp.unmount();
+    mock.restore();
+  });
+
+  await t.test("re-aiming a slot back onto KTC reads the cache, not the route", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ ok: url }));
+
+    // On, off, on — which is one press each way, and must not be three requests.
+    const view = mount(client, gatedKtc("alice", DEFAULT_COLUMNS));
+    await flush();
+    assert.equal(mock.countOf("/ktc"), 1);
+
+    view.observer.setOptions(gatedKtc("alice", PROJECTIONS_ONLY));
+    await flush();
+    view.observer.setOptions(gatedKtc("alice", DEFAULT_COLUMNS));
+    await flush();
+
+    // The entry is still inside its stale time, so enabling is a cache read —
+    // nothing here invalidates, because the selection is not a fact about the
+    // data.
+    assert.equal(mock.countOf("/ktc"), 1);
+    assert.ok(view.observer.getCurrentResult().data);
+    view.unmount();
     mock.restore();
   });
 });

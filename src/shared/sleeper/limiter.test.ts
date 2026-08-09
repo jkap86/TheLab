@@ -171,6 +171,92 @@ describe("createLimiter", () => {
     assert.deepEqual(order, [0, 1, 2, 3, 4]);
   });
 
+  test("tryAcquire takes a free slot and answers null when there is none", () => {
+    const limiter = createLimiter(2);
+    const first = limiter.tryAcquire();
+    const second = limiter.tryAcquire();
+    assert.ok(first);
+    assert.ok(second);
+    assert.equal(limiter.tryAcquire(), null, "no third slot to take");
+    assert.equal(limiter.stats().active, 2);
+    assert.equal(limiter.stats().queued, 0, "a declined caller never queues");
+
+    first();
+    assert.ok(limiter.tryAcquire(), "a released slot is immediately reusable");
+  });
+
+  test("a doubled release does not widen the bound", () => {
+    // The opposite of a leak and the worse of the two, because it is permanent:
+    // a `finally` reachable on two paths is the ordinary way it happens.
+    const limiter = createLimiter(1);
+    const release = limiter.tryAcquire();
+    assert.ok(release);
+    release();
+    release();
+    release();
+    assert.equal(limiter.stats().active, 0);
+
+    assert.ok(limiter.tryAcquire());
+    assert.equal(limiter.tryAcquire(), null, "the bound is still one");
+  });
+
+  test("tryAcquire cannot steal the slot a waiting run() was handed", async () => {
+    // The window this closes: `release` used to decrement and *then* resolve the
+    // waiter, so between the two — a synchronous window, since the waiter resumes
+    // a microtask later — `active` read below the limit and a non-queueing caller
+    // walked straight through, putting limit+1 in flight the moment the waiter
+    // woke.
+    const limiter = createLimiter(1);
+    let concurrent = 0;
+    let peak = 0;
+    const held = deferred();
+    const queued = deferred();
+
+    const first = limiter.run(async () => {
+      concurrent += 1;
+      peak = Math.max(peak, concurrent);
+      await held.promise;
+      concurrent -= 1;
+      return "first";
+    });
+    const second = limiter.run(async () => {
+      concurrent += 1;
+      peak = Math.max(peak, concurrent);
+      await queued.promise;
+      concurrent -= 1;
+      return "second";
+    });
+
+    await tick();
+    assert.equal(limiter.stats().queued, 1);
+
+    // Resolve the holder and reach for a slot in the same synchronous turn the
+    // release happens in.
+    held.resolve("ok");
+    assert.equal(limiter.tryAcquire(), null, "the slot belongs to the waiter");
+
+    queued.resolve("ok");
+    assert.deepEqual(await Promise.all([first, second]), ["first", "second"]);
+    assert.equal(peak, 1, `peak reached ${peak}`);
+    assert.equal(limiter.stats().active, 0);
+    assert.equal(limiter.stats().peak, 1);
+  });
+
+  test("declines while a queue is draining, so a waiter is never jumped", async () => {
+    const limiter = createLimiter(2);
+    const gates = Array.from({ length: 4 }, deferred);
+    const runs = gates.map((gate) => limiter.run(() => gate.promise));
+
+    await tick();
+    assert.equal(limiter.stats().queued, 2);
+    assert.equal(limiter.tryAcquire(), null);
+
+    gates.forEach((gate) => gate.resolve("ok"));
+    await Promise.all(runs);
+    assert.equal(limiter.stats().active, 0);
+    assert.ok(limiter.tryAcquire(), "and admits again once the queue is empty");
+  });
+
   test("a limit below one is still one, not zero", () => {
     // Zero would be a deadlock dressed as a configuration value.
     for (const limit of [0, -3, 0.4]) {
