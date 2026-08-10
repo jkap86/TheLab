@@ -416,6 +416,40 @@ Filtering *on* those blobs takes two habits:
   planner to a nested loop that does the expensive per-row work more times.
   Materialized first, then indexed, 597ms. Neither half should be reverted
   without the other.
+- **And the planner needs *statistics* on such a fragment, or it estimates the
+  same number of rows whatever you asked for.** Postgres keeps none for an
+  expression, so `SCORING_SQL = ANY(...)` fell to its default equality guess of
+  0.005 and every board came out at **9 rows** — against 1,400 to 3,800 actual,
+  because a constant guess cannot vary with the board. What that buys is the
+  wrong plan: at 9 rows a nested loop over `draft_picks` looks free, so one board
+  of a manager's ADP valuation ran 1,404 loops of an index scan over a
+  164-player `= ANY` (719k buffer hits) and a `GroupAggregate` whose sort spilled
+  to disk having budgeted 550 rows against 146,139. `CREATE STATISTICS` on that
+  expression (`leagues_scoring_bucket_stats`) is the whole fix: the slow board
+  1,170ms → 163ms, `/api/user/…/adp-value` 1,803ms → 687ms, and `/api/adp`'s own
+  board read 873ms → 287ms. Four things hold it up. **It is the scoring
+  expression alone, measured rather than minimal** — statistics on `SUPERFLEX_SQL`
+  beside it change nothing (163ms either way), since 3,646 drafts × 0.005 × the
+  0.5 a boolean expression is assumed to select is exactly the 9 that came out;
+  it could not be added anyway, because it counts slots with a sub-select and
+  `CREATE STATISTICS` rejects a sublink (`0A000`). **The expression in the
+  migration has to stay textually the one in `adp.ts`**, since the planner
+  matches a statistics object by comparing parsed expression trees — change the
+  buckets or the regex and this silently stops applying, with no error and no
+  warning, just the 0.005 guess and the nested loop back. **The migration runs
+  `ANALYZE`**, because creating a statistics object collects nothing and on a
+  table that is only ever upserted autovacuum may not come for a long time.
+  And **it is not a substitute for `AS MATERIALIZED`** — inlining is still twice
+  as slow again (2,252ms on the same board): that keyword stops the expression
+  being recomputed per pick per aggregate, this stops the row count above it
+  being a fiction.
+- **A plan that is wrong for one shape is not wrong for all of them, so measure
+  every shape before reaching for a switch.** The obvious reading of the above is
+  "the nested loop is the bug", and forcing a hash join does fix the bad board
+  (1,135ms → 200ms) — while making the other three *worse* (37→224, 54→232,
+  330→612), for no net gain across the four. The nested loop is right whenever
+  the estimate is; what was broken was the estimate. Reach for better statistics
+  before a different plan preference.
 
 Build a dynamic `WHERE` by pushing onto a params array and binding the index it
 returns (`` `$${params.push(value)}` ``) — the validated enum decides *which*
@@ -1677,7 +1711,14 @@ stops holding, a comment saying it does would not have caught it.
     players, so an unpriced kicker appears all season), and not caching the miss
     is how a cache with a 95% hit rate still issues a query per page. Bounded
     because a plain map of every id a process has been asked about is a leak with
-    a slow fuse.
+    a slow fuse. **`BoundedCache` itself is `shared/util/bounded-cache` now**,
+    with `shared/trades/cache` re-exporting it under the mover's usual habit and
+    keeping `cachedLookup`, which is the per-id half and still this concern's;
+    the second caller is the ADP board below. What it deliberately does *not* do
+    is dedupe concurrent misses — two requests arriving together on a cold key
+    both compute, which is the right trade for a value this cheap to recompute,
+    and a caller needing otherwise wants an advisory lock rather than a change
+    there.
   - **A page names its own ids rather than sending a delta.** The stream held a
     set of what it had already sent, so a player crossed the wire once per season;
     the equivalent across separate requests is the client listing everything it
@@ -5221,6 +5262,25 @@ stops holding, a comment saying it does would not have caught it.
   wherever the number surfaces, and expose filters that narrow the population:
   pooling a 4-round dynasty rookie draft with a 25-round startup averages two
   different games.
+- **A priced board is cached in-process, and the reason is the *curve* rather
+  than the query** (`getDraftAdpForPlayers`, `BOARD_TTL_MS`). Steepness is
+  applied by the caller, per league, *after* that read returns — so every notch
+  of the ADP drawer's slider re-asked for a board byte-identical to the one just
+  read, at a second of aggregate over 1.9M picks a time. A reload, a second tab
+  and the 15-minute boundary where the browser's own entry goes stale are the
+  same case: none of them changes the population, and the population is all this
+  reads. Two decisions in it. **The key is the statement, not
+  `boardSignature`** — that exists for grouping leagues onto shared fetches and
+  names the axes a *board* varies on, where a cache key has to name everything
+  the *answer* varies on, which is strictly more (`min_picks` gates which players
+  come back, `draft_types` and `draft_statuses` decide which drafts match, and
+  none of the three is in it); keying on the generated `where`, its bound params,
+  the gate and the sorted ids is exact by construction. And **the ids go in
+  verbatim rather than digested**, for the reason `boardSignature` spells its
+  league scope out: a hash trades a silent collision for a shorter key, and a
+  collision here is one manager's roster priced off another's board with nothing
+  to say so. It flips which half of `/api/user/…/adp-value` is the critical path
+  — warm, the ADP read is 0ms and the ~1,400 lineup solves are the whole 169ms.
 - **A season and a date range are different cuts of the same drafts, and
   `/api/adp` takes both.** `season` is what a draft is *for*; `start_after` /
   `start_before` (`YYYY-MM-DD`, read in ET against `drafts.start_time`) is when it
