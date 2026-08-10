@@ -3944,7 +3944,39 @@ stops holding, a comment saying it does would not have caught it.
     `share` selection, the same catalogue, and the league filters key in its
     title bar (`seat="bar"`) — every row's share is out of the leagues the other
     filters leave, so narrowing there rewrites every number and reorders the list
-    under it. Four rules it keeps:
+    under it. Six rules it keeps:
+    - **The list is windowed, and that is what makes the browse openable at
+      all.** A hundred-league account rosters several hundred distinct players,
+      and this used to mount a `ShareCard` for every one of them synchronously —
+      four metric cells and two controls each, every one a gradient, a shadow and
+      its own `backdrop-filter`, inside a dialog that is itself
+      `backdrop-blur-xl` — while the sheet lazy-loaded the ADP apparatus and
+      started two reads. Mobile WebKit answered by discarding the page and
+      reloading it. `ShareList` reads the well through `SharesScrollProvider` and
+      draws a window (measured 10–16 cards of 420 at every viewport, flat with
+      depth); with no provider — the two manager tabs — it draws every row
+      exactly as before, which is why the box arrives as a **context** rather
+      than as a prop threaded through a render prop (a ref passed into a call
+      during render is a ref read at a moment React has not promised is current,
+      and its own lint rule says so) and never by `querySelector`. Four details:
+      heights are **measured**, since a card expands into its leagues, and
+      `SHARE_ROW_ESTIMATE` is only what the scrollbar believes beforehand; the
+      key is the row's **domain id**, so a search that reshuffles the list cannot
+      hand an expanded card's height to whoever now sits at that index; the gap
+      is the virtualizer's own `gap` option and not padding, because a share card
+      *is* its `<li>` and padding would land inside the visible surface; and the
+      offset is `top` and not a transform, since an inline `transform` outranks
+      `LIST_ROW_HOVER`'s own lift. Which rows are **open** moves up to the list
+      for the same reason the measurements are keyed that way — a card that
+      scrolls out unmounts, and a remounted collapsed card laid out in an
+      expanded card's slot is a blank gap followed by a jump.
+    - **`LIST_ROW_SURFACE`'s blur is `sm` and up**, which is the belt beside
+      that. A `backdrop-filter` is a live composited texture rather than a paint,
+      and below `sm` these rows sit on an *opaque* well — so there is nothing
+      legible behind one for the blur to have been softening, and everything that
+      makes the card read as glass (border, gradient, inset highlight, shadow,
+      sheen) is unchanged at every width. The sheet's own frame keeps its
+      `backdrop-blur-xl`: that is the blur that says the page is still underneath.
     - **Counted over `leagueFiltered`**, like the menu it replaces: the numerator
       is what you picked, the denominator is what you picked it from.
     - **A row press picks; the chevron expands.** `ShareCard` splits its one
@@ -3962,6 +3994,37 @@ stops holding, a comment saying it does would not have caught it.
       stacking (top layer, Escape innermost-first, presses inside a nested dialog
       never reaching this one's box) is the platform's, which is why this is a
       `<dialog>` and not an overlay.
+    - **`showModal()` throws, so it is never called bare** (`shared/dialog-open`,
+      pure and tested). It throws on a dialog already open non-modally, on one
+      detached between the press and the effect, and by absence on an engine that
+      never shipped it — and the call is inside an effect, where a throw is an
+      uncaught error in a commit that React answers by unmounting to the nearest
+      boundary. On a route with none that is the page blanking on the press meant
+      to open the sheet, which is indistinguishable from the crash above.
+      `openDialog` returns an outcome instead and falls back to the non-modal
+      `open` attribute — the same panel without the top layer, which beats a
+      dialog nobody can open. Nothing navigates or reloads.
+    - **Autofocus is a fact about the pointer, asked of the platform**
+      (`shared/pointer`, `(pointer: fine)` — never the user agent string). On a
+      mouse the field takes the focus, because the sheet is opened to be typed
+      into. On a finger, focusing a text field *is* raising the software keyboard
+      — over a sheet sized in `vh`, on top of the list the reader came to scroll
+      — so the panel takes it instead, on a `tabIndex={-1}` that is a place to
+      put the focus and not a tab stop. Unknown answers *false*: autofocus
+      withheld from a desktop reader costs one click, where autofocus given to a
+      phone costs the list.
+  - **Each sheet is latched in from the *press*, never from the render body**
+    (`shared/sheet-latch`). The two browses are separate `dynamic()` chunks and
+    mounting is what downloads one, so which have ever been opened has to be
+    remembered — and it was remembered by an `if (…) setMounted(…)` while
+    rendering, which is a render-phase update: opening a browse re-ran the whole
+    rail synchronously before React committed anything, in the frame already
+    carrying a `<dialog>` mounting, two chunks evaluating and two reads starting.
+    As a fold called from the handler the latch and the open are one batched
+    update. It returns the *same array* on a no-op, or every press would
+    re-render the sheet that is not being opened; and `closeSheet` clears only
+    its own kind, since a sheet closing is the last thing that happens on the way
+    out of it and a flat `null` would cancel whatever had just been asked for.
   - **Null and false are different answers, exactly as `slotCount`'s are.** A
     league whose rosters were never synced is not evidence a player is absent
     from it, so `holdsSubject` returns null and a rule against it *fails* rather
@@ -4571,7 +4634,9 @@ stops holding, a comment saying it does would not have caught it.
   the same rule as `ManagerLeagues` above the league cards, for the same reason: a
   list several hundred rows long is scanned vertically, and per-card columns would
   make it unreadable. `ShareCard` holds only whether *it* is expanded — the
-  pickers are in the heading rail, so a card has no menu state to keep.
+  pickers are in the heading rail, so a card has no menu state to keep — and it
+  gives that up too where the list is windowed, since a card that scrolls out
+  unmounts and would lose the disclosure with it (see the shares sheet above).
 - **The expanded standings are ordered by projected points, not by record.**
   What the panel adds over Sleeper is the projection, so the Proj column is the
   one the rows are ranked on — the numbers descend down the page, and the `#`

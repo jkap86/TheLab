@@ -1,24 +1,37 @@
 /**
- * The lit surface a row in a long list wears — league cards, share cards, trade
- * cards. It is the tool cards' glass held to a row's height: the same border,
- * the same backdrop blur, the same lift and cyan-tinted shadow on hover, and the
- * same light sweep. What it does *not* take is the tool cards' corner brackets,
- * which are a card-scale device — four of them on each of a hundred-odd rows
- * reads as noise rather than as an instrument.
+ * The lit surface a row in a long list wears — the share cards, and the tool
+ * cards' glass held to a row's height: the same border, the same backdrop blur,
+ * the same lift and cyan-tinted shadow on hover, and the same light sweep. What
+ * it does *not* take is the tool cards' corner brackets, which are a card-scale
+ * device — four of them on each of a hundred-odd rows reads as noise rather than
+ * as an instrument.
  *
- * Kept in one place for the reason `TOOL_CARD_SURFACE` is: three lists wear it,
- * and a row surface that drifts between them is the difference a reader notices
- * without being able to name.
+ * Kept in one place for the reason `TOOL_CARD_SURFACE` is: a row surface that
+ * drifts between the lists wearing it is the difference a reader notices without
+ * being able to name.
  *
  * The hover payoff is driven by `group-hover`, and `group` is in
  * `LIST_ROW_SURFACE` rather than in the hover half — a row that doesn't lift
  * still holds a {@link RowSheen} whose rail reads the group's hover state.
+ *
+ * **The blur is `sm` and up, and everything else is at every width.** A
+ * `backdrop-filter` is not a paint, it is a composited layer: the engine has to
+ * snapshot what is behind the element, blur it into a texture of its own, and
+ * keep that texture live. One is free. A shares browse is several hundred rows,
+ * each raising its own — inside a dialog that is itself `backdrop-blur-xl`, so
+ * every one of them is blurring a surface that is already being blurred — and
+ * mobile WebKit answers that by running out of memory and reloading the tab.
+ * Windowing the list is the fix and this is the belt beside it: at phone widths
+ * the row keeps its border, its gradient, its inset highlight, its shadow and
+ * its sheen, and gives up ~1.5px of blur over an *opaque* well, where there is
+ * nothing legible behind the row for it to have been softening. The glass is
+ * spent on the sheet's own frame, which is where it says something.
  */
 export const LIST_ROW_SURFACE =
   "group relative rounded-xl border border-foreground/10 " +
   "bg-gradient-to-b from-foreground/[0.06] to-foreground/[0.015] " +
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_28px_-16px_rgba(0,0,0,0.7)] " +
-  "backdrop-blur-sm";
+  "sm:backdrop-blur-sm";
 
 export const LIST_ROW_HOVER =
   "transition-[transform,border-color,box-shadow] duration-300 " +
