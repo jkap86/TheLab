@@ -284,11 +284,17 @@ describe("ADP market metrics", () => {
  * as "nothing priced" rather than as "not fetched".
  */
 describe("managerDataRequirements", () => {
-  /** The `MetricContext` fields each batch read supplies. */
+  /**
+   * The `MetricContext` fields each batch read supplies — or, for `projections`,
+   * the fields the *cheap half* of the ranks read leaves out. That one is not a
+   * route of its own (`?projections=0` on the ranks one), so what it withholds
+   * is the projected pair and the horizon rather than the whole context field.
+   */
   const FIELDS: Record<ManagerDataset, Partial<MetricContext>> = {
     ranks: { ranks: null, weeks: [] },
     ktc: { ktc: null, valuedAt: null },
     adp: { adp: null },
+    projections: { ranks: { ...ranks, proj: null, proj_bench: null }, weeks: [] },
   };
   const DATASETS = Object.keys(FIELDS) as ManagerDataset[];
 
@@ -328,7 +334,7 @@ describe("managerDataRequirements", () => {
   test("needs neither optional read for a projection-only board", () => {
     assert.deepEqual(
       managerDataRequirements(["proj", "proj_pts", "proj_bench", "points"]),
-      { ranks: true, ktc: false, adp: false },
+      { ranks: true, ktc: false, adp: false, projections: true },
     );
   });
 
@@ -362,11 +368,11 @@ describe("managerDataRequirements", () => {
   test("a mixed board asks for exactly the reads it draws", () => {
     assert.deepEqual(
       managerDataRequirements(["points", "proj", "ktc_bench", "points_for"]),
-      { ranks: true, ktc: true, adp: false },
+      { ranks: true, ktc: true, adp: false, projections: true },
     );
     assert.deepEqual(
       managerDataRequirements(["points", "proj", "adp_rank_redraft", "proj_pts"]),
-      { ranks: true, ktc: false, adp: true },
+      { ranks: true, ktc: false, adp: true, projections: true },
     );
   });
 
@@ -388,6 +394,7 @@ describe("managerDataRequirements", () => {
       ranks: true,
       ktc: true,
       adp: true,
+      projections: true,
     });
   });
 
@@ -409,6 +416,7 @@ describe("managerDataRequirements", () => {
       ranks: true,
       ktc: false,
       adp: false,
+      projections: false,
     });
   });
 });

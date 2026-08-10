@@ -163,6 +163,73 @@ parses `season` for all six including the base route that ignores it — one str
 read is cheaper than a second entry point, and the routes that want more of the
 query string get `searchParams` itself (`leagues` reads `?refresh=1` off it).
 
+## The server's own read caches
+
+**There is a third cache, and it protects the *dyno* from its own readers.**
+Postgres protects Sleeper and KTC; TanStack Query protects Postgres from one
+browser. What neither reaches is the case where the same expensive answer is
+computed for several readers at once — a second tab, a second person, a reload,
+a process that has just restarted — and the two reads where that costs most are
+the full ADP board (a ~500ms aggregate over 1.5M picks) and a manager's ranks (a
+lineup solve per team per remaining week: ~29,000 solves for a 400-league
+account, and *CPU on the web process*, so two readers are two spells of a blocked
+event loop rather than two queries a database can interleave).
+
+`TtlPromiseCache` (`shared/util`) is that layer, and it is `BoundedCache` plus
+the one thing that class deliberately refuses: an **in-flight map**, so ten
+callers arriving on a cold key run one computation. That refusal was right for
+what it was written for (a page of trades resolving player names, where a doubled
+miss is one cheap lookup) and wrong the moment the value is seconds of work held
+against a pool connection. Six rules hold it up:
+
+- **A rejection is never cached and never lingers**, so one database blip is not
+  a TTL-long outage. The compute runs *inside* the promise chain, so a
+  synchronous throw rejects rather than escaping past the bookkeeping and
+  wedging the key forever.
+- **The in-flight entry is retired by identity**, and that identity check guards
+  the *store* as well as the delete — otherwise a `clear()` mid-flight lets the
+  older computation write its answer over the newer one's.
+- **The key names everything the answer varies on, spelled out rather than
+  `JSON.stringify(theObject)`** — property order is not a fact about the values.
+  `shared/manager/read-cache.ts` holds both keys and both policies, and is pure
+  (everything it touches arrives as an erased `import type`) precisely so the
+  keys can be tested: a key that is too narrow serves one board under another's
+  filters, one that is too wide simply never hits, and *neither* is an error.
+  The ADP key's test walks every field of `AdpFilters` and asserts that changing
+  it changes the key, which is the agreement no type can carry.
+- **List fields are sorted and deduplicated into the key** — `= ANY(…)` is a set
+  comparison, so two orderings are one population — but ids go in **verbatim
+  rather than digested**, the rule `boardSignature` already keeps: a hash trades
+  a silent collision for a shorter key, and a collision here is one reader's
+  board served to another.
+- **A shared answer is frozen** (`deepFreeze`), because every caller inside the
+  TTL holds the same object and an in-place sort would edit what every later
+  reader gets — a bug that appears on the second request and never on the first.
+  The exception is the per-player board, which carries a `Map`: `Object.freeze`
+  on one is a guarantee that cannot be kept, so it is left alone rather than
+  given reassurance.
+- **Each TTL is shorter than the layer it stands in front of** — the board's ten
+  minutes against the browser's fifteen, the ranks' five matching
+  `MANAGER_STALE_TIMES.ranks` — and each process holding its own is *correct*
+  rather than merely acceptable: Postgres stays the source of truth, so a second
+  instance costs one extra computation of an answer that was about to expire.
+  Nothing here wants Redis; it would put a network hop on the hot path.
+
+**And the ranks read is split at the work, not at the route.** Its expensive half
+is the projections; its cheap half (the standing, the points rank) comes straight
+off rosters it has already fetched, and the record ledge on every card needs the
+standing whatever the four stat columns say. So `?projections=0` is a parameter
+on the same request rather than a second one — a route split would make the cheap
+half a round trip for every reader who wants both, which is most of them. Two
+rules make it safe: **absent reads as *on***, so a bookmark or an older client
+answers exactly as it always did (`booleanFilter`, never `booleanFlag`, whose
+absent-is-false is the opposite meaning), and the flag is in **both** cache keys,
+because the cheap answer carries no `weeks` and a null `proj` on every league.
+`managerDataRequirements` derives it exactly as it derives `ktc` and `adp`, so
+the `Value` and `Market` presets — one press each — skip the solves entirely.
+Measured against 400 leagues × 12 teams × 6 weeks: 1,284ms with them, 58ms
+without, and the standings identical across the two.
+
 ## The client cache
 
 **There are two caches and they protect different things.** Postgres protects
@@ -508,6 +575,37 @@ Anything that scrapes or syncs should also take an advisory lock, so extra
 instances sharing one database don't multiply load on Sleeper or KTC. Take it
 around the freshness check too, not just the fetch — otherwise every instance
 decides for itself that a refresh is due and they queue up to do it in turn.
+
+**Every loop has a switch, and there is one switch over all of them**
+(`shared/util/background-jobs`). Three of the four already had one and KTC had
+none, which made "web dyno serves, worker dyno crawls" impossible to express
+however the other three were set — so `BACKGROUND_JOBS=off` disables the lot and
+the four per-job variables keep the names they had (a rename would quietly turn
+a loop somebody had deliberately disabled back on). Four things about it:
+
+- **The deployment it buys is one variable**, not a second entry point: the same
+  image runs twice, `BACKGROUND_JOBS=off` on the web dyno and nothing set on the
+  worker. Migrations run on boot in both, so their start order doesn't matter.
+  Nothing is required locally — unset, every loop runs as it always has.
+- **The switch is scheduling; the lock is correctness, and neither substitutes
+  for the other.** Turning a loop off on the web dyno is what stops it competing
+  for the pool; the advisory lock is what makes a second worker started by
+  accident cost a skipped tick instead of a doubled scrape. Removing either
+  because the other exists is the mistake to watch for.
+- **The master switch is checked first**, so a job added later is off on a web
+  process without a second edit — the failure it prevents is a new loop nobody
+  remembered to disable there.
+- **Only the exact word `off` disables anything.** Absent, empty, `on` and junk
+  all run: a typo that stopped the syncs would leave the database quietly
+  unfilled for hours with nothing failing, where a typo that leaves them running
+  is visible at once.
+
+The crawler is the loop that most wants that separation, and for a reason
+`shared/manager/sync-admission` already spells out from the other end: its
+advisory lock spans the whole sync, network included, so it holds a pool
+connection across a league's entire Sleeper fan-out. That is deliberate and
+cannot be shortened (released before the fetch, two instances both decide a
+refresh is due), which leaves *where the loop runs* as the only lever.
 
 Two cadences, and the choice matters:
 
@@ -1087,6 +1185,24 @@ stops holding, a comment saying it does would not have caught it.
   - `AmbientBackdrop` moved from `features/tools` to `features/shared` and is
     rendered once in `app/layout.tsx`. It is `fixed` at `-z-10`, so no page is
     laid out against it and none has to opt out.
+
+    **Below `sm` it carries no `filter` at all, and that is a memory decision
+    rather than a frame-rate one.** Three ~500px boxes under `blur(64px)` are
+    three promoted compositor layers whose backing store is expanded by the blur
+    radius on every side — tens of megabytes of GPU texture at a device pixel
+    ratio of 3, spent on a decoration, on top of every `backdrop-filter` surface
+    the page itself wears. That combined budget is what mobile WebKit discards a
+    page over, which the shares sheet has already been fixed for once. So the
+    gradient's own ramp does the softening instead, running to the full radius
+    rather than stopping at 62% and being blurred outward from there, and the
+    drift holds still on the same terms `prefers-reduced-motion` already freezes
+    it. Desktop keeps the blur, the tighter stop and the drift exactly as they
+    were. Two details make it work: the **tint is a custom property**
+    (`--aurora-tint`) so the class can own the *shape* at each width while the
+    colours stay on the component where the gradient exception puts them, and the
+    blur is `sm:blur-3xl` — a Tailwind variant rather than a `filter: none`
+    override, since a `.lab-*` rule in `@layer components` loses to a utility and
+    would have silently done nothing.
   - `PageHeading` is the eyebrow, the gradient display title and the lede, used
     by every page that leads with a title. `size` is the only thing that varies —
     `hero` for `/tools`, where the wordmark *is* the page, and `page` everywhere
@@ -1862,6 +1978,24 @@ stops holding, a comment saying it does would not have caught it.
     thing from a manager's leagues), and the DOM stays bounded at any depth
     because the list is windowed. The fold itself is `features/trades/trades-data`,
     pure and tested, which is where those assumptions are pinned.
+
+    **What `gcTime` cannot express is *how many* boards, and that is the second
+    bound** (`features/trades/board-retention`, pure and tested). Every press on
+    the filters is a different key with a full board behind it, and five minutes
+    is a long time at the keyboard — a reader working through a search holds
+    every combination they tried, on a phone, at the same time. So the count is
+    bounded rather than the time: the three most recently read *abandoned* boards
+    stay and the rest are removed. Three exclusions carry the safety and none is
+    a matter of ordering. **The active key is never dropped**, even before its
+    first page has arrived and its `dataUpdatedAt` is still 0 — exactly when a
+    plain recency sort would choose it first. **A board with observers is never
+    dropped**, because it is on screen or it is the placeholder
+    `keepPreviousData` is showing. And **three rather than one**, so "widen back
+    and find it loaded with the scroll position" survives coming back two presses
+    as well as one. The sweep runs in an effect on the key changing — the moment
+    a board is abandoned and the only moment the answer can change — because
+    `removeQueries` is a cache write, and a cache write during render mutates
+    something another component is reading.
   - **A league set too large for a query string travels in a POST body, not to
     the browser.** Past `MAX_LEAGUE_IDS` (500) the request used to go
     *unnarrowed* and the page filtered the pages as they arrived, which is not a
@@ -4025,6 +4159,21 @@ stops holding, a comment saying it does would not have caught it.
     re-render the sheet that is not being opened; and `closeSheet` clears only
     its own kind, since a sheet closing is the last thing that happens on the way
     out of it and a flat `null` would cancel whatever had just been asked for.
+
+    **The same correction has since been made everywhere else that latched**, so
+    read this as the rule rather than as one sheet's story: the trades board's
+    search panel and ADP drawer, the manager tabs' drawer, and the columns
+    editor's own `useColumnsEditor` all spelled it `if (open && !everOpened)
+    setEverOpened(true)` in the render body. `features/shared/use-latched-
+    disclosure` is the boolean case of `sheet-latch` — `open`/`mounted` with
+    `show`/`hide`/`toggle` that set both in one batched update — and
+    `useColumnsEditor` keeps its own hook only because its open state is *which
+    slot* rather than a flag. What made those worth fixing is where the second
+    pass landed: pressing a heading re-ran a hundred-odd league cards, four
+    metric cells each, synchronously before React committed anything, in the same
+    frame as a `<dialog>` mounting and its chunk evaluating. **A render-body
+    latch is legal, so nothing catches it — the tell is a `setState` reached from
+    the render body whose condition is "has this ever been true".**
   - **Null and false are different answers, exactly as `slotCount`'s are.** A
     league whose rosters were never synced is not evidence a player is absent
     from it, so `holdsSubject` returns null and a rule against it *fails* rather

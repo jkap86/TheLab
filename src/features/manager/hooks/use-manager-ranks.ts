@@ -30,14 +30,31 @@ export function useManagerRanks(
    */
   userId: string | null,
   leagues: ManagerLeague[] | null,
+  /**
+   * Whether the projected starter and bench ranks are wanted.
+   *
+   * The record ledge reads the standing off this route whatever the columns say,
+   * so it is always asked for — but the *projected* half is a lineup solve per
+   * team per remaining week in every projectable league, and four of the
+   * catalogue's thirteen metrics read it. With none of them on screen the read
+   * asks for `?projections=0` and the server skips the solves entirely; see
+   * `managerDataRequirements`.
+   */
+  options: { projections: boolean } = { projections: true },
 ): ManagerRanksState {
-  const queryKey = useMemo(() => managerQueryKeys.ranks(searched), [searched]);
+  const { projections } = options;
+  const queryKey = useMemo(
+    () => managerQueryKeys.ranks(searched, undefined, { projections }),
+    [searched, projections],
+  );
   return useManagerResource<ManagerRanksResult>(
     queryKey,
     searched,
     userId,
     leagues,
-    "ranks",
+    // Only ever narrowed, never widened: the parameter's absence reads as *on*,
+    // so an older client and a bookmark answer exactly as they always did.
+    projections ? "ranks" : "ranks?projections=0",
     "Failed to load ranks",
     STALE_TIMES.ranks,
   );

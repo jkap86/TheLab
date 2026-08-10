@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo } from "react";
 
 import {
   HeaderSlot,
@@ -16,6 +16,7 @@ import {
   useAdpLeagues,
 } from "@/features/shared";
 import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
+import { useLatchedDisclosure } from "@/features/shared/use-latched-disclosure";
 
 import { useAdpControls, useSubjectFilters } from "../filters-context";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
@@ -129,9 +130,12 @@ export function LeaguesViewLayout({
     scope: boardScope,
   } = useAdpControls();
   const { subjects } = useSubjectFilters();
-  const [boardOpen, setBoardOpen] = useState(false);
-  const [everOpened, setEverOpened] = useState(false);
-  if (boardOpen && !everOpened) setEverOpened(true);
+  const {
+    open: boardOpen,
+    mounted: everOpened,
+    show: openBoard,
+    hide: closeBoard,
+  } = useLatchedDisclosure();
 
   // Gated on the drawer being open: a tab nobody has opened the board on should
   // cost no ADP request. The gate is on the *fetch* and not on the read, which
@@ -239,7 +243,7 @@ export function LeaguesViewLayout({
             season={controls.season}
             draftCount={board.data?.draft_count ?? null}
             narrowed={adpNarrowingCount(controls, defaultSeason)}
-            onClick={() => setBoardOpen(true)}
+            onClick={openBoard}
           />
         </HeaderSlot>
       )}
@@ -262,7 +266,7 @@ export function LeaguesViewLayout({
       <AdpDrawer
         open={boardOpen}
         scope={boardScope}
-        onClose={() => setBoardOpen(false)}
+        onClose={closeBoard}
         controls={controls}
         onChange={setControls}
         onReset={resetControls}

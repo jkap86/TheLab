@@ -43,6 +43,26 @@ test("managerQueryKeys", async (t) => {
     );
   });
 
+  await t.test("the two halves of the ranks read are two entries", () => {
+    // `?projections=0` is a genuinely different answer — no weeks, and a null
+    // `proj` on every league — so serving one for the other would blank two
+    // columns with nothing on screen saying why.
+    assert.notEqual(
+      hash(managerQueryKeys.ranks("alice", undefined, { projections: true })),
+      hash(managerQueryKeys.ranks("alice", undefined, { projections: false })),
+    );
+  });
+
+  await t.test("the dependent invalidation is a prefix of both halves", () => {
+    // React Query matches an invalidation by prefix, which is what lets one
+    // entry in `dependentManagerQueryKeys` retire both variants.
+    const prefix = managerQueryKeys.ranks("alice");
+    for (const projections of [true, false]) {
+      const full = managerQueryKeys.ranks("alice", undefined, { projections });
+      assert.deepEqual(full.slice(0, prefix.length), [...prefix]);
+    }
+  });
+
   await t.test("two resources of one manager never share an entry", () => {
     const keys = [
       managerQueryKeys.leagues("alice"),
