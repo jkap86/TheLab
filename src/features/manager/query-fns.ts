@@ -1,27 +1,27 @@
-import type { QueryClient } from "@tanstack/react-query";
-
 import { fetchJson } from "../shared/api.ts";
 import { fetchManagerResource } from "../shared/manager-query.ts";
-import { dependentManagerQueryKeys } from "./query-keys.ts";
 
 /**
  * The functions behind the manager queries: one read per resource, the leagues
- * stream decoded into something a query can resolve with, and the one
- * invalidation this tool performs.
+ * stream decoded into something a query can resolve with, and the invalidation
+ * that follows a refreshed stream.
  *
- * The first two are re-exports now — both moved to `features/shared` as a second
- * tool started making the same read, which is this codebase's standing habit and
- * not a filing preference. What is still *written* here is
- * {@link invalidateManagerDependents}, which is the only part of the set that is
- * genuinely about this tool: it is keyed on the name searched in the URL, and no
- * other tool has one.
+ * Every one of them is a re-export now — each moved to `features/shared` as a
+ * second tool started making the same read, which is this codebase's standing
+ * habit and not a filing preference. {@link invalidateManagerDependents} was the
+ * last to go and is the interesting one: it looked like the only part of the set
+ * genuinely about this tool, because it is keyed on the name searched in the URL
+ * and no other tool has one. What that missed is that the *entry* it follows is
+ * shared — the pick tracker and the lineup checker refresh the same leagues
+ * query — so deciding when to call it inside this tool's own hook made the
+ * decision conditional on this tool being mounted. It is made at the write now,
+ * in `features/shared/leagues-cache`, and this file keeps the name its own
+ * consumers and tests already import.
  *
- * It lives apart from the hooks for the reason `shares` and `record` do — a
- * function taking its inputs as arguments is one the test runner can call, where
- * the same logic inside a `useEffect` is only reachable through a renderer. The
- * imports are relative and carry a `.ts` extension for the same reason, and
- * nothing here holds cache policy — how long an answer stays fresh is
- * `query-config`, and where it is filed is `query-keys`.
+ * The imports are relative and carry a `.ts` extension for the reason `shares`
+ * and `record` keep theirs: these are reachable from the test runner. Nothing
+ * here holds cache policy — how long an answer stays fresh is `query-config`,
+ * and where it is filed is `query-keys`.
  */
 
 // Re-exported under its old name: this module's own consumers (the tests,
@@ -50,21 +50,14 @@ export {
   type ManagerLeaguesData,
 } from "../shared/leagues-stream.ts";
 
-/**
- * Mark the reads that follow a manager's leagues as stale.
- *
- * Called when — and only when — a stream result carries a new revision, so a
- * refresh that changed nothing costs nothing. It addresses the ADP valuation by
- * its prefix, so every steepness already in the cache goes with it; a curve is
- * not re-derivable from a stale roster just because nobody has touched the
- * slider.
- */
-export function invalidateManagerDependents(
-  queryClient: QueryClient,
-  searched: string,
-  season?: string,
-): void {
-  for (const queryKey of dependentManagerQueryKeys(searched, season)) {
-    void queryClient.invalidateQueries({ queryKey });
-  }
-}
+// The invalidation and the publisher that decides when to call it live in
+// `features/shared/leagues-cache.ts`, beside the entry they are about — three
+// tools write that entry and only one of them was doing the comparison.
+// Re-exported under its old name: this feature's hooks and its tests already
+// import it from here, the same mover's-rule habit above.
+export {
+  cachedLeaguesRevision,
+  dependentsFellBehind,
+  invalidateManagerDependents,
+  publishManagerLeagues,
+} from "../shared/leagues-cache.ts";

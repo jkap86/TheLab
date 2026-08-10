@@ -31,7 +31,7 @@ import type {
 } from "@/shared/contract";
 import type { ManagerLeague } from "@/shared/manager";
 
-import { apiFetch } from "./api.ts";
+import { apiFetch, isAbortError } from "./api.ts";
 import { takeLines } from "./ndjson.ts";
 
 /**
@@ -162,11 +162,15 @@ export async function fetchManagerLeagues({
 
   const url = `/api/user/${encodeURIComponent(searched)}/leagues${refresh ? "?refresh=1" : ""}`;
 
+  // Held outside the `try` so the bail-out path can hand the connection back
+  // rather than leaving a half-read body attached to it.
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+
   try {
     const res = await apiFetch(url, { signal, fallbackError: "Failed to load leagues" });
     if (!res.body) throw new Error("Failed to load leagues");
 
-    const reader = res.body.getReader();
+    reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
 
@@ -212,11 +216,41 @@ export async function fetchManagerLeagues({
       }
     }
   } catch (error: unknown) {
-    // Nothing usable arrived: the query's own error state is the honest answer.
-    if (!hasResult(state.current)) throw error;
-    // Something did: a dropped connection mid-refresh costs the refresh, not
-    // the leagues.
-    update({ refreshError: messageOf(error) });
+    // Whatever ended it, this stream is finished with: release the connection
+    // instead of leaving the rest of the body unread on it. An aborted stream is
+    // *errored*, and `cancel` on an errored stream rejects with that same
+    // error — so the rejection is swallowed here rather than surfacing as an
+    // unhandled one. (Optional chaining short-circuits the whole chain, so this
+    // is a no-op when the request never got as far as a body.)
+    void reader?.cancel().catch(() => {});
+
+    // **An abort is teardown, not a failure.** An unmount, a navigation, or
+    // React Query cancelling this query fires the signal the request was given
+    // and `fetch` rejects with an `AbortError`. Nothing failed — the refresh was
+    // never given the chance to — so it must not be written into `refreshError`,
+    // which is a message the header shows and the cache keeps: a reader who
+    // walked away mid-refresh came back to "Failed to sync leagues" over leagues
+    // that had synced perfectly well.
+    if (isAbortError(error)) {
+      // Nothing usable arrived, so there is nothing to hand back. The abort goes
+      // out as-is, which is what says *cancelled* rather than failed; React
+      // Query discards a cancelled fetch either way, and inventing a payload
+      // here would file one under the entry it has just cancelled.
+      if (!hasResult(state.current)) throw error;
+      // A payload did arrive, so it stays exactly as it was — no `refreshError`,
+      // and whatever one an *earlier* message set is carried forward by
+      // `update`. Falls through to the backstop below, which clears
+      // `refreshing`/`progress`: only a message clears those, and no further
+      // message is coming, so without it a remount inside the stale window would
+      // spin "Refreshing…" on a stream nobody is reading.
+    } else if (!hasResult(state.current)) {
+      // Nothing usable arrived: the query's own error state is the honest answer.
+      throw error;
+    } else {
+      // Something did: a dropped connection mid-refresh costs the refresh, not
+      // the leagues.
+      update({ refreshError: messageOf(error) });
+    }
   }
 
   if (!hasResult(state.current)) throw new Error("Failed to load leagues");
