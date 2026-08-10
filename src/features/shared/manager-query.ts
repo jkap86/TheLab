@@ -61,8 +61,30 @@ export const managerQueryKeys = {
   leaguemates: (searched: string, season?: string) =>
     [...managerQueryKeys.manager(searched), "leaguemates", seasonKey(season)] as const,
 
-  ranks: (searched: string, season?: string) =>
-    [...managerQueryKeys.manager(searched), "ranks", seasonKey(season)] as const,
+  /**
+   * The projected and record ranks.
+   *
+   * `options` appends which *half* of the route was asked for — see
+   * `?projections=` on `/api/user/[username]/ranks`. The two answers genuinely
+   * differ (the cheap one carries no `weeks` and a null `proj` on every league),
+   * so they cannot share an entry; re-aiming a column onto a projection metric
+   * is a different key rather than a stale one.
+   *
+   * Omitting it yields the **prefix**, which is what
+   * {@link dependentManagerQueryKeys} wants: React Query matches an
+   * invalidation by prefix, so one entry there retires both variants.
+   */
+  ranks: (
+    searched: string,
+    season?: string,
+    options?: { projections: boolean },
+  ) =>
+    [
+      ...managerQueryKeys.manager(searched),
+      "ranks",
+      seasonKey(season),
+      ...(options ? [options.projections ? "proj" : "no-proj"] : []),
+    ] as const,
 
   ktc: (searched: string, season?: string) =>
     [...managerQueryKeys.manager(searched), "ktc", seasonKey(season)] as const,

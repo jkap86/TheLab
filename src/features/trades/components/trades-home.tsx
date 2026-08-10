@@ -29,6 +29,7 @@ import {
 } from "@/features/shared";
 import type { LeagueFilters } from "@/features/shared";
 import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
+import { useLatchedDisclosure } from "@/features/shared/use-latched-disclosure";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { focusRosterFor } from "../exchange";
@@ -206,9 +207,11 @@ export function TradesHome({ season }: { season: string }) {
   // throw away the names it remembered for tokens the loaded pages never named
   // (see `TradeSearch`). Shut, the control is `display: none` and costs the page
   // nothing but its own subtree.
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [everOpenedSearch, setEverOpenedSearch] = useState(false);
-  if (searchOpen && !everOpenedSearch) setEverOpenedSearch(true);
+  const {
+    open: searchOpen,
+    mounted: everOpenedSearch,
+    toggle: toggleSearch,
+  } = useLatchedDisclosure();
   const searchId = useId();
 
   // The three boxes laid out above the list, watched by the virtualizer for the
@@ -262,9 +265,12 @@ export function TradesHome({ season }: { season: string }) {
     defaultSeason,
     scope: adpScope,
   } = useAdpControls();
-  const [boardOpen, setBoardOpen] = useState(false);
-  const [everOpenedBoard, setEverOpenedBoard] = useState(false);
-  if (boardOpen && !everOpenedBoard) setEverOpenedBoard(true);
+  const {
+    open: boardOpen,
+    mounted: everOpenedBoard,
+    show: openBoard,
+    hide: closeBoard,
+  } = useLatchedDisclosure();
   // Asked for only once the drawer has been opened — the dialog inside it counts
   // its options over this, and the controls store asks for the same entry
   // whenever a rule is set, so the two gates are one request.
@@ -514,7 +520,7 @@ export function TradesHome({ season }: { season: string }) {
           season={adpControls.season}
           draftCount={board.data?.draft_count ?? null}
           narrowed={adpNarrowingCount(adpControls, defaultSeason)}
-          onClick={() => setBoardOpen(true)}
+          onClick={openBoard}
         />
       </HeaderSlot>
 
@@ -609,7 +615,7 @@ export function TradesHome({ season }: { season: string }) {
                 expanded={searchOpen}
                 active={sideSelectionCount(tradeFilters)}
                 controls={everOpenedSearch ? searchId : undefined}
-                onToggle={() => setSearchOpen(!searchOpen)}
+                onToggle={toggleSearch}
               />
             </>
           }
@@ -735,7 +741,7 @@ export function TradesHome({ season }: { season: string }) {
         <AdpDrawer
           open={boardOpen}
           scope={adpScope}
-          onClose={() => setBoardOpen(false)}
+          onClose={closeBoard}
           controls={adpControls}
           onChange={setAdpControls}
           onReset={resetAdpControls}

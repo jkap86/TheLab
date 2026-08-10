@@ -19,6 +19,15 @@ import { useCallback, useState } from "react";
  * the first press, which also makes the second press instant: the chunk is
  * already in memory.
  *
+ * **The latch is set in `open`, not in the render body.** It used to be
+ * `if (openSlot !== null && !mounted) setMounted(true)`, which is a render-phase
+ * update: pressing a heading re-ran the whole list — a hundred-odd cards, four
+ * metric cells each — synchronously before React committed anything, in the same
+ * frame as the dialog mounting and its chunk evaluating. Batched into the
+ * handler it is one update. `useLatchedDisclosure` is the same correction for
+ * the boolean case; this one keeps its own hook because the open state here is
+ * *which slot*, not a flag.
+ *
  * **`openSlot` is the slot the dialog opens *armed on*, not a boolean.** Pressing
  * a heading is a press on the column the reader meant; the editor seeds its armed
  * slot from this and then owns it, so re-arming inside survives.
@@ -34,10 +43,13 @@ export function useColumnsEditor(): {
   mounted: boolean;
 } {
   const [openSlot, setOpenSlot] = useState<number | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  const open = useCallback((slot: number) => {
+    setMounted(true);
+    setOpenSlot(slot);
+  }, []);
   const close = useCallback(() => setOpenSlot(null), []);
 
-  const [mounted, setMounted] = useState(false);
-  if (openSlot !== null && !mounted) setMounted(true);
-
-  return { openSlot, open: setOpenSlot, close, mounted };
+  return { openSlot, open, close, mounted };
 }

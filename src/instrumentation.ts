@@ -10,6 +10,29 @@
  * code out of the Edge bundle entirely. The same guard fronts the in-process
  * background loops (KeepTradeCut values, league crawl, weekly projections and
  * weekly stat lines), which are started once migrations have applied.
+ *
+ * ## Deploying with a worker
+ *
+ * Every loop below runs *in the process serving requests*, sharing its event
+ * loop and its Postgres pool. That is right for one dyno and for development;
+ * past that, the crawler holding a pool connection across a league's whole
+ * Sleeper fan-out is competing with the requests it exists to serve. Each loop
+ * has an env switch and there is one that covers all of them
+ * (`shared/util/background-jobs`), so the split is configuration rather than a
+ * second entry point:
+ *
+ * ```
+ * # Procfile — same image, same database, one variable
+ * web:    npm start          # with BACKGROUND_JOBS=off
+ * worker: npm start          # nothing set: every loop on
+ * ```
+ *
+ * Migrations still run on both, which is what makes the order between them
+ * irrelevant. **The advisory locks stay exactly as they are**: they are what
+ * stops a misconfigured second worker — or a web dyno somebody left the jobs on
+ * — from double-scraping Sleeper or KTC, and switching a loop off is not a
+ * substitute for that. Nothing here is required locally; unset, this file
+ * behaves as it always has.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;

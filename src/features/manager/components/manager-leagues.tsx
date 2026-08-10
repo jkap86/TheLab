@@ -96,7 +96,13 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   // value is a third lens on top of both. All fetch over the unfiltered leagues,
   // since the chips belong to every card the filters might later show.
   const leagues = view.data?.leagues ?? null;
-  const ranks = useManagerRanks(searched, view.userId, leagues);
+  // Always asked for — the record ledge reads the standing off it — but its
+  // expensive half is asked for only when something draws it. The editor's
+  // preview draws every metric in the catalogue, so opening it turns the
+  // projected ranks on for the same reason it turns the other two reads on.
+  const ranks = useManagerRanks(searched, view.userId, leagues, {
+    projections: needs.projections || editorOpened,
+  });
   const ktc = useManagerKtc(searched, view.userId, leagues, {
     enabled: needs.ktc || editorOpened,
   });

@@ -1,4 +1,4 @@
-import { startBackgroundLoop } from "@/shared/util";
+import { backgroundJobSwitch, startBackgroundLoop } from "@/shared/util";
 
 import { syncKtcHistory } from "./history";
 import { KTC_TTL_MS, syncKtcValues } from "./sync";
@@ -59,12 +59,18 @@ async function tick(firstRun: boolean): Promise<void> {
  * Runs per server instance, but `syncKtcValues` and `syncKtcHistory` each take a
  * Postgres advisory lock, so scaling horizontally doesn't multiply the scrapes —
  * extra instances find the lock held and skip that tick.
+ *
+ * `KTC_SYNC=off` disables it, and `BACKGROUND_JOBS=off` disables every loop —
+ * see {@link backgroundJobSwitch}. This was the one loop with no switch at all,
+ * which made "web dyno serves, worker dyno crawls" impossible to express however
+ * the other three were set.
  */
 export function startKtcScheduler(): void {
   startBackgroundLoop({
     name: "ktc",
     intervalMs: KTC_REFRESH_MS,
     guardKey: "ktc-scheduler",
+    ...backgroundJobSwitch("ktc"),
     cadence: "refresh every 15 min",
     tick,
   });

@@ -33,8 +33,16 @@ while you work.
 | `REQUEST_DEADLINE_MS` | no | 30000 | The deadline the platform enforces on a request (Heroku's router answers `H12` at 30s). Every database wait is a share of it — connect at ⅙, advisory lock at ½, statement at ⅔ — so lowering it tightens them together. Set it if the app sits behind a proxy with a shorter timeout; the waits exist to be shorter than whatever gives up first. |
 | `INTERNAL_SYNC_SECRET` | in production, to use the sync routes | — | Shared secret gating the operator sync endpoints (see [Internal sync endpoints](#internal-sync-endpoints)). Sent as the `x-internal-sync-secret` header. In production an unset secret makes those routes answer **503** — they fail closed, never open. On a dev server an unset secret lets them through, so `npm run dev` can still force a sync by hand. |
 | `NFL_SEASON_OVERRIDE` | no | — | Pins the operating season (a 4-digit year). Otherwise the season is read from Sleeper's `state/nfl` and cached for six hours, so a league-year rollover needs no redeploy. An implausible value is ignored with a warning. |
+| `BACKGROUND_JOBS` | no | on | Set to `off` to disable **every** background loop in this process — the web process's switch in a web+worker deployment (see [Running a worker](#running-a-worker)). It outranks the four per-loop switches below, so a loop added later is off on a web dyno without a second edit. |
 | `LEAGUE_CRAWLER` | no | on | Set to `off` to disable the background league crawler. |
 | `PROJECTIONS_SYNC` | no | on | Set to `off` to disable the weekly projections sync. Each week it refreshes is a ~5.6MB download. |
+| `STATS_SYNC` | no | on | Set to `off` to disable the weekly actual stat-line sync, likewise a multi-megabyte download per week. |
+| `KTC_SYNC` | no | on | Set to `off` to disable the KeepTradeCut values refresh and its per-player history backfill. |
+| `CACHE_DEBUG` | no | off | Set to `on` to log every read of the two server-side caches (the full ADP board, a manager's ranks) as `hit`, `miss` or `coalesced`. Development only — these are the hottest reads in the app. |
+
+Only the exact word `off` disables a loop. Anything else runs, including junk: a
+typo that stopped the syncs would leave the database quietly unfilled for hours
+with nothing failing, where a typo that leaves them running is visible at once.
 
 ## Architecture
 
@@ -295,6 +303,36 @@ Two settings need a decision before a production deploy:
   throwing instrumentation hook as nothing but the error's own message.
 - **`INTERNAL_SYNC_SECRET`.** Without it the two sync endpoints answer `503` in
   production. That is deliberate: they are unauthenticated otherwise.
+
+### Running a worker
+
+The four background loops (KeepTradeCut, the league crawl, projections, stat
+lines) run *inside the process serving requests*, sharing its event loop and its
+Postgres pool. On one dyno — and in development — that is what you want: a
+second process would be ceremony around a database that isn't busy.
+
+It stops being what you want once requests and crawling compete for
+`DATABASE_POOL_MAX` connections. The crawler holds a pooled connection across a
+league's whole Sleeper fan-out, and a request that has to queue for one is a
+request the platform answers `503` for on the app's behalf. Splitting them is
+configuration, not a second entry point:
+
+```
+# Procfile
+web:    npm start        # set BACKGROUND_JOBS=off on this dyno
+worker: npm start        # nothing set — every loop runs
+```
+
+Same image, same database, one variable. Migrations run on boot in both, so the
+order they start in doesn't matter. **Advisory locking is untouched and stays
+load-bearing**: every loop takes its own lock, so a second worker started by
+accident — or a web dyno somebody left the jobs on — costs a skipped tick rather
+than a doubled scrape of Sleeper or KTC. Switching a loop off is a scheduling
+decision; the lock is the correctness one, and neither substitutes for the
+other.
+
+Give each dyno its own share of `DATABASE_POOL_MAX` when you do this: the
+ceiling that matters belongs to the database *role*, not to any one process.
 `node-pg-migrate` and `pg` are kept as native Node modules via
 `serverExternalPackages` in `next.config.ts` — the migration runner loads
 migration files through a runtime `import()` the bundler can't statically

@@ -1,10 +1,15 @@
 "use client";
 
-import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo } from "react";
 
 import type { TradesPagePayload } from "@/shared/contract";
 
+import { retiredTradeBoards, type TradeBoardEntry } from "../board-retention";
 import { fetchTradesPage } from "../query-fns";
 import { tradesQueryKeys } from "../query-keys";
 import { foldTradePages } from "../trades-data";
@@ -115,8 +120,9 @@ export function tradesBoardQuery(request: TradeRequest, key: string) {
  *   board has no previous-page path to read it back with — a keyset walk resumes
  *   forwards only. See {@link foldTradePages} for the four things that broke
  *   when it did. What bounds memory instead is {@link TRADES_GC_TIME} for an
- *   abandoned board, and the DOM stays bounded at any depth because `TradesList`
- *   windows it.
+ *   abandoned board, {@link useBoundedBoardCache} for how many abandoned boards
+ *   may pile up before that expires, and the DOM stays bounded at any depth
+ *   because `TradesList` windows it.
  * - **`keepPreviousData` holds the last board while the next one lands.** That
  *   is what makes the filters committing live affordable: without it every press
  *   on the controls is a new key with nothing in it, so the whole list is replaced
@@ -136,6 +142,7 @@ export function tradesBoardQuery(request: TradeRequest, key: string) {
  */
 export function useTrades(request: TradeRequest, key: string): TradesState {
   const query = useInfiniteQuery(tradesBoardQuery(request, key));
+  useBoundedBoardCache(key);
 
   // What is on screen belongs to the filter set that has just been left. The
   // list is unchanged by design; what it gates is pagination and what it tells
@@ -174,3 +181,54 @@ export function useTrades(request: TradeRequest, key: string): TradesState {
 
 /** One frozen empty page list, so a board with no data folds to a stable null. */
 const EMPTY_PAGES: readonly TradesPagePayload[] = [];
+
+/**
+ * Retire the trade boards nobody is reading any more, past a small bound.
+ *
+ * **The complement of "loaded pages are never evicted", not a retreat from it.**
+ * Inside one board nothing is ever dropped, for all the reasons above; what this
+ * bounds is how many *boards* a reader can be holding at once. Every press on
+ * the filters is a different key with a full board behind it, and `gcTime` only
+ * starts five minutes after the last reader lets go — long enough at the
+ * keyboard that a reader working through a search holds every combination they
+ * tried. {@link retiredTradeBoards} is where the decision lives and why it is
+ * safe; here it is only applied.
+ *
+ * It runs on the key changing rather than on every render, which is the moment
+ * a board is abandoned and the only moment the answer can change. Removal is
+ * deliberate — `gcTime` cannot express "however many, but not more than this"
+ * — and it is the one thing here that would be wrong to do during render, so it
+ * is an effect: `removeQueries` notifies the cache, and a cache write inside a
+ * render is a render that mutates something another component is reading.
+ */
+function useBoundedBoardCache(activeKey: string): void {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const cache = queryClient.getQueryCache();
+    const boards: (TradeBoardEntry & { queryKey: readonly unknown[] })[] = [];
+
+    for (const query of cache.getAll()) {
+      const [scope, kind, boardKey] = query.queryKey as unknown[];
+      // The board entries only — the season's leagues and the facet menus are
+      // small, shared across filter sets, and expensive to re-ask for.
+      if (scope !== "trades" || kind !== "board" || typeof boardKey !== "string") {
+        continue;
+      }
+      boards.push({
+        key: boardKey,
+        updatedAt: query.state.dataUpdatedAt,
+        observers: query.getObserversCount(),
+        queryKey: query.queryKey,
+      });
+    }
+
+    const retired = new Set(retiredTradeBoards(boards, activeKey));
+    if (retired.size === 0) return;
+    for (const board of boards) {
+      if (retired.has(board.key)) {
+        queryClient.removeQueries({ queryKey: board.queryKey, exact: true });
+      }
+    }
+  }, [queryClient, activeKey]);
+}

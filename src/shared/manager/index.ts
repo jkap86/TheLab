@@ -72,6 +72,9 @@ export type {
 } from "./types";
 export { orderByProjectedPoints, projectedRank, rankOf, standingScore } from "./rank";
 export type { LeagueRank, ProjectedRank } from "./rank";
+export { readManagerRanks } from "./ranks-read";
+export { parseManagerRanksOptions } from "./read-cache";
+export type { ManagerRanksOptions } from "./read-cache";
 export {
   DYNASTY_PICK_SEASONS,
   dynastyPickGrid,

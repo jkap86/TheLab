@@ -1,8 +1,9 @@
 import { pool } from "@/shared/db";
 import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
-import { BoundedCache } from "@/shared/util";
+import { TtlPromiseCache, deepFreeze } from "@/shared/util";
 
 import type { AdpFilters } from "./adp-filters";
+import { ADP_BOARD_CACHE, adpBoardCacheKey } from "./read-cache";
 
 /**
  * Average draft position over the drafts this app has crawled.
@@ -281,6 +282,30 @@ function boardStats(
 }
 
 /**
+ * Every distinct board a process has read lately, and the reads still running.
+ *
+ * **The aggregate underneath is the most expensive statement in the app** —
+ * ~500-600ms over 1.5M picks with the plan fully tuned (see the note on
+ * `matchedDraftsSql` for what "tuned" cost), plus a second statement to count
+ * the matched drafts. The browser's own cache does nothing about that across
+ * readers, tabs, processes or a reload, and the population it describes is
+ * identical for everyone who has not narrowed it: the default board is one
+ * answer that every visitor to the trades page and the manager tabs was asking
+ * Postgres for separately.
+ *
+ * The in-flight half is the part that matters under load. Ten readers arriving
+ * on a cold key is ten copies of that aggregate, each holding a pool connection
+ * for its whole duration — one board by itself over `databaseBudget().fanout`,
+ * which is the shape of the exhaustion the budget module exists to bound. With
+ * the promise shared it is one query and one connection however many are
+ * waiting on it.
+ *
+ * See {@link ADP_BOARD_CACHE} for the TTL and the bound, and
+ * {@link adpBoardCacheKey} for why the key names every filter.
+ */
+const boardResultCache = new TtlPromiseCache<AdpResult>(ADP_BOARD_CACHE);
+
+/**
  * ADP for every player taken in the drafts matching `filters`, averaged per
  * board, best average first. The `min_picks` gate applies per board — a player
  * with one redraft pick and five dynasty ones has a dynasty average and no
@@ -291,13 +316,29 @@ function boardStats(
  * whichever board(s) it displays. `draft_count` and its split are reported
  * separately so an empty page still tells the caller whether the filters
  * matched no drafts or merely no players.
+ *
+ * **Cached and coalesced per process** — see {@link boardResultCache}. The
+ * answer is deep-frozen because it is now *shared*: every caller inside the TTL
+ * holds the same object, so an in-place sort or annotation would edit what every
+ * later reader gets. The SQL below is untouched by any of that; a miss runs
+ * exactly the two statements it always ran.
  */
 export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
+  return boardResultCache.read(adpBoardCacheKey(filters), () =>
+    computeDraftAdp(filters),
+  );
+}
+
+async function computeDraftAdp(filters: AdpFilters): Promise<AdpResult> {
   const { where, params } = draftSelection(filters);
   const matchedDrafts = matchedDraftsSql(where);
 
   const counts = await countMatchedDrafts(matchedDrafts, params);
-  if (counts.draft_count === 0) return { ...counts, player_count: 0, rows: [] };
+  // Cached like any other answer: a population that matches no draft is the
+  // most repeatable answer there is, and re-deriving it is the same query.
+  if (counts.draft_count === 0) {
+    return deepFreeze({ ...counts, player_count: 0, rows: [] });
+  }
 
   const rowParams = [...params];
   const bind = (value: unknown) => `$${rowParams.push(value)}`;
@@ -332,7 +373,7 @@ export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
     rowParams,
   );
 
-  return {
+  return deepFreeze({
     ...counts,
     player_count: rows[0]?.player_count ?? 0,
     rows: rows.map((r) => ({
@@ -340,7 +381,7 @@ export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
       redraft: boardStats(r, "redraft", filters.min_picks),
       dynasty: boardStats(r, "dynasty", filters.min_picks),
     })),
-  };
+  });
 }
 
 /**
@@ -426,14 +467,29 @@ export type PlayerBoardAdpResult = DraftCounts & {
  * distinct scoring/superflex group), so it holds a dozen-odd readers, and the
  * eviction is recency — a reader who has stopped scrolling loses their board to
  * one who hasn't.
+ *
+ * It is a {@link TtlPromiseCache} rather than a plain `BoundedCache` for the one
+ * thing the plain one deliberately does not do: **a cold key with several
+ * readers on it computes once.** Same key, same TTL, same bound as before — what
+ * is added is that two readers of one manager, or one reader whose page prices
+ * six boards at once, no longer race each other through the same aggregate while
+ * each holds a pool connection. That is the same argument the board cache above
+ * rests on, and leaving the two halves of one read on different terms is the
+ * kind of asymmetry that reads as an oversight.
+ *
+ * The answer is **not** frozen, unlike the paged board's: it carries a `Map`,
+ * and `Object.freeze` on a `Map` is a guarantee that cannot be kept (`set` goes
+ * on working), so a freeze here would be reassurance rather than a bound. The
+ * three callers read it and nothing else.
  */
 const BOARD_TTL_MS = 10 * 60 * 1000;
 const BOARD_CACHE_MAX = 64;
 
-const boardCache = new BoundedCache<PlayerBoardAdpResult>(
-  BOARD_CACHE_MAX,
-  BOARD_TTL_MS,
-);
+const boardCache = new TtlPromiseCache<PlayerBoardAdpResult>({
+  name: "adp-players",
+  ttlMs: BOARD_TTL_MS,
+  max: BOARD_CACHE_MAX,
+});
 
 /**
  * ADP for a specific set of players over the drafts matching `filters`, keyed by
@@ -476,20 +532,27 @@ export async function getDraftAdpForPlayers(
   // order they enumerated them share one entry rather than computing twice.
   const ids = [...new Set(playerIds.filter((id) => id && id !== "0"))].sort();
   const { where, params } = draftSelection(filters);
-  const matchedDrafts = matchedDraftsSql(where);
 
   const cacheKey = JSON.stringify([where, params, filters.min_picks, ids]);
-  const cached = boardCache.get(cacheKey);
-  if (cached) return cached;
+  return boardCache.read(cacheKey, () =>
+    computeDraftAdpForPlayers(filters, ids, where, params),
+  );
+}
 
-  const counts = await countMatchedDrafts(matchedDrafts, params);
+async function computeDraftAdpForPlayers(
+  filters: AdpFilters,
+  ids: readonly string[],
+  where: string,
+  params: readonly unknown[],
+): Promise<PlayerBoardAdpResult> {
+  const matchedDrafts = matchedDraftsSql(where);
+
+  const counts = await countMatchedDrafts(matchedDrafts, [...params]);
   if (counts.draft_count === 0 || ids.length === 0) {
     // Cached like any other answer: a population that matches no draft is the
     // most repeatable answer there is, and re-deriving it is the same two
     // queries as deriving a real one.
-    const empty = { ...counts, values: new Map<string, PlayerBoardAdp>() };
-    boardCache.set(cacheKey, empty);
-    return empty;
+    return { ...counts, values: new Map<string, PlayerBoardAdp>() };
   }
 
   const rowParams = [...params];
@@ -532,7 +595,5 @@ export async function getDraftAdpForPlayers(
           : null,
     });
   }
-  const result = { ...counts, values };
-  boardCache.set(cacheKey, result);
-  return result;
+  return { ...counts, values };
 }

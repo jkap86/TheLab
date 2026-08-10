@@ -1,4 +1,4 @@
-import { startBackgroundLoop } from "@/shared/util";
+import { backgroundJobSwitch, startBackgroundLoop } from "@/shared/util";
 
 import { syncStats } from "./sync";
 
@@ -68,15 +68,16 @@ async function tick(): Promise<void> {
  * instances against one database doesn't multiply the load on Sleeper.
  *
  * Set `STATS_SYNC=off` to disable (worth doing on a dev server — each week it
- * refreshes is a multi-megabyte download).
+ * refreshes is a multi-megabyte download), or `BACKGROUND_JOBS=off` to disable
+ * every loop at once — see {@link backgroundJobSwitch} for the web/worker
+ * split.
  */
 export function startStatsScheduler(): void {
   startBackgroundLoop({
     name: "stats",
     intervalMs: STATS_INTERVAL_MS,
     guardKey: "stats-scheduler",
-    enabled: process.env.STATS_SYNC !== "off",
-    disabledReason: "STATS_SYNC=off",
+    ...backgroundJobSwitch("stats"),
     cadence: "check every 15 min; live weeks hourly, settled weeks monthly",
     tick,
   });

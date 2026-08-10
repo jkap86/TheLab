@@ -67,15 +67,27 @@ export type MetricContext = {
 };
 
 /**
- * Which of the leagues list's three batch reads a metric needs.
+ * Which of the leagues list's batch reads a metric needs.
  *
  * `ranks`, `ktc` and `adp` are three separate routes and two of them are
  * expensive in ways a column being *off* does not make cheaper: the KTC
  * valuation solves every team's optimal lineup in every league, and the ADP one
  * prices every roster against a crawled board. A reader whose four columns name
  * none of them was paying for both anyway.
+ *
+ * **`projections` is the fourth and is not a route** — it is the expensive
+ * *half* of the ranks one. That read is unconditional (the record ledge needs
+ * the standing, and no column controls that), but the standing and the points
+ * rank come straight off the rosters it already fetches, where the projected
+ * starter and bench ranks are a lineup solve per team per remaining week in
+ * every projectable league. Four of the thirteen metrics read them, and the
+ * `Value` and `Market` presets are one press away from naming none of the four —
+ * so it is asked for separately, as `?projections=0` on the same request rather
+ * than as a request of its own. Splitting the *route* would make the cheap half
+ * a second round trip for every reader who does want both, which is most of
+ * them; splitting the *work* costs nothing either way.
  */
-export type ManagerDataset = "ranks" | "ktc" | "adp";
+export type ManagerDataset = "ranks" | "ktc" | "adp" | "projections";
 
 /**
  * One selectable league metric — {@link Metric} bound to this catalogue's grain,
@@ -308,7 +320,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "proj",
     group: "Projection",
     label: "Proj start",
-    reads: ["ranks"],
+    reads: ["ranks", "projections"],
     cell: ({ ranks, weeks }) => {
       const proj = ranks?.proj ?? null;
       return {
@@ -322,7 +334,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "proj_pts",
     group: "Projection",
     label: "Proj pts",
-    reads: ["ranks"],
+    reads: ["ranks", "projections"],
     cell: ({ ranks, weeks }) => {
       const proj = ranks?.proj ?? null;
       return {
@@ -336,7 +348,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "proj_bench",
     group: "Projection",
     label: "Proj bench",
-    reads: ["ranks"],
+    reads: ["ranks", "projections"],
     cell: ({ ranks, weeks }) => {
       const bench = ranks?.proj_bench ?? null;
       return {
@@ -350,7 +362,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
     key: "proj_bench_pts",
     group: "Projection",
     label: "Bench pts",
-    reads: ["ranks"],
+    reads: ["ranks", "projections"],
     cell: ({ ranks, weeks }) => {
       const bench = ranks?.proj_bench ?? null;
       return {
@@ -411,7 +423,7 @@ export const LEAGUE_METRICS: LeagueMetric[] = [
 export const LEAGUE_METRICS_BY_KEY: Record<string, LeagueMetric> =
   Object.fromEntries(LEAGUE_METRICS.map((metric) => [metric.key, metric]));
 
-/** Which of the leagues list's three batch reads are worth making. */
+/** Which of the leagues list's batch reads — and which halves of them — to make. */
 export type ManagerDataRequirements = Record<ManagerDataset, boolean>;
 
 /**
@@ -434,6 +446,14 @@ export type ManagerDataRequirements = Record<ManagerDataset, boolean>;
  * into the same derivation as the other two would silently blank a fact no column
  * controls.
  *
+ * **`projections` is the half of that read which is not**, and it is the one
+ * derivation here that saves CPU rather than a request: the ranks call is made
+ * either way, and `?projections=0` is what stops it running a lineup solve per
+ * team per remaining week across every league. It is derived exactly like `ktc`
+ * and `adp` — nothing declares it, nothing computes it — so a board whose four
+ * columns name no projection asks for the cheap answer and still gets its
+ * standing.
+ *
  * A key naming no metric (a selection stored by an older build) requires nothing,
  * which is `resolveColumns`' fallback arriving here as well: a slot that cannot
  * be drawn should not be a slot that fetches.
@@ -445,7 +465,12 @@ export type ManagerDataRequirements = Record<ManagerDataset, boolean>;
 export function managerDataRequirements(
   columns: readonly string[],
 ): ManagerDataRequirements {
-  const needs: ManagerDataRequirements = { ranks: true, ktc: false, adp: false };
+  const needs: ManagerDataRequirements = {
+    ranks: true,
+    ktc: false,
+    adp: false,
+    projections: false,
+  };
   for (const key of columns) {
     for (const dataset of LEAGUE_METRICS_BY_KEY[key]?.reads ?? []) {
       needs[dataset] = true;

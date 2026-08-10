@@ -1411,6 +1411,47 @@ body {
     opacity: 0;
   }
 }
+/* The ambient aurora's gradient, at the two costs it is worth drawing at.
+
+   The tint is the element's own `--aurora-tint` (see `AmbientBackdrop`): the
+   colours are data and stay on the component, and what lives here is the
+   *shape* — which is the half that has to change with the width.
+
+   Below `sm` there is deliberately **no `filter`** on these: three ~500px boxes
+   under `blur(64px)` are three promoted layers whose backing store is expanded
+   by the blur radius on every side, which at a device pixel ratio of 3 is tens
+   of megabytes of GPU texture spent on a decoration — on top of every
+   `backdrop-filter` surface the page itself wears, and that combined budget is
+   what mobile WebKit discards a page over. So the ramp does the softening
+   instead, running all the way to the edge of the box rather than stopping at
+   62% and being blurred outward from there. It is the same glow drawn by the
+   gradient rather than by a filter pass; the element simply isn't a filtered
+   layer any more.
+
+   From `sm` up the blur comes back (`sm:blur-3xl` at the call site) and the stop
+   tightens to 62%, which is the arrangement the desktop backdrop has always
+   had — a laptop has the memory, and the blur is what smooths the ramp's own
+   shoulder at that stop. */
+.lab-aurora {
+  border-radius: 9999px;
+  background: radial-gradient(circle, var(--aurora-tint), transparent 100%);
+}
+@media (min-width: 40rem) {
+  .lab-aurora {
+    background: radial-gradient(circle, var(--aurora-tint), transparent 62%);
+  }
+}
+/* And it holds still on a phone, on the same reasoning as the reduced-motion
+   block below: an ambient glow that has stopped drifting is identical in a
+   screenshot, where three layers animating forever is a compositor that never
+   idles. `!important` because the animation is an inline style — the same
+   reason that block needs it. */
+@media (max-width: 39.999rem) {
+  .lab-aurora {
+    animation: none !important;
+  }
+}
+
 /* Tools page ambience (features/tools). Same rule as the flask loader: Tailwind
    v4 has no per-component keyframe mechanism, so the aurora backdrop's drift and
    the account's "connected" pulse are named here once and referenced through

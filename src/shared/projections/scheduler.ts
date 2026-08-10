@@ -1,4 +1,4 @@
-import { startBackgroundLoop } from "@/shared/util";
+import { backgroundJobSwitch, startBackgroundLoop } from "@/shared/util";
 
 import { syncProjections } from "./sync";
 
@@ -61,15 +61,15 @@ async function tick(): Promise<void> {
  * Sleeper.
  *
  * Set `PROJECTIONS_SYNC=off` to disable (worth doing on a dev server — each week
- * it refreshes is a ~5.6MB download).
+ * it refreshes is a ~5.6MB download), or `BACKGROUND_JOBS=off` to disable every
+ * loop at once — see {@link backgroundJobSwitch} for the web/worker split.
  */
 export function startProjectionsScheduler(): void {
   startBackgroundLoop({
     name: "proj",
     intervalMs: PROJECTIONS_INTERVAL_MS,
     guardKey: "projections-scheduler",
-    enabled: process.env.PROJECTIONS_SYNC !== "off",
-    disabledReason: "PROJECTIONS_SYNC=off",
+    ...backgroundJobSwitch("projections"),
     cadence: "check every 15 min; this week hourly, rest of season daily",
     tick,
   });
