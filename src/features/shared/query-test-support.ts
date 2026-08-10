@@ -63,17 +63,23 @@ export type FetchMock = {
 /**
  * Replace `globalThis.fetch` with a handler, recording every call.
  *
- * The handler takes the URL and the call index, so a test can answer the same
- * route differently the second time — which is how "a failed background refetch
- * keeps the previous data" is set up.
+ * The handler takes the URL, the call index and the request's own init, so a
+ * test can answer the same route differently the second time — which is how "a
+ * failed background refetch keeps the previous data" is set up — and can reach
+ * the `AbortSignal` the caller passed, which is what lets a cancellation be
+ * modelled with a real controller rather than with a hand-made rejection.
  */
 export function installFetchMock(
-  handler: (url: string, call: number) => Response | Promise<Response>,
+  handler: (
+    url: string,
+    call: number,
+    init?: RequestInit,
+  ) => Response | Promise<Response>,
 ): FetchMock {
   const original = globalThis.fetch;
   const calls: string[] = [];
 
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url =
       typeof input === "string"
         ? input
@@ -82,7 +88,7 @@ export function installFetchMock(
           : input.url;
     const call = calls.length;
     calls.push(url);
-    return handler(url, call);
+    return handler(url, call, init);
   }) as typeof fetch;
 
   return {

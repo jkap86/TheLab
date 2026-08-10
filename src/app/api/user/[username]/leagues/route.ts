@@ -31,6 +31,10 @@ export const dynamic = "force-dynamic";
  * cache sends it, marked stale, and skips the refresh; one holding nothing
  * answers 503, since an empty league list would read as "this manager has none".
  *
+ * A client that disconnects mid-stream stops being written to and nothing else:
+ * neither shape of sync is cancelled, and the permit each holds is released in a
+ * `finally` whatever happens. Both halves of that are argued at {@link closed}.
+ *
  * The message shapes are declared in `@/shared/contract`'s
  * {@link LeaguesStreamMessage}, which the client decodes against — see
  * `features/manager/hooks/use-manager-leagues`.
@@ -161,9 +165,41 @@ export async function GET(
   }
 
   const encoder = new TextEncoder();
+  /**
+   * Whether anybody is still reading this stream.
+   *
+   * Hoisted out of `start` so the underlying source's own `cancel` can set it:
+   * that is the spec's notification that the consumer has gone away, and it
+   * arrives when the browser disconnects rather than at whichever later
+   * `enqueue` happens to throw. The `catch` in `send` stays as the backstop for
+   * a disconnect nothing announced.
+   *
+   * **What it does not do is stop the sync, and that is deliberate rather than
+   * missing.** Nothing in the sync stack takes an `AbortSignal` — `sleeperGet`
+   * has no parameter for one, so neither do `fetchLeagueGraph`,
+   * `syncLeagueGraphs`, `persistLeagueGraph`'s per-league transactions, or the
+   * session advisory lock held across all of it — so honouring `request.signal`
+   * here would mean threading a signal through every Sleeper call site and then
+   * answering a question none of this code has an answer for: what a half-run
+   * sync stamps. `attempt_at` and `synced_at` mean "we tried" and "this graph is
+   * current" (see `sync-freshness`), and a run cancelled between two leagues is
+   * neither cleanly, so a partial implementation would put a lie into the column
+   * the whole throttle is read off.
+   *
+   * It is also not obviously the behaviour you want. A cold sync is the one
+   * thing that fills this manager's graph, and it is filling *shared* Postgres
+   * state, not this request's answer — the same reason a background refresh is
+   * deliberately allowed to outlive the browser that started it. Cancelling on
+   * disconnect would throw away the Sleeper budget already spent and leave the
+   * next visitor to start over. What it costs is one admission permit for the
+   * rest of the run: bounded by `managerSyncAdmission` (a share of the pool),
+   * never leaked — the `finally` below releases on every path out, and
+   * `release` is idempotent — and paid for by the work being finished rather
+   * than repeated.
+   */
+  let closed = false;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      let closed = false;
       const send = (message: LeaguesStreamMessage) => {
         if (closed) return;
         try {
@@ -240,6 +276,14 @@ export async function GET(
           }
         }
       }
+    },
+    cancel() {
+      // The consumer stopped reading — a closed tab, a navigation, or React
+      // Query cancelling the fetch. Everything after this point is for a reader
+      // who is no longer there, so `send` becomes a no-op and `start`'s
+      // `finally` must not try to close a stream that is already gone. The sync
+      // itself runs on; see {@link closed} for why.
+      closed = true;
     },
   });
 
