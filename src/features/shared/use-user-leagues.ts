@@ -6,7 +6,8 @@ import { useMemo } from "react";
 import type { ManagerLeague } from "@/shared/manager";
 import { errorMessage } from "@/shared/util";
 
-import { fetchManagerLeagues, type ManagerLeaguesData } from "./leagues-stream";
+import { cachedLeaguesRevision, publishManagerLeagues } from "./leagues-cache";
+import { fetchManagerLeagues } from "./leagues-stream";
 import { MANAGER_STALE_TIMES, managerQueryKeys } from "./manager-query";
 
 export type UserLeaguesState = {
@@ -93,28 +94,35 @@ export type UserLeaguesState = {
  * It takes the client rather than reading one from context because that is the
  * only thing in here that is React's: `publish` writes each mid-stream state
  * into this very entry, and `previousRevision` reads the last one back out.
+ *
+ * **Both of those go through {@link publishManagerLeagues}, which is not a
+ * convenience.** This tool and the manager tabs share the entry, so they share
+ * what a new revision *means*: the rosters, membership, ranks, values and ADP
+ * valuation derived from it are behind. Writing the entry here and leaving the
+ * comparison to the manager tool made that comparison conditional on the manager
+ * tool being mounted — so a refresh started from this page, while it wasn't,
+ * invalidated nothing. See `leagues-cache.ts`.
  */
 export function userLeaguesQuery(
   /** The account's username — the spelling the manager tool files under too. */
   username: string | null,
   queryClient: QueryClient,
 ) {
-  const queryKey = managerQueryKeys.leagues(username ?? "");
+  const searched = username ?? "";
   return {
-    queryKey,
+    queryKey: managerQueryKeys.leagues(searched),
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       fetchManagerLeagues({
-        searched: username ?? "",
+        searched,
         signal,
         // Carried forward so a re-read continues the refresh sequence rather
-        // than restarting it — which the manager tool would read as a
-        // dependent-invalidating change if it were looking at the same entry.
-        previousRevision:
-          queryClient.getQueryData<ManagerLeaguesData>(queryKey)?.revision,
+        // than restarting it — which every reader of the entry would see as a
+        // dependent-invalidating change.
+        previousRevision: cachedLeaguesRevision(queryClient, searched),
         // Every state the stream reaches, published as it is learned. This is
-        // what fills the menu at the first `result` instead of at the last.
-        publish: (data: ManagerLeaguesData) =>
-          queryClient.setQueryData(queryKey, data),
+        // what fills the menu at the first `result` instead of at the last —
+        // and, where the revision moved, what tells the manager-derived reads.
+        publish: (data) => publishManagerLeagues(queryClient, searched, data),
       }),
     enabled: username !== null,
     staleTime: MANAGER_STALE_TIMES.leagues,

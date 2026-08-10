@@ -1,12 +1,10 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 
 import { matchesFilters } from "@/features/shared";
 import type { SubjectView } from "@/features/shared/subject-view";
 import { useLeagueFilters, useSubjectFilters } from "../filters-context";
-import { invalidateManagerDependents } from "../query-fns";
 import { EMPTY_SUBJECT_INDEX, matchesSubjects } from "../subjects";
 import type { Subject, SubjectIndex, SubjectLabel } from "../subjects";
 import { useManagerLeagues } from "./use-manager-leagues";
@@ -32,31 +30,23 @@ import { useManagerPlayers } from "./use-manager-players";
  * rather than reset on each navigation between them. The stream's data lives one
  * level further out still — in the query cache, which outlives the layout too.
  *
- * **This is also where a refreshed stream tells the dependent reads they are
- * behind.** The rosters, membership, ranks, values and ADP valuation are all
- * derived from what a sync writes, and they used to re-fetch on the leagues
- * array's identity — five requests per rebuild of a list that may not have
- * changed at all. `revision` is the honest signal (see `leaguesRevision`), and it
- * is compared against the last one *this mount* saw: a first sighting is what
- * every navigation between tabs produces, so it invalidates nothing.
+ * **Telling the dependent reads they are behind used to happen here, and no
+ * longer does.** The rosters, membership, ranks, values and ADP valuation are all
+ * derived from what a sync writes, and this hook held an effect comparing each
+ * `revision` against the last one *that mount* had seen. It was right about the
+ * navigation it was written for — arriving from a sibling tab is a first
+ * sighting, and the data behind it is exactly what those queries already read —
+ * and wrong about the entry it was watching, which three tools write. A refresh
+ * run by the lineup checker or the pick tracker while this tool was unmounted
+ * landed a new revision in the cache, and the manager page then saw it as *its*
+ * first sighting and invalidated nothing. The comparison is at the write now, in
+ * `features/shared/leagues-cache`, so it happens whoever ran the refresh and
+ * whether or not anything is mounted to notice.
  */
 export function useFilteredLeagues(searched: string) {
   const stream = useManagerLeagues(searched);
   const { filters, setFilters } = useLeagueFilters();
   const { subjects, setSubjects } = useSubjectFilters();
-  const queryClient = useQueryClient();
-
-  const revision = stream.revision;
-  const seen = useRef<string | null>(null);
-  useEffect(() => {
-    if (!revision) return;
-    const previous = seen.current;
-    seen.current = revision;
-    // First sighting on this mount — which is what arriving from another tab
-    // looks like. The data behind it is exactly what those queries already read.
-    if (previous === null || previous === revision) return;
-    invalidateManagerDependents(queryClient, searched);
-  }, [revision, searched, queryClient]);
 
   const leagues = stream.data?.leagues;
   const leagueFiltered = useMemo(

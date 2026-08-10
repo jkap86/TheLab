@@ -258,6 +258,64 @@ describe("createManagerSyncAdmission", () => {
     assert.equal(admission.stats().active, 2);
   });
 
+  test("a client that disconnects mid-sync still gives its permit back", async () => {
+    // Nothing in the sync stack takes an `AbortSignal` — `sleeperGet` has no
+    // parameter for one — so a browser that goes away mid-stream does not stop
+    // the sync it started, and that is deliberate: a cold sync is filling shared
+    // Postgres state rather than this request's answer, the same reason a
+    // background refresh is allowed to outlive its caller. What must not happen
+    // is the permit going with the reader: the route releases in a `finally`
+    // reached on every path out, so the slot is occupied for the run and not
+    // beyond it.
+    const admission = createManagerSyncAdmission(1);
+
+    /** The route's stream, with the client gone before the sync returns. */
+    const serve = async (key: string, sync: () => Promise<void>) => {
+      const reservation = admission.reserve(key, { dedupe: false });
+      if (!reservation.ok) return "shed";
+      let closed = false;
+      const send = () => {
+        if (closed) return;
+        // `controller.enqueue` throws once the consumer has gone; the route
+        // swallows it and stops writing, which is all a disconnect changes.
+        closed = true;
+      };
+      try {
+        send();
+        await sync();
+        send(); // the closing `result`, into a stream nobody is reading
+        return "synced";
+      } finally {
+        reservation.release();
+      }
+    };
+
+    assert.equal(
+      await serve("alice:2026", async () => {
+        // Mid-sync, the permit is spent — this instance is at its cap.
+        assert.equal(admission.stats().active, 1);
+        assert.equal(admission.reserve("bob:2026", { dedupe: true }).ok, false);
+      }),
+      "synced",
+      "the disconnect does not cancel the sync",
+    );
+    assert.equal(admission.stats().active, 0, "and the permit comes back");
+
+    // A sync that throws behind a disconnected client is the same story.
+    await assert.rejects(
+      serve("carol:2026", async () => {
+        throw new Error("Sleeper timed out");
+      }),
+      /Sleeper timed out/,
+    );
+    assert.equal(admission.stats().active, 0);
+
+    // So the next manager is admitted rather than meeting a cap that tightened
+    // by one per abandoned request.
+    admit(admission, "dave:2026", false);
+    assert.equal(admission.stats().active, 1);
+  });
+
   test("a cap below one is still one", () => {
     // Zero would be a manager tool that never syncs, dressed as configuration.
     for (const cap of [0, -1]) {

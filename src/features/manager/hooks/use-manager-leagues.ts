@@ -3,10 +3,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
+import {
+  cachedLeaguesRevision,
+  publishManagerLeagues,
+} from "@/features/shared/leagues-cache";
 import { errorMessage } from "@/shared/util";
 
 import { STALE_TIMES } from "../query-config";
-import { fetchManagerLeagues, type ManagerLeaguesData } from "../query-fns";
+import { fetchManagerLeagues } from "../query-fns";
 import { managerQueryKeys } from "../query-keys";
 import type { LeaguesResult, SyncProgress } from "../types";
 
@@ -15,7 +19,12 @@ export type ManagerLeaguesState = {
   progress: SyncProgress | null;
   refreshing: boolean;
   error: string | null;
-  /** The fingerprint dependent reads follow — see `leaguesRevision`. */
+  /**
+   * The fingerprint dependent reads follow — see `leaguesRevision`.
+   *
+   * Reported, not acted on: what a *change* to it means is settled at the write
+   * (`publishManagerLeagues`), so no consumer of this hook has to notice one.
+   */
   revision: string | null;
   /**
    * Re-read the stream now, whatever the client cache holds.
@@ -66,13 +75,21 @@ export type ManagerLeaguesState = {
  */
 export function useManagerLeagues(searched: string): ManagerLeaguesState {
   const queryClient = useQueryClient();
-  // Memoised on the manager alone: the key is what the callbacks below depend
-  // on, and a fresh array every render would rebuild all of them for nothing.
+  // Memoised on the manager alone: a fresh key array every render is a new
+  // `useQuery` key object and a rebuilt `revalidate` for nothing.
   const queryKey = useMemo(() => managerQueryKeys.leagues(searched), [searched]);
 
   // Both entry points — the query and the manual re-read — run the same stream
   // into the same entry. Neither asks the server to force a Sleeper sync; the
   // fetcher keeps that option for the operator path that can actually use it.
+  //
+  // **Publishing goes through the shared writer, and that is where this tool's
+  // dependent reads are told they are behind.** It used to be an effect in
+  // `useFilteredLeagues` comparing each revision against the last one *that
+  // mount* saw, which is a comparison only made while the manager tool is on
+  // screen: the pick tracker and the lineup checker write this same entry, so a
+  // refresh either of them ran while this tool was unmounted arrived here as a
+  // first sighting and invalidated nothing. See `features/shared/leagues-cache`.
   const run = useCallback(
     (signal?: AbortSignal) =>
       fetchManagerLeagues({
@@ -80,11 +97,10 @@ export function useManagerLeagues(searched: string): ManagerLeaguesState {
         signal,
         // Carried forward so a re-run continues the refresh sequence rather than
         // restarting it, which would read as a dependent-invalidating change.
-        previousRevision:
-          queryClient.getQueryData<ManagerLeaguesData>(queryKey)?.revision,
-        publish: (data) => queryClient.setQueryData(queryKey, data),
+        previousRevision: cachedLeaguesRevision(queryClient, searched),
+        publish: (data) => publishManagerLeagues(queryClient, searched, data),
       }),
-    [searched, queryClient, queryKey],
+    [searched, queryClient],
   );
 
   const query = useQuery({

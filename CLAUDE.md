@@ -211,6 +211,31 @@ Four rules hold it up, and each replaced a specific failure:
   rosters are not on this payload at all, so a sync that persisted a waiver claim
   changes nothing visible while making every dependent read stale. A new revision
   invalidates `dependentManagerQueryKeys` and nothing else.
+
+  **The comparison belongs to the *entry*, not to whoever is reading it, and
+  that is the correction worth knowing.** It lived in `useFilteredLeagues` as an
+  effect over the last revision *that mount* had seen — correct about the
+  navigation it was written for (arriving from a sibling tab is a first sighting,
+  and the data behind it is what those queries already read) and wrong about the
+  entry it watched, which **three** tools write: the manager tabs, the pick
+  tracker's picker and the lineup checker's list all stream
+  `/api/user/[username]/leagues` under one key. So a refresh either of the other
+  two ran while the manager tool was unmounted landed a new revision in the
+  cache, the manager page came back and read it as *its* first sighting, and
+  nothing was invalidated — stale shares for up to ten minutes, stale KTC and ADP
+  valuation for fifteen. `features/shared/leagues-cache` is the fix and it is one
+  function: `publishManagerLeagues` reads the cached revision, writes the new
+  state, and invalidates the dependents when the two differ. Every reader passes
+  it as the stream's `publish`, so the invalidation happens whoever ran the
+  refresh and whether or not anything is mounted to notice. Three things hold it
+  up. **An absent revision on either side is never a change** — an empty cache is
+  a first population with nothing on screen to be stale, and a `progress` state
+  from a cold sync carries the empty string by construction. **It cannot loop**,
+  because `dependentManagerQueryKeys` excludes the leagues entry itself (it is
+  the thing that changed, and it already holds the new data) and the board (a
+  fact about the crawled database, not about this manager). And **there is one
+  mechanism**, not two: the mount-local effect is gone rather than left running
+  beside it.
 - **A stream is published into the cache, not resolved at the end.** The leagues
   route sends cached leagues and then refreshed ones over one connection; a query
   that resolved once would sit on a loading screen through a refresh the server
@@ -219,6 +244,23 @@ Four rules hold it up, and each replaced a specific failure:
   follows from that: a failure with a payload already sent is a `refreshError`
   **field**, so the cached leagues stay on screen; only a failure with nothing to
   show throws.
+
+  **An abort is not one of those failures, and treating it as one wrote a lie
+  into the cache.** An unmount, a navigation or React Query cancelling the query
+  fires the signal the request was given, and the body rejects with an
+  `AbortError` — which went straight into `refreshError`, a message the header
+  shows and the entry keeps, so a reader who walked away mid-refresh came back to
+  "the operation was aborted" written over leagues that had synced perfectly
+  well. `isAbortError` (`features/shared/api`, already there for exactly this)
+  splits the branch: with a payload in hand the abort costs nothing at all, and
+  with nothing in hand it is rethrown as-is, which is what says *cancelled*
+  rather than failed — inventing a payload there would file one under an entry
+  React Query has just cancelled. Two details ride along. The published state
+  still clears `refreshing`/`progress`, because only a message clears those and
+  no further message is coming, so a remount inside the stale window would
+  otherwise spin forever. And the bail-out cancels the reader, since an aborted
+  body is *errored* and `cancel` on an errored stream rejects with that same
+  error — swallowed there rather than surfacing as an unhandled rejection.
 
 The fetchers and the keys are pure modules with relative `.ts` imports, so the
 cache's behaviour is tested by driving `QueryObserver`s directly
@@ -5144,6 +5186,25 @@ stops holding, a comment saying it does would not have caught it.
   request is the retry. **Only the cold caller sheds with a 503**, since it is the
   one with no cache to fall back on and an empty league list would read as "this
   manager has none".
+
+  **A browser that disconnects mid-stream stops being written to and nothing
+  else, and the "nothing else" is a decision rather than an omission.** Nothing
+  in the sync stack takes an `AbortSignal` — `sleeperGet` has no parameter for
+  one, so neither do `fetchLeagueGraph`, `syncLeagueGraphs`,
+  `persistLeagueGraph`'s per-league transactions or the session lock held across
+  all of it — so honouring `request.signal` would mean threading a signal through
+  every Sleeper call site *and* answering what a half-run sync stamps, which
+  `attempt_at`/`synced_at` have no spelling for: a run cancelled between two
+  leagues is neither "we tried" nor "this graph is current", so a partial
+  implementation puts a lie into the column the whole throttle is read off. It is
+  also not the behaviour you want — a cold sync is filling *shared* Postgres
+  state rather than this request's answer, the same reason a background refresh
+  deliberately outlives its caller, so cancelling would throw away the Sleeper
+  budget already spent and leave the next visitor to start over. What it costs is
+  one admission permit for the rest of the run, bounded by `managerSyncAdmission`
+  and never leaked: the route's `finally` releases on every path out and
+  `release` is idempotent. The stream's own `cancel` sets the `closed` flag, so
+  the disconnect is noticed there rather than at whichever later `enqueue` throws.
 - **The advisory lock still spans the whole sync, network included, and that is
   deliberate.** It is the one thing the limiter's own note warns against — a pool
   connection held across an upstream wait — and shortening it is not available:
