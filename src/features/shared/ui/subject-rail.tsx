@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { SEARCH_FIELD } from "../control-type.ts";
+import { closeSheet, latchSheet } from "../sheet-latch.ts";
 import {
   type Subject,
   type SubjectKind,
@@ -246,7 +247,6 @@ export function SubjectRail({
    * the leaguemates list's catalogue and reads.
    */
   const [mounted, setMounted] = useState<readonly SubjectKind[]>([]);
-  if (sheet && !mounted.includes(sheet)) setMounted([...mounted, sheet]);
   const [query, setQuery] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -288,6 +288,27 @@ export function SubjectRail({
     setOpen(false);
     setQuery("");
   }, []);
+
+  /**
+   * Open a browse: latch its chunk in, then put it up.
+   *
+   * **Both writes are here rather than one of them in the render body**, which
+   * is the whole of the change. The latch used to be applied as
+   * `if (sheet && !mounted.includes(sheet)) setMounted(...)` while rendering —
+   * a render-phase update, so opening a sheet re-ran this entire rail
+   * synchronously before React committed anything, in the same frame as the
+   * dialog mounting, two lazy chunks evaluating and (for players) the roster and
+   * ADP reads starting. In a press handler the two setters are one batched
+   * update, and the render body is a function of its props again.
+   *
+   * The panel goes down with it: two floating things over one list, one covering
+   * the other, is two answers to "where am I".
+   */
+  const openSheet = useCallback((kind: SubjectKind) => {
+    close();
+    setMounted((m) => latchSheet(m, kind));
+    setSheet(kind);
+  }, [close]);
 
   // A press outside the rail dismisses the panel. Pointer-down rather than
   // click, so dragging out of it doesn't leave it up — the same gesture the
@@ -551,10 +572,7 @@ export function SubjectRail({
                   trigger does: the icon is what still tells the pair apart. */}
               <button
                 type="button"
-                onClick={() => {
-                  close();
-                  setSheet("player");
-                }}
+                onClick={() => openSheet("player")}
                 aria-haspopup="dialog"
                 className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[10px] font-semibold text-foreground/75 transition-colors hover:text-foreground"
               >
@@ -564,10 +582,7 @@ export function SubjectRail({
 
               <button
                 type="button"
-                onClick={() => {
-                  close();
-                  setSheet("leaguemate");
-                }}
+                onClick={() => openSheet("leaguemate")}
                 aria-haspopup="dialog"
                 className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[10px] font-semibold text-foreground/75 transition-colors hover:text-foreground"
               >
@@ -612,7 +627,7 @@ export function SubjectRail({
         <PlayerSharesSheet
           view={view}
           open={sheet === "player"}
-          onClose={() => setSheet((s) => (s === "player" ? null : s))}
+          onClose={() => setSheet((s) => closeSheet(s, "player"))}
         />
       )}
 
@@ -620,7 +635,7 @@ export function SubjectRail({
         <LeaguemateSharesSheet
           view={view}
           open={sheet === "leaguemate"}
-          onClose={() => setSheet((s) => (s === "leaguemate" ? null : s))}
+          onClose={() => setSheet((s) => closeSheet(s, "leaguemate"))}
         />
       )}
     </div>

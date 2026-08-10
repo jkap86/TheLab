@@ -7,6 +7,8 @@ import dynamic from "next/dynamic";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
 import { SEARCH_FIELD } from "../../control-type.ts";
+import { closeDialog, openDialog } from "../../dialog-open.ts";
+import { hasFinePointer } from "../../pointer.ts";
 import type { ColumnPreset } from "../../metric-cell.ts";
 import { rankByName } from "../../name-search.ts";
 import type { ShareMetric, ShareMetricContext } from "../../share-metrics.ts";
@@ -22,6 +24,7 @@ import { LeagueFiltersPlaceholder } from "../league-filters-seat";
 import { ErrorCard, PanelLoading, PanelMessage } from "../panel-message";
 import { MatchToggle, SubjectToken } from "../subject-parts";
 import type { ShareRow } from "./share-list";
+import { SharesScrollProvider } from "./shares-scroll";
 
 /**
  * The league filters, split from this sheet the way both other call sites split
@@ -175,10 +178,19 @@ export function SharesSheet<T extends ShareRow>({
   onColumnChange: (slot: number, key: string) => void;
   onColumns: (keys: readonly string[]) => void;
   onReset: () => void;
-  /** The list itself, given what survived the field and how to pick a row. */
+  /**
+   * The list itself, given what survived the field and how to pick a row.
+   *
+   * The box it is windowed against does *not* come through here — it is
+   * published to the subtree by {@link SharesScrollProvider} below, because
+   * handing a ref to a function during render is a ref read at a moment React
+   * has not promised is current, and React's own lint rule says so.
+   */
   children: (rows: T[], selection: SharesSelection<T>) => React.ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Generated for the reason the two dialogs *inside* this one generate theirs:
   // a literal id in a component is a duplicate waiting for a second mount.
@@ -210,22 +222,56 @@ export function SharesSheet<T extends ShareRow>({
   // The one thing a `<dialog>` can't be told declaratively. `close` fires for
   // Escape and the backdrop alike, so the parent hears every way out through the
   // same handler.
+  //
+  // **Every call here goes through `openDialog`/`closeDialog`, and the reason is
+  // that `showModal()` throws.** A dialog already open non-modally, one detached
+  // between the press and this effect, an engine that never implemented it — each
+  // is an exception inside a commit, which React answers by tearing the tree down
+  // to the nearest boundary; on a route with none that is the page blanking on
+  // the press meant to open the sheet. The fallback is the same panel without the
+  // top layer rather than anything that navigates: a degraded sheet beats a lost
+  // page, and on every engine that matters the first spelling is the one taken.
   useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) return;
     if (!open) {
-      if (dialog.open) dialog.close();
+      closeDialog(ref.current);
       return;
     }
-    if (!dialog.open) {
-      dialog.showModal();
-      // `showModal` autofocuses the first focusable descendant, which here is the
-      // filters key — a control wearing a focus ring reads as pressed. The field
-      // takes it instead: the sheet is opened to be typed into or scrolled, and
-      // the trap and Escape still belong to the dialog.
-      inputRef.current?.focus();
-    }
+    // Only a *fresh* open moves the focus. `already-open` is this effect running
+    // again over a sheet that is up — a remount, or React's development
+    // double-invoke — and stealing the focus back from whatever the reader has
+    // since tabbed to would be the sheet fighting them.
+    const outcome = openDialog(ref.current);
+    if (outcome !== "modal" && outcome !== "non-modal") return;
+
+    // `showModal` autofocuses the first focusable descendant, which here is the
+    // filters key — a control wearing a focus ring reads as pressed. So the
+    // focus is placed deliberately, and *where* is a fact about the pointer:
+    //
+    // On a mouse the field takes it, because the sheet is opened to be typed
+    // into and a first keystroke landing on the page behind it is lost. On a
+    // finger, focusing a text field *is* raising the software keyboard — over a
+    // sheet sized in `vh`, on top of the list the reader came to scroll — so the
+    // panel takes it instead. It is `tabIndex={-1}`, so it is a place to put the
+    // focus and not a tab stop: Escape and the trap still belong to the dialog,
+    // the first Tab still lands on the first control, and the field is one tap
+    // away for a reader who did come to search.
+    const target = hasFinePointer(
+      typeof window === "undefined" ? null : window.matchMedia?.bind(window),
+    )
+      ? inputRef.current
+      : panelRef.current;
+    target?.focus();
   }, [open]);
+
+  // A search that leaves five rows out of five hundred must not leave the reader
+  // looking at the empty end of the well. The browser clamps `scrollTop` for
+  // them, which lands on the *last* of what matched rather than the first — and
+  // with the list windowed there is nothing above that position to scroll back
+  // through until the range recomputes. The board's own rule, one tool over: a
+  // list that becomes a different list goes back to the top.
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [query]);
 
   // Reopening on a stale query would show a filtered list under an emptied field
   // on the next open otherwise — the field is cleared on the way out, not the
@@ -258,14 +304,20 @@ export function SharesSheet<T extends ShareRow>({
       // The backdrop is the dialog's own pseudo-element, so a click landing on
       // the dialog box itself is a click outside the panel.
       onClick={(event) => {
-        if (event.target === ref.current) ref.current?.close();
+        if (event.target === ref.current) closeDialog(ref.current);
       }}
       // A thinner scrim than the other two dialogs wear: this one is meant to be
       // seen through, and at their 0.72 the page behind the glass is gone.
       className="m-auto h-[min(88vh,54rem)] w-[min(1180px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.5)]"
     >
       <div
-        className="flex h-full flex-col overflow-hidden rounded-2xl border border-active/25 bg-gradient-to-b from-[rgba(24,45,60,0.72)] to-[rgba(9,20,31,0.86)] shadow-[0_50px_90px_-30px_rgba(0,0,0,0.95),0_0_70px_-24px_rgba(0,255,229,0.35),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-xl"
+        ref={panelRef}
+        // Focusable as a place to *put* the focus, never as a tab stop — the ADP
+        // drawer's own panel, for the same reason: on a coarse pointer the focus
+        // has to land somewhere that is not a text field, or opening the sheet
+        // opens the keyboard.
+        tabIndex={-1}
+        className="flex h-full flex-col overflow-hidden rounded-2xl border border-active/25 bg-gradient-to-b from-[rgba(24,45,60,0.72)] to-[rgba(9,20,31,0.86)] shadow-[0_50px_90px_-30px_rgba(0,0,0,0.95),0_0_70px_-24px_rgba(0,255,229,0.35),inset_0_1px_0_rgba(255,255,255,0.1)] outline-none backdrop-blur-xl"
         style={{ animation: "dialog-rise 0.18s cubic-bezier(0.2,0.9,0.3,1)" }}
       >
         {/* The panel's specular rail, as the filters dialog and the header plate
@@ -401,8 +453,16 @@ export function SharesSheet<T extends ShareRow>({
 
           {/* The list's own ground: opaque, so the numbers are never read over
               the page moving behind the glass. `min-h-0` is what lets it shrink
-              into the sheet rather than pushing the bar off the top. */}
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl bg-[rgba(3,11,18,0.72)] p-2 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65),inset_0_0_0_1px_rgba(255,255,255,0.05)]">
+              into the sheet rather than pushing the bar off the top.
+
+              **It is also the box the list is windowed against**, which is why
+              it carries a ref at all: it is the one element here that is present
+              whether or not there are rows to draw, so the list below can be
+              handed it without waiting on its own contents. */}
+          <div
+            ref={listRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl bg-[rgba(3,11,18,0.72)] p-2 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65),inset_0_0_0_1px_rgba(255,255,255,0.05)]"
+          >
             {error && !rows ? (
               <ErrorCard message={error} />
             ) : !rows ? (
@@ -412,7 +472,12 @@ export function SharesSheet<T extends ShareRow>({
                 {query.trim() ? noMatchLabel : emptyLabel}
               </PanelMessage>
             ) : (
-              children(shown, selection)
+              // Everything below is windowed against this well — see
+              // {@link SharesScrollProvider}, and {@link ShareList}, which reads
+              // it and draws the whole list where there is none.
+              <SharesScrollProvider value={listRef}>
+                {children(shown, selection)}
+              </SharesScrollProvider>
             )}
           </div>
         </div>

@@ -11,6 +11,34 @@ import { MetricColumns } from "../metric-column";
 import { SharedLeagueRow } from "./shared-league-row";
 
 /**
+ * Where a card sits when the list around it is windowed.
+ *
+ * A share card *is* its `<li>` — the border, the gradient and the rounded
+ * corners are on that element — so a virtualized list has nowhere to put a
+ * positioning wrapper without either nesting a `<li>` inside a `<div>` inside
+ * the `<ul>` (invalid) or moving the surface off the list item (which costs the
+ * list its semantics). The card takes the seat instead: the same `<li>`, told
+ * where it goes and handed to the measurer.
+ *
+ * **The offset is `top`, not a transform**, and that is the one detail that
+ * cannot be swapped for the other spelling. {@link LIST_ROW_HOVER} lifts a row
+ * with `-translate-y-0.5`; an inline `transform` outranks any class, so
+ * positioning that way would silently delete the hover lift on every share card.
+ * Nothing is lost by using `top`: a windowed row's offset is fixed for as long
+ * as it is mounted, so it is written once and never animated.
+ */
+export type ShareCardSeat = {
+  /** The virtualizer's measurer — see `ShareList`, which passes it through. */
+  ref: (node: HTMLLIElement | null) => void;
+  /** Which row this is, for `measureElement`'s own `data-index` lookup. */
+  index: number;
+  /** Where the card starts inside the list's spacer, in px. */
+  offset: number;
+  /** How long the list really is — only a window of it is in the DOM. */
+  count: number;
+};
+
+/**
  * One share in the players or leaguemates list: the same glassy card a league
  * wears, with the player or person where the league name goes and the leagues
  * behind the share where the standings panel goes.
@@ -44,6 +72,9 @@ export function ShareCard({
   columns,
   selected = false,
   onSelect,
+  expanded: controlledExpanded,
+  onExpandedChange,
+  seat,
 }: {
   name: string;
   /** Leads the name: a position pill, an avatar — whatever identifies the row. */
@@ -60,15 +91,51 @@ export function ShareCard({
   selected?: boolean;
   /** Toggle that selection. Omitted where the list is read rather than picked. */
   onSelect?: () => void;
+  /**
+   * Whether the leagues behind the share are listed, where the list owns that
+   * rather than the card.
+   *
+   * **Uncontrolled by default, controlled only where the list is windowed**, and
+   * the asymmetry is the honest one rather than an oversight. A card that scrolls
+   * out of a windowed list unmounts, so state it held alone is state a reader
+   * loses by scrolling past their own expanded row — and worse, the virtualizer
+   * remembers that row's *expanded* height under its domain id, so scrolling back
+   * lays out a collapsed card in an expanded card's slot until the remeasure
+   * lands: a blank gap, then a jump. Held above the window, the card comes back
+   * exactly as it was left. The unwindowed tabs keep the local state, because
+   * lifting it there would re-render several hundred cards on every disclosure
+   * to fix a problem those lists do not have.
+   */
+  expanded?: boolean;
+  onExpandedChange?: (next: boolean) => void;
+  /** Where this card sits when the list is windowed — see {@link ShareCardSeat}. */
+  seat?: ShareCardSeat;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const toggleExpanded = () => setExpanded((v) => !v);
+  const [ownExpanded, setOwnExpanded] = useState(false);
+  const expanded = controlledExpanded ?? ownExpanded;
+  const toggleExpanded = () => {
+    if (onExpandedChange) onExpandedChange(!expanded);
+    else setOwnExpanded((v) => !v);
+  };
   // What `aria-expanded` is about — see `LeagueCard`, which names its panel for
   // the same reason.
   const panelId = useId();
 
   return (
     <li
+      ref={seat?.ref}
+      // What `measureElement` reads to know which row it has just been handed.
+      data-index={seat?.index}
+      // The window's own count, not the DOM's: a couple of dozen cards exist at
+      // a time, and without these a screen reader would announce the list as
+      // being that long. Absent unwindowed, where the DOM *is* the list.
+      aria-setsize={seat?.count}
+      aria-posinset={seat ? seat.index + 1 : undefined}
+      // `left`/`right` rather than `inset-inline`, which mobile WebKit is the
+      // last engine to have learned and this is the browser the windowing is for.
+      style={
+        seat ? { position: "absolute", left: 0, right: 0, top: seat.offset } : undefined
+      }
       className={`${LIST_ROW_SURFACE} ${LIST_ROW_HOVER} ${
         // A picked row is lit rather than merely ticked: it is the thing the
         // list behind the sheet is currently being narrowed by, and the accent
