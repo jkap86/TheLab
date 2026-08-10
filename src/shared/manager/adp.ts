@@ -1,5 +1,6 @@
 import { pool } from "@/shared/db";
 import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
+import { BoundedCache } from "@/shared/util";
 
 import type { AdpFilters } from "./adp-filters";
 
@@ -406,6 +407,34 @@ export type PlayerBoardAdp = {
   dynasty: PlayerAdp | null;
 };
 
+export type PlayerBoardAdpResult = DraftCounts & {
+  values: Map<string, PlayerBoardAdp>;
+};
+
+/**
+ * How long a priced board is worth reusing, and how many are kept.
+ *
+ * The TTL follows the rule the other in-process caches here follow — shorter
+ * than the sync writing behind it, so a stale read costs a query rather than a
+ * wrong answer. What writes behind this one is the league crawler, whose fastest
+ * tier is 15 minutes, and whose effect on any one board is a handful of new
+ * drafts among thousands.
+ *
+ * The bound is in *boards*, and each is a map of up to ~1,100 players, so this
+ * is the one cache here whose entries are large enough to be worth counting:
+ * ~64 of them is a few megabytes at worst. A manager's page reads four (one per
+ * distinct scoring/superflex group), so it holds a dozen-odd readers, and the
+ * eviction is recency — a reader who has stopped scrolling loses their board to
+ * one who hasn't.
+ */
+const BOARD_TTL_MS = 10 * 60 * 1000;
+const BOARD_CACHE_MAX = 64;
+
+const boardCache = new BoundedCache<PlayerBoardAdpResult>(
+  BOARD_CACHE_MAX,
+  BOARD_TTL_MS,
+);
+
 /**
  * ADP for a specific set of players over the drafts matching `filters`, keyed by
  * id and split per board — what pricing a roster needs, where {@link getDraftAdp}
@@ -418,18 +447,49 @@ export type PlayerBoardAdp = {
  * draft has no average worth trusting), but never resolves names or pages,
  * because the caller already holds both. The draft counts ride along so a number
  * can say how many crawled drafts stand behind the board it was read from.
+ *
+ * **The answer is cached in-process, and the reason is the curve rather than the
+ * query.** Steepness is applied by the *caller*, per league, after this returns —
+ * so dragging the ADP drawer's slider re-asks for a board that is byte-identical
+ * to the one just read, and every notch was a second of aggregate over 1.9M
+ * picks. The same holds for a reload, a second tab, and the 15-minute boundary
+ * where the browser's own entry goes stale: none of those change the population,
+ * and the population is all this reads.
+ *
+ * **The key is the statement, not a signature of the filters.** {@link
+ * boardSignature} exists for grouping leagues onto shared fetches and names the
+ * axes a *board* varies on; a cache key has to name everything the *answer*
+ * varies on, which is strictly more (`min_picks` gates which players come back,
+ * `draft_types` and `draft_statuses` decide which drafts are matched, and none
+ * of the three is in that signature). Keying on the generated `where`, its bound
+ * params, the gate and the ids is exact by construction — the query is a pure
+ * function of precisely those. The ids go in verbatim rather than digested, for
+ * the reason `boardSignature` spells its league scope out: a hash trades a
+ * silent collision for a shorter key, and a collision here is one manager's
+ * roster priced off another's board with nothing to say so.
  */
 export async function getDraftAdpForPlayers(
   filters: AdpFilters,
   playerIds: readonly string[],
-): Promise<DraftCounts & { values: Map<string, PlayerBoardAdp> }> {
-  const ids = [...new Set(playerIds.filter((id) => id && id !== "0"))];
+): Promise<PlayerBoardAdpResult> {
+  // Sorted as well as deduped, so two callers whose rosters differ only in the
+  // order they enumerated them share one entry rather than computing twice.
+  const ids = [...new Set(playerIds.filter((id) => id && id !== "0"))].sort();
   const { where, params } = draftSelection(filters);
   const matchedDrafts = matchedDraftsSql(where);
 
+  const cacheKey = JSON.stringify([where, params, filters.min_picks, ids]);
+  const cached = boardCache.get(cacheKey);
+  if (cached) return cached;
+
   const counts = await countMatchedDrafts(matchedDrafts, params);
   if (counts.draft_count === 0 || ids.length === 0) {
-    return { ...counts, values: new Map() };
+    // Cached like any other answer: a population that matches no draft is the
+    // most repeatable answer there is, and re-deriving it is the same two
+    // queries as deriving a real one.
+    const empty = { ...counts, values: new Map<string, PlayerBoardAdp>() };
+    boardCache.set(cacheKey, empty);
+    return empty;
   }
 
   const rowParams = [...params];
@@ -472,5 +532,7 @@ export async function getDraftAdpForPlayers(
           : null,
     });
   }
-  return { ...counts, values };
+  const result = { ...counts, values };
+  boardCache.set(cacheKey, result);
+  return result;
 }
