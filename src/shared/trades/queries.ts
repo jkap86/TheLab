@@ -114,7 +114,9 @@ export async function listTrades(query: TradeQuery): Promise<TradesPage> {
   );
 
   const page = rows.slice(0, query.limit);
-  const owners = await rosterOwners([...new Set(page.map((r) => r.league_id))]);
+  const owners = await getRosterOwners([
+    ...new Set(page.map((r) => r.league_id)),
+  ]);
   const trades = page.map((row) =>
     assembleTrade(row, owners.get(row.league_id) ?? EMPTY_OWNERS),
   );
@@ -373,8 +375,15 @@ const ownersCache = new BoundedCache<ReadonlyMap<number, string> | null>(
  * across pages and readers — a season's trades come from a hundred-odd leagues
  * and every page names most of them, so without the cache this would be the same
  * query on every request.
+ *
+ * **Exported for the second reader, which is why the cache matters twice over.**
+ * `/api/trades/rosters` names a pick's origin off the same map — a pre-trade
+ * portfolio holds picks from rosters that are nowhere in the trade, the same case
+ * {@link TradePickAsset.user_id} exists for — and that route is asked one trade at
+ * a time as a reader opens cards. Uncached, each press would be a fresh query for
+ * a league the board it was pressed on has already resolved.
  */
-async function rosterOwners(
+export async function getRosterOwners(
   leagueIds: string[],
 ): Promise<Map<string, ReadonlyMap<number, string>>> {
   return cachedLookup(ownersCache, leagueIds, async (misses) => {

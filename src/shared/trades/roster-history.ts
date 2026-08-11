@@ -41,6 +41,15 @@ export type SyncedWeeks = { from: number; to: number };
 export type TradeRosterRow = {
   transaction_id: string;
   roster_id: number;
+  /**
+   * The league the snapshot belongs to.
+   *
+   * Read back with the row rather than resolved by the caller, because the caller
+   * asks by `transaction_id` alone — it has a trade id and no league in hand, and
+   * naming a held pick's origin needs the league's roster→owner map. One column
+   * off a row already being read beats a second query for the league of a trade.
+   */
+  league_id: string;
   state: RosterState;
 };
 
@@ -279,10 +288,11 @@ export async function getTradeRosters(
   const { rows } = await pool.query<{
     transaction_id: string;
     roster_id: number;
+    league_id: string;
     players: string[] | null;
     draft_picks: RosterState["picks"] | null;
   }>(
-    `SELECT transaction_id, roster_id, players, draft_picks
+    `SELECT transaction_id, roster_id, league_id, players, draft_picks
        FROM trade_rosters
       WHERE transaction_id = ANY($1::varchar[])
       ORDER BY transaction_id, roster_id`,
@@ -296,6 +306,7 @@ export async function getTradeRosters(
     list.push({
       transaction_id: r.transaction_id,
       roster_id: r.roster_id,
+      league_id: r.league_id,
       state: { players: r.players ?? [], picks: r.draft_picks ?? [] },
     });
   }

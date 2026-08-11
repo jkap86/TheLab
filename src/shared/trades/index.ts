@@ -46,6 +46,7 @@ export {
   countTradeTotals,
   countTrades,
   getDraftSlots,
+  getRosterOwners,
   getSeasonTradeLeagues,
   getTradeFacets,
   getTradeManagers,

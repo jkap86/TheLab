@@ -30,4 +30,15 @@ export const tradesQueryKeys = {
    * the selection would re-run a season-wide aggregate for an unchanged answer.
    */
   facets: (query: string) => ["trades", "facets", query] as const,
+  /**
+   * One trade's pre-trade rosters, keyed on the trade alone.
+   *
+   * **No board, no season, no filters in it**, unlike every other key here: the
+   * answer is a fact about one stored trade, so it is the same answer whichever
+   * board the card was pressed on. Folding the query string in would give the
+   * same snapshot a fresh entry every time a filter moved, and re-fetch it on the
+   * press after — for an answer that cannot have changed.
+   */
+  rosters: (transactionId: string) =>
+    ["trades", "rosters", transactionId] as const,
 };

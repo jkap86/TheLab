@@ -506,6 +506,23 @@ export function TradesHome({ season }: { season: string }) {
     [leaguesById, account],
   );
 
+  // Which card has its pre-trade rosters showing.
+  //
+  // **Here rather than in the card**, for the reason the leagues list keeps the
+  // open league above its own list: a windowed card unmounts when it scrolls out,
+  // so state held inside one would close itself behind the reader and hand a
+  // remounted collapsed card an expanded card's measured height. One id rather
+  // than a set, which is that list's rule too — a board where every card can be
+  // left open is one whose total size churns as the reader scrolls back over
+  // them. Each card is given a *boolean*, so opening one re-renders the two cards
+  // involved rather than the whole window.
+  const [openRosters, setOpenRosters] = useState<string | null>(null);
+  const toggleRostersFor = useCallback((trade: Trade) => {
+    setOpenRosters((prev) =>
+      prev === trade.transaction_id ? null : trade.transaction_id,
+    );
+  }, []);
+
   return (
     <>
       {/* The board's trigger, seated in the app bar rather than beside the
@@ -708,6 +725,8 @@ export function TradesHome({ season }: { season: string }) {
             loadingMore={loadingMore}
             onLoadMore={loadMore}
             onOpenLeague={openLeagueFor}
+            openRosters={openRosters}
+            onToggleRosters={toggleRostersFor}
           />
           {loadingMore && (
             // Below the list rather than over it: the cards above are readable

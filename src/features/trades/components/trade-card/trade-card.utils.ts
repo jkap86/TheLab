@@ -1,4 +1,8 @@
 import { MONTH_ABBREVIATIONS } from "../../../shared/date-range.ts";
+import {
+  SIDE_SEAM_COLUMN,
+  SIDE_SEAM_ROW,
+} from "./trade-card.constants.ts";
 import type { TradeBundle } from "../../exchange.ts";
 import { bundleAssets } from "../../trade-metrics.ts";
 import type {
@@ -77,6 +81,36 @@ export function formatTradeTime(at: number | null): string {
   const hour12 = hours % 12 === 0 ? 12 : hours % 12;
   const minutes = String(d.getMinutes()).padStart(2, "0");
   return `${hour12}:${minutes} ${hours < 12 ? "AM" : "PM"}`;
+}
+
+/**
+ * Which way a side is cut off the one before it.
+ *
+ * The first side is cut off nothing; a side in the trailing column takes the
+ * seam on its leading edge, and one that starts a row takes it along its top —
+ * which is what puts a horizontal seam above the odd side of a three-way, since
+ * that one spans both columns rather than sitting beside either.
+ *
+ * **A function rather than a ternary at the call site, because there are two call
+ * sites now.** The sides grid draws it and the pre-trade rosters below draw the
+ * same grid underneath, so the two have to agree about where a cut falls or the
+ * card shows a seam in one row and not the other directly under it.
+ */
+export function sideSeam(index: number): string {
+  if (index === 0) return "";
+  return index % 2 === 1 ? SIDE_SEAM_COLUMN : SIDE_SEAM_ROW;
+}
+
+/**
+ * Whether a side takes the whole row rather than half of it.
+ *
+ * True only for the odd side of an odd-sided trade — the three-way case. An
+ * empty cell beside it would read as a participant who came away with nothing,
+ * which is a real state the card draws in words. Paired with {@link sideSeam}
+ * for the reason that one is shared.
+ */
+export function sideSpansRow(index: number, count: number): boolean {
+  return count % 2 === 1 && index === count - 1;
 }
 
 /**

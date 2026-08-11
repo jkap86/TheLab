@@ -1,6 +1,7 @@
 import type {
   TradeFacetsPayload,
   TradeLeaguesPayload,
+  TradeRostersPayload,
   TradesPagePayload,
 } from "@/shared/contract";
 
@@ -120,4 +121,26 @@ export async function fetchTradeFacets({
     signal,
   );
   return (await res.json()) as TradeFacetsPayload;
+}
+
+/**
+ * What each side of one trade held immediately before it.
+ *
+ * **A plain GET with no scope machinery**, which is what separates it from the
+ * three above: those describe a *population* and so carry the league scope in a
+ * query string or a body, where this asks about one stored trade. There is
+ * nothing here that could outgrow a request line.
+ */
+export async function fetchTradeRosters({
+  transactionId,
+  signal,
+}: {
+  transactionId: string;
+  signal?: AbortSignal;
+}): Promise<TradeRostersPayload> {
+  const res = await apiFetch(
+    `/api/trades/rosters?trade=${encodeURIComponent(transactionId)}`,
+    { signal, fallbackError: "Failed to load rosters" },
+  );
+  return (await res.json()) as TradeRostersPayload;
 }

@@ -10,16 +10,14 @@ import { isSuperflexLineup } from "@/shared/ktc/roster";
 import { leagueAdpPool } from "@/shared/manager/adp-value";
 
 import {
-  SIDE_SEAM_COLUMN,
-  SIDE_SEAM_ROW,
-} from "./trade-card.constants.ts";
-import {
   TradeHeaderLine,
   TradeInstantLedge,
   TradeNameplate,
 } from "./trade-header";
+import { TradeRostersSection } from "./trade-rosters";
 import { TradeSideColumn } from "./trade-side";
 import type { TradeCardProps } from "./trade-card.types.ts";
+import { sideSeam, sideSpansRow } from "./trade-card.utils.ts";
 
 /**
  * One trade: which league it happened in, when, and what each side came away
@@ -103,6 +101,8 @@ export const TradeCard = memo(function TradeCard({
   steepness,
   pickSlots,
   onOpenLeague,
+  rostersOpen,
+  onToggleRosters,
 }: TradeCardProps) {
   const lookups = { players, managers, pickSlots };
   const pricing = {
@@ -188,26 +188,28 @@ export const TradeCard = memo(function TradeCard({
               <TradeSideColumn
                 key={side.roster_id}
                 side={side}
-                // Which way this side is cut off the one before it. The first
-                // is cut off nothing; a side in the trailing column takes the
-                // seam on its leading edge, and one that starts a row takes it
-                // along its top — which is what puts a horizontal seam above
-                // the odd side of a three-way, since that one spans both
-                // columns rather than sitting beside either.
-                seam={
-                  i === 0 ? "" : i % 2 === 1 ? SIDE_SEAM_COLUMN : SIDE_SEAM_ROW
-                }
-                // The odd side of a three-way takes the whole row rather than
-                // leaving the cell beside it empty: an empty cell in a grid of
-                // sides reads as a participant who came away with nothing, which
-                // is a real state this card draws in words.
-                wide={trade.sides.length % 2 === 1 && i === trade.sides.length - 1}
+                // Which way this side is cut off the one before it, and whether
+                // it takes the whole row. Both are `./trade-card.utils` now
+                // rather than arithmetic here, because the pre-trade rosters
+                // below draw the same grid and a cut that fell differently in
+                // the two would read as a rendering fault.
+                seam={sideSeam(i)}
+                wide={sideSpansRow(i, trade.sides.length)}
                 trade={trade}
                 lookups={lookups}
                 pricing={pricing}
               />
             ))}
           </div>
+
+          {/* What each side held before the deal — the one thing the face above
+              cannot say at any height. Behind a press, and fetched on it. */}
+          <TradeRostersSection
+            trade={trade}
+            lookups={lookups}
+            open={rostersOpen}
+            onToggle={onToggleRosters}
+          />
         </article>
       </div>
     </div>
