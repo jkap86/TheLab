@@ -127,6 +127,41 @@ export function stampableManagers(
 }
 
 /**
+ * Of the leagues that failed to sync, the ones this tick could not record
+ * anywhere — and therefore the only ones still fit to hold a manager back.
+ *
+ * **This is the bound on {@link stampableManagers}, and the reason that hold is
+ * finite.** The hold itself is right: a manager stamped alongside a league that
+ * failed takes the failure with them for the enumeration TTL, so the league is
+ * forgotten until some other member of it happens to come up. What it lacked was
+ * an end. A league that fails *every* time — deleted, or alive but unsyncable —
+ * held its managers unstamped forever, and unstamped managers sort to the front
+ * of `pendingManagers`: the same managers returned to the head of the queue on
+ * every tick, the same leagues were re-fetched, and discovery stopped finding
+ * anything for anyone while the corpus stood still. That is not a slow queue,
+ * it is a stopped one, and it is invisible in the summary line — which goes on
+ * reporting a healthy refresh pass beside `discovered 0`.
+ *
+ * So the hold is no longer released by a league *succeeding*; it is released by
+ * the league being **written down**, which a tombstone and a parked row both do.
+ * The distinction that matters to a manager is not whether we have the graph but
+ * whether anything still points at the league — a row means discovery can stop
+ * carrying it, because the refresh pass has it from here.
+ *
+ * `recorded` is therefore the ids a row was actually written for, never the ids
+ * we merely *meant* to write: passing the intent would stamp a manager on the
+ * strength of a write that may not have happened, which is the one way to lose a
+ * league permanently. What is left over is the residual this returns — a failure
+ * with no payload to write a row from — and it still blocks, exactly as before.
+ */
+export function unrecordedFailures(
+  failedIds: readonly string[],
+  recorded: ReadonlySet<string>,
+): Set<string> {
+  return new Set(failedIds.filter((id) => !recorded.has(id)));
+}
+
+/**
  * Leagues still past the freshness TTL after a refresh pass.
  *
  * Both a successful refresh and a tombstone leave the queue: `markLeaguesGone`

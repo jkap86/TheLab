@@ -112,7 +112,15 @@ export function startLeagueCrawler(): void {
     // leagues by the batch.
     const gone = s.gone + s.discoverGone;
     const touched =
-      s.refreshed + s.discovered + s.refreshFailed + s.discoverFailed + gone;
+      s.refreshed +
+      s.discovered +
+      s.refreshFailed +
+      s.discoverFailed +
+      // A tick that only parked a failed first sync is work too, and reporting
+      // it as idle would read as a drained queue at the exact moment discovery
+      // is shedding leagues it cannot sync.
+      s.discoverQueued +
+      gone;
     const skipNote = lockSkips ? `; ${lockSkips} tick(s) lock-skipped` : "";
 
     if (touched === 0) {
@@ -143,6 +151,9 @@ export function startLeagueCrawler(): void {
           ? `; ${s.refreshFailed + s.discoverFailed} failed`
           : "") +
         (gone ? `; ${gone} gone from Sleeper` : "") +
+        (s.discoverQueued
+          ? `; ${s.discoverQueued} queued for refresh`
+          : "") +
         (s.deferred ? `; ${s.deferred} member(s) deferred` : "") +
         skipNote +
         `; ${fmtMs(s.tickMs)}.`,
