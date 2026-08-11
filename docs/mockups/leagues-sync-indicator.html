@@ -1,0 +1,1473 @@
+<title>Leagues sync indicator — four places for the flask</title>
+
+<style>
+  /* ------------------------------------------------------------------
+     Fifteenth in the series. Palette, faces and section grammar lifted
+     from `leagues-manager-plate.html`, which took them from
+     src/app/globals.css.
+
+     The plate under every mock here is **option C as shipped** — slab
+     wall, four chamfers, rail-scaled fill — so what is being compared is
+     only the indicator sitting on it.
+
+     The flask is the real one: paths, tones, bubble table and keyframes
+     are copied out of `features/shared/ui/flask-loader.tsx` and
+     globals.css, because the whole question below is how it behaves at
+     sizes the component has never been asked for.
+     ------------------------------------------------------------------ */
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  :root {
+    color-scheme: dark;
+
+    --bench: #050b12;
+    --app-bg: rgb(10, 20, 30);
+
+    --active: #00ffe5;
+    --on-active: #052029;
+    --edge: #05121d;
+    --edge-active: #00776b;
+
+    --fg: #ffffff;
+    --amber: #fbbf24;
+
+    --measure: 66ch;
+
+    --display: "Orbitron", "Eurostile", "Bahnschrift", ui-sans-serif, system-ui, sans-serif;
+    --body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  }
+
+  @font-face {
+    font-family: "Orbitron";
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: block;
+    src: url(data:font/woff2;base64,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) format("woff2");
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 620px at 12% -8%, rgba(0, 255, 229, 0.07), transparent 62%),
+      radial-gradient(900px 520px at 92% 4%, rgba(0, 120, 190, 0.09), transparent 60%),
+      var(--bench);
+    color: var(--fg);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------------------------------------------------------- shell */
+  .wrap { max-width: 1380px; margin: 0 auto; padding: 0 20px 96px; }
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    margin-bottom: 40px;
+    background: linear-gradient(180deg, rgba(14, 32, 45, 0.92), rgba(6, 16, 24, 0.92));
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 255, 229, 0.16);
+    box-shadow: 0 6px 0 -1px #030a11, 0 12px 26px -14px rgba(0, 0, 0, 0.9);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .bar::-webkit-scrollbar { display: none; }
+  .bar__mark {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--active);
+    text-shadow: 0 0 16px rgba(0, 255, 229, 0.5);
+    white-space: nowrap;
+  }
+  .bar__keys { display: flex; gap: 6px; margin-left: auto; }
+  .bar__key {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.72);
+    text-decoration: none;
+    white-space: nowrap;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+    transition: background 0.15s, color 0.15s;
+  }
+  .bar__key:hover { background: linear-gradient(170deg, #34586f, #162b38); color: #fff; }
+
+  /* ------------------------------------------------------------ masthead */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: rgba(255, 255, 255, 0.38);
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.07;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 12px 0 0;
+    background: linear-gradient(96deg, #ffffff 18%, var(--active) 92%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lede {
+    max-width: var(--measure);
+    margin: 20px 0 0;
+    font-size: 17px;
+    color: rgba(255, 255, 255, 0.74);
+  }
+  .lede b { color: #fff; font-weight: 600; }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 20px;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; margin: 0 0 6px; color: #fff; }
+  p { margin: 0; }
+  .prose { max-width: var(--measure); color: rgba(255, 255, 255, 0.72); }
+  .prose + .prose { margin-top: 14px; }
+  .prose b { color: #fff; font-weight: 600; }
+  em { color: rgba(255, 255, 255, 0.88); font-style: italic; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 255, 229, 0.08);
+    border: 1px solid rgba(0, 255, 229, 0.14);
+    color: #9ffff2;
+    white-space: nowrap;
+  }
+
+  section { margin-top: 64px; }
+  .rule { height: 1px; background: linear-gradient(90deg, rgba(0, 255, 229, 0.5), rgba(255, 255, 255, 0.08) 40%, transparent); }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .sec-head .eyebrow { margin-left: auto; }
+
+  /* ---------------------------------------------------------- prose cards */
+  .cards {
+    display: grid;
+    gap: 14px;
+    margin-top: 26px;
+    grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  }
+  .card {
+    padding: 16px 17px 17px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+  .card p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .card p + p { margin-top: 9px; }
+  .card__tag {
+    display: inline-block;
+    margin-bottom: 9px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--active);
+    background: rgba(0, 255, 229, 0.09);
+    border: 1px solid rgba(0, 255, 229, 0.22);
+  }
+  .card--warn .card__tag { color: var(--amber); background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.28); }
+
+  /* -------------------------------------------------------------- options */
+  .opt { margin-top: 76px; scroll-margin-top: 76px; }
+  .opt__head { display: flex; align-items: flex-start; gap: 14px; }
+  .opt__letter {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 3px 0 var(--edge-active),
+      0 8px 18px -6px rgba(0, 255, 229, 0.45);
+  }
+  .opt--alt .opt__letter {
+    color: rgba(255, 255, 255, 0.8);
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.22), 0 3px 0 var(--edge);
+  }
+  .opt__thesis { margin-top: 5px; font-size: 15px; color: rgba(255, 255, 255, 0.6); max-width: var(--measure); }
+  .opt__body { display: grid; gap: 16px; margin-top: 22px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .opt__body { grid-template-columns: 1fr 1fr; } }
+  .opt__body > * { min-width: 0; }
+  .note h3 { display: flex; align-items: center; gap: 7px; }
+  .note h3::before {
+    content: "";
+    width: 3px;
+    height: 13px;
+    border-radius: 2px;
+    background: var(--active);
+    box-shadow: 0 0 8px rgba(0, 255, 229, 0.7);
+  }
+  .note--cost h3::before { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, 0.6); }
+  .note p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .note p + p { margin-top: 10px; }
+
+  .price {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    max-width: 100%;
+  }
+  .price--good { color: var(--active); background: rgba(0, 255, 229, 0.09); border-color: rgba(0, 255, 229, 0.28); }
+
+  /* --------------------------------------------------- the mock enclosure */
+  .screen {
+    margin-top: 26px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    background: var(--app-bg);
+    box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+  }
+  .screen__tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.34);
+  }
+  .screen__tab b { color: rgba(0, 255, 229, 0.8); font-weight: 600; }
+  .screen__body {
+    position: relative;
+    padding: 20px 18px 26px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+    background:
+      radial-gradient(620px 320px at 8% -20%, rgba(0, 255, 229, 0.06), transparent 64%),
+      radial-gradient(520px 280px at 96% 0%, rgba(0, 120, 190, 0.08), transparent 62%);
+  }
+  .screen__body::-webkit-scrollbar { height: 8px; }
+  .screen__body::-webkit-scrollbar-track { background: transparent; }
+  .screen__body::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .screen__body > * { min-width: 620px; }
+
+  /* ================================================= the app's materials */
+  .lab-well {
+    background: #07131e;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(0, 255, 229, 0.14);
+  }
+  .lab-readout {
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.85),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .lab-readout-live {
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.8),
+      inset 0 -1px 0 rgba(0, 255, 229, 0.22),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.34),
+      inset 0 0 16px -5px rgba(0, 255, 229, 0.55),
+      0 0 14px -4px rgba(0, 255, 229, 0.35);
+  }
+  /* The amber sibling of `-live`, for a housing whose reading is a caveat
+     rather than a clock. Not in globals.css — it is what options B and C
+     would add, and it is here so the amber can be judged as a *housing*
+     rather than as a border around text. */
+  .lab-readout-warn {
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.8),
+      inset 0 -1px 0 rgba(251, 191, 36, 0.22),
+      inset 0 0 0 1px rgba(251, 191, 36, 0.34),
+      inset 0 0 16px -5px rgba(251, 191, 36, 0.45),
+      0 0 14px -4px rgba(251, 191, 36, 0.28);
+  }
+  .lab-groove {
+    background: linear-gradient(180deg, #050e17, #081722);
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.95),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.05);
+  }
+  .lab-slab {
+    padding: 0 6px 6px 0;
+    background: linear-gradient(128deg, #14545c 0%, #0a2b33 38%, var(--edge) 76%);
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 10px 16px rgba(0, 0, 0, 0.75))
+      drop-shadow(0 0 20px rgba(0, 255, 229, 0.1));
+  }
+  .lab-slab-face {
+    position: relative;
+    background:
+      repeating-linear-gradient(101deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(168deg, #1b3245 0%, #122534 46%, #0a1723 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 2.5px 0 -1px rgba(255, 255, 255, 0.14),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
+      inset 0 -20px 38px -22px rgba(0, 0, 0, 0.9),
+      inset -8px 0 16px -10px rgba(0, 0, 0, 0.75);
+  }
+  .lab-slab-face::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(106deg, transparent 20%, rgba(255, 255, 255, 0.055) 44%, transparent 60%);
+  }
+  .lab-slab-face-rail {
+    background:
+      repeating-linear-gradient(101deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 70%),
+      linear-gradient(100deg, #23445f 0%, #1a3145 45%, #142534 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 2.5px 0 -1px rgba(255, 255, 255, 0.14),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
+      inset 0 -8px 14px -12px rgba(0, 0, 0, 0.85),
+      inset -10px 0 20px -14px rgba(0, 0, 0, 0.7);
+  }
+  .lab-notch-all {
+    clip-path: polygon(
+      9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px),
+      calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px
+    );
+  }
+  .lab-notch-lg {
+    clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+  }
+  .lab-nameplate {
+    background: linear-gradient(172deg, #4d7d9c 0%, #2f566f 55%, #1f3b50 100%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.4),
+      0 2px 0 var(--edge),
+      0 5px 10px -4px rgba(0, 0, 0, 0.8);
+  }
+  /* The same plate in the app's caution tone, for a nameplate whose reading is
+     a warning. Option A's amber state. */
+  .lab-nameplate-warn {
+    background: linear-gradient(172deg, #9c7a3d 0%, #6f5528 55%, #4a3a1c 100%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 240, 200, 0.42),
+      0 2px 0 #241a06,
+      0 5px 10px -4px rgba(0, 0, 0, 0.8);
+  }
+  .lab-ledge {
+    padding-bottom: 5px;
+    background: linear-gradient(180deg, #071825 0%, #030e17 100%);
+    filter: drop-shadow(0 5px 3px rgba(0, 0, 0, 0.5)) drop-shadow(0 14px 22px rgba(0, 0, 0, 0.65));
+  }
+  .lab-ledge-face {
+    position: relative;
+    background: linear-gradient(
+      177deg, #6d9cba 0px, #6d9cba 1.5px, #416f8e 3px, #315874 16%, #1c374c 62%, #122636 100%
+    );
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.55), inset 0 -7px 12px -7px rgba(0, 0, 0, 0.75);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.08), 0 -1px 1px rgba(0, 0, 0, 0.8);
+  }
+  .lab-ledge-face::before {
+    content: "";
+    position: absolute;
+    left: 12px; right: 1px; top: 2.5px; height: 1px;
+    background: linear-gradient(90deg, rgba(0, 255, 229, 0.55), rgba(0, 255, 229, 0.14) 55%, transparent);
+    pointer-events: none;
+  }
+  .lab-ledge-slot {
+    background: linear-gradient(180deg, #0b1c28, #123045);
+    box-shadow:
+      inset 0 2px 3px rgba(0, 0, 0, 0.8),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+      0 1px 0 rgba(255, 255, 255, 0.07);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  }
+  .lab-chip {
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+  }
+  .lab-chip-sm {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.4),
+      0 2px 0 var(--edge),
+      0 4px 8px -4px rgba(0, 0, 0, 0.7);
+  }
+  .lab-engraved { text-shadow: 0 -1px 1px rgba(0, 0, 0, 0.95), 0 1px 0 rgba(255, 255, 255, 0.16); }
+
+  /* ================================================= the flask, as shipped */
+  .flask-loader { display: inline-flex; }
+  .flask-bub { transform-box: fill-box; transform-origin: center; }
+  @keyframes flask-rise {
+    0%   { transform: translateY(4px) scale(0.3); opacity: 0; }
+    20%  { opacity: 0.95; }
+    75%  { opacity: 0.95; }
+    100% { transform: translateY(-30px) scale(1); opacity: 0; }
+  }
+  @keyframes flask-glow {
+    0%, 100% { opacity: 0.35; }
+    50%      { opacity: 0.9; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .flask-loader * { animation: none !important; }
+  }
+
+  /* -------------------------------------------------------- the size ruler */
+  .ruler {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 26px;
+    align-items: flex-end;
+    margin-top: 26px;
+    padding: 24px 22px 18px;
+    border-radius: 12px;
+    background: var(--app-bg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .ruler__cell { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .ruler__cap {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.42);
+    text-align: center;
+    white-space: pre-line;
+  }
+  .ruler__cell--good .ruler__cap { color: var(--active); }
+
+  /* ================================================== the plate (option C) */
+  .plate-wrap { position: relative; margin-bottom: 18px; }
+  .plate__face-inner { position: relative; isolation: isolate; width: 100%; }
+  .plate__rail {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 2;
+    width: 4px;
+    background: linear-gradient(180deg, var(--active), rgba(0, 255, 229, 0.3));
+    box-shadow: 0 0 16px rgba(0, 255, 229, 0.4);
+  }
+  .plate__tab {
+    position: absolute;
+    top: 0;
+    z-index: 3;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 10px;
+    line-height: 1;
+  }
+  .plate__tab--l { left: 0; padding-left: 14px; border-radius: 0 8px 8px 0; }
+  .plate__tab--r { right: 0; border-radius: 8px 0 0 8px; }
+  .plate__season {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    color: var(--active); text-shadow: 0 0 12px rgba(0, 255, 229, 0.35);
+  }
+  .plate__stat-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255, 255, 255, 0.4); }
+  .plate__stat-value { font-family: var(--mono); font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.85); }
+  .plate__stat-sub { color: rgba(255, 255, 255, 0.35); font-style: normal; }
+
+  .plate__body {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 22px 11px 8px 21px;
+  }
+  .avatar {
+    flex: none; display: grid; place-items: center;
+    width: 44px; height: 44px; border-radius: 999px;
+    font-family: var(--display); font-weight: 700; font-size: 17px;
+    color: var(--on-active);
+    background: linear-gradient(160deg, #7ff5e6, #109e93);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 4px 12px -4px rgba(0, 0, 0, 0.8);
+  }
+  .plate__id { min-width: 0; flex: 1; }
+  .plate__name {
+    margin: 0; font-family: var(--display); font-size: 20px; font-weight: 600;
+    letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .plate__rec {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px;
+    margin-top: 4px; font-size: 13px; line-height: 1.35;
+  }
+  .plate__rec b { font-family: var(--mono); font-weight: 600; }
+  .plate__rec .scope { color: rgba(0, 255, 229, 0.6); }
+  .plate__rec .from { color: rgba(255, 255, 255, 0.4); }
+  .plate__bar { display: flex; gap: 2px; height: 4px; max-width: 420px; margin-top: 6px; }
+  .plate__bar span { display: block; border-radius: 2px; }
+  .plate__bar .w { background: linear-gradient(90deg, rgba(0, 255, 229, 0.5), var(--active)); box-shadow: 0 0 10px rgba(0, 255, 229, 0.35); }
+  .plate__bar .l { background: rgba(255, 255, 255, 0.16); }
+  .plate__bar .t { background: rgba(251, 191, 36, 0.5); }
+
+  .gauge { position: relative; flex: none; display: grid; place-items: center; width: 66px; height: 66px; }
+  .gauge svg.dial { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .gauge__read { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .gauge__pct { font-family: var(--mono); font-size: 18px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
+  .gauge__cap { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: rgba(255, 255, 255, 0.4); }
+
+  /* today's in-flow state line, for the "before" */
+  .plate__state {
+    position: relative; z-index: 1;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+    padding: 8px 15px 8px 21px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 11px; color: rgba(255, 255, 255, 0.55);
+  }
+  .pill-old {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 10px; border-radius: 999px;
+    color: var(--active); background: rgba(0, 255, 229, 0.1);
+    border: 1px solid rgba(0, 255, 229, 0.3);
+  }
+  .spinner-old {
+    width: 10px; height: 10px; border-radius: 999px;
+    border: 2px solid rgba(0, 255, 229, 0.4); border-top-color: var(--active);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .warn-old {
+    padding: 2px 8px; border-radius: 6px; color: #fcd34d;
+    background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3);
+  }
+
+  /* ======================================================= the indicators */
+
+  /* A — a plate straddling the bottom edge. Sibling of the slab, never inside
+     it: `clip-path` clips a whole subtree, so a part rendered in the face
+     would be severed at the exact edge it exists to straddle.
+
+     **It needs a reserved lane, and that is the measurement that decides this
+     option.** The record bar's bottom sits 10px above the face's bottom edge
+     and the dial's 8px, so a 32px plate straddling that edge lands on both.
+     `.plate--lane` is 12px of permanent bottom padding, which is the app's own
+     answer to exactly this: the record bar keeps its empty rail out of season so
+     the plate is the same height in September as in December. A constant 12px
+     is not the layout shift the whole change is about — a lane that appears with
+     the indicator would be. */
+  .plate--lane .plate__body { padding-bottom: 20px; }
+  .ind-a {
+    position: absolute;
+    bottom: -12px;
+    left: 22px;
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 2px 12px 2px 6px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .ind-a .count { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .ind-a--warn { color: #ffeec2; }
+
+  /* B — a lit housing seated in the plate's trailing bottom corner, inside the
+     face, so the chamfer cuts it the way it cuts the two top tabs. */
+  .ind-b {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 12px 3px 7px;
+    border-radius: 9px 0 0 0;
+    font-size: 11px;
+  }
+  .ind-b .label { color: rgba(0, 255, 229, 0.85); font-weight: 600; }
+  .ind-b .count {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.85);
+  }
+  .ind-b--warn .label { color: #fcd34d; }
+
+  /* C — the flask takes the readout slot the dial and the countdown share. */
+  .ind-c {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: grid;
+    place-items: center;
+  }
+  .ind-c__cap {
+    position: absolute;
+    bottom: -3px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--mono);
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+    color: rgba(0, 255, 229, 0.8);
+    white-space: nowrap;
+  }
+  .ind-c__note {
+    position: absolute;
+    bottom: -11px;
+    right: 22px;
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #ffeec2;
+  }
+
+  /* D — a capsule floating over the list, outside the card entirely. */
+  .ind-d {
+    position: absolute;
+    top: 10px;
+    right: 18px;
+    z-index: 40;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 13px 4px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.88);
+    background: linear-gradient(170deg, rgba(24, 52, 68, 0.94), rgba(9, 22, 31, 0.94));
+    backdrop-filter: blur(8px);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.2),
+      0 2px 0 var(--edge),
+      0 10px 22px -8px rgba(0, 0, 0, 0.9),
+      0 0 18px -6px rgba(0, 255, 229, 0.4);
+  }
+  .ind-d .count { font-family: var(--mono); font-variant-numeric: tabular-nums; color: rgba(0, 255, 229, 0.9); }
+
+  /* --------------------------------------------------- under the plate */
+  .rail { position: relative; margin-bottom: 18px; }
+  .rail__face { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; width: 100%; padding: 6px 10px; }
+  .rail__cap { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.42); }
+  .rail__seek { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 7px; font-size: 11px; color: rgba(255, 255, 255, 0.5); }
+  .rail__count { margin-left: auto; font-family: var(--mono); font-size: 11px; color: rgba(255, 255, 255, 0.6); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 10px; font-weight: 600; color: rgba(255, 255, 255, 0.75); }
+
+  .billet { position: relative; margin-bottom: 10px; }
+  .billet__face { display: flex; align-items: stretch; width: 100%; }
+  .billet__sub { flex: 1; min-width: 0; display: flex; align-items: center; padding: 7px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.5); }
+  .billet__col { flex: none; width: 96px; padding: 5px 6px; box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.5); }
+  .billet__slot { display: block; padding: 3px 4px; border-radius: 5px; text-align: right; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255, 255, 255, 0.62); }
+
+  .lcard { position: relative; margin-top: 14px; }
+  .lcard__plate { position: absolute; top: -9px; left: 14px; right: 14px; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 10px; pointer-events: none; }
+  .lcard__name, .lcard__rec { display: inline-flex; align-items: center; gap: 7px; padding: 2px 10px; border-radius: 5px; max-width: 52%; }
+  .lcard__name b { font-family: var(--display); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lcard__rec b { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+  .lcard__rec i { font-family: var(--display); font-size: 11px; font-style: normal; color: rgba(255, 255, 255, 0.75); }
+  .lcard__face { display: flex; align-items: center; gap: 8px; width: 100%; padding: 18px 11px 12px 21px; }
+  .lcard__lead { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255, 255, 255, 0.55); }
+  .lcard__cols { flex: none; display: flex; }
+  .lcard__col { width: 96px; padding: 0 6px; text-align: right; box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.06); }
+  .lcard__col b { display: block; font-family: var(--display); font-size: 13px; font-weight: 600; }
+  .lcard__col span { display: block; font-size: 9px; color: rgba(255, 255, 255, 0.38); }
+
+  /* ------------------------------------------------------------- verdict */
+  .verdict {
+    margin-top: 30px; padding: 20px 22px 22px; border-radius: 14px;
+    background: linear-gradient(180deg, rgba(0, 255, 229, 0.07), rgba(0, 255, 229, 0.015));
+    border: 1px solid rgba(0, 255, 229, 0.25);
+  }
+  .verdict h3 { font-family: var(--display); font-size: 15px; margin-bottom: 10px; }
+  .verdict p { color: rgba(255, 255, 255, 0.74); max-width: var(--measure); }
+  .verdict p + p { margin-top: 12px; }
+  .verdict b { color: #fff; }
+
+  .states { display: grid; gap: 12px; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .state-cell {
+    position: relative;
+    padding: 26px 16px 26px;
+    border-radius: 12px;
+    background: var(--app-bg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: grid;
+    place-items: center;
+  }
+  .state-cell__cap {
+    position: absolute; top: 7px; left: 12px;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: rgba(255, 255, 255, 0.3);
+  }
+  .state-cell .ind-a, .state-cell .ind-b, .state-cell .ind-d { position: static; }
+</style>
+
+<div class="bar">
+  <span class="bar__mark">THE LAB · MOCKUP</span>
+  <nav class="bar__keys">
+    <a class="bar__key" href="#now">Today</a>
+    <a class="bar__key" href="#size">Flask size</a>
+    <a class="bar__key" href="#a">A · Edge plate</a>
+    <a class="bar__key" href="#b">B · Corner cell</a>
+    <a class="bar__key" href="#c">C · Slot takeover</a>
+    <a class="bar__key" href="#d">D · Floating</a>
+    <a class="bar__key" href="#verdict">Verdict</a>
+  </nav>
+</div>
+
+<div class="wrap">
+  <p class="eyebrow">Sync state · manager header</p>
+  <h1>Four places for the flask</h1>
+  <p class="lede">
+    The sync line is a <b>row in the plate's flow</b>, so the card grows when a
+    refresh starts and shrinks when it ends — and the whole list under it moves
+    both times. Its spinner is also a generic ring, on a page that has its own
+    loading mark.
+  </p>
+  <p class="lede">
+    All four options below are <b>absolutely positioned</b>, so the plate's height
+    never changes, and all four use <code>FlaskLoader</code>. What differs is where
+    the indicator sits and how much of the message it can carry.
+  </p>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head"><h2>What has to stay true</h2><span class="eyebrow">constraints</span></div>
+    <div class="rule"></div>
+
+    <div class="cards">
+      <div class="card">
+        <span class="card__tag">four states, two kinds</span>
+        <p>
+          <em>Refreshing</em> is transient and self-resolving. <em>Partial</em>,
+          <em>locked</em> and <em>failed</em> are standing caveats about the rows
+          already on screen — they do not go away on their own.
+        </p>
+        <p>
+          An indicator that treats them as one thing either makes a caveat look
+          like a spinner or makes a spinner look permanent.
+        </p>
+      </div>
+      <div class="card card--warn">
+        <span class="card__tag">the counts must be spoken</span>
+        <p>
+          <code>97 of 100</code> is not decoration. A partly-failed sync leaves the
+          list a mix of just-synced rows and rows as old as the last pass, and
+          nothing else on the page can tell it from a complete one.
+        </p>
+        <p>
+          So no option may put that number behind a hover — which rules out the
+          smallest, tidiest badge.
+        </p>
+      </div>
+      <div class="card card--warn">
+        <span class="card__tag">the plate has no spare surface</span>
+        <p>
+          Measured on the shipped card: the record bar's bottom sits <b>10px</b>
+          above the face's bottom edge and the dial's <b>8px</b>. The two top
+          corners are tabs and the leading edge is the accent rail.
+        </p>
+        <p>
+          So "absolute" and "covers nothing" cannot both be true for free — the
+          real question every option below answers is <em>what does it cover, or
+          what does it reserve</em>. A first draft of A was drawn straddling the
+          bottom edge and landed squarely on the record bar.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="size">
+    <div class="sec-head"><h2>How big a flask has to be</h2><span class="eyebrow">measured, not guessed</span></div>
+    <div class="rule"></div>
+    <p class="prose" style="margin-top:18px">
+      <code>FlaskLoader</code> draws in a 120-unit box with bubbles of radius
+      1.8–3.2 that rise 30 units. Rendered at width <em>W</em>, a bubble is
+      <code>W/120 × r</code> across — so the animation the flask exists for has a
+      floor, and it is higher than a badge.
+    </p>
+
+    <div class="ruler">
+      <div class="ruler__cell">
+        <span class="flask-loader" role="status" aria-label="Refreshing"><svg width="18" height="22" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f1"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f1" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f1)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f1)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f1)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f1)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+        <span class="ruler__cap">18px
+sub-pixel bubbles</span>
+      </div>
+      <div class="ruler__cell">
+        <span class="flask-loader" role="status" aria-label="Refreshing"><svg width="26" height="32" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f2"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f2" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f2)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f2)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f2)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f2)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+        <span class="ruler__cap">26px
+~1px, a smudge</span>
+      </div>
+      <div class="ruler__cell">
+        <span class="flask-loader" role="status" aria-label="Refreshing"><svg width="34" height="42" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f3"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f3" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f3)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f3)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f3)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f3)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+        <span class="ruler__cap">34px
+just visible</span>
+      </div>
+      <div class="ruler__cell ruler__cell--good">
+        <span class="flask-loader" role="status" aria-label="Refreshing"><svg width="44" height="55" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f4"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f4" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f4)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f4)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f4)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f4)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+        <span class="ruler__cap">44px
+reads as bubbling</span>
+      </div>
+      <div class="ruler__cell ruler__cell--good">
+        <span class="flask-loader" role="status" aria-label="Refreshing"><svg width="56" height="70" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f5" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f5" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f5"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f5" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f5)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f5)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f5)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f5)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+        <span class="ruler__cap">56px
+unmistakable</span>
+      </div>
+    </div>
+
+    <p class="prose" style="margin-top:22px">
+      <b>Below ~34px the flask is a mark, not a loader.</b> That is not fatal — a
+      static flask still says "The Lab is working", and the reduced-motion block
+      in <code>globals.css</code> deliberately ships exactly that. But it means
+      "use the flask" and "use the flask <em>animating</em>" are different asks,
+      and only option C can honour the second one.
+    </p>
+    <p class="prose">
+      The <code>pulse</code> variant is drawn throughout: its glowing rim is the
+      one variant whose motion survives at small sizes, because the glow is a
+      whole-outline opacity breath rather than a 1px dot travelling.
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="now">
+    <div class="sec-head"><h2>Today</h2><span class="eyebrow">the before</span></div>
+    <div class="rule"></div>
+    <p class="prose" style="margin-top:18px">
+      In flow, with a border above it. The plate is ~24px taller while this is up,
+      and every league card below moves by that much twice a visit.
+    </p>
+
+    <div class="screen">
+      <div class="screen__tab"><b>current</b> · in-flow row, ring spinner</div>
+      <div class="screen__body">
+        <div class="plate-wrap">
+          <div class="lab-slab lab-notch-all">
+            <div class="lab-slab-face lab-slab-face-rail lab-notch-all plate__face-inner">
+              <span class="plate__rail"></span>
+              <span class="plate__tab plate__tab--l lab-well"><b class="plate__season">2026</b></span>
+              <span class="plate__tab plate__tab--r lab-well">
+                <span class="plate__stat-label">Leagues</span>
+                <span class="plate__stat-value">121</span>
+                <i class="plate__stat-sub">of 121 total</i>
+              </span>
+              <div class="plate__body">
+                <span class="avatar">J</span>
+                <div class="plate__id">
+                  <h4 class="plate__name">jkap</h4>
+                  <p class="plate__rec"><b>72-48-1</b><span class="scope">dynasty leagues</span><span class="from">from 113 of 121 leagues</span></p>
+                  <div class="plate__bar"><span class="w" style="flex-grow:72"></span><span class="l" style="flex-grow:48"></span><span class="t" style="flex-grow:1"></span></div>
+                </div>
+                <div class="gauge">
+                  <svg class="dial" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                    <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke-linecap="round" stroke="url(#dg0)" stroke-dasharray="276.46" stroke-dashoffset="127.17" style="filter:drop-shadow(0 0 6px rgba(0,255,229,0.45))"></circle>
+                    <defs><linearGradient id="dg0" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#00ffe5" stop-opacity="0.45"></stop><stop offset="100%" stop-color="#00ffe5"></stop></linearGradient></defs>
+                  </svg>
+                  <div class="gauge__read"><span class="gauge__pct">.540</span><span class="gauge__cap">Win pct</span></div>
+                </div>
+              </div>
+              <div class="plate__state">
+                <span class="pill-old"><span class="spinner-old"></span>Refreshing 41/121</span>
+                <span class="warn-old">97 of 100 leagues refreshed</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rail lab-slab lab-notch-all">
+          <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+            <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+            <span class="rail__cap">Narrow to</span>
+            <span class="rail__seek lab-groove">Player or leaguemate</span>
+            <span class="rail__count">113 of 121</span>
+          </div>
+        </div>
+        <div class="billet lab-ledge lab-notch-lg">
+          <div class="billet__face lab-ledge-face lab-notch-lg">
+            <span class="billet__sub">League</span>
+            <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+            <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+            <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+            <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+          </div>
+        </div>
+        <div class="lcard">
+          <div class="lcard__plate">
+            <span class="lcard__name lab-nameplate"><b>Dynasty Degenerates III</b></span>
+            <span class="lcard__rec lab-nameplate"><b>8-4-0</b><i>2nd</i></span>
+          </div>
+          <div class="lab-slab lab-notch-lg">
+            <div class="lcard__face lab-slab-face lab-notch-lg">
+              <span class="lcard__lead">12 teams · SF · Dynasty</span>
+              <span class="lcard__cols">
+                <span class="lcard__col"><b class="lab-engraved">8-4-0</b><span>Record</span></span>
+                <span class="lcard__col"><b class="lab-engraved">1,842</b><span>Proj</span></span>
+                <span class="lcard__col"><b class="lab-engraved">41,208</b><span>Dynasty</span></span>
+                <span class="lcard__col"><b class="lab-engraved">3</b><span>KTC #</span></span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head"><h2>Four indicators</h2><span class="eyebrow">all absolute, all flask</span></div>
+    <div class="rule"></div>
+
+    <!-- ------------------------------------------------------ A -->
+    <div class="opt" id="a">
+      <div class="opt__head">
+        <span class="opt__letter">A</span>
+        <div>
+          <h2>Edge plate</h2>
+          <p class="opt__thesis">
+            The app's own "part rising out of an edge" device, on the plate's
+            bottom edge — a nameplate carrying the flask and the counts.
+          </p>
+        </div>
+      </div>
+
+      <div class="screen">
+        <div class="screen__tab"><b>A</b> · nameplate straddling the bottom edge · 12px reserved lane · flask 22px</div>
+        <div class="screen__body">
+          <div class="plate-wrap plate--lane">
+            <div class="lab-slab lab-notch-all">
+              <div class="lab-slab-face lab-slab-face-rail lab-notch-all plate__face-inner">
+                <span class="plate__rail"></span>
+                <span class="plate__tab plate__tab--l lab-well"><b class="plate__season">2026</b></span>
+                <span class="plate__tab plate__tab--r lab-well">
+                  <span class="plate__stat-label">Leagues</span>
+                  <span class="plate__stat-value">121</span>
+                  <i class="plate__stat-sub">of 121 total</i>
+                </span>
+                <div class="plate__body">
+                  <span class="avatar">J</span>
+                  <div class="plate__id">
+                    <h4 class="plate__name">jkap</h4>
+                    <p class="plate__rec"><b>72-48-1</b><span class="scope">dynasty leagues</span><span class="from">from 113 of 121 leagues</span></p>
+                    <div class="plate__bar"><span class="w" style="flex-grow:72"></span><span class="l" style="flex-grow:48"></span><span class="t" style="flex-grow:1"></span></div>
+                  </div>
+                  <div class="gauge">
+                    <svg class="dial" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke-linecap="round" stroke="url(#dga)" stroke-dasharray="276.46" stroke-dashoffset="127.17" style="filter:drop-shadow(0 0 6px rgba(0,255,229,0.45))"></circle>
+                      <defs><linearGradient id="dga" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#00ffe5" stop-opacity="0.45"></stop><stop offset="100%" stop-color="#00ffe5"></stop></linearGradient></defs>
+                    </svg>
+                    <div class="gauge__read"><span class="gauge__pct">.540</span><span class="gauge__cap">Win pct</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Sibling of the slab, never inside it. -->
+            <span class="ind-a lab-nameplate">
+              <span class="flask-loader" role="status" aria-label="Refreshing"><svg width="26" height="32" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f6" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f6" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f6"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f6" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f6)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f6)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f6)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f6)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+              Refreshing <span class="count">41/121</span>
+            </span>
+          </div>
+
+          <div class="rail lab-slab lab-notch-all">
+            <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+              <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+              <span class="rail__cap">Narrow to</span>
+              <span class="rail__seek lab-groove">Player or leaguemate</span>
+              <span class="rail__count">113 of 121</span>
+            </div>
+          </div>
+          <div class="billet lab-ledge lab-notch-lg">
+            <div class="billet__face lab-ledge-face lab-notch-lg">
+              <span class="billet__sub">League</span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="states">
+        <div class="state-cell"><span class="state-cell__cap">refreshing</span>
+          <span class="ind-a lab-nameplate"><span class="flask-loader" role="status" aria-label="Refreshing"><svg width="26" height="32" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f7" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f7" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f7"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f7" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f7)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f7)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f7)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f7)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>Refreshing <span class="count">41/121</span></span>
+        </div>
+        <div class="state-cell"><span class="state-cell__cap">partial</span>
+          <span class="ind-a ind-a--warn lab-nameplate-warn"><span class="flask-loader" role="status" aria-label="Refreshing"><svg width="26" height="32" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f8" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f8" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f8"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f8" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f8)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f8)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f8)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f8)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>Refreshed <span class="count">97 of 100</span></span>
+        </div>
+        <div class="state-cell"><span class="state-cell__cap">locked elsewhere</span>
+          <span class="ind-a ind-a--warn lab-nameplate-warn"><span class="flask-loader" role="status" aria-label="Refreshing"><svg width="26" height="32" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f9" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f9" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f9"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f9" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f9)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f9)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f9)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f9)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>Syncing elsewhere — list may be incomplete</span>
+        </div>
+      </div>
+
+      <div class="opt__body">
+        <div class="note">
+          <h3>What it buys</h3>
+          <p>
+            It reuses a device the app already owns — the league card's name plate
+            rides its top edge for exactly this reason — so the indicator reads as
+            part of the plate rather than as something dropped on it.
+          </p>
+          <p>
+            <b>It covers nothing — once it is given a lane.</b> The bottom edge is
+            the only edge with no readout on it, but it is not free: the record
+            bar ends 10px above it. 12px of permanent bottom padding clears it,
+            and a constant 12px is not the layout shift this change is about. The
+            card is the same height whether a sync is running or not, which is the
+            rule the record bar's own empty rail already keeps.
+          </p>
+          <span class="price price--good">covers nothing · fits every message</span>
+        </div>
+        <div class="note note--cost">
+          <h3>What it costs</h3>
+          <p>
+            <b>12px of card height, permanently</b>, on a card that is above a list
+            — paid whether or not anything is ever syncing. That is the trade, and
+            it is the whole of it.
+          </p>
+          <p>
+            <b>It must be a sibling of the slab, never a child.</b>
+            <code>clip-path</code> clips a whole subtree, so a plate rendered
+            inside the face would be severed at the exact edge it exists to
+            straddle. The <code>relative</code> wrapper in
+            <code>manager-header.tsx</code> is already there for this — its comment
+            says so.
+          </p>
+          <p>
+            The flask is 22px, so it is a mark rather than a loader. And an amber
+            nameplate is a new material: the caution tone has only ever been a
+            bordered text pill here, never a plate.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------ B -->
+    <div class="opt" id="b">
+      <div class="opt__head">
+        <span class="opt__letter">B</span>
+        <div>
+          <h2>Corner cell</h2>
+          <p class="opt__thesis">
+            A lit housing seated in the plate's trailing bottom corner — the
+            <code>.lab-readout-live</code> grammar, where the <em>cell</em> lights
+            because the thing in it is running.
+          </p>
+        </div>
+      </div>
+
+      <div class="screen">
+        <div class="screen__tab"><b>B</b> · readout cell in the bottom-right corner · flask 24px</div>
+        <div class="screen__body">
+          <div class="plate-wrap">
+            <div class="lab-slab lab-notch-all">
+              <div class="lab-slab-face lab-slab-face-rail lab-notch-all plate__face-inner">
+                <span class="plate__rail"></span>
+                <span class="plate__tab plate__tab--l lab-well"><b class="plate__season">2026</b></span>
+                <span class="plate__tab plate__tab--r lab-well">
+                  <span class="plate__stat-label">Leagues</span>
+                  <span class="plate__stat-value">121</span>
+                  <i class="plate__stat-sub">of 121 total</i>
+                </span>
+                <div class="plate__body">
+                  <span class="avatar">J</span>
+                  <div class="plate__id">
+                    <h4 class="plate__name">jkap</h4>
+                    <p class="plate__rec"><b>72-48-1</b><span class="scope">dynasty leagues</span><span class="from">from 113 of 121 leagues</span></p>
+                    <div class="plate__bar"><span class="w" style="flex-grow:72"></span><span class="l" style="flex-grow:48"></span><span class="t" style="flex-grow:1"></span></div>
+                  </div>
+                  <div class="gauge">
+                    <svg class="dial" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke-linecap="round" stroke="url(#dgb)" stroke-dasharray="276.46" stroke-dashoffset="127.17" style="filter:drop-shadow(0 0 6px rgba(0,255,229,0.45))"></circle>
+                      <defs><linearGradient id="dgb" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#00ffe5" stop-opacity="0.45"></stop><stop offset="100%" stop-color="#00ffe5"></stop></linearGradient></defs>
+                    </svg>
+                    <div class="gauge__read"><span class="gauge__pct">.540</span><span class="gauge__cap">Win pct</span></div>
+                  </div>
+                </div>
+                <span class="ind-b lab-readout lab-readout-live">
+                  <span class="flask-loader" role="status" aria-label="Refreshing"><svg width="24" height="30" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f10" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f10" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f10"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f10" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f10)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f10)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f10)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f10)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+                  <span class="label">Refreshing</span>
+                  <span class="count">41/121</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail lab-slab lab-notch-all">
+            <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+              <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+              <span class="rail__cap">Narrow to</span>
+              <span class="rail__seek lab-groove">Player or leaguemate</span>
+              <span class="rail__count">113 of 121</span>
+            </div>
+          </div>
+          <div class="billet lab-ledge lab-notch-lg">
+            <div class="billet__face lab-ledge-face lab-notch-lg">
+              <span class="billet__sub">League</span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="states">
+        <div class="state-cell"><span class="state-cell__cap">refreshing</span>
+          <span class="ind-b lab-readout lab-readout-live" style="border-radius:9px"><span class="flask-loader" role="status" aria-label="Refreshing"><svg width="24" height="30" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f11" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f11" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f11"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f11" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f11)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f11)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f11)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f11)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span><span class="label">Refreshing</span><span class="count">41/121</span></span>
+        </div>
+        <div class="state-cell"><span class="state-cell__cap">partial</span>
+          <span class="ind-b ind-b--warn lab-readout lab-readout-warn" style="border-radius:9px"><span class="flask-loader" role="status" aria-label="Refreshing"><svg width="24" height="30" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f12" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f12" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f12"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f12" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f12)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f12)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f12)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f12)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span><span class="label">Refreshed</span><span class="count">97 of 100</span></span>
+        </div>
+        <div class="state-cell"><span class="state-cell__cap">failed</span>
+          <span class="ind-b ind-b--warn lab-readout lab-readout-warn" style="border-radius:9px"><span class="flask-loader" role="status" aria-label="Refreshing"><svg width="24" height="30" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f13" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f13" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f13"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f13" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f13)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f13)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f13)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f13)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span><span class="label">Refresh failed — cached</span></span>
+        </div>
+      </div>
+
+      <div class="opt__body">
+        <div class="note">
+          <h3>What it buys</h3>
+          <p>
+            It is the most <em>literally</em> correct thing in the app's own
+            grammar: a recessed cell whose housing lights because the value in it
+            is running is exactly what <code>.lab-readout-live</code> was written
+            for on the countdown.
+          </p>
+          <p>
+            Seated inside the face, the chamfer cuts it the same way it cuts the
+            two top tabs — so all four corners of the plate are wells, and the
+            card stays one part.
+          </p>
+        </div>
+        <div class="note note--cost">
+          <h3>What it costs</h3>
+          <p>
+            <b>It covers the dial</b> — look at the mock above, not at this
+            sentence. The dial's bottom is 8px off the face's bottom edge, so a
+            corner cell tall enough to hold a flask and a count takes the
+            <code>WIN PCT</code> caption and the bottom of the ring with it. This
+            was written as "crowds on a narrow viewport" before it was rendered;
+            it crowds at every width.
+          </p>
+          <p>
+            The longer messages ("Syncing elsewhere — this list may be
+            incomplete") do not fit a corner at all, so they truncate or push
+            further across the card — which covers more of the dial, not less.
+          </p>
+          <p>
+            It also needs an amber sibling of <code>-live</code>, which
+            <code>globals.css</code> does not have.
+          </p>
+          <span class="price">longest message doesn't fit</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------ C -->
+    <div class="opt" id="c">
+      <div class="opt__head">
+        <span class="opt__letter">C</span>
+        <div>
+          <h2>Slot takeover</h2>
+          <p class="opt__thesis">
+            The flask takes the readout slot the dial and the countdown already
+            share — at 56px, the only option where it actually bubbles.
+          </p>
+        </div>
+      </div>
+
+      <div class="screen">
+        <div class="screen__tab"><b>C</b> · flask over the dial · 56px · caveat on its own edge plate</div>
+        <div class="screen__body">
+          <div class="plate-wrap">
+            <div class="lab-slab lab-notch-all">
+              <div class="lab-slab-face lab-slab-face-rail lab-notch-all plate__face-inner">
+                <span class="plate__rail"></span>
+                <span class="plate__tab plate__tab--l lab-well"><b class="plate__season">2026</b></span>
+                <span class="plate__tab plate__tab--r lab-well">
+                  <span class="plate__stat-label">Leagues</span>
+                  <span class="plate__stat-value">121</span>
+                  <i class="plate__stat-sub">of 121 total</i>
+                </span>
+                <div class="plate__body">
+                  <span class="avatar">J</span>
+                  <div class="plate__id">
+                    <h4 class="plate__name">jkap</h4>
+                    <p class="plate__rec"><b>72-48-1</b><span class="scope">dynasty leagues</span><span class="from">from 113 of 121 leagues</span></p>
+                    <div class="plate__bar"><span class="w" style="flex-grow:72"></span><span class="l" style="flex-grow:48"></span><span class="t" style="flex-grow:1"></span></div>
+                  </div>
+                  <div class="gauge">
+                    <!-- The dial is still mounted underneath; the flask is an
+                         absolute overlay, so nothing about the slot resizes. -->
+                    <svg class="dial" viewBox="0 0 100 100" style="opacity:.12">
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                    </svg>
+                    <span class="ind-c">
+                      <span class="flask-loader" role="status" aria-label="Refreshing"><svg width="56" height="70" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f14" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f14" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f14"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f14" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f14)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f14)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f14)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f14)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+                      <span class="ind-c__cap">41/121</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span class="ind-c__note lab-nameplate-warn">97 of 100 leagues refreshed</span>
+          </div>
+
+          <div class="rail lab-slab lab-notch-all">
+            <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+              <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+              <span class="rail__cap">Narrow to</span>
+              <span class="rail__seek lab-groove">Player or leaguemate</span>
+              <span class="rail__count">113 of 121</span>
+            </div>
+          </div>
+          <div class="billet lab-ledge lab-notch-lg">
+            <div class="billet__face lab-ledge-face lab-notch-lg">
+              <span class="billet__sub">League</span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="opt__body">
+        <div class="note">
+          <h3>What it buys</h3>
+          <p>
+            <b>The flask is legible.</b> At 56px the bubbles rise and pop and the
+            rim breathes — this is the only option where "use the loading flask"
+            buys the animation rather than the silhouette.
+          </p>
+          <p>
+            It follows a decision the plate already made. That slot is where the
+            countdown and the dial trade places, on the argument that they are
+            never both worth drawing; a refresh in flight is a third reading of the
+            same "what is live right now".
+          </p>
+          <span class="price price--good">the only legible flask</span>
+        </div>
+        <div class="note note--cost">
+          <h3>What it costs</h3>
+          <p>
+            <b>It hides the win percentage</b> for as long as a refresh runs, which
+            on a cold hundred-league account is a while. The dial is the card's one
+            verdict, and covering it to report a process is arguably backwards.
+          </p>
+          <p>
+            It also does not solve the caveats — those still need somewhere to go,
+            so this option is really "C plus A", and two indicators is one more
+            than the card had.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------ D -->
+    <div class="opt opt--alt" id="d">
+      <div class="opt__head">
+        <span class="opt__letter">D</span>
+        <div>
+          <h2>Floating over the list</h2>
+          <p class="opt__thesis">
+            Out of the card entirely — a capsule pinned to the top-right of the
+            page, floating over whatever is under it.
+          </p>
+        </div>
+      </div>
+
+      <div class="screen">
+        <div class="screen__tab"><b>D</b> · capsule over the list · flask 22px</div>
+        <div class="screen__body" style="position:relative">
+          <span class="ind-d">
+            <span class="flask-loader" role="status" aria-label="Refreshing"><svg width="22" height="28" viewBox="0 0 120 150" fill="none" aria-hidden="true"><defs><linearGradient id="glass-f15" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--active)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--active)" stop-opacity="0.06"/></linearGradient><linearGradient id="liquid-f15" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cffef"/><stop offset="1" stop-color="#00c2ad"/></linearGradient><clipPath id="clip-f15"><path d="M55 40 L65 40 L90 123 Q93 130 86 130 L34 130 Q27 130 30 123 L55 40 Z"/></clipPath><filter id="glow-f15" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" stroke="var(--active)" stroke-width="3" stroke-linejoin="round" filter="url(#glow-f15)" style="animation:flask-glow 1.8s ease-in-out infinite"/><g clip-path="url(#clip-f15)"><rect x="20" y="100" width="80" height="46" fill="url(#liquid-f15)"/><ellipse cx="60" cy="100" rx="30" ry="4" fill="#7dfff2"/><circle class="flask-bub" cx="52" cy="120" r="3.2" fill="#d4fffa" style="animation:flask-rise 2.2s ease-in 0s infinite"/><circle class="flask-bub" cx="64" cy="124" r="2.4" fill="#d4fffa" style="animation:flask-rise 2.6s ease-in 0.6s infinite"/><circle class="flask-bub" cx="58" cy="118" r="1.8" fill="#d4fffa" style="animation:flask-rise 1.8s ease-in 1.1s infinite"/></g><path d="M46 23 L46 20 Q46 16 50 16 L70 16 Q74 16 74 20 L74 23 L68 23 L68 58 L94 124 Q98 134 88 134 L32 134 Q22 134 26 124 L52 58 L52 23 Z" fill="url(#glass-f15)" stroke="var(--active)" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/><path d="M56 26 L56 57 L40 118" stroke="var(--fg)" stroke-opacity="0.22" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+            Refreshing <span class="count">41/121</span>
+          </span>
+          <div class="plate-wrap">
+            <div class="lab-slab lab-notch-all">
+              <div class="lab-slab-face lab-slab-face-rail lab-notch-all plate__face-inner">
+                <span class="plate__rail"></span>
+                <span class="plate__tab plate__tab--l lab-well"><b class="plate__season">2026</b></span>
+                <span class="plate__tab plate__tab--r lab-well">
+                  <span class="plate__stat-label">Leagues</span>
+                  <span class="plate__stat-value">121</span>
+                  <i class="plate__stat-sub">of 121 total</i>
+                </span>
+                <div class="plate__body">
+                  <span class="avatar">J</span>
+                  <div class="plate__id">
+                    <h4 class="plate__name">jkap</h4>
+                    <p class="plate__rec"><b>72-48-1</b><span class="scope">dynasty leagues</span><span class="from">from 113 of 121 leagues</span></p>
+                    <div class="plate__bar"><span class="w" style="flex-grow:72"></span><span class="l" style="flex-grow:48"></span><span class="t" style="flex-grow:1"></span></div>
+                  </div>
+                  <div class="gauge">
+                    <svg class="dial" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke-linecap="round" stroke="url(#dgd)" stroke-dasharray="276.46" stroke-dashoffset="127.17" style="filter:drop-shadow(0 0 6px rgba(0,255,229,0.45))"></circle>
+                      <defs><linearGradient id="dgd" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#00ffe5" stop-opacity="0.45"></stop><stop offset="100%" stop-color="#00ffe5"></stop></linearGradient></defs>
+                    </svg>
+                    <div class="gauge__read"><span class="gauge__pct">.540</span><span class="gauge__cap">Win pct</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail lab-slab lab-notch-all">
+            <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+              <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+              <span class="rail__cap">Narrow to</span>
+              <span class="rail__seek lab-groove">Player or leaguemate</span>
+              <span class="rail__count">113 of 121</span>
+            </div>
+          </div>
+          <div class="billet lab-ledge lab-notch-lg">
+            <div class="billet__face lab-ledge-face lab-notch-lg">
+              <span class="billet__sub">League</span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="opt__body">
+        <div class="note">
+          <h3>What it buys</h3>
+          <p>
+            It is the only option with no geometry to negotiate: no chamfer, no
+            corner tab, no wall arithmetic. It can also say anything at any length,
+            since nothing constrains its width but the page.
+          </p>
+        </div>
+        <div class="note note--cost">
+          <h3>What it costs</h3>
+          <p>
+            <b>It belongs to no part.</b> Everything else on this page is seated in
+            something — that is the whole of the material grammar — and a capsule
+            floating on its own reads as a notification from the browser rather
+            than as a reading from the instrument.
+          </p>
+          <p>
+            It also covers the stat corner tab at this position, and would cover a
+            league card's own plate anywhere lower. Being out of flow does not stop
+            it being in the way; it just moves the cost somewhere less predictable.
+          </p>
+          <span class="price">covers the stat tab</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="verdict">
+    <div class="sec-head"><h2>Where this lands</h2><span class="eyebrow">the recommendation</span></div>
+    <div class="rule"></div>
+
+    <div class="verdict">
+      <h3>A — because the thing it pays is a constant</h3>
+      <p>
+        <b>Every option here costs something; A's cost is the one that never
+        surprises anybody.</b> The plate has no spare surface, so an indicator
+        either covers a reading (B covers its own corner and truncates, C covers
+        the dial, D covers whatever it lands on) or reserves a lane. A reserves
+        12px, permanently, and in exchange covers nothing, fits the longest
+        message, and holds the card at one height forever — which is the rule this
+        card already keeps for the record bar out of season.
+      </p>
+      <p>
+        <b>The flask at that size is a mark, not a loader</b>, and that is the one
+        thing worth deciding deliberately rather than discovering. If the animation
+        is the point, the honest answer is C — but C hides the dial and still needs
+        A underneath it for the caveats, so it buys the bubbling at the price of two
+        indicators and the card's only verdict.
+      </p>
+      <p>
+        <b>B is the most orthodox and the least practical.</b> Its grammar is exactly
+        right — a housing that lights because what is in it is running — and its
+        corner cannot hold "Syncing elsewhere — this list may be incomplete" without
+        truncating, which is the one message that has to be read to mean anything.
+      </p>
+      <div class="cards" style="margin-top:18px">
+        <div class="card">
+          <span class="card__tag">worth doing either way</span>
+          <p>
+            Whichever wins, the <em>refreshing</em> state and the three caveats want
+            different treatments: one is a process with a running count, the others
+            are standing facts about the rows on screen. Today they share a row and
+            a colour and only differ by wording.
+          </p>
+        </div>
+        <div class="card">
+          <span class="card__tag">the accessibility half</span>
+          <p>
+            <code>role="status"</code> moves with the indicator, and the running
+            tally stays <code>aria-hidden</code> — a polite region re-reading
+            "Refreshing 41/121" every few hundred milliseconds talks over the page
+            it is describing. That rule survives all four positions.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>

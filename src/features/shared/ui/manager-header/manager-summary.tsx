@@ -41,8 +41,17 @@ export function ManagerSummary({
   const name = user.display_name || user.username;
 
   return (
+    // `z-[1]` keeps the row above the face's own specular sweep. That sweep is
+    // `.lab-slab-face::after`, which is generated as the face's last child, so
+    // with everything on `auto` it paints last and lies *over* the content — the
+    // one thing the plate's decoration has never done. One utility buys back the
+    // original reading.
+    //
+    // The insets are the slab's wall arithmetic, for the reason `statePadding`
+    // spells out: 21px from the leading edge and 17px from the trailing one is
+    // what the bordered box gave, and the trailing 6px is now wall.
     <div
-      className={`relative flex items-center gap-3 pl-5 pr-4 pt-[22px] sm:gap-4 sm:pl-6 sm:pr-5 sm:pt-6 ${padding}`}
+      className={`relative z-[1] flex items-center gap-3 pl-[21px] pr-[11px] pt-[22px] sm:gap-4 sm:pl-[25px] sm:pr-[15px] sm:pt-6 ${padding}`}
     >
       <Avatar url={user.avatar_url} name={name} size="lg" />
 
