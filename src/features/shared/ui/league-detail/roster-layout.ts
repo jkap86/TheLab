@@ -8,12 +8,12 @@
  * them lives here.
  *
  * **The row has two shapes, and which one it takes is the only thing that
- * changes with width.** Below `@3xl` it is two lines: the name owns the first
- * one and the position, the NFL team and the numbers sit under it. From `@3xl`
- * it is one line: a lane holding the lineup slot, then the name, then the
- * numbers beside it. Both shapes are the same cells in the same DOM order —
- * what moves is `--cols`, whether the meta cell is drawn, and whether the slot
- * chip is in flow (see `PlayerRow`).
+ * changes with width.** Below `@3xl` it is two lines: the name, his position
+ * and his NFL team own the first one and the numbers sit under it. From `@3xl`
+ * it is one line: a lane holding the lineup slot, then that same name group,
+ * then the numbers beside it. Both shapes are the same cells in the same DOM
+ * order — what moves is `--cols`, where the first number starts, and whether
+ * the slot chip is in flow (see `PlayerRow`).
  *
  * Two lines exist because at a phone's width the name loses every fight for
  * horizontal space: squeezed between a slot mark and two totals, "Christian
@@ -31,6 +31,21 @@ export type SectionLayout = {
   grid: string;
   /** How far the name reaches — everything on its line, in whichever shape. */
   nameSpan: string;
+  /**
+   * Where the first value column starts in the two-line shape, and nothing at
+   * all from `@3xl`.
+   *
+   * The name spans the whole first line down there, so the numbers auto-place
+   * onto the second — and they used to land in the second and third tracks only
+   * because a meta cell holding the position and the NFL team occupied the
+   * first. With those moved up beside the name there is nothing holding it, so
+   * the first number would slide under the name and stop lining up with the
+   * heading that names it (see {@link ColumnRail}, whose own leading spacer is
+   * what it lines up against). One explicit start is cheaper than a spacer
+   * element, and it belongs here rather than in `PlayerRow` because which track
+   * that is, is a fact about the template above.
+   */
+  statStart: string;
   /**
    * The recessed lane the two number columns run down, or null where there are
    * no numbers to run down it. Drawn once per section rather than once per row
@@ -51,6 +66,9 @@ export type SectionLayout = {
 export const NO_NUMBERS: SectionLayout = {
   grid: "grid-cols-[minmax(0,1fr)] @3xl:grid-cols-[2.125rem_minmax(0,1fr)]",
   nameSpan: "col-span-1",
+  // Nothing to place: this layout is paired with an empty column list, so no
+  // row using it draws a value cell at all.
+  statStart: "",
   lane: null,
 };
 
@@ -103,6 +121,22 @@ export const NO_NUMBERS: SectionLayout = {
  * one that had just started showing it whole. `@3xl` is the first tier where one
  * line is not a step backwards for the field a reader is actually scanning.
  *
+ * **The name shares its line with the position and the NFL team now, and what
+ * that costs is stated here rather than discovered later.** Measured in a
+ * headless browser against the compiled stylesheet and the real `woff2` files,
+ * the pair plus its two gaps is 38px for `RB SF`, 45px for `LB CLE` and 54px
+ * for the widest thing a roster can hold, `DEF WAS` — all of it `shrink-0`, so
+ * every pixel comes out of the name. At `@3xl` exactly, where the shape has
+ * just switched and the half is ~358px, that leaves the name 98–114px against
+ * the 116px `Christian McCaffrey` renders at, so the longest real names
+ * truncate in a narrow band just above the switch and are whole again from a
+ * ~800px panel. That is a real regression on one tier and it is the price of
+ * the row saying what every player *is*: those two facts used to be drawn only
+ * on the two-line shape and only where the chip disagreed with the position, so
+ * at most widths, on most rows, the row said nothing about the player at all. A
+ * truncated name still reads as a name and carries its whole spelling on the
+ * `title`; a team code that is only sometimes there does not.
+ *
  * The knock-on is that the *contraction* threshold stays at `@lg` and is
  * deliberately not moved to meet this one: between `@lg` and `@3xl` the name
  * owns its whole line and has room for the full spelling, and re-contracting it
@@ -113,9 +147,11 @@ export const SPLIT_LAYOUT: SectionLayout = {
     "grid-cols-[minmax(0,1fr)_2.875rem_2.875rem] " +
     "@lg:grid-cols-[minmax(0,1fr)_3.25rem_3.25rem] " +
     "@3xl:grid-cols-[2.125rem_minmax(0,1fr)_3.5rem_3.5rem]",
-  // Two lines: the name spans the row. One line: the name is one cell of it,
+  // Two lines: the name group spans the row. One line: it is one cell of it,
   // between the slot lane and the numbers.
   nameSpan: "col-span-3 @3xl:col-span-1",
+  // Row two, second track — the first is under the name and belongs to nothing.
+  statStart: "@max-3xl:col-start-2",
   // Both tracks plus the `gap-x-2` between them.
   lane: "w-[7.5rem]",
 };
