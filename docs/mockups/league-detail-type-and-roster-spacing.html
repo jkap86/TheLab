@@ -515,7 +515,7 @@
   .v-b1 .prow.hastab .pname { padding-left: 34px; }
 
   /* -- variant B2: one line, both marks kept ------------------------- */
-  .v-b2 { --cols: 26px 32px minmax(0,1fr) 3.5rem 3.5rem; }
+  .v-b2 { --cols: 30px minmax(0,1fr) 3.5rem 3.5rem; }
   .v-b2 .prow { padding: 5px 0; gap: 0 6px; align-items: center; }
   .v-b2 .prow .tab { position: static; left: auto; top: auto; }
   .v-b2 .prow .pname { grid-column: auto; padding-left: 0 !important; font-size: 13.5px; }
@@ -527,12 +527,37 @@
   .v-b3 .prow .tab { position: static; left: auto; top: auto; width: 30px; min-width: 0; }
   .v-b3 .prow .pname { grid-column: auto; padding-left: 0 !important; font-size: 13.5px; }
   .v-b3 .prow .meta { display: none; }
-  /* The mark takes the position's own tone, so the badge's colour coding
-     survives the badge itself. */
+  /* The mark is the *slot*, toned by the position it is filled with. It is
+     never a position: a chip on this row means "a lineup slot", and letters
+     mean "what he plays" — see `.pos`. */
   .mk.QB { background: linear-gradient(160deg,#5d2634,#341019); color: #fda4af; box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 1px 1px 0 rgba(0,0,0,0.55); }
   .mk.RB { background: linear-gradient(160deg,#14503f,#0a2a22); color: #6ee7b7; box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 1px 1px 0 rgba(0,0,0,0.55); }
   .mk.WR { background: linear-gradient(160deg,#154867,#0b2536); color: #7dd3fc; box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 1px 1px 0 rgba(0,0,0,0.55); }
   .mk.TE { background: linear-gradient(160deg,#5c421a,#2f2110); color: #fcd34d; box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 1px 1px 0 rgba(0,0,0,0.55); }
+
+
+  /* Position as letters, never as a chip. Tone on the glyphs rather than on a
+     fill, so it can sit a few pixels from the slot chip without reading as a
+     second one of them: different shape, different register. `.pos-plain`
+     is the colourless spelling. */
+  .pos {
+    font-family: var(--mono); font-size: 0.62rem; font-weight: 700;
+    letter-spacing: 0.04em; flex: none;
+  }
+  .pos.QB { color: #f9a8b4; }
+  .pos.RB { color: #6ee7b7; }
+  .pos.WR { color: #7dd3fc; }
+  .pos.TE { color: #fcd34d; }
+  .pos.K  { color: #c4b5fd; }
+  .pos.DEF{ color: #5eead4; }
+  .pos-plain { color: rgba(255,255,255,0.45) !important; }
+  /* In the mark lane of a one-line row, where a bench player has no slot. */
+  .lane { display: block; text-align: center; }
+
+  /* The name cell holds the name and, where it is a surprise, the position.
+     The name truncates; the letters never do. */
+  .pname.withpos { display: flex; align-items: baseline; gap: 6px; }
+  .pname.withpos > .nmtxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* -- variant B4: one line, one mark, with air and a number lane ---- */
   .v-b4 { --cols: 30px minmax(0,1fr) 3.5rem 3.5rem; }
@@ -628,9 +653,11 @@
     <strong>Arial</strong> — while the repository self-hosts Geist and Geist Mono,
     preloads both on every page, and wires neither to anything. Two lines of CSS
     recover them. Below that: four ways to spend the roster column's vertical
-    budget, three ways to hold <strong>both</strong> stat columns on a phone —
-    which is what rules out the obvious one-line row at that width — and three
-    shapes for the readout strip once the lineup gap comes off it.
+    budget; three ways to say a player's position now that <strong>a chip means
+    a lineup slot and nothing else</strong>; three ways to hold both stat
+    columns on a phone — which is what rules out the obvious one-line row at
+    that width — and three shapes for the readout strip once the lineup gap
+    comes off it.
   </p>
   <p class="lede">
     Every specimen on this page is rendered in the actual faces from
@@ -896,8 +923,8 @@
     <em>including the ones labelled "today"</em> — §1 is where the type is
     argued, and holding it constant here is what makes these comparisons about
     height alone. <strong>Both stat columns are on every row at every
-    width</strong>, here and in §3; the phone renders below are previews of the
-    problem, and §3 is where it is solved.
+    width</strong>, here and in §4; the phone renders below are previews of the
+    problem, and §4 is where it is solved.
   </p>
   <div class="rule"></div>
 
@@ -973,13 +1000,20 @@
 
     <!-- B2 -->
     <div class="opt">
-      <h3>B2 · One line, both marks kept <span class="flag mute">@lg and up</span></h3>
+      <h3>B2 · One line, the position spelled out on every row <span class="flag mute">@lg and up</span></h3>
       <p class="tagline">
-        Slot tab, position badge, name, then the two numbers — all on one line,
-        with the NFL team moving to the row's hover (the panel's own precedent:
-        the standings row already keeps the team name there and nowhere else).
-        The tab comes out of the corner and into the grid, so the name no longer
+        Slot chip, name, position, then the two numbers — all on one line, with
+        the NFL team moving to the row's hover (the panel's own precedent: the
+        standings row already keeps the team name there and nowhere else). The
+        chip comes out of the corner and into the grid, so the name no longer
         needs its 34px indent.
+      </p>
+      <p class="tagline">
+        The position is letters after the name rather than a second chip, and it
+        is drawn on <em>every</em> row — including the ones where the slot
+        already says it. That is the difference between this and B3: B2 buys a
+        column you can scan straight down at the cost of printing
+        <code>QB&nbsp;·&nbsp;QB</code> nine rows out of twelve.
       </p>
       <p class="tagline"><strong>49px → 30px per row</strong>, and the numbers finally sit beside the name they belong to.</p>
       <div class="stage">
@@ -987,17 +1021,17 @@
           <div>
             <div class="caption on">B2 · 340px</div>
             <div style="width:340px" class="half lab-plate lab-plate-sm roster">
-              <div class="crail v-b2"><span></span><span></span><span></span><span>Start</span><span>Bench</span></div>
+              <div class="crail v-b2"><span></span><span></span><span>Start</span><span>Bench</span></div>
               <div class="sect"><h4>Starters</h4>
                 <ul class="prows v-b2">
-                  <li class="prow"><span class="tab lab-tab">QB</span><span class="badge QB">QB</span><span class="pname">M. Stafford</span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab lab-tab">RB</span><span class="badge RB">RB</span><span class="pname">C. McCaffrey</span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab lab-tab">RB</span><span class="badge RB">RB</span><span class="pname">J. Taylor</span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab lab-tab">WR</span><span class="badge WR">WR</span><span class="pname">S. Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab lab-tab">WR</span><span class="badge WR">WR</span><span class="pname">M. Golden</span><span class="pv">197.95</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab lab-tab">TE</span><span class="badge TE">TE</span><span class="pname">I. Likely</span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab lab-tab">FLEX</span><span class="badge RB">RB</span><span class="pname">A. Jeanty</span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab lab-tab">FLEX</span><span class="badge RB">RB</span><span class="pname">S. Barkley</span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">QB</span><span class="pname withpos"><span class="nmtxt">M. Stafford</span><span class="pos QB">QB</span></span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">RB</span><span class="pname withpos"><span class="nmtxt">C. McCaffrey</span><span class="pos RB">RB</span></span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">RB</span><span class="pname withpos"><span class="nmtxt">J. Taylor</span><span class="pos RB">RB</span></span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">WR</span><span class="pname withpos"><span class="nmtxt">S. Diggs</span><span class="pos WR">WR</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">WR</span><span class="pname withpos"><span class="nmtxt">M. Golden</span><span class="pos WR">WR</span></span><span class="pv">197.95</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">TE</span><span class="pname withpos"><span class="nmtxt">I. Likely</span><span class="pos TE">TE</span></span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">FLX</span><span class="pname withpos"><span class="nmtxt">A. Jeanty</span><span class="pos RB">RB</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">FLX</span><span class="pname withpos"><span class="nmtxt">S. Barkley</span><span class="pos RB">RB</span></span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
             </div>
@@ -1005,12 +1039,12 @@
           <div>
             <div class="caption warn" style="color:rgba(251,191,36,0.7)">B2 · 168px — this is why it is @lg only</div>
             <div style="width:168px" class="half lab-plate lab-plate-sm roster">
-              <div class="crail v-b2" style="--cols: 26px 32px minmax(0,1fr) 2.75rem 2.75rem"><span></span><span></span><span></span><span>St</span><span>Bn</span></div>
+              <div class="crail v-b2" style="--cols: 30px minmax(0,1fr) 2.75rem 2.75rem"><span></span><span></span><span>St</span><span>Bn</span></div>
               <div class="sect"><h4>Starters</h4>
-                <ul class="prows v-b2" style="--cols: 26px 32px minmax(0,1fr) 2.75rem 2.75rem">
-                  <li class="prow"><span class="tab lab-tab">QB</span><span class="badge QB">QB</span><span class="pname">M. Stafford</span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab lab-tab">RB</span><span class="badge RB">RB</span><span class="pname">C. McCaffrey</span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab lab-tab">WR</span><span class="badge WR">WR</span><span class="pname">S. Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                <ul class="prows v-b2" style="--cols: 30px minmax(0,1fr) 2.75rem 2.75rem">
+                  <li class="prow"><span class="tab lab-tab">QB</span><span class="pname withpos"><span class="nmtxt">M. Stafford</span><span class="pos QB">QB</span></span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">RB</span><span class="pname withpos"><span class="nmtxt">C. McCaffrey</span><span class="pos RB">RB</span></span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">WR</span><span class="pname withpos"><span class="nmtxt">S. Diggs</span><span class="pos WR">WR</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
             </div>
@@ -1019,8 +1053,8 @@
       </div>
       <ul class="costs">
         <li>A roster and a standings table finally scroll at comparable rates — the whole point of splitting the two scroll boxes.</li>
-        <li class="minus"><strong>Below <code>@lg</code> the name track collapses to ~24px.</strong> Two 44px number tracks plus a 26px tab plus a 32px badge is more than a 166px half has — see §3 for the arithmetic and for what the phone does instead.</li>
-        <li class="minus">Two marks on one line is a lot of leading furniture for what is one fact said twice.</li>
+        <li class="minus"><strong>Below <code>@lg</code> the name track collapses to ~24px.</strong> Two 44px number tracks plus a 26px tab plus a 32px badge is more than a 166px half has — see §4 for the arithmetic and for what the phone does instead.</li>
+        <li class="minus">Says the position twice on every non-flex row. The letters are cheap — ~16px against the badge's 32 — but they are still a restatement, which is the thing this panel keeps having to remove.</li>
       </ul>
     </div>
 
@@ -1028,12 +1062,18 @@
     <div class="opt pick">
       <h3>B3 · One line, one mark <span class="flag">recommended</span></h3>
       <p class="tagline">
-        The duplicate is the thing to remove, not the line. A starter's mark
+        The duplicate is the thing to remove, not the line. A starter's chip
         carries the <em>slot</em> and takes the <em>position's</em> tone, so the
         badge's colour coding survives without the badge — <code>FLEX</code> in
         emerald says "a running back is in the flex" in one part where the panel
-        used two. A bench row, which has no slot, shows the position in the same
-        mark.
+        used two, and the position is spelled out beside the name only where the
+        chip does not already say it.
+      </p>
+      <p class="tagline">
+        <strong>A chip on this row means a lineup slot and nothing else.</strong>
+        A bench player has no slot, so he has no chip — his position is letters
+        in the same lane. Two registers, so the two facts stop looking like two
+        instances of one thing. §3 is the whole of that argument.
       </p>
       <p class="tagline">
         <strong>49px → 30px per row</strong>, and the name gets 32px back from the
@@ -1054,16 +1094,16 @@
                   <li class="prow"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
                   <li class="prow"><span class="tab mk WR">WR</span><span class="pname">M. Golden</span><span class="pv">197.95</span><span class="pv zero">0.00</span></li>
                   <li class="prow"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">S. Barkley</span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">J. Warren</span><span class="pv">276.89</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">A. Jeanty</span><span class="pos RB">RB</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">S. Barkley</span><span class="pos RB">RB</span></span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">J. Warren</span><span class="pos RB">RB</span></span><span class="pv">276.89</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
               <div class="sect"><h4>Bench</h4>
                 <ul class="prows v-b3">
-                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">K. Walker III</span><span class="pv">42.10</span><span class="pv">198.44</span></li>
-                  <li class="prow"><span class="tab mk WR">WR</span><span class="pname">J. Downs</span><span class="pv">18.60</span><span class="pv">171.02</span></li>
-                  <li class="prow"><span class="tab mk QB">QB</span><span class="pname">B. Nix</span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow"><span class="pos lane RB">RB</span><span class="pname">K. Walker III</span><span class="pv">42.10</span><span class="pv">198.44</span></li>
+                  <li class="prow"><span class="pos lane WR">WR</span><span class="pname">J. Downs</span><span class="pv">18.60</span><span class="pv">171.02</span></li>
+                  <li class="prow"><span class="pos lane QB">QB</span><span class="pname">B. Nix</span><span class="pv">0.00</span><span class="pv">288.31</span></li>
                 </ul>
               </div>
             </div>
@@ -1079,10 +1119,16 @@
                 <span class="tab mk RB" style="position:static;width:30px">FLX</span>
                 <span class="tab mk WR" style="position:static;width:30px">W/T</span>
               </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;padding:2px 4px 8px">
+                <span class="pos lane RB" style="width:30px">RB</span>
+                <span class="pos lane WR" style="width:30px">WR</span>
+                <span class="pos lane TE" style="width:30px">TE</span>
+              </div>
               <p style="margin:6px 4px 0;font-size:11.5px;color:rgba(255,255,255,0.45);line-height:1.55">
                 Same <code>.lab-tab</code> extrusion, one fill per position. The
-                slot is the word; the colour is the position. A bench row shows
-                the position as the word too, so the mark is never empty.
+                <strong>word is always the slot</strong>; the colour is the
+                position. The bottom row is a bench player: no slot, so no chip
+                — letters in the same lane instead.
               </p>
             </div>
           </div>
@@ -1090,10 +1136,10 @@
       </div>
       <ul class="costs">
         <li>Removes a fact the panel was stating twice, which is the reason the row was two lines in the first place.</li>
-        <li>The bench section stops being visually narrower than the starters section — both now carry a mark.</li>
+        <li>Starters and bench stay aligned — the chip and the letters share one 30px lane — while still reading as two different kinds of row.</li>
         <li>A 40-man roster goes ~1,960px → ~1,200px, so the roster half stops dwarfing the standings half inside the card's cap.</li>
-        <li class="minus">The NFL team leaves the row for its hover. That is a real loss on touch, where there is no hover — and it is the thing §3's phone row hands back.</li>
-        <li class="minus">One line still needs <code>@lg</code>. Below it the same mark and the same grid make M1's two-line row (§3), which is why these are one change and not two.</li>
+        <li class="minus">The NFL team leaves the row for its hover. That is a real loss on touch, where there is no hover — and it is the thing §4's phone row hands back.</li>
+        <li class="minus">One line still needs <code>@lg</code>. Below it the same mark and the same grid make M1's two-line row (§4), which is why these are one change and not two.</li>
       </ul>
     </div>
 
@@ -1124,13 +1170,13 @@
                   <li class="prow"><span class="tab mk RB">RB</span><span class="pname">J. Taylor</span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
                   <li class="prow"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
                   <li class="prow"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">A. Jeanty</span><span class="pos RB">RB</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
               <div class="sect"><h4>Bench</h4>
                 <ul class="prows v-b4">
-                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">K. Walker III</span><span class="pv">42.10</span><span class="pv">198.44</span></li>
-                  <li class="prow"><span class="tab mk QB">QB</span><span class="pname">B. Nix</span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow"><span class="pos lane RB">RB</span><span class="pname">K. Walker III</span><span class="pv">42.10</span><span class="pv">198.44</span></li>
+                  <li class="prow"><span class="pos lane QB">QB</span><span class="pname">B. Nix</span><span class="pv">0.00</span><span class="pv">288.31</span></li>
                 </ul>
               </div>
             </div>
@@ -1162,7 +1208,220 @@
 
 <!-- ============================================================ §3 -->
 <section>
-  <h2><span class="num">3</span> The phone, with both stat columns</h2>
+  <h2><span class="num">3</span> The position, without a chip</h2>
+  <p class="sub">
+    Today the slot and the position are the <em>same part</em> in two colours,
+    stacked one above the other — a rounded, filled, 9–10px, uppercase mark
+    saying <code>QB</code>, and directly under it a rounded, filled, 10px,
+    uppercase mark also saying <code>QB</code>. They read as two of one thing,
+    which is why the row looks like it is repeating itself even before you
+    notice that it is.
+  </p>
+  <p class="sub">
+    <strong>So the chip becomes slot vocabulary and nothing else.</strong> A
+    chip on a roster row means "a lineup slot"; the position is letters —
+    toned on the glyphs rather than on a fill, which is a different register at
+    a glance and takes about half the width. Three ways to spend that, below.
+    All three drop <code>PositionBadge</code> from this panel; none of them
+    touches the shares lists, where the badge is the only mark on the row and
+    has nothing to collide with.
+  </p>
+  <div class="rule"></div>
+
+  <div class="opts">
+
+    <!-- P1 -->
+    <div class="opt">
+      <h3>P1 · Letters on every row, no colour on the chip <span class="flag mute">most conservative</span></h3>
+      <p class="tagline">
+        The chip stays the neutral steel <code>.lab-tab</code> it already is, and
+        the position is letters after the name on every row — including the nine
+        rows in twelve where the chip already says it. Nothing encodes anything in
+        colour, so nothing depends on colour being perceived.
+      </p>
+      <div class="stage">
+        <div class="stage-row set-geist">
+          <div>
+            <div class="caption on">P1 · 340px</div>
+            <div style="width:340px" class="half lab-plate lab-plate-sm roster">
+              <div class="crail v-b3"><span></span><span></span><span>Start</span><span>Bench</span></div>
+              <div class="sect"><h4>Starters</h4>
+                <ul class="prows v-b3">
+                  <li class="prow"><span class="tab lab-tab">QB</span><span class="pname withpos"><span class="nmtxt">M. Stafford</span><span class="pos pos-plain">QB</span></span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">RB</span><span class="pname withpos"><span class="nmtxt">C. McCaffrey</span><span class="pos pos-plain">RB</span></span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">WR</span><span class="pname withpos"><span class="nmtxt">S. Diggs</span><span class="pos pos-plain">WR</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">TE</span><span class="pname withpos"><span class="nmtxt">I. Likely</span><span class="pos pos-plain">TE</span></span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">FLX</span><span class="pname withpos"><span class="nmtxt">A. Jeanty</span><span class="pos pos-plain">RB</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab lab-tab">FLX</span><span class="pname withpos"><span class="nmtxt">S. Barkley</span><span class="pos pos-plain">RB</span></span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
+                </ul>
+              </div>
+              <div class="sect"><h4>Bench</h4>
+                <ul class="prows v-b3">
+                  <li class="prow"><span class="pos lane pos-plain">QB</span><span class="pname">B. Nix</span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow"><span class="pos lane pos-plain">RB</span><span class="pname">K. Walker III</span><span class="pv">42.10</span><span class="pv">198.44</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div style="max-width:270px">
+            <div class="caption">Reading</div>
+            <p style="font-size:13.5px;color:rgba(255,255,255,0.52);line-height:1.6">
+              Calmest of the three and the only one a reader can use with no
+              colour perception at all. What it gives up is the scan: with every
+              row the same steel, finding the running backs means reading the
+              letters rather than seeing them.
+            </p>
+          </div>
+        </div>
+      </div>
+      <ul class="costs">
+        <li>No colour is load-bearing anywhere on the row.</li>
+        <li>Position is in the same place on every row, starters and bench alike.</li>
+        <li class="minus">Prints the position where the slot already said it, on most rows.</li>
+        <li class="minus">Loses the one thing the badge was good at — a roster you can scan by colour.</li>
+      </ul>
+    </div>
+
+    <!-- P2 -->
+    <div class="opt">
+      <h3>P2 · Tone on the chip, letters only where there is no chip <span class="flag mute">least ink</span></h3>
+      <p class="tagline">
+        The slot chip takes the position's tone, so the colour scan survives; the
+        letters appear only on the bench, where there is no chip to carry them.
+        A flex row is therefore <em>emerald <code>FLEX</code></em> and nothing
+        else — the colour is the only thing saying a running back is in it.
+      </p>
+      <div class="stage">
+        <div class="stage-row set-geist">
+          <div>
+            <div class="caption on">P2 · 340px</div>
+            <div style="width:340px" class="half lab-plate lab-plate-sm roster">
+              <div class="crail v-b3"><span></span><span></span><span>Start</span><span>Bench</span></div>
+              <div class="sect"><h4>Starters</h4>
+                <ul class="prows v-b3">
+                  <li class="prow"><span class="tab mk QB">QB</span><span class="pname">M. Stafford</span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">C. McCaffrey</span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">S. Barkley</span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
+                </ul>
+              </div>
+              <div class="sect"><h4>Bench</h4>
+                <ul class="prows v-b3">
+                  <li class="prow"><span class="pos lane QB">QB</span><span class="pname">B. Nix</span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow"><span class="pos lane RB">RB</span><span class="pname">K. Walker III</span><span class="pv">42.10</span><span class="pv">198.44</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div style="max-width:270px">
+            <div class="caption">Reading</div>
+            <p style="font-size:13.5px;color:rgba(255,255,255,0.52);line-height:1.6">
+              The tidiest column of the three — no row says anything twice. The
+              risk is that a flex row's position is <em>only</em> a hue, and this
+              app already treats colour as decoration rather than as data
+              everywhere else.
+            </p>
+          </div>
+        </div>
+      </div>
+      <ul class="costs">
+        <li>Nothing is ever restated; the narrowest name track pressure of the three.</li>
+        <li>Keeps the colour scan the badge was providing.</li>
+        <li class="minus">On a flex row the position is carried by hue alone, which is the one place this panel would be encoding data in colour with no text behind it.</li>
+      </ul>
+    </div>
+
+    <!-- P3 -->
+    <div class="opt pick">
+      <h3>P3 · Tone on the chip, letters wherever the chip doesn't say it <span class="flag">recommended</span></h3>
+      <p class="tagline">
+        P2 plus the flex rows: letters wherever the chip is <em>not</em> the
+        position, which is the flexes and the whole bench. It is the rule the
+        trades board already keeps for a pick's origin — draw it when it is a
+        surprise, leave it out when it restates the line it is on — and it lands
+        the letters exactly on the rows a reader is asking the question about.
+      </p>
+      <div class="stage">
+        <div class="stage-row set-geist">
+          <div>
+            <div class="caption on">P3 · 340px, one line</div>
+            <div style="width:340px" class="half lab-plate lab-plate-sm roster">
+              <div class="crail v-b3"><span></span><span></span><span>Start</span><span>Bench</span></div>
+              <div class="sect"><h4>Starters</h4>
+                <ul class="prows v-b3">
+                  <li class="prow"><span class="tab mk QB">QB</span><span class="pname">M. Stafford</span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">C. McCaffrey</span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">J. Taylor</span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">A. Jeanty</span><span class="pos RB">RB</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">S. Barkley</span><span class="pos RB">RB</span></span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk WR">W/T</span><span class="pname withpos"><span class="nmtxt">M. Golden</span><span class="pos WR">WR</span></span><span class="pv">197.95</span><span class="pv zero">0.00</span></li>
+                </ul>
+              </div>
+              <div class="sect"><h4>Bench</h4>
+                <ul class="prows v-b3">
+                  <li class="prow"><span class="pos lane QB">QB</span><span class="pname">B. Nix</span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow"><span class="pos lane RB">RB</span><span class="pname">K. Walker III</span><span class="pv">42.10</span><span class="pv">198.44</span></li>
+                  <li class="prow"><span class="pos lane WR">WR</span><span class="pname">J. Downs</span><span class="pv">18.60</span><span class="pv">171.02</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="caption on">P3 · 166px, two lines (the phone)</div>
+            <div style="width:166px" class="half lab-plate lab-plate-sm roster">
+              <div class="crail v-m1"><span></span><span>Start</span><span>Bench</span></div>
+              <div class="sect"><h4>Starters</h4>
+                <ul class="prows v-m1">
+                  <li class="prow hastab"><span class="tab mk QB">QB</span><span class="pname">M. Stafford</span><span class="meta"><span class="team">LAR</span></span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">C. McCaffrey</span><span class="meta"><span class="team">SF</span></span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="meta"><span class="team">NE</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="meta"><span class="team">BAL</span></span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">FLEX</span><span class="pname">A. Jeanty</span><span class="meta"><span class="pos RB">RB</span><span class="team">LV</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                </ul>
+              </div>
+              <div class="sect"><h4>Bench</h4>
+                <ul class="prows v-m1">
+                  <li class="prow"><span class="pname">B. Nix</span><span class="meta"><span class="pos QB">QB</span><span class="team">DEN</span></span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow"><span class="pname">K. Walker III</span><span class="meta"><span class="pos RB">RB</span><span class="team">SEA</span></span><span class="pv">42.10</span><span class="pv">198.44</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div style="max-width:250px">
+            <div class="caption">Where the letters land</div>
+            <p style="font-size:13.5px;color:rgba(255,255,255,0.52);line-height:1.6">
+              On a one-line row they follow the name in the same cell, so the
+              name truncates and the position never does. On the phone's
+              two-line row they lead the second line, where the badge used to
+              sit — <code>RB · LV</code> — which is the one spot on that row
+              that was already about what a player is rather than about how he
+              is doing.
+            </p>
+            <p style="font-size:13.5px;color:rgba(255,255,255,0.52);line-height:1.6">
+              A bench row has no chip at either width, so its letters take the
+              lane the chip would have used and the two sections still line up.
+            </p>
+          </div>
+        </div>
+      </div>
+      <ul class="costs">
+        <li>Nothing is said twice, and nothing is carried by colour alone.</li>
+        <li>The letters appear on exactly the rows where "what is he?" is a live question — a flex, and the bench.</li>
+        <li>~16px of name track on the rows that carry them, against the badge's 32px on every row.</li>
+        <li class="minus">Two rules to hold rather than one: a chip is a slot, letters are a position, and the letters are conditional. Worth a sentence in <code>player-row.tsx</code>'s doc comment.</li>
+        <li class="minus">The bench's leading lane is letters where the starters' is a chip, so the two sections are deliberately not identical. That is the point, and it is also the thing to check on screen first.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ §4 -->
+<section>
+  <h2><span class="num">4</span> The phone, with both stat columns</h2>
   <p class="sub">
     Both columns stay at every width — so the question is what the row does
     instead. First, the measurement, because it decides the rest:
@@ -1237,14 +1496,15 @@
       <h3>M1 · Two lines, but the second one earns its keep <span class="flag">recommended</span></h3>
       <p class="tagline">
         The phone's problem was never that the row has two lines — it is that the
-        second line is spent on a badge repeating the tab above it. Take the badge
-        out (the mark carries the slot <em>and</em> the position's colour, B3's
-        move) and line two holds only what belongs to it. Three things follow, and
-        all three are gains:
+        second line is spent on a chip repeating the chip above it. Take that
+        second chip out (§3: the slot chip takes the position's tone, and the
+        position is letters where the chip doesn't already say it) and line two
+        holds only what belongs to it. Three things follow, and all three are
+        gains:
       </p>
       <ul class="costs" style="margin-bottom:18px">
         <li><strong>The numbers get bigger, not smaller.</strong> 0.65rem → 0.7rem, which is 42.7px against the 44px track already there — the size the code comment measured and could not previously afford.</li>
-        <li><strong>The phone gets the NFL team back.</strong> It is <code>hidden … @lg:inline</code> today because the badge was using that space. It fits easily now: team ~22px plus 88px of numbers plus gaps is 126px of 154.</li>
+        <li><strong>The phone gets the NFL team back.</strong> It is <code>hidden … @lg:inline</code> today because the badge was using that space. It fits easily now: team ~22px, plus ~16px of position letters on the rows that carry them, plus 88px of numbers and gaps is ~142px of 154.</li>
         <li><strong>The row gets shorter anyway.</strong> A 17px badge with its padding leaves and a 14px line of text arrives: ~49px → ~42px, without touching the rhythm.</li>
       </ul>
       <div class="stage">
@@ -1276,13 +1536,13 @@
                   <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">J. Taylor</span><span class="meta"><span class="team">IND</span></span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
                   <li class="prow hastab"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="meta"><span class="team">NE</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
                   <li class="prow hastab"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="meta"><span class="team">BAL</span></span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
-                  <li class="prow hastab"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="meta"><span class="team">LV</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">FLEX</span><span class="pname withpos"><span class="nmtxt">A. Jeanty</span><span class="pos RB">RB</span></span><span class="meta"><span class="pos RB">RB</span><span class="team">LV</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
               <div class="sect"><h4>Bench</h4>
                 <ul class="prows v-m1">
-                  <li class="prow hastab"><span class="tab mk QB">QB</span><span class="pname">B. Nix</span><span class="meta"><span class="team">DEN</span></span><span class="pv">0.00</span><span class="pv">288.31</span></li>
-                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">K. Walker III</span><span class="meta"><span class="team">SEA</span></span><span class="pv">42.10</span><span class="pv">198.44</span></li>
+                  <li class="prow"><span class="pname">B. Nix</span><span class="meta"><span class="pos QB">QB</span><span class="team">DEN</span></span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow"><span class="pname">K. Walker III</span><span class="meta"><span class="pos RB">RB</span><span class="team">SEA</span></span><span class="pv">42.10</span><span class="pv">198.44</span></li>
                 </ul>
               </div>
             </div>
@@ -1290,12 +1550,13 @@
           <div style="max-width:260px">
             <div class="caption">What moved</div>
             <p style="font-size:13.5px;color:rgba(255,255,255,0.52);line-height:1.6">
-              The mark is still on the row's leading corner, out of flow, so it
-              costs the name an indent and nothing else — exactly as today. The
-              badge is gone because the mark now says the same thing in colour.
-              Line two is the team on the left and the two numbers on the right,
-              which is a line with a left edge and a right edge rather than three
-              things fighting over the middle.
+              The slot chip is still on the row's leading corner, out of flow, so
+              it costs the name an indent and nothing else — exactly as today.
+              The badge is gone because the chip now carries the position in its
+              tone, with letters on the flex rows where it doesn't. Line two is
+              the team on the left and the two numbers on the right — a line with
+              a left edge and a right edge rather than three things fighting over
+              the middle.
             </p>
             <p style="font-size:13.5px;color:rgba(255,255,255,0.52);line-height:1.6">
               The headings can go back to their full words too —
@@ -1308,7 +1569,7 @@
       </div>
       <ul class="costs">
         <li>Nothing documented is reversed. Both value columns stay at every width, the name keeps its own line at every width, and the panel keeps one row architecture from 166px to 400px.</li>
-        <li>It is the same edit as B3 — remove the badge, tone the mark — so the desktop and the phone are one change rather than two.</li>
+        <li>It is the same edit as B3 and P3 — drop the badge, tone the chip, spell the position out where the chip doesn't — so the desktop and the phone are one change rather than two.</li>
         <li class="minus">Still two lines, so the density win is ~14% rather than B3's ~39%. On a phone that is the honest ceiling.</li>
       </ul>
     </div>
@@ -1352,7 +1613,7 @@
                   <li class="prow"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
                   <li class="prow"><span class="tab mk WR">WR</span><span class="pname">M. Golden</span><span class="pv">197.95</span><span class="pv zero">0.00</span></li>
                   <li class="prow"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">A. Jeanty</span><span class="pos RB">RB</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
             </div>
@@ -1403,7 +1664,7 @@
                       <li class="prow"><span class="tab mk RB">RB</span><span class="pname">Jonathan Taylor</span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
                       <li class="prow"><span class="tab mk WR">WR</span><span class="pname">Stefon Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
                       <li class="prow"><span class="tab mk TE">TE</span><span class="pname">Isaiah Likely</span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
-                      <li class="prow"><span class="tab mk RB">FLEX</span><span class="pname">Ashton Jeanty</span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                      <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">Ashton Jeanty</span><span class="pos RB">RB</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
                     </ul>
                   </div>
                 </div>
@@ -1440,7 +1701,7 @@
 </section>
 
 <section>
-  <h2><span class="num">4</span> The readout strip without the lineup gap</h2>
+  <h2><span class="num">5</span> The readout strip without the lineup gap</h2>
   <p class="sub">
     Removing the third cell is one deletion. What it leaves behind is a decision:
     a dial and two wells is a different-shaped object from a dial and three, and
@@ -1606,9 +1867,9 @@
   </div>
 </section>
 
-<!-- ============================================================ §5 -->
+<!-- ============================================================ §6 -->
 <section>
-  <h2><span class="num">5</span> A1 + A2 + M2 + C2, together</h2>
+  <h2><span class="num">6</span> A1 + A2 + P3 + M2 + C2, together</h2>
   <p class="sub">
     The combination I would ship, rendered whole — card, readout strip, both
     halves — at a desktop width and at the phone width the screenshot was taken
@@ -1665,16 +1926,16 @@
                   <li class="prow"><span class="tab mk WR">WR</span><span class="pname">Stefon Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
                   <li class="prow"><span class="tab mk WR">WR</span><span class="pname">Matthew Golden</span><span class="pv">197.95</span><span class="pv zero">0.00</span></li>
                   <li class="prow"><span class="tab mk TE">TE</span><span class="pname">Isaiah Likely</span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab mk RB">FLEX</span><span class="pname">Ashton Jeanty</span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab mk RB">FLEX</span><span class="pname">Saquon Barkley</span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
-                  <li class="prow"><span class="tab mk RB">FLEX</span><span class="pname">Jaylen Warren</span><span class="pv">276.89</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">Ashton Jeanty</span><span class="pos RB">RB</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">Saquon Barkley</span><span class="pos RB">RB</span></span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname withpos"><span class="nmtxt">Jaylen Warren</span><span class="pos RB">RB</span></span><span class="pv">276.89</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
               <div class="sect"><h4>Bench</h4>
                 <ul class="prows v-b3">
-                  <li class="prow"><span class="tab mk QB">QB</span><span class="pname">Bo Nix</span><span class="pv">0.00</span><span class="pv">288.31</span></li>
-                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">Kenneth Walker III</span><span class="pv">42.10</span><span class="pv">198.44</span></li>
-                  <li class="prow"><span class="tab mk WR">WR</span><span class="pname">Josh Downs</span><span class="pv">18.60</span><span class="pv">171.02</span></li>
+                  <li class="prow"><span class="pos lane QB">QB</span><span class="pname">Bo Nix</span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow"><span class="pos lane RB">RB</span><span class="pname">Kenneth Walker III</span><span class="pv">42.10</span><span class="pv">198.44</span></li>
+                  <li class="prow"><span class="pos lane WR">WR</span><span class="pname">Josh Downs</span><span class="pv">18.60</span><span class="pv">171.02</span></li>
                 </ul>
               </div>
             </div>
@@ -1729,15 +1990,15 @@
                   <li class="prow hastab"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="meta"><span class="team">NE</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
                   <li class="prow hastab"><span class="tab mk WR">WR</span><span class="pname">M. Golden</span><span class="meta"><span class="team">GB</span></span><span class="pv">197.95</span><span class="pv zero">0.00</span></li>
                   <li class="prow hastab"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="meta"><span class="team">BAL</span></span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
-                  <li class="prow hastab"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="meta"><span class="team">LV</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
-                  <li class="prow hastab"><span class="tab mk RB">FLX</span><span class="pname">S. Barkley</span><span class="meta"><span class="team">PHI</span></span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
-                  <li class="prow hastab"><span class="tab mk RB">FLX</span><span class="pname">J. Warren</span><span class="meta"><span class="team">PIT</span></span><span class="pv">276.89</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">FLEX</span><span class="pname withpos"><span class="nmtxt">A. Jeanty</span><span class="pos RB">RB</span></span><span class="meta"><span class="pos RB">RB</span><span class="team">LV</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">FLEX</span><span class="pname withpos"><span class="nmtxt">S. Barkley</span><span class="pos RB">RB</span></span><span class="meta"><span class="pos RB">RB</span><span class="team">PHI</span></span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">FLEX</span><span class="pname withpos"><span class="nmtxt">J. Warren</span><span class="pos RB">RB</span></span><span class="meta"><span class="pos RB">RB</span><span class="team">PIT</span></span><span class="pv">276.89</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
               <div class="sect"><h4>Bench</h4>
                 <ul class="prows v-m1">
-                  <li class="prow hastab"><span class="tab mk QB">QB</span><span class="pname">B. Nix</span><span class="meta"><span class="team">DEN</span></span><span class="pv">0.00</span><span class="pv">288.31</span></li>
-                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">K. Walker III</span><span class="meta"><span class="team">SEA</span></span><span class="pv">42.10</span><span class="pv">198.44</span></li>
+                  <li class="prow"><span class="pname">B. Nix</span><span class="meta"><span class="pos QB">QB</span><span class="team">DEN</span></span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow"><span class="pname">K. Walker III</span><span class="meta"><span class="pos RB">RB</span><span class="team">SEA</span></span><span class="pv">42.10</span><span class="pv">198.44</span></li>
                 </ul>
               </div>
             </div>
@@ -1752,7 +2013,8 @@
     <tbody>
       <tr><td>A1 · faces on</td><td class="n">globals.css</td><td class="good">No</td></tr>
       <tr><td>A2 · panel type scale</td><td class="n">panel-telemetry, roster-detail, standings, player-row</td><td class="good">No — no measured track moves</td></tr>
-      <tr><td>M1 · one mark, line two earns its keep</td><td class="n">player-row, roster-detail</td><td>Yes — the slot/badge split. Nothing about column count.</td></tr>
+      <tr><td>P3 · chip is the slot, letters are the position</td><td class="n">player-row</td><td>Yes — <code>PositionBadge</code> leaves this panel (it stays on the shares lists)</td></tr>
+      <tr><td>M1 · line two earns its keep</td><td class="n">player-row, roster-detail</td><td>Yes — the slot/badge split. Nothing about column count.</td></tr>
       <tr><td>M2 · one line at <code>@lg</code> and up</td><td class="n">roster-layout, player-row</td><td>Yes — the two-line note in <code>roster-layout.ts</code> gains a tier</td></tr>
       <tr><td>C2 · one housing, no gap</td><td class="n">panel-telemetry</td><td class="good">No — <code>points_left</code> still drawn by the lineup checker</td></tr>
     </tbody>
@@ -1766,10 +2028,11 @@
   Bench value is <code>0.00</code> — so the starters list, which is the first
   thing the panel shows, opens with a column of zeros. <code>Proj</code> /
   <code>Start</code> would put two live numbers there. And <strong>the position
-  badge and the slot tab are two different shapes for one fact</strong> across the
-  whole app, not only in this panel; B3 and M1 unify them here at both widths, and
-  the shares lists still draw the badge on its own, which is correct there and
-  worth not accidentally diverging from.
+  badge and the slot chip are the same shape for two different facts</strong>,
+  which is what §3 is about; they are the same shape elsewhere in the app too,
+  and it only collides here because this is the one list that draws both. The
+  shares lists keep <code>PositionBadge</code> and should — there is no slot
+  chip beside it there to be confused with.
 </p>
 
 </div>
