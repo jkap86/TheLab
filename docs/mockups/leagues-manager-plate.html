@@ -1,0 +1,1660 @@
+<title>Leagues manager plate — five ways off the glass</title>
+
+<style>
+  /* ------------------------------------------------------------------
+     Fourteenth in the series, so the palette, the faces and the section
+     grammar are lifted from `trades-top-card.html` — which took them
+     from src/app/globals.css. A mock that looked like a different
+     product from the thirteen before it would be arguing about the
+     wrong thing.
+
+     What is new here is under THE PLATE ITSELF: five ways of building
+     the card at the top of `/manager/[searched]/leagues`, all of them
+     carrying byte-for-byte the same content as the card does today.
+
+     The app's own materials below are copied from globals.css rather
+     than approximated — a mock that judged a material by a lookalike
+     would be judging the lookalike.
+     ------------------------------------------------------------------ */
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  :root {
+    color-scheme: dark;
+
+    --bench: #050b12;
+    --app-bg: rgb(10, 20, 30);
+
+    --well: #07131e;
+
+    --active: #00ffe5;
+    --on-active: #052029;
+    --edge: #05121d;
+    --edge-active: #00776b;
+
+    --fg: #ffffff;
+    --amber: #fbbf24;
+
+    --measure: 66ch;
+
+    --display: "Orbitron", "Eurostile", "Bahnschrift", ui-sans-serif, system-ui, sans-serif;
+    --body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  }
+
+  /* Inlined rather than linked: the artifact CSP blocks font CDNs, and a
+     silent fallback here would lose the one face that makes the app the
+     app. Variable weight axis, subset latin. */
+  @font-face {
+    font-family: "Orbitron";
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: block;
+    src: url(data:font/woff2;base64,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) format("woff2");
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 620px at 12% -8%, rgba(0, 255, 229, 0.07), transparent 62%),
+      radial-gradient(900px 520px at 92% 4%, rgba(0, 120, 190, 0.09), transparent 60%),
+      var(--bench);
+    color: var(--fg);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------------------------------------------------------- shell */
+  .wrap { max-width: 1380px; margin: 0 auto; padding: 0 20px 96px; }
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    margin-bottom: 40px;
+    background: linear-gradient(180deg, rgba(14, 32, 45, 0.92), rgba(6, 16, 24, 0.92));
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 255, 229, 0.16);
+    box-shadow: 0 6px 0 -1px #030a11, 0 12px 26px -14px rgba(0, 0, 0, 0.9);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .bar::-webkit-scrollbar { display: none; }
+  .bar__mark {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--active);
+    text-shadow: 0 0 16px rgba(0, 255, 229, 0.5);
+    white-space: nowrap;
+  }
+  .bar__keys { display: flex; gap: 6px; margin-left: auto; }
+  .bar__key {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.72);
+    text-decoration: none;
+    white-space: nowrap;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+    transition: background 0.15s, color 0.15s;
+  }
+  .bar__key:hover { background: linear-gradient(170deg, #34586f, #162b38); color: #fff; }
+  .bar__key:active { transform: translateY(2px); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.18), 0 1px 0 var(--edge); }
+
+  /* ------------------------------------------------------------ masthead */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: rgba(255, 255, 255, 0.38);
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.07;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 12px 0 0;
+    background: linear-gradient(96deg, #ffffff 18%, var(--active) 92%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lede {
+    max-width: var(--measure);
+    margin: 20px 0 0;
+    font-size: 17px;
+    color: rgba(255, 255, 255, 0.74);
+  }
+  .lede b { color: #fff; font-weight: 600; }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 20px;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; margin: 0 0 6px; color: #fff; }
+  p { margin: 0; }
+  .prose { max-width: var(--measure); color: rgba(255, 255, 255, 0.72); }
+  .prose + .prose { margin-top: 14px; }
+  .prose b { color: #fff; font-weight: 600; }
+  em { color: rgba(255, 255, 255, 0.88); font-style: italic; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 255, 229, 0.08);
+    border: 1px solid rgba(0, 255, 229, 0.14);
+    color: #9ffff2;
+    white-space: nowrap;
+  }
+
+  section { margin-top: 64px; }
+  .rule { height: 1px; background: linear-gradient(90deg, rgba(0, 255, 229, 0.5), rgba(255, 255, 255, 0.08) 40%, transparent); }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .sec-head .eyebrow { margin-left: auto; }
+
+  /* ---------------------------------------------------------- prose cards */
+  .cards {
+    display: grid;
+    gap: 14px;
+    margin-top: 26px;
+    grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  }
+  .card {
+    padding: 16px 17px 17px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+  .card p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .card p + p { margin-top: 9px; }
+  .card__tag {
+    display: inline-block;
+    margin-bottom: 9px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--active);
+    background: rgba(0, 255, 229, 0.09);
+    border: 1px solid rgba(0, 255, 229, 0.22);
+  }
+  .card--warn .card__tag { color: var(--amber); background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.28); }
+
+  /* -------------------------------------------------------------- options */
+  .opt { margin-top: 76px; scroll-margin-top: 76px; }
+  .opt__head { display: flex; align-items: flex-start; gap: 14px; }
+  .opt__letter {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 3px 0 var(--edge-active),
+      0 8px 18px -6px rgba(0, 255, 229, 0.45);
+  }
+  .opt--alt .opt__letter {
+    color: rgba(255, 255, 255, 0.8);
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.22), 0 3px 0 var(--edge);
+  }
+  .opt__thesis { margin-top: 5px; font-size: 15px; color: rgba(255, 255, 255, 0.6); max-width: var(--measure); }
+  .opt__body { display: grid; gap: 16px; margin-top: 22px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .opt__body { grid-template-columns: 1fr 1fr; } }
+  .opt__body > * { min-width: 0; }
+  .note h3 { display: flex; align-items: center; gap: 7px; }
+  .note h3::before {
+    content: "";
+    width: 3px;
+    height: 13px;
+    border-radius: 2px;
+    background: var(--active);
+    box-shadow: 0 0 8px rgba(0, 255, 229, 0.7);
+  }
+  .note--cost h3::before { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, 0.6); }
+  .note p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .note p + p { margin-top: 10px; }
+
+  .price {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    max-width: 100%;
+  }
+  .price--good { color: var(--active); background: rgba(0, 255, 229, 0.09); border-color: rgba(0, 255, 229, 0.28); }
+
+  /* --------------------------------------------------- the mock enclosure */
+  .screen {
+    margin-top: 26px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    background: var(--app-bg);
+    box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+  }
+  .screen__tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.34);
+  }
+  .screen__tab b { color: rgba(0, 255, 229, 0.8); font-weight: 600; }
+  /* The app's own aurora, so a translucent surface has something behind it to
+     be translucent *against* — judging glass on a flat ground is judging a
+     different material. */
+  .screen__body {
+    position: relative;
+    padding: 20px 18px 26px;
+    background:
+      radial-gradient(620px 320px at 8% -20%, rgba(0, 255, 229, 0.06), transparent 64%),
+      radial-gradient(520px 280px at 96% 0%, rgba(0, 120, 190, 0.08), transparent 62%);
+  }
+
+  /* ==================================================================
+     THE APP'S OWN MATERIALS — copied from src/app/globals.css.
+     Nothing here is invented; if a face looks wrong in this file it is
+     wrong in the app too.
+     ================================================================== */
+  .lab-well {
+    background: #07131e;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(0, 255, 229, 0.14);
+  }
+  .lab-readout {
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow:
+      inset 0 2px 7px rgba(0, 0, 0, 0.85),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .lab-trough {
+    background: #06111b;
+    box-shadow:
+      inset 0 6px 14px -4px rgba(0, 0, 0, 0.9),
+      inset 0 -2px 6px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.1);
+  }
+  .lab-groove {
+    background: linear-gradient(180deg, #050e17, #081722);
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.95),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.05);
+  }
+  .lab-plate {
+    background: linear-gradient(168deg, #16293a, #0a1622 62%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -24px 44px -26px rgba(0, 0, 0, 0.9),
+      0 4px 0 var(--edge),
+      0 20px 34px -16px rgba(0, 0, 0, 0.85);
+  }
+  .lab-slab {
+    padding: 0 6px 6px 0;
+    background: linear-gradient(128deg, #14545c 0%, #0a2b33 38%, var(--edge) 76%);
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.9))
+      drop-shadow(0 10px 16px rgba(0, 0, 0, 0.75))
+      drop-shadow(0 0 20px rgba(0, 255, 229, 0.1));
+  }
+  .lab-slab-face {
+    position: relative;
+    background:
+      repeating-linear-gradient(101deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(168deg, #1b3245 0%, #122534 46%, #0a1723 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 2.5px 0 -1px rgba(255, 255, 255, 0.14),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
+      inset 0 -20px 38px -22px rgba(0, 0, 0, 0.9),
+      inset -8px 0 16px -10px rgba(0, 0, 0, 0.75);
+  }
+  .lab-slab-face::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(106deg, transparent 20%, rgba(255, 255, 255, 0.055) 44%, transparent 60%);
+  }
+  .lab-slab-face-rail {
+    background:
+      repeating-linear-gradient(101deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 70%),
+      linear-gradient(100deg, #23445f 0%, #1a3145 45%, #142534 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 2.5px 0 -1px rgba(255, 255, 255, 0.14),
+      inset 2px 0 0 -0.5px rgba(255, 255, 255, 0.13),
+      inset 0 -8px 14px -12px rgba(0, 0, 0, 0.85),
+      inset -10px 0 20px -14px rgba(0, 0, 0, 0.7);
+  }
+  .lab-notch-lg {
+    clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+  }
+  .lab-notch-all {
+    clip-path: polygon(
+      9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px),
+      calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px
+    );
+  }
+  .lab-nameplate {
+    background: linear-gradient(172deg, #4d7d9c 0%, #2f566f 55%, #1f3b50 100%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.4),
+      0 2px 0 var(--edge),
+      0 5px 10px -4px rgba(0, 0, 0, 0.8);
+  }
+  .lab-ledge {
+    padding-bottom: 5px;
+    background: linear-gradient(180deg, #071825 0%, #030e17 100%);
+    filter: drop-shadow(0 5px 3px rgba(0, 0, 0, 0.5)) drop-shadow(0 14px 22px rgba(0, 0, 0, 0.65));
+  }
+  .lab-ledge-face {
+    position: relative;
+    background: linear-gradient(
+      177deg, #6d9cba 0px, #6d9cba 1.5px, #416f8e 3px, #315874 16%, #1c374c 62%, #122636 100%
+    );
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.55), inset 0 -7px 12px -7px rgba(0, 0, 0, 0.75);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.08), 0 -1px 1px rgba(0, 0, 0, 0.8);
+  }
+  .lab-ledge-face::before {
+    content: "";
+    position: absolute;
+    left: 12px;
+    right: 1px;
+    top: 2.5px;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(0, 255, 229, 0.55), rgba(0, 255, 229, 0.14) 55%, transparent);
+    pointer-events: none;
+  }
+  .lab-ledge-slot {
+    background: linear-gradient(180deg, #0b1c28, #123045);
+    box-shadow:
+      inset 0 2px 3px rgba(0, 0, 0, 0.8),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+      0 1px 0 rgba(255, 255, 255, 0.07);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  }
+  .lab-chip {
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+  }
+  .lab-chip-sm {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.4),
+      0 2px 0 var(--edge),
+      0 4px 8px -4px rgba(0, 0, 0, 0.7);
+  }
+  .lab-engraved { text-shadow: 0 -1px 1px rgba(0, 0, 0, 0.95), 0 1px 0 rgba(255, 255, 255, 0.16); }
+  .lab-engraved-faint { text-shadow: 0 -1px 1px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.08); }
+
+  /* ==================================================================
+     THE PLATE ITSELF
+
+     One markup skeleton, five surfaces. Everything inside `.plate__body`
+     and `.plate__state` is identical in all six renderings — including
+     the current one — so what is being compared is only the surface.
+     ================================================================== */
+  .plate-wrap { position: relative; margin-bottom: 6px; }
+
+  .plate { position: relative; isolation: isolate; }
+
+  /* The accent rail down the leading edge, and the specular sweep. Both are
+     the card's own today; each option says whether it keeps them. */
+  .plate__rail {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 2;
+    width: 4px;
+    background: linear-gradient(180deg, var(--active), rgba(0, 255, 229, 0.3));
+    box-shadow: 0 0 16px rgba(0, 255, 229, 0.4);
+  }
+  .plate__sweep {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.06) 48%, transparent 62%);
+  }
+
+  /* The two corner tabs. Wells, because on this card recessed means *read me*
+     — the plate's corners are facts, never controls. */
+  .plate__tab {
+    position: absolute;
+    top: 0;
+    z-index: 3;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 10px;
+    line-height: 1;
+  }
+  .plate__tab--l { left: 0; padding-left: 14px; border-radius: 0 8px 8px 0; border-top-left-radius: 15px; }
+  .plate__tab--r { right: 0; border-radius: 8px 0 0 8px; border-top-right-radius: 15px; }
+  .plate__season {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--active);
+    text-shadow: 0 0 12px rgba(0, 255, 229, 0.35);
+  }
+  .plate__stat-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255, 255, 255, 0.4); }
+  .plate__stat-value { font-family: var(--mono); font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.85); }
+  .plate__stat-sub { color: rgba(255, 255, 255, 0.35); font-style: normal; }
+
+  .plate__body {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 24px 20px 12px 24px;
+  }
+
+  .avatar {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--on-active);
+    background: linear-gradient(160deg, #7ff5e6, #109e93);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 4px 12px -4px rgba(0, 0, 0, 0.8);
+  }
+
+  .plate__id { min-width: 0; flex: 1; }
+  .plate__name {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .plate__rec {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 8px;
+    margin-top: 4px;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  .plate__rec b { font-family: var(--mono); font-weight: 600; }
+  .plate__rec .scope { color: rgba(0, 255, 229, 0.6); }
+  .plate__rec .from { color: rgba(255, 255, 255, 0.4); }
+
+  .plate__bar { display: flex; gap: 2px; height: 4px; max-width: 420px; margin-top: 6px; }
+  .plate__bar span { display: block; border-radius: 2px; }
+  .plate__bar .w { background: linear-gradient(90deg, rgba(0, 255, 229, 0.5), var(--active)); box-shadow: 0 0 10px rgba(0, 255, 229, 0.35); }
+  .plate__bar .l { background: rgba(255, 255, 255, 0.16); }
+  .plate__bar .t { background: rgba(251, 191, 36, 0.5); }
+
+  .gauge { position: relative; flex: none; display: grid; place-items: center; width: 66px; height: 66px; }
+  .gauge svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .gauge__read { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .gauge__pct { font-family: var(--mono); font-size: 18px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
+  .gauge__cap { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: rgba(255, 255, 255, 0.4); }
+
+  .plate__state {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 8px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+  }
+  .plate__state .ok { color: rgba(255, 255, 255, 0.45); }
+  .plate__state .warn {
+    padding: 2px 8px;
+    border-radius: 6px;
+    color: #fcd34d;
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+  }
+
+  /* ---------------------------------------------------- 0 · today's glass */
+  .plate--glass {
+    overflow: hidden;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(
+      160deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.02) 60%, rgba(255, 255, 255, 0.008)
+    );
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -2px 8px rgba(0, 0, 0, 0.5),
+      0 18px 40px -22px rgba(0, 0, 0, 0.9);
+  }
+
+  /* ------------------------------------------------------ A · milled plate */
+  .plate--plate { overflow: hidden; border-radius: 16px; }
+
+  /* ------------------------------------------------------------- B · slab */
+  /* The wall wrapper and the face are two boxes, `.lab-slab`'s construction —
+     `clip-path` cuts a `box-shadow` off, so thickness has to be a stacked
+     layer rather than a shadow. */
+  .plate--slab { padding: 0; background: none; box-shadow: none; }
+  .plate--slab .plate__face { position: relative; }
+
+  /* ------------------------------------------------------- D · instrument */
+  .plate--panel { overflow: hidden; border-radius: 16px; }
+  .plate--panel .plate__body { align-items: stretch; gap: 14px; padding: 26px 16px 16px 22px; }
+  /* The housing hugs its contents rather than stretching to the row. A cut is
+     read as a cut because something sits in it; stretched to the full face it
+     is 500px of empty trough with a name at one end, which reads as a gap in
+     the chassis rather than as a housing. `margin-right: auto` is what keeps
+     the dial on the trailing edge once the housing stops filling the row. */
+  .plate--panel .plate__id {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    justify-content: center;
+    max-width: 560px;
+    margin-right: auto;
+    padding: 8px 14px 10px;
+    border-radius: 9px;
+  }
+  .plate--panel .plate__bar { max-width: none; }
+  .plate--panel .plate__name { margin-bottom: 2px; }
+  .plate--panel .plate__rec b { color: #cfeeff; }
+  .plate--panel .gauge-housing {
+    flex: none;
+    display: grid;
+    place-items: center;
+    padding: 6px;
+    border-radius: 999px;
+  }
+  .plate--panel .avatar-housing {
+    flex: none;
+    display: grid;
+    place-items: center;
+    padding: 5px;
+    border-radius: 999px;
+  }
+  .plate--panel .plate__state { border-top: none; box-shadow: inset 0 1px 0 rgba(0,0,0,0.7), inset 0 2px 0 rgba(255,255,255,0.05); }
+
+  /* ---------------------------------------------------------- E · no plate */
+  .plate--none { background: none; box-shadow: none; border: none; }
+  .plate--none .plate__body { padding: 6px 4px 12px 18px; }
+  .plate--none .plate__rail { inset: 2px auto 12px 0; width: 3px; border-radius: 2px; }
+  .plate--none .plate__tab { padding: 3px 9px; border-radius: 7px; }
+  .plate--none .plate__tab--l { left: 14px; top: -4px; }
+  .plate--none .plate__tab--r { right: 0; top: -4px; }
+  .plate--none .plate__state { padding-left: 18px; padding-right: 4px; }
+  .plate--none .plate__head { position: relative; height: 22px; }
+
+  /* ==================================================================
+     WHAT SITS UNDER IT — the subject rail, the heading billet and one
+     league card. Every option is judged against these, because they are
+     what the plate has to stop disagreeing with.
+     ================================================================== */
+  .rail { position: relative; margin-bottom: 18px; }
+  .rail__face {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    width: 100%;
+    padding: 6px 10px;
+  }
+  .rail__cap { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.42); }
+  .rail__seek {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 7px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .rail__count { margin-left: auto; font-family: var(--mono); font-size: 11px; color: rgba(255, 255, 255, 0.6); }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+  }
+
+  .billet { position: relative; margin-bottom: 10px; }
+  .billet__face { display: flex; align-items: stretch; width: 100%; padding: 0; }
+  .billet__sub { flex: 1; min-width: 0; display: flex; align-items: center; padding: 7px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.5); }
+  .billet__col { flex: none; width: 96px; padding: 5px 6px; box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.5); }
+  .billet__slot {
+    display: block;
+    padding: 3px 4px;
+    border-radius: 5px;
+    text-align: right;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(255, 255, 255, 0.62);
+  }
+
+  .lcard { position: relative; margin-top: 14px; }
+  .lcard__plate {
+    position: absolute;
+    top: -9px;
+    left: 14px;
+    right: 14px;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    pointer-events: none;
+  }
+  .lcard__name, .lcard__rec {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 2px 10px;
+    border-radius: 5px;
+    max-width: 52%;
+  }
+  .lcard__name b { font-family: var(--display); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lcard__rec b { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+  .lcard__rec i { font-family: var(--display); font-size: 11px; font-style: normal; color: rgba(255, 255, 255, 0.75); }
+  .lcard__face { display: flex; align-items: center; gap: 8px; width: 100%; padding: 18px 11px 12px 21px; }
+  .lcard__lead { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255, 255, 255, 0.55); }
+  .lcard__cols { flex: none; display: flex; }
+  .lcard__col { width: 96px; padding: 0 6px; text-align: right; box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.06); }
+  .lcard__col b { display: block; font-family: var(--display); font-size: 13px; font-weight: 600; }
+  .lcard__col span { display: block; font-size: 9px; color: rgba(255, 255, 255, 0.38); }
+
+  /* ------------------------------------------------------------- verdict */
+  .verdict {
+    margin-top: 30px;
+    padding: 20px 22px 22px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(0, 255, 229, 0.07), rgba(0, 255, 229, 0.015));
+    border: 1px solid rgba(0, 255, 229, 0.25);
+  }
+  .verdict h3 { font-family: var(--display); font-size: 15px; margin-bottom: 10px; }
+  .verdict p { color: rgba(255, 255, 255, 0.74); max-width: var(--measure); }
+  .verdict p + p { margin-top: 12px; }
+  .verdict b { color: #fff; }
+
+  .legend { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .legend span {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+</style>
+
+<div class="bar">
+  <span class="bar__mark">THE LAB · MOCKUP</span>
+  <nav class="bar__keys">
+    <a class="bar__key" href="#now">Today</a>
+    <a class="bar__key" href="#a">A · Plate</a>
+    <a class="bar__key" href="#b">B · Slab</a>
+    <a class="bar__key" href="#c">C · Console</a>
+    <a class="bar__key" href="#d">D · Instrument</a>
+    <a class="bar__key" href="#e">E · No plate</a>
+    <a class="bar__key" href="#verdict">Verdict</a>
+  </nav>
+</div>
+
+<div class="wrap">
+  <p class="eyebrow">Manager header · /manager/[searched]/leagues</p>
+  <h1>Five ways off the glass</h1>
+  <p class="lede">
+    The plate at the top of the leagues page is the <b>last translucent surface on
+    that screen</b>. Everything under it went machined — the subject rail is a
+    <code>.lab-slab</code>, the heading billet is a <code>.lab-ledge</code>, and the
+    league cards left <code>LIST_ROW_SURFACE</code> for the trades board's own
+    corner-lit block. The card didn't come with them.
+  </p>
+  <p class="lede">
+    Every option below carries <b>exactly the content the card carries today</b> —
+    season tab, stat tab, avatar, name, record digits, scope, denominator,
+    proportion bar, win-pct dial, sync line. Only the surface changes.
+  </p>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head"><h2>What is actually wrong with it</h2><span class="eyebrow">the diagnosis</span></div>
+    <div class="rule"></div>
+
+    <div class="cards">
+      <div class="card">
+        <span class="card__tag">the tell</span>
+        <p>
+          The card is glass on the outside and <em>machined on the inside</em>. Its
+          two corner tabs are already <code>.lab-well</code>, and the kickoff
+          countdown's digit cells are already <code>.lab-readout</code>.
+        </p>
+        <p>
+          So it is not that the app has two materials — it is that this one part
+          wears both, four surfaces deep, with the join running around its own
+          edge.
+        </p>
+      </div>
+      <div class="card">
+        <span class="card__tag">the neighbours</span>
+        <p>
+          Directly below it sit three machined parts in a row: the subject rail
+          (slab, chamfered, wall down <em>and</em> right), the heading billet, then
+          a hundred league cards.
+        </p>
+        <p>
+          Reading down the page, the plate is the only thing you could put a
+          finger through.
+        </p>
+      </div>
+      <div class="card card--warn">
+        <span class="card__tag">the aspect trap</span>
+        <p>
+          <code>.lab-slab-face</code>'s corner-lit fill runs at 168°. Over this
+          card's box (~1200×130) the gradient line is only ~380px long, so the
+          three stops resolve inside the leading third and the rest sits flat on
+          <code>#0a1723</code> — three values off the page ground.
+        </p>
+        <p>
+          That is the exact failure <code>.lab-slab-face-rail</code> was written
+          for. It is why <b>B and C differ</b>, and why the difference is worth
+          seeing rather than reasoning about.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="now">
+    <div class="sec-head"><h2>Today</h2><span class="eyebrow">the before</span></div>
+    <div class="rule"></div>
+    <p class="prose" style="margin-top:18px">
+      Rendered over the app's own aurora, because glass judged against a flat
+      ground is a different material.
+    </p>
+
+    <div class="screen">
+      <div class="screen__tab"><b>/manager/jkap/leagues</b> · current</div>
+      <div class="screen__body">
+
+        <div class="plate-wrap">
+          <div class="plate plate--glass">
+            <span class="plate__rail"></span>
+            <span class="plate__sweep"></span>
+            <span class="plate__tab plate__tab--l lab-well"><b class="plate__season">2026</b></span>
+            <span class="plate__tab plate__tab--r lab-well">
+              <span class="plate__stat-label">Leagues</span>
+              <span class="plate__stat-value">121</span>
+              <i class="plate__stat-sub">of 121 total</i>
+            </span>
+            <div class="plate__body">
+              <span class="avatar">J</span>
+              <div class="plate__id">
+                <h4 class="plate__name">jkap</h4>
+                <p class="plate__rec">
+                  <b>72-48-1</b>
+                  <span class="scope">dynasty leagues</span>
+                  <span class="from">from 113 of 121 leagues</span>
+                </p>
+                <div class="plate__bar">
+                  <span class="w" style="flex-grow:72"></span>
+                  <span class="l" style="flex-grow:48"></span>
+                  <span class="t" style="flex-grow:1"></span>
+                </div>
+              </div>
+              <div class="gauge">
+                <svg viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                  <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke-linecap="round"
+                          stroke="url(#g0)" stroke-dasharray="276.46" stroke-dashoffset="127.17"
+                          style="filter:drop-shadow(0 0 6px rgba(0,255,229,0.45))"></circle>
+                  <defs><linearGradient id="g0" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#00ffe5" stop-opacity="0.45"></stop>
+                    <stop offset="100%" stop-color="#00ffe5"></stop>
+                  </linearGradient></defs>
+                </svg>
+                <div class="gauge__read"><span class="gauge__pct">.540</span><span class="gauge__cap">Win pct</span></div>
+              </div>
+            </div>
+            <div class="plate__state">
+              <span class="ok">Refreshed just now</span>
+              <span class="warn">97 of 100 leagues refreshed</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- the three machined parts under it -->
+        <div class="rail lab-slab lab-notch-all">
+          <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+            <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+            <span class="rail__cap">Narrow to</span>
+            <span class="rail__seek lab-groove">Player or leaguemate</span>
+            <span class="rail__count">113 of 121</span>
+            <span class="chip lab-chip lab-chip-sm">Player shares</span>
+            <span class="chip lab-chip lab-chip-sm">Leaguemates</span>
+          </div>
+        </div>
+
+        <div class="billet lab-ledge lab-notch-lg">
+          <div class="billet__face lab-ledge-face lab-notch-lg">
+            <span class="billet__sub">League</span>
+            <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+            <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+            <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+            <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+          </div>
+        </div>
+
+        <div class="lcard">
+          <div class="lcard__plate">
+            <span class="lcard__name lab-nameplate"><b>Dynasty Degenerates III</b></span>
+            <span class="lcard__rec lab-nameplate"><b>8-4-0</b><i>2nd</i></span>
+          </div>
+          <div class="lab-slab lab-notch-lg">
+            <div class="lcard__face lab-slab-face lab-notch-lg">
+              <span class="lcard__lead">12 teams · SF · Dynasty</span>
+              <span class="lcard__cols">
+                <span class="lcard__col"><b class="lab-engraved">8-4-0</b><span>Record</span></span>
+                <span class="lcard__col"><b class="lab-engraved">1,842</b><span>Proj</span></span>
+                <span class="lcard__col"><b class="lab-engraved">41,208</b><span>Dynasty</span></span>
+                <span class="lcard__col"><b class="lab-engraved">3<small style="opacity:.5"> of 12</small></b><span>KTC #</span></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head"><h2>Five surfaces</h2><span class="eyebrow">same content, five materials</span></div>
+    <div class="rule"></div>
+
+    <!-- ------------------------------------------------------ A -->
+    <div class="opt" id="a">
+      <div class="opt__head">
+        <span class="opt__letter">A</span>
+        <div>
+          <h2>Milled plate</h2>
+          <p class="opt__thesis">
+            The same card, with <code>.lab-plate</code> where the glass was. One
+            class swapped, nothing moved.
+          </p>
+        </div>
+      </div>
+
+      <div class="screen">
+        <div class="screen__tab"><b>A</b> · <code style="border:0;background:none;padding:0">.lab-plate</code>, rounded, bottom wall, rail and sweep kept</div>
+        <div class="screen__body">
+          <div class="plate-wrap">
+            <div class="plate plate--plate lab-plate">
+              <span class="plate__rail"></span>
+              <span class="plate__sweep"></span>
+              <span class="plate__tab plate__tab--l lab-well"><b class="plate__season">2026</b></span>
+              <span class="plate__tab plate__tab--r lab-well">
+                <span class="plate__stat-label">Leagues</span>
+                <span class="plate__stat-value">121</span>
+                <i class="plate__stat-sub">of 121 total</i>
+              </span>
+              <div class="plate__body">
+                <span class="avatar">J</span>
+                <div class="plate__id">
+                  <h4 class="plate__name">jkap</h4>
+                  <p class="plate__rec">
+                    <b>72-48-1</b>
+                    <span class="scope">dynasty leagues</span>
+                    <span class="from">from 113 of 121 leagues</span>
+                  </p>
+                  <div class="plate__bar">
+                    <span class="w" style="flex-grow:72"></span>
+                    <span class="l" style="flex-grow:48"></span>
+                    <span class="t" style="flex-grow:1"></span>
+                  </div>
+                </div>
+                <div class="gauge">
+                  <svg viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                    <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke-linecap="round"
+                            stroke="url(#ga)" stroke-dasharray="276.46" stroke-dashoffset="127.17"
+                            style="filter:drop-shadow(0 0 6px rgba(0,255,229,0.45))"></circle>
+                    <defs><linearGradient id="ga" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stop-color="#00ffe5" stop-opacity="0.45"></stop>
+                      <stop offset="100%" stop-color="#00ffe5"></stop>
+                    </linearGradient></defs>
+                  </svg>
+                  <div class="gauge__read"><span class="gauge__pct">.540</span><span class="gauge__cap">Win pct</span></div>
+                </div>
+              </div>
+              <div class="plate__state">
+                <span class="ok">Refreshed just now</span>
+                <span class="warn">97 of 100 leagues refreshed</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail lab-slab lab-notch-all">
+            <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+              <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+              <span class="rail__cap">Narrow to</span>
+              <span class="rail__seek lab-groove">Player or leaguemate</span>
+              <span class="rail__count">113 of 121</span>
+              <span class="chip lab-chip lab-chip-sm">Player shares</span>
+              <span class="chip lab-chip lab-chip-sm">Leaguemates</span>
+            </div>
+          </div>
+          <div class="billet lab-ledge lab-notch-lg">
+            <div class="billet__face lab-ledge-face lab-notch-lg">
+              <span class="billet__sub">League</span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+            </div>
+          </div>
+          <div class="lcard">
+            <div class="lcard__plate">
+              <span class="lcard__name lab-nameplate"><b>Dynasty Degenerates III</b></span>
+              <span class="lcard__rec lab-nameplate"><b>8-4-0</b><i>2nd</i></span>
+            </div>
+            <div class="lab-slab lab-notch-lg">
+              <div class="lcard__face lab-slab-face lab-notch-lg">
+                <span class="lcard__lead">12 teams · SF · Dynasty</span>
+                <span class="lcard__cols">
+                  <span class="lcard__col"><b class="lab-engraved">8-4-0</b><span>Record</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">1,842</b><span>Proj</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">41,208</b><span>Dynasty</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">3<small style="opacity:.5"> of 12</small></b><span>KTC #</span></span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="opt__body">
+        <div class="note">
+          <h3>What it buys</h3>
+          <p>
+            The material the app already uses for a surface <em>holding</em> an
+            instrument: it is what an expanded league card becomes, and what the
+            detail panel's body is made of. So the header is now the same face the
+            list turns into when you open a row.
+          </p>
+          <p>
+            Nothing about the layout, the corner tabs, the rail, the sweep or the
+            sync line changes — which means nothing about the card's height, its
+            wrapping or its phone behaviour changes either.
+          </p>
+          <span class="price price--good">diff · one class, one deleted gradient</span>
+        </div>
+        <div class="note note--cost">
+          <h3>What it costs</h3>
+          <p>
+            It is the <em>quietest</em> of the five. Rounded corners and a
+            bottom-only wall put it in a different family from the chamfered,
+            two-sided-wall parts immediately below it — coherent, but not
+            obviously one instrument with them.
+          </p>
+          <p>
+            If the complaint is "this doesn't fit", A fixes it. If the complaint is
+            "the top of the page doesn't read as one thing", A does not.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------ B -->
+    <div class="opt" id="b">
+      <div class="opt__head">
+        <span class="opt__letter">B</span>
+        <div>
+          <h2>Slab — the league card's own construction</h2>
+          <p class="opt__thesis">
+            Wall running down <em>and</em> right, chamfered leading and trailing
+            corners, brushed corner-lit face. The header is built like the rows.
+          </p>
+        </div>
+      </div>
+
+      <div class="screen">
+        <div class="screen__tab"><b>B</b> · <code style="border:0;background:none;padding:0">.lab-slab</code> + <code style="border:0;background:none;padding:0">.lab-slab-face</code> + <code style="border:0;background:none;padding:0">.lab-notch-lg</code></div>
+        <div class="screen__body">
+          <div class="plate-wrap">
+            <div class="plate plate--slab lab-slab lab-notch-lg" style="filter:drop-shadow(0 1px 0 rgba(0,0,0,.9)) drop-shadow(0 10px 16px rgba(0,0,0,.75)) drop-shadow(0 0 20px rgba(0,255,229,.1))">
+              <div class="plate__face lab-slab-face lab-notch-lg">
+                <span class="plate__rail"></span>
+                <span class="plate__tab plate__tab--l lab-well" style="border-radius:0 8px 8px 0"><b class="plate__season">2026</b></span>
+                <span class="plate__tab plate__tab--r lab-well" style="border-radius:8px 0 0 8px">
+                  <span class="plate__stat-label">Leagues</span>
+                  <span class="plate__stat-value">121</span>
+                  <i class="plate__stat-sub">of 121 total</i>
+                </span>
+                <div class="plate__body">
+                  <span class="avatar">J</span>
+                  <div class="plate__id">
+                    <h4 class="plate__name">jkap</h4>
+                    <p class="plate__rec">
+                      <b>72-48-1</b>
+                      <span class="scope">dynasty leagues</span>
+                      <span class="from">from 113 of 121 leagues</span>
+                    </p>
+                    <div class="plate__bar">
+                      <span class="w" style="flex-grow:72"></span>
+                      <span class="l" style="flex-grow:48"></span>
+                      <span class="t" style="flex-grow:1"></span>
+                    </div>
+                  </div>
+                  <div class="gauge">
+                    <svg viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke-linecap="round"
+                              stroke="url(#gb)" stroke-dasharray="276.46" stroke-dashoffset="127.17"
+                              style="filter:drop-shadow(0 0 6px rgba(0,255,229,0.45))"></circle>
+                      <defs><linearGradient id="gb" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#00ffe5" stop-opacity="0.45"></stop>
+                        <stop offset="100%" stop-color="#00ffe5"></stop>
+                      </linearGradient></defs>
+                    </svg>
+                    <div class="gauge__read"><span class="gauge__pct">.540</span><span class="gauge__cap">Win pct</span></div>
+                  </div>
+                </div>
+                <div class="plate__state">
+                  <span class="ok">Refreshed just now</span>
+                  <span class="warn">97 of 100 leagues refreshed</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail lab-slab lab-notch-all">
+            <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+              <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+              <span class="rail__cap">Narrow to</span>
+              <span class="rail__seek lab-groove">Player or leaguemate</span>
+              <span class="rail__count">113 of 121</span>
+              <span class="chip lab-chip lab-chip-sm">Player shares</span>
+              <span class="chip lab-chip lab-chip-sm">Leaguemates</span>
+            </div>
+          </div>
+          <div class="billet lab-ledge lab-notch-lg">
+            <div class="billet__face lab-ledge-face lab-notch-lg">
+              <span class="billet__sub">League</span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+            </div>
+          </div>
+          <div class="lcard">
+            <div class="lcard__plate">
+              <span class="lcard__name lab-nameplate"><b>Dynasty Degenerates III</b></span>
+              <span class="lcard__rec lab-nameplate"><b>8-4-0</b><i>2nd</i></span>
+            </div>
+            <div class="lab-slab lab-notch-lg">
+              <div class="lcard__face lab-slab-face lab-notch-lg">
+                <span class="lcard__lead">12 teams · SF · Dynasty</span>
+                <span class="lcard__cols">
+                  <span class="lcard__col"><b class="lab-engraved">8-4-0</b><span>Record</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">1,842</b><span>Proj</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">41,208</b><span>Dynasty</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">3<small style="opacity:.5"> of 12</small></b><span>KTC #</span></span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="opt__body">
+        <div class="note">
+          <h3>What it buys</h3>
+          <p>
+            Maximum continuity with the list. Same wall, same chamfer, same brushed
+            grain — the header and the cards are visibly the same kind of object,
+            and the corner tabs pick up the chamfer for free because the slab's
+            <code>clip-path</code> clips its whole subtree.
+          </p>
+        </div>
+        <div class="note note--cost">
+          <h3>What it costs</h3>
+          <p>
+            <b>Look at the trailing half of the face.</b> The 168° corner-lit fill
+            resolves inside the leading third of a box this wide and this short, so
+            the right-hand end sits flat on a tone barely above the page ground —
+            the stat tab and the dial appear to float off the part. That is the
+            documented reason <code>.lab-slab-face-rail</code> exists, and it lands
+            on this card too.
+          </p>
+          <p>
+            Two smaller ones. It needs <code>.lab-slab-fixed</code>, or the header
+            lifts and blooms under the cursor promising a press that does nothing.
+            And a slab is <em>an object in a list</em> — this one is not in the
+            list, which is a claim the material makes and the card can't keep.
+          </p>
+          <span class="price">risk · the fill degenerates at this aspect ratio</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------ C -->
+    <div class="opt" id="c">
+      <div class="opt__head">
+        <span class="opt__letter">C</span>
+        <div>
+          <h2>Console — the subject rail's material at card height</h2>
+          <p class="opt__thesis">
+            Four chamfers, the same wall, and the rail-scaled fill that actually
+            holds at this width. Header, rail and billet become one stacked
+            console.
+          </p>
+        </div>
+      </div>
+
+      <div class="screen">
+        <div class="screen__tab"><b>C</b> · <code style="border:0;background:none;padding:0">.lab-slab</code> + <code style="border:0;background:none;padding:0">.lab-slab-face-rail</code> + <code style="border:0;background:none;padding:0">.lab-notch-all</code></div>
+        <div class="screen__body">
+          <div class="plate-wrap">
+            <div class="plate plate--slab lab-slab lab-notch-all" style="filter:drop-shadow(0 1px 0 rgba(0,0,0,.9)) drop-shadow(0 10px 16px rgba(0,0,0,.75)) drop-shadow(0 0 20px rgba(0,255,229,.1))">
+              <div class="plate__face lab-slab-face lab-slab-face-rail lab-notch-all">
+                <span class="plate__rail"></span>
+                <span class="plate__tab plate__tab--l lab-well" style="border-radius:0 8px 8px 0"><b class="plate__season">2026</b></span>
+                <span class="plate__tab plate__tab--r lab-well" style="border-radius:8px 0 0 8px">
+                  <span class="plate__stat-label">Leagues</span>
+                  <span class="plate__stat-value">121</span>
+                  <i class="plate__stat-sub">of 121 total</i>
+                </span>
+                <div class="plate__body">
+                  <span class="avatar">J</span>
+                  <div class="plate__id">
+                    <h4 class="plate__name">jkap</h4>
+                    <p class="plate__rec">
+                      <b>72-48-1</b>
+                      <span class="scope">dynasty leagues</span>
+                      <span class="from">from 113 of 121 leagues</span>
+                    </p>
+                    <div class="plate__bar">
+                      <span class="w" style="flex-grow:72"></span>
+                      <span class="l" style="flex-grow:48"></span>
+                      <span class="t" style="flex-grow:1"></span>
+                    </div>
+                  </div>
+                  <div class="gauge">
+                    <svg viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke-linecap="round"
+                              stroke="url(#gc)" stroke-dasharray="276.46" stroke-dashoffset="127.17"
+                              style="filter:drop-shadow(0 0 6px rgba(0,255,229,0.45))"></circle>
+                      <defs><linearGradient id="gc" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#00ffe5" stop-opacity="0.45"></stop>
+                        <stop offset="100%" stop-color="#00ffe5"></stop>
+                      </linearGradient></defs>
+                    </svg>
+                    <div class="gauge__read"><span class="gauge__pct">.540</span><span class="gauge__cap">Win pct</span></div>
+                  </div>
+                </div>
+                <div class="plate__state">
+                  <span class="ok">Refreshed just now</span>
+                  <span class="warn">97 of 100 leagues refreshed</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail lab-slab lab-notch-all">
+            <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+              <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+              <span class="rail__cap">Narrow to</span>
+              <span class="rail__seek lab-groove">Player or leaguemate</span>
+              <span class="rail__count">113 of 121</span>
+              <span class="chip lab-chip lab-chip-sm">Player shares</span>
+              <span class="chip lab-chip lab-chip-sm">Leaguemates</span>
+            </div>
+          </div>
+          <div class="billet lab-ledge lab-notch-lg">
+            <div class="billet__face lab-ledge-face lab-notch-lg">
+              <span class="billet__sub">League</span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+            </div>
+          </div>
+          <div class="lcard">
+            <div class="lcard__plate">
+              <span class="lcard__name lab-nameplate"><b>Dynasty Degenerates III</b></span>
+              <span class="lcard__rec lab-nameplate"><b>8-4-0</b><i>2nd</i></span>
+            </div>
+            <div class="lab-slab lab-notch-lg">
+              <div class="lcard__face lab-slab-face lab-notch-lg">
+                <span class="lcard__lead">12 teams · SF · Dynasty</span>
+                <span class="lcard__cols">
+                  <span class="lcard__col"><b class="lab-engraved">8-4-0</b><span>Record</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">1,842</b><span>Proj</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">41,208</b><span>Dynasty</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">3<small style="opacity:.5"> of 12</small></b><span>KTC #</span></span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="opt__body">
+        <div class="note">
+          <h3>What it buys</h3>
+          <p>
+            The three parts at the top of the page stop being three unrelated
+            objects. Header, rail and billet share a wall, a chamfer family and a
+            light direction, and they read down the page as one console with the
+            list running out from under it.
+          </p>
+          <p>
+            It is also the only slab option whose fill is <em>correct</em> at this
+            box's aspect ratio — the horizontal graded base and the scaled falloffs
+            keep the trailing end clear of the page ground, which is exactly what
+            the stat tab and the dial sit on.
+          </p>
+          <span class="price price--good">fixes B's trailing edge for free</span>
+        </div>
+        <div class="note note--cost">
+          <h3>What it costs</h3>
+          <p>
+            The face is a step lighter than a league card's, so the header is the
+            brightest thing on the page. That is arguably right — it is the page's
+            subject — but it is a deliberate choice, not a neutral one.
+          </p>
+          <p>
+            It also needs <code>.lab-slab-fixed</code>, and the four-corner chamfer
+            means the corner tabs have to be re-cut to follow it rather than
+            keeping their <code>15px</code> outer radius.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------ D -->
+    <div class="opt opt--alt" id="d">
+      <div class="opt__head">
+        <span class="opt__letter">D</span>
+        <div>
+          <h2>Instrument panel</h2>
+          <p class="opt__thesis">
+            A plate chassis with the readings <em>sunk into it</em>. The card stops
+            being text on a surface and becomes gauges in a housing.
+          </p>
+        </div>
+      </div>
+
+      <div class="screen">
+        <div class="screen__tab"><b>D</b> · plate chassis, record in a cut, dial and avatar in wells</div>
+        <div class="screen__body">
+          <div class="plate-wrap">
+            <div class="plate plate--panel lab-plate">
+              <span class="plate__rail"></span>
+              <span class="plate__sweep"></span>
+              <span class="plate__tab plate__tab--l lab-well"><b class="plate__season">2026</b></span>
+              <span class="plate__tab plate__tab--r lab-well">
+                <span class="plate__stat-label">Leagues</span>
+                <span class="plate__stat-value">121</span>
+                <i class="plate__stat-sub">of 121 total</i>
+              </span>
+              <div class="plate__body">
+                <span class="avatar-housing lab-trough"><span class="avatar">J</span></span>
+                <div class="plate__id lab-groove">
+                  <h4 class="plate__name lab-engraved">jkap</h4>
+                  <p class="plate__rec">
+                    <b class="lab-engraved">72-48-1</b>
+                    <span class="scope">dynasty leagues</span>
+                    <span class="from">from 113 of 121 leagues</span>
+                  </p>
+                  <div class="plate__bar">
+                    <span class="w" style="flex-grow:72"></span>
+                    <span class="l" style="flex-grow:48"></span>
+                    <span class="t" style="flex-grow:1"></span>
+                  </div>
+                </div>
+                <span class="gauge-housing lab-readout">
+                  <div class="gauge">
+                    <svg viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                      <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke-linecap="round"
+                              stroke="url(#gd)" stroke-dasharray="276.46" stroke-dashoffset="127.17"
+                              style="filter:drop-shadow(0 0 6px rgba(0,255,229,0.45))"></circle>
+                      <defs><linearGradient id="gd" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#00ffe5" stop-opacity="0.45"></stop>
+                        <stop offset="100%" stop-color="#00ffe5"></stop>
+                      </linearGradient></defs>
+                    </svg>
+                    <div class="gauge__read"><span class="gauge__pct">.540</span><span class="gauge__cap">Win pct</span></div>
+                  </div>
+                </span>
+              </div>
+              <div class="plate__state">
+                <span class="ok">Refreshed just now</span>
+                <span class="warn">97 of 100 leagues refreshed</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail lab-slab lab-notch-all">
+            <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+              <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+              <span class="rail__cap">Narrow to</span>
+              <span class="rail__seek lab-groove">Player or leaguemate</span>
+              <span class="rail__count">113 of 121</span>
+              <span class="chip lab-chip lab-chip-sm">Player shares</span>
+              <span class="chip lab-chip lab-chip-sm">Leaguemates</span>
+            </div>
+          </div>
+          <div class="billet lab-ledge lab-notch-lg">
+            <div class="billet__face lab-ledge-face lab-notch-lg">
+              <span class="billet__sub">League</span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+            </div>
+          </div>
+          <div class="lcard">
+            <div class="lcard__plate">
+              <span class="lcard__name lab-nameplate"><b>Dynasty Degenerates III</b></span>
+              <span class="lcard__rec lab-nameplate"><b>8-4-0</b><i>2nd</i></span>
+            </div>
+            <div class="lab-slab lab-notch-lg">
+              <div class="lcard__face lab-slab-face lab-notch-lg">
+                <span class="lcard__lead">12 teams · SF · Dynasty</span>
+                <span class="lcard__cols">
+                  <span class="lcard__col"><b class="lab-engraved">8-4-0</b><span>Record</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">1,842</b><span>Proj</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">41,208</b><span>Dynasty</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">3<small style="opacity:.5"> of 12</small></b><span>KTC #</span></span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="opt__body">
+        <div class="note">
+          <h3>What it buys</h3>
+          <p>
+            It commits to what the card already says about itself. Its four corners
+            are readouts; this makes its <em>middle</em> one too, so the whole part
+            obeys one rule — recessed means read me — instead of stating it at the
+            corners and dropping it in the body.
+          </p>
+          <p>
+            It is also the only option where the name gets a housing rather than
+            floating, which is what stops a long username reading as loose text on
+            a wide face.
+          </p>
+        </div>
+        <div class="note note--cost">
+          <h3>What it costs</h3>
+          <p>
+            <b>Depth budget.</b> The house rule is three countable z-levels on a
+            card. This spends all three — plate, cut, dial rim — so there is nothing
+            left, and anything added later has to displace something.
+          </p>
+          <p>
+            <b>And it leaves dead face.</b> Once the housing hugs its contents —
+            which it has to, or it is 500px of empty trough — there is a wide blank
+            stretch between it and the dial. On a chassis that is arguably correct
+            (an instrument panel has unused face), but it is real estate the glass
+            card was not spending, and it grows with the viewport.
+          </p>
+          <p>
+            It is the largest diff of the five: new housings, new padding, and the
+            record's cyan scope word has to be re-checked against a darker floor.
+            The em-dash and no-records states need re-checking too, since an empty
+            housing reads differently from empty text.
+          </p>
+          <span class="price">diff · new markup in `manager-summary`</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------ E -->
+    <div class="opt opt--alt" id="e">
+      <div class="opt__head">
+        <span class="opt__letter">E</span>
+        <div>
+          <h2>No plate</h2>
+          <p class="opt__thesis">
+            Delete the surface rather than re-material it. The facts sit on the page
+            ground; the first <em>object</em> on the page is the subject rail.
+          </p>
+        </div>
+      </div>
+
+      <div class="screen">
+        <div class="screen__tab"><b>E</b> · accent rail and a seam, no card at all</div>
+        <div class="screen__body">
+          <div class="plate-wrap">
+            <div class="plate plate--none">
+              <div class="plate__head">
+                <span class="plate__tab plate__tab--l lab-well"><b class="plate__season">2026</b></span>
+                <span class="plate__tab plate__tab--r lab-well">
+                  <span class="plate__stat-label">Leagues</span>
+                  <span class="plate__stat-value">121</span>
+                  <i class="plate__stat-sub">of 121 total</i>
+                </span>
+              </div>
+              <span class="plate__rail"></span>
+              <div class="plate__body">
+                <span class="avatar">J</span>
+                <div class="plate__id">
+                  <h4 class="plate__name">jkap</h4>
+                  <p class="plate__rec">
+                    <b>72-48-1</b>
+                    <span class="scope">dynasty leagues</span>
+                    <span class="from">from 113 of 121 leagues</span>
+                  </p>
+                  <div class="plate__bar">
+                    <span class="w" style="flex-grow:72"></span>
+                    <span class="l" style="flex-grow:48"></span>
+                    <span class="t" style="flex-grow:1"></span>
+                  </div>
+                </div>
+                <div class="gauge">
+                  <svg viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke="rgba(255,255,255,0.07)"></circle>
+                    <circle cx="50" cy="50" r="44" fill="none" stroke-width="7" stroke-linecap="round"
+                            stroke="url(#ge)" stroke-dasharray="276.46" stroke-dashoffset="127.17"
+                            style="filter:drop-shadow(0 0 6px rgba(0,255,229,0.45))"></circle>
+                    <defs><linearGradient id="ge" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stop-color="#00ffe5" stop-opacity="0.45"></stop>
+                      <stop offset="100%" stop-color="#00ffe5"></stop>
+                    </linearGradient></defs>
+                  </svg>
+                  <div class="gauge__read"><span class="gauge__pct">.540</span><span class="gauge__cap">Win pct</span></div>
+                </div>
+              </div>
+              <div class="plate__state">
+                <span class="ok">Refreshed just now</span>
+                <span class="warn">97 of 100 leagues refreshed</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail lab-slab lab-notch-all" style="margin-top:16px">
+            <div class="rail__face lab-slab-face lab-slab-face-rail lab-notch-all">
+              <span class="chip lab-chip lab-chip-sm">Leagues <b style="color:#00ffe5">2</b></span>
+              <span class="rail__cap">Narrow to</span>
+              <span class="rail__seek lab-groove">Player or leaguemate</span>
+              <span class="rail__count">113 of 121</span>
+              <span class="chip lab-chip lab-chip-sm">Player shares</span>
+              <span class="chip lab-chip lab-chip-sm">Leaguemates</span>
+            </div>
+          </div>
+          <div class="billet lab-ledge lab-notch-lg">
+            <div class="billet__face lab-ledge-face lab-notch-lg">
+              <span class="billet__sub">League</span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Record</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Proj</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">Dynasty</span></span>
+              <span class="billet__col"><span class="billet__slot lab-ledge-slot">KTC #</span></span>
+            </div>
+          </div>
+          <div class="lcard">
+            <div class="lcard__plate">
+              <span class="lcard__name lab-nameplate"><b>Dynasty Degenerates III</b></span>
+              <span class="lcard__rec lab-nameplate"><b>8-4-0</b><i>2nd</i></span>
+            </div>
+            <div class="lab-slab lab-notch-lg">
+              <div class="lcard__face lab-slab-face lab-notch-lg">
+                <span class="lcard__lead">12 teams · SF · Dynasty</span>
+                <span class="lcard__cols">
+                  <span class="lcard__col"><b class="lab-engraved">8-4-0</b><span>Record</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">1,842</b><span>Proj</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">41,208</b><span>Dynasty</span></span>
+                  <span class="lcard__col"><b class="lab-engraved">3<small style="opacity:.5"> of 12</small></b><span>KTC #</span></span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="opt__body">
+        <div class="note">
+          <h3>What it buys</h3>
+          <p>
+            It answers the complaint by subtraction: there is no surface left to
+            disagree with anything. The page opens on its subject, then on its first
+            real part — which is the same argument that took the page heading off
+            <code>/trades</code>.
+          </p>
+          <p>
+            It gives the list back roughly 24px of chrome, and it is the only option
+            with no material to maintain.
+          </p>
+          <span class="price price--good">gives the list ~24px back</span>
+        </div>
+        <div class="note note--cost">
+          <h3>What it costs</h3>
+          <p>
+            The corner tabs lose the edge they were machined into, so they become
+            floating chips — the one thing this app's grammar says a fact must not
+            be. They would have to become something else, which is content work
+            rather than a restyle.
+          </p>
+          <p>
+            The sync line also loses the box that scoped it, and the record's
+            proportion bar loses the field it was measured against. Both are
+            legible here and both got quieter.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="verdict">
+    <div class="sec-head"><h2>Where this lands</h2><span class="eyebrow">the recommendation</span></div>
+    <div class="rule"></div>
+
+    <div class="verdict">
+      <h3>C, with A as the safe version of the same idea</h3>
+      <p>
+        <b>C is the one that answers the actual complaint.</b> The card doesn't fit
+        because everything around it is a machined part with a wall and a chamfer
+        and it is a pane of glass; C makes it the same kind of part as the rail
+        directly beneath it, and the three of them read down the page as one
+        console. It is also the only slab option whose fill is right at this box's
+        proportions — which is the thing B gets wrong, visibly, at its trailing
+        edge where the stat tab and the dial live.
+      </p>
+      <p>
+        <b>A is the low-risk version.</b> One class swapped, no geometry touched,
+        no chamfer to re-cut, and it lands on a material the app already uses for
+        exactly this job — an expanded league card <em>is</em> this face. If the
+        goal is "stop it looking like glass" and nothing more, A is finished in an
+        afternoon and cannot regress anything.
+      </p>
+      <p>
+        <b>D and E are real but they are different questions.</b> D is a redesign of
+        what the card is, not of what it is made of, and it spends the whole depth
+        budget doing it. E is worth taking seriously if the honest answer is that
+        this card is chrome the page could do without — but it turns the two corner
+        tabs into a content problem, so it isn't a restyle either.
+      </p>
+      <div class="legend">
+        <span>A · 1 class</span>
+        <span>B · 1 class + notch + fixed hover</span>
+        <span>C · 2 classes + notch + fixed hover + re-cut tabs</span>
+        <span>D · new markup in manager-summary</span>
+        <span>E · corner tabs need rehoming</span>
+      </div>
+    </div>
+  </section>
+</div>
