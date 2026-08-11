@@ -13,11 +13,17 @@ import type {
   TradeCardPricing,
 } from "./trade-card.types.ts";
 import {
+  SIDE_SEAM_COLUMN,
+  SIDE_SEAM_ROW,
+} from "./trade-card.constants.ts";
+import {
   assetKey,
   formatTradeDate,
   formatTradeTime,
   pickOwnerLabel,
   sideContext,
+  sideSeam,
+  sideSpansRow,
   trackLines,
 } from "./trade-card.utils.ts";
 
@@ -337,5 +343,58 @@ describe("trackLines", () => {
     trackLines(spy, context({ received: take }), give);
     assert.ok(seen.length > 0);
     assert.ok(seen.every((b) => b === give));
+  });
+});
+
+describe("where a side is cut, and how wide it sits", () => {
+  /**
+   * **These two exist to be shared, so what is pinned here is the agreement.**
+   * The sides grid draws them and the pre-trade rosters draw the same grid
+   * underneath it; a cut that fell in one row and not the one directly below it
+   * reads as a rendering fault rather than as a layout. They were a ternary
+   * inline in the card until there were two call sites for it.
+   */
+
+  test("the first side is cut off nothing", () => {
+    assert.equal(sideSeam(0), "");
+  });
+
+  test("a side in the trailing column is cut on its leading edge", () => {
+    // Vertical from `sm` up — below it the sides stack, which is why the class
+    // carries the horizontal cut too.
+    assert.equal(sideSeam(1), SIDE_SEAM_COLUMN);
+    assert.equal(sideSeam(3), SIDE_SEAM_COLUMN);
+  });
+
+  test("a side that starts a row is cut along its top", () => {
+    assert.equal(sideSeam(2), SIDE_SEAM_ROW);
+    assert.equal(sideSeam(4), SIDE_SEAM_ROW);
+  });
+
+  test("only the odd side of an odd-sided trade spans the row", () => {
+    // The two-sided card, which is nearly every trade: neither side is wide.
+    assert.equal(sideSpansRow(0, 2), false);
+    assert.equal(sideSpansRow(1, 2), false);
+
+    // The three-way: the last one takes the whole row rather than leaving the
+    // cell beside it empty, which would read as a participant who came away
+    // with nothing — a real state the card draws in words instead.
+    assert.equal(sideSpansRow(0, 3), false);
+    assert.equal(sideSpansRow(1, 3), false);
+    assert.equal(sideSpansRow(2, 3), true);
+
+    // Four sides pair up evenly again.
+    assert.equal(sideSpansRow(3, 4), false);
+  });
+
+  test("a wide side is always one that starts a row, so its cut is horizontal", () => {
+    // The two are read together at both call sites, and this is the pairing that
+    // has to hold: a side spanning both columns sits under both of them, so a
+    // vertical cut on its leading edge would be a line to nowhere.
+    for (const count of [1, 3, 5, 7]) {
+      const last = count - 1;
+      assert.equal(sideSpansRow(last, count), true);
+      if (last > 0) assert.equal(sideSeam(last), SIDE_SEAM_ROW);
+    }
   });
 });

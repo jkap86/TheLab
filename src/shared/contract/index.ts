@@ -488,6 +488,75 @@ export type TradeFacetsPayload = {
   };
 };
 
+/** A future pick as a roster held it before a trade. */
+export type TradeRosterPickPayload = {
+  season: string;
+  round: number;
+  /**
+   * The roster the pick *originally* belongs to, which is what names it — the
+   * same spelling {@link TradePickAsset} uses, so a held pick and a traded one
+   * read alike.
+   */
+  roster_id: number;
+  /**
+   * The manager holding that origin roster, resolved server-side for the reason
+   * {@link TradePickAsset.user_id} is: a portfolio holds picks from rosters that
+   * are nowhere in the trade, and a client seeing only the sides could never name
+   * them. Null on an uncached or orphaned roster.
+   */
+  user_id: string | null;
+};
+
+/** What one participating roster held immediately before a trade. */
+export type TradeRosterPayload = {
+  roster_id: number;
+  /** Player ids held then, as stored — the client groups them for display. */
+  players: string[];
+  picks: TradeRosterPickPayload[];
+};
+
+/**
+ * `GET /api/trades/rosters?trade=<id>` — what each side of one trade held
+ * immediately before it.
+ *
+ * **Its own route, fetched on a press, rather than a field on
+ * {@link TradesPagePayload}.** A card states what moved; this states what it
+ * moved *off*, which is the question a card cannot answer at any height — three
+ * receivers for a first reads one way off a team that had eight and another off a
+ * team that had three. But a pre-trade roster is 25–50 player ids per side, so a
+ * page of two hundred trades would carry ~16,000 of them plus the names for a
+ * vocabulary the board otherwise never mentions: several hundred KB on every
+ * page, for a disclosure most readers never open on most cards. The board's whole
+ * design is that a reader downloads the trades they are looking at, and this is
+ * the same rule one level down — see the split-at-the-press habit the ADP drawer
+ * and the columns editor already follow.
+ *
+ * **An absent snapshot is `rosters: []`, and it is not an error.** The walk
+ * behind these skips an undated trade outright (there is no honest moment to
+ * rewind to), and a league the crawler has not visited since the table existed
+ * has none yet. Absent reads as "not known", never as "held nothing" — the card
+ * says so rather than drawing an empty roster.
+ *
+ * Two limits ride on the reconstruction itself and are worth knowing before
+ * trusting one, since neither is visible in the payload: a draft is not a
+ * transaction, so a snapshot reaching back across a rookie draft over-reports
+ * that class; and the pick horizon is today's, so a pick in a season already
+ * drafted is absent unless a reversed trade names it. See `shared/trades/rewind`.
+ */
+export type TradeRostersPayload = {
+  transaction_id: string;
+  /**
+   * One entry per participating roster with a snapshot stored, in roster-id
+   * order — the order {@link Trade.sides} is in, so a card can pair them up
+   * without sorting either.
+   */
+  rosters: TradeRosterPayload[];
+  /** Player ids → name/position/team, for everyone named above. */
+  players: Record<string, PlayerSummary>;
+  /** User ids → display name and avatar, for the pick origins named above. */
+  managers: Record<string, LeaguematePayload>;
+};
+
 /**
  * The manager's place in one league across the metrics a league card ranks it
  * on. Each is independently nullable, because they don't all answer at the same
