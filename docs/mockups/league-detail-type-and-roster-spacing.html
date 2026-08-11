@@ -550,14 +550,25 @@
   .v-b4 .prow > * { position: relative; z-index: 1; }
   .v-b4 .sect { margin-top: 16px; }
 
-  /* -- variant B5: one line, one value column (narrow tier only) ----- */
-  .v-b5 { --cols: 28px minmax(0,1fr) 3.25rem; }
-  .v-b5 .prow { padding: 6px 0; gap: 0 8px; align-items: center; }
-  .v-b5 .prow .tab { position: static; left: auto; top: auto; width: 28px; min-width: 0; }
-  .v-b5 .prow .pname { grid-column: auto; padding-left: 0 !important; font-size: 13.5px; }
-  .v-b5 .prow .meta { display: none; }
-  .v-b5 .prow .pv.second { display: none; }
-  .v-b5 .crail span.second { display: none; }
+  /* -- variant M1: two lines, both columns, no duplicate badge -------
+     The phone row. The mark keeps the corner (out of flow, so it costs
+     the name an indent and nothing else); the badge goes because the
+     mark now carries the position's tone; line two is the NFL team on
+     the left and the two numbers on the right, one step larger than
+     they are today because the badge's height is no longer setting the
+     line. */
+  .v-m1 { --cols: minmax(0,1fr) 2.75rem 2.75rem; }
+  .v-m1 .prow { padding: 5px 0; gap: 1px 8px; }
+  .v-m1 .prow .tab { left: 0; top: 1px; }
+  .v-m1 .prow.hastab .pname { padding-left: 32px; }
+  .v-m1 .prow .meta { align-items: baseline; }
+  .v-m1 .badge { display: none; }
+  .v-m1 .team { display: inline; font-size: 0.62rem; }
+  .v-m1 .prow .pv { font-size: 0.7rem; }
+  .v-m1 .prow:nth-child(even) { background: rgba(255,255,255,0.017); }
+  .v-m1 .prow { border-radius: 4px; margin: 0 -4px; padding-left: 4px; padding-right: 4px; }
+  .v-m1 .prow .tab { left: 4px; }
+  .v-m1 .prow.hastab .pname { padding-left: 36px; }
 
   /* ----------------------------------------------------------- specimen */
   .spec { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
@@ -617,7 +628,9 @@
     <strong>Arial</strong> — while the repository self-hosts Geist and Geist Mono,
     preloads both on every page, and wires neither to anything. Two lines of CSS
     recover them. Below that: four ways to spend the roster column's vertical
-    budget, and three shapes for the readout strip once the lineup gap comes off it.
+    budget, three ways to hold <strong>both</strong> stat columns on a phone —
+    which is what rules out the obvious one-line row at that width — and three
+    shapes for the readout strip once the lineup gap comes off it.
   </p>
   <p class="lede">
     Every specimen on this page is rendered in the actual faces from
@@ -882,7 +895,9 @@
     the crowding actually shows. Every panel in this section is set in Geist,
     <em>including the ones labelled "today"</em> — §1 is where the type is
     argued, and holding it constant here is what makes these comparisons about
-    height alone.
+    height alone. <strong>Both stat columns are on every row at every
+    width</strong>, here and in §3; the phone renders below are previews of the
+    problem, and §3 is where it is solved.
   </p>
   <div class="rule"></div>
 
@@ -1004,7 +1019,7 @@
       </div>
       <ul class="costs">
         <li>A roster and a standings table finally scroll at comparable rates — the whole point of splitting the two scroll boxes.</li>
-        <li class="minus"><strong>Below <code>@lg</code> the name track collapses to ~24px.</strong> Two 44px number tracks plus a 26px tab plus a 32px badge is more than a 168px half has. B2 has to be a tier, with B1's two-line row underneath it.</li>
+        <li class="minus"><strong>Below <code>@lg</code> the name track collapses to ~24px.</strong> Two 44px number tracks plus a 26px tab plus a 32px badge is more than a 166px half has — see §3 for the arithmetic and for what the phone does instead.</li>
         <li class="minus">Two marks on one line is a lot of leading furniture for what is one fact said twice.</li>
       </ul>
     </div>
@@ -1077,8 +1092,8 @@
         <li>Removes a fact the panel was stating twice, which is the reason the row was two lines in the first place.</li>
         <li>The bench section stops being visually narrower than the starters section — both now carry a mark.</li>
         <li>A 40-man roster goes ~1,960px → ~1,200px, so the roster half stops dwarfing the standings half inside the card's cap.</li>
-        <li class="minus">The NFL team leaves the row for its hover. That is a real loss on touch, where there is no hover — see the note under B5.</li>
-        <li class="minus">One-line still needs <code>@lg</code>; the phone needs B5 or B1 underneath it.</li>
+        <li class="minus">The NFL team leaves the row for its hover. That is a real loss on touch, where there is no hover — and it is the thing §3's phone row hands back.</li>
+        <li class="minus">One line still needs <code>@lg</code>. Below it the same mark and the same grid make M1's two-line row (§3), which is why these are one change and not two.</li>
       </ul>
     </div>
 
@@ -1142,46 +1157,202 @@
       </ul>
     </div>
 
-    <!-- B5 -->
+  </div>
+</section>
+
+<!-- ============================================================ §3 -->
+<section>
+  <h2><span class="num">3</span> The phone, with both stat columns</h2>
+  <p class="sub">
+    Both columns stay at every width — so the question is what the row does
+    instead. First, the measurement, because it decides the rest:
+  </p>
+
+  <table class="facts">
+    <thead><tr><th>At a 390px phone</th><th></th><th></th></tr></thead>
+    <tbody>
+      <tr><td>Viewport</td><td class="n">390px</td><td></td></tr>
+      <tr><td>Less <code>PageShell</code>'s <code>px-4</code></td><td class="n">−32</td><td>358px card</td></tr>
+      <tr><td>Less the panel body's <code>pl-3 pr-2</code></td><td class="n">−20</td><td>338px</td></tr>
+      <tr><td>Less the halves' <code>gap-1.5</code>, split in two</td><td class="n">÷2</td><td>166px half</td></tr>
+      <tr><td>Less the plate's <code>p-1</code> and the scroll lane</td><td class="n">−12</td><td class="good">154px of row</td></tr>
+      <tr><td>A one-line row needs mark + name + two tracks + three gaps</td><td class="n">30 + <em>n</em> + 88 + 24</td><td>leaves <strong>12px</strong> of name</td></tr>
+      <tr><td>…with the tracks trimmed to the widest string they hold (<code>1,041.16</code> is 39.7px)</td><td class="n">30 + <em>n</em> + 80 + 24</td><td>leaves <strong>20px</strong> of name</td></tr>
+      <tr><td>…and a contracted name (<code>M. Stafford</code>) needs</td><td class="n">~66px</td><td>at 13.5px Geist</td></tr>
+    </tbody>
+  </table>
+
+  <p class="sub" style="margin-top:22px">
+    <strong>One line and two columns do not both fit in 154px.</strong> Not with
+    trimmed tracks, not at a smaller size, not with harder contraction — the name
+    is 46px short before anything else gives. So on a phone either the row stays
+    two lines, or the 154px has to stop being 154px. Both answers are below, and
+    the first one is better than it sounds.
+  </p>
+  <div class="rule"></div>
+
+  <div class="opts">
+
+    <!-- the failure, shown -->
     <div class="opt">
-      <h3>B5 · The narrow tier, whichever of B2–B4 wins <span class="flag warn">reverses a documented decision</span></h3>
+      <h3>Why not, at actual size <span class="flag warn">this is the thing to avoid</span></h3>
       <p class="tagline">
-        B2, B3 and B4 are all one-line architectures, and one line at 168px does
-        not fit two 44px number columns. There are exactly two honest answers,
-        and the screenshot was taken at this width, so this is the choice that
-        actually decides how the change feels.
+        B3's one-line row rendered at the real 154px, next to today's. This is not
+        a near miss.
       </p>
-      <div class="stage">
+      <div class="stage tight">
         <div class="stage-row set-geist">
           <div>
-            <div class="caption">B5a · keep two lines below <code>@lg</code> (B1's row)</div>
-            <div style="width:168px" class="half lab-plate lab-plate-sm roster">
-              <div class="crail v-b1"><span></span><span>St</span><span>Bn</span></div>
+            <div class="caption">Today · two lines, 154px</div>
+            <div style="width:166px" class="half lab-plate lab-plate-sm roster">
+              <div class="crail v-today"><span></span><span>St</span><span>Bn</span></div>
               <div class="sect"><h4>Starters</h4>
-                <ul class="prows v-b1">
+                <ul class="prows rules v-today">
                   <li class="prow hastab"><span class="tab lab-tab">QB</span><span class="pname">M. Stafford</span><span class="meta"><span class="badge QB">QB</span></span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
                   <li class="prow hastab"><span class="tab lab-tab">RB</span><span class="pname">C. McCaffrey</span><span class="meta"><span class="badge RB">RB</span></span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
                   <li class="prow hastab"><span class="tab lab-tab">RB</span><span class="pname">J. Taylor</span><span class="meta"><span class="badge RB">RB</span></span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
-                  <li class="prow hastab"><span class="tab lab-tab">WR</span><span class="pname">S. Diggs</span><span class="meta"><span class="badge WR">WR</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
             </div>
           </div>
           <div>
-            <div class="caption on">B5b · one line, <strong>one</strong> value column below <code>@lg</code></div>
-            <div style="width:168px" class="half lab-plate lab-plate-sm roster">
-              <div class="crail v-b5"><span></span><span></span><span>Start</span></div>
+            <div class="caption" style="color:rgba(251,191,36,0.72)">One line, both columns · 154px</div>
+            <div style="width:166px" class="half lab-plate lab-plate-sm roster">
+              <div class="crail v-b3" style="--cols: 30px minmax(0,1fr) 2.75rem 2.75rem"><span></span><span></span><span>St</span><span>Bn</span></div>
               <div class="sect"><h4>Starters</h4>
-                <ul class="prows v-b5">
-                  <li class="prow"><span class="tab mk QB">QB</span><span class="pname">M. Stafford</span><span class="pv">321.50</span></li>
-                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">C. McCaffrey</span><span class="pv">422.94</span></li>
-                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">J. Taylor</span><span class="pv">401.03</span></li>
-                  <li class="prow"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="pv">222.30</span></li>
-                  <li class="prow"><span class="tab mk WR">WR</span><span class="pname">M. Golden</span><span class="pv">197.95</span></li>
-                  <li class="prow"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="pv">202.70</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="pv">309.53</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">S. Barkley</span><span class="pv">296.92</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">J. Warren</span><span class="pv">276.89</span></li>
+                <ul class="prows v-b3" style="--cols: 30px minmax(0,1fr) 2.75rem 2.75rem">
+                  <li class="prow"><span class="tab mk QB">QB</span><span class="pname">M. Stafford</span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">C. McCaffrey</span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">J. Taylor</span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- M1 -->
+    <div class="opt pick">
+      <h3>M1 · Two lines, but the second one earns its keep <span class="flag">recommended</span></h3>
+      <p class="tagline">
+        The phone's problem was never that the row has two lines — it is that the
+        second line is spent on a badge repeating the tab above it. Take the badge
+        out (the mark carries the slot <em>and</em> the position's colour, B3's
+        move) and line two holds only what belongs to it. Three things follow, and
+        all three are gains:
+      </p>
+      <ul class="costs" style="margin-bottom:18px">
+        <li><strong>The numbers get bigger, not smaller.</strong> 0.65rem → 0.7rem, which is 42.7px against the 44px track already there — the size the code comment measured and could not previously afford.</li>
+        <li><strong>The phone gets the NFL team back.</strong> It is <code>hidden … @lg:inline</code> today because the badge was using that space. It fits easily now: team ~22px plus 88px of numbers plus gaps is 126px of 154.</li>
+        <li><strong>The row gets shorter anyway.</strong> A 17px badge with its padding leaves and a 14px line of text arrives: ~49px → ~42px, without touching the rhythm.</li>
+      </ul>
+      <div class="stage">
+        <div class="stage-row set-geist">
+          <div>
+            <div class="caption">Today · 166px</div>
+            <div style="width:166px" class="half lab-plate lab-plate-sm roster">
+              <div class="crail v-today"><span></span><span>St</span><span>Bn</span></div>
+              <div class="sect"><h4>Starters</h4>
+                <ul class="prows rules v-today">
+                  <li class="prow hastab"><span class="tab lab-tab">QB</span><span class="pname">M. Stafford</span><span class="meta"><span class="badge QB">QB</span></span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab lab-tab">RB</span><span class="pname">C. McCaffrey</span><span class="meta"><span class="badge RB">RB</span></span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab lab-tab">RB</span><span class="pname">J. Taylor</span><span class="meta"><span class="badge RB">RB</span></span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab lab-tab">WR</span><span class="pname">S. Diggs</span><span class="meta"><span class="badge WR">WR</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab lab-tab">TE</span><span class="pname">I. Likely</span><span class="meta"><span class="badge TE">TE</span></span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab lab-tab">FLEX</span><span class="pname">A. Jeanty</span><span class="meta"><span class="badge RB">RB</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="caption on">M1 · 166px</div>
+            <div style="width:166px" class="half lab-plate lab-plate-sm roster">
+              <div class="crail v-m1"><span></span><span>Start</span><span>Bench</span></div>
+              <div class="sect"><h4>Starters</h4>
+                <ul class="prows v-m1">
+                  <li class="prow hastab"><span class="tab mk QB">QB</span><span class="pname">M. Stafford</span><span class="meta"><span class="team">LAR</span></span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">C. McCaffrey</span><span class="meta"><span class="team">SF</span></span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">J. Taylor</span><span class="meta"><span class="team">IND</span></span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="meta"><span class="team">NE</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="meta"><span class="team">BAL</span></span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="meta"><span class="team">LV</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                </ul>
+              </div>
+              <div class="sect"><h4>Bench</h4>
+                <ul class="prows v-m1">
+                  <li class="prow hastab"><span class="tab mk QB">QB</span><span class="pname">B. Nix</span><span class="meta"><span class="team">DEN</span></span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">K. Walker III</span><span class="meta"><span class="team">SEA</span></span><span class="pv">42.10</span><span class="pv">198.44</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div style="max-width:260px">
+            <div class="caption">What moved</div>
+            <p style="font-size:13.5px;color:rgba(255,255,255,0.52);line-height:1.6">
+              The mark is still on the row's leading corner, out of flow, so it
+              costs the name an indent and nothing else — exactly as today. The
+              badge is gone because the mark now says the same thing in colour.
+              Line two is the team on the left and the two numbers on the right,
+              which is a line with a left edge and a right edge rather than three
+              things fighting over the middle.
+            </p>
+            <p style="font-size:13.5px;color:rgba(255,255,255,0.52);line-height:1.6">
+              The headings can go back to their full words too —
+              <code>Start</code> / <code>Bench</code> rather than
+              <code>St</code> / <code>Bn</code> — because the track was always
+              wide enough and only the rail's own type size was in question.
+            </p>
+          </div>
+        </div>
+      </div>
+      <ul class="costs">
+        <li>Nothing documented is reversed. Both value columns stay at every width, the name keeps its own line at every width, and the panel keeps one row architecture from 166px to 400px.</li>
+        <li>It is the same edit as B3 — remove the badge, tone the mark — so the desktop and the phone are one change rather than two.</li>
+        <li class="minus">Still two lines, so the density win is ~14% rather than B3's ~39%. On a phone that is the honest ceiling.</li>
+      </ul>
+    </div>
+
+    <!-- M2 -->
+    <div class="opt">
+      <h3>M2 · M1 below <code>@lg</code>, B3's single line above it <span class="flag mute">one tier</span></h3>
+      <p class="tagline">
+        The same row in two arrangements: two lines where there are 154px, one
+        line where there are 300+. It is the panel's existing habit — the NFL
+        team, the points-for and the standings' own second column all arrive at a
+        tier — and here the two arrangements are made of the same parts in a
+        different order, so it reads as one row breathing rather than as two
+        designs.
+      </p>
+      <div class="stage">
+        <div class="stage-row set-geist">
+          <div>
+            <div class="caption on">Below <code>@lg</code> · 166px</div>
+            <div style="width:166px" class="half lab-plate lab-plate-sm roster">
+              <div class="crail v-m1"><span></span><span>Start</span><span>Bench</span></div>
+              <div class="sect"><h4>Starters</h4>
+                <ul class="prows v-m1">
+                  <li class="prow hastab"><span class="tab mk QB">QB</span><span class="pname">M. Stafford</span><span class="meta"><span class="team">LAR</span></span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">C. McCaffrey</span><span class="meta"><span class="team">SF</span></span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">J. Taylor</span><span class="meta"><span class="team">IND</span></span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="meta"><span class="team">NE</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="caption on">At <code>@lg</code> and up · 340px</div>
+            <div style="width:340px" class="half lab-plate lab-plate-sm roster">
+              <div class="crail v-b3"><span></span><span></span><span>Start</span><span>Bench</span></div>
+              <div class="sect"><h4>Starters</h4>
+                <ul class="prows v-b3">
+                  <li class="prow"><span class="tab mk QB">QB</span><span class="pname">M. Stafford</span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">C. McCaffrey</span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">J. Taylor</span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk WR">WR</span><span class="pname">M. Golden</span><span class="pv">197.95</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
+                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
             </div>
@@ -1189,18 +1360,87 @@
         </div>
       </div>
       <ul class="costs">
-        <li><strong>B5a</strong> keeps every documented decision intact and gives a phone reader nothing but B1's ~16% — the width where the crowding is worst is the width that improves least.</li>
-        <li><strong>B5b</strong> is the honest trade: on the default <code>Start</code>/<code>Bench</code> pair, <em>every starter's Bench column reads <code>0.00</code></em>, so on the starters list the second column is a column of zeros. Dropping it below <code>@lg</code> costs a phone reader almost nothing and buys the one-line row.</li>
-        <li class="minus">B5b reverses <code>roster-layout.ts</code>'s "both value columns at every width", which the rank tab was moved out of the grid to pay for. That note would need rewriting rather than quietly contradicting.</li>
-        <li class="minus">On the <em>bench</em> section both columns are real, so B5b does hide a number there. A reader who wants it has the columns editor, and the panel's own habit is to shed a whole fact rather than half of one.</li>
+        <li>Every width gets the best row it has room for, and both columns are on all of them.</li>
+        <li>The name's own line survives exactly where it is needed and is dropped exactly where it is not.</li>
+        <li class="minus">Two arrangements to keep in step. The mitigation is that they share a grid and a mark, so what differs is <code>--cols</code> and whether the meta cell is drawn.</li>
+      </ul>
+    </div>
+
+    <!-- M3 -->
+    <div class="opt">
+      <h3>M3 · Stop the phone being 154px <span class="flag warn">reverses the 50/50 split</span></h3>
+      <p class="tagline">
+        The other way to fit a one-line row is to stop cutting a 390px screen in
+        half. Stacked below <code>@sm</code> — standings above, roster below, each
+        scrolling in its own share of the card's cap — the roster half is 338px
+        wide, and a one-line row with both columns has <strong>196px</strong> of
+        name track. That is more name than the desktop panel gives it today.
+      </p>
+      <div class="stage">
+        <div class="stage-row set-geist">
+          <div>
+            <div class="caption on">M3 · 358px card, halves stacked</div>
+            <div style="width:358px" class="card lab-plate">
+              <div class="head">
+                <span class="lname">LT auction BB #11</span>
+                <span class="lrec lab-readout"><span class="lab-engraved">0-0</span></span>
+              </div>
+              <div style="padding:8px 8px 12px 12px;display:flex;flex-direction:column;gap:8px">
+                <div class="half lab-trough standings" style="max-height:132px;overflow:hidden">
+                  <div class="srail" style="grid-template-columns:minmax(0,1fr) 3.25rem 3.25rem"><span>Manager</span><span>Proj</span><span>Bench</span></div>
+                  <ul class="srows">
+                    <li><div class="srow lab-row-on on" style="grid-template-columns:minmax(0,1fr) 3.25rem 3.25rem"><span class="rk lab-tab-on">1</span><span class="who"><span class="av"></span><span class="nm2">Puppyvolcano</span></span><span class="rec">0-0</span><span class="sv">3,154.55</span><span class="sv">983.59</span></div></li>
+                    <li><div class="srow lab-row" style="grid-template-columns:minmax(0,1fr) 3.25rem 3.25rem"><span class="rk lab-tab">2</span><span class="who"><span class="av"></span><span class="nm2">CritterFixers</span></span><span class="rec">0-0</span><span class="sv">3,088.75</span><span class="sv">1,537.61</span></div></li>
+                    <li><div class="srow lab-row" style="grid-template-columns:minmax(0,1fr) 3.25rem 3.25rem"><span class="rk lab-tab">3</span><span class="who"><span class="av"></span><span class="nm2">MambaMentality</span></span><span class="rec">0-0</span><span class="sv">3,009.27</span><span class="sv">704.02</span></div></li>
+                  </ul>
+                </div>
+                <div class="half lab-plate lab-plate-sm roster">
+                  <div class="crail v-b3"><span></span><span></span><span>Start</span><span>Bench</span></div>
+                  <div class="sect"><h4>Starters</h4>
+                    <ul class="prows v-b3">
+                      <li class="prow"><span class="tab mk QB">QB</span><span class="pname">Matthew Stafford</span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                      <li class="prow"><span class="tab mk RB">RB</span><span class="pname">Christian McCaffrey</span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                      <li class="prow"><span class="tab mk RB">RB</span><span class="pname">Jonathan Taylor</span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
+                      <li class="prow"><span class="tab mk WR">WR</span><span class="pname">Stefon Diggs</span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                      <li class="prow"><span class="tab mk TE">TE</span><span class="pname">Isaiah Likely</span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
+                      <li class="prow"><span class="tab mk RB">FLEX</span><span class="pname">Ashton Jeanty</span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="max-width:280px">
+            <div class="caption">The trade</div>
+            <p style="font-size:13.5px;color:rgba(255,255,255,0.52);line-height:1.6">
+              The panel's own note says the halves stay side by side at every
+              width because reading one against the other is the point. The
+              counter-argument is that at 166px each you are not reading one
+              against the other — you are reading two cramped lists, and full
+              player names have not been on screen at all.
+            </p>
+            <p style="font-size:13.5px;color:rgba(255,255,255,0.52);line-height:1.6">
+              What it costs is that the standings need a ceiling of their own, or
+              a twelve-team table pushes the roster off the bottom of the card.
+              A capped, scrolling standings block above the roster is the
+              straightforward version; a collapsed one-row team picker is the
+              other, and that is a bigger change than this document is scoped for.
+            </p>
+          </div>
+        </div>
+      </div>
+      <ul class="costs">
+        <li>The only arrangement where a phone gets a one-line row, full player names, and both stat columns at once.</li>
+        <li>The desktop is untouched — this is a below-<code>@sm</code> arrangement only.</li>
+        <li class="minus">Reverses "even 50/50 split at every width", which is written down and argued for in <code>league-detail-panel.tsx</code>.</li>
+        <li class="minus">Needs a height policy for the standings block that does not exist yet. That is the part that makes this a bigger job than M1 or M2.</li>
       </ul>
     </div>
   </div>
 </section>
 
-<!-- ============================================================ §3 -->
 <section>
-  <h2><span class="num">3</span> The readout strip without the lineup gap</h2>
+  <h2><span class="num">4</span> The readout strip without the lineup gap</h2>
   <p class="sub">
     Removing the third cell is one deletion. What it leaves behind is a decision:
     a dial and two wells is a different-shaped object from a dial and three, and
@@ -1366,14 +1606,14 @@
   </div>
 </section>
 
-<!-- ============================================================ §4 -->
+<!-- ============================================================ §5 -->
 <section>
-  <h2><span class="num">4</span> A1 + A2 + B3 + C2, together</h2>
+  <h2><span class="num">5</span> A1 + A2 + M2 + C2, together</h2>
   <p class="sub">
     The combination I would ship, rendered whole — card, readout strip, both
     halves — at a desktop width and at the phone width the screenshot was taken
-    at. The phone uses B5b's single value column, which is the one decision in
-    here that reverses something already written down.
+    at. Both stat columns are on the phone as well as the desktop; what
+    changes between the two is only whether the name gets a line of its own.
   </p>
   <div class="rule"></div>
 
@@ -1443,7 +1683,7 @@
       </div>
 
       <div>
-        <div class="caption on">390px · the phone, B5b underneath</div>
+        <div class="caption on">390px · the phone, M1's row, both columns</div>
         <div style="width:390px" class="card lab-plate">
           <div class="head">
             <span class="lname">LT auction BB #11</span>
@@ -1480,24 +1720,24 @@
               <p class="sfoot">Wk 1–18</p>
             </div>
             <div class="half lab-plate lab-plate-sm roster">
-              <div class="crail v-b5"><span></span><span></span><span>Start</span></div>
+              <div class="crail v-m1"><span></span><span>Start</span><span>Bench</span></div>
               <div class="sect"><h4>Starters</h4>
-                <ul class="prows v-b5">
-                  <li class="prow"><span class="tab mk QB">QB</span><span class="pname">M. Stafford</span><span class="pv">321.50</span></li>
-                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">C. McCaffrey</span><span class="pv">422.94</span></li>
-                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">J. Taylor</span><span class="pv">401.03</span></li>
-                  <li class="prow"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="pv">222.30</span></li>
-                  <li class="prow"><span class="tab mk WR">WR</span><span class="pname">M. Golden</span><span class="pv">197.95</span></li>
-                  <li class="prow"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="pv">202.70</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="pv">309.53</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">S. Barkley</span><span class="pv">296.92</span></li>
-                  <li class="prow"><span class="tab mk RB">FLX</span><span class="pname">J. Warren</span><span class="pv">276.89</span></li>
+                <ul class="prows v-m1">
+                  <li class="prow hastab"><span class="tab mk QB">QB</span><span class="pname">M. Stafford</span><span class="meta"><span class="team">LAR</span></span><span class="pv">321.50</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">C. McCaffrey</span><span class="meta"><span class="team">SF</span></span><span class="pv">422.94</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">J. Taylor</span><span class="meta"><span class="team">IND</span></span><span class="pv">401.03</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk WR">WR</span><span class="pname">S. Diggs</span><span class="meta"><span class="team">NE</span></span><span class="pv">222.30</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk WR">WR</span><span class="pname">M. Golden</span><span class="meta"><span class="team">GB</span></span><span class="pv">197.95</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk TE">TE</span><span class="pname">I. Likely</span><span class="meta"><span class="team">BAL</span></span><span class="pv">202.70</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">FLX</span><span class="pname">A. Jeanty</span><span class="meta"><span class="team">LV</span></span><span class="pv">309.53</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">FLX</span><span class="pname">S. Barkley</span><span class="meta"><span class="team">PHI</span></span><span class="pv">296.92</span><span class="pv zero">0.00</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">FLX</span><span class="pname">J. Warren</span><span class="meta"><span class="team">PIT</span></span><span class="pv">276.89</span><span class="pv zero">0.00</span></li>
                 </ul>
               </div>
               <div class="sect"><h4>Bench</h4>
-                <ul class="prows v-b5">
-                  <li class="prow"><span class="tab mk QB">QB</span><span class="pname">B. Nix</span><span class="pv">0.00</span></li>
-                  <li class="prow"><span class="tab mk RB">RB</span><span class="pname">K. Walker III</span><span class="pv">42.10</span></li>
+                <ul class="prows v-m1">
+                  <li class="prow hastab"><span class="tab mk QB">QB</span><span class="pname">B. Nix</span><span class="meta"><span class="team">DEN</span></span><span class="pv">0.00</span><span class="pv">288.31</span></li>
+                  <li class="prow hastab"><span class="tab mk RB">RB</span><span class="pname">K. Walker III</span><span class="meta"><span class="team">SEA</span></span><span class="pv">42.10</span><span class="pv">198.44</span></li>
                 </ul>
               </div>
             </div>
@@ -1512,8 +1752,8 @@
     <tbody>
       <tr><td>A1 · faces on</td><td class="n">globals.css</td><td class="good">No</td></tr>
       <tr><td>A2 · panel type scale</td><td class="n">panel-telemetry, roster-detail, standings, player-row</td><td class="good">No — no measured track moves</td></tr>
-      <tr><td>B3 · one line, one mark</td><td class="n">player-row, roster-layout, roster-detail</td><td>Yes — the slot/badge split, and the two-line note in <code>roster-layout.ts</code></td></tr>
-      <tr><td>B5b · one value column below <code>@lg</code></td><td class="n">roster-layout</td><td>Yes — "both value columns at every width"</td></tr>
+      <tr><td>M1 · one mark, line two earns its keep</td><td class="n">player-row, roster-detail</td><td>Yes — the slot/badge split. Nothing about column count.</td></tr>
+      <tr><td>M2 · one line at <code>@lg</code> and up</td><td class="n">roster-layout, player-row</td><td>Yes — the two-line note in <code>roster-layout.ts</code> gains a tier</td></tr>
       <tr><td>C2 · one housing, no gap</td><td class="n">panel-telemetry</td><td class="good">No — <code>points_left</code> still drawn by the lineup checker</td></tr>
     </tbody>
   </table>
@@ -1527,9 +1767,9 @@
   thing the panel shows, opens with a column of zeros. <code>Proj</code> /
   <code>Start</code> would put two live numbers there. And <strong>the position
   badge and the slot tab are two different shapes for one fact</strong> across the
-  whole app, not only in this panel; B3 unifies them here, and the shares lists
-  still draw the badge on its own, which is correct there and worth not
-  accidentally diverging from.
+  whole app, not only in this panel; B3 and M1 unify them here at both widths, and
+  the shares lists still draw the badge on its own, which is correct there and
+  worth not accidentally diverging from.
 </p>
 
 </div>
