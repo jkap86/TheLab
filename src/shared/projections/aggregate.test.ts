@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { aggregateWeeklyStats } from "./aggregate.ts";
-import { scoreProjection } from "./score.ts";
+import { scoreStatLine } from "./score.ts";
 
 /**
  * The property the whole rest-of-season path rests on is linearity: summing stat
@@ -89,8 +89,8 @@ describe("scoring the aggregate", () => {
       { player_id: "1", week: 6, stats: week2 },
     ]);
 
-    const perWeek = scoreProjection(week1, tePremium) + scoreProjection(week2, tePremium);
-    const aggregate = scoreProjection(out["1"].stats, tePremium);
+    const perWeek = scoreStatLine(week1, tePremium) + scoreStatLine(week2, tePremium);
+    const aggregate = scoreStatLine(out["1"].stats, tePremium);
 
     // Equal to the cent: both sides round to two decimals, and the aggregate does
     // it once, so anything beyond a cent apart means the dot product isn't linear.

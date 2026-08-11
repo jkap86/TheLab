@@ -1,5 +1,5 @@
 /**
- * Scoring a projected stat line with a league's own scoring settings.
+ * Scoring a stat line with a league's own scoring settings.
  *
  * Pure and free of runtime imports so it can be unit-tested — the caller supplies
  * both sides, as in `ktc/match`.
@@ -9,6 +9,13 @@
  * `pts_allow_21_27`) are the keys in a league's `scoring_settings`. Of the 93
  * stat keys observed across a season of projections, 81 appear as scoring keys in
  * leagues already stored here; the rest are metadata, not events.
+ *
+ * One function serves projections and played weeks alike, because the rule is the
+ * same for both: a category scores when the league pays for it and the line
+ * carries it. Sleeper populates every category it publishes — including the ones
+ * it fills in itself, like the first downs and the reception splits — so there is
+ * nothing here that reads a key differently depending on which kind of line it
+ * arrived on.
  *
  * Why this exists at all, when the endpoint already sends `pts_ppr`: those are
  * Sleeper's *default* PPR/half/standard scorings. A TE-premium league, one paying
@@ -25,6 +32,10 @@
  * happens to ride along in `stats`. No league observed scores any of these, but
  * the failure would be a silently doubled total rather than an error, so they are
  * excluded here rather than trusted not to appear.
+ *
+ * This is the one exclusion list, and it is deliberately narrow: these are not
+ * categories at all, they are the answer restated. Every key that names an actual
+ * event scores.
  */
 const NOT_SCORABLE = new Set([
   "pts_std",
@@ -34,111 +45,31 @@ const NOT_SCORABLE = new Set([
   "pos_adp_dd_ppr",
 ]);
 
-/**
- * Stat keys Sleeper carries in `stats` without projecting them: each is a fixed
- * function of a base stat rather than a modelled value.
- *
- * A `*_fd` is the yardage over ten. Joe Burrow's 2026 week 1 line projects 25.83
- * completions and 29.39 passing "first downs" — more first downs than
- * completions, because it is 293.94 / 10. The reception splits are a fixed
- * distribution of `rec` (20/20/30/20/10/10, summing to 110% of the catches),
- * which puts a tenth of every reception in the 40-plus bucket. Across both stored
- * seasons all 1,494 receiving lines and all 142 passing lines match their formula
- * to within a cent, which is the rounding.
- *
- * Scoring them is not a rounding-sized error: 39 of the leagues stored here pay
- * for `rush_fd` and 23 for `pass_fd`, so a league at 0.5 a passing first down is
- * quietly adding 0.05 a passing yard on top of its own yardage rate — 15.62 of
- * Burrow's 35.69 points in one of them, and 35% of the average starter's total.
- * They are reported through {@link derivedScoring} instead, which is what they
- * are: categories a league scores that the feed cannot supply.
- *
- * `rush_40p` and `pass_cmp_40p` look like the same trick and aren't — neither
- * holds to a formula across seasons, so they are scored as projected.
- */
-const DERIVED = new Set([
-  "pass_fd",
-  "rush_fd",
-  "rec_fd",
-  "rec_0_4",
-  "rec_5_9",
-  "rec_10_19",
-  "rec_20_29",
-  "rec_30_39",
-  "rec_40p",
-]);
-
 /** Two decimals, which is the precision both sides of the multiplication carry. */
 const round = (n: number): number => Math.round(n * 100) / 100;
 
 /**
- * Fantasy points for a projected stat line under one league's scoring.
+ * Fantasy points for a stat line under one league's scoring.
  *
  * Driven by the scoring settings rather than the stat line: a category the league
- * doesn't score contributes nothing, and a category it scores but Sleeper doesn't
- * project contributes nothing either — whether the key is absent (IDP tackles,
- * 50-yard field goals) or present but {@link DERIVED} from another stat. Both are
- * real gaps rather than zeroes, and {@link unprojectedScoring} names them.
+ * doesn't score contributes nothing, and a category it scores but the line doesn't
+ * carry contributes nothing either. Both are real gaps rather than zeroes, and
+ * {@link unprojectedScoring} names the second kind.
  *
  * Projected stats are expected values, not integers — 0.67 fumbles, 1.82 passing
- * touchdowns — so the result is a weighted average of outcomes, not a score any
- * single week will land on.
- */
-export function scoreProjection(
-  stats: Record<string, number> | null | undefined,
-  scoring: Record<string, number> | null | undefined,
-): number {
-  return dot(stats, scoring, DERIVED);
-}
-
-/**
- * Fantasy points for an **actual** stat line under one league's scoring.
- *
- * The same dot product against the same vocabulary — Sleeper serves stats and
- * projections off one endpoint shape — and it differs in exactly one thing:
- * {@link DERIVED} is *not* excluded.
- *
- * That exclusion is a fact about projections, not about football. Sleeper does
- * not model a first down, so in a *projection* it writes `rush_fd` as the
- * yardage over ten and the reception splits as a fixed carve-up of `rec`;
- * scoring those adds a second yardage rate on top of the league's own. In a
- * played week they are what they say they are — a count of first downs a player
- * actually gained — and 39 of the leagues stored here pay for `rush_fd`. Passing
- * a real line through {@link scoreProjection} would silently drop those points,
- * which is the same size of error in the opposite direction, and just as
- * invisible.
- *
- * Which is why these are two exported functions rather than one with a flag:
- * picking the wrong one is a wrong number and never an error, so the call site
- * should have to say which kind of line it holds. {@link unprojectedScoring}
- * still names what a league scores and the *feed* cannot supply; nothing here
- * changes that read, which is about the projection side.
+ * touchdowns — so scoring a projection gives a weighted average of outcomes, not a
+ * score any single week will land on. A played line carries counts and gives the
+ * points that were actually scored.
  */
 export function scoreStatLine(
   stats: Record<string, number> | null | undefined,
   scoring: Record<string, number> | null | undefined,
 ): number {
-  return dot(stats, scoring, null);
-}
-
-/**
- * The dot product both scorers are, with the excluded-key set as the only knob.
- *
- * Driven by the scoring settings rather than the stat line: a category the league
- * doesn't score contributes nothing, and a category it scores but the line
- * doesn't carry contributes nothing either. Both are real gaps rather than
- * zeroes.
- */
-function dot(
-  stats: Record<string, number> | null | undefined,
-  scoring: Record<string, number> | null | undefined,
-  excluded: ReadonlySet<string> | null,
-): number {
   if (!stats || !scoring) return 0;
 
   let total = 0;
   for (const [key, weight] of Object.entries(scoring)) {
-    if (NOT_SCORABLE.has(key) || excluded?.has(key)) continue;
+    if (NOT_SCORABLE.has(key)) continue;
     if (typeof weight !== "number" || !Number.isFinite(weight) || weight === 0) {
       continue;
     }
@@ -167,10 +98,6 @@ function dot(
  * projected, scored by 89 of the 120 leagues stored here, and worth about 1.6
  * points a kicker a week.
  *
- * Kept separate from {@link derivedScoring}, which is the other half of the same
- * question, because the two want different warnings: this one only bites a league
- * that starts the players carrying those categories, and that one bites everyone.
- *
  * Only categories with a non-zero weight count: Sleeper writes out its whole
  * scoring template, so most leagues carry dozens of keys set to 0 that are
  * disabled, not missing.
@@ -180,31 +107,10 @@ export function unprojectedScoring(
   available: Iterable<string>,
 ): string[] {
   const have = new Set(available);
-  return scoredKeys(scoring).filter(
-    (key) => !DERIVED.has(key) && !have.has(key),
-  );
+  return scoredKeys(scoring).filter((key) => !have.has(key));
 }
 
-/**
- * Categories a league scores that Sleeper publishes but doesn't project — the
- * {@link DERIVED} keys, computed from another stat rather than modelled.
- *
- * Doesn't depend on what the feed contains, only on what the league pays for, so
- * it takes no vocabulary: a derived key is derived in every week.
- *
- * Worth its own list because it can't be gated the way {@link unprojectedScoring}
- * can. A missing defensive category costs nothing in a league that starts no
- * defence, but a league paying for first downs is paying on quarterbacks, backs
- * and receivers alike — the categories are just no longer *scored*, so the effect
- * is that those totals now read lower than the league's settings suggest.
- */
-export function derivedScoring(
-  scoring: Record<string, number> | null | undefined,
-): string[] {
-  return scoredKeys(scoring).filter((key) => DERIVED.has(key));
-}
-
-/** A league's live scoring keys, sorted — the shared half of the two above. */
+/** A league's live scoring keys, sorted. */
 function scoredKeys(
   scoring: Record<string, number> | null | undefined,
 ): string[] {

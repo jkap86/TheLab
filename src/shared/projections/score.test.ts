@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import {
-  derivedScoring,
-  scoreProjection,
-  scoreStatLine,
-  unprojectedScoring,
-} from "./score.ts";
+import { scoreStatLine, unprojectedScoring } from "./score.ts";
 
 /**
  * The whole point of scoring a projection ourselves is that Sleeper's `pts_ppr`
@@ -50,12 +45,12 @@ const ppr = {
   bonus_rec_wr: 0,
 };
 
-describe("scoreProjection", () => {
+describe("scoreStatLine", () => {
   test("agrees with Sleeper's own PPR total for the same stat line", () => {
     // 20.39 against the 20.36 Sleeper published — measured across 206 real skill
     // projections, this agreement holds to 0.019 points on average, so a larger
     // gap on a real line means a weight is wrong, not that the numbers round.
-    const points = scoreProjection(receiver, ppr);
+    const points = scoreStatLine(receiver, ppr);
     assert.equal(points, 20.39);
     // Rounded before comparing: the subtraction itself carries float noise
     // (20.39 - 20.36 is 0.030000000000001 in binary).
@@ -63,29 +58,29 @@ describe("scoreProjection", () => {
   });
 
   test("half PPR and standard fall out of the same dot product", () => {
-    assert.equal(scoreProjection(receiver, { ...ppr, rec: 0.5 }), 17.21);
-    assert.equal(scoreProjection(receiver, { ...ppr, rec: 0 }), 14.03);
+    assert.equal(scoreStatLine(receiver, { ...ppr, rec: 0.5 }), 17.21);
+    assert.equal(scoreStatLine(receiver, { ...ppr, rec: 0 }), 14.03);
   });
 
   test("a reception bonus changes the total — the reason this exists", () => {
     // A WR-bonus league pays 0.25 a catch on top of PPR: 20.39 + 1.59.
-    assert.equal(scoreProjection(receiver, { ...ppr, bonus_rec_wr: 0.25 }), 21.98);
+    assert.equal(scoreStatLine(receiver, { ...ppr, bonus_rec_wr: 0.25 }), 21.98);
   });
 
   test("never scores Sleeper's own totals, even if a league lists them", () => {
     // Scoring `pts_ppr` would add the whole projection to itself, silently.
-    assert.equal(scoreProjection(receiver, { ...ppr, pts_ppr: 1 }), 20.39);
-    assert.equal(scoreProjection(receiver, { ...ppr, adp_dd_ppr: 1 }), 20.39);
+    assert.equal(scoreStatLine(receiver, { ...ppr, pts_ppr: 1 }), 20.39);
+    assert.equal(scoreStatLine(receiver, { ...ppr, adp_dd_ppr: 1 }), 20.39);
   });
 
   test("ignores stats the league doesn't score", () => {
     // `rec_tgt`, `rec_fd` and `gp` are in every stat line; settings decide what
     // counts, and most leagues score none of the three.
-    assert.equal(scoreProjection(receiver, { rec: 1 }), 6.36);
+    assert.equal(scoreStatLine(receiver, { rec: 1 }), 6.36);
   });
 
   test("ignores categories the league scores but the projection lacks", () => {
-    assert.equal(scoreProjection(receiver, { ...ppr, tkl_solo: 1, punt_ret_yd: 0.1 }), 20.39);
+    assert.equal(scoreStatLine(receiver, { ...ppr, tkl_solo: 1, punt_ret_yd: 0.1 }), 20.39);
   });
 
   test("a quarterback under real league scoring is nothing like pts_ppr", () => {
@@ -106,62 +101,56 @@ describe("scoreProjection", () => {
       rush_yd: 0.1, rush_td: 6, rush_2pt: 2, fum_lost: -2,
     };
 
-    assert.equal(scoreProjection(qb, league), 22.87);
-    assert.equal(scoreProjection(qb, { ...league, pass_yd: 0.05 }), 25.15);
+    assert.equal(scoreStatLine(qb, league), 22.87);
+    assert.equal(scoreStatLine(qb, { ...league, pass_yd: 0.05 }), 25.15);
     // Six-point passing touchdowns, a common house rule, move him again.
-    assert.equal(scoreProjection(qb, { ...league, pass_td: 6 }), 26.51);
+    assert.equal(scoreStatLine(qb, { ...league, pass_td: 6 }), 26.51);
   });
 
   test("applies negative weights", () => {
     const fumbler = { rush_yd: 50, fum: 0.8, fum_lost: 0.4 };
     // 5 - 0.8 - 0.8: Sleeper scores the fumble and the loss as separate events.
-    assert.equal(scoreProjection(fumbler, { rush_yd: 0.1, fum: -1, fum_lost: -2 }), 3.4);
+    assert.equal(scoreStatLine(fumbler, { rush_yd: 0.1, fum: -1, fum_lost: -2 }), 3.4);
   });
 
   test("scores a defense from its own categories", () => {
     const dst = { sack: 2.57, int: 0.8, ff: 0.97, def_td: 0.17, pts_allow_21_27: 1 };
     assert.equal(
-      scoreProjection(dst, { sack: 1, int: 2, def_td: 6, pts_allow_21_27: 1, ff: 0 }),
+      scoreStatLine(dst, { sack: 1, int: 2, def_td: 6, pts_allow_21_27: 1, ff: 0 }),
       6.19,
     );
   });
 
-  test("never scores a category Sleeper derives instead of projecting", () => {
-    // The reason this rule exists, in one line: the receiver's `rec_fd` is 9.94
-    // on 6.36 catches, because it is `rec_yd / 10` and not a first-down count. A
-    // league paying a point each would hand him 9.94 points nobody can score.
-    assert.equal(receiver.rec_fd, Math.round(receiver.rec_yd * 10) / 100);
-    assert.equal(scoreProjection(receiver, { ...ppr, rec_fd: 1 }), 20.39);
-
-    // Same for the reception splits, a fixed 20/20/30/20/10/10 carve-up of `rec`
-    // that puts a tenth of every catch in the 40-plus bucket.
-    assert.equal(receiver.rec_40p, Math.round(receiver.rec * 10) / 100);
-    assert.equal(scoreProjection(receiver, { ...ppr, rec_40p: 1.5 }), 20.39);
+  test("scores the first downs and the reception splits like any other key", () => {
+    // Sleeper populates these itself rather than modelling them, which is its
+    // business and not this function's: the league pays for the category and the
+    // line carries it, so it scores. 20.39 + 9.94.
+    assert.equal(scoreStatLine(receiver, { ...ppr, rec_fd: 1 }), 30.33);
+    // 20.39 + 0.64 * 1.5.
+    assert.equal(scoreStatLine(receiver, { ...ppr, rec_40p: 1.5 }), 21.35);
   });
 
-  test("still scores the bonuses Sleeper really does project", () => {
-    // `rush_40p` and `pass_cmp_40p` look like the derived keys and aren't —
-    // neither holds to a formula across the stored seasons, so they count.
-    assert.equal(scoreProjection({ rush_40p: 0.19 }, { rush_40p: 2 }), 0.38);
-    assert.equal(scoreProjection({ pass_cmp_40p: 0.4 }, { pass_cmp_40p: 1 }), 0.4);
+  test("scores the yardage bonuses too", () => {
+    assert.equal(scoreStatLine({ rush_40p: 0.19 }, { rush_40p: 2 }), 0.38);
+    assert.equal(scoreStatLine({ pass_cmp_40p: 0.4 }, { pass_cmp_40p: 1 }), 0.4);
   });
 
   test("rounds to two decimals rather than leaking float noise", () => {
     // 0.1 * 3 is 0.30000000000000004 in binary floating point.
-    assert.equal(scoreProjection({ rush_yd: 3 }, { rush_yd: 0.1 }), 0.3);
+    assert.equal(scoreStatLine({ rush_yd: 3 }, { rush_yd: 0.1 }), 0.3);
   });
 
   test("empty, missing and malformed inputs score zero, not NaN", () => {
-    assert.equal(scoreProjection(null, ppr), 0);
-    assert.equal(scoreProjection(receiver, null), 0);
-    assert.equal(scoreProjection({}, ppr), 0);
-    assert.equal(scoreProjection(receiver, {}), 0);
+    assert.equal(scoreStatLine(null, ppr), 0);
+    assert.equal(scoreStatLine(receiver, null), 0);
+    assert.equal(scoreStatLine({}, ppr), 0);
+    assert.equal(scoreStatLine(receiver, {}), 0);
     assert.equal(
-      scoreProjection({ rec: "6" as unknown as number }, { rec: 1 }),
+      scoreStatLine({ rec: "6" as unknown as number }, { rec: 1 }),
       0,
     );
     assert.equal(
-      scoreProjection({ rec: 6 }, { rec: NaN as unknown as number }),
+      scoreStatLine({ rec: 6 }, { rec: NaN as unknown as number }),
       0,
     );
   });
@@ -191,9 +180,9 @@ describe("unprojectedScoring", () => {
     assert.deepEqual(unprojectedScoring({ pts_ppr: 1, adp_dd_ppr: 1 }, []), []);
   });
 
-  test("leaves the derived keys to derivedScoring", () => {
-    // They are present in the stat line, so they are not missing — they are the
-    // other kind of gap, and the two get different warnings.
+  test("never reports a category the line carries, however it got there", () => {
+    // `rec_fd` is in every stat line Sleeper publishes, so a league scoring it
+    // has no gap to be told about.
     assert.deepEqual(unprojectedScoring({ rec_fd: 1, tkl_solo: 1 }, available), [
       "tkl_solo",
     ]);
@@ -204,56 +193,24 @@ describe("unprojectedScoring", () => {
   });
 });
 
-describe("derivedScoring", () => {
-  test("names the categories Sleeper computes rather than projects", () => {
-    assert.deepEqual(
-      derivedScoring({ rec: 1, rec_fd: 0.5, pass_fd: 0.5, rec_40p: 1.5 }),
-      ["pass_fd", "rec_40p", "rec_fd"],
-    );
-  });
-
-  test("ignores disabled ones, like the rest of a league's template", () => {
-    assert.deepEqual(derivedScoring({ rec_fd: 0, rush_fd: 0 }), []);
-  });
-
-  test("says nothing for a league that doesn't score them", () => {
-    assert.deepEqual(derivedScoring(ppr), []);
-    assert.deepEqual(derivedScoring(null), []);
-  });
-});
-
-describe("scoreStatLine", () => {
-  /**
-   * The one thing that separates it from {@link scoreProjection}, and the reason
-   * they are two exported functions rather than one with a flag: picking the
-   * wrong one is a wrong number, never an error.
-   */
-  test("scores the first-down keys a projection has to skip", () => {
-    // In a played week `rush_fd` is a count of first downs. In a projection it
-    // is the yardage over ten, which is why the other scorer drops it.
+describe("scoreStatLine on a played week", () => {
+  test("scores a real first-down count off the same dot product", () => {
     const line = { gp: 1, rush_yd: 100, rush_fd: 6, rush_td: 1 };
     const scoring = { rush_yd: 0.1, rush_fd: 0.5, rush_td: 6 };
 
     assert.equal(scoreStatLine(line, scoring), 19);
-    assert.equal(scoreProjection(line, scoring), 16);
   });
 
-  test("the reception splits are real buckets once the week is played", () => {
+  test("the reception splits score as buckets", () => {
     const line = { gp: 1, rec: 6, rec_40p: 1 };
     assert.equal(scoreStatLine(line, { rec: 1, rec_40p: 2 }), 8);
-    assert.equal(scoreProjection(line, { rec: 1, rec_40p: 2 }), 6);
   });
 
   test("it still refuses to score Sleeper's own totals", () => {
-    // NOT_SCORABLE is shared: scoring `pts_ppr` would add the whole line to
-    // itself, which is as wrong for a stat line as for a projection.
+    // Scoring `pts_ppr` would add the whole line to itself — the one exclusion
+    // that survives, because those keys restate the answer rather than naming an
+    // event.
     assert.equal(scoreStatLine({ pts_ppr: 24, rec: 4 }, { pts_ppr: 1, rec: 1 }), 4);
-  });
-
-  test("the two agree wherever no derived key is scored", () => {
-    // Which is the common case — most leagues score neither — so the split
-    // costs nothing except where it is load-bearing.
-    assert.equal(scoreStatLine(receiver, ppr), scoreProjection(receiver, ppr));
   });
 
   test("a missing line or missing settings is zero, not a throw", () => {

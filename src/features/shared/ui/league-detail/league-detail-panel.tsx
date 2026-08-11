@@ -502,42 +502,29 @@ const real = (id: string) => Boolean(id) && id !== "0";
 /**
  * Says so when this league's projections are known to be incomplete.
  *
- * Two caveats, gated differently, which is why they aren't one line. Missing
- * categories are near enough always non-empty — every league carries weights for
- * defence and special-teams events Sleeper doesn't project — so they are only
- * worth a warning where those categories actually score: a league that starts a
- * DEF or an IDP. Derived categories are the opposite: first downs and reception
- * splits are scored on skill players, so they apply to every team in a league
- * that pays for them, and there is nothing to gate on.
+ * One caveat, and it is gated: the missing-category list is near enough always
+ * non-empty — every league carries weights for defence and special-teams events
+ * Sleeper doesn't project — so it is only worth a warning where those categories
+ * actually score, which is a league that starts a DEF or an IDP.
  *
- * League-level facts, so they are stated once under the panel rather than on each
+ * A league-level fact, so it is stated once under the panel rather than on each
  * team — and outside the halves' scroll boxes, so a caveat about the numbers
  * stays on screen with the numbers it is about.
  */
 function OutlookCaveat({ data }: { data: LeagueDetailResult }) {
   const missing = data.outlook?.unprojected_scoring.length ?? 0;
-  const derived = data.outlook?.derived_scoring ?? [];
   const startsDefence = (data.roster_positions ?? []).some((slot) =>
     DEFENSIVE_SLOTS.has(slot),
   );
-  if (derived.length === 0 && (missing === 0 || !startsDefence)) return null;
+  if (missing === 0 || !startsDefence) return null;
 
   return (
     <div className="mt-2 shrink-0 space-y-1 text-[0.7rem] leading-relaxed text-foreground/40">
-      {derived.length > 0 && (
-        <p>
-          This league scores {derived.join(", ")}, which Sleeper publishes as a
-          formula rather than a projection — a &ldquo;first down&rdquo; is just
-          the yardage over ten. Those categories are left out of the totals here.
-        </p>
-      )}
-      {missing > 0 && startsDefence && (
-        <p>
-          This league starts defensive players and scores {missing} categories
-          Sleeper doesn&apos;t project, so their projected points read low and the
-          optimal lineup will under-start them.
-        </p>
-      )}
+      <p>
+        This league starts defensive players and scores {missing} categories
+        Sleeper doesn&apos;t project, so their projected points read low and the
+        optimal lineup will under-start them.
+      </p>
     </div>
   );
 }

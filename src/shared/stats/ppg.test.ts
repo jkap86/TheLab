@@ -65,9 +65,7 @@ test("it scores with the league's own settings, not Sleeper's", () => {
   assert.equal(full?.average, 16);
 });
 
-test("first downs score off an actual line, where a projection's would not", () => {
-  // The whole reason `scoreStatLine` exists beside `scoreProjection`: in a
-  // played week `rush_fd` is a count of first downs, not yardage over ten.
+test("first downs score like any other category the league pays for", () => {
   const ppg = playerPpg([{ week: 1, stats: { rush_yd: 100, rush_fd: 6 } }], {
     rush_yd: 0.1,
     rush_fd: 0.5,

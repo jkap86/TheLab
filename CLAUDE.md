@@ -5459,17 +5459,27 @@ stops holding, a comment saying it does would not have caught it.
   within 0.15 of it. Score the stat line against the league's `scoring_settings`
   with `projections/score`; the two sides share a key vocabulary, so it is a dot
   product. Reserve `pts_ppr` for a generic, league-less board.
-- **Some of what's in `stats` isn't a projection at all.** `pass_fd`, `rush_fd`
-  and `rec_fd` are exactly the yardage over ten — Burrow projects 25.83
-  completions and 29.39 passing "first downs" — and the reception splits
-  (`rec_0_4` … `rec_40p`) are a fixed 20/20/30/20/10/10 carve-up of `rec`. Both
-  hold on every row of both stored seasons. Scoring them is not a small error: 39
-  leagues here pay for `rush_fd`, so a league at 0.5 a first down is silently
-  adding 0.05 a passing yard on top of its own rate, up to 35% of a starter's
-  total. `score`'s `DERIVED` set is the exclusion list, and `derivedScoring`
-  reports them so the league is told rather than quietly given a smaller number.
-  Check a new bonus key against both seasons before trusting it — `rush_40p` and
-  `pass_cmp_40p` look like the same trick and hold to no formula.
+- **Every key the league pays for and the line carries scores, and there is one
+  scorer for projections and played weeks alike.** `scoreStatLine` is that dot
+  product, and the only exclusion in it is `NOT_SCORABLE` — `pts_std`,
+  `pts_half_ppr`, `pts_ppr` and the ADP keys, which restate the answer rather
+  than naming an event, so scoring one would add the whole line to itself.
+  Nothing else is filtered.
+
+  **This bullet used to say the opposite, and the correction is worth keeping
+  because the observation behind it was true and the conclusion wasn't.** In the
+  projections feed `pass_fd`/`rush_fd`/`rec_fd` really are the matching yardage
+  over ten (Burrow: 228.30 passing yards, 22.83 "first downs", on 18.97
+  completions) and the reception splits really are a fixed 20/20/30/20/10/10
+  carve-up of `rec` — both hold to the cent on every row of both stored seasons.
+  How Sleeper populates a category is Sleeper's business: it is a scoring
+  category like any other, points are `settings[key] × stats[key]`, and a
+  `scoreProjection` that dropped those keys was handing back a total the league's
+  own settings do not produce. So the split scorer, the `DERIVED` set,
+  `derivedScoring` and the `derived_scoring` field on `LeagueOutlook` are all
+  gone rather than inverted. `unprojectedScoring` is unaffected and still names
+  what a league scores and the feed genuinely does not publish — a `_fd` key is
+  in every stat line, so it was never one of those.
 - **A week is five days long, so filter the horizon by game, not by week.**
   `getRemainingWeeks` keeps a week until its *last* game, which is right for
   labelling the horizon and wrong for summing it: on the Sunday of 2025 week 1
