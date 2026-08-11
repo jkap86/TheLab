@@ -5,6 +5,7 @@ import {
   remainingDue,
   selectDiscoveryLeagues,
   stampableManagers,
+  unrecordedFailures,
 } from "./discovery.ts";
 
 type League = { league_id: string };
@@ -146,6 +147,84 @@ test("a duplicate league id in one manager's list is fetched once", () => {
     10,
   );
   assert.deepEqual(ids(selection), ["a", "b"]);
+});
+
+test("a league that was written down no longer blocks its managers", () => {
+  const selection = selectDiscoveryLeagues(
+    ["u1", "u2"],
+    enumerated({ u1: ["a", "b"], u2: ["c"] }),
+    new Set(),
+    10,
+  );
+  // `a` was tombstoned and `c` parked — both have rows, so neither is a reason
+  // to hold a manager back. `b` synced.
+  const blocked = unrecordedFailures(["a", "c"], new Set(["a", "c"]));
+  assert.deepEqual(blocked, new Set());
+  assert.deepEqual(stampableManagers(selection, blocked).sort(), ["u1", "u2"]);
+});
+
+test("a failure nothing could be written for still blocks", () => {
+  // The residual case: a failed id the tick held no league payload for, so
+  // there was nothing to write a row from and nothing else points at it.
+  const selection = selectDiscoveryLeagues(
+    ["u1", "u2"],
+    enumerated({ u1: ["a"], u2: ["b"] }),
+    new Set(),
+    10,
+  );
+  const blocked = unrecordedFailures(["a", "b"], new Set(["b"]));
+  assert.deepEqual(blocked, new Set(["a"]));
+  assert.deepEqual(stampableManagers(selection, blocked), ["u2"]);
+});
+
+test("recording is judged on ids written, never on ids attempted", () => {
+  // Passing the intent rather than the outcome is the one way to lose a league
+  // for good: the manager is suppressed for the enumeration TTL on the strength
+  // of a row that was never written.
+  assert.deepEqual(unrecordedFailures(["a", "b"], new Set()), new Set(["a", "b"]));
+  assert.deepEqual(unrecordedFailures([], new Set(["a"])), new Set());
+  // An id recorded but not failed is simply not this function's business.
+  assert.deepEqual(unrecordedFailures(["a"], new Set(["a", "z"])), new Set());
+});
+
+test("the wedge: a permanently failing league stops holding the queue once parked", () => {
+  // Tick one, as it used to go forever — `bad` fails, nothing is written for
+  // it, so `u1` is not stamped and returns to the head of `pendingManagers`.
+  const first = selectDiscoveryLeagues(
+    ["u1"],
+    enumerated({ u1: ["good", "bad"] }),
+    new Set(),
+    10,
+  );
+  assert.deepEqual(
+    stampableManagers(first, unrecordedFailures(["bad"], new Set())),
+    [],
+  );
+
+  // Tick two, with parking: `bad` still fails, but Sleeper serves it, so a row
+  // is written and the hold is released. `u1` retires for the enumeration TTL
+  // and the queue moves on to somebody else.
+  const second = selectDiscoveryLeagues(
+    ["u1"],
+    enumerated({ u1: ["good", "bad"] }),
+    new Set(["good"]),
+    10,
+  );
+  assert.deepEqual(
+    stampableManagers(second, unrecordedFailures(["bad"], new Set(["bad"]))),
+    ["u1"],
+  );
+
+  // Tick three: `bad` now has a row, so it is *known* and never selected again
+  // — the refresh pass owns it from here.
+  const third = selectDiscoveryLeagues(
+    ["u1"],
+    enumerated({ u1: ["good", "bad"] }),
+    new Set(["good", "bad"]),
+    10,
+  );
+  assert.deepEqual(third.leagues, []);
+  assert.deepEqual(stampableManagers(third, new Set()), ["u1"]);
 });
 
 test("remainingDue retires both refreshed and tombstoned leagues", () => {

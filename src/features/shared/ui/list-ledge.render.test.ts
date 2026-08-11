@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -68,14 +69,36 @@ describe("what a pinned rail paints", () => {
     // The billet is opaque but inset from the cards' own edges, so the fill has
     // to be on the box outside that inset — on the billet's own wrapper it would
     // leave a gutter either side for the rows to scroll through.
+    assert.match(root({ pinned: true }), /(?:^| )lab-ledge-ground(?: |$)/);
+  });
+
+  test("the side ramp is paid for out of the shell's gutter, not the cards", () => {
+    // The bleed and the padding cancel, so the billet lands exactly where it did
+    // and what widens is only the painted box — into `PageShell`'s `wide`
+    // gutter, which is the one strip either side of the list that no card
+    // occupies. Drop the bleed and the ramp starts eating the cards it exists to
+    // cover; drop the padding and the billet moves.
     const classes = root({ pinned: true });
-    assert.match(classes, /bg-\[var\(--background\)\]/);
-    assert.doesNotMatch(classes, /(?:^| )px-/);
+    assert.match(classes, /(?:^| )-mx-4(?: |$)/);
+    assert.match(classes, /(?:^| )px-4(?: |$)/);
+  });
+
+  test("the ramp's width is the bleed it was cut for", () => {
+    // A matched pair with no compiler link between them: the stops live in
+    // `globals.css` and the bleed is a utility here. Too small and the ramp
+    // starts over the cards, too large and it never reaches transparent — and
+    // both failures look like a rendering fault rather than an edit.
+    const css = readFileSync(
+      new URL("../../../app/globals.css", import.meta.url),
+      "utf8",
+    );
+    assert.match(css, /--ledge-bleed:\s*16px/, "`-mx-4 px-4` is 16px a side");
   });
 
   test("the ground fades into the page rather than ending against it", () => {
     // A flat edge of `--background` across the page reads as the ambient glow
-    // behind it being clipped.
+    // behind it being clipped — on the sides as much as underneath, which is
+    // what `.lab-ledge-ground` answers and this asserts the other half of.
     assert.match(root({ pinned: true }), /after:bg-gradient-to-b/);
   });
 
@@ -91,5 +114,5 @@ test("unpinned, the rail is the part it always was", () => {
   // is nothing above it to scroll away, and a second writer of the pinned height
   // would point an open league card at a rail on a different surface.
   const classes = root({});
-  assert.doesNotMatch(classes, /sticky|top-\[|z-30|bg-\[var\(--background\)\]/);
+  assert.doesNotMatch(classes, /sticky|top-\[|z-30|lab-ledge-ground/);
 });

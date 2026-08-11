@@ -17,8 +17,9 @@ import {
   remainingDue,
   selectDiscoveryLeagues,
   stampableManagers,
+  unrecordedFailures,
 } from "./discovery";
-import { persistGoneLeagues } from "./persist";
+import { persistGoneLeagues, persistUnsyncedLeagues } from "./persist";
 import { flooredWeek, syncLeagueGraphs } from "./sync";
 
 /**
@@ -95,14 +96,31 @@ export type DiscoveryResult = {
   managersCrawled: number;
   /** previously unseen leagues fetched and stored. */
   discovered: number;
-  /** discovered leagues whose first sync failed and will be retried. */
+  /**
+   * Discovered leagues whose first sync failed and that nothing was written
+   * for — the only ones still holding a manager back. A failure with a row
+   * behind it is counted as {@link DiscoveryResult.discoverGone} or
+   * {@link DiscoveryResult.discoverQueued} instead.
+   */
   discoverFailed: number;
   /**
    * Discovered leagues Sleeper no longer serves. Tombstoned rather than counted
    * as failures — they cannot succeed, and treating them as retryable is what
-   * used to wedge this pass. See {@link partitionGoneLeagues}.
+   * used to wedge this pass. See {@link partitionSyncFailures}.
    */
   discoverGone: number;
+  /**
+   * Discovered leagues that failed their first sync while Sleeper still serves
+   * them: stored as a bare row and handed to the refresh pass, which is where
+   * retrying a known league belongs.
+   *
+   * **Worth watching rather than merely counting.** A steady trickle is
+   * ordinary — a league whose graph was mid-write, a timeout — and it costs one
+   * refresh slot each. A tick where this is most of the discovery batch says
+   * first syncs are failing wholesale, and the corpus is filling with rows that
+   * have no graph behind them.
+   */
+  discoverQueued: number;
   /** managers deferred to the next tick because the discovery cap was hit. */
   deferred: number;
 };
@@ -152,6 +170,7 @@ const NO_DISCOVERY: DiscoveryResult = {
   discovered: 0,
   discoverFailed: 0,
   discoverGone: 0,
+  discoverQueued: 0,
   deferred: 0,
 };
 
@@ -219,28 +238,42 @@ async function refreshStaleLeagues(
 }
 
 /**
- * Split a discovery pass's failed leagues into ones Sleeper no longer serves and
- * ones worth another attempt.
+ * Split a discovery pass's failed leagues into the ones Sleeper no longer serves
+ * and the ones it still does.
  *
  * A first sync fetches half a dozen child collections, so the error it throws
  * can't say whether the league is dead or Sleeper hiccuped — and that difference
- * decides whether the managers waiting on it may be stamped, which is what makes
- * a second request worth spending. Re-asking for the league itself is that
- * signal: null (Sleeper's 200-with-null, with 404 folded into it) means gone.
+ * decides which row the league gets, which is what makes a second request worth
+ * spending. Re-asking for the league itself is that signal: null (Sleeper's
+ * 200-with-null, with 404 folded into it) means gone.
  *
- * Only a definite null retires a league. A probe that throws stays retryable,
- * because the tombstone is permanent as far as the crawler is concerned — from
- * here only a manager-driven sync ever clears it — so an ambiguous answer must
- * not reach it. Leagues are returned rather than ids so the caller can write the
- * row: the enumeration payload is the only copy of that league we will ever hold.
+ * **Both halves are written down, and that is the change worth reading.** This
+ * used to hand back a `retryable` set that nothing recorded, so a league in it
+ * held its managers unstamped until some later tick happened to sync it — which
+ * for a league that always fails is never (see {@link unrecordedFailures}). A
+ * league Sleeper still serves is now parked with `persistUnsyncedLeagues`
+ * instead, which retires it from *this* pass and hands it to the refresh pass,
+ * where retrying leagues belongs.
+ *
+ * Which side an ambiguous answer falls on has therefore flipped, and it is safe
+ * that it did. A probe that throws used to have to stay retryable, because the
+ * only other bucket was a permanent tombstone; parking carries no such claim, so
+ * an unconfirmed league is parked and the refresh pass re-probes it — a real
+ * tombstone, if it deserves one, gets written there with a fresh answer rather
+ * than guessed at here. Only a definite null still retires a league outright.
+ *
+ * Leagues are returned rather than ids because the caller writes the row from
+ * them: the enumeration payload is the only copy of that league we will ever
+ * hold. A failure with no payload behind it is in neither list, which is what
+ * leaves it blocking — there is nothing to write.
  */
-async function partitionGoneLeagues(
+async function partitionSyncFailures(
   failedIds: string[],
   attempted: readonly SleeperLeague[],
-): Promise<{ gone: SleeperLeague[]; retryable: Set<string> }> {
+): Promise<{ gone: SleeperLeague[]; unsynced: SleeperLeague[] }> {
   const gone: SleeperLeague[] = [];
-  const retryable = new Set(failedIds);
-  if (retryable.size === 0) return { gone, retryable };
+  const unsynced: SleeperLeague[] = [];
+  if (failedIds.length === 0) return { gone, unsynced };
 
   const byId = new Map(attempted.map((l) => [l.league_id, l]));
 
@@ -248,19 +281,22 @@ async function partitionGoneLeagues(
     const league = byId.get(leagueId);
     if (!league) return;
     try {
-      if (await getLeague(leagueId)) return;
+      if (await getLeague(leagueId)) {
+        unsynced.push(league);
+        return;
+      }
     } catch (error) {
       console.warn(
         `[crawl] could not confirm league ${leagueId} is gone:`,
         errorMessage(error),
       );
+      unsynced.push(league);
       return;
     }
     gone.push(league);
-    retryable.delete(leagueId);
   });
 
-  return { gone, retryable };
+  return { gone, unsynced };
 }
 
 /**
@@ -306,31 +342,47 @@ async function discoverMemberLeagues(
     concurrency: CRAWL_CONCURRENCY,
   });
 
-  // A deleted league fails its first sync every time, so left in the failed set
-  // it holds its managers unstamped forever — and because unstamped managers
-  // sort to the front of `pendingManagers`, that is not just their problem: they
-  // occupy the head of the queue, the same dead leagues are re-fetched every
-  // tick, and discovery stops finding anything for anyone. Tombstoning is what
-  // ends it: the id counts as known from here on, so it is never selected again.
-  const { gone, retryable } = await partitionGoneLeagues(
+  // A league that fails its first sync every time holds its managers unstamped
+  // forever, and because unstamped managers sort to the front of
+  // `pendingManagers` that is not just their problem: they occupy the head of
+  // the queue, the same leagues are re-fetched every tick, and discovery stops
+  // finding anything for anyone. Writing a row is what ends it, whichever answer
+  // the league gave — a tombstone for one Sleeper has dropped, a parked row for
+  // one it still serves. Both retire the id from this pass; only the second is
+  // still due a graph, and the refresh pass is what owes it.
+  const { gone, unsynced } = await partitionSyncFailures(
     result.failedIds,
     selection.leagues,
   );
   await persistGoneLeagues(gone);
+  await persistUnsyncedLeagues(unsynced);
 
-  // The invariant this pass rests on: stamping a manager suppresses them for
-  // the six-hour enumeration TTL, so a manager whose newly discovered league
-  // failed to sync must stay unstamped — otherwise that league stays unknown
-  // and nothing points at it again until some other member of it comes up. Only
-  // *retryable* failures block, since a tombstoned league is now accounted for.
-  const stamped = stampableManagers(selection, retryable);
+  // Stamped *after* both writes, and the order is the whole safety of this: a
+  // write that throws takes the tick with it, so nothing is stamped and the
+  // managers come back to a queue that has not moved. Stamping first would
+  // suppress them for the enumeration TTL on the strength of a row that may not
+  // exist — the one way a league is lost for good rather than merely late.
+  //
+  // What still blocks is a failure with no row behind it, which is a failure we
+  // held no payload to write one from. See {@link unrecordedFailures} for why
+  // that residual is the right thing to keep blocking, and why "the league
+  // synced" was the wrong release condition for a hold with no other bound.
+  const recorded = new Set([...gone, ...unsynced].map((l) => l.league_id));
+  const stamped = stampableManagers(
+    selection,
+    unrecordedFailures(result.failedIds, recorded),
+  );
   await stampManagers(season, stamped);
 
   return {
     managersCrawled: stamped.length,
     discovered: result.loaded,
-    discoverFailed: failed + result.failed - gone.length,
+    // Only the failures nothing was written for. A parked league is reported as
+    // queued rather than failed: it *did* fail to sync, but counting it here as
+    // well would have the same league show up twice in one summary line.
+    discoverFailed: failed + result.failed - gone.length - unsynced.length,
     discoverGone: gone.length,
+    discoverQueued: unsynced.length,
     // Managers this tick did not retire: cap-deferred, enumeration failures, and
     // those held back by a failed league. All three are unstamped and come back.
     deferred: userIds.length - stamped.length,

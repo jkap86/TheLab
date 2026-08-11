@@ -1,6 +1,4 @@
-import type { AxiosError } from "@thelab/http";
-
-import { sleeperGet, sleeperUrl } from "./client";
+import { sleeperGet, sleeperGetOptional, sleeperUrl } from "./client";
 import type {
   SleeperDraft,
   SleeperDraftPick,
@@ -34,45 +32,70 @@ export function getUserLeagues(
  * and a 404 that threw instead left the league due forever, burning a claim slot
  * and a Sleeper request on every rotation.
  */
-export async function getLeague(
-  leagueId: string,
-): Promise<SleeperLeague | null> {
-  try {
-    return await sleeperGet<SleeperLeague | null>(
-      sleeperUrl("league", leagueId),
-      null,
-    );
-  } catch (error) {
-    if ((error as AxiosError).response?.status === 404) return null;
-    throw error;
-  }
+export function getLeague(leagueId: string): Promise<SleeperLeague | null> {
+  return sleeperGetOptional<SleeperLeague | null>(
+    sleeperUrl("league", leagueId),
+    null,
+  );
 }
+
+/**
+ * A league's child collections, every one of them folding a 404 into its empty
+ * fallback — {@link sleeperGetOptional} rather than {@link sleeperGet}.
+ *
+ * **The asymmetry this closes wedged the crawler.** `getLeague` folded 404 and
+ * these seven did not, so a league whose own endpoint answered 200 while one
+ * child 404'd could never sync and could never be tombstoned either: the
+ * crawler's whole retire-a-dead-league mechanism asks the *league* endpoint, and
+ * that endpoint said the league was alive. In the discovery pass that is not
+ * merely a league lost. A first sync that fails holds its managers unstamped so
+ * the league is not forgotten, and `pendingManagers` orders unstamped managers
+ * first — so the same managers came back to the head of the queue every tick,
+ * the same leagues were re-fetched, and discovery stopped finding anything for
+ * anyone while the corpus stood still.
+ *
+ * Folding is no more exposure than the 200-with-null fold these already carried,
+ * because it produces the identical value and `persistLeagueGraph` judges the
+ * *payload* rather than the transport: users and rosters cannot legitimately be
+ * empty for a live league, so an empty one refuses the delete and says so, while
+ * traded picks, transactions and matchups empty legitimately and are replaced.
+ * What changes is only that the two spellings of "no such thing" now reach that
+ * judgement the same way instead of one of them failing the league outright.
+ */
 
 /** All rosters (teams) in a league. */
 export function getLeagueRosters(leagueId: string): Promise<SleeperRoster[]> {
-  return sleeperGet(sleeperUrl("league", leagueId, "rosters"), []);
+  return sleeperGetOptional(sleeperUrl("league", leagueId, "rosters"), []);
 }
 
 /** All members of a league. */
 export function getLeagueUsers(leagueId: string): Promise<SleeperLeagueUser[]> {
-  return sleeperGet(sleeperUrl("league", leagueId, "users"), []);
+  return sleeperGetOptional(sleeperUrl("league", leagueId, "users"), []);
 }
 
 /** Traded future draft-pick assets in a league. */
 export function getLeagueTradedPicks(
   leagueId: string,
 ): Promise<SleeperTradedPick[]> {
-  return sleeperGet(sleeperUrl("league", leagueId, "traded_picks"), []);
+  return sleeperGetOptional(sleeperUrl("league", leagueId, "traded_picks"), []);
 }
 
 /** Drafts belonging to a league (usually one). */
 export function getLeagueDrafts(leagueId: string): Promise<SleeperDraft[]> {
-  return sleeperGet(sleeperUrl("league", leagueId, "drafts"), []);
+  return sleeperGetOptional(sleeperUrl("league", leagueId, "drafts"), []);
 }
 
-/** Every pick made in a draft. */
+/**
+ * Every pick made in a draft.
+ *
+ * The likeliest of these to answer 404 rather than a null body, because it is
+ * the one whose id comes out of *another* payload: a draft Sleeper still lists
+ * under `league/<id>/drafts` but no longer serves picks for takes the league's
+ * whole graph down with it otherwise. An empty answer clears nothing — picks are
+ * replaced only for the drafts that returned some.
+ */
 export function getDraftPicks(draftId: string): Promise<SleeperDraftPick[]> {
-  return sleeperGet(sleeperUrl("draft", draftId, "picks"), []);
+  return sleeperGetOptional(sleeperUrl("draft", draftId, "picks"), []);
 }
 
 /**
@@ -84,7 +107,10 @@ export function getLeagueTransactions(
   leagueId: string,
   week: number,
 ): Promise<SleeperTransaction[]> {
-  return sleeperGet(sleeperUrl("league", leagueId, "transactions", week), []);
+  return sleeperGetOptional(
+    sleeperUrl("league", leagueId, "transactions", week),
+    [],
+  );
 }
 
 /**
@@ -102,5 +128,8 @@ export function getLeagueMatchups(
   leagueId: string,
   week: number,
 ): Promise<SleeperMatchup[]> {
-  return sleeperGet(sleeperUrl("league", leagueId, "matchups", week), []);
+  return sleeperGetOptional(
+    sleeperUrl("league", leagueId, "matchups", week),
+    [],
+  );
 }

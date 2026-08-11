@@ -44,6 +44,63 @@ export async function persistGoneLeagues(
   });
 }
 
+/**
+ * Store the league row for a discovered league whose first sync failed while
+ * Sleeper is still serving it.
+ *
+ * **The third answer beside {@link persistGoneLeagues} and a whole graph, and
+ * the one that was missing.** A first sync fetches half a dozen child
+ * collections, so it can fail for reasons that are neither "deleted" nor
+ * momentary — and with no row, the only record that the league was ever seen was
+ * that the managers pointing at it stayed unstamped. That hold has no bound of
+ * its own (see {@link unrecordedFailures}), so one permanently-failing league
+ * parked its managers at the head of the discovery queue and stopped the pass
+ * for everyone.
+ *
+ * Writing the row is the bound, and it is the same move `persistGoneLeagues`
+ * makes for the other outcome: the id counts as known from here on, so discovery
+ * stops selecting it, and the **refresh pass** is what retries it. That is the
+ * right home for a retry and this never was — refresh claims in bounded batches,
+ * stamps `sync_attempt_at` as it claims so a league that keeps failing rotates to
+ * the back of its own tier, and re-probes `getLeague` first, so a league that
+ * turns out to be deleted is tombstoned there. Discovery's job is finding
+ * leagues; retrying them is not.
+ *
+ * No children are written — there is no graph, and an empty collection would be
+ * a claim about the league rather than the absence of one. The row is inert
+ * until a refresh fills it in: every manager-facing list reaches a league
+ * through `league_users` or `rosters`, so a league with neither appears in
+ * nobody's leagues, no standings and no shares.
+ *
+ * **`DO NOTHING`, so this can never overwrite a league somebody synced properly
+ * in the meantime** — that data is strictly better than the enumeration payload
+ * held here, and a tombstone written by the refresh pass has to survive too;
+ * only `persistLeagueGraph` clears one. A fresh row takes `updated_at`'s default
+ * of now, which puts the retry a freshness TTL out rather than in the next tick.
+ * That is deliberate: due immediately, a league that cannot sync would be
+ * reclaimed every tick, and the wedge this fixes would simply move to the pass
+ * that has to absorb it.
+ */
+export async function persistUnsyncedLeagues(
+  leagues: readonly SleeperLeague[],
+): Promise<void> {
+  await bulkInsert(pool, {
+    table: "leagues",
+    columns: [
+      "league_id", "name", "season", "sport", "status", "total_rosters", "avatar",
+      "previous_league_id", "draft_id", "roster_positions", "settings",
+      "scoring_settings", "metadata",
+    ],
+    rows: leagues,
+    values: (x) => [
+      x.league_id, x.name, x.season, x.sport, x.status, x.total_rosters, x.avatar,
+      x.previous_league_id, x.draft_id, j(x.roster_positions), j(x.settings),
+      j(x.scoring_settings), j(x.metadata),
+    ],
+    onConflict: `(league_id) DO NOTHING`,
+  });
+}
+
 /** Persist one league graph inside an open transaction. */
 async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<void> {
   const l = g.league;

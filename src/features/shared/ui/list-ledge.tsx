@@ -186,9 +186,19 @@ export function ListLedge({
  * whole box, gutters included.
  *
  * **That fill ends against the ambient aurora, so it fades rather than
- * stopping.** A flat edge of `--background` across the page reads as the glow
- * behind it being clipped — the manager plate's own `::after`, moved to the part
- * that still paints. `pointer-events-none` because it overhangs the list.
+ * stopping — on the sides as well as below.** A flat edge of `--background`
+ * across the page reads as the glow behind it being clipped, and for a while
+ * only the bottom edge answered that: the two sides ended hard, so at rest the
+ * rail sat in a visible rectangle of cut-out glow. They ramp now too
+ * (`.lab-ledge-ground`), and the one thing that decides is *where*: the ramp
+ * runs outward across the `-mx-4 px-4` bleed into `PageShell`'s own gutter,
+ * which is card-free, so every pixel the fill was already covering stays fully
+ * opaque. Ramping inward from the box's own edge would have softened the same
+ * edge by exposing the cards it exists to hide.
+ *
+ * The bleed and the padding cancel, so the billet inside is laid out exactly
+ * where it was — what widens is only the painted box. `pointer-events-none` on
+ * the fade because it overhangs the list.
  *
  * **`z-30` is a window, not a spare number.** Below it is an expanded league
  * card, which pins under this rail at `z-20` and must not paint over it; above
@@ -206,7 +216,7 @@ export function ListLedge({
  * than from the box's own position.
  */
 const pinnedBox = (fade: boolean) =>
-  `sticky top-[var(--site-header-h)] z-30 mb-3 mt-3 bg-[var(--background)] pb-1.5 ${
+  `lab-ledge-ground sticky top-[var(--site-header-h)] z-30 -mx-4 mb-3 mt-3 px-4 pb-1.5 ${
     fade
       ? "after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-10 after:bg-gradient-to-b after:from-[var(--background)] after:to-transparent"
       : ""

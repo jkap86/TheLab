@@ -1375,6 +1375,59 @@ body {
   .lab-ledge-face-seated::before {
     content: none;
   }
+  /* The page's ground under a pinned rail, ending in a ramp on every open edge
+     rather than a cut.
+
+     The billet is opaque but it is inset from the cards' own edges, so a card
+     scrolling under a bare rail shows through the gutters either side of it —
+     which is what this fill is for. Painted as a flat colour it is also a
+     rectangle of `--background` sitting over `AmbientBackdrop`, and the glow
+     behind it reads as clipped: the same complaint the bottom edge already
+     answers with a 40px fade, on two edges that never got one.
+
+     Three things hold it up:
+
+     - **The ramp is outside the cards, never over them.** It runs across the
+       call site's bleed into `PageShell`'s own gutter, where nothing scrolls;
+       every pixel from there inward stays fully opaque, so the gutters either
+       side of the billet still cover what passes under them. Ramping *inward*
+       from the box's edge is the tempting spelling and it undoes the fill: the
+       21px between the billet and the card's edge is the card's own lit face,
+       and a card ghosting through it is worse than the flat edge this replaces.
+     - **`--ledge-bleed` agrees with `-mx-4 px-4` at the call site**, which is
+       the one number this class cannot see. Too small and the ramp starts over
+       the cards; too large and it never reaches transparent, so the cut comes
+       back one step out. `list-ledge.render.test.ts` pins the pair.
+     - **The fade below is masked rather than composed.** A vertical fade whose
+       colour also ramps horizontally is a two-axis gradient and no single
+       `linear-gradient` is one; the strip has no descendants, so a mask over its
+       own box is exact. The mask is deliberately *not* on the rail's box — with
+       `mask-clip` at its initial `border-box` that would clip the fade strip
+       hanging below it away entirely, and the billet's cast shadow with it.
+
+     The 16px is the whole of the ramp because it is the whole of the card-free
+     space; the bottom gets 40px because there is nothing below it to protect.
+     The top needs none — pinned it is under the app bar, and at rest the box
+     clears the billet by the 1px its wrapper spends on a transparent border. */
+  .lab-ledge-ground {
+    --ledge-bleed: 16px;
+    background-image: linear-gradient(
+      90deg,
+      transparent 0,
+      var(--background) var(--ledge-bleed),
+      var(--background) calc(100% - var(--ledge-bleed)),
+      transparent 100%
+    );
+  }
+  .lab-ledge-ground::after {
+    mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 var(--ledge-bleed),
+      #000 calc(100% - var(--ledge-bleed)),
+      transparent 100%
+    );
+  }
 
   /* The same grammar for a continuous control: a milled slot with a raised key
      riding in it — the ADP drawer's value curve. The track is recessed for the
