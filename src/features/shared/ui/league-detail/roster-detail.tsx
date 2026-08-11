@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 // Imported directly rather than through the projections barrel, which would
 // pull `pg`-backed code into the client bundle — see `slots.ts`.
@@ -48,13 +48,18 @@ type SlotRow = { slot: string; player_id: string };
  *
  * **The head is fixed and the two sections scroll under it.** This half scrolls
  * on its own (see {@link LeagueDetailPanel}), and what is above the scroll box is
- * what a scrolled roster can't do without: the rail naming the two number columns
- * — which is also what opens the editor that aims them.
+ * what a scrolled roster can't do without: the rail naming the number columns —
+ * which is also what opens the editor that aims them — and, where the caller
+ * passes one, the line naming whose roster this is.
  *
- * It names no team of its own. The plate that used to head it — avatar, team name
- * and record — restated the standings row that is already highlighted a few pixels
- * to the left, and on a phone it cost ~64px of a half that is ~155px wide before
- * a single player was listed. The team name lives on that row's hover instead.
+ * **It names no team of its own by default, and the exception is the rule read
+ * twice.** The plate that used to head it — avatar, team name and record —
+ * restated the standings row already highlighted a few pixels to the left, and on
+ * a phone it cost ~64px of a half that is ~155px wide before a single player was
+ * listed. That argument holds wherever the standings is beside it, which is the
+ * season panel; a *week* panel draws two rosters and no standings, so nothing
+ * else on screen says which of them is the reader's, and the caller passes a
+ * {@link heading}. The team name is still only on the hover either way.
  */
 export function RosterDetail({
   team,
@@ -66,6 +71,8 @@ export function RosterDetail({
   weekView,
   columns,
   onOpenColumn,
+  heading,
+  surface = "raised",
 }: {
   team: LeagueTeamView;
   /** Every team in the league, for naming the roster an acquired pick came from. */
@@ -81,6 +88,25 @@ export function RosterDetail({
   columns: string[];
   /** Open the panel's player-columns editor armed on this column's slot. */
   onOpenColumn: (slot: number) => void;
+  /**
+   * Whose roster this is, drawn in the fixed head above the column rail.
+   *
+   * Absent for a panel whose standings already name the team — the plate that
+   * used to head this half was removed for exactly that restatement (see below).
+   * A week panel draws two rosters and no standings, so there each half names
+   * itself; see {@link RosterHeading}.
+   */
+  heading?: ReactNode;
+  /**
+   * Which side of the app's raised/recessed grammar this half sits on.
+   *
+   * `raised` is a roster the reader can act on — the season panel's one roster,
+   * and their own on a week panel. `recessed` is one they can only read, which
+   * on a week panel is the opponent's: it is the standings' own material, and
+   * the pairing means the two halves are told apart by what they *are* and not
+   * only by the names on them.
+   */
+  surface?: "raised" | "recessed";
 }) {
   const teamOutlook = useMemo(
     () => outlook?.teams.find((t) => t.roster_id === team.roster_id) ?? null,
@@ -142,18 +168,31 @@ export function RosterDetail({
   const lineupLayout = sectionLayout(valueColumns.length);
 
   return (
-    // The raised half: this is the one being acted on, against the recessed
-    // field of standings beside it. `.lab-plate-sm` is the panel body's own face
-    // at half the thickness — two surfaces at equal thickness read as two
-    // instruments that happen to be adjacent rather than as a part seated in one.
+    // Raised is the half being acted on, against the recessed field beside it —
+    // the standings on a season panel, the *opponent's* roster on a week one,
+    // which is the same distinction read at a different grain: a lineup you can
+    // change against one you can only look at. `.lab-plate-sm` is the panel
+    // body's own face at half the thickness — two surfaces at equal thickness
+    // read as two instruments that happen to be adjacent rather than as a part
+    // seated in one — and `.lab-trough` is the sink the standings wears, since a
+    // shadow at this scale is the whole signal (see `.lab-trough` itself).
+    //
+    // The *inset* is the roster's either way and deliberately not the standings':
+    // what makes that half a step tighter is that its rows are lit keys carrying
+    // their own `px`, and a row here carries none whichever surface it sits on.
     //
     // A flex column, because this half scrolls on its own inside the card's cap
-    // (see `LeagueDetailPanel`): the coverage caveat and the column rail are the
-    // head it scrolls under, and only the list below them moves.
+    // (see `LeagueDetailPanel`): the heading, the coverage caveat and the column
+    // rail are the head it scrolls under, and only the list below them moves.
     // The inset is a step tighter at the base tier than it was: with both value
     // columns drawn at every width the row needs the 4px more than the edge
     // does. Trim the padding, never the gap.
-    <div className="lab-plate lab-plate-sm flex min-h-0 flex-col rounded-lg p-1 @sm:p-1.5 @lg:p-4">
+    <div
+      className={`flex min-h-0 flex-col rounded-lg p-1 @sm:p-1.5 @lg:p-4 ${
+        surface === "recessed" ? "lab-trough" : "lab-plate lab-plate-sm"
+      }`}
+    >
+      {heading}
       {teamOutlook && <LineupCoverage teamOutlook={teamOutlook} />}
 
       <ColumnRail

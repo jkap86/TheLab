@@ -59,10 +59,15 @@ export function LineupCard({
       ledge={<OpponentLedge week={week} matchup={matchup} />}
       columns={<LineupStatColumns matchup={matchup} />}
       focusRosterId={matchup?.roster_id}
+      // Which turns the panel into the game itself: this manager's roster beside
+      // the one it is playing, in place of the standings. Undefined on a bye or
+      // an unsynced week, which falls back to the standings — there is no game
+      // to draw, and the league is the more useful thing to show instead.
+      opponentRosterId={matchup?.opponent?.roster_id}
       // The panel opens on this week rather than on the rest of the season,
       // which is the whole reason this tool draws the card at all: a reader here
-      // is setting one lineup, so the two numbers beside each player are what he
-      // projects for it and what he has been averaging coming into it.
+      // is setting one lineup, so the number beside each player is what he
+      // projects for it.
       week={week}
       expanded={expanded}
       onToggle={onToggle}

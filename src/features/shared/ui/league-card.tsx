@@ -93,6 +93,7 @@ export function LeagueCard({
   ledge,
   columns,
   focusRosterId,
+  opponentRosterId,
   week = null,
   expanded,
   onToggle,
@@ -120,6 +121,13 @@ export function LeagueCard({
    * nobody asked. Omitted by the leagues list, which arrives at a league.
    */
   focusRosterId?: number;
+  /**
+   * The roster {@link focusRosterId} is playing this week, where the caller
+   * knows of one — which turns the panel into a head-to-head, the reader's own
+   * lineup beside the one it is up against and no standings between them. The
+   * lineup checker passes it and the leagues list has no game to pass.
+   */
+  opponentRosterId?: number;
   /**
    * Open the panel on a **week** rather than on the rest of the season — the
    * lineup checker passes its selected week, the leagues list passes nothing.
@@ -414,6 +422,7 @@ export function LeagueCard({
                 <LeagueDetailPanel
                   leagueId={leagueId}
                   focusRosterId={focusRosterId}
+                  opponentRosterId={opponentRosterId}
                   week={week}
                 />
               </div>

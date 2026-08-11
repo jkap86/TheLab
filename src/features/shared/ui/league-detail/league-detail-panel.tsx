@@ -33,8 +33,10 @@ import { useLeagueDetail } from "../../use-league-detail";
 import { usePersistedColumns } from "../../use-persisted-columns";
 import type { ColumnsEditor as ColumnsEditorComponent } from "../columns-editor";
 import { PanelLoading, PanelMessage } from "../panel-message";
+import { headToHead } from "./head-to-head";
 import { PanelTelemetry } from "./panel-telemetry";
 import { RosterDetail } from "./roster-detail";
+import { RosterHeading } from "./roster-heading";
 import { Standings } from "./standings";
 import { managerLabel } from "./team-label";
 import type { LeagueDetailResult, LeagueTeamView, TeamOutlook } from "./types";
@@ -127,6 +129,7 @@ const ColumnsEditor = dynamic(
 export function LeagueDetailPanel({
   leagueId,
   focusRosterId,
+  opponentRosterId,
   week = null,
 }: {
   leagueId: string;
@@ -138,6 +141,17 @@ export function LeagueDetailPanel({
    * projected leader; a roster this league doesn't hold falls back to the same.
    */
   focusRosterId?: number;
+  /**
+   * The roster on the other side of this week's game, which turns the panel into
+   * a head-to-head: {@link focusRosterId}'s roster on the left, this one on the
+   * right, and no standings between them.
+   *
+   * Only the lineup checker passes it, and only where it has a game to name — a
+   * bye, an unsynced week or a roster that has left the league since the matchup
+   * was read all fall back to the standings, which is the more useful thing to
+   * show when there is nobody to play. {@link headToHead} is that rule.
+   */
+  opponentRosterId?: number;
   /**
    * Read this league **as one week** rather than as the rest of a season.
    *
@@ -192,7 +206,12 @@ export function LeagueDetailPanel({
           <PanelMessage>No roster data yet.</PanelMessage>
         </PanelState>
       ) : (
-        <Panel data={data} focusRosterId={focusRosterId} week={week} />
+        <Panel
+          data={data}
+          focusRosterId={focusRosterId}
+          opponentRosterId={opponentRosterId}
+          week={week}
+        />
       )}
     </div>
   );
@@ -206,10 +225,12 @@ function PanelState({ children }: { children: ReactNode }) {
 function Panel({
   data,
   focusRosterId,
+  opponentRosterId,
   week,
 }: {
   data: LeagueDetailResult;
   focusRosterId?: number;
+  opponentRosterId?: number;
   week: number | null;
 }) {
   // Projected-points order, not standings order — the table's own Proj column
@@ -299,6 +320,11 @@ function Panel({
   // whether a source came with them — so they collapse to one value here.
   const weekView = data.week_view ?? null;
 
+  // The two rosters a week panel is about, or null for every other panel and for
+  // a week with no game in it. Resolved against `teams` rather than trusted,
+  // because the matchup and this payload are two reads — see {@link headToHead}.
+  const game = headToHead(teams, focusRosterId, opponentRosterId);
+
   // The panel is one milled instrument rather than two adjacent boxes: a plate
   // holding a recessed field (the standings, which is read) beside a raised one
   // (the roster, which is acted on) — the app bar's grammar at panel scale, so
@@ -347,7 +373,17 @@ function Panel({
           detail. It is also the line that must not move — it names the team
           both halves are about — which is what `shrink-0` on its own root says
           now that the halves below it are what scroll. */}
-      {data.outlook && (
+      {/* Not on a head-to-head, and that is the strip's own rule rather than an
+          exception to it: everything it states is the *selected* team's, and a
+          panel showing two rosters has no selection for it to be about — full
+          bleed above both halves it would be three numbers attributable to
+          either. What it was for is not lost, it is stated twice and correctly
+          attributed: each half's {@link RosterHeading} carries that team's name
+          and what it projects for the week, which is the reading a reader who
+          arrived at a *lineup* is after. The rank dial goes with it, since where
+          a roster places over the rest of the season is the question the season
+          panel answers. */}
+      {data.outlook && !game && (
         <PanelTelemetry
           outlook={data.outlook}
           team={data.outlook.teams.find(
@@ -356,19 +392,50 @@ function Panel({
         />
       )}
       <div className="flex min-h-0 flex-col pb-3 pl-3 pr-2 pt-2 @lg:pb-5 @lg:pl-5 @lg:pr-4 @lg:pt-3">
+        {/* The same 50/50 split either way, and the halves keep the roles the
+            materials give them: the left one is acted on and the right one is
+            read. On a season panel that is the roster against the standings; on
+            a week panel it is the reader's own lineup against the one they are
+            playing, which is the same distinction — you can move your own
+            players and not theirs. */}
         <div className="grid min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-1.5 @lg:gap-4">
-          <Standings
-            teams={teams}
-            outlook={data.outlook}
-            values={data.values}
-            weekView={weekView}
-            selectedId={selected.roster_id}
-            onSelect={setSelectedId}
-            columns={teamColumns}
-            onOpenColumn={teamEditor.open}
-          />
+          {game ? (
+            <RosterDetail
+              team={game.mine}
+              teams={teams}
+              players={data.players}
+              rosterPositions={data.roster_positions}
+              outlook={data.outlook}
+              values={data.values}
+              weekView={weekView}
+              columns={rosterColumns}
+              onOpenColumn={rosterEditor.open}
+              heading={
+                <RosterHeading
+                  team={game.mine}
+                  weekView={weekView}
+                  opponent={false}
+                />
+              }
+            />
+          ) : (
+            <Standings
+              teams={teams}
+              outlook={data.outlook}
+              values={data.values}
+              weekView={weekView}
+              selectedId={selected.roster_id}
+              onSelect={setSelectedId}
+              columns={teamColumns}
+              onOpenColumn={teamEditor.open}
+            />
+          )}
+          {/* One selection across both halves, so the columns line up across
+              the panel and one pick moves them together — the same rule that
+              holds a column steady down a list, read sideways. The editor is
+              one editor for the same reason: two rosters are one catalogue. */}
           <RosterDetail
-            team={selected}
+            team={game ? game.theirs : selected}
             teams={teams}
             players={data.players}
             rosterPositions={data.roster_positions}
@@ -377,6 +444,16 @@ function Panel({
             weekView={weekView}
             columns={rosterColumns}
             onOpenColumn={rosterEditor.open}
+            surface={game ? "recessed" : "raised"}
+            heading={
+              game ? (
+                <RosterHeading
+                  team={game.theirs}
+                  weekView={weekView}
+                  opponent
+                />
+              ) : undefined
+            }
           />
         </div>
         <OutlookCaveat data={data} />
