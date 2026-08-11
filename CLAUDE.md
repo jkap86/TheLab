@@ -720,19 +720,53 @@ about how it is laid out. Each replaced something that read as fine and wasn't.
   Sleeper has deleted — which fails its first sync every time — held its managers
   at the head of the queue forever: the same dead leagues re-fetched every tick,
   discovery finding nothing for anyone, and the corpus stopped growing. So
-  `partitionGoneLeagues` re-asks for the league itself before deciding, and a
-  null answer tombstones it through `persistGoneLeagues`. That write is the whole
-  fix: the league is unknown to us, so a marker with no row has nowhere to live
-  and every member rediscovers it. Two halves are load-bearing. **The probe is a
+  `partitionSyncFailures` re-asks for the league itself before deciding, and a
+  null answer tombstones it through `persistGoneLeagues`. **The probe is a
   second signal, not a re-read of the first** — a first sync fetches half a dozen
   child collections, so the error it throws cannot tell a deleted league from a
-  Sleeper hiccup, and only the league endpoint can. And **a probe that throws
-  stays retryable**: the tombstone is permanent as far as the crawler is
-  concerned (only a manager-driven sync clears it, via `persistLeagueGraph`), so
-  an ambiguous answer must never reach it. The refresh pass takes the same
-  answer through `markLeaguesGone`, which is why `getLeague` folds 404 into
+  Sleeper hiccup, and only the league endpoint can. The refresh pass takes the
+  same answer through `markLeaguesGone`, which is why `getLeague` folds 404 into
   Sleeper's usual 200-with-null rather than throwing — the two spellings mean one
   thing, and a 404 that threw left the league due forever.
+
+  **The write is the fix, and the tombstone was only ever half of it.** That
+  paragraph read as though *deletion* were the wedge, so the bound it describes
+  covered exactly one cause: the league is unknown to us, a marker with no row
+  has nowhere to live, so `persistGoneLeagues` writes the row and every member
+  stops rediscovering it. But nothing about the wedge needs the league to be
+  dead — **any** first sync that fails every time holds its managers at the head
+  of `pendingManagers` forever, and the crawler duly wedged a second time on
+  leagues Sleeper was still serving perfectly well (a 404 from one *child*
+  endpoint, which the league endpoint cannot see and the probe therefore
+  cleared). So a league Sleeper still serves is now written down too —
+  `persistUnsyncedLeagues`, a bare row with no children — and the hold is
+  released by the league being **recorded** rather than by its syncing.
+  `unrecordedFailures` is that rule, and what is left blocking is the residual
+  it names: a failure the tick held no payload to write a row from. Four things
+  hold it up:
+  - **Discovery finds leagues; the refresh pass retries them.** A parked row is
+    known, so discovery never selects it again, and refresh claims in bounded
+    batches, stamps `sync_attempt_at` as it claims so a league that keeps failing
+    rotates to the back of its own tier, and re-probes `getLeague` first — which
+    is where a league that turns out to be deleted gets its tombstone, with a
+    fresh answer rather than a guess. Retrying was never discovery's job, and
+    doing it there is what had no bound.
+  - **The row is written before the manager is stamped**, so a write that throws
+    takes the tick with it and nothing is suppressed. Stamping first would retire
+    a manager for the enumeration TTL on the strength of a row that may not
+    exist, which is the one way a league is lost for good rather than merely
+    late — and it is why `unrecordedFailures` takes the ids actually written and
+    never the ids intended.
+  - **An ambiguous probe now parks instead of staying retryable**, which is a
+    straight inversion of what this used to say and is safe only because of what
+    it is inverted *into*. A probe that throws had to stay retryable while the
+    only other bucket was a permanent tombstone; parking claims nothing about
+    whether the league exists, so an unconfirmed league goes there and the
+    refresh pass asks again.
+  - **A parked row takes `updated_at`'s default**, so the retry is a freshness
+    TTL out rather than the next tick. Due immediately, a league that cannot sync
+    would be reclaimed every tick and the wedge would simply move to the pass
+    that absorbed it.
 - **The season is resolved, not compiled in.** `DEFAULT_SEASON` was a release note
   disguised as a string. `shared/season` is an override (`NFL_SEASON_OVERRIDE`),
   then Sleeper's `state/nfl` on a six-hour cache, then that constant as the floor.
@@ -5360,9 +5394,23 @@ stops holding, a comment saying it does would not have caught it.
   released before the fetch, two instances both decide a refresh is due and both
   run the fan-out, which is the duplicate work the lock exists to prevent. So the
   connection lifetime is unchanged and the *number* of them is what got bounded.
-- **Sleeper answers 200 with a `null` body** for "no such thing" (unknown user,
-  deleted league) rather than 404. `sleeperGet` normalises this to a fallback —
-  use it rather than calling axios directly.
+- **Sleeper spells "no such thing" two ways, and which one you get is a fact
+  about the endpoint rather than about the request.** Usually it is 200 with a
+  `null` body (unknown user, deleted league); several endpoints answer 404 for
+  the same thing. `sleeperGet` folds the null body; `sleeperGetOptional` folds
+  both. Use one of them rather than calling axios directly, and pick by whether a
+  missing resource is an *answer*: the league graph's seven child collections
+  take the second, because folding one spelling and throwing on the other is
+  deciding by spelling — a 404 from one child used to fail a whole league whose
+  own endpoint said it was alive, which is invisible to the tombstone mechanism
+  (that asks the league endpoint) and wedged discovery until
+  `persistUnsyncedLeagues` existed. The projections sync takes the first, and
+  that split is the point of two names: its freshness gate stamps on a *successful
+  fetch*, so a folded 404 there would stamp an empty week fresh and never come
+  back for it. `isMissingResource` is pure and tested because both ways of
+  getting it wrong are silent — a 429 folded into a fallback is a rate-limited
+  crawl writing empty collections over good rows, and a timeout learned nothing
+  about whether the resource exists.
 - **Sleeper's players map is ~5MB** and they ask for at most one fetch per day.
   It's cached in `players`; go through `@/shared/players`.
 - **KTC serves bot clients a page with no data**, so requests need browser

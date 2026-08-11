@@ -16,8 +16,9 @@
  * chunk. Sleeper should not send one, but the cost if it does is this league's
  * entire sync transaction, every collection in it — and it repeats on every
  * retry, because the payload is what triggers it. That is the permanently
- * wedged league `partitionGoneLeagues` exists to end, reached through a
- * different door.
+ * wedged league `partitionSyncFailures` exists to end, reached through a
+ * different door — and note which door: a payload Postgres refuses is a league
+ * Sleeper is still serving, so it parks rather than tombstones.
  *
  * The later row wins, which is what the conflict clause would have done.
  *
