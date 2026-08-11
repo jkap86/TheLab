@@ -1,7 +1,7 @@
 import type { LeagueTeam } from "@/shared/manager";
 import { getPreviousLeagueScores, listRosterWeekPoints } from "@/shared/manager";
 import type { RosterWeekPoints } from "@/shared/manager";
-import { getWeekLineups, listLineupWeekStats, scoreProjection } from "@/shared/projections";
+import { getWeekLineups, listLineupWeekStats, scoreStatLine } from "@/shared/projections";
 
 import { playerPpg, ppgWindow, teamPpg } from "./ppg";
 import type { Ppg, StatLine } from "./ppg";
@@ -138,7 +138,7 @@ async function weekProjection({
 
   const projection = new Map<string, number>();
   for (const row of rows) {
-    projection.set(row.player_id, scoreProjection(row.stats, scoringSettings));
+    projection.set(row.player_id, scoreStatLine(row.stats, scoringSettings));
   }
   return projection;
 }

@@ -45,12 +45,7 @@ export type {
   ParsedProjectionFilters,
   ProjectionScoring,
 } from "./filters";
-export {
-  scoreProjection,
-  scoreStatLine,
-  unprojectedScoring,
-  derivedScoring,
-} from "./score";
+export { scoreStatLine, unprojectedScoring } from "./score";
 export {
   optimalLineup,
   compareLineup,

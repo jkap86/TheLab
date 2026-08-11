@@ -11,7 +11,7 @@ import {
   listLineupWeekStats,
   listPlayerWeekStats,
 } from "./queries";
-import { derivedScoring, scoreProjection, unprojectedScoring } from "./score";
+import { scoreStatLine, unprojectedScoring } from "./score";
 import { groupWeeklyPoints, weeklyLineupSplit, weeklyRosters } from "./weekly";
 import type { PlayerSplit } from "./weekly";
 
@@ -116,17 +116,6 @@ export type LeagueOutlook = {
    * slot and a long list here shouldn't be presented as authoritative.
    */
   unprojected_scoring: string[];
-  /**
-   * Categories the league scores that Sleeper publishes as a formula rather than
-   * a projection, and which are therefore left out of every total here.
-   *
-   * Separate from `unprojected_scoring` because it can't be gated on the league
-   * starting a defence: first-down and reception-split scoring applies to every
-   * skill player, so a non-empty list here means every number on the page is
-   * lower than the league's own settings would suggest — and, before this was
-   * excluded, was higher than anything that could actually be scored.
-   */
-  derived_scoring: string[];
 };
 
 /**
@@ -194,7 +183,7 @@ export async function getLeagueOutlook({
   const players: Record<string, PlayerOutlook> = {};
   for (const [playerId, entry] of Object.entries(aggregated)) {
     players[playerId] = {
-      points: scoreProjection(entry.stats, scoring),
+      points: scoreStatLine(entry.stats, scoring),
       weeks: entry.weeks.length,
     };
   }
@@ -205,7 +194,7 @@ export async function getLeagueOutlook({
   // changes week to week, so that sum has to be broken back out per week to know
   // what a lineup is worth in it.
   const weeklyPoints = groupWeeklyPoints(stats, (s) =>
-    scoreProjection(s, scoring),
+    scoreStatLine(s, scoring),
   );
 
   return {
@@ -242,7 +231,6 @@ export async function getLeagueOutlook({
       };
     }),
     unprojected_scoring: unprojectedScoring(scoring, statKeys),
-    derived_scoring: derivedScoring(scoring),
   };
 }
 
@@ -345,7 +333,7 @@ export async function getWeeklyTeamPoints({
     const scoring = league.scoringSettings;
     const weeklyPoints = groupWeeklyPoints(
       rosterPlayerIds(league.teams).flatMap((id) => rowsByPlayer.get(id) ?? []),
-      (s) => scoreProjection(s, scoring),
+      (s) => scoreStatLine(s, scoring),
     );
 
     const slots = recognisedSlots(league.rosterPositions);
@@ -430,7 +418,7 @@ export async function getOptimalLineups({
     for (const team of league.teams) {
       const candidates = lineupCandidates(team, positions, (id) => {
         const entry = aggregated[id];
-        return entry ? scoreProjection(entry.stats, scoring) : 0;
+        return entry ? scoreStatLine(entry.stats, scoring) : 0;
       });
 
       byTeam.set(
@@ -546,7 +534,7 @@ export async function getWeekLineups({
     const points =
       groupWeeklyPoints(
         rosterPlayerIds(league.teams).flatMap((id) => rowsByPlayer.get(id) ?? []),
-        (s) => scoreProjection(s, scoring),
+        (s) => scoreStatLine(s, scoring),
       ).get(week) ?? new Map<string, number>();
 
     const byTeam = new Map<number, TeamWeekLineup>();
