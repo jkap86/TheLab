@@ -40,15 +40,20 @@ import type {
  * no scrollbar at all — the point of the split is that the roster's does not move
  * it.
  *
- * The two value columns are slots the reader points at a team-level metric —
+ * The value columns are slots the reader points at a team-level metric —
  * projected points and projected bench to start with, swappable to the season
  * optimal, points for, or the roster's whole KTC / ADP total. Pressing a heading
  * opens the panel's columns editor armed on that slot; which metric each column
- * shows is held above this table (in the panel), so both columns line up down the
- * list and one pick moves the whole column.
+ * shows is held above this table (in the panel), so the columns line up down the
+ * list and one pick moves a whole column.
  *
- * **Both of them are drawn at every width, and the rank is what paid for it.**
- * The second used to wait for @xl, because the row had no room: a fixed rank
+ * **How many there are is the selection's, not this table's**: a panel opened on
+ * a season carries two and one opened on a week carries one (see
+ * `DEFAULT_WEEK_TEAM_COLUMNS`), so the template comes off the count —
+ * {@link COLUMN_GRID} — rather than being cut for a fixed pair.
+ *
+ * **They are drawn at every width, and the rank is what paid for it.** The
+ * second used to wait for @xl, because the row had no room: a fixed rank
  * gutter spanning both lines took 24px of a 137px row on a phone, and it took it
  * from the line the numbers are on as much as from the line the name is on. As a
  * tab on the row's corner (see `.lab-tab`) the rank rides in the row's own inset
@@ -103,13 +108,16 @@ import type {
  * **The points-for is monotonic now, and that is a consequence rather than a
  * separate decision.** It used to be `@sm:inline @xl:hidden @2xl:inline` — on,
  * off, on — because the second value column arrived at @xl and took back more
- * width than the tier gained. With the column count fixed there is no reversal
- * left to describe: the line waits for one tier and stays. That tier is @3xl
- * rather than the @2xl it used to be, which is the honest price of two wide
- * tracks — `12-5-1 · 1,842.36 PF` measures ~120px against ~114 of cell at @2xl,
- * so it would clip there. What gives below it is still a whole fact rather than
- * half of one, since a shortened name reads as long where a shortened total
- * reads as bad data.
+ * width than the tier gained. With the count no longer varying *with the width*
+ * there is no reversal left to describe: the line waits for one tier and stays.
+ * That tier is @3xl rather than the @2xl it used to be, which is the honest
+ * price of two wide tracks — `12-5-1 · 1,842.36 PF` measures ~120px against
+ * ~114 of cell at @2xl, so it would clip there. It is cut for the **two**-column
+ * shape and left there for the one-column one, which has a whole track more to
+ * spend: one threshold that is right at the tight shape and merely generous at
+ * the wide one beats a pair that can drift. What gives below it is still a whole
+ * fact rather than half of one, since a shortened name reads as long where a
+ * shortened total reads as bad data.
  */
 export function Standings({
   teams,
@@ -147,17 +155,14 @@ export function Standings({
   // in exactly the league whose horizon is empty.
   const hasNumbers = outlookByRoster !== null || weekView !== null;
 
-  // Written out rather than assembled, so Tailwind sees every class string whole.
-  // No rank track in either: the rank is a tab on the row's corner now, so what
-  // is left is the name/meta column and the two value tracks — measured against
-  // the widest string each has to hold (see the note above), not rounded.
-  const grid = hasNumbers
-    ? "grid-cols-[minmax(0,1fr)_2.625rem_2.625rem] " +
-      "@sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem] " +
-      "@lg:grid-cols-[minmax(0,1fr)_4rem_4rem] " +
-      "@xl:grid-cols-[minmax(0,1fr)_5rem_5rem]"
-    : "grid-cols-[minmax(0,1fr)]";
-  const nameSpan = hasNumbers ? "col-span-3" : "col-span-1";
+  // The selection decides the shape as well as the contents: a week panel is one
+  // slot wide and a season panel two (see `DEFAULT_WEEK_TEAM_COLUMNS`), so the
+  // template is picked off the count rather than assumed. A track nothing fills
+  // is not harmless here — it would leave a column of ground on the trailing edge
+  // of every row while the heading above it named the column to its left.
+  const valueColumns = hasNumbers ? columns : [];
+  const grid = COLUMN_GRID[valueColumns.length] ?? NO_COLUMN_GRID;
+  const nameSpan = NAME_SPAN[valueColumns.length] ?? "col-span-1";
 
   // The rail sits on the rows' own inset, or a heading lands a pixel or two off
   // the number under it and the table reads as misaligned. Its *trailing* side
@@ -181,34 +186,33 @@ export function Standings({
         className={`grid shrink-0 ${grid} ${inset} items-center gap-x-2 pb-2 pt-1 text-[0.6rem] text-foreground/50 @lg:text-xs`}
       >
         {/* `invisible`, not `hidden`: the cell has to keep its grid track below
-            @lg or the two headings slide left off the columns they name. What
-            it captions is a column of avatars and usernames, which is the same
-            reason the roster half leaves its own name track empty — and with
-            two headings to seat there is no longer room to say it twice.
+            @lg or the headings beside it slide left off the columns they name.
+            What it captions is a column of avatars and usernames, which is the
+            same reason the roster half leaves its own name track empty — and
+            with a heading to seat there is no longer room to say it twice.
             A league with no projections has no headings to seat, so it keeps
             its caption at every width. */}
         <span
           className={`truncate uppercase tracking-wide ${
-            hasNumbers ? "invisible @lg:visible" : ""
+            valueColumns.length > 0 ? "invisible @lg:visible" : ""
           }`}
         >
           Manager
         </span>
-        {hasNumbers &&
-          columns.map((key, slot) => (
-            <ColumnHeading
-              key={slot}
-              // Sentence case below @lg, and the reason is `Optimal`: uppercase
-              // and tracked it measures 43.8px at this rail's size, against a
-              // 42px track — and a heading clipped inside its own word reads as
-              // broken where a clipped name only reads as long. Written as
-              // base-then-variant so no two utilities of one property ever meet
-              // on this element.
-              className="normal-case tracking-normal @lg:uppercase @lg:tracking-wide"
-              label={(TEAM_METRICS_BY_KEY[key] ?? TEAM_METRICS[0]).label}
-              onOpen={() => onOpenColumn(slot)}
-            />
-          ))}
+        {valueColumns.map((key, slot) => (
+          <ColumnHeading
+            key={slot}
+            // Sentence case below @lg, and the reason is `Optimal`: uppercase
+            // and tracked it measures 43.8px at this rail's size, against a
+            // 42px track — and a heading clipped inside its own word reads as
+            // broken where a clipped name only reads as long. Written as
+            // base-then-variant so no two utilities of one property ever meet
+            // on this element.
+            className="normal-case tracking-normal @lg:uppercase @lg:tracking-wide"
+            label={(TEAM_METRICS_BY_KEY[key] ?? TEAM_METRICS[0]).label}
+            onOpen={() => onOpenColumn(slot)}
+          />
+        ))}
       </div>
       {/* The list is what scrolls, and only the list: the heading above it is
           what says which metric each column of bare numbers is showing, and it
@@ -230,7 +234,7 @@ export function Standings({
             rank={i + 1}
             grid={grid}
             nameSpan={nameSpan}
-            columns={hasNumbers ? columns : null}
+            columns={valueColumns.length > 0 ? valueColumns : null}
             teamOutlook={outlookByRoster?.get(team.roster_id)}
             values={values}
             weekView={weekView}
@@ -245,7 +249,7 @@ export function Standings({
 }
 
 /**
- * The dim line under the table saying what its two numbers are over.
+ * The dim line under the table saying what its numbers are over.
  *
  * **It names the columns actually selected, not the payload that arrived.** A
  * panel opened on a week can still have a rest-of-season column aimed at it (the
@@ -254,10 +258,6 @@ export function Standings({
  * line shows only where a week column is on screen, and everything else falls
  * through to the horizon line exactly as before — which is what keeps a panel
  * opened on a season byte-for-byte unchanged.
- *
- * The season the average came from is the half worth spelling out: in week 1 it
- * is *last* year's form sitting in the same units as the projection beside it,
- * and a column that didn't say so would be quoting two seasons as one.
  */
 function StandingsFootnote({
   outlook,
@@ -274,19 +274,7 @@ function StandingsFootnote({
   const className =
     "shrink-0 px-1 pb-0.5 pt-2 text-[0.65rem] leading-relaxed text-foreground/35 @lg:px-2";
 
-  if (showsWeek) {
-    const { week, ppg_source: source } = weekView;
-    return (
-      <p className={className}>
-        Week {week} · points per game{" "}
-        {source.prior
-          ? `over the ${source.season} season`
-          : source.weeks > 0
-            ? `over ${source.weeks} completed week${source.weeks === 1 ? "" : "s"}`
-            : "unavailable — no completed weeks stored"}
-      </p>
-    );
-  }
+  if (showsWeek) return <p className={className}>Week {weekView.week}</p>;
 
   if (!outlook) return null;
 
@@ -301,7 +289,37 @@ function StandingsFootnote({
 }
 
 /** The catalogue's week-grain keys, for deciding which footnote the table wants. */
-const WEEK_METRIC_KEYS = new Set(["week_proj", "ppg"]);
+const WEEK_METRIC_KEYS = new Set(["week_proj"]);
+
+/**
+ * The row template for each value-column count, written out rather than
+ * assembled so Tailwind sees every class string whole.
+ *
+ * No rank track in any of them: the rank is a tab on the row's corner, so what
+ * is left is the name/meta column and one track per value column — each measured
+ * against the widest string it has to hold (see the note on {@link Standings}),
+ * not rounded. The two counts share those measurements exactly; what differs is
+ * only how many of the tracks there are, so a tier moved for one has to move for
+ * the other.
+ */
+const COLUMN_GRID: Record<number, string> = {
+  1:
+    "grid-cols-[minmax(0,1fr)_2.625rem] " +
+    "@sm:grid-cols-[minmax(0,1fr)_2.75rem] " +
+    "@lg:grid-cols-[minmax(0,1fr)_4rem] " +
+    "@xl:grid-cols-[minmax(0,1fr)_5rem]",
+  2:
+    "grid-cols-[minmax(0,1fr)_2.625rem_2.625rem] " +
+    "@sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem] " +
+    "@lg:grid-cols-[minmax(0,1fr)_4rem_4rem] " +
+    "@xl:grid-cols-[minmax(0,1fr)_5rem_5rem]",
+};
+
+/** A league with nothing to put in a value column: the name and nothing else. */
+const NO_COLUMN_GRID = "grid-cols-[minmax(0,1fr)]";
+
+/** How far the name reaches on its own line — every track of its own template. */
+const NAME_SPAN: Record<number, string> = { 1: "col-span-2", 2: "col-span-3" };
 
 function StandingsRow({
   team,
@@ -434,8 +452,6 @@ function StandingsRow({
             // Roster ids are numbers here and JSON keys there, so the lookup is
             // by template string rather than pretending the map is numeric.
             weekProjection: weekView?.team_projection[`${team.roster_id}`] ?? null,
-            ppg: weekView?.team_ppg[`${team.roster_id}`] ?? null,
-            ppgSource: weekView?.ppg_source ?? null,
           });
           return (
             <span

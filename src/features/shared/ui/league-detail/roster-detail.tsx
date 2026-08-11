@@ -10,7 +10,7 @@ import { PLAYER_METRICS, PLAYER_METRICS_BY_KEY } from "../../roster-metrics";
 import { ColumnHeading } from "./column-heading";
 import { DraftPicks } from "./draft-picks";
 import { PlayerRow } from "./player-row";
-import { NO_NUMBERS, SPLIT_LAYOUT } from "./roster-layout";
+import { sectionLayout } from "./roster-layout";
 import type { SectionLayout } from "./roster-layout";
 import type {
   LeagueOutlook,
@@ -37,12 +37,14 @@ type SlotRow = { slot: string; player_id: string };
  * aren't broken out either; they're treated as bench depth (candidates for the
  * lineup like anyone on the bench), so they simply sit in the bench list.
  *
- * The two value columns beside each player are slots the reader points at a
+ * The value columns beside each player are slots the reader points at a
  * player-level metric — the projected start/bench split to start with, swappable
- * to the season total or to this player's KTC and ADP value. Pressing either
- * heading on the rail above the list opens the panel's columns editor armed on
- * that slot; which metric each column shows is held above this panel, so the two
- * sections' columns line up and one pick moves the whole column.
+ * to the season total or to this player's KTC and ADP value. Pressing a heading
+ * on the rail above the list opens the panel's columns editor armed on that slot;
+ * which metric each column shows is held above this panel, so the two sections'
+ * columns line up and one pick moves the whole column. How *many* there are is
+ * the selection's too — two on a season panel, one on a week's (see
+ * `sectionLayout`).
  *
  * **The head is fixed and the two sections scroll under it.** This half scrolls
  * on its own (see {@link LeagueDetailPanel}), and what is above the scroll box is
@@ -75,7 +77,7 @@ export function RosterDetail({
   values: LeagueRosterValues;
   /** The week's numbers, or null on a panel opened on a season. */
   weekView: LeagueWeekView;
-  /** The metric key each of the two value columns shows. */
+  /** The metric key each value column shows — one on a week panel, two on a season's. */
   columns: string[];
   /** Open the panel's player-columns editor armed on this column's slot. */
   onOpenColumn: (slot: number) => void;
@@ -133,8 +135,11 @@ export function RosterDetail({
     weekView !== null ||
     Object.keys(values.ktc).length > 0 ||
     Object.keys(values.adp).length > 0;
-  const lineupLayout = hasNumbers ? SPLIT_LAYOUT : NO_NUMBERS;
   const valueColumns = hasNumbers ? columns : [];
+  // The selection decides the row's shape as well as its contents: a week panel
+  // is one number wide and a season panel two, so the template comes off the
+  // count rather than being assumed a pair.
+  const lineupLayout = sectionLayout(valueColumns.length);
 
   return (
     // The raised half: this is the one being acted on, against the recessed
@@ -209,11 +214,7 @@ export function RosterDetail({
           </RosterSection>
         )}
 
-        <ValueFootnote
-          columns={valueColumns}
-          values={values}
-          weekView={weekView}
-        />
+        <ValueFootnote columns={valueColumns} values={values} />
 
         <DraftPicks
           picks={team.picks}
@@ -226,7 +227,7 @@ export function RosterDetail({
 }
 
 /**
- * The two value columns' headings, once for the whole half.
+ * The value columns' headings, once for the whole half.
  *
  * They used to sit in each section's own heading, which drew the same two labels
  * twice — one selection, two places claiming it, since a pick in either moves
@@ -252,12 +253,12 @@ function ColumnRail({
   onOpenColumn,
 }: {
   layout: SectionLayout;
-  /** The two value columns' metric keys — empty when the half shows no numbers. */
+  /** The value columns' metric keys — empty when the half shows no numbers. */
   valueColumns: string[];
   onOpenColumn: (slot: number) => void;
 }) {
   // Nothing to name, so no rail: a league with no projections and nothing priced
-  // would otherwise spend a line on two empty tracks.
+  // would otherwise spend a line on empty tracks.
   if (valueColumns.length === 0) return null;
 
   return (
@@ -386,48 +387,30 @@ function RosterSection({
 
 /**
  * A dim line saying what the selected columns rest on — the board KTC and ADP
- * were priced against, and which weeks a points-per-game average was counted
- * over — shown only while the column it is about is selected. The same "say what
- * the number rests on" habit the standings footer and the outlook caveat keep,
- * and the reminder that KTC is a dynasty board and ADP a market consensus, not
- * points.
+ * were priced against — shown only while the column it is about is selected. The
+ * same "say what the number rests on" habit the standings footer and the outlook
+ * caveat keep, and the reminder that KTC is a dynasty board and ADP a market
+ * consensus, not points.
  *
- * The PPG line is the one that earns it most, because what it qualifies is
- * *which season*: coming into week 1 there is nothing this year to average, so
- * the column is last year's form standing in the same units as the projection
- * beside it, and only this line says so.
+ * Only the two board lenses need one: everything else in the catalogue is points
+ * in this league's own scoring, over a horizon the standings footer beside it
+ * already names.
  */
 function ValueFootnote({
   columns,
   values,
-  weekView,
 }: {
   columns: string[];
   values: LeagueRosterValues;
-  weekView: LeagueWeekView;
 }) {
   const showKtc = columns.includes("ktc");
   const showAdp = columns.includes("adp");
-  const showPpg = columns.includes("ppg") && weekView !== null;
-  if (!showKtc && !showAdp && !showPpg) return null;
+  if (!showKtc && !showAdp) return null;
 
   const board = values.superflex ? "superflex" : "1QB";
 
   return (
     <div className="mt-2 space-y-0.5 text-[0.65rem] leading-relaxed text-foreground/35">
-      {showPpg && weekView && (
-        <p>
-          PPG ·{" "}
-          {weekView.ppg_source.prior
-            ? `points per game across the ${weekView.ppg_source.season} season, ` +
-              "since no week of this one has been played yet"
-            : weekView.ppg_source.weeks > 0
-              ? `points per game over ${weekView.ppg_source.weeks} completed ` +
-                `week${weekView.ppg_source.weeks === 1 ? "" : "s"}, ` +
-                "in this league's scoring"
-              : "no completed weeks stored to average"}
-        </p>
-      )}
       {showKtc && (
         <p>
           KTC · KeepTradeCut dynasty {board} value

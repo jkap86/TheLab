@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import {
   DEFAULT_PLAYER_COLUMNS,
+  DEFAULT_WEEK_PLAYER_COLUMNS,
   PLAYER_METRICS,
   PLAYER_METRICS_BY_KEY,
   type PlayerMetricContext,
@@ -27,8 +28,6 @@ const ctx = (over: Partial<PlayerMetricContext> = {}): PlayerMetricContext => ({
   // week metric says "not asked for" rather than "no data" without one.
   week: null,
   weekProjection: null,
-  ppg: null,
-  ppgSource: null,
   ...over,
 });
 
@@ -37,7 +36,10 @@ const cell = (key: string, over: Partial<PlayerMetricContext> = {}) =>
 
 describe("player metric catalogue", () => {
   test("every default column names a real metric", () => {
-    for (const key of DEFAULT_PLAYER_COLUMNS) {
+    // Both defaults, because they are two selections of different lengths and a
+    // key dropped from the catalogue would otherwise only be caught on whichever
+    // panel happened to be opened.
+    for (const key of [...DEFAULT_PLAYER_COLUMNS, ...DEFAULT_WEEK_PLAYER_COLUMNS]) {
       assert.ok(PLAYER_METRICS_BY_KEY[key], `unknown default column ${key}`);
     }
   });
@@ -108,12 +110,7 @@ describe("player-value metrics", () => {
 });
 
 describe("week metrics", () => {
-  const week = {
-    week: 5,
-    weekProjection: 18.4,
-    ppg: { average: 16.25, games: 4 },
-    ppgSource: { season: "2026", weeks: 4, prior: false },
-  };
+  const week = { week: 5, weekProjection: 18.4 };
 
   test("week proj reads the week's projection, not a slice of the season", () => {
     const c = cell("week_proj", week);
@@ -129,42 +126,12 @@ describe("week metrics", () => {
     assert.equal(cell("week_proj", { ...week, weekProjection: null }).text, null);
   });
 
-  test("ppg carries its denominator and the season it came from", () => {
-    const c = cell("ppg", week);
-    assert.equal(c.text, "16.25");
-    assert.match(c.title, /4 weeks/);
-    assert.match(c.title, /this season/);
-  });
-
-  test("the prior-season fallback says which season it is quoting", () => {
-    // Week 1 has nothing this season to average, so the column is last year's
-    // form in the same units as the projection beside it — and only the hover
-    // separates the two.
-    const c = cell("ppg", {
-      week: 1,
-      weekProjection: 18.4,
-      ppg: { average: 14.1, games: 16 },
-      ppgSource: { season: "2025", weeks: 18, prior: true },
-    });
-    assert.equal(c.text, "14.10");
-    assert.match(c.title, /2025 season/);
-  });
-
-  test("on a season panel both read as not asked for, not as no data", () => {
+  test("on a season panel it reads as not asked for, not as no data", () => {
     // The leagues list and the trades board open on a season, so a reader who
-    // aims a slot at one of these gets an em dash and a hover saying why —
-    // rather than one implying the league has no projection.
-    for (const key of ["week_proj", "ppg"]) {
-      const c = cell(key);
-      assert.equal(c.text, null);
-      assert.match(c.title, /opened on a week/);
-    }
-  });
-
-  test("a player who has not played inside a real window is an em dash", () => {
-    // Distinct from the case above: the window exists, he is simply not in it.
-    const c = cell("ppg", { ...week, ppg: null });
+    // aims a slot at this gets an em dash and a hover saying why — rather than
+    // one implying the league has no projection.
+    const c = cell("week_proj");
     assert.equal(c.text, null);
-    assert.match(c.title, /No games played/);
+    assert.match(c.title, /opened on a week/);
   });
 });

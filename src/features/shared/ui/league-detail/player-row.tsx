@@ -165,8 +165,6 @@ export function PlayerRow({
     draftCount: values.adp_draft_count,
     week: weekView?.week ?? null,
     weekProjection: weekView?.projection[playerId] ?? null,
-    ppg: weekView?.ppg[playerId] ?? null,
-    ppgSource: weekView?.ppg_source ?? null,
   };
 
   return (

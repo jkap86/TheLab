@@ -21,10 +21,13 @@
  * exists because above `@3xl` it doesn't have to — and a 40-man roster at two
  * lines is ~1,960px of scrolling beside a twelve-team table.
  *
- * Which metric the two number columns show is a separate choice, held above the
- * panel and rendered by {@link ColumnRail}; this only fixes their *count* and
- * width. Both templates therefore carry exactly two number tracks, and
- * `NO_NUMBERS` carries none for a league with nothing to price.
+ * Which metric each number column shows is a separate choice, held above the
+ * panel and rendered by {@link ColumnRail}; this only fixes their *width* and
+ * lays out however many there are. **How many there are is the selection's**: a
+ * panel opened on a season carries two and one opened on a week carries one (see
+ * `DEFAULT_WEEK_PLAYER_COLUMNS`), so {@link sectionLayout} picks the template off
+ * the count — {@link SPLIT_LAYOUT} for two, {@link ONE_NUMBER} for one, and
+ * {@link NO_NUMBERS} for a league with nothing to price.
  */
 export type SectionLayout = {
   /** Column template: the shape's own tracks, at every tier. */
@@ -169,3 +172,45 @@ export const SPLIT_LAYOUT: SectionLayout = {
   // Both tracks plus the `gap-x-2` between them.
   lane: "w-[7.5rem]",
 };
+
+/**
+ * The same row with one number instead of two — what a panel opened on a week
+ * draws, since the week grain has a single metric to show.
+ *
+ * **Every track keeps the width it is cut to above**, which is what makes this a
+ * template rather than a re-measurement: dropping a column only ever hands width
+ * *back* to the name, and the string each value track is cut for
+ * (`1,041.16` at the tier's own size) is unchanged. A metric whose numbers run
+ * wider than that wants both templates re-measured, not this one.
+ *
+ * The two placements that are not simply "one track fewer" are the ones to
+ * check. `nameSpan` still covers the whole of the narrow shape's first line, so
+ * it is one less than {@link SPLIT_LAYOUT}'s; `statStart` is unchanged, because
+ * what it names is the track the *first* number sits in and the leading track is
+ * still the one under the name. And the lane is one 3.5rem track with no gap
+ * inside it — it spans the numbers, so with one number there is nothing to span
+ * between.
+ */
+export const ONE_NUMBER: SectionLayout = {
+  grid:
+    "grid-cols-[minmax(0,1fr)_2.875rem] " +
+    "@lg:grid-cols-[minmax(0,1fr)_3.25rem] " +
+    "@3xl:grid-cols-[2.125rem_minmax(0,1fr)_3.5rem]",
+  nameSpan: "col-span-2 @3xl:col-span-1",
+  statStart: "@max-3xl:col-start-2",
+  lane: "w-[3.5rem]",
+};
+
+/**
+ * The template a section takes for `count` value columns.
+ *
+ * Beside the templates rather than at the call site, so which shape a count
+ * means is decided once — a second reader choosing for itself is how two lists
+ * that share a heading rail end up laid out differently. A count past what is
+ * spelled out falls to the widest template, since a stored selection is fixed to
+ * the defaults' length (`resolveColumns`) and cannot legitimately arrive here.
+ */
+export function sectionLayout(count: number): SectionLayout {
+  if (count <= 0) return NO_NUMBERS;
+  return count === 1 ? ONE_NUMBER : SPLIT_LAYOUT;
+}

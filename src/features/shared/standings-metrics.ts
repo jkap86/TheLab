@@ -1,6 +1,6 @@
 import { formatPoints, formatValue } from "./format.ts";
 import type { ColumnPreset, Metric } from "./metric-cell.ts";
-import type { LeagueTeamPayload, PpgPayload } from "@/shared/contract";
+import type { LeagueTeamPayload } from "@/shared/contract";
 import type { TeamOutlook } from "@/shared/projections";
 
 /**
@@ -55,10 +55,6 @@ export type TeamMetricContext = {
     current: number;
     points_left: number;
   } | null;
-  /** What it has averaged coming into that week; null where it has played none. */
-  ppg: PpgPayload | null;
-  /** Which season and how many weeks that average was counted over. */
-  ppgSource: { season: string; weeks: number; prior: boolean } | null;
 };
 
 /**
@@ -130,7 +126,9 @@ const noProjection: TeamMetricCell = {
 
 /**
  * Every team metric a standings column can show, in the order the picker lists
- * them: the two projected totals it opened with — each week's best lineup and what
+ * them: the one week-grain number (what this team can score in the week a panel
+ * was opened on, and nothing where it was opened on a season), the two projected
+ * totals a season panel opens with — each week's best lineup and what
  * those lineups leave on the bench — the single season-long optimal lineup (a
  * different, always-smaller number, see {@link TeamOutlook}), the points the team
  * has actually scored so far, and the whole roster's value on the KTC and ADP
@@ -166,30 +164,6 @@ export const TEAM_METRICS: TeamMetric[] = [
           `${formatPoints(optimal)} from the best lineup available in week ${week}` +
           ` · ${formatPoints(current)} as currently set` +
           (points_left > 0 ? ` · ${formatPoints(points_left)} left on the bench` : ""),
-      };
-    },
-  },
-  {
-    key: "ppg",
-    group: "Week",
-    label: "PPG",
-    cell: ({ ppg, ppgSource }) => {
-      if (!ppg || !ppgSource) {
-        return {
-          kind: "value",
-          text: null,
-          title: ppgSource
-            ? "No games scored in the weeks counted"
-            : "Only answered where a panel is opened on a week",
-        };
-      }
-      return {
-        kind: "value",
-        text: formatPoints(ppg.average),
-        title:
-          `${formatPoints(ppg.average)} a game over ${ppg.games} ` +
-          `game${ppg.games === 1 ? "" : "s"}` +
-          (ppgSource.prior ? `, ${ppgSource.season} season` : " this season"),
       };
     },
   },
@@ -308,22 +282,32 @@ export const DEFAULT_TEAM_COLUMNS: string[] = ["proj", "bench"];
  * score, what have they done, what are they worth. `Season` is the pair that has
  * to be read together to mean anything, since one best lineup over the horizon
  * and the points already banked are the two halves of a whole year.
+ *
+ * **There is no `Week` preset, and its absence is the rule rather than an
+ * omission.** A preset names a *pair*, and the week grain has one metric left —
+ * on the panel where that metric means anything the table is one slot wide, so a
+ * preset writing it would be the table's own default under another name, and on a
+ * season panel it would seat a column of em dashes.
  */
 export const TEAM_COLUMN_PRESETS: ColumnPreset[] = [
-  { name: "Week", columns: ["week_proj", "ppg"] },
   { name: "Projection", columns: ["proj", "bench"] },
   { name: "Season", columns: ["optimal", "pf"] },
   { name: "Value", columns: ["ktc", "adp"] },
 ];
 
 /**
- * The two columns the standings opens with **when the panel is opened on a
- * week** — what each team can score in it, against what each has been averaging
- * coming into it.
+ * The column the standings opens with **when the panel is opened on a week** —
+ * what each team can score in it.
  *
  * Stored under a key of its own rather than sharing the season panel's, for the
  * reason its roster-level twin is: the grain is a week rather than the rest of a
- * season, so a reader who aims these columns on the lineup checker has not
- * thereby re-aimed the leagues list's.
+ * season, so a reader who aims this column on the lineup checker has not thereby
+ * re-aimed the leagues list's.
+ *
+ * **One column and not two, which is a fact about the table's *shape* and not
+ * only about its defaults**: `resolveColumns` takes the row's length from this
+ * array, so a week panel is one slot wide and the standings picks the matching
+ * grid template off the count (see `Standings`). It carried a points-per-game
+ * column beside this one, which is what the second slot was for.
  */
-export const DEFAULT_WEEK_TEAM_COLUMNS: string[] = ["week_proj", "ppg"];
+export const DEFAULT_WEEK_TEAM_COLUMNS: string[] = ["week_proj"];

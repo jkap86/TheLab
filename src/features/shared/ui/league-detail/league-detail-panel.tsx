@@ -144,9 +144,9 @@ export function LeagueDetailPanel({
    * The lineup checker passes its selected week; the leagues list and the trades
    * board pass nothing, which is what they want — a reader who arrived at a
    * league is asking about its shape, and a reader who arrived at a lineup is
-   * asking about one Sunday. What it changes is the two numbers each table opens
-   * on (this week's projection and points per game, against the rest-of-season
-   * split) and, because those numbers come off the same payload, what is
+   * asking about one Sunday. What it changes is what each table opens on — a
+   * single column carrying this week's projection, against the rest-of-season
+   * split's pair — and, because that number comes off the same payload, what is
    * requested and how the answer is keyed.
    *
    * The two selections are stored apart — see {@link DEFAULT_WEEK_TEAM_COLUMNS}
@@ -253,8 +253,9 @@ function Panel({
   // a season, and that is the grain rule rather than an exception to it: "this
   // team over the rest of the year" and "this team on Sunday" are two questions,
   // so a column aimed at one is not a column aimed at the other. Same catalogue
-  // either way — both pairs are pickable from either panel — and only what each
-  // opens on differs.
+  // either way — everything is pickable from either panel — and what differs is
+  // what each opens on and how many slots it has (one on a week, two on a
+  // season: `resolveColumns` takes the row's length from the defaults).
   const {
     columns: teamColumns,
     setColumn: setTeamColumn,
@@ -448,7 +449,6 @@ function previewSubjects(
     (t) => t.roster_id === selected.roster_id,
   );
   const weekView = data.week_view ?? null;
-  const ppgSource = weekView?.ppg_source ?? null;
 
   const team: TeamMetricContext = {
     team: selected,
@@ -459,8 +459,6 @@ function previewSubjects(
     draftCount: data.values.adp_draft_count,
     week,
     weekProjection: weekView?.team_projection[selected.roster_id] ?? null,
-    ppg: weekView?.team_ppg[selected.roster_id] ?? null,
-    ppgSource,
   };
 
   // Sleeper pads an unfilled slot with an empty id or a literal "0", so a
@@ -489,8 +487,6 @@ function previewSubjects(
       draftCount: data.values.adp_draft_count,
       week,
       weekProjection: weekView?.projection[playerId] ?? null,
-      ppg: weekView?.ppg[playerId] ?? null,
-      ppgSource,
     },
     playerLabel: data.players[playerId]?.name ?? playerId,
   };
