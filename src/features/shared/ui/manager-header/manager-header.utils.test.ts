@@ -7,7 +7,7 @@ import type {
   HeaderSyncSummary,
 } from "./manager-header.types.ts";
 import {
-  hasSyncState,
+  hasSyncCaveat,
   partialSyncNote,
   recordBarParts,
   refreshingSuffix,
@@ -32,33 +32,38 @@ const summary = (
 const progress = (over: Partial<HeaderProgress> = {}): HeaderProgress =>
   ({ type: "progress", phase: "refresh", loaded: 4, total: 12, failed: 0, ...over }) as HeaderProgress;
 
-describe("the state line only appears when it has something to say", () => {
-  const quiet = { refreshing: false, summary: summary(), refreshError: null };
+describe("the caveat plates only appear when there is a caveat", () => {
+  const quiet = { summary: summary(), refreshError: null };
 
-  test("nothing transient draws nothing", () => {
-    assert.equal(hasSyncState(quiet), false);
-    assert.equal(
-      hasSyncState({ refreshing: false, summary: undefined, refreshError: null }),
-      false,
-    );
+  test("nothing standing draws nothing", () => {
+    assert.equal(hasSyncCaveat(quiet), false);
+    assert.equal(hasSyncCaveat({ summary: undefined, refreshError: null }), false);
     // Undefined is the prop's own default, not a third state.
     assert.equal(
-      hasSyncState({ refreshing: false, summary: summary(), refreshError: undefined }),
+      hasSyncCaveat({ summary: summary(), refreshError: undefined }),
       false,
     );
   });
 
-  test("each of the three states opens it on its own", () => {
-    assert.equal(hasSyncState({ ...quiet, refreshing: true }), true);
-    assert.equal(hasSyncState({ ...quiet, summary: summary({ failed: 1 }) }), true);
-    assert.equal(hasSyncState({ ...quiet, refreshError: "boom" }), true);
+  test("each of the two standing states opens it on its own", () => {
+    assert.equal(hasSyncCaveat({ ...quiet, summary: summary({ failed: 1 }) }), true);
+    assert.equal(hasSyncCaveat({ ...quiet, refreshError: "boom" }), true);
   });
 
   // The two skips mean opposite things — one leaves a complete graph, the other
   // leaves whatever the lock's winner has committed so far — so a locked summary
-  // has to open the line even with nothing failed.
+  // has to open the plate even with nothing failed.
   test("a locked sync opens it though nothing failed", () => {
-    assert.equal(hasSyncState({ ...quiet, summary: summary({ locked: true }) }), true);
+    assert.equal(hasSyncCaveat({ ...quiet, summary: summary({ locked: true }) }), true);
+  });
+
+  // **The split this predicate exists for.** A refresh in flight is a process
+  // with a running count that resolves on its own, and it is drawn in the
+  // readout slot as a flask — not as a caveat about the rows already on screen.
+  // Before the split both lived on one row behind one predicate, which gave the
+  // loudest treatment to the state that goes away by itself.
+  test("a refresh in flight is not a caveat", () => {
+    assert.equal(hasSyncCaveat({ ...quiet, ...{ refreshing: true } }), false);
   });
 });
 

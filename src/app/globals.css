@@ -698,6 +698,33 @@ body {
       0 2px 0 var(--edge),
       0 5px 10px -4px rgba(0, 0, 0, 0.8);
   }
+  /* The same plate in the app's caution tone — the manager header's sync
+     caveats, which ride that card's bottom edge.
+
+     **It is a plate rather than the bordered pill it replaced because of where
+     it sits.** Hanging off a card's edge there is no card behind it, so a
+     hairline border over a 10%-alpha amber fill — legible on the plate's own
+     face — is a floating outline against the page ground. A plate brings its own
+     surface with it.
+
+     Two things are held from `.lab-nameplate` deliberately. The wall is the same
+     2px and the top edge is the same specular line, so the two read as one
+     device in two tones rather than as two parts. And the darkest stop clears
+     the page ground by the same margin the blue one clears a card face, which is
+     that class's own rule: a face carrying a label has to be lighter than what
+     it is read against, or the plate reads as a hole with text in it.
+
+     The wall is a shading of the fill rather than `--edge`, for the reason the
+     extrusion palette exists at all — a side wall is a darker version of its own
+     face, and the blue wall under an amber plate reads as a shadow cast by
+     something else. */
+  .lab-nameplate-warn {
+    background: linear-gradient(172deg, #9c7a3d 0%, #6f5528 55%, #4a3a1c 100%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 240, 200, 0.42),
+      0 2px 0 #241a06,
+      0 5px 10px -4px rgba(0, 0, 0, 0.8);
+  }
 
   /* A numeral cut into the surface rather than lit on top of it.
 

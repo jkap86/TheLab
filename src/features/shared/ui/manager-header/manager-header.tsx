@@ -1,8 +1,8 @@
 import type { ManagerHeaderProps } from "./manager-header.types.ts";
-import { hasSyncState } from "./manager-header.utils.ts";
+import { hasSyncCaveat } from "./manager-header.utils.ts";
 import { ManagerSummary } from "./manager-summary.tsx";
 import { SeasonTab, StatTab } from "./plate-corners.tsx";
-import { SyncStateLine } from "./sync-state.tsx";
+import { SyncCaveats } from "./sync-state.tsx";
 
 /**
  * The padding under the plate's body, and around the transient state line.
@@ -14,8 +14,23 @@ import { SyncStateLine } from "./sync-state.tsx";
  * nothing to clear, so both are the unencumbered spelling and the seam argument
  * lives here as history rather than as a branch.
  */
-const BODY_PADDING = "pb-2 sm:pb-3";
-const STATE_PADDING = "px-5 py-2 sm:px-6";
+/**
+ * The padding under the plate's body — and 12px of it is a *reserved lane* for
+ * the sync caveats, which is the one number here worth understanding.
+ *
+ * {@link SyncCaveats} rides the card's bottom edge, rising 14px above it. The
+ * record bar's own bottom clears that edge by 10px, so a plate landing there
+ * sits on the bar. 12px more clears it with room, and reserving that space
+ * **permanently** is the whole point: a lane that appeared only when a caveat
+ * did would be exactly the layout shift moving the state line out of flow was
+ * meant to stop.
+ *
+ * It is the same trade the record bar itself already makes — it keeps an empty
+ * rail before a game is played, so the plate is the same height in September as
+ * in December. A card above a list pays for its height in list; it should pay a
+ * constant.
+ */
+const BODY_PADDING = "pb-5 sm:pb-6";
 
 /**
  * Who is being looked at, how their season is going, and the list's own header
@@ -67,6 +82,28 @@ const STATE_PADDING = "px-5 py-2 sm:px-6";
  * sync state and the record are the same facts on all of them; only `stat`
  * differs, which is why it is a prop rather than three copies of this card.
  *
+ * **It is machined, and it was the last thing on this page that wasn't.** The
+ * plate was a pane of tinted glass — a translucent white gradient over a
+ * hairline border — while everything under it had moved to milled parts: the
+ * subject rail is a `.lab-slab`, the heading billet a `.lab-ledge`, and the
+ * league cards left `LIST_ROW_SURFACE` for the trades board's corner-lit block.
+ * Worse, it wore *both*: its two corner tabs are `.lab-well` and the countdown's
+ * digit cells are `.lab-readout`, so the glass-to-metal join ran around the
+ * card's own edge rather than between it and anything else.
+ *
+ * It is the **subject rail's** material rather than a league card's, and the
+ * choice is not a preference. A card's `.lab-slab-face` is lit from a corner at
+ * 168°, which is a claim about a card-shaped box and degenerates on one this
+ * wide and this short (see the face's own comment below). The rail's fill is the
+ * same material re-laid for exactly these proportions — so the plate, the rail
+ * and the billet now share a wall, a chamfer family and a light direction, and
+ * read down the page as one console with the list running out from under it.
+ *
+ * What it deliberately does *not* take is the nameplate. A league card's name
+ * rides its top edge because the card is one of a hundred and needs a mark that
+ * says "one object"; this plate is alone on the page and its top edge is already
+ * two readouts.
+ *
  * **The lineup checker renders it too, which is why the card is in
  * `features/shared`.** What it swaps is the *aggregation* behind `record` — the
  * season so far there, the week ahead here — and the plate draws both the same
@@ -110,50 +147,66 @@ export function ManagerHeader({
     // rail — a lit face, held off this one's the same way the rail holds off the
     // heading billet under it.
     <header className="mb-1.5">
-      {/* The plate keeps `overflow-hidden`: the accent rail and the specular
-          sweep are square boxes drawn against its rounded corners. The wrapper
-          around it is what a part seated *outside* that clip would need — the
-          filters' key used to be one, and the wall that made it read as
-          pressable is exactly what the clip would have cut off. Nothing is
-          seated there now (the key leads the subject rail below), so the wrapper
-          is a plain positioning box. */}
+      {/* A plain positioning box. It is what a part seated *outside* the plate's
+          clip would need — the filters' key used to be one, and the wall that
+          made it read as pressable is exactly what a clip would have cut off.
+          Nothing is seated there now (the key leads the subject rail below). */}
       <div className="relative">
-        <div className="relative isolate overflow-hidden rounded-2xl border border-foreground/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.075),rgba(255,255,255,0.02)_60%,rgba(255,255,255,0.008))] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.12),inset_0_-2px_8px_rgba(0,0,0,0.5),0_18px_40px_-22px_rgba(0,0,0,0.9)]">
-          {/* The cyan rail down the plate, echoing the league rows' accent. */}
-          <span
-            aria-hidden="true"
-            className="absolute inset-y-0 left-0 z-[2] w-1 bg-gradient-to-b from-active to-active/30 shadow-[0_0_16px_rgba(0,255,229,0.4)]"
-          />
-          {/* The specular sweep that reads as a milled face under a light. It is
-              the plate's only decoration and sits under the content, not over it. */}
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_30%,rgba(255,255,255,0.06)_48%,transparent_62%)]"
-          />
+        {/* Wall wrapper and lit face, both chamfered — a wall that turns four
+            corners shows a square one wherever the clip doesn't follow it. This
+            is the subject rail's construction exactly, which is the point: see
+            the class comment above.
 
-          <SeasonTab season={season} />
-          <StatTab stat={stat} />
+            `.lab-slab-fixed` is not optional. `.lab-slab` lifts and blooms under
+            the cursor because the trades board's card is a card you press; this
+            is a surface holding readouts, and a header that rose under the
+            pointer would promise a press that lands on nothing. */}
+        <div className="lab-slab lab-slab-fixed lab-notch-all">
+          {/* `-face-rail` overrides only the fill, and it is what makes this
+              work at a header's proportions rather than a card's. The corner-lit
+              168° gradient `.lab-slab-face` carries is a claim about a card-shaped
+              box: over ~1200×130 its gradient line is ~380px, so the three stops
+              resolve inside the leading third and the rest sits flat on `#0a1723`
+              — three values off the page ground, with the stat tab and the dial
+              at that end appearing to float. Same failure, same fix, as the rail.
 
-          <ManagerSummary
-            user={user}
-            season={season}
-            record={record}
-            scope={scope}
-            leagueCount={leagueCount}
-            countdown={countdown}
-            padding={BODY_PADDING}
-          />
+              `isolate` is what the two corner tabs and the accent rail rank
+              inside; `z-[1]` on the body below keeps the face's own specular
+              sweep (`.lab-slab-face::after`, generated last and therefore painted
+              last) under the content rather than over it. */}
+          <div className="lab-slab-face lab-slab-face-rail lab-notch-all isolate w-full">
+            {/* The cyan rail down the plate, echoing the league rows' accent.
+                The chamfer cuts its top, which is what seats it in the part
+                rather than laying it on top. */}
+            <span
+              aria-hidden="true"
+              className="absolute inset-y-0 left-0 z-[2] w-1 bg-gradient-to-b from-active to-active/30 shadow-[0_0_16px_rgba(0,255,229,0.4)]"
+            />
 
-          {hasSyncState({ refreshing, summary, refreshError }) && (
-            <SyncStateLine
+            <SeasonTab season={season} />
+            <StatTab stat={stat} />
+
+            <ManagerSummary
+              user={user}
+              season={season}
+              record={record}
+              scope={scope}
+              leagueCount={leagueCount}
+              countdown={countdown}
               refreshing={refreshing}
               progress={progress}
-              summary={summary}
-              refreshError={refreshError}
-              padding={STATE_PADDING}
+              padding={BODY_PADDING}
             />
-          )}
+          </div>
         </div>
+
+        {/* Outside the slab, which is the one thing about it that is not
+            negotiable: `clip-path` clips a whole subtree, so a plate rendered
+            inside the face would be severed at the edge it exists to straddle.
+            This is what the wrapper above is for. */}
+        {hasSyncCaveat({ summary, refreshError }) && (
+          <SyncCaveats summary={summary} refreshError={refreshError} />
+        )}
       </div>
     </header>
   );

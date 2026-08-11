@@ -24,12 +24,17 @@ import type { HeaderStat } from "./manager-header.types.ts";
  * and moving them there costs the plate no height: the tabs sit in top padding
  * the avatar's own height already paid for.
  *
- * "Flush" is the whole of the styling. The outer corner takes the card's radius
- * one pixel in (`15px` against a `rounded-2xl` border), the two inner corners are
- * square but for a small return, and the fill is `lab-well` — the recessed
- * material the countdown cells wear — so a tab reads as machined out of the
- * plate's edge rather than as a chip parked near it. The left one pads past the
- * accent rail it covers.
+ * "Flush" is the whole of the styling, and what makes a tab flush changed with
+ * the plate under it. It used to carry the card's radius one pixel in
+ * (`rounded-tl-[15px]` against a `rounded-2xl` border); the plate is a chamfered
+ * slab now, so its own `clip-path` cuts these tabs on the same 9px diagonal —
+ * `clip-path` clips a whole subtree — and a radius underneath that cut is a
+ * curve inside a bevel, which reads as a tab *almost* fitting its corner. So the
+ * outer corners are square and the clip does the work. The two inner corners
+ * keep their small return, and the fill is `lab-well` — the recessed material
+ * the countdown cells wear — so a tab reads as machined out of the plate's edge
+ * rather than as a chip parked near it. The left one pads past the accent rail
+ * it covers.
  *
  * They sit above that rail (`z-[3]` against its `z-[2]`), so the accent passes
  * behind the left tab and resumes below it rather than stopping at the chip.
@@ -45,8 +50,8 @@ function CornerTab({
     <span
       className={`lab-well absolute top-0 z-[3] inline-flex items-baseline gap-1.5 px-2.5 py-1 text-[10px] leading-none ${
         side === "left"
-          ? "left-0 rounded-br-lg rounded-tl-[15px] pl-3.5"
-          : "right-0 rounded-bl-lg rounded-tr-[15px]"
+          ? "left-0 rounded-br-lg pl-3.5"
+          : "right-0 rounded-bl-lg"
       }`}
     >
       {children}

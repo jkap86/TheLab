@@ -1,81 +1,88 @@
 import type { ReactNode } from "react";
 
-import type { HeaderProgress, HeaderSyncSummary } from "./manager-header.types.ts";
-import { partialSyncNote, refreshingSuffix } from "./manager-header.utils.ts";
+import type { HeaderSyncSummary } from "./manager-header.types.ts";
+import { partialSyncNote } from "./manager-header.utils.ts";
 
 /**
- * The plate's state line: a refresh in flight, and the two ways a sync can leave
- * the list below incomplete.
+ * The three standing caveats about the rows below, as plates riding the card's
+ * bottom edge.
  *
- * It carries only what is transient, so the caller draws it only where there is
- * something to say (`hasSyncState`) — with the countdown up in the readout slot,
- * an always-present row would be an empty band under the record for the whole
- * season. That is also what makes it the plate's bottom edge whenever it appears,
- * which is why the filters' key takes its clearance out of *this* padding then
- * (see `statePadding`).
+ * **It was a row in the plate's flow, and that was the bug.** Present only when
+ * there was something to say, it made the card ~24px taller the moment a refresh
+ * started and ~24px shorter when it ended — so the entire league list moved twice
+ * on every visit, once in each direction, for a band most readers never look at.
+ * Absolutely positioned, the card is one height forever and the list never moves.
+ *
+ * **What it no longer carries is the refresh**, which went to the readout slot
+ * (see {@link SyncFlask}). The split is the one in {@link hasSyncCaveat}: a
+ * refresh is a process with a running count that resolves on its own, and these
+ * three are facts about data already on screen that resolve by nothing. Sharing a
+ * row made them look like one kind of thing, and gave the loudest treatment to
+ * the one that goes away by itself.
+ *
+ * **The plates are siblings of the slab, never children of it.** `clip-path`
+ * clips a whole subtree, so a part rendered inside the face would be severed at
+ * the exact edge it exists to straddle — which is why {@link ManagerHeader} keeps
+ * a plain `relative` wrapper around the slab, and why its comment has always said
+ * that is what the wrapper is for.
+ *
+ * The edge they ride is not free: the record bar's bottom clears it by 10px and
+ * these plates rise 14px above it, so the body reserves a 12px lane
+ * (`bodyPadding`). Reserving it *permanently* is the point — a lane that appeared
+ * with the caveat would be the layout shift this whole change is about.
  */
-export function SyncStateLine({
-  refreshing,
-  progress,
+export function SyncCaveats({
   summary,
   refreshError,
-  padding,
 }: {
-  refreshing?: boolean;
-  progress?: HeaderProgress | null;
   summary?: HeaderSyncSummary;
   refreshError?: string | null;
-  /** The seam under the row — see `statePadding`, which is what sizes it. */
-  padding: string;
 }) {
   const partial = partialSyncNote(summary);
   return (
     <div
-      // The one part of the plate that appears and disappears, and every line in
-      // it is something the page cannot otherwise be told apart from a complete
-      // one: a refresh in flight, leagues that failed, a list another sync is
-      // still filling in.
+      // Every plate here is something the page cannot otherwise be told apart
+      // from a complete one: leagues that failed, a list another sync is still
+      // filling in, a refresh that gave up on data already served.
       role="status"
-      className={`relative flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/10 text-[11px] ${padding}`}
+      // `pointer-events-none` because a plate hanging off the card's edge sits
+      // over the gap above the subject rail, and nothing here is pressable —
+      // a press meant for the rail below must not land on a label.
+      className="pointer-events-none absolute -bottom-3 left-[21px] right-[21px] z-[5] flex flex-wrap items-center gap-1.5"
     >
-      {refreshing && <RefreshingPill progress={progress} />}
       {/* Some leagues could not be refreshed, so the list below is a mix of
           just-synced rows and rows as old as the last pass. Stated as the two
           counts rather than the failure alone — see `partialSyncNote`. */}
-      {partial && <Warning>{partial}</Warning>}
+      {partial && <Caveat>{partial}</Caveat>}
       {/* A sync running elsewhere kept this one from writing, so the list below
           is whatever that one has committed so far — on a first visit, a
           fraction of it. Said out loud for the reason the failed-league count
           is: the page cannot otherwise be told apart from a complete one. */}
       {summary?.locked && (
-        <Warning>Syncing elsewhere — this list may be incomplete</Warning>
+        <Caveat>Syncing elsewhere — this list may be incomplete</Caveat>
       )}
-      {refreshError && <Warning>Refresh failed — showing cached data</Warning>}
+      {refreshError && <Caveat>Refresh failed — showing cached data</Caveat>}
     </div>
   );
 }
 
-function Warning({ children }: { children: ReactNode }) {
+/**
+ * One caveat, on the card's own edge-plate device.
+ *
+ * A plate rather than the bordered text pill this used to be, because off the
+ * card's edge there is no card behind it — a pill with a hairline border and a
+ * 10%-alpha fill was legible against the plate's face and is a floating outline
+ * against the page ground. It is `.lab-nameplate`'s construction in the caution
+ * tone: same lit top edge, same 2px wall, so it reads as stamped on the part
+ * rather than dropped near it.
+ *
+ * It stays a *plate* and never a chip: raised-means-press-me is about keys and
+ * pills, and there is nothing to press here.
+ */
+function Caveat({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-amber-300">
+    <span className="lab-nameplate-warn rounded-[5px] px-2.5 py-[3px] text-[11px] font-semibold leading-tight text-amber-50">
       {children}
-    </span>
-  );
-}
-
-function RefreshingPill({ progress }: { progress?: HeaderProgress | null }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-active/30 bg-active/10 px-2.5 py-0.5 text-active">
-      <span
-        aria-hidden="true"
-        className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-active/40 border-t-active"
-      />
-      Refreshing
-      {/* The running tally is hidden from the live region around this: it moves
-          once per league, and a polite region re-reading "Refreshing 41/121"
-          every few hundred milliseconds is the announcement talking over the
-          page it is describing. "Refreshing" is announced once and stays true. */}
-      <span aria-hidden="true">{refreshingSuffix(progress)}</span>
     </span>
   );
 }

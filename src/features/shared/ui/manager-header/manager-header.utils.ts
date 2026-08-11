@@ -12,25 +12,30 @@ import type { HeaderProgress, HeaderSyncSummary } from "./manager-header.types.t
  */
 
 /**
- * Whether the state line has anything to say.
+ * Whether the plate has a standing caveat about the rows below it.
  *
- * It carries only what is transient — a refresh in flight, a sync that failed —
- * so it is drawn only when there is something to say: with the countdown up in
- * the readout slot, an always-present row would be an empty band under the record
- * for the whole season.
+ * **This is `hasSyncState` minus `refreshing`, and the subtraction is the whole
+ * point.** The four sync states were one row and one predicate, which made them
+ * look like one kind of thing. They are two. A refresh in flight is a *process*:
+ * it has a running count, it resolves on its own, and while it runs the card has
+ * something live to show — so it belongs in the readout slot, beside the dial and
+ * the countdown it takes turns with. The other three are *standing facts about
+ * the data already on screen*: leagues that failed, a sync writing from another
+ * process, a refresh that gave up. None of them resolves by waiting, and each one
+ * means the list below cannot be told apart from a complete one without being
+ * told. Those get the plate.
+ *
+ * So this answers only the second question, and the first is `refreshing` itself
+ * — a boolean the readout reads directly, with no predicate to wrap it.
  */
-export function hasSyncState({
-  refreshing,
+export function hasSyncCaveat({
   summary,
   refreshError,
 }: {
-  refreshing?: boolean;
   summary?: HeaderSyncSummary;
   refreshError?: string | null;
 }): boolean {
-  return Boolean(
-    refreshing || (summary && (summary.failed > 0 || summary.locked)) || refreshError,
-  );
+  return Boolean((summary && (summary.failed > 0 || summary.locked)) || refreshError);
 }
 
 /**

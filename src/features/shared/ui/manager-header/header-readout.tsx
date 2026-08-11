@@ -1,9 +1,11 @@
 // Both the module rather than the barrel, for `manager-summary`'s reason: this
 // card lives inside `features/shared`, so its own index is a cycle from here.
+import { FlaskLoader } from "../flask-loader";
 import { firstKickoff } from "../../nfl-calendar";
 import { useKickoff } from "../../use-kickoff";
 import { KickoffCountdown } from "./kickoff-countdown.tsx";
-import { resolveKickoff } from "./manager-header.utils.ts";
+import type { HeaderProgress } from "./manager-header.types.ts";
+import { refreshingSuffix, resolveKickoff } from "./manager-header.utils.ts";
 import { useTick } from "./use-tick.ts";
 import { WinPctGauge } from "./win-pct-gauge.tsx";
 
@@ -34,18 +36,79 @@ export function HeaderReadout({
   season,
   pct,
   countdown,
+  refreshing,
+  progress,
 }: {
   season: string;
   pct: number | null;
   /** Whether the clock may take the slot. */
   countdown: boolean;
+  /** Whether a background refresh is in flight — see {@link SyncFlask}. */
+  refreshing?: boolean;
+  progress?: HeaderProgress | null;
 }) {
   // A component boundary rather than a branch below the hooks, and that is what
   // it buys: a page that never draws the clock never mounts the query behind it,
   // so opting out costs no `/api/kickoff` request either.
-  if (!countdown) return <WinPctGauge pct={pct} />;
+  const readout = countdown ? (
+    <KickoffReadout season={season} pct={pct} />
+  ) : (
+    <WinPctGauge pct={pct} />
+  );
 
-  return <KickoffReadout season={season} pct={pct} />;
+  if (!refreshing) return readout;
+
+  return (
+    // The flask is laid *over* whichever readout is in the slot rather than
+    // replacing it, which is what keeps the swap free of layout: the readout
+    // underneath still sizes the box, so the plate is the same height refreshing
+    // or not, and the card never moves the list below it. Dimmed rather than
+    // hidden, because what is under the flask is still the truth — it comes
+    // back the moment the sync lands, and fading to nothing would read as the
+    // number having been lost.
+    <div className="relative flex-none">
+      <div className="opacity-[0.12]" aria-hidden="true">
+        {readout}
+      </div>
+      <SyncFlask progress={progress} />
+    </div>
+  );
+}
+
+/**
+ * The refresh, as the one live thing on the card while it runs.
+ *
+ * **Why the slot rather than a badge**: the flask draws in a 120-unit box with
+ * bubbles of radius 1.8–3.2 that rise 30 units, so at width `w` a bubble is
+ * `w/120 × r` across. Below about 34px they are sub-pixel and what is left is a
+ * static glass outline — a mark, not a loader. This slot is the only place on the
+ * plate with room for a flask that actually bubbles, which is the whole reason
+ * the refresh state was moved into it rather than badged onto an edge.
+ *
+ * 44px is the smallest size that reads, and it fits the slot at both widths: the
+ * flask is `size × 1.25` tall, so 55px inside a 56px box on a phone and a 66px
+ * one from `sm`.
+ *
+ * The count is `aria-hidden` and the flask's own `role="status"` says
+ * "Refreshing" once. That is the rule the state line already kept, moved with
+ * the state it belongs to: the tally ticks once per league, and a polite region
+ * re-reading "Refreshing 41/121" every few hundred milliseconds talks over the
+ * page it is describing.
+ */
+function SyncFlask({ progress }: { progress?: HeaderProgress | null }) {
+  return (
+    <span className="absolute inset-0 grid place-items-center">
+      <FlaskLoader variant="pulse" size={44} label="Refreshing leagues" />
+      {/* Below the flask's foot rather than inside it — the flask fills the
+          slot, and the count is absolute, so it costs the box nothing. */}
+      <span
+        aria-hidden="true"
+        className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] leading-none tracking-[0.04em] text-active/80"
+      >
+        {refreshingSuffix(progress).trim()}
+      </span>
+    </span>
+  );
 }
 
 /** The readout where a clock is welcome — the half that has to ask the season. */

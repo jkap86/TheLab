@@ -7,6 +7,7 @@ import { formatRecord } from "../../format";
 import type { OverallRecord } from "../../record";
 
 import { HeaderReadout } from "./header-readout.tsx";
+import type { HeaderProgress } from "./manager-header.types.ts";
 import { recordBarParts } from "./manager-header.utils.ts";
 
 /**
@@ -26,6 +27,8 @@ export function ManagerSummary({
   scope,
   leagueCount,
   countdown,
+  refreshing,
+  progress,
   padding,
 }: {
   user: UserInfo;
@@ -35,14 +38,31 @@ export function ManagerSummary({
   leagueCount: number;
   /** Whether the readout may run a clock — see {@link ManagerHeaderProps}. */
   countdown: boolean;
+  /**
+   * Threaded to the readout, which is where a refresh in flight is drawn: the
+   * flask takes the slot the dial and the countdown share. Nothing on this row
+   * reads them, which is why they pass straight through rather than being
+   * unpacked here.
+   */
+  refreshing?: boolean;
+  progress?: HeaderProgress | null;
   /** The seam under the row — see `bodyPadding`, which is what sizes it. */
   padding: string;
 }) {
   const name = user.display_name || user.username;
 
   return (
+    // `z-[1]` keeps the row above the face's own specular sweep. That sweep is
+    // `.lab-slab-face::after`, which is generated as the face's last child, so
+    // with everything on `auto` it paints last and lies *over* the content — the
+    // one thing the plate's decoration has never done. One utility buys back the
+    // original reading.
+    //
+    // The insets are the slab's wall arithmetic, for the reason `statePadding`
+    // spells out: 21px from the leading edge and 17px from the trailing one is
+    // what the bordered box gave, and the trailing 6px is now wall.
     <div
-      className={`relative flex items-center gap-3 pl-5 pr-4 pt-[22px] sm:gap-4 sm:pl-6 sm:pr-5 sm:pt-6 ${padding}`}
+      className={`relative z-[1] flex items-center gap-3 pl-[21px] pr-[11px] pt-[22px] sm:gap-4 sm:pl-[25px] sm:pr-[15px] sm:pt-6 ${padding}`}
     >
       <Avatar url={user.avatar_url} name={name} size="lg" />
 
@@ -57,7 +77,13 @@ export function ManagerSummary({
         <RecordBar record={record} />
       </div>
 
-      <HeaderReadout season={season} pct={record.pct} countdown={countdown} />
+      <HeaderReadout
+        season={season}
+        pct={record.pct}
+        countdown={countdown}
+        refreshing={refreshing}
+        progress={progress}
+      />
     </div>
   );
 }
