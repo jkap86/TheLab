@@ -124,13 +124,13 @@ export const NO_NUMBERS: SectionLayout = {
  * **The name shares its line with the position and the NFL team now, and what
  * that costs is stated here rather than discovered later.** Measured in a
  * headless browser against the compiled stylesheet and the real `woff2` files,
- * the pair plus its two gaps is 38px for `RB SF`, 45px for `LB CLE` and 54px
+ * the pair plus its two gaps is 40px for `RB SF`, 47px for `LB CLE` and 57px
  * for the widest thing a roster can hold, `DEF WAS` — all of it `shrink-0`, so
  * every pixel comes out of the name. At `@3xl` exactly, where the shape has
- * just switched and the half is ~358px, that leaves the name 98–114px against
- * the 116px `Christian McCaffrey` renders at, so the longest real names
- * truncate in a narrow band just above the switch and are whole again from a
- * ~800px panel. That is a real regression on one tier and it is the price of
+ * just switched and the half is ~358px, that leaves the name 95–112px against
+ * the 135.6px `Christian McCaffrey` renders at, so the longest real names
+ * truncate in a band just above the switch and are whole again from a ~850px
+ * panel. That is a real regression on one tier and it is the price of
  * the row saying what every player *is*: those two facts used to be drawn only
  * on the two-line shape and only where the chip disagreed with the position, so
  * at most widths, on most rows, the row said nothing about the player at all. A
@@ -141,6 +141,20 @@ export const NO_NUMBERS: SectionLayout = {
  * deliberately not moved to meet this one: between `@lg` and `@3xl` the name
  * owns its whole line and has room for the full spelling, and re-contracting it
  * at `@3xl` to buy back width would be a third crossing of the same axis.
+ *
+ * **The name is 0.9375rem and steps to 1rem at `@4xl`, and that tier is a
+ * measurement rather than a round number.** It was a flat `text-sm` — the same
+ * size as the value column beside it, and smaller than the standings' own
+ * manager name — for the field this half is a list *of*. Its two costs are the
+ * ones already stated above: the position and the team went to 0.7rem with it,
+ * which is the 3–5px the pair gained, and the band where a nineteen-character
+ * name truncates in the one-line shape widened from ~768–821px of panel to
+ * ~768–850px. `@4xl` is where the step up is safe rather than where it looks
+ * tidy — the name track there is 159px against `DEF WAS` and 176px against
+ * `RB SF`, and `Christian McCaffrey` is 144.7px at 1rem, so it is the first
+ * tier holding that name whole on *every* row. `@3xl`'s own 95–112px holds it
+ * at no size at all, which is why the step waits rather than meeting the shape
+ * switch.
  */
 export const SPLIT_LAYOUT: SectionLayout = {
   grid:

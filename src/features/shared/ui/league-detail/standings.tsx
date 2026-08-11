@@ -71,6 +71,30 @@ import type {
  * (at 4px the record and the value beside it read as one number). Trim the
  * padding, never the gap.
  *
+ * **The manager column is the largest type on the row, and its three stops are
+ * cut against a track that is not linear in the panel's width.** It is the field
+ * a reader is scanning for and it was the smallest thing on its own line — 12px
+ * under a 13px value column — so it steps 13px / 15px (`@lg`) / 16px (`@2xl`).
+ * Measured in a headless browser against the compiled stylesheet and the real
+ * `woff2` files, the name track is 81px at a 320px panel, 112px at 390, **132px
+ * at `@lg` exactly**, 164 at `@xl`, 212 at `@2xl` and 312 at the ~870px panel a
+ * laptop draws; `MambaMentality2424` — an 18-character username, about as long
+ * as they usefully get — is 134.3px at 13px, 155.0 at 15px and 165.3 at 16px.
+ * So each stop lands where its own worst case fits, and `@lg` is the tier that
+ * decides the middle one: 132px of track is why 16px waits for `@2xl` rather
+ * than arriving with the wider gutters. A name past that truncates, which is the
+ * right thing to lose — a shortened name still reads as a name.
+ *
+ * **The record line under it steps with the name but not at `@lg`, and that
+ * exception is the tightest measurement on this half.** Its track is the 1fr
+ * column alone — 47px at 360, 69 at 420, and back to **42px at `@lg`**, where
+ * the two value tracks widen to 4rem and take it — so `12-5-1` at 12px (38.9px)
+ * has 3.1px to spare there and at 13px (42.1px) has none. The step to 0.8125rem
+ * therefore waits for `@2xl`, where the track is 90px, and the `· 1,842.36 PF`
+ * suffix it carries from `@3xl` measures 122.3px against 138px of track. Both
+ * numbers are why this line reads as one stop behind the name rather than
+ * matching it.
+ *
  * The insets are *not* the same on the two halves, and that is arithmetic rather
  * than a lapse: a row here carries its own `px` (it is a lit key, and text hard
  * against a key's edge reads as clipped) where a roster row carries none, so this
@@ -348,7 +372,7 @@ function StandingsRow({
         // — the app bar's grammar, at row scale (see `.lab-row`).
         //
         // `relative` is what the rank tab is positioned against.
-        className={`relative grid w-full ${grid} items-center gap-x-2 gap-y-0.5 rounded-md px-1 py-1.5 text-left @sm:px-1.5 @lg:px-3 @lg:py-2 ${
+        className={`relative grid w-full ${grid} items-center gap-x-2 gap-y-0.5 rounded-md px-1 py-1.5 text-left @sm:px-1.5 @lg:px-3 @lg:py-2.5 ${
           active ? "lab-row-on" : "lab-row"
         }`}
       >
@@ -370,8 +394,13 @@ function StandingsRow({
           className={`${nameSpan} flex min-w-0 items-center gap-1 pl-[22px] @lg:gap-2`}
         >
           <TeamAvatar team={team} label={manager} />
+          {/* The manager is what this half is a list *of*, so it takes the
+              largest type on the row — three stops rather than the two the
+              other cells carry, because the name track is not linear in the
+              panel's width and each step is cut against the track it lands in
+              (see the note above). */}
           <span
-            className={`min-w-0 truncate text-xs font-medium @lg:text-sm ${
+            className={`min-w-0 truncate text-[0.8125rem] font-medium @lg:text-[0.9375rem] @2xl:text-base ${
               active ? "font-semibold" : "text-foreground/90"
             }`}
           >
@@ -380,7 +409,7 @@ function StandingsRow({
         </span>
 
         <span
-          className={`col-start-1 truncate text-[0.6rem] tabular-nums @sm:text-[0.65rem] @lg:text-xs ${dim}`}
+          className={`col-start-1 truncate text-[0.6rem] tabular-nums @sm:text-[0.7rem] @lg:text-xs @2xl:text-[0.8125rem] ${dim}`}
         >
           {record}
           {/* The record keeps this line at every width; the points-for waits for

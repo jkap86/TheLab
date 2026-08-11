@@ -31,9 +31,9 @@ import type {
  *
  * So the chip is slot vocabulary and nothing else, and what a player *is* —
  * position and NFL team — trails his name as letters: toned on the glyphs
- * rather than on a fill, which is a different register at a glance and about
- * half the width (`DEF` is 19px against the badge's fixed 32). Three rules
- * follow, and the third is the one that changed most recently:
+ * rather than on a fill, which is a different register at a glance and still
+ * well under the badge's fixed 32px (`DEF` is 21.5px at the 0.7rem these are set
+ * in). Three rules follow, and the third is the one that changed most recently:
  *
  * - **A bench player has no slot, so he has no chip**, and the lane he would
  *   wear one in stays empty rather than standing in with his position — so the
@@ -187,7 +187,7 @@ export function PlayerRow({
     // The band bleeds 4px past the row's own box so it reaches the plate's
     // inset rather than floating inside it; `px-1` puts the content back where
     // it was, so nothing moves and no track is re-measured.
-    <li className={`relative -mx-1 grid ${layout.grid} items-center gap-x-2 gap-y-0.5 px-1 py-1 @max-3xl:odd:bg-foreground/[0.022] @3xl:gap-y-0 @3xl:py-2`}>
+    <li className={`relative -mx-1 grid ${layout.grid} items-center gap-x-2 gap-y-0.5 px-1 py-1 @max-3xl:odd:bg-foreground/[0.022] @3xl:gap-y-0 @3xl:py-2.5`}>
       {/* The mark, and it is the *slot* on a chip washed in the position it is
           filled with — nothing else. A bench player holds no slot, so the lane
           is left empty rather than standing in with his position: that fact
@@ -223,10 +223,15 @@ export function PlayerRow({
           one line at every width. `title` is the desktop backstop for a
           truncated name and deliberately not the plan — it does nothing on a
           touch screen, which is the width where the name is short of room in
-          the first place. */}
+          the first place.
+
+          The size steps once, at `@4xl`, and that is the first tier whose name
+          track holds a nineteen-character name whole — see `roster-layout` for
+          the arithmetic, and for why the tier below it is the tightest on this
+          half whatever size the name is set in. */}
       <span
         title={empty ? undefined : name}
-        className={`${layout.nameSpan} flex min-w-0 items-baseline gap-1.5 text-sm ${
+        className={`${layout.nameSpan} flex min-w-0 items-baseline gap-1.5 text-[0.9375rem] @4xl:text-base ${
           // Clears the chip's overhang, and only while the chip is overhanging:
           // from `@3xl` it is a cell of the grid and pays for its own width.
           slotLabel ? "pl-[34px] @3xl:pl-0" : ""
@@ -247,13 +252,13 @@ export function PlayerRow({
             reads as a different team. */}
         {position && (
           <span
-            className={`shrink-0 font-mono text-[0.62rem] font-bold tracking-[0.04em] ${tone}`}
+            className={`shrink-0 font-mono text-[0.7rem] font-bold tracking-[0.04em] ${tone}`}
           >
             {position}
           </span>
         )}
         {team && (
-          <span className="shrink-0 text-[0.62rem] text-foreground/35">{team}</span>
+          <span className="shrink-0 text-[0.7rem] text-foreground/35">{team}</span>
         )}
       </span>
 
