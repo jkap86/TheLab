@@ -44,16 +44,25 @@ export type ManagerHeaderProps = {
   user: UserInfo;
   season: string;
   /**
-   * The leagues stream's state, where the page is reading one. All three are
+   * The leagues stream's state, where the page is reading one. All four are
    * optional together: a page with no background refresh to report passes none,
-   * and the transient state line is simply never drawn (see `hasSyncState`).
+   * and neither sync treatment is drawn.
+   *
+   * **They are drawn in two different places, which is the split
+   * {@link hasSyncCaveat} exists for.** `refreshing` and `progress` are a
+   * *process* — a running count that resolves on its own — so they take the
+   * readout slot as a bubbling flask, beside the dial and the countdown that
+   * already trade places there. `summary` and `refreshError` are *standing facts
+   * about the rows already on screen*, which resolve by nothing, so they ride the
+   * card's bottom edge as plates. Sharing one row made them look like one kind of
+   * thing and gave the loudest treatment to the one that goes away by itself.
    */
   refreshing?: boolean;
   progress?: HeaderProgress | null;
   summary?: HeaderSyncSummary;
   /**
-   * A refresh that failed after cached data was already served. Shown as a
-   * pill rather than replacing the page: what's below is stale, not wrong.
+   * A refresh that failed after cached data was already served. Shown as an edge
+   * plate rather than replacing the page: what's below is stale, not wrong.
    */
   refreshError?: string | null;
   /**

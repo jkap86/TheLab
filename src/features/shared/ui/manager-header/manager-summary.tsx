@@ -7,6 +7,7 @@ import { formatRecord } from "../../format";
 import type { OverallRecord } from "../../record";
 
 import { HeaderReadout } from "./header-readout.tsx";
+import type { HeaderProgress } from "./manager-header.types.ts";
 import { recordBarParts } from "./manager-header.utils.ts";
 
 /**
@@ -26,6 +27,8 @@ export function ManagerSummary({
   scope,
   leagueCount,
   countdown,
+  refreshing,
+  progress,
   padding,
 }: {
   user: UserInfo;
@@ -35,6 +38,14 @@ export function ManagerSummary({
   leagueCount: number;
   /** Whether the readout may run a clock — see {@link ManagerHeaderProps}. */
   countdown: boolean;
+  /**
+   * Threaded to the readout, which is where a refresh in flight is drawn: the
+   * flask takes the slot the dial and the countdown share. Nothing on this row
+   * reads them, which is why they pass straight through rather than being
+   * unpacked here.
+   */
+  refreshing?: boolean;
+  progress?: HeaderProgress | null;
   /** The seam under the row — see `bodyPadding`, which is what sizes it. */
   padding: string;
 }) {
@@ -66,7 +77,13 @@ export function ManagerSummary({
         <RecordBar record={record} />
       </div>
 
-      <HeaderReadout season={season} pct={record.pct} countdown={countdown} />
+      <HeaderReadout
+        season={season}
+        pct={record.pct}
+        countdown={countdown}
+        refreshing={refreshing}
+        progress={progress}
+      />
     </div>
   );
 }

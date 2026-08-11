@@ -132,6 +132,14 @@ describe("what the corners and the body owe the wall", () => {
     assert.match(plate(), /class="relative z-\[1\] flex items-center/);
   });
 
+  test("the caveat lane is reserved whether or not there is a caveat", () => {
+    // The lane is what keeps {@link SyncCaveats} off the record bar, and
+    // reserving it *permanently* is the point: a lane that appeared with the
+    // caveat would be the layout shift moving that row out of flow was for.
+    // Asserted on the quiet header, which is the case that would regress.
+    assert.match(plate(), /pb-5 sm:pb-6/);
+  });
+
   test("the trailing inset pays for the wall", () => {
     const html = plate();
 
@@ -141,5 +149,126 @@ describe("what the corners and the body owe the wall", () => {
     // 26px in on the other, which reads as not square.
     assert.match(html, /pl-\[21px\] pr-\[11px\]/);
     assert.match(html, /sm:pl-\[25px\] sm:pr-\[15px\]/);
+  });
+});
+
+/**
+ * Where the two sync states are drawn, which is the whole of what moving them
+ * out of the plate's flow was for.
+ */
+
+/** The `progress` message the header reads a running tally off. */
+const progress = {
+  type: "progress",
+  phase: "refresh",
+  loaded: 41,
+  total: 121,
+  failed: 0,
+} as Parameters<typeof ManagerHeader>[0]["progress"];
+
+/** A summary that dropped three leagues to a Sleeper failure. */
+const partial = {
+  leagues: 97,
+  total: 100,
+  failed: 3,
+  locked: false,
+  complete: false,
+} as Parameters<typeof ManagerHeader>[0]["summary"];
+
+/**
+ * The extent of the element carrying `cls`, as `[start, end)` into the markup.
+ *
+ * A stack walk rather than a regex, because the one rule worth pinning here is a
+ * *nesting* rule and a regex cannot see nesting. `clip-path` clips a whole
+ * subtree, so a plate that straddles the slab's edge has to be its sibling — and
+ * a refactor that tidies it back inside the face produces markup that looks
+ * right, renders with no error, and silently severs the plate at the exact edge
+ * it exists to cross.
+ */
+function extentOf(html: string, cls: string): [number, number] {
+  const start = html.indexOf(`<div class="${cls}`);
+  assert.notEqual(start, -1, `no element carrying ${cls}`);
+  let depth = 0;
+  const tag = /<(\/?)div\b[^>]*?(\/?)>/g;
+  tag.lastIndex = start;
+  for (let m = tag.exec(html); m; m = tag.exec(html)) {
+    if (m[2] === "/") continue; // self-closing, never a <div> but cheap to skip
+    depth += m[1] === "/" ? -1 : 1;
+    if (depth === 0) return [start, m.index + m[0].length];
+  }
+  throw new Error(`unbalanced markup around ${cls}`);
+}
+
+describe("a refresh in flight", () => {
+  test("puts the flask in the readout slot", () => {
+    const html = plate({ refreshing: true, progress });
+
+    assert.match(html, /class="flask-loader/);
+    // Announced once, by name. The flask brings its own `role="status"`.
+    assert.match(html, /aria-label="Refreshing leagues"/);
+  });
+
+  test("keeps the readout under it, dimmed rather than dropped", () => {
+    const html = plate({ refreshing: true, progress });
+
+    // The dial still sizes the slot — that is what makes the swap free of
+    // layout — so it stays in the markup, dimmed and hidden from the reading.
+    assert.match(html, /class="opacity-\[0\.12\]" aria-hidden="true"/);
+    assert.match(html, /Win pct/);
+  });
+
+  test("the running tally is written but not announced", () => {
+    const html = plate({ refreshing: true, progress });
+
+    // It ticks once per league; a polite region re-reading "41/121" every few
+    // hundred milliseconds talks over the page it is describing. The rule came
+    // with the state when it moved out of the old line.
+    assert.match(html, /aria-hidden="true"[^>]*>41\/121</);
+  });
+
+  test("draws no caveat plate on its own", () => {
+    // The split `hasSyncCaveat` exists for: a refresh is a process, not a
+    // standing fact about the rows on screen.
+    assert.doesNotMatch(plate({ refreshing: true, progress }), /lab-nameplate-warn/);
+  });
+
+  test("a quiet header draws neither", () => {
+    const html = plate();
+    assert.doesNotMatch(html, /flask-loader/);
+    assert.doesNotMatch(html, /lab-nameplate-warn/);
+  });
+});
+
+describe("a standing caveat", () => {
+  test("states how much of the list is current", () => {
+    assert.match(plate({ summary: partial }), />97 of 100 leagues refreshed</);
+  });
+
+  test("rides an edge plate, out of the plate's flow", () => {
+    const html = plate({ summary: partial });
+
+    assert.match(html, /class="lab-nameplate-warn/);
+    // Out of flow: it hangs off the bottom edge rather than adding a row.
+    assert.match(html, /absolute -bottom-3/);
+  });
+
+  test("is a sibling of the slab, never inside it", () => {
+    const html = plate({ summary: partial });
+    const [, slabEnds] = extentOf(html, "lab-slab lab-slab-fixed lab-notch-all");
+    const caveat = html.indexOf("lab-nameplate-warn");
+
+    assert.ok(
+      caveat > slabEnds,
+      "the caveat plate is inside the slab, so `clip-path` will sever it",
+    );
+  });
+
+  test("both kinds can be up at once", () => {
+    // A refresh started after a pass that dropped leagues: the process is live
+    // and the caveat about the rows already on screen still stands. They are at
+    // opposite corners, which is why neither has to make room for the other.
+    const html = plate({ refreshing: true, progress, summary: partial });
+    assert.match(html, /flask-loader/);
+    assert.match(html, /lab-nameplate-warn/);
   });
 });

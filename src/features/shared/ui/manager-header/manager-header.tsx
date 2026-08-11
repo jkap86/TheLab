@@ -1,8 +1,8 @@
 import type { ManagerHeaderProps } from "./manager-header.types.ts";
-import { hasSyncState } from "./manager-header.utils.ts";
+import { hasSyncCaveat } from "./manager-header.utils.ts";
 import { ManagerSummary } from "./manager-summary.tsx";
 import { SeasonTab, StatTab } from "./plate-corners.tsx";
-import { SyncStateLine } from "./sync-state.tsx";
+import { SyncCaveats } from "./sync-state.tsx";
 
 /**
  * The padding under the plate's body, and around the transient state line.
@@ -14,24 +14,23 @@ import { SyncStateLine } from "./sync-state.tsx";
  * nothing to clear, so both are the unencumbered spelling and the seam argument
  * lives here as history rather than as a branch.
  */
-const BODY_PADDING = "pb-2 sm:pb-3";
-
 /**
- * The state line's own insets, and they are the slab's wall arithmetic rather
- * than a round number.
+ * The padding under the plate's body — and 12px of it is a *reserved lane* for
+ * the sync caveats, which is the one number here worth understanding.
  *
- * The plate was a bordered box, so `px-5` put its content 21px from the outer
- * edge on both sides (20px of padding over a 1px border). A slab has no border
- * and spends 6px of its *trailing* gutter on the wall, so the same 21px is
- * `pl-[21px] pr-[15px]` — the league card's rule, one part over. Left unchanged,
- * the line would sit 20px in on the leading edge and 26px in on the trailing
- * one, which reads as a part that isn't square.
+ * {@link SyncCaveats} rides the card's bottom edge, rising 14px above it. The
+ * record bar's own bottom clears that edge by 10px, so a plate landing there
+ * sits on the bar. 12px more clears it with room, and reserving that space
+ * **permanently** is the whole point: a lane that appeared only when a caveat
+ * did would be exactly the layout shift moving the state line out of flow was
+ * meant to stop.
  *
- * The bottom is deliberately not compensated: the wall is *thickness*, not
- * space, so a `pb` shortened by 6px would pull the content into the part rather
- * than off its edge.
+ * It is the same trade the record bar itself already makes — it keeps an empty
+ * rail before a game is played, so the plate is the same height in September as
+ * in December. A card above a list pays for its height in list; it should pay a
+ * constant.
  */
-const STATE_PADDING = "py-2 pl-[21px] pr-[15px] sm:pl-[25px] sm:pr-[19px]";
+const BODY_PADDING = "pb-5 sm:pb-6";
 
 /**
  * Who is being looked at, how their season is going, and the list's own header
@@ -194,20 +193,20 @@ export function ManagerHeader({
               scope={scope}
               leagueCount={leagueCount}
               countdown={countdown}
+              refreshing={refreshing}
+              progress={progress}
               padding={BODY_PADDING}
             />
-
-            {hasSyncState({ refreshing, summary, refreshError }) && (
-              <SyncStateLine
-                refreshing={refreshing}
-                progress={progress}
-                summary={summary}
-                refreshError={refreshError}
-                padding={STATE_PADDING}
-              />
-            )}
           </div>
         </div>
+
+        {/* Outside the slab, which is the one thing about it that is not
+            negotiable: `clip-path` clips a whole subtree, so a plate rendered
+            inside the face would be severed at the edge it exists to straddle.
+            This is what the wrapper above is for. */}
+        {hasSyncCaveat({ summary, refreshError }) && (
+          <SyncCaveats summary={summary} refreshError={refreshError} />
+        )}
       </div>
     </header>
   );
