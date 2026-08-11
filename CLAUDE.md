@@ -1128,6 +1128,30 @@ stops holding, a comment saying it does would not have caught it.
 - Tailwind: use the `foreground` token for text/borders/surfaces and `active`
   for the accent. Both are registered in `@theme` in `globals.css`. Do **not**
   use `white` — it was the old convention and has been fully migrated.
+- **Three faces are loaded and all three are now wired.** `app/fonts/index.ts`
+  self-hosts Geist, Geist Mono and Orbitron; `@theme` maps them to `--font-sans`,
+  `--font-mono` and `--font-display`. Only the first two of those registrations
+  are recent, and the failure they fixed is the one to recognise if it ever comes
+  back: the faces were being downloaded and preloaded on every page while
+  `@theme` mapped only Orbitron and `body` named `Arial` outright, so the app
+  rendered in Arial and every `font-mono` utility fell through to Tailwind's
+  default stack — a different face per platform for the kickoff countdown, the
+  record ledges and every number column. **A loaded font is not a used font**;
+  the check is a grep for the variable, not for the `localFont()` call. One
+  knock-on worth knowing: Geist's tabular figures are *narrower* than Arial's at
+  equal size (`1,041.16` is 36.4px against 40.5px at `0.65rem`), so every fixed
+  track measured against an Arial string gained slack rather than losing it —
+  which is why the measurements in `roster-layout.ts` and `standings.tsx` did
+  not all have to be retaken, and why the one that did was a track being asked
+  to hold *larger* type rather than a different face.
+- **Measure a fixed track, don't estimate it.** The panel's tracks are cut for
+  the widest string they can be asked to hold, and the arithmetic is written
+  beside them; the way those numbers were taken is a headless Chromium page with
+  the real `woff2` files and the compiled stylesheet, rendering the component and
+  reading `getBoundingClientRect()`. It is worth doing before touching a track,
+  because the two failure modes are invisible in review and opposite: a track a
+  hair too narrow clips a total into bad data, and one too wide comes out of the
+  name, which is the only column with nowhere else to go.
 - Wrap page content in `<PageShell>` rather than repeating the container
   classes.
 - **Keyframes live in `globals.css`, not beside the component that uses them.**
@@ -4796,9 +4820,9 @@ stops holding, a comment saying it does would not have caught it.
   and a league with no outlook at all degrade to the standings rather than to a
   shuffle.
 - **The panel leads with a readout, and it is the selected team's, not the
-  league's.** `PanelTelemetry` is a rank dial and three milled cells — projected,
-  on bench, lineup gap — above both halves, because a panel that opens onto two
-  dense tables otherwise asks the reader to derive its own headline. Three rules
+  league's.** `PanelTelemetry` is a rank dial and two milled cells — projected
+  and on bench — above both halves, because a panel that opens onto two dense
+  tables otherwise asks the reader to derive its own headline. Three rules
   in it, and the first is the one worth arguing with:
   - **The overlap with the `proj` / `bench` columns is paid on purpose.** Those
     columns exist to compare teams *against each other* and the readout states
@@ -4806,14 +4830,18 @@ stops holding, a comment saying it does would not have caught it.
     are pickable, so neither is reliably on screen anyway. Restating a number at a
     different grain is not the sin the roster panel's dropped team plate was;
     restating it at the *same* grain is.
-  - **A number still lives in exactly one place.** The gap moved here out of the
-    roster half's prose, which used to carry `+41.72 on the bench` above the list
-    it belongs to. It sits beside the two totals it is the difference between, and
-    it is now the *only* place the panel states the distance from the lineup
-    Sleeper has seated — the names that used to follow it went with the rest of
-    that prose (see `roster-detail` below). It takes amber, the app's existing
-    needs-attention tone, because it is the one figure here that is a verdict
-    rather than a count.
+  - **The panel says nothing about the lineup a team is currently seating, and
+    the lineup gap was the last of three removals that got it there.** The roster
+    half's head carried the gap above the list it belongs to, then the
+    `start … · sit …` names under it, then a cell in this strip; each removal
+    asked what the panel is *for*, and the answer is the best lineup available
+    rather than a diff against another one — which the two lists below already
+    are. Nothing about the contract moved: `points_left` is still computed, still
+    sent, and still read by the lineup checker's own gap column and the
+    standings' week-projection hover, which are where a reader is asking that
+    question rather than this one. What it leaves is a strip with no verdict on
+    it, so the amber the app spends on "needs attention" is unspent here and the
+    accent stays available for the one lit standings row.
   - **The dial's arc is the rank, not the points.** A full ring is the best roster
     in the league and an empty one the worst, so it reads as "how far up this
     field am I" — the points are in the cell beside it and have no field to be
@@ -5155,13 +5183,23 @@ stops holding, a comment saying it does would not have caught it.
   lists it sat over rather than any one number. That head is now the coverage
   caveat and nothing else. Pass the same string to
   `TeamAvatar`'s `label` so its fallback initial matches the name shown next to it.
-- **Rows in that panel give the name its own line.** Both lists inside it —
-  `standings` and `roster-detail` — put the team or player name alone on the first
-  line and everything else (record, points for, position, NFL team, both totals)
-  on a second line under it. The name is the field a reader scans for and it lost
-  every fight for horizontal space in a panel rendering at half a card's width;
-  "Christian McCaffrey" between a slot label, a badge, a team and two numbers
-  truncates to nothing. The numbers keep their own grid columns on that second
+- **Rows in that panel give the name its own line — the standings always, the
+  roster only where it has to.** Both lists put the team or player name alone on
+  the first line and everything else (record, points for, position, NFL team,
+  both totals) on a second line under it, because the name is the field a reader
+  scans for and it lost every fight for horizontal space in a panel rendering at
+  half a card's width. A roster row takes that shape below `@3xl` and collapses
+  to one line above it, which is worth two notes. **The tier is `@3xl` rather
+  than the `@2xl` it reads as wanting**, because a tier that adds a *cell* takes
+  back more width than it gained: measured in a browser, one line leaves the
+  name 121px at a 690px panel against the 198px the two-line shape already gives
+  it at 520px, so switching earlier would truncate `Christian McCaffrey` in the
+  tier immediately above the one that had just started showing it whole. That
+  non-monotonicity is the thing to sweep for whenever either threshold moves.
+  And **the two shapes are the same cells in the same DOM order** — what changes
+  is `--cols`, whether the meta cell is drawn, and whether the slot chip is in
+  flow — so there is one row rather than two designs either side of a
+  breakpoint. The numbers keep their own grid columns on that second
   line rather than being folded into a sentence, because they are what's worth
   comparing down the list. Row and heading share **one** grid template
   (`SectionLayout` in `roster-layout`, the `columns` string in `standings`) — a

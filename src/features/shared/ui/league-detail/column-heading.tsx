@@ -56,7 +56,11 @@ export function ColumnHeading({
       // The full label, in case a catalogue ever grows one past the column's
       // width — a truncated heading is the only name its column has.
       title={label}
-      className={`group/pick inline-flex min-w-0 items-center justify-self-end gap-0.5 whitespace-nowrap text-foreground/40 transition-colors hover:text-foreground/70 ${className}`}
+      // 50% rather than 40% at rest: these labels are the smallest strings in
+      // the panel and the only name a column of bare numbers has, so they are
+      // the last thing that should be fading into the plate. One place, because
+      // both halves' rails are this component.
+      className={`group/pick inline-flex min-w-0 items-center justify-self-end gap-0.5 whitespace-nowrap text-foreground/50 transition-colors hover:text-foreground/80 ${className}`}
     >
       <span className="truncate">{label}</span>
       {/* Always drawn, dim at rest. On `group-hover` alone it never appeared on

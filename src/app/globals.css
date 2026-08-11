@@ -16,6 +16,25 @@
      utility. Only the tools page's wordmark and tool names reach for it; body
      text stays on the default sans. */
   --font-display: var(--font-orbitron);
+
+  /* **The other two faces load already; these two lines are what use them.**
+     `app/fonts/index.ts` self-hosts Geist and Geist Mono, `layout.tsx` puts
+     both variables on `<html>`, and every page preloads them — and until this
+     was written neither was referenced anywhere in `src/`. So the app rendered
+     in Arial (the `body` rule below said so outright), and every `font-mono`
+     readout fell through to Tailwind's default stack, which is a different face
+     per platform: the kickoff countdown, the record ledges, the standings and
+     the roster's number columns were Menlo on a Mac, Consolas on Windows and
+     DejaVu Sans Mono on Android. Registering them here costs nothing over the
+     wire, because the bytes were already being fetched.
+
+     Geist is narrower than Arial at the same size, which matters because the
+     measured tracks in this app were all sized against Arial strings — see
+     `roster-layout.ts` and `standings.tsx`. Every one of those measurements is
+     therefore conservative under Geist rather than tight; none of them had to
+     move. */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 :root {
@@ -61,7 +80,7 @@
 body {
   background: var(--background);
   color: var(--color-foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 
 /* ---------------------------------------------------------------------------
@@ -787,6 +806,33 @@ body {
       inset 0 0 0 1px rgba(0, 255, 229, 0.05);
   }
 
+  /* `.lab-groove` at *list* scale: the cut the roster's two number columns run
+     down, once behind a whole section rather than once per row.
+
+     It is the third instance of "a shadow doesn't scale", and this time the
+     count is what forces it. The roster's rows carry no rule between them (see
+     `roster-detail`), so something has to say where a row's numbers end and its
+     name begins — and a groove per row is forty boxes whose radii scallop
+     against each other at the seams and whose 2px sinks stack into mud, the
+     arithmetic `.lab-row`'s own 2px wall already answers for a dozen. Drawn
+     once behind the section's list it is a single continuous cut with no seams
+     to scallop, and one box rather than forty.
+
+     Shallower than the groove for the same reason: this one is read *through*
+     forty times, so the sink is a hairline top edge and a lit bottom lip and
+     nothing else. No cyan ring — an outline around a column of dim numbers
+     claims the column is a control.
+
+     Material only, per the layer's rule. Where the lane is and how wide it is
+     belong to the call site, because they are the number tracks' own
+     arithmetic. */
+  .lab-lane {
+    background: rgba(0, 0, 0, 0.22);
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.5),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.045);
+  }
+
   /* Worn *with* `.lab-readout`: the glass over the cut, and nothing else.
 
      A readout is a face that falls away from the light; a lens is that face with
@@ -1037,6 +1083,38 @@ body {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.35),
       1px 1px 0 rgba(0, 60, 55, 0.6);
+  }
+
+  /* Worn *with* `.lab-tab`: the same chip washed in the position it is filled
+     with, for the roster's lineup slots.
+
+     **The tone comes from `currentColor`, which is the whole point.** The chip's
+     label is already set in the position's text tone (`positionTextTone`, one
+     table in `position-badge.tsx`), so the wash and the leading rail are
+     derived from that one value rather than from a second table of fills —
+     there is no way for the chip's colour and its own label's colour to
+     disagree, and adding a position means adding one entry.
+
+     The wash sits *over* the steel rather than replacing it, so the part keeps
+     the extrusion every other chip in the app has and reads as the same object
+     in a different livery. The colour arrives mostly as the lit leading rail:
+     at 9px a tinted fill is a suggestion and an edge is a fact.
+
+     Declared after `.lab-tab` because the two tie on specificity and source
+     order is what decides — moving this above it silently returns every chip to
+     plain steel. */
+  .lab-tab-pos {
+    background:
+      linear-gradient(
+        160deg,
+        color-mix(in oklab, currentColor 24%, transparent),
+        color-mix(in oklab, currentColor 7%, transparent)
+      ),
+      linear-gradient(160deg, #24405a, #12293a);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 2px 0 0 color-mix(in oklab, currentColor 60%, transparent),
+      1px 1px 0 rgba(0, 0, 0, 0.6);
   }
 
   /* The cyan key, for a control that is currently narrowing something. */

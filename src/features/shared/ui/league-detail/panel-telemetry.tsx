@@ -32,14 +32,22 @@ import type { LeagueOutlook, TeamOutlook } from "./types";
  * the overlap with the default `proj` / `bench` columns is worth paying. The
  * columns are pickable in any case, so neither number is reliably on screen.
  *
- * The gap is the one figure here that is a verdict rather than a count, so it
- * takes the amber the app already uses for "needs attention" (a drafting
- * league's status dot, a failed-refresh note) rather than competing with cyan —
- * and it is the panel's *only* remaining word on the lineup the team is
- * currently seating. The roster half's head used to carry the same number above
- * the list it belongs to (two places for one figure being one edit away from
- * disagreeing), and then the `start … · sit …` names under it, which restated
- * the two lists a few pixels below rather than any number at all.
+ * **The lineup gap is not one of them, and the panel now says nothing at all
+ * about the lineup a team is currently seating.** That is deliberate and it is
+ * the end of a line this half has been walking for a while: the roster's head
+ * carried the same number above the list it belongs to (two places for one
+ * figure being one edit away from disagreeing), then the `start … · sit …`
+ * names under it (the two lists restated in prose a few pixels above
+ * themselves), then a cell here. What each removal kept asking is what the
+ * *panel* is for, and the answer is the best lineup available rather than a
+ * diff against another one — which is already what the two lists below are.
+ *
+ * Nothing about the contract changes: `points_left` is still computed, still
+ * sent, and still read by the lineup checker's own gap column and by the
+ * standings' week-projection hover, which are the two places a reader is asking
+ * that question rather than this one. It also leaves this strip with no verdict
+ * on it, so the amber the app spends on "needs attention" is unspent here and
+ * the accent stays available for the one lit standings row.
  *
  * Rendered only for a league that has an outlook, which is the same gate the
  * standings' value columns sit behind; a team with no outlook of its own inside
@@ -87,17 +95,6 @@ export function PanelTelemetry({
         value={team ? formatPoints(team.weekly_bench_points) : "—"}
         title="What this roster's non-starters project over the same horizon — depth on a good team, a logjam on a badly balanced one"
       />
-      <Readout
-        label="Lineup gap"
-        // Zero is a real answer here and a good one: the team is already
-        // starting its best lineup. It reads as "set" rather than as `+0.00`,
-        // which looks like a number that failed to arrive.
-        value={
-          team ? (team.points_left > 0 ? `+${formatPoints(team.points_left)}` : "set") : "—"
-        }
-        tone={team && team.points_left > 0 ? "text-amber-300" : undefined}
-        title="Points the optimal lineup would add over what this team is starting today"
-      />
     </div>
   );
 }
@@ -108,32 +105,39 @@ export function PanelTelemetry({
  * The header's kickoff countdown at panel scale — same well, same digits-over-
  * unit stacking — because a readout appearing twice in the app with two looks
  * is the drift the shared material classes exist to stop.
+ *
+ * **The unit is 8.5px, not 7px, and that is a legibility floor rather than a
+ * preference.** At 7px with `0.1em` of tracking on a 30%-opacity foreground,
+ * uppercase stops resolving into a word on any face and reads as grey texture —
+ * so the cell was carrying a caption nobody could use and a number that had to
+ * be inferred from its position. The cell does not get taller for it: the extra
+ * 1.5px of type comes out of padding that was there to hold a 7px string off
+ * the well's own edge.
+ *
+ * The digits step up with it and lose a weight. `font-bold` at 12px in the body
+ * face was doing the work of making a number look deliberate; at 13px in a
+ * monospace with a hair of negative tracking, the face is doing it — which is
+ * what an instrument's figures should look like and what the `--font-mono`
+ * registration in `globals.css` finally makes available.
  */
 function Readout({
   label,
   value,
-  tone,
   title,
 }: {
   label: string;
   value: string;
-  /** Overrides the digits' colour where the number is a verdict, not a count. */
-  tone?: string;
   title: string;
 }) {
   return (
     <span
       title={title}
-      className="lab-well flex-none rounded-[5px] px-2 pb-1 pt-[3px] text-center"
+      className="lab-well flex-none rounded-[5px] px-2.5 pb-1 pt-1 text-center"
     >
-      <span
-        className={`block font-mono text-[12px] font-bold leading-[1.1] tabular-nums @lg:text-[13px] ${
-          tone ?? "text-foreground/90"
-        }`}
-      >
+      <span className="block font-mono text-[13px] font-semibold leading-[1.15] tracking-[-0.01em] tabular-nums text-foreground/90 @lg:text-[13.5px]">
         {value}
       </span>
-      <span className="block text-[7px] font-bold uppercase tracking-[0.1em] text-foreground/30">
+      <span className="block text-[8.5px] font-semibold uppercase tracking-[0.15em] text-foreground/45">
         {label}
       </span>
     </span>

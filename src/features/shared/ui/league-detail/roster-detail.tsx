@@ -264,7 +264,11 @@ function ColumnRail({
     <div
       className={`mb-1.5 grid shrink-0 ${layout.grid} items-baseline gap-x-2 pr-1`}
     >
-      <span />
+      {/* One cell over the row's leading tracks, however many there are: the
+          name alone below `@3xl`, the slot lane and the name from it. Spanning
+          rather than drawing a second empty span, so the headings can't slide
+          off the columns they name when the shape changes. */}
+      <span className="@3xl:col-span-2" />
       {valueColumns.map((key, slot) => (
         <ColumnHeading
           key={slot}
@@ -315,12 +319,26 @@ function LineupCoverage({ teamOutlook }: { teamOutlook: TeamOutlook }) {
 }
 
 /**
- * A titled group of rows.
+ * A titled group of rows, and the lane its numbers run down.
  *
- * Laid out on the same grid as its rows, so the title starts where the names do —
- * the first cell is the empty slot gutter. It names the *rows*; what names the
- * numbers beside them is {@link ColumnRail}, once for both sections, above the
- * box this scrolls in.
+ * The title names the *rows*; what names the numbers beside them is
+ * {@link ColumnRail}, once for both sections, above the box this scrolls in.
+ *
+ * **The rows carry no rule between them and the numbers carry a lane instead.**
+ * Forty hairlines down a roster is a lot of drawn furniture for a list whose
+ * rows are one line each from `@3xl`, and what a reader actually needs is not a
+ * boundary between rows but an edge to track the figures against. So the lane
+ * is one recessed cut behind the whole section (`.lab-lane`) rather than a box
+ * per row: a per-row spelling is forty sinks stacking into mud and forty radii
+ * scalloping against each other at the seams, which is the arithmetic
+ * `.lab-row`'s own 2px wall already answers for a dozen.
+ *
+ * Two things about it are load-bearing. It is drawn **before** the list and the
+ * list is positioned, because an absolutely positioned element paints above
+ * static siblings whatever the source order — the same rule `RowSheen` keeps one
+ * tool over. And it is only drawn from `@3xl`, where the row is one line: on the
+ * two-line shape the numbers are the second line only, so a full-height lane
+ * would run behind the name as well and stop meaning anything.
  */
 function RosterSection({
   title,
@@ -334,21 +352,34 @@ function RosterSection({
   return (
     // `first:mt-0` because this is the first thing in the scroll box: the head
     // above holds its own bottom gap, so a top margin here would double it.
-    <div className="mt-3 first:mt-0">
+    // The gap grows with the shape — one-line rows are tight enough that the
+    // sections need more air between them than the rows have inside them, or
+    // the two lists read as one run.
+    <div className="mt-3 first:mt-0 @3xl:mt-4">
       <div className={`mb-1.5 grid ${layout.grid} items-baseline gap-x-2`}>
         {/* Spans the whole row rather than sitting in the name track alone.
             There is nothing else on this line — the value columns are named
             once by the rail above, not per section — so spanning costs nothing
-            and takes "Starters" out of the one track it used to truncate in. */}
+            and takes "Starters" out of the one track it used to truncate in.
+            `col-span-full` rather than the name's own span, which is one cell
+            of the one-line shape. */}
         {/* `h3`, not `h5`: the league name this panel belongs to is an `h2`, so
             a 5 here skipped two levels. The size is a class either way. */}
         <h3
-          className={`${layout.nameSpan} min-w-0 truncate text-[0.65rem] font-medium uppercase tracking-wide text-foreground/35 @lg:text-xs`}
+          className="col-span-full min-w-0 truncate text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-foreground/45 @lg:text-xs"
         >
           {title}
         </h3>
       </div>
-      <ul className="flex flex-col divide-y divide-foreground/5">{children}</ul>
+      <div className="relative">
+        {layout.lane && (
+          <span
+            aria-hidden="true"
+            className={`lab-lane pointer-events-none absolute inset-y-0 right-0 hidden rounded-[3px] @3xl:block ${layout.lane}`}
+          />
+        )}
+        <ul className="relative flex flex-col">{children}</ul>
+      </div>
     </div>
   );
 }

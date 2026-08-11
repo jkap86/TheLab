@@ -154,7 +154,7 @@ export function Standings({
     // open instead is in the top layer where nothing here can reach it.
     <div className="lab-trough flex min-h-0 flex-col rounded-lg p-1 @lg:p-2">
       <div
-        className={`grid shrink-0 ${grid} ${inset} items-center gap-x-2 pb-2 pt-1 text-[0.6rem] text-foreground/40 @lg:text-xs`}
+        className={`grid shrink-0 ${grid} ${inset} items-center gap-x-2 pb-2 pt-1 text-[0.6rem] text-foreground/50 @lg:text-xs`}
       >
         {/* `invisible`, not `hidden`: the cell has to keep its grid track below
             @lg or the two headings slide left off the columns they name. What

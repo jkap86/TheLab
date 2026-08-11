@@ -1,6 +1,6 @@
 import { shortPlayerName, weekCount } from "../../format";
 import { PLAYER_METRICS, PLAYER_METRICS_BY_KEY } from "../../roster-metrics";
-import { PositionBadge } from "../position-badge";
+import { positionTextTone } from "../position-badge";
 import type { SectionLayout } from "./roster-layout";
 import type {
   LeagueRosterValues,
@@ -20,6 +20,51 @@ import type {
  * against what Sleeper has seated — but the two lists *are* the best lineup
  * available, so which section a player is in already says where he belongs, and
  * the marking only said how far the team currently is from agreeing.
+ *
+ * ## A chip is a lineup slot; a position is letters
+ *
+ * The row used to carry two marks, and they were the *same part*: a rounded,
+ * filled, uppercase 9px chip saying `QB`, and directly under it a rounded,
+ * filled, uppercase 10px {@link PositionBadge} also saying `QB`. Two of one
+ * thing rather than two facts — which is most of why the row read as repeating
+ * itself, and it cost a whole line to say so.
+ *
+ * So the chip is slot vocabulary and nothing else, and the position is letters:
+ * toned on the glyphs rather than on a fill, which is a different register at a
+ * glance and about half the width (`DEF` is 19px against the badge's fixed 32).
+ * Three rules follow, and the third is the one that is easy to lose:
+ *
+ * - **A bench player has no slot, so he has no chip.** His position takes the
+ *   slot lane instead, as letters — so the two sections still line up while
+ *   staying visibly different kinds of row.
+ * - **The chip carries the position in its wash**, through `currentColor` and
+ *   one table (see `.lab-tab-pos` and `positionTextTone`), so the colour scan
+ *   the badge was good at survives without the badge.
+ * - **The letters are drawn only where the chip does not already say the
+ *   position** — a flex, a superflex, and the IDP case where Sleeper starts a
+ *   player at `DL` whose position reads `LB`. On a quarterback in the QB slot
+ *   they would be the restatement this just removed. It is the rule the trades
+ *   board already keeps for a pick's origin: print it when it is a surprise.
+ *
+ * ## Two shapes, one set of cells
+ *
+ * Below `@3xl` the row is two lines and from `@3xl` it is one — see
+ * `roster-layout` for which widths and why. Every cell below is written once
+ * and moves between the two by container query alone:
+ *
+ * - the **mark** is out of flow below `@3xl` (riding the row's leading corner,
+ *   costing the name an indent and the numbers nothing) and in flow from it,
+ *   where it is the first cell of the grid and fills the slot lane;
+ * - the **name** spans the row's whole first line below `@3xl` and one cell of
+ *   it from `@3xl`;
+ * - the **meta** cell — the position where it is a surprise, and the NFL team —
+ *   is the second line below `@3xl` and is not drawn from it, where both facts
+ *   have somewhere better to be.
+ *
+ * The one thing rendered twice is the position, because it lands in different
+ * cells in the two shapes. That is the same pair the contracted and full name
+ * are already written as, for the same reason: a container query can move a box
+ * but not a string between two of them.
  */
 
 /**
@@ -92,6 +137,17 @@ export function PlayerRow({
   const short = empty ? name : shortPlayerName(name, player?.position ?? null);
   const slotLabel = slot ? (SLOT_LABEL[slot] ?? slot) : null;
 
+  const position = empty ? null : (player?.position ?? null);
+  const tone = positionTextTone(position);
+  // The letters are worth drawing exactly where the chip doesn't already say
+  // the position: a flex of any kind, the IDP slots Sleeper starts a linebacker
+  // at `DL` in, and every bench row (which has no chip at all). Comparing the
+  // raw slot rather than its label is deliberate — `SLOT_LABEL` shortens
+  // `SUPER_FLEX` to `SFLX`, which no position is ever equal to anyway, and the
+  // question being asked is about the lineup's vocabulary and not about how it
+  // is abbreviated.
+  const showPosition = Boolean(position) && slot !== position;
+
   const ctx = {
     outlook,
     split,
@@ -108,14 +164,54 @@ export function PlayerRow({
   };
 
   return (
-    <li className={`relative grid ${layout.grid} items-center gap-x-2 gap-y-0.5 py-1.5`}>
-      {/* Out of flow on the row's leading corner rather than in a track of its
-          own — see `.lab-tab` and `roster-layout`. It bleeds into the plate's
-          own inset, so it costs this row nothing but the name's indent, and a
-          bench row without one costs nothing at all. */}
-      {slotLabel && (
-        <span className="lab-tab absolute -left-1 top-[2px] inline-flex h-[17px] min-w-[26px] items-center justify-center rounded-[5px] px-[5px] font-mono text-[9px] font-bold uppercase leading-none tracking-[0.04em] text-foreground/60">
+    // **No rule between rows, and two different things standing in for one.**
+    // Forty hairlines down a roster is more drawn furniture than a list this
+    // short-lined needs, but something has to say where a row ends — and what
+    // that is differs by shape. From `@3xl` the row is one line and the numbers
+    // have a lane of their own to track against (see `RosterSection`). Below it
+    // the row is a *pair* of lines with no lane, so two adjacent rows would read
+    // as one four-line block; the band is what parts them, and it is cheaper
+    // than a rule because it is a tone rather than an edge.
+    //
+    // `@max-3xl:` rather than a plain `odd:` turned off later: two variants of
+    // one property are decided by specificity and source order, and
+    // `odd:bg-…`/`@3xl:odd:bg-transparent` tie on both — the failure would be a
+    // banded one-line list, which looks deliberate and is not.
+    //
+    // The band bleeds 4px past the row's own box so it reaches the plate's
+    // inset rather than floating inside it; `px-1` puts the content back where
+    // it was, so nothing moves and no track is re-measured.
+    <li className={`relative -mx-1 grid ${layout.grid} items-center gap-x-2 gap-y-0.5 px-1 py-1 @max-3xl:odd:bg-foreground/[0.022] @3xl:gap-y-0 @3xl:py-2`}>
+      {/* The mark. A starter's is the *slot* on a chip, washed in the position
+          it is filled with; a bench player has no slot, so his is the position
+          in letters. Both occupy the same lane from `@3xl`, which is what keeps
+          the two sections aligned while leaving them different kinds of row.
+
+          Below `@3xl` the chip is out of flow on the row's leading corner, so it
+          costs the row nothing but the name's indent — and the bench's letters
+          are not drawn here at all, because down there they ride the meta line
+          with the team.
+
+          **`left-0`, not a negative offset.** It used to sit at `-left-1` to
+          bleed into the plate's own inset, which cannot work from in here: the
+          list is inside a scroll box, and `overflow-y: auto` computes
+          `overflow-x` to `auto` as well, so anything reaching past the box's
+          leading edge is clipped rather than overhanging. It went unnoticed
+          while the widest label had a pixel to spare and showed up the moment
+          the chip's padding tightened — as `FLEX` and `SFLX` with their first
+          letter shaved off, which reads as a rendering fault rather than as a
+          label. */}
+      {slotLabel ? (
+        <span
+          className={`lab-tab lab-tab-pos absolute left-0 top-[2px] inline-flex h-[17px] min-w-[26px] items-center justify-center rounded-[5px] px-1 font-mono text-[9px] font-bold uppercase leading-none tracking-[0.04em] @3xl:static @3xl:top-auto @3xl:w-full ${tone}`}
+        >
           {slotLabel}
+        </span>
+      ) : (
+        <span
+          className={`hidden text-center font-mono text-[0.62rem] font-bold leading-none tracking-[0.04em] @3xl:block ${tone}`}
+        >
+          {position ?? ""}
         </span>
       )}
 
@@ -124,35 +220,51 @@ export function PlayerRow({
           of room in the first place. */}
       <span
         title={empty ? undefined : name}
-        className={`${layout.nameSpan} min-w-0 truncate text-sm ${
-          // Clears the tab's overhang, and only on a row that carries one.
-          slotLabel ? "pl-[34px]" : ""
+        className={`${layout.nameSpan} flex min-w-0 items-baseline gap-1.5 text-sm ${
+          // Clears the chip's overhang, and only while the chip is overhanging:
+          // from `@3xl` it is a cell of the grid and pays for its own width.
+          slotLabel ? "pl-[34px] @3xl:pl-0" : ""
         } ${empty ? "text-foreground/25" : "text-foreground/85"}`}
       >
-        {short === name ? (
-          name
-        ) : (
-          <>
-            <span className="@lg:hidden">{short}</span>
-            <span className="hidden @lg:inline">{name}</span>
-          </>
+        <span className="min-w-0 truncate">
+          {short === name ? (
+            name
+          ) : (
+            <>
+              <span className="@lg:hidden">{short}</span>
+              <span className="hidden @lg:inline">{name}</span>
+            </>
+          )}
+        </span>
+        {/* The one-line shape's home for the position, where there is no meta
+            line to put it on. It never truncates and the name does, which is
+            the right way round: a shortened name still reads as a name. */}
+        {showPosition && slotLabel && (
+          <span
+            className={`hidden shrink-0 font-mono text-[0.62rem] font-bold tracking-[0.04em] @3xl:inline ${tone}`}
+          >
+            {position}
+          </span>
         )}
       </span>
 
-      {/* Second line, and the tight one now that both value columns are drawn at
-          every width — which is why the NFL team waits for @lg.
+      {/* The second line, below `@3xl` only: what a player *is*, where the line
+          above says who he is and the cells beside it say how he is doing.
 
-          It is the fact to yield, and the reasoning is the standings' own for
-          the points-for one half over: what gives is a whole fact rather than
-          half of one, and this is the least load-bearing thing on the row —
-          the player's name is directly above it and the position badge stays.
-          The badge is what a reader is scanning a lineup by, and narrowing that
-          instead would take the shared component's padding and type size with
-          it for the sake of three characters. */}
-      <span className="col-start-1 flex min-w-0 items-center gap-1.5">
-        {!empty && <PositionBadge position={player?.position ?? null} />}
+          The NFL team is back at every width. It used to wait for `@lg` because
+          the position badge was spending this line's width — 32px of pill for a
+          fact the chip above it had already stated — and with the badge gone
+          there is room for both the letters and the team on a 154px phone row. */}
+      <span className="col-start-1 flex min-w-0 items-baseline gap-1.5 @3xl:hidden">
+        {showPosition && (
+          <span
+            className={`shrink-0 font-mono text-[0.62rem] font-bold tracking-[0.04em] ${tone}`}
+          >
+            {position}
+          </span>
+        )}
         {player?.team && (
-          <span className="hidden truncate text-[0.65rem] tabular-nums text-foreground/35 @lg:inline">
+          <span className="truncate text-[0.62rem] tabular-nums text-foreground/35">
             {player.team}
           </span>
         )}
@@ -197,12 +309,16 @@ function PlayerStat({
   return (
     <span
       title={cell.title}
-      // A step down below @lg, and the size is set by the *widest* total rather
-      // than by a typical one: a season projection is eight characters in a
-      // high-scoring league (`1,041.16`), which is 46px at `text-xs` against a
-      // 44px track and 39.7px here. A shortened name still reads as a name
-      // where a shortened total reads as bad data.
-      className={`text-right text-[0.65rem] tabular-nums @lg:text-xs ${
+      // Every size here is set by the *widest* total rather than by a typical
+      // one — a season projection is eight characters in a high-scoring league
+      // (`1,041.16`) — and each is measured against its own track in
+      // `roster-layout`, which is where the arithmetic lives. A shortened name
+      // still reads as a name where a shortened total reads as bad data.
+      //
+      // The narrow tier steps *up* rather than down, which is the position
+      // badge's width being handed to the figures: these numbers shared their
+      // line with a 32px pill until the badge left it.
+      className={`text-right text-[0.7rem] tabular-nums @lg:text-xs @3xl:text-[0.8125rem] ${
         cell.text === null || cell.muted ? "text-foreground/25" : "text-foreground/70"
       }`}
     >
