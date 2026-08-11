@@ -1,8 +1,8 @@
 import http from "@thelab/http";
-import type { AxiosError } from "@thelab/http";
 
 import { createLimiter, sleeperConcurrency } from "./limiter";
 import type { Limiter } from "./limiter";
+import { isMissingResource } from "./missing";
 import type { SleeperUser } from "./types";
 
 export const SLEEPER_API_BASE = "https://api.sleeper.app/v1";
@@ -80,6 +80,40 @@ export async function sleeperGet<T>(url: string, fallback: T): Promise<T> {
   return data ?? fallback;
 }
 
+/**
+ * {@link sleeperGet} for an endpoint where a *missing* resource is an answer,
+ * folding **both** of Sleeper's spellings of one into `fallback`.
+ *
+ * Sleeper's documented convention is 200 with a null body, which `sleeperGet`
+ * already folds. A number of endpoints answer 404 for the same thing instead,
+ * and which one you get is a fact about the endpoint rather than about the
+ * request — so a caller that folds one and throws on the other is deciding by
+ * spelling. `getLeague` has folded both since the crawler learned to tombstone;
+ * this is that fold written once, for every caller that needs it.
+ *
+ * **Two named functions rather than one taking a flag**, the same split as
+ * `booleanFlag`/`booleanFilter`: these mean different things, and one function
+ * quietly serving both meanings is what the naming exists to prevent. Reach for
+ * this where an absent resource is an answer the caller can act on, and for
+ * `sleeperGet` where a 404 is a genuine fault — the projections sync gates on
+ * its fetch *throwing*, so folding one there would stamp an empty week fresh
+ * and never come back for it.
+ *
+ * Only 404, and only with a response behind it — see {@link isMissingResource}
+ * for why a 429 and a timeout must both keep throwing.
+ */
+export async function sleeperGetOptional<T>(
+  url: string,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await sleeperGet(url, fallback);
+  } catch (error) {
+    if (isMissingResource(error)) return fallback;
+    throw error;
+  }
+}
+
 /** Build a full avatar URL from a Sleeper avatar id, or null when there is none. */
 export function sleeperAvatarUrl(
   avatar: string | null,
@@ -93,19 +127,15 @@ export function sleeperAvatarUrl(
 /**
  * Fetch a Sleeper user by username (or user_id).
  *
- * Sleeper returns HTTP 200 with a `null` body for unknown users, so this
- * resolves to `null` rather than throwing when no such user exists.
+ * Sleeper answers an unknown user with 200 and a `null` body, and this endpoint
+ * 404s for some ids too, so both resolve to `null` rather than throwing — see
+ * {@link sleeperGetOptional}, which is where that fold now lives.
  */
-export async function getSleeperUser(
+export function getSleeperUser(
   usernameOrId: string,
 ): Promise<SleeperUser | null> {
-  try {
-    return await sleeperGet<SleeperUser | null>(
-      sleeperUrl("user", usernameOrId),
-      null,
-    );
-  } catch (error) {
-    if ((error as AxiosError).response?.status === 404) return null;
-    throw error;
-  }
+  return sleeperGetOptional<SleeperUser | null>(
+    sleeperUrl("user", usernameOrId),
+    null,
+  );
 }
