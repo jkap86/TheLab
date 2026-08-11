@@ -291,13 +291,37 @@
   /* The app's own aurora, so a translucent surface has something behind it to
      be translucent *against* — judging glass on a flat ground is judging a
      different material. */
+  /* The mock inside is a fixed-width instrument — four 96px stat columns plus
+     the card's own insets — so on a narrow reader it is wider than the
+     enclosure. It scrolls in its own box rather than being clipped by
+     `.screen`'s `overflow: hidden` (which is there for the radius) and rather
+     than pushing the page sideways: silently losing the trailing column is
+     losing the stat tab and the dial, which is exactly where two of these
+     options are decided. The bar is the app's own, thinned, so it does not
+     read as somebody else's chrome sitting in the mock. */
   .screen__body {
     position: relative;
     padding: 20px 18px 26px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
     background:
       radial-gradient(620px 320px at 8% -20%, rgba(0, 255, 229, 0.06), transparent 64%),
       radial-gradient(520px 280px at 96% 0%, rgba(0, 120, 190, 0.08), transparent 62%);
   }
+  .screen__body::-webkit-scrollbar { height: 8px; }
+  .screen__body::-webkit-scrollbar-track { background: transparent; }
+  .screen__body::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  /* The parts hold their instrument width instead of squashing: a rail whose
+     chips have wrapped and a card whose columns have collapsed are not the
+     thing being judged. */
+  .screen__body > * { min-width: 620px; }
 
   /* ==================================================================
      THE APP'S OWN MATERIALS — copied from src/app/globals.css.
