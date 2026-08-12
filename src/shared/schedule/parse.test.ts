@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { openingKickoff } from "./parse.ts";
+import { openingKickoff, weekKickoffs } from "./parse.ts";
 
 // 2026-09-10T20:20:00-04:00 and the Sunday 1 PM ET after it, as epoch ms.
 const THURSDAY = 1789086000000;
@@ -49,5 +49,54 @@ describe("openingKickoff", () => {
       ]),
       null,
     );
+  });
+});
+
+describe("weekKickoffs", () => {
+  test("files each game's instant under both of its teams", () => {
+    const games = [
+      { week: 1, start_time: THURSDAY, home: "PHI", away: "DAL" },
+      { week: 1, start_time: SUNDAY, home: "KC", away: "BUF" },
+    ];
+    assert.deepEqual(
+      weekKickoffs(games, 1),
+      new Map([
+        ["PHI", THURSDAY],
+        ["DAL", THURSDAY],
+        ["KC", SUNDAY],
+        ["BUF", SUNDAY],
+      ]),
+    );
+  });
+
+  test("reads only the asked week", () => {
+    const games = [
+      { week: 1, start_time: THURSDAY, home: "PHI", away: "DAL" },
+      { week: 2, start_time: SUNDAY, home: "PHI", away: "KC" },
+    ];
+    assert.deepEqual(weekKickoffs(games, 2), new Map([["PHI", SUNDAY], ["KC", SUNDAY]]));
+  });
+
+  test("a game without a believable time names no team at all", () => {
+    // Absent means "not known" to the lineup ordering, which holds the seat;
+    // a seconds epoch believed here would read as fifty years locked.
+    const games = [
+      { week: 1, home: "PHI", away: "DAL", date: "2026-09-10" },
+      { week: 1, start_time: 1789086000, home: "KC", away: "BUF" },
+    ];
+    assert.deepEqual(weekKickoffs(games, 1), new Map());
+  });
+
+  test("a team listed twice in one week keeps its earliest instant", () => {
+    const games = [
+      { week: 1, start_time: SUNDAY, home: "PHI", away: "DAL" },
+      { week: 1, start_time: THURSDAY, home: "NYG", away: "PHI" },
+    ];
+    assert.equal(weekKickoffs(games, 1).get("PHI"), THURSDAY);
+  });
+
+  test("skips a side the schedule doesn't name without losing the other", () => {
+    const games = [{ week: 1, start_time: THURSDAY, home: "PHI", away: null }];
+    assert.deepEqual(weekKickoffs(games, 1), new Map([["PHI", THURSDAY]]));
   });
 });

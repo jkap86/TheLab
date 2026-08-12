@@ -1,2 +1,2 @@
 export { getFirstKickoff } from "./kickoff";
-export { openingKickoff } from "./parse";
+export { openingKickoff, weekKickoffs } from "./parse";

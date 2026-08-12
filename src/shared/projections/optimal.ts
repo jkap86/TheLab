@@ -48,8 +48,12 @@ export type LineupComparison = {
   unknown_slots: string[];
 };
 
-/** Whether a player is eligible for a slot. Unknown slots take nobody. */
-function eligible(slot: string, positions: string[]): boolean {
+/**
+ * Whether a player is eligible for a slot. Unknown slots take nobody.
+ * Exported for `./kickoff-order`, which re-seats lineups and must not carry a
+ * second spelling of who may sit where.
+ */
+export function eligible(slot: string, positions: string[]): boolean {
   const allowed = SLOT_POSITIONS[slot];
   return allowed ? positions.some((p) => allowed.includes(p)) : false;
 }
@@ -132,8 +136,11 @@ export function optimalLineup(
   }));
 }
 
-/** How many positions a slot accepts. A strict slot is a more constrained home. */
-const breadth = (slot: string): number => SLOT_POSITIONS[slot]?.length ?? 0;
+/**
+ * How many positions a slot accepts. A strict slot is a more constrained home.
+ * Exported for `./kickoff-order`, whose whole objective is stated in it.
+ */
+export const breadth = (slot: string): number => SLOT_POSITIONS[slot]?.length ?? 0;
 
 /**
  * Settle which of two interchangeable slots each chosen player occupies: the

@@ -11,6 +11,13 @@ import type { SleeperScheduleGame } from "@/shared/sleeper";
 const MIN_PLAUSIBLE_MS = Date.UTC(2000, 0, 1);
 const MAX_PLAUSIBLE_MS = Date.UTC(2100, 0, 1);
 
+/** Whether a claimed kickoff is a believable ms epoch — see the note above. */
+const believable = (at: number | null | undefined): at is number =>
+  typeof at === "number" &&
+  Number.isFinite(at) &&
+  at >= MIN_PLAUSIBLE_MS &&
+  at <= MAX_PLAUSIBLE_MS;
+
 /**
  * The instant of a season's opening kickoff: the earliest week-1 game the
  * schedule stamps with a believable `start_time`. Null when it doesn't say —
@@ -29,11 +36,42 @@ export function openingKickoff(
 
   for (const game of games) {
     if (game?.week !== 1) continue;
-    const at = game.start_time;
-    if (typeof at !== "number" || !Number.isFinite(at)) continue;
-    if (at < MIN_PLAUSIBLE_MS || at > MAX_PLAUSIBLE_MS) continue;
-    if (earliest === null || at < earliest) earliest = at;
+    if (!believable(game.start_time)) continue;
+    if (earliest === null || game.start_time < earliest) earliest = game.start_time;
   }
 
   return earliest;
+}
+
+/**
+ * Team → kickoff instant for one week of the schedule, epoch ms — what a
+ * kickoff-ordered lineup (`projections/kickoff-order`) reads a player's game
+ * time from, through the team on his player row.
+ *
+ * Both sides of a game kick off together, so a believable `start_time` is
+ * filed under the home and the away team alike. A game without one is skipped
+ * on `openingKickoff`'s own terms — an absent team here is "not known", which
+ * the ordering answers by holding the seat, never a guess. A team the data
+ * lists twice in one week keeps its earliest instant, the conservative read
+ * for anything deciding what has already locked.
+ */
+export function weekKickoffs(
+  games: readonly SleeperScheduleGame[],
+  week: number,
+): Map<string, number> {
+  const kickoffs = new Map<string, number>();
+
+  for (const game of games) {
+    if (game?.week !== week) continue;
+    if (!believable(game.start_time)) continue;
+    for (const team of [game.home, game.away]) {
+      if (typeof team !== "string" || team === "") continue;
+      const known = kickoffs.get(team);
+      if (known === undefined || game.start_time < known) {
+        kickoffs.set(team, game.start_time);
+      }
+    }
+  }
+
+  return kickoffs;
 }

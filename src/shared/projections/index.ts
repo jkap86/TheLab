@@ -53,6 +53,8 @@ export {
   recognisedSlots,
 } from "./optimal";
 export type { RosterPlayer, LineupSlot, LineupComparison } from "./optimal";
+export { orderLineupByKickoff } from "./kickoff-order";
+export type { KickoffSeat, KickoffPlayer } from "./kickoff-order";
 export {
   SLOT_POSITIONS,
   NON_STARTING_SLOTS,
