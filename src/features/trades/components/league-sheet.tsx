@@ -248,6 +248,19 @@ function SheetBody({ league }: { league: OpenLeague }) {
   // the rail additive rather than something the panel has to wait for.
   const [back, setBack] = useState(0);
 
+  // Which manager the historical half is showing, seeded from the roster the
+  // trade card opened on.
+  //
+  // **Held here rather than in the view, so it survives the rail moving.** The
+  // roster list is rebuilt at every stop; a selection held inside it would reset
+  // as the reader dragged, which is the one thing a timeline must not do — the
+  // question being asked is what *this* manager held over time, so the manager is
+  // what stays fixed while the moment moves. It is deliberately *not* shared with
+  // the detail panel's own selection: that one is seeded the same way and then
+  // owned by the panel, and reaching into it would mean the shared panel
+  // reporting a selection it currently keeps to itself.
+  const [rosterId, setRosterId] = useState<number | null>(league.rosterId);
+
   const { data } = useTradeTimeline(league.tradeId);
 
   const moves = timelineMoveCount(data);
@@ -287,6 +300,8 @@ function SheetBody({ league }: { league: OpenLeague }) {
           rosters={rosters}
           players={data?.players ?? EMPTY_PLAYERS}
           managers={data?.managers ?? EMPTY_MANAGERS}
+          selectedId={rosterId}
+          onSelect={setRosterId}
           caveat={rosterCaveat(stop.at)}
         />
       )}
