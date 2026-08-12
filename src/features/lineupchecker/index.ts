@@ -1,9 +1,11 @@
 export { LineupCheckerHome } from "./components/lineup-checker-home";
 export { LineupCard } from "./components/lineup-card";
 export {
-  LineupStatColumns,
-  LineupStatHeadings,
-} from "./components/lineup-columns";
+  DEFAULT_LINEUP_COLUMNS,
+  LINEUP_COLUMN_PRESETS,
+  LINEUP_METRICS,
+} from "./lineup-metrics";
+export type { LineupMetric, LineupMetricContext } from "./lineup-metrics";
 export { matchupState, opponentLabel } from "./opponent";
 export type { MatchupState } from "./opponent";
 export { projectedRecord } from "./projected-record";

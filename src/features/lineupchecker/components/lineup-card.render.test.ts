@@ -5,9 +5,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { ManagerLeague } from "@/shared/manager";
 
+import { MetricHeadings } from "@/features/shared/ui/metric-column";
+
+import {
+  DEFAULT_LINEUP_COLUMNS,
+  LINEUP_METRICS,
+} from "../lineup-metrics.ts";
 import type { LeagueMatchup } from "../types.ts";
 import { LineupCard } from "./lineup-card.tsx";
-import { LineupStatHeadings } from "./lineup-columns.tsx";
 
 /**
  * The card without a DOM.
@@ -51,6 +56,7 @@ const render = (week: number | null, matchup: LeagueMatchup | undefined) =>
       league,
       week,
       matchup,
+      columns: DEFAULT_LINEUP_COLUMNS,
       expanded: false,
       onToggle: () => {},
     }),
@@ -117,24 +123,27 @@ describe("the opponent ledge", () => {
 describe("the stat columns", () => {
   test("draws four stat cells on every card, whatever the matchup says", () => {
     for (const html of [render(3, matchup()), render(null, undefined)]) {
-      // Three em dashes for the reserved slots, and a fourth for a bench gap
-      // there is no projection to form.
+      // Three em dashes for the blank slots, and a fourth for a shortfall there
+      // is no projection to form.
       assert.equal(html.split("—").length - 1, 4);
     }
   });
 
-  test("the bench gap says what to do, or that there is nothing to do", () => {
+  test("the shortfall reads against the optimal lineup, not toward it", () => {
     const gap = render(
       3,
       matchup({ projection: { optimal: 132.5, current: 120.16, points_left: 12.34 } }),
     );
-    // Amber and signed: the one number on the card that is a verdict rather than
-    // a count, spelled as the expanded panel's own `Lineup gap` spells it.
-    assert.match(gap, /\+12\.34/);
+    // `current − optimal`: a lineup with points on its bench is *behind* the best
+    // one available, so the number carries a minus and never a plus. Amber
+    // because it is the one figure on the row that is a verdict rather than a
+    // count.
+    assert.match(gap, /-12\.34/);
+    assert.equal(gap.includes("+12.34"), false);
     assert.match(gap, /text-amber-300/);
 
     // Zero is a real answer and a good one, so it reads as a word rather than as
-    // `+0.00`, which down a list looks like a number that failed to arrive.
+    // `-0.00`, which down a list looks like a number that failed to arrive.
     const set = render(
       3,
       matchup({ projection: { optimal: 120, current: 120, points_left: 0 } }),
@@ -142,12 +151,19 @@ describe("the stat columns", () => {
     assert.match(set, />set</);
     assert.equal(set.includes("text-amber-300"), false);
     // And it is not the em dash a *missing* projection prints: three left, for
-    // the reserved slots.
+    // the blank slots.
     assert.equal(set.split("—").length - 1, 3);
   });
 
   test("the cells and the headings resolve to one column width", () => {
-    const headings = renderToStaticMarkup(createElement(LineupStatHeadings));
+    const headings = renderToStaticMarkup(
+      createElement(MetricHeadings, {
+        metrics: LINEUP_METRICS,
+        columns: DEFAULT_LINEUP_COLUMNS,
+        subject: "League",
+        onOpen: () => {},
+      }),
+    );
     const row = render(3, undefined);
 
     // The shared geometry, spelled once in `ui/stat-columns` and worn by both
@@ -156,6 +172,25 @@ describe("the stat columns", () => {
     const width = "sm:w-24";
     assert.equal(headings.split(width).length - 1, 4);
     assert.equal(row.split(width).length - 1, 4);
+  });
+
+  test("every heading is a trigger, blank columns included", () => {
+    // The rail used to draw flat labels because there was nothing behind a
+    // press — three of them an em dash, hidden from the accessibility tree.
+    // Every column is aimable now, so every heading is a button naming what its
+    // column holds, and `Blank` is a name a reader can read before pressing it.
+    const headings = renderToStaticMarkup(
+      createElement(MetricHeadings, {
+        metrics: LINEUP_METRICS,
+        columns: DEFAULT_LINEUP_COLUMNS,
+        subject: "League",
+        onOpen: () => {},
+      }),
+    );
+    assert.equal(headings.split("<button").length - 1, 4);
+    assert.equal(headings.split('aria-haspopup="dialog"').length - 1, 4);
+    assert.equal(headings.split(">Blank<").length - 1, 3);
+    assert.match(headings, />Vs optimal</);
   });
 });
 

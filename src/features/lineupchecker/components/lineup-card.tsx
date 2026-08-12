@@ -4,10 +4,11 @@ import type { ManagerLeague } from "@/shared/manager";
 
 import { Avatar } from "@/features/shared/ui/avatar";
 import { CardLedge, LeagueCard } from "@/features/shared/ui/league-card";
+import { MetricColumns } from "@/features/shared/ui/metric-column";
 
+import { LINEUP_METRICS } from "../lineup-metrics";
 import { matchupState, opponentLabel } from "../opponent";
 import type { LeagueMatchup } from "../types";
-import { LineupStatColumns } from "./lineup-columns";
 
 /**
  * One league in the lineup checker's list: which league, who it is playing this
@@ -33,11 +34,19 @@ import { LineupStatColumns } from "./lineup-columns";
  * bench — the panel's own default, which is right for someone who arrived at a
  * league — would answer a question nobody asked. Absent where the week isn't
  * stored, which falls back to that default.
+ *
+ * **Its stat columns are the leagues list's too, aimed the same way.** They were
+ * a hand-drawn cell and three inert slots; they are {@link MetricColumns} over
+ * {@link LINEUP_METRICS} now, so which metric each slot holds is a fact about the
+ * *list* — held above this card and edited from the heading rail — and this card
+ * renders numbers and no picker of its own, exactly as the leagues list's card
+ * does.
  */
 export function LineupCard({
   league,
   week,
   matchup,
+  columns,
   expanded,
   onToggle,
 }: {
@@ -46,6 +55,8 @@ export function LineupCard({
   week: number | null;
   /** This league's matchup, or undefined where the week isn't stored for it. */
   matchup: LeagueMatchup | undefined;
+  /** The metric key each stat column shows, shared by every card in the list. */
+  columns: string[];
   /** Whether this is the league currently open — one at a time, list-wide. */
   expanded: boolean;
   /** Open this league, or close it if it is the one already open. */
@@ -57,7 +68,16 @@ export function LineupCard({
       name={league.name}
       status={league.status}
       ledge={<OpponentLedge week={week} matchup={matchup} />}
-      columns={<LineupStatColumns matchup={matchup} />}
+      columns={
+        <MetricColumns
+          metrics={LINEUP_METRICS}
+          // Null rather than the `undefined` the payload's league map answers
+          // with: "not stored for this league" is an answer the catalogue spells,
+          // and a context is not a lookup.
+          ctx={{ matchup: matchup ?? null }}
+          columns={columns}
+        />
+      }
       focusRosterId={matchup?.roster_id}
       // Which turns the panel into the game itself: this manager's roster beside
       // the one it is playing, in place of the standings. Undefined on a bye or

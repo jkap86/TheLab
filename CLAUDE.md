@@ -4897,7 +4897,7 @@ stops holding, a comment saying it does would not have caught it.
   the module keeps the pure-and-tested bar its neighbours `shares` and `filters`
   hold: everything from `./types` arrives as an erased `import type`, so the
   accessors test without a fetch (`league-metrics.test.ts`).
-- **There are five metric catalogues, one per grain, and that is the axis they
+- **There are six metric catalogues, one per grain, and that is the axis they
   divide on — not the screen they appear on.** `ColumnsEditor` is how every one
   of them is aimed and `MetricColumn` draws the cards' cells; what differs is what
   a row *is*:
@@ -4909,8 +4909,40 @@ stops holding, a comment saying it does would not have caught it.
   | `shared/roster-metrics` | one player | league detail panel's roster list |
   | `shared/share-metrics` | one subject held across several leagues | players and leaguemates cards |
   | `trades/trade-metrics` | one side of one trade | trade card |
+  | `lineupchecker/lineup-metrics` | one league's **week** | lineup row |
 
-  **Three of them are in `features/shared` and two are not, and the split is the
+  **The sixth is what made the lineup checker's headings pressable, and the two
+  lists it now matches are the argument for it.** That tool drew its four columns
+  by hand — a bench-gap cell and three reserved slots — with a heading rail that
+  deliberately wore no milled channel, because a part that lights under the cursor
+  and then does nothing is exactly what this app's raised/recessed grammar exists
+  to prevent. A catalogue is what put something behind the press, and nothing
+  about the geometry moved: the cells are `MetricColumns` and the headings
+  `MetricHeadings`, so a heading still sits over the number it names at both
+  widths. Three things it settles that a seventh will meet too. **A week is its
+  own grain**, so the persisted key is `lineup` and not `league` however alike the
+  two lists look — a selection only means anything against the catalogue it was
+  picked from. **A blank is a metric**, since three slots have nothing to show
+  yet: it is named `Blank` rather than drawn as an em dash, because a heading is a
+  control now and a reader cannot press a word they cannot read (the *cell* keeps
+  the em dash, which is how this app spells "no answer" everywhere), and being
+  pickable is also the only way to give a column back once one has been aimed. And
+  **a repeated key is legitimate** — three slots hold `blank` — which is why the
+  editor asks what the *armed slot* holds rather than where a key first appears;
+  `columns.indexOf(key) === slot` is the same question for a unique key and the
+  wrong answer for a repeated one, lighting nothing when the third blank is armed.
+
+  **`MetricCell`'s value arm carries an optional `tone`, and it is meant to stay
+  rare.** Nearly every number in these catalogues is a measurement, and a
+  measurement has no business being tinted — a card of four coloured figures reads
+  as an alarm. What earns it is a cell whose whole point is that there is
+  something to *do*: the lineup shortfall wore the app's needs-attention amber
+  while it was hand-drawn, and the tone is what let it move into the shared column
+  without losing the one thing separating a verdict from a count. It is a named
+  tone rather than a class name, since a catalogue that could hand a Tailwind
+  class through could hand any class through.
+
+  **Three of them are in `features/shared` and three are not, and the split is the
   mover's rule rather than the grain**: the panel the standings and roster
   catalogues feed is drawn by the leagues list *and* by a trade card, and the
   share catalogue feeds two sheets the lineup checker opens as well as the manager
@@ -4936,12 +4968,12 @@ stops holding, a comment saying it does would not have caught it.
   cells, because only the collapsed card places a league against its peers; the
   standings and roster panels are already ranked lists, so their columns are plain
   values and a rank in them would be a second ordering competing with the rows.
-  All five hold the same pure-and-tested bar, and all are *client* modules
+  All six hold the same pure-and-tested bar, and all are *client* modules
   under `features/` — they format for display, so they belong beside the
   components, and their `./format.ts` import is relative with an explicit
   extension for the usual test-runner reason.
 
-  **All five now speak `Metric<C>` outright, and the two panel catalogues took a
+  **All six now speak `Metric<C>` outright, and the two panel catalogues took a
   small type trick to get there.** They had cell types of their own —
   `TeamMetricCell`, `PlayerMetricCell` — that were the union's `value` arm minus
   its tag, so they could not be handed to the editor without an adapter array in

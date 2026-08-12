@@ -277,7 +277,19 @@ export function ColumnsEditor<C>({
                       <span className="h-px flex-1 bg-foreground/10" />
                     </div>
                     {group.metrics.map((metric) => {
-                      const shown = columns.indexOf(metric.key);
+                      // Read as two questions rather than as one index, because
+                      // a key can legitimately sit in more than one slot: a
+                      // catalogue may offer a *blank* column, and a board that
+                      // opens with three of them is three slots holding one key.
+                      // `columns.indexOf(key) === slot` answers the first
+                      // question wrongly there — arming the third blank would
+                      // light nothing, since the index found is the first blank
+                      // — and for a key that appears once the two spellings are
+                      // identical, so nothing else changes.
+                      const held = columns[slot] === metric.key;
+                      const elsewhere = columns.findIndex(
+                        (key, index) => key === metric.key && index !== slot,
+                      );
                       const value = preview(metric);
                       return (
                         <button
@@ -287,10 +299,10 @@ export function ColumnsEditor<C>({
                           // holds, which is a *state* rather than a colour —
                           // the same claim `aria-pressed` makes on the slot
                           // wells above it.
-                          aria-pressed={shown === slot}
+                          aria-pressed={held}
                           onClick={() => onColumnChange(slot, metric.key)}
                           className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors ${
-                            shown === slot
+                            held
                               ? "bg-active/15 text-active"
                               : "text-foreground/75 hover:bg-foreground/10 hover:text-foreground"
                           }`}
@@ -304,20 +316,20 @@ export function ColumnsEditor<C>({
                             second copy — the swap is easier to accept when it was
                             visible before the press.
                           */}
-                          {shown >= 0 && shown !== slot && (
+                          {!held && elsewhere >= 0 && (
                             <>
                               <span
                                 aria-hidden="true"
                                 className="shrink-0 rounded-[4px] border border-foreground/15 px-1 font-mono text-[9px] leading-4 text-foreground/40"
                               >
-                                {shown + 1}
+                                {elsewhere + 1}
                               </span>
                               {/* A bare digit beside a metric name is
                                   unreadable aloud — and the point of the badge
                                   is that picking this one *swaps* two columns,
                                   which is worth knowing before the press. */}
                               <span className="sr-only">
-                                currently in column {shown + 1}
+                                currently in column {elsewhere + 1}
                               </span>
                             </>
                           )}
@@ -333,6 +345,12 @@ export function ColumnsEditor<C>({
                 ))}
               </div>
 
+              {/* No presets is no row, caption included. A preset is a *named
+                  board*, and a catalogue too small to have more than one board
+                  in it has no name to offer — a lone caption over nothing is
+                  the same "reporting that nothing is set" the filter dock was
+                  shortened to stop doing. */}
+              {presets.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className={CAPTION}>Presets</span>
                 {presets.map((preset) => {
@@ -359,6 +377,7 @@ export function ColumnsEditor<C>({
                   );
                 })}
               </div>
+              )}
             </div>
           </div>
 

@@ -291,7 +291,12 @@ function StatBody({ cell, title }: { cell: MetricCell; title: string }) {
         {cell.text ? (
           <span
             title={title}
-            className="text-sm font-bold leading-none tabular-nums text-foreground/85"
+            // Amber only where the catalogue asked for it — see
+            // {@link MetricTone}. A tinted number is a verdict, and four of them
+            // on a card would be four alarms.
+            className={`text-sm font-bold leading-none tabular-nums ${
+              cell.tone === "alert" ? "text-amber-300" : "text-foreground/85"
+            }`}
           >
             {cell.text}
           </span>

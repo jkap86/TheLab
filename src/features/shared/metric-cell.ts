@@ -33,7 +33,27 @@ import type { LeagueRank } from "@/shared/manager";
 export type MetricCell =
   | { kind: "rank"; rank: LeagueRank | null; title: string }
   | { kind: "share"; held: number; of: number; title: string }
-  | { kind: "value"; text: string | null; title: string };
+  | { kind: "value"; text: string | null; title: string; tone?: MetricTone };
+
+/**
+ * A value cell that is a **verdict rather than a count**, drawn in the app's
+ * needs-attention amber.
+ *
+ * Optional, and it stays that way: nearly every number in these catalogues is a
+ * measurement, and a measurement has no business being tinted — a card of four
+ * coloured figures reads as an alarm. What earns it is a cell whose whole point
+ * is that there is something to *do*, which today is the lineup checker's gap
+ * against the best lineup still reachable. That number lived on a hand-drawn
+ * column before the headings became pickable, wearing exactly this amber; the
+ * tone is what let it move into the shared column without losing the one thing
+ * that distinguished it from the numbers beside it.
+ *
+ * It is a named tone rather than a class name, because a catalogue is pure
+ * display *logic* and the palette belongs to {@link StatBody} — a metric that
+ * could hand a Tailwind class through would be a metric that could hand any
+ * class through.
+ */
+export type MetricTone = "alert";
 
 /**
  * One selectable metric: its key, its short column label, and how to read it off

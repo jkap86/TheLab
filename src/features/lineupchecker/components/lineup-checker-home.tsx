@@ -5,25 +5,33 @@ import { useMemo, useState } from "react";
 
 import {
   FlaskLoader,
-  ListLedge,
   PageHeading,
   activeFilterCount,
   filterSummary,
   useStoredAccount,
 } from "@/features/shared";
 import { subjectSummary } from "@/features/shared/subjects";
+import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 // The module paths rather than that barrel, deliberately: the plate is kept off
 // it so the pages that draw none don't carry its countdown, its dial and a query
-// hook, and the rail drags both shares sheets in behind a press — see each
-// folder's own index.
+// hook, the rail drags both shares sheets in behind a press, and the columns bar
+// carries the editor's own `dynamic()` seam — a barrel is one module to the
+// bundler, so re-exporting any of the three would put it in the graph of every
+// page that imports anything shared. See each folder's own index.
+import { ColumnsBar } from "@/features/shared/ui/columns-bar";
 import { ManagerHeader } from "@/features/shared/ui/manager-header";
 import { SubjectRail } from "@/features/shared/ui/subject-rail";
 
 import { useLineupView } from "../hooks/use-lineup-view";
 import { useManagerMatchups } from "../hooks/use-manager-matchups";
+import {
+  DEFAULT_LINEUP_COLUMNS,
+  LINEUP_COLUMN_PRESETS,
+  LINEUP_METRICS,
+  type LineupMetricContext,
+} from "../lineup-metrics";
 import { projectedRecord } from "../projected-record";
 import { LineupCard } from "./lineup-card";
-import { LineupStatHeadings } from "./lineup-columns";
 import { WeekStepper } from "./week-stepper";
 
 /**
@@ -100,6 +108,23 @@ export function LineupCheckerHome() {
    */
   const [openId, setOpenId] = useState<string | null>(null);
 
+  /**
+   * Which metric each of the four stat columns shows, shared by every card so
+   * they line up down the list — the leagues list's own arrangement, and its
+   * reasoning: the selection is list-wide, so the control that moves it is the
+   * heading rail above the list and never a card.
+   *
+   * Keyed `lineup` because the key is the **catalogue's grain** and this is a
+   * sixth one — one league's week. A selection only means anything against the
+   * catalogue it was picked from, which is why it can't share the leagues list's
+   * `league` key however alike the two lists look.
+   */
+  const { columns, setColumn, setColumns, reset } = usePersistedColumns(
+    "lineup",
+    DEFAULT_LINEUP_COLUMNS,
+    LINEUP_METRICS,
+  );
+
   const all = view.leagues ?? [];
   const rows = view.filtered;
 
@@ -135,6 +160,15 @@ export function LineupCheckerHome() {
   // a card nobody can see would leave the header unpinned for a panel that isn't
   // there. Derived during render, so there is no effect chasing the filters.
   const open = rows.some((league) => league.league_id === openId) ? openId : null;
+
+  // What the columns editor previews a metric against: the first row on screen.
+  // An assumption — every league's week is its own — so the editor names it in
+  // the footer rather than letting one league's shortfall pass as the column's
+  // own answer.
+  const first = rows[0] ?? null;
+  const previewCtx: LineupMetricContext | null = first
+    ? { matchup: matchups.data?.matchups[first.league_id] ?? null }
+    : null;
 
   if (!user) return <NoAccount />;
 
@@ -203,16 +237,36 @@ export function LineupCheckerHome() {
             // reader had stepped anywhere.
             leading={<WeekStepper week={week} onChange={setSteppedWeek} />}
           />
-          {/* No rows is no billet: a heading rail with nothing to head is a lit
-              face saying nothing, and the rail above it is where a reader who
+          {/* The heading rail and the editor behind it. No `view` is passed, and
+              that is the one thing to know: `ColumnsBar` draws the subject rail
+              itself where a caller hands it one, and this page draws its own a
+              few lines up because it seats the week stepper ahead of both of the
+              rail's questions. Passing it here would be two rails.
+
+              `headings` is what decides whether a billet is drawn at all: no rows
+              is no billet, since a heading rail with nothing to head is a lit
+              face saying nothing, and the rail above is where a reader who
               narrowed to zero goes to get back. */}
-          {rows.length > 0 && (
-            <ListLedge
-              headings={<LineupStatHeadings />}
-              pinned
-              fade={open === null}
-            />
-          )}
+          <ColumnsBar
+            metrics={LINEUP_METRICS}
+            columns={columns}
+            subject="League"
+            presets={LINEUP_COLUMN_PRESETS}
+            ctx={previewCtx}
+            previewLabel={first?.name ?? null}
+            headings={rows.length > 0}
+            // It holds the top through an open league too: it names the columns
+            // the rows under it are being read on, and losing that at the moment
+            // a reader goes a level deeper is what pinning is for. What it gives
+            // up there is the fade below itself — an open card pins flush against
+            // the rail, so that near-solid ground would land on the card's own
+            // head rather than on the page.
+            pinned
+            fade={open === null}
+            onColumnChange={setColumn}
+            onColumns={setColumns}
+            onReset={reset}
+          />
         </>
       )}
 
@@ -250,6 +304,7 @@ export function LineupCheckerHome() {
               league={league}
               week={week}
               matchup={matchups.data?.matchups[league.league_id]}
+              columns={columns}
               expanded={open === league.league_id}
               onToggle={() =>
                 setOpenId((current) =>
