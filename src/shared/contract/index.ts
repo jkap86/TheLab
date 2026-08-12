@@ -17,6 +17,7 @@ import type { KtcRosterValue, KtcValue } from "@/shared/ktc";
 import type { PlaceholderPick } from "@/shared/picktracker";
 import type { PlayersSyncSummary, PlayerSummary } from "@/shared/players";
 import type { Trade } from "@/shared/trades";
+import type { TeamGame } from "@/shared/schedule";
 import type { StatsSyncSummary } from "@/shared/stats";
 import type {
   LeagueOutlook,
@@ -182,7 +183,34 @@ export type LeagueWeekViewPayload = {
   team_projection: Record<string, TeamWeekProjectionPayload>;
   /** Roster id → that team's points per game over the same window. */
   team_ppg: Record<string, PpgPayload>;
+  /**
+   * NFL team → its game this week, so a player row can say who he plays and
+   * when — see {@link TeamGamePayload}.
+   *
+   * Keyed by team rather than by player, which is what it is a fact about: a
+   * league's rosters name a couple of dozen clubs between them and several
+   * hundred players, so per-player it would be the same kickoff written over
+   * and over with every copy free to disagree. The client joins on the NFL team
+   * it already draws beside the name.
+   *
+   * `{}` is a schedule this app could not read, never "everyone is on a bye" —
+   * a bye is a team **absent** from a non-empty map, which is why the whole
+   * week crosses rather than only the teams these rosters hold.
+   */
+  games: Record<string, TeamGamePayload>;
 };
+
+/**
+ * One NFL team's game in the week: who they play, which end of it they are, and
+ * when it kicks off.
+ *
+ * The domain shape rather than a second declaration of it — it is already JSON
+ * (two strings and a number, each nullable), so redeclaring the fields here
+ * would be exactly the drift this module exists to stop. `opponent` is null
+ * where the schedule names only one side, and `kickoff` where it gives a date
+ * and no hour; neither absence means a bye.
+ */
+export type TeamGamePayload = TeamGame;
 
 /** `GET /api/league/[leagueId]` — standings and rosters for one league. */
 export type LeagueDetailPayload = Omit<LeagueDetail, "teams"> & {

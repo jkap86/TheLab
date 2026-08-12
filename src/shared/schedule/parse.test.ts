@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { openingKickoff, weekKickoffs } from "./parse.ts";
+import { openingKickoff, weekGames, weekKickoffs } from "./parse.ts";
 
 // 2026-09-10T20:20:00-04:00 and the Sunday 1 PM ET after it, as epoch ms.
 const THURSDAY = 1789086000000;
@@ -49,6 +49,71 @@ describe("openingKickoff", () => {
       ]),
       null,
     );
+  });
+});
+
+describe("weekGames", () => {
+  test("files each side with the other named as its opponent", () => {
+    const games = [{ week: 1, start_time: SUNDAY, home: "KC", away: "BUF" }];
+    assert.deepEqual(
+      weekGames(games, 1),
+      new Map([
+        ["KC", { opponent: "BUF", home: true, kickoff: SUNDAY }],
+        ["BUF", { opponent: "KC", home: false, kickoff: SUNDAY }],
+      ]),
+    );
+  });
+
+  test("a game scheduled only to the day still names the opponent", () => {
+    // The row can say who he plays without claiming an hour Sleeper hasn't
+    // published — the same split `openingKickoff` refuses to guess across.
+    const games = [{ week: 1, home: "PHI", away: "DAL", date: "2026-09-10" }];
+    assert.deepEqual(
+      weekGames(games, 1),
+      new Map([
+        ["PHI", { opponent: "DAL", home: true, kickoff: null }],
+        ["DAL", { opponent: "PHI", home: false, kickoff: null }],
+      ]),
+    );
+  });
+
+  test("a bye is an absent team, not an entry saying so", () => {
+    const games = [{ week: 1, start_time: SUNDAY, home: "KC", away: "BUF" }];
+    assert.equal(weekGames(games, 1).has("PHI"), false);
+  });
+
+  test("keeps the half of a game the schedule names", () => {
+    const games = [{ week: 1, start_time: THURSDAY, home: "PHI", away: null }];
+    assert.deepEqual(
+      weekGames(games, 1),
+      new Map([["PHI", { opponent: null, home: true, kickoff: THURSDAY }]]),
+    );
+  });
+
+  test("a dated listing supersedes an undated one, whichever came first", () => {
+    // Both orderings, since the rule is about the entries and not the array:
+    // an undated duplicate must never take a known instant back off a team.
+    const dated = { week: 1, start_time: THURSDAY, home: "NYG", away: "PHI" };
+    const undated = { week: 1, home: "PHI", away: "DAL", date: "2026-09-10" };
+    for (const games of [[dated, undated], [undated, dated]]) {
+      assert.deepEqual(weekGames(games, 1).get("PHI"), {
+        opponent: "NYG",
+        home: false,
+        kickoff: THURSDAY,
+      });
+    }
+  });
+
+  test("reads only the asked week", () => {
+    const games = [
+      { week: 1, start_time: THURSDAY, home: "PHI", away: "DAL" },
+      { week: 2, start_time: SUNDAY, home: "PHI", away: "KC" },
+    ];
+    assert.deepEqual(weekGames(games, 2).get("PHI"), {
+      opponent: "KC",
+      home: true,
+      kickoff: SUNDAY,
+    });
   });
 });
 

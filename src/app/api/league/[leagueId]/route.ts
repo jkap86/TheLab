@@ -358,6 +358,14 @@ function serializeWeekView(
     };
   }
 
+  // Already the payload's own shape — the domain type *is* the wire type here —
+  // so this is the `Map` → object conversion and nothing else. Every team the
+  // schedule named crosses, not only the ones these rosters hold: a team absent
+  // from a non-empty map is what says "bye", so trimming it to the rosters would
+  // make every unrostered club read as one.
+  const games: LeagueWeekViewPayload["games"] = {};
+  for (const [team, game] of view.games) games[team] = game;
+
   return {
     week: view.week,
     ppg_source: {
@@ -369,5 +377,6 @@ function serializeWeekView(
     ppg,
     team_projection,
     team_ppg,
+    games,
   };
 }

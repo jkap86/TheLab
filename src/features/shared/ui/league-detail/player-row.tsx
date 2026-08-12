@@ -1,6 +1,7 @@
 import { shortPlayerName, weekCount } from "../../format";
 import { PLAYER_METRICS, PLAYER_METRICS_BY_KEY } from "../../roster-metrics";
 import { positionTextTone } from "../position-badge";
+import { playerGame } from "./player-game";
 import type { SectionLayout } from "./roster-layout";
 import type {
   LeagueRosterValues,
@@ -77,9 +78,12 @@ import type {
  *   shortened name still reads as a name, where a clipped team code reads as a
  *   different team.
  *
- * There is no meta line any more, which is what leaves the second line of the
- * narrow shape holding numbers alone — see `SectionLayout.statStart` for the
- * one placement that keeps them under the headings that name them.
+ * The meta line the position and the team used to share is gone, and what took
+ * its cell is the one fact a *week* row could not do without: the NFL game the
+ * player is in. See {@link PlayerGameLine} for what it says and
+ * `SectionLayout.gameSeat` for why it is seated rather than appended to the name
+ * run — and `SectionLayout.statStart` for the placement that keeps the numbers
+ * under the headings naming them either way.
  */
 
 /**
@@ -222,6 +226,12 @@ export function PlayerRow({
   // The kickoff re-seat, in the slot chip's own vocabulary — it names a seat,
   // and two spellings of one slot on one row would read as two slots.
   const move = empty || !reseat ? null : (SLOT_LABEL[reseat] ?? reseat);
+
+  // Which NFL game he is in, joined on the team already drawn beside his name.
+  // Null on a season panel (there is no week to read a game from) and wherever
+  // the schedule could not be read — see {@link playerGame} for the three
+  // absences it tells apart.
+  const game = weekView ? playerGame(team, weekView.games) : null;
 
   const ctx = {
     outlook,
@@ -372,7 +382,56 @@ export function PlayerRow({
           />
         ),
       )}
+
+      {/* Last in DOM order and definitely placed, which is the pair that keeps
+          the numbers where they are — see `SectionLayout.gameSeat`. */}
+      {game && <PlayerGameLine game={game} seat={layout.gameSeat} />}
     </li>
+  );
+}
+
+/**
+ * The NFL game under a player's name: who he plays, and when it kicks off.
+ *
+ * **The two facts a lineup is actually set on**, and the row said neither.
+ * Whether a starter has already played, whether there is still time to move him,
+ * and whether his club is on a bye at all were three questions a reader had to
+ * leave this panel to answer — on the one panel this app draws *because* someone
+ * is about to set a lineup.
+ *
+ * Three things about how it is drawn:
+ *
+ * - **It is quieter than everything above it.** A roster is a list of players
+ *   and this is a note on each; at the name's own weight, twenty rows of
+ *   `Sun 1:05p` would be the loudest column on a panel that is about points.
+ * - **A bye takes no tone of its own**, though it is the row most worth
+ *   noticing. The verdict this list already spends colour on is the amber `sit`
+ *   mark, which is precisely what a startable bench player behind a bye
+ *   *produces* — and where there is no such player there is nothing to do, so a
+ *   second alarm would be one the reader cannot act on.
+ * - **The kickoff truncates before the opponent does.** They share one cell and
+ *   the cell is ~100px on a phone; the matchup is the shorter half and the one
+ *   that identifies the game, and the `title` carries both whichever is cut.
+ */
+function PlayerGameLine({
+  game,
+  seat,
+}: {
+  game: NonNullable<ReturnType<typeof playerGame>>;
+  /** Where this line sits in the row's grid — see `SectionLayout.gameSeat`. */
+  seat: string;
+}) {
+  return (
+    <span
+      title={game.title}
+      className={`${seat} flex min-w-0 items-baseline gap-1 truncate text-[0.65rem] leading-tight text-foreground/40`}
+    >
+      {/* `shrink-0`, so the *time* is what gives when the cell runs short: the
+          matchup is the shorter half and the one that identifies the game, and
+          the `title` carries both whichever of them is cut. */}
+      {game.matchup && <span className="shrink-0 font-medium">{game.matchup}</span>}
+      {game.kickoff && <span className="min-w-0 truncate">{game.kickoff}</span>}
+    </span>
   );
 }
 

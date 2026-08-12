@@ -5419,6 +5419,44 @@ stops holding, a comment saying it does would not have caught it.
   - **It changes nothing on a season panel**, whose list is the best
     rest-of-season lineup whoever sets the weekly one — so the note is gated on
     the week rather than on the flag.
+- **On a week panel every roster row also names the NFL game its player is in —
+  the opponent and the kickoff — and it is seated rather than appended.** Which
+  starters have already played, which kick off in ten minutes and which club is
+  on a bye are the three things a lineup is actually set on, and the row said
+  none of them. Five decisions:
+  - **The whole week's schedule crosses, keyed by NFL team**
+    (`LeagueWeekViewPayload.games`, off `weekGames` in `shared/schedule`), and
+    the client joins on the team already drawn beside the name. Per player it
+    would be one kickoff written several hundred times with every copy free to
+    disagree; trimmed to the rostered clubs it could not answer the bye, which is
+    an **absence** and so only readable against a population. `{}` is a schedule
+    this app could not read and draws nothing at all — `BYE` on every row of
+    every lineup is what reading the first as the second looks like.
+    `playerGame` is those three refusals, pure and tested for exactly the reason
+    `head-to-head` beside it is.
+  - **`weekKickoffs` is derived from `weekGames` rather than walked for itself**,
+    and one `getWeekGames` cache entry serves both readers — so the panel naming
+    a player's kickoff and the ordering that re-seats him for it cost one
+    schedule request between them and read one answer.
+  - **It takes a seat on the row's second line** (`SectionLayout.gameSeat`),
+    which costs the narrow shape *nothing*: the leading cell of that line — the
+    retired meta cell's — is already there and already paid for, since the
+    numbers start in the second track. The wide shape grows a line, and only on a
+    week panel. The alternative was the name's width and it was measured and
+    rejected: ~87px of a ~150px name track on a phone, so `Christian McCaffrey`
+    truncates at every tier. The **row** is explicit and not just the column, or
+    auto-placement drags the value cells onto the second line with it.
+  - **The clock is `Sun 1:05p`, `Sun 12p`** — a one-letter meridiem and no `:00`
+    — which is where it parts company with the trade card's `3:07 PM`. That one
+    sits on a plate; this shares a measured 90px cell with the matchup, and the
+    pair that has to fit is `vs WAS` beside a noon kickoff, which is not a corner
+    case: it is the ordinary 1pm ET slot as every Central reader sees it. Both
+    compressions are measured in the rendered panel, not guessed.
+  - **A bye takes no tone of its own**, though it is the row most worth noticing.
+    The colour this list spends is the amber `sit` mark, which is precisely what
+    a startable bench player behind a bye *produces* — and where there is none
+    there is nothing to do, so a second alarm would be one the reader can't act
+    on.
 - **Every roster row carries two numbers, not one: `start` and `bench`.** A
   season total answers the wrong question on both sides of the roster. A backup
   quarterback projected 361 points behind two better starters is worth *nothing* —
