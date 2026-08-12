@@ -33,15 +33,27 @@ export type {
 export { collectEnrichmentIds } from "./enrich-ids";
 export type { TradeEnrichmentIds } from "./enrich-ids";
 export { draftOrderKey, pickSlotKey } from "./pick-slots";
-export { rewindTradeRosters } from "./rewind";
+export { rewindRosters, rewindTradeRosters } from "./rewind";
 export type {
   RewindTransaction,
   RosterPick,
   RosterState,
   TradeRosterSnapshot,
 } from "./rewind";
-export { getTradeRosters, syncTradeRosters } from "./roster-history";
-export type { SyncedWeeks, TradeRosterRow } from "./roster-history";
+export {
+  getTradeRosters,
+  getTradeTimeline,
+  readLeagueRosterStates,
+  syncTradeRosters,
+} from "./roster-history";
+export type {
+  LeagueRosterState,
+  SyncedWeeks,
+  TimelineEvent,
+  TimelinePick,
+  TradeRosterRow,
+  TradeTimeline,
+} from "./roster-history";
 export {
   countTradeTotals,
   countTrades,

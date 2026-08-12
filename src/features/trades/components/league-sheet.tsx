@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { ManagerLeague } from "@/shared/manager";
 
 import { LeagueDetailPanel } from "@/features/shared/ui/league-detail";
+
+import { useTradeTimeline } from "../hooks/use-trade-timeline";
+import { timelineMoveCount, timelineRosters, timelineStop } from "../timeline";
+import { TimelineRail } from "./timeline-rail";
+import { TimelineRosters } from "./timeline-rosters";
+import { formatTradeDate } from "./trade-card/trade-card.utils.ts";
 
 /** Which league a trade card asked for, and where its roster half should open. */
 export type OpenLeague = {
@@ -19,6 +25,14 @@ export type OpenLeague = {
   name: string;
   /** The roster to open on — see `focusRosterFor`. */
   rosterId: number | null;
+  /**
+   * The trade that was pressed — what the sheet's timeline is anchored on.
+   *
+   * The rail runs from this trade to today, so without one there is no rail: a
+   * sheet opened from anywhere that is not a trade card is the detail panel and
+   * nothing else, which is what it was before the timeline existed.
+   */
+  tradeId: string;
 };
 
 /**
@@ -55,6 +69,22 @@ export type OpenLeague = {
  * arrives at a fresh mount, so there is no stale selection to reconcile and no
  * key to remember to set. It costs nothing — the detail is a cached query by the
  * second open, so a remount re-reads the cache rather than the network.
+ *
+ * **It carries a timeline now, and that is where the card's pre-trade rosters
+ * went.** A disclosure on the card answered what the two sides held before the
+ * deal; the sheet answers what *every* roster held at *any* moment from the trade
+ * to today, which is the same question with both of its limits removed. The rail
+ * is {@link TimelineRail} and the past is {@link TimelineRosters}; what makes
+ * them affordable is that one request buys every stop (see `../timeline`).
+ *
+ * **At "now" the sheet is byte-for-byte what it was**, which is the promise the
+ * whole arrangement is arranged around: the rail opens at the present, the panel
+ * below it is the same panel with the same props, and a reader who never touches
+ * the slider sees no change at all. Only stepping back swaps the body — and it
+ * *swaps* rather than substituting a roster list into the panel, because every
+ * number that panel draws is a fact about the league today. See
+ * {@link TimelineRosters} for why laying a past roster under them would be a
+ * claim rather than a reading.
  */
 export function LeagueSheet({
   league,
@@ -190,10 +220,10 @@ export function LeagueSheet({
               contents, which is what the panel's own `0 1 auto` chain is for. */}
           {open && league && (
             <div className="lab-plate flex min-h-0 flex-1 flex-col overflow-hidden">
-              <LeagueDetailPanel
-                leagueId={league.leagueId}
-                focusRosterId={league.rosterId ?? undefined}
-              />
+              {/* Keyed on the trade, so opening a different card is a fresh mount
+                  and the rail is back at "now" — the one piece of state in here
+                  that must not survive being pointed at another league. */}
+              <SheetBody key={league.tradeId} league={league} />
             </div>
           )}
         </div>
@@ -201,6 +231,88 @@ export function LeagueSheet({
     </dialog>
   );
 }
+
+/**
+ * The rail and whatever it is pointing at.
+ *
+ * A component of its own because it holds state the dialog above it must not:
+ * where the rail is standing. Mounted from the sheet's own `open` gate and keyed
+ * on the trade, so both of the things that should reset it — closing the sheet,
+ * and pressing a different card — reset it by construction rather than through an
+ * effect watching for them.
+ */
+function SheetBody({ league }: { league: OpenLeague }) {
+  // How many of the league's newest moves are reversed. **Zero rather than a
+  // stop index**, so it is meaningful before the payload lands: the sheet opens
+  // at the present whether or not the timeline has answered, which is what makes
+  // the rail additive rather than something the panel has to wait for.
+  const [back, setBack] = useState(0);
+
+  const { data } = useTradeTimeline(league.tradeId);
+
+  const moves = timelineMoveCount(data);
+  const stop = timelineStop(data, back);
+  // Only where the reader has actually stepped back. At "now" this would be the
+  // current rosters — which the panel below already draws, from its own read —
+  // so computing it would be a rewind of nothing for an answer nobody shows.
+  const rosters = useMemo(
+    () => (stop.back > 0 ? timelineRosters(data, stop.back) : []),
+    [data, stop.back],
+  );
+
+  return (
+    <>
+      {/* No rail where there is nothing to scrub: a trade Sleeper filed with no
+          timestamp has no moment to rewind to, and a league whose rosters are not
+          stored has nothing to rewind from. Both come back as no timeline, and
+          both leave the sheet exactly as it was before this existed — which is a
+          better answer than a dead slider explaining itself. A timeline with the
+          trade as its only move is still a rail, since "before it" is a stop. */}
+      {moves > 0 && (
+        <TimelineRail
+          stop={stop}
+          moves={moves}
+          players={data?.players ?? EMPTY_PLAYERS}
+          onChange={setBack}
+        />
+      )}
+
+      {stop.back === 0 ? (
+        <LeagueDetailPanel
+          leagueId={league.leagueId}
+          focusRosterId={league.rosterId ?? undefined}
+        />
+      ) : (
+        <TimelineRosters
+          rosters={rosters}
+          players={data?.players ?? EMPTY_PLAYERS}
+          managers={data?.managers ?? EMPTY_MANAGERS}
+          caveat={rosterCaveat(stop.at)}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * The line above a past league, which has two jobs and states both plainly.
+ *
+ * It says *which moment* this is, because the rail's own readout is a row up and
+ * a reader who has scrolled the grid can no longer see it. And it says the rosters
+ * are **reconstructed**, because nothing about a list of names admits that it was
+ * derived — Sleeper stores no history, so this is today's rosters with every move
+ * since undone, and the two limits of that walk (a draft is not a transaction, and
+ * the pick horizon is today's) are exactly the kind of thing a reader should be
+ * told once rather than discover.
+ */
+function rosterCaveat(at: number | null): string {
+  const when = at === null ? "this point" : formatTradeDate(at);
+  return `Every roster as it stood on ${when} — reconstructed by undoing every move since, so a class drafted after this date is already on the roster that took it.`;
+}
+
+/** Stable empties, so a render before the payload lands changes no identity. */
+const EMPTY_PLAYERS = {};
+const EMPTY_MANAGERS = {};
 
 function CloseIcon() {
   return (

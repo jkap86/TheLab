@@ -7,6 +7,7 @@ import {
 } from "@/shared/manager";
 import type { LeagueDraft, TradedPick } from "@/shared/manager";
 
+import { asNumber, isRecord, items, numbers } from "./jsonb";
 import { rewindTradeRosters } from "./rewind";
 import type { RewindTransaction, RosterState } from "./rewind";
 import { TRADE_SORT_SQL } from "./sql";
@@ -32,6 +33,16 @@ import { TRADE_SORT_SQL } from "./sql";
  * did not have to reverse — and the second is what fills a league in on its
  * first pass and after any gap. Everything older is left alone, which is what
  * makes a steady-state pass cost one indexed query and no write at all.
+ *
+ * **{@link getTradeTimeline} is the exception to the paragraph above, and it is
+ * the exception that paragraph already allows.** The argument against deriving
+ * was about a *board page*: twenty trades from twenty leagues, so twenty whole
+ * transaction logs per request. The league sheet's timeline is one league, on a
+ * press, in a modal — the same class of read as `/api/league/[leagueId]` — and
+ * what it wants is a thing no table stores: **every** roster at an **arbitrary**
+ * moment, where `trade_rosters` holds the participants at one. So it reads the
+ * log and hands it to the browser rather than the answer, which is what makes
+ * scrubbing free after the first request.
  */
 
 /** Inclusive week range this sync re-fetched — {@link WeekRange}, structurally. */
@@ -76,42 +87,14 @@ export async function syncTradeRosters(
   // reading a week of them.
   const oldest = Math.min(...due.values());
 
-  const [league, rosters, tradedPicks, drafts, transactions] = await Promise.all([
-    readLeague(leagueId),
-    readRosters(leagueId),
-    readTradedPicks(leagueId),
-    readDrafts(leagueId),
+  const [states, transactions] = await Promise.all([
+    readLeagueRosterStates(leagueId),
     readTransactionTail(leagueId, oldest),
   ]);
-  if (!league || rosters.length === 0) return 0;
-
-  // The same resolution `getLeagueDetail` makes, and for the same reason: a
-  // dynasty league's pick market is a fixed horizon of future drafts, while
-  // every other format has no standing horizon and takes the derived grid.
-  const picksByRoster = ownedDraftPicks(
-    tradedPicks,
-    rosters.map((r) => r.roster_id),
-    league.season,
-    league.league_type === DYNASTY_LEAGUE_TYPE
-      ? dynastyPickGrid(league.season, drafts, league.previous_league_id)
-      : null,
-  );
+  if (states.length === 0) return 0;
 
   const current = new Map<number, RosterState>(
-    rosters.map((r) => [
-      r.roster_id,
-      {
-        players: r.players ?? [],
-        picks: (picksByRoster.get(r.roster_id) ?? []).map((p) => ({
-          season: p.season,
-          round: p.round,
-          // `ownedDraftPicks` names the origin `original_roster_id`; on the wire
-          // and in storage it is Sleeper's `roster_id`, which is what the
-          // transactions being reversed spell it as.
-          roster_id: p.original_roster_id,
-        })),
-      },
-    ]),
+    states.map((s) => [s.roster_id, s.state]),
   );
 
   // The walk crosses every trade in the window, including ones already stored —
@@ -186,6 +169,65 @@ async function tradesNeedingSnapshots(
   return new Map(rows.map((r) => [r.transaction_id, r.at]));
 }
 
+/** One roster as it stands now, with whoever holds it. */
+export type LeagueRosterState = {
+  roster_id: number;
+  /** Null on an orphaned roster — the same reading `getRosterOwners` takes. */
+  owner_id: string | null;
+  state: RosterState;
+};
+
+/**
+ * Every roster in the league as it stands now — the state both walks rewind
+ * *from*.
+ *
+ * Four reads rather than one because a roster's players are a column and its
+ * picks are a derivation: the pick portfolio is `traded_picks` overlaid on a
+ * grid whose seasons depend on the league's format, which is the same resolution
+ * `getLeagueDetail` makes and for the same reason — a dynasty league's pick
+ * market is a fixed horizon of future drafts, while every other format has no
+ * standing horizon and takes the derived grid.
+ *
+ * An empty answer is a league with no rosters stored, which both callers read as
+ * "nothing to say" rather than as a league of empty teams.
+ */
+export async function readLeagueRosterStates(
+  leagueId: string,
+): Promise<LeagueRosterState[]> {
+  const [league, rosters, tradedPicks, drafts] = await Promise.all([
+    readLeague(leagueId),
+    readRosters(leagueId),
+    readTradedPicks(leagueId),
+    readDrafts(leagueId),
+  ]);
+  if (!league || rosters.length === 0) return [];
+
+  const picksByRoster = ownedDraftPicks(
+    tradedPicks,
+    rosters.map((r) => r.roster_id),
+    league.season,
+    league.league_type === DYNASTY_LEAGUE_TYPE
+      ? dynastyPickGrid(league.season, drafts, league.previous_league_id)
+      : null,
+  );
+
+  return rosters.map((r) => ({
+    roster_id: r.roster_id,
+    owner_id: r.owner_id,
+    state: {
+      players: r.players ?? [],
+      picks: (picksByRoster.get(r.roster_id) ?? []).map((p) => ({
+        season: p.season,
+        round: p.round,
+        // `ownedDraftPicks` names the origin `original_roster_id`; on the wire
+        // and in storage it is Sleeper's `roster_id`, which is what the
+        // transactions being reversed spell it as.
+        roster_id: p.original_roster_id,
+      })),
+    },
+  }));
+}
+
 type LeagueMetaRow = {
   season: string;
   previous_league_id: string | null;
@@ -203,11 +245,18 @@ async function readLeague(leagueId: string): Promise<LeagueMetaRow | null> {
 
 async function readRosters(
   leagueId: string,
-): Promise<Array<{ roster_id: number; players: string[] | null }>> {
+): Promise<
+  Array<{ roster_id: number; owner_id: string | null; players: string[] | null }>
+> {
   const { rows } = await pool.query<{
     roster_id: number;
+    owner_id: string | null;
     players: string[] | null;
-  }>(`SELECT roster_id, players FROM rosters WHERE league_id = $1`, [leagueId]);
+  }>(
+    `SELECT roster_id, owner_id, players FROM rosters WHERE league_id = $1
+      ORDER BY roster_id`,
+    [leagueId],
+  );
   return rows;
 }
 
@@ -311,4 +360,211 @@ export async function getTradeRosters(
     });
   }
   return byTrade;
+}
+
+/** A pick as one move handed it over — Sleeper's own spelling of both ends. */
+export type TimelinePick = {
+  season: string;
+  round: number;
+  roster_id: number;
+  owner_id: number | null;
+  previous_owner_id: number | null;
+};
+
+/**
+ * One move in a league, as the timeline replays and labels it.
+ *
+ * **Read defensively here and sent clean**, which is the one place this differs
+ * from what the walk consumes internally. `RewindTransaction` takes the JSONB as
+ * `unknown` because Sleeper promises nothing about it and the columns are read
+ * straight off `pg`; a payload is a contract, so the blobs are narrowed once — on
+ * the server, through the same `./jsonb` readers the walk itself uses — and the
+ * browser gets three fields it can trust.
+ *
+ * **The field names are still Sleeper's**, which is what keeps this assignable to
+ * {@link RewindTransaction} (every concrete type is, to `unknown`) and lets the
+ * client feed an event straight to `rewindRosters`. Renaming them to something
+ * tidier would buy a nicer payload and cost the single definition of what undoing
+ * a move means.
+ */
+export type TimelineEvent = {
+  transaction_id: string;
+  type: string | null;
+  /** Epoch milliseconds. Never null — the read's own bound excludes undated rows. */
+  at: number;
+  roster_ids: number[];
+  /** Player id → the roster that received him. */
+  adds: Record<string, number>;
+  /** Player id → the roster that gave him up. */
+  drops: Record<string, number>;
+  draft_picks: TimelinePick[];
+};
+
+/** Everything the league sheet's timeline replays. */
+export type TradeTimeline = {
+  league_id: string;
+  /** When the trade completed, epoch milliseconds. */
+  traded_at: number;
+  /** Every roster as it stands now — what {@link rewindRosters} rewinds from. */
+  rosters: LeagueRosterState[];
+  /**
+   * The league's completed moves from the trade forward, **newest first** and
+   * ending with the trade itself.
+   *
+   * Newest-first because that is the direction the walk runs and the order the
+   * board is read in (`TRADE_SORT_SQL`); the client turns it into a left-to-right
+   * rail. Ending *with* the trade because the list is truncated there — see the
+   * note in {@link getTradeTimeline} on why the read cannot simply take
+   * everything at or after the trade's timestamp.
+   */
+  events: TimelineEvent[];
+};
+
+/**
+ * Everything needed to replay one league's rosters from a trade to today.
+ *
+ * **The log crosses the wire, not the answer.** A stop on the rail is the current
+ * rosters with the moves since it reversed, and there are as many stops as there
+ * are moves — so sending a roster state per stop would be the league's rosters
+ * times its transactions, where sending the log is the transactions alone and the
+ * browser does arithmetic it can do thousands of times a second. That is what
+ * makes scrubbing free after the first request, and it is the same trade
+ * `/api/trades` makes in reverse: there the page is what the reader is looking
+ * at, here the *derivation* is small enough to hand over.
+ *
+ * Null where the trade is not one this can answer for, which the sheet draws as
+ * no rail at all rather than as an error:
+ *
+ * - **No such completed trade.** A trade id off a board this database has since
+ *   lost, or one that never completed.
+ * - **No timestamp.** The rule `tradesNeedingSnapshots` already keeps, for the
+ *   same reason: `TRADE_SORT_SQL` folds a missing timestamp to zero, which is
+ *   where to *sort* such a row and not a moment to rewind to — "before the oldest
+ *   thing in the league" reverses the entire log and answers with rosters from
+ *   before the league existed.
+ * - **No rosters stored.** A league the crawler has recorded but not yet filled
+ *   in; there is nothing to rewind from, and synthesising empty rosters is the
+ *   claim this module refuses everywhere else.
+ */
+export async function getTradeTimeline(
+  transactionId: string,
+): Promise<TradeTimeline | null> {
+  const trade = await readTrade(transactionId);
+  if (!trade || trade.at === null) return null;
+
+  const [rosters, tail] = await Promise.all([
+    readLeagueRosterStates(trade.league_id),
+    readTimelineEvents(trade.league_id, trade.at),
+  ]);
+  if (rosters.length === 0) return null;
+
+  // **Truncated at the trade rather than trusted to end there**, which the `>=`
+  // bound alone does not guarantee. The order is `(at DESC, transaction_id DESC)`,
+  // so a move sharing the trade's exact timestamp with a *smaller* id sorts after
+  // it and is still inside the bound — reversing the whole tail would then walk
+  // past the trade and answer with a league from before moves the timeline never
+  // shows. Slicing at the trade's own index is exact under the same total order
+  // the board and the snapshot walk are read in.
+  const index = tail.findIndex((e) => e.transaction_id === transactionId);
+  // Absent is impossible under the bound above and cheap to be sure of: an empty
+  // timeline reads as no rail, where a wrong one reads as a fact.
+  if (index === -1) return null;
+
+  return {
+    league_id: trade.league_id,
+    traded_at: trade.at,
+    rosters,
+    events: tail.slice(0, index + 1),
+  };
+}
+
+/** The trade's league and the moment the timeline is anchored on. */
+async function readTrade(
+  transactionId: string,
+): Promise<{ league_id: string; at: number | null } | null> {
+  const { rows } = await pool.query<{ league_id: string; at: number | null }>(
+    `SELECT league_id, coalesce(status_updated, created)::float8 AS at
+       FROM transactions
+      WHERE transaction_id = $1 AND type = 'trade' AND status = 'complete'`,
+    [transactionId],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * {@link readTransactionTail} with the timestamp the rail labels each stop by.
+ *
+ * A second function rather than a column added to that one because the two have
+ * different jobs: the sync reverses a tail and never says when anything happened,
+ * and paying for a column on every league sync to serve a modal nobody may open
+ * is the wrong way round. Every other clause is identical, deliberately — the
+ * walk is only correct on one total order, and two spellings of it is how a
+ * snapshot ends up taken at a different point in the log from the trade the board
+ * shows.
+ */
+async function readTimelineEvents(
+  leagueId: string,
+  oldest: number,
+): Promise<TimelineEvent[]> {
+  const { rows } = await pool.query<RewindTransaction & { at: number }>(
+    `SELECT t.transaction_id, t.type, t.roster_ids, t.adds, t.drops,
+            t.draft_picks,
+            coalesce(t.status_updated, t.created)::float8 AS at
+       FROM transactions t
+      WHERE t.league_id = $1
+        AND t.status = 'complete'
+        AND coalesce(t.status_updated, t.created) >= $2
+      ORDER BY ${TRADE_SORT_SQL} DESC, t.transaction_id DESC`,
+    [leagueId, oldest],
+  );
+  return rows.map(narrowEvent);
+}
+
+/**
+ * One row's blobs, narrowed to what the payload promises.
+ *
+ * Every junk value costs *that fact and nothing else* — the rule the walk's own
+ * tests pin. A `roster_ids` that is not an array is an empty list, a player whose
+ * roster id is unreadable is dropped from the map, and a pick missing a season, a
+ * round or an origin is dropped from the list: reversing half of one would move an
+ * asset under a key nothing else will ever match. Both ends of a pick's move stay
+ * independently nullable for the same reason the walk reads them independently —
+ * not knowing who sent it says nothing about the roster that received it.
+ */
+function narrowEvent(row: RewindTransaction & { at: number }): TimelineEvent {
+  return {
+    transaction_id: row.transaction_id,
+    type: row.type,
+    at: row.at,
+    roster_ids: numbers(row.roster_ids),
+    adds: playerRosterMap(row.adds),
+    drops: playerRosterMap(row.drops),
+    draft_picks: items(row.draft_picks).flatMap((raw) => {
+      if (!isRecord(raw)) return [];
+      const round = asNumber(raw.round);
+      const origin = asNumber(raw.roster_id);
+      const season = String(raw.season ?? "");
+      if (round === null || origin === null || season === "") return [];
+      return [
+        {
+          season,
+          round,
+          roster_id: origin,
+          owner_id: asNumber(raw.owner_id),
+          previous_owner_id: asNumber(raw.previous_owner_id),
+        },
+      ];
+    }),
+  };
+}
+
+/** Sleeper's player id → roster id maps (`adds`, `drops`), read defensively. */
+function playerRosterMap(value: unknown): Record<string, number> {
+  if (!isRecord(value)) return {};
+  const map: Record<string, number> = {};
+  for (const [playerId, rosterId] of Object.entries(value)) {
+    const id = asNumber(rosterId);
+    if (id !== null) map[playerId] = id;
+  }
+  return map;
 }

@@ -41,4 +41,15 @@ export const tradesQueryKeys = {
    */
   rosters: (transactionId: string) =>
     ["trades", "rosters", transactionId] as const,
+  /**
+   * One trade's league timeline — every roster, at every moment from the trade to
+   * today — keyed on the trade alone for {@link tradesQueryKeys.rosters}' reason.
+   *
+   * **The rail's position is deliberately not in it.** A stop is arithmetic over
+   * this one payload rather than a request of its own, which is the whole point of
+   * sending the log instead of the answer: keying on the position would turn a
+   * drag into a request per notch for data the browser is already holding.
+   */
+  timeline: (transactionId: string) =>
+    ["trades", "timeline", transactionId] as const,
 };

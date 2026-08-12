@@ -2,6 +2,7 @@ import type {
   TradeFacetsPayload,
   TradeLeaguesPayload,
   TradeRostersPayload,
+  TradeTimelinePayload,
   TradesPagePayload,
 } from "@/shared/contract";
 
@@ -143,4 +144,26 @@ export async function fetchTradeRosters({
     { signal, fallbackError: "Failed to load rosters" },
   );
   return (await res.json()) as TradeRostersPayload;
+}
+
+/**
+ * The league behind one trade, at every moment from that trade to today.
+ *
+ * A plain GET for {@link fetchTradeRosters}' reason — one stored trade rather
+ * than a population, so there is nothing here that could outgrow a request line.
+ * What comes back is the league's log rather than a roster per moment, which is
+ * what makes the sheet's rail free to drag: see {@link TradeTimelinePayload}.
+ */
+export async function fetchTradeTimeline({
+  transactionId,
+  signal,
+}: {
+  transactionId: string;
+  signal?: AbortSignal;
+}): Promise<TradeTimelinePayload> {
+  const res = await apiFetch(
+    `/api/trades/timeline?trade=${encodeURIComponent(transactionId)}`,
+    { signal, fallbackError: "Failed to load the league's timeline" },
+  );
+  return (await res.json()) as TradeTimelinePayload;
 }

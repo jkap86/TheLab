@@ -99,8 +99,6 @@ export function TradesList({
   loadingMore,
   onLoadMore,
   onOpenLeague,
-  openRosters,
-  onToggleRosters,
 }: {
   trades: readonly Trade[];
   leaguesById: ReadonlyMap<string, ManagerLeague>;
@@ -148,18 +146,6 @@ export function TradesList({
    * survive a re-render of this list.
    */
   onOpenLeague: (trade: Trade) => void;
-  /**
-   * Which card has its pre-trade rosters showing, or null.
-   *
-   * **One at a time**, which is the leagues list's own rule and doubly right
-   * here: a windowed list re-measures whatever changes height, so a board where
-   * every card could be left open is one whose total size churns as the reader
-   * scrolls back through them. Each card is handed a boolean rather than this, so
-   * opening one re-renders two cards and not the window — see
-   * `TradeCardProps.rostersOpen`.
-   */
-  openRosters: string | null;
-  onToggleRosters: (trade: Trade) => void;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -281,8 +267,6 @@ export function TradesList({
               steepness={steepness}
               pickSlots={pickSlots}
               onOpenLeague={onOpenLeague}
-              rostersOpen={openRosters === trade.transaction_id}
-              onToggleRosters={onToggleRosters}
             />
           </li>
         );

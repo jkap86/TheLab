@@ -194,16 +194,10 @@ function card(over: Partial<Parameters<typeof TradeCard>[0]> = {}): string {
       adpLadders,
       steepness: 4,
       pickSlots,
-      // The card's handlers. Nothing here presses them —
-      // `renderToStaticMarkup` has no DOM to press with — so they are stubs, and
-      // what these tests are still about is the markup.
+      // The card's one handler. Nothing here presses it —
+      // `renderToStaticMarkup` has no DOM to press with — so it is a stub, and
+      // what these tests are about is the markup.
       onOpenLeague: () => {},
-      // Shut, which is the state every card on a fresh board is in. Open, the
-      // panel underneath runs a query, and a query needs a client these tests
-      // deliberately don't stand up — what is asserted here is the card's own
-      // face.
-      rostersOpen: false,
-      onToggleRosters: () => {},
       ...over,
     }),
   );
@@ -213,13 +207,6 @@ function card(over: Partial<Parameters<typeof TradeCard>[0]> = {}): string {
 function count(html: string, needle: string): number {
   return html.split(needle).length - 1;
 }
-
-/**
- * The one horizontal cut a card wears that is not between two sides: the seam
- * above the pre-trade rosters disclosure, which is drawn on every card whether or
- * not it is open.
- */
-const ROSTERS_SEAM = 1;
 
 describe("the card's material", () => {
   test("the slab and its face both carry the chamfer", () => {
@@ -244,18 +231,18 @@ describe("the card's material", () => {
     // from `sm` up. Three: the odd one spans the row and takes a horizontal cut
     // along its top, since it is under both columns rather than beside either.
     //
-    // **Every count here carries `+ ROSTERS_SEAM` for the disclosure below the
-    // sides**, which wears the card's own horizontal cut rather than a second
-    // spelling of the same shadow — so it lands in this count, and spelling the
-    // arithmetic out is what keeps the numbers readable as the sides' seams plus
-    // one rather than as magic totals.
+    // **Every seam on this card is now between two sides**, which is what the
+    // counts say and is worth knowing as a fact about the card rather than about
+    // the test: a `Rosters before this trade` disclosure used to hang below the
+    // sides on a horizontal cut of its own, and these totals each carried a `+ 1`
+    // for it. That reading is the league sheet's timeline now.
     assert.equal(count(card(), SIDE_SEAM_COLUMN), 1);
     // The column seam textually contains the row seam, so the row count picks it
-    // up too — one from that, one from the disclosure.
-    assert.equal(count(card(), SIDE_SEAM_ROW), 1 + ROSTERS_SEAM);
+    // up too — and, with the disclosure gone, only it.
+    assert.equal(count(card(), SIDE_SEAM_ROW), 1);
     const three = card({ trade: threeSided });
     assert.equal(count(three, SIDE_SEAM_COLUMN), 1);
-    assert.equal(count(three, SIDE_SEAM_ROW), 2 + ROSTERS_SEAM);
+    assert.equal(count(three, SIDE_SEAM_ROW), 2);
   });
 
   test("both plates ride the edge, outside the clip that would cut them", () => {
@@ -292,24 +279,14 @@ describe("the card's material", () => {
     const html = card();
     assert.match(html, /<h2 [^>]*><button type="button"[^>]*>The Lab Dynasty<\/button><\/h2>/);
 
-    // **Exactly two, and the count is the guard**: the name, and the disclosure
-    // that opens what each side held before the deal. Anything else that becomes
-    // pressable here has to be added deliberately, which is what this number is
-    // for — a card in a windowed list of forty thousand is not somewhere a third
-    // control should arrive by accident.
-    assert.equal(count(html, "<button"), 2);
-    assert.match(html, /aria-expanded="false"[^>]*>.*?Rosters before this trade/);
-  });
-
-  test("the rosters disclosure is shut on a fresh card and names nothing until it opens", () => {
-    // Shut, it must not claim to control a panel that isn't rendered — an
-    // `aria-controls` pointing at no element is a promise to a screen reader
-    // that nothing keeps. And the card must carry no roster content at all: the
-    // read behind it is gated on the panel mounting, so markup here would mean a
-    // request per windowed card.
-    const html = card();
-    assert.doesNotMatch(html, /aria-controls/);
-    assert.doesNotMatch(html, /Reading rosters/);
+    // **Exactly one, and the count is the guard.** A card in a windowed list of
+    // forty thousand is not somewhere a second control should arrive by
+    // accident, and one did once: a `Rosters before this trade` disclosure,
+    // which made this number two and made the card a thing that changes height
+    // under a virtualizer. What it opened is the league sheet's timeline now, so
+    // the card is back to one press with one destination.
+    assert.equal(count(html, "<button"), 1);
+    assert.doesNotMatch(html, /aria-expanded/);
   });
 
   test("the nameplate carries the accent rail, and it is decoration", () => {

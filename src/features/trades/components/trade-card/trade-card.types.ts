@@ -147,22 +147,4 @@ export type TradeCardProps = {
    * or a catalogue entry.
    */
   onOpenLeague: (trade: Trade) => void;
-  /**
-   * Whether this card's pre-trade rosters are showing.
-   *
-   * **A boolean rather than the open id, and held above the list rather than in
-   * the card** — both for the memo. A `Set` or a string compared here would be a
-   * prop whose identity or value changes for all ~26 windowed cards whenever any
-   * one of them opens; a boolean changes for exactly the two cards involved. And
-   * it cannot be the card's own `useState` at all: a card that scrolls out of the
-   * window unmounts, so the disclosure would close itself behind the reader and a
-   * remounted collapsed card would be laid out in an expanded card's measured
-   * slot — the rule `ShareList` already keeps for the same reason.
-   */
-  rostersOpen: boolean;
-  /**
-   * Toggle them. One stable callback for the whole list, taking the trade rather
-   * than closing over it, for the reason {@link TradeCardProps.onOpenLeague} is.
-   */
-  onToggleRosters: (trade: Trade) => void;
 };

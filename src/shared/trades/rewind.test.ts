@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { rewindTradeRosters } from "./rewind.ts";
+import { rewindRosters, rewindTradeRosters } from "./rewind.ts";
 import type { RewindTransaction, RosterState } from "./rewind.ts";
 
 const roster = (
@@ -263,5 +263,116 @@ describe("rewindTradeRosters", () => {
     // Before t1: both halves are back where they started, one trade further on.
     assert.deepEqual(stateOf(snapshots, "t1", 1)?.players, ["b"]);
     assert.deepEqual(stateOf(snapshots, "t1", 2)?.players, ["a", "c"]);
+  });
+});
+
+describe("rewindRosters", () => {
+  /** Three moves, newest first, over a two-team league. */
+  const log: RewindTransaction[] = [
+    tx({
+      transaction_id: "w2",
+      type: "waiver",
+      roster_ids: [2],
+      adds: { late: 2 },
+      drops: { "cut-late": 2 },
+    }),
+    tx({
+      transaction_id: "w1",
+      type: "waiver",
+      roster_ids: [1],
+      adds: { pickup: 1 },
+      drops: null,
+    }),
+    tx({
+      transaction_id: "t1",
+      roster_ids: [1, 2],
+      adds: { moved: 1 },
+      drops: { moved: 2 },
+    }),
+  ];
+
+  const now = () =>
+    new Map([
+      [1, roster(["moved", "pickup"])],
+      [2, roster(["late"])],
+    ]);
+
+  test("a count of zero is the current state", () => {
+    const states = rewindRosters(now(), log, 0);
+    assert.deepEqual(states.get(1)?.players, ["moved", "pickup"]);
+    assert.deepEqual(states.get(2)?.players, ["late"]);
+  });
+
+  test("each step undoes exactly one move", () => {
+    // One back: roster 2's waiver is undone, and nothing about roster 1 moves.
+    const one = rewindRosters(now(), log, 1);
+    assert.deepEqual(one.get(1)?.players, ["moved", "pickup"]);
+    assert.deepEqual(one.get(2)?.players, ["cut-late"]);
+
+    // Two back: roster 1's pickup goes too.
+    const two = rewindRosters(now(), log, 2);
+    assert.deepEqual(two.get(1)?.players, ["moved"]);
+    assert.deepEqual(two.get(2)?.players, ["cut-late"]);
+  });
+
+  test("the whole log is the league as it stood before the trade", () => {
+    const before = rewindRosters(now(), log, log.length);
+    assert.deepEqual(before.get(1)?.players, []);
+    assert.deepEqual(before.get(2)?.players, ["cut-late", "moved"]);
+  });
+
+  test("every roster answers, including the ones no move named", () => {
+    const current = new Map([
+      [1, roster(["moved", "pickup"])],
+      [2, roster(["late"])],
+      // A team that sat still through the whole window.
+      [3, roster(["idle"])],
+    ]);
+
+    const states = rewindRosters(current, log, log.length);
+    assert.deepEqual([...states.keys()].sort(), [1, 2, 3]);
+    assert.deepEqual(states.get(3)?.players, ["idle"]);
+  });
+
+  test("a count past the end of the log stops at the end of it", () => {
+    assert.deepEqual(
+      rewindRosters(now(), log, 99).get(2)?.players,
+      rewindRosters(now(), log, log.length).get(2)?.players,
+    );
+  });
+
+  test("it agrees with the trade walk at the trade's own stop", () => {
+    // The two entry points are one reversal read two ways, so the state this
+    // reports before the last move must be the snapshot the walk emits for it.
+    const snapshots = rewindTradeRosters(now(), log);
+    const scrubbed = rewindRosters(now(), log, log.length);
+
+    assert.deepEqual(stateOf(snapshots, "t1", 1), scrubbed.get(1));
+    assert.deepEqual(stateOf(snapshots, "t1", 2), scrubbed.get(2));
+  });
+
+  test("picks travel back with their players", () => {
+    const current = new Map([
+      [1, roster([], [{ season: "2027", round: 1, roster_id: 2 }])],
+      [2, roster([], [])],
+    ]);
+
+    const before = rewindRosters(
+      current,
+      [
+        tx({
+          transaction_id: "t1",
+          draft_picks: [
+            { season: "2027", round: 1, roster_id: 2, owner_id: 1, previous_owner_id: 2 },
+          ],
+        }),
+      ],
+      1,
+    );
+
+    assert.deepEqual(before.get(1)?.picks, []);
+    assert.deepEqual(before.get(2)?.picks, [
+      { season: "2027", round: 1, roster_id: 2 },
+    ]);
   });
 });

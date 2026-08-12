@@ -14,7 +14,6 @@ import {
   TradeInstantLedge,
   TradeNameplate,
 } from "./trade-header";
-import { TradeRostersSection } from "./trade-rosters";
 import { TradeSideColumn } from "./trade-side";
 import type { TradeCardProps } from "./trade-card.types.ts";
 import { sideSeam, sideSpansRow } from "./trade-card.utils.ts";
@@ -67,6 +66,16 @@ import { sideSeam, sideSpansRow } from "./trade-card.utils.ts";
  * a chevron. Which is also why it opens a sheet rather than expanding in place:
  * see `../league-sheet`.
  *
+ * **That sentence was true and the card broke it for a while, which is worth
+ * recording.** A `Rosters before this trade` disclosure was added to the face —
+ * a chevron, a fetch on the press, and a panel of two rosters growing out of the
+ * bottom of the card. Everything above is the argument against it: it made a
+ * windowed list re-measure a card that had changed height, it put a second press
+ * target on a card whose whole surface is one, and what it showed was *the
+ * league* rather than more of the trade. It is the league sheet's timeline now,
+ * where the same reading is one stop of a rail that runs to today — see
+ * `../league-sheet`. The card is back to being the whole of what it says.
+ *
  * **Memoised, and it is worth being exact about why — the note here used to say
  * "the list re-renders on every scroll frame", which is not what happens.**
  * `@tanstack/react-virtual` only calls back into React when
@@ -101,8 +110,6 @@ export const TradeCard = memo(function TradeCard({
   steepness,
   pickSlots,
   onOpenLeague,
-  rostersOpen,
-  onToggleRosters,
 }: TradeCardProps) {
   const lookups = { players, managers, pickSlots };
   const pricing = {
@@ -201,15 +208,6 @@ export const TradeCard = memo(function TradeCard({
               />
             ))}
           </div>
-
-          {/* What each side held before the deal — the one thing the face above
-              cannot say at any height. Behind a press, and fetched on it. */}
-          <TradeRostersSection
-            trade={trade}
-            lookups={lookups}
-            open={rostersOpen}
-            onToggle={onToggleRosters}
-          />
         </article>
       </div>
     </div>

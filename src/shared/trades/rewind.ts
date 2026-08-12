@@ -51,6 +51,17 @@ import { asNumber, isRecord, items, numbers } from "./jsonb.ts";
  *
  * Pure and free of runtime imports beyond `./jsonb.ts`, so it unit-tests like
  * its neighbours; `./roster-history` is the thin I/O around it.
+ *
+ * **It has a second reader now, and it is a browser.** The league sheet's
+ * timeline walks the same log to answer "what did every roster hold on this
+ * date", which is the identical reversal stopped at a different point rather
+ * than a second reading of Sleeper's columns — so {@link rewindRosters} is that
+ * walk bounded by a count, and {@link rewindTradeRosters} is it stopping at every
+ * trade. Both go through {@link reverseTransaction}, which is the whole of what
+ * "reversing a move" means and now exists once. That is also why the purity above
+ * is load-bearing rather than merely tidy: a client component imports this
+ * module directly, the way it reaches `@/shared/ktc/roster`, and a runtime import
+ * of anything `pg`-backed here would drag the database into the bundle.
  */
 
 /**
@@ -134,59 +145,11 @@ export function rewindTradeRosters(
   current: ReadonlyMap<number, RosterState>,
   newestFirst: readonly RewindTransaction[],
 ): TradeRosterSnapshot[] {
-  const working = new Map<number, Working>();
-  for (const [rosterId, state] of current) {
-    working.set(rosterId, {
-      players: new Set(state.players),
-      picks: new Map(
-        state.picks.map((p) => [pickKey(p.season, p.round, p.roster_id), p]),
-      ),
-    });
-  }
-
-  const at = (rosterId: unknown): Working | undefined => {
-    const id = asNumber(rosterId);
-    return id === null ? undefined : working.get(id);
-  };
-
+  const working = toWorking(current);
   const snapshots: TradeRosterSnapshot[] = [];
 
   for (const tx of newestFirst) {
-    // Received here, so not held before this. `adds` is player id -> the roster
-    // that took them, which is the whole player half of any move.
-    if (isRecord(tx.adds)) {
-      for (const [playerId, rosterId] of Object.entries(tx.adds)) {
-        at(rosterId)?.players.delete(playerId);
-      }
-    }
-
-    // Given up here, so held before this. Not the mirror of the loop above and
-    // not redundant with it: a waiver claim adds to one roster and drops from
-    // another, and a free-agent add has no drop at all.
-    if (isRecord(tx.drops)) {
-      for (const [playerId, rosterId] of Object.entries(tx.drops)) {
-        at(rosterId)?.players.add(playerId);
-      }
-    }
-
-    for (const raw of items(tx.draft_picks)) {
-      if (!isRecord(raw)) continue;
-      const round = asNumber(raw.round);
-      const original = asNumber(raw.roster_id);
-      const season = String(raw.season ?? "");
-      // A pick with no season, round or origin is not a cell anything can be
-      // said about — reversing half of it would move an asset onto a roster
-      // under a key nothing else will ever match.
-      if (round === null || original === null || season === "") continue;
-
-      const key = pickKey(season, round, original);
-      at(raw.owner_id)?.picks.delete(key);
-      at(raw.previous_owner_id)?.picks.set(key, {
-        season,
-        round,
-        roster_id: original,
-      });
-    }
+    reverseTransaction(working, tx);
 
     if (tx.type !== "trade") continue;
 
@@ -207,6 +170,114 @@ export function rewindTradeRosters(
   }
 
   return snapshots;
+}
+
+/**
+ * Every roster's state with the first `count` of `newestFirst` reversed — the
+ * whole league at one past moment.
+ *
+ * This is {@link rewindTradeRosters}' walk stopped at an arbitrary point rather
+ * than at every trade, and it is what the league sheet's timeline scrubs over: a
+ * reader dragging from "now" back to a trade is asking for `count` to go from 0
+ * to the number of moves made since. `count` of 0 is therefore the current state
+ * and is a real answer rather than a degenerate one — it is the right end of the
+ * rail.
+ *
+ * **Every roster comes back, not just the ones a move named.** That is the
+ * difference between this and a snapshot: a trade's own rosters are what
+ * `trade_rosters` stores, and the question here is what *any* team in the league
+ * held on a date, which includes the ones that were sitting still. A roster with
+ * no current state is still skipped, on the same terms — absent is not zero.
+ *
+ * `count` is clamped to the list rather than validated, since it arrives from a
+ * slider and an over-long drag means "as far back as this goes".
+ */
+export function rewindRosters(
+  current: ReadonlyMap<number, RosterState>,
+  newestFirst: readonly RewindTransaction[],
+  count: number,
+): Map<number, RosterState> {
+  const working = toWorking(current);
+  const stop = Math.min(Math.max(count, 0), newestFirst.length);
+  for (let i = 0; i < stop; i++) reverseTransaction(working, newestFirst[i]);
+
+  const states = new Map<number, RosterState>();
+  for (const [rosterId, state] of working) states.set(rosterId, freeze(state));
+  return states;
+}
+
+/** The mutable form the walk carries each roster through. */
+function toWorking(
+  current: ReadonlyMap<number, RosterState>,
+): Map<number, Working> {
+  const working = new Map<number, Working>();
+  for (const [rosterId, state] of current) {
+    working.set(rosterId, {
+      players: new Set(state.players),
+      picks: new Map(
+        state.picks.map((p) => [pickKey(p.season, p.round, p.roster_id), p]),
+      ),
+    });
+  }
+  return working;
+}
+
+/**
+ * Undo one move, in place.
+ *
+ * **Every fact is applied on its own**, which is the third of this module's
+ * load-bearing decisions and is why this is a single pass over three independent
+ * columns rather than a matching-up of halves. A payload missing one of them
+ * still tells the truth about the roster the others name.
+ *
+ * It reverses **every** type, trades included: a waiver claim moves a player as
+ * surely as a trade does, and what `type` decides is only whether the caller
+ * takes a reading afterwards.
+ */
+function reverseTransaction(
+  working: Map<number, Working>,
+  tx: RewindTransaction,
+): void {
+  const at = (rosterId: unknown): Working | undefined => {
+    const id = asNumber(rosterId);
+    return id === null ? undefined : working.get(id);
+  };
+
+  // Received here, so not held before this. `adds` is player id -> the roster
+  // that took them, which is the whole player half of any move.
+  if (isRecord(tx.adds)) {
+    for (const [playerId, rosterId] of Object.entries(tx.adds)) {
+      at(rosterId)?.players.delete(playerId);
+    }
+  }
+
+  // Given up here, so held before this. Not the mirror of the loop above and
+  // not redundant with it: a waiver claim adds to one roster and drops from
+  // another, and a free-agent add has no drop at all.
+  if (isRecord(tx.drops)) {
+    for (const [playerId, rosterId] of Object.entries(tx.drops)) {
+      at(rosterId)?.players.add(playerId);
+    }
+  }
+
+  for (const raw of items(tx.draft_picks)) {
+    if (!isRecord(raw)) continue;
+    const round = asNumber(raw.round);
+    const original = asNumber(raw.roster_id);
+    const season = String(raw.season ?? "");
+    // A pick with no season, round or origin is not a cell anything can be
+    // said about — reversing half of it would move an asset onto a roster
+    // under a key nothing else will ever match.
+    if (round === null || original === null || season === "") continue;
+
+    const key = pickKey(season, round, original);
+    at(raw.owner_id)?.picks.delete(key);
+    at(raw.previous_owner_id)?.picks.set(key, {
+      season,
+      round,
+      roster_id: original,
+    });
+  }
 }
 
 /**
