@@ -18,8 +18,9 @@ import {
  *
  * `renderToStaticMarkup` answers what a reader *sees*, which is most of what the
  * move to a slab changed: the surface, the nameplate, the status lamp, the head's
- * insets and where the disclosure semantics live are strings and conditionals, so
- * every one of them survives a refactor silently or not at all.
+ * insets, the order of its two lines and where the disclosure semantics live are
+ * strings and conditionals, so every one of them survives a refactor silently or
+ * not at all.
  *
  * **This is the shell, so it is rendered with stand-ins for the three things it
  * does not own** — the trailing plate, the specs bezel and the stat columns. What
@@ -123,34 +124,54 @@ describe("the specs line", () => {
   /** A stand-in for the specs bezel — what this shell owes it is a line. */
   const specs = createElement("span", { "data-specs": "" }, "1QB + SF");
 
-  test("it is a line under the head, not a seat inside it", () => {
+  test("it is a line of its own, not a seat beside the columns", () => {
     // Measured rather than reasoned: seated in the head's leading half — which
-    // is a `flex-1` holding nothing but the chevron, and looks free — the run has
-    // 144px at `sm` beside four fixed 96px columns, and wraps to three rows there
-    // for an ordinary league and five for a fully-specified one. On its own line
-    // it is one row at every width from `sm` up. See {@link specs}.
+    // looks free — the run has 144px at `sm` beside four fixed 96px columns, and
+    // wraps to three rows there for an ordinary league and five for a
+    // fully-specified one. On its own line it is one row at every width from `sm`
+    // up. See {@link specs}.
     const html = card({ specs });
-    const columns = html.indexOf("<span>—</span>");
-    const line = html.indexOf("data-specs");
-    assert.ok(columns >= 0 && columns < line, "the stat columns still lead");
+    assert.match(html, /data-specs[\s\S]*<span>—<\/span>/);
     // Inside the face, so it is part of the card's own surface rather than a
     // second object under it.
-    assert.ok(line < html.lastIndexOf("</div></div></li>"));
+    assert.ok(html.indexOf("data-specs") < html.lastIndexOf("</div></div></li>"));
+  });
+
+  test("it leads the stat columns rather than trailing them", () => {
+    // The columns measure the league and the run says which game the league *is*,
+    // so the qualifier reads before the number it qualifies — the same order the
+    // card's edge already states, the league then how it is going.
+    const html = card({ specs });
+    const line = html.indexOf("data-specs");
+    const columns = html.indexOf("<span>—</span>");
+    assert.ok(line >= 0 && line < columns, "the specs run still leads");
   });
 
   test("the line carries the head's own inset, so the two share an edge", () => {
-    // A bezel that started at a different x from the chevron above it would read
+    // A bezel that started at a different x from the numbers below it would read
     // as a part laid on the card rather than machined into it — and the inset is
     // per-state, which is why the box is this shell's and not the caller's.
     const html = card({ specs });
     assert.match(html, new RegExp(`class="flex shrink-0 ${literal(REST.head)} pb-3"`));
+    // Both lines wear it, which is what makes them one head rather than a head
+    // and a strip above it.
+    assert.equal(html.split(REST.head).length - 1, 2);
   });
 
-  test("it is under the head's own press and never a second one", () => {
+  test("it is inside the head's own press and never a second one", () => {
     // The head is the mouse affordance over the card's one toggle, and the
     // league's name on the plate is the button. A line that grew a control would
-    // be a press inside a press.
-    assert.equal(card({ specs }).split("<button").length - 1, 1);
+    // be a press inside a press — and a line left *outside* the press would be the
+    // inert half the head was made whole to remove.
+    const html = card({ specs });
+    assert.equal(html.split("<button").length - 1, 1);
+    // One press over both lines: the head opens before the run does, and there is
+    // no second one wrapping the columns. Probed on the head's own class rather
+    // than on `cursor-pointer` alone, which the nameplate's button up on the edge
+    // wears too.
+    const head = "cursor-pointer flex-col";
+    assert.equal(html.split(head).length - 1, 1);
+    assert.ok(html.indexOf(head) < html.indexOf("data-specs"));
   });
 
   test("a caller with nothing to say costs the card no line at all", () => {

@@ -2,7 +2,6 @@
 
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
-import { Chevron } from "./chevron";
 // The module path rather than the `features/shared` barrel: the panel is a
 // subtree deep enough that re-exporting it there would ship it to every page
 // importing anything shared — see `ui/league-detail/index.ts`.
@@ -50,6 +49,17 @@ import { NAMEPLATE_BUTTON, Nameplate } from "./nameplate";
  * the same four and the columns line up column to column down the whole list — and
  * the control that moves them is the heading rail up there too, which is why this
  * card renders numbers and no pickers of its own.
+ *
+ * **It carries no caret, and the disclosure mark it lost was the only thing in the
+ * head's leading half.** A chevron stood there for as long as the head was two
+ * clusters negotiating one line; with the record and the standing on the edge and
+ * the {@link specs} run on a line of its own, what was left was a 16px glyph
+ * holding open a `flex-1` that had nothing else in it. What says a card opens is
+ * the material and the movement — the slab lifts, the face swaps to the panel's
+ * plate, the rail lights — and what says it *is* open, to a reader who cannot see
+ * any of that, is the `aria-expanded` on the name (see {@link LeagueNameplate}),
+ * which is where the disclosure semantics have always lived. The mark was the one
+ * part of the card restating them.
  *
  * **An expanded card does not *hold* the detail panel, it *becomes* it — and
  * that is why the slab stops at the press.** The row used to wear glass while
@@ -115,23 +125,21 @@ export function LeagueCard({
    */
   ledge?: ReactNode;
   /**
-   * What kind of league this is, on a line under the head — the specs bezel the
-   * trade cards wear (`ui/league-specs`).
+   * What kind of league this is, on a line of its own leading the head — the
+   * specs bezel the trade cards wear (`ui/league-specs`).
    *
-   * **The obvious seat is the head's leading half and it was measured and
-   * rejected, which is worth recording because the argument for it is a good
-   * one.** That half is already a `flex-1` holding nothing but the chevron — the
-   * two facts that used to stand there are on the edge now — so a run seated
-   * there costs the difference between a bezel and a stat column rather than a
-   * whole line, and it lands in the half the four columns are not scanned in.
-   * What that reasoning leaves out is how much room the half actually has once
+   * **A line, not a seat beside the columns, and that was measured rather than
+   * reasoned.** The tempting seat is the head's leading half, which is free
+   * space — so a run there costs the difference between a bezel and a stat column
+   * rather than a whole line, and it lands in the half the four columns are not
+   * scanned in. What that leaves out is how much room the half actually has once
    * four fixed 96px columns are beside it. Rendered in headless Chromium with the
    * real faces and the compiled stylesheet: at the list's widest (an 864px card)
-   * the cluster leaves ~400px against a four-gauge run's 279px — one row, +11px,
-   * exactly as promised — but at `sm` it leaves **144px**, and the same run wraps
-   * to *three* rows there (a 137px card against 70px), a six-gauge league to
-   * five (193px). The band is worst precisely where it is invisible on the
-   * machine the layout is being written on.
+   * it leaves ~400px against a four-gauge run's 279px — one row, +11px, exactly
+   * as promised — but at `sm` it leaves **144px**, and the same run wraps to
+   * *three* rows there (a 137px card against 70px), a six-gauge league to five
+   * (193px). The band is worst precisely where it is invisible on the machine the
+   * layout is being written on.
    *
    * **On its own line it is one row at every width from `sm` up**, six gauges
    * included: the run's natural width is 430px against the 576px a 640px viewport
@@ -139,6 +147,19 @@ export function LeagueCard({
    * drawn. Flat +47px — a 35px bezel and the 12px under it — which is the price
    * stated rather than discovered later, and it is what the trade card pays for
    * the same part.
+   *
+   * **It leads the head rather than trailing it, which is where this card parts
+   * company with the trade card's identical run.** There the bezel is the *first*
+   * interior line too, under two manager names; here it spent a while below the
+   * stat columns, on the reading that the four numbers are what a hundred-row
+   * list is scanned on and the settings are the context under them. What that got
+   * backwards is which of the two the reader needs first: the columns are a
+   * measurement of the league, and the run says *which game* the league is —
+   * whether `#2 of 10` is a place in a 3QB best-ball auction or in a plain
+   * redraft. The qualifier reads before the number it qualifies, which is the
+   * same order the card's own edge already states (the league, then how it is
+   * going). It costs the card nothing: the two lines swap the padding between
+   * them and the height is unchanged.
    *
    * The box is this shell's and the *decision* is the caller's, which is the
    * split {@link ledge} already draws: the inset is per-state and a caller cannot
@@ -365,8 +386,16 @@ export function LeagueCard({
           would overrun the cap shrinks into it. `flex-1` anywhere on this chain
           would stretch every open card to the full screen whatever it had to
           say. */}
+      {/* The face's own top inset, which used to be the head's `pt-4`. It moved
+          up one box when the specs line took the lead: whichever of the two lines
+          comes first has to hold the head off the nameplate hanging into it, and
+          a caller with no specs has only one of them — so the padding belongs to
+          the box that is always there rather than to a line that is conditional
+          (which is a `pt-4` spelled twice, or spelled once behind a ternary that
+          says nothing a reader wants to know). Each line keeps its own `pb-3`, so
+          the card's height is exactly what it was. */}
       <div className={`flex min-h-0 flex-col ${surface.wall}`}>
-        <div className={`relative flex min-h-0 flex-col ${surface.face}`}>
+        <div className={`relative flex min-h-0 flex-col pt-4 ${surface.face}`}>
           {/* Only on the plate. A slab has a specular sweep of its own and a
               cyan bloom under it, so a second travelling band would be the one
               part of the card claiming to be glass — and the rail RowSheen
@@ -375,10 +404,14 @@ export function LeagueCard({
               marks which league is the one being worked in. */}
           {mounted && <RowSheen lit={expanded} />}
 
-          {/* The whole head is the press target, not just the name half. The
-              stat columns have nothing to press of their own — the pickers live
-              in the heading rail above the list — so the right half of every
-              card was inert while looking exactly as pressable as the left.
+          {/* The whole head is the press target, and it is *both* of its lines.
+              Neither the specs bezel nor the stat columns has anything to press
+              of its own — the pickers live in the heading rail above the list,
+              and the gauges are readouts — so any part of the head left outside
+              this would be inert while looking exactly as pressable as the rest.
+              That is the argument that put the columns inside it in the first
+              place, and moving the specs line above them is exactly the case that
+              would have reintroduced the hole one line up.
 
               It carries no `role` and no `tabIndex`: the *button* is the league's
               name on the plate, for the reason the trade card's is. `role="button"`
@@ -393,41 +426,44 @@ export function LeagueCard({
 
               `relative` is what keeps the open card's sheen behind this rather
               than over it — an absolutely positioned sibling paints above static
-              content whatever the source order. */}
+              content whatever the source order.
+
+              The inset is on each *line* rather than here, which is what lets the
+              specs line keep the box it had before the swap — and it is per-state
+              either way, so a caller could not carry it (see {@link REST}). */}
           <div
             onClick={onToggle}
-            className={`relative flex w-full shrink-0 cursor-pointer flex-col items-stretch gap-3 pb-3 pt-4 text-left sm:flex-row sm:items-center sm:gap-4 ${surface.head}`}
+            className="relative flex w-full shrink-0 cursor-pointer flex-col text-left"
           >
-            {/* The chevron and the space it holds. **Both facts that used to
-                stand here are on the edge now** (see {@link ledge}), which
-                leaves this cluster as the disclosure mark and the flex spacer
-                that pushes the columns to the trailing edge — thin, and
-                deliberately so: the head's left half was the one place on the
-                card that had to stay quiet, since the four columns beside it are
-                what the list is scanned on. */}
-            <div className="flex min-w-0 flex-1 items-center gap-2.5">
-              <Chevron open={expanded} size="md" />
-            </div>
+            {/* The specs line, leading the head and inside its own inset. It is
+                rendered only when a caller has something to put on it — the box
+                is this shell's (the inset is per-state, which a caller cannot
+                know) and whether there is anything to say is the caller's, which
+                is the same split {@link ledge} draws.
+
+                `pb-3` and no top padding of its own: the face's `pt-4` is the gap
+                above, so the line costs the card one bezel plus one gap rather
+                than two — and the columns under it are the same shape read the
+                other way. */}
+            {specs && (
+              <div className={`flex shrink-0 ${surface.head} pb-3`}>{specs}</div>
+            )}
 
             {/* Numbers only, at every width: the heading rail pinned above the
                 list names these columns and is the only thing that moves them,
                 because the same four words repeated down a hundred rows is what
-                made a list-wide selection read as a per-card one. */}
-            {columns}
+                made a list-wide selection read as a per-card one.
+
+                `justify-end` is what the retired chevron's `flex-1` cluster used
+                to do — hold the columns against the trailing edge, where the
+                heading rail's own four cells sit. It is a no-op below `sm`, where
+                the columns take a line of their own and divide it whole
+                ({@link COLUMN_ROW}), which is why the row needs no breakpoint of
+                its own now that there is nothing beside them to stack against. */}
+            <div className={`flex items-center justify-end pb-3 ${surface.head}`}>
+              {columns}
+            </div>
           </div>
-
-          {/* The specs line, under the head and inside its own inset. It is
-              rendered only when a caller has something to put on it — the box is
-              this shell's (the inset is per-state, which a caller cannot know)
-              and whether there is anything to say is the caller's, which is the
-              same split {@link ledge} draws.
-
-              `pb-3` and no top padding of its own: the head's own `pb-3` is the
-              gap above, so the line costs the card one bezel plus one gap rather
-              than two. */}
-          {specs && (
-            <div className={`flex shrink-0 ${surface.head} pb-3`}>{specs}</div>
-          )}
 
           {/* No seam and no inset of its own: the panel is on this card's face,
               so what used to be a border between two surfaces would now be a

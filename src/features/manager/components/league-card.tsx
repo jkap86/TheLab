@@ -29,7 +29,11 @@ import { MetricColumns } from "./metric-column";
  * opponent in the same seat, which is most of the difference between the two
  * lists' cards.
  *
- * **A line under the head names the league's settings**, as the same bezel of
+ * Neither card carries a caret any more — what says one opens is the slab lifting
+ * and the face swapping to the panel's plate, and what says it *is* open to a
+ * reader who cannot see either is the `aria-expanded` on the league's name.
+ *
+ * **A line leading the head names the league's settings**, as the same bezel of
  * gauges the trade cards wear (`ui/league-specs`) — type, size, the QB and
  * superflex slots, tight ends, TE premium and best ball. It is the trades board's
  * part for a reason that turns out to be this list's too: an account here is a
@@ -120,12 +124,12 @@ export function LeagueCard({
  * holding the card's trailing corner, opposite the name.
  *
  * **It is the same plate as the nameplate and it is not a second name**, which
- * is the whole of what its construction is for. Both facts sat in the head,
- * between the chevron and the stat columns, which is the one part of the card
- * that has to stay quiet: the columns are what a list a hundred rows long is
- * scanned on, and two numbers in front of them were being read as a fifth. On
- * the edge they are what they are — the card's two corners holding its two
- * identities, which league this is and how it is going.
+ * is the whole of what its construction is for. Both facts sat in the head, in
+ * front of the stat columns, which is the one part of the card that has to stay
+ * quiet: the columns are what a list a hundred rows long is scanned on, and two
+ * numbers ahead of them were being read as a fifth. On the edge they are what
+ * they are — the card's two corners holding its two identities, which league this
+ * is and how it is going.
  *
  * What keeps it from reading as a second label is the material rather than the
  * size. The record keeps the `.lab-readout` cut it already wore in the head, so

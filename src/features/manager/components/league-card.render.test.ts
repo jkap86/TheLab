@@ -10,19 +10,19 @@ import { LeagueCard } from "./league-card";
  * What this list puts in the card's two seats: the manager's record and standing
  * on the trailing plate, and what kind of league it is in the head's quiet half.
  *
- * The card itself — the slab, the two plates, the head's insets, the press and
- * the geometry it shares with the heading rail — is
- * `features/shared/ui/league-card` and is tested there, as is the fact that a
- * seated node lands beside the chevron. What is left for this file is what *this*
- * list seats. The lineup checker puts this week's opponent in the same plate,
- * seats no specs, and tests its own.
+ * The card itself — the slab, the two plates, the head's two lines and their
+ * insets, the press and the geometry it shares with the heading rail — is
+ * `features/shared/ui/league-card` and is tested there, including which of those
+ * lines a seated node lands on. What is left for this file is what *this* list
+ * seats. The lineup checker puts this week's opponent in the same plate, seats no
+ * specs, and tests its own.
  *
- * Both record facts used to sit in the head between the chevron and the stat
- * columns, which is the one part of the card that has to stay quiet — so what
- * these pin is that they are on the *edge*, that the plate is a housing rather
- * than a second name, and that "absent is not zero" survived the move. The specs
- * pin the same rule read the other way: the run says nothing rather than guessing
- * where a league has not answered.
+ * Both record facts used to sit in the head in front of the stat columns, which is
+ * the one part of the card that has to stay quiet — so what these pin is that they
+ * are on the *edge*, that the plate is a housing rather than a second name, and
+ * that "absent is not zero" survived the move. The specs pin the same rule read
+ * the other way: the run says nothing rather than guessing where a league has not
+ * answered.
  */
 
 const league: ManagerLeague = {
@@ -160,17 +160,17 @@ describe("the league specs", () => {
     assert.equal(html.split("lab-gauge").length - 1, 4);
   });
 
-  test("it is on the card's own face, below the four columns", () => {
-    // The four columns are what a list a hundred rows long is scanned on, so
-    // they keep the first line and the settings read as the context under them —
-    // the rank the trade card gives the same run, which sits below both manager
-    // names there.
+  test("it is on the card's own face, above the four columns", () => {
+    // The columns *measure* the league and the run says which game the league is,
+    // so the qualifier reads before the number it qualifies: `#2 of 10` means one
+    // thing in a 3QB best-ball auction and another in a plain redraft. It is the
+    // trade card's rank for the same run, which leads that card's interior too.
     const html = card();
     const wall = html.indexOf("lab-slab lab-notch-lg");
-    const columns = html.indexOf("divide-x divide-foreground/10");
     const bezel = html.indexOf("lab-bezel");
+    const columns = html.indexOf("divide-x divide-foreground/10");
     assert.ok(wall >= 0 && bezel > wall, "the run is inside the card's face");
-    assert.ok(columns >= 0 && columns < bezel, "and after the stat columns");
+    assert.ok(columns >= 0 && bezel < columns, "and before the stat columns");
   });
 
   test("a league the sync has not answered for draws no line", () => {
@@ -186,7 +186,10 @@ describe("the league specs", () => {
       },
     });
     assert.doesNotMatch(html, /lab-bezel/);
-    assert.doesNotMatch(html, /pb-3">/);
+    // The head's two lines each carry its inset, so a card drawing one line wears
+    // it once — which is a probe for the *box* rather than for the bezel inside
+    // it, since an empty line is exactly what costs the padding.
+    assert.equal(html.split("pl-[21px] pr-[11px]").length - 1, 1);
   });
 
   test("an unsynced lineup drops the lineup gauges rather than reading them as zero", () => {
