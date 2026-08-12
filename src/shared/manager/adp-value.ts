@@ -55,7 +55,42 @@ export const ADP_PEAK = 10_000;
  * falling back to the default — a query string is never trusted.
  */
 export const STEEPNESS_RANGE = { min: 2, max: 8, step: 0.25 } as const;
-export const DEFAULT_STEEPNESS = 4;
+
+/**
+ * **Measured against the trade market rather than guessed.** It was 4 — a
+ * reasonable-sounding number of halvings and nothing more — and
+ * `scripts/fit-adp-curve.ts` is what replaced it with a number: every completed
+ * trade is a revealed near-indifference between two hauls, so the curve that
+ * makes the fewest of them look lopsided is the curve the market is using.
+ * Over 14,082 two-sided player-for-player trades of the 2026 season, scored on a
+ * time-held-out fifth, the median `|log(ΣA / ΣB)|` bottoms out at **2.70** —
+ * rounded here to the slider's own quarter-notch, since an off-grid default is
+ * one the slider snaps away from the moment it is touched.
+ *
+ * Three things make it a reading rather than a number off a chart:
+ *
+ * - **It comes from the count-asymmetric trades, which are the only ones that
+ *   carry the answer.** A 1-for-1 balances under *every* curve, so the even
+ *   subset simply prefers the flattest one on offer and its argmin runs to
+ *   whatever floor the search has (0.25, at the widest we looked). The
+ *   asymmetric subset has a genuine interior minimum with the loss rising on
+ *   both sides of it — 0.344 at the old default of 4, 0.269 at 2.5, 0.265 at
+ *   2.70, 0.271 at 3, 0.290 at 3.5.
+ * - **It replicates.** The fit lands at 2.70 pricing players at their mean and
+ *   2.65 pricing them as an expectation over their pick distribution, which are
+ *   two quite different valuations of the same hauls.
+ * - **The one bias we know about points the other way**, so this is a ceiling
+ *   rather than a midpoint. A 3-for-1 favours the consolidating side, because
+ *   roster spots are scarce and nothing in this curve prices one; to balance
+ *   fewer-but-better against many-lesser you need the top of the board worth
+ *   *more*, so an uncorrected fit reads some of the price of a roster spot as
+ *   steepness. The true figure is at most this.
+ *
+ * The knob stays a knob — it is a modeling choice and a reader may want a
+ * steeper board — but its default is now a measurement, and re-running that
+ * script is how to challenge it.
+ */
+export const DEFAULT_STEEPNESS = 2.75;
 
 /**
  * Read a `steepness` query value: a number of halvings, clamped to
@@ -128,148 +163,13 @@ export function leagueAdpPool(
  * decreasing in ADP.
  */
 export function adpValue(adp: number, pool: number, halvings: number): number {
-  return Math.round(curveAt(adp, decay(pool, halvings)));
-}
-
-/**
- * The curve's decay constant, in value-per-pick: `λ` such that the curve is
- * `PEAK · e^(−λ(pick − 1))`.
- *
- * Spelled once because {@link expectedAdpValue} needs it as a number rather than
- * as a base-2 exponent — the cumulant correction below is a series in λ, and
- * writing it against `2^…` would put a `ln 2` on every term. `pool` is floored
- * at 1 so a league with no slots on file can't divide by zero; the caller
- * supplies a fallback pool for that case ({@link leagueAdpPool}).
- */
-function decay(pool: number, halvings: number): number {
-  return (halvings * Math.LN2) / (pool > 0 ? pool : 1);
-}
-
-/**
- * The curve itself, unrounded. ADP is an average of 1-based pick numbers, so it
- * is always ≥ 1 in practice; the guard is only so a junk value can't hand back
- * NaN or something above the peak.
- */
-function curveAt(pick: number, lambda: number): number {
-  if (!Number.isFinite(pick) || pick <= 1) return ADP_PEAK;
-  return ADP_PEAK * Math.exp(-lambda * (pick - 1));
-}
-
-/**
- * How the board's drafts took one player: the average, and enough of the shape
- * around it to price him as an *expectation* rather than as a point.
- *
- * Every field here is already computed by the board aggregate — see
- * `adp.ts`'s `boardAggregates` — so carrying them costs the wire and not a
- * second scan of `draft_picks`.
- */
-export type AdpDistribution = {
-  /** Mean `pick_no` across the board's drafts that took him. */
-  adp: number;
-  /** How many of those drafts took him. */
-  picks: number;
-  /** Sample standard deviation of `pick_no`; 0 for a single pick. */
-  stdev: number;
-  /**
-   * Third *central* moment of `pick_no` — `E[(P − μ)³]`, in picks³, not the
-   * dimensionless skewness. The correction below wants the moment itself, and
-   * normalising it would divide by a `stdev` that is legitimately 0.
-   */
-  m3: number;
-  /** Earliest and latest `pick_no` observed, which bound the expectation. */
-  min_pick: number;
-  max_pick: number;
-};
-
-/**
- * One player's draft capital as the **expected** value of the curve over his
- * pick distribution, rather than the curve read at his mean pick.
- *
- * {@link adpValue} answers `v(E[P])`; this answers `E[v(P)]`, and the two are
- * not the same number because the curve is convex. Jensen's inequality says the
- * second is always the larger, and the gap grows with the spread — so pricing
- * off the mean **systematically undervalues every polarising player**, which is
- * exactly the rookies and the post-injury names where the question is live. A
- * player taken at 12 in half the drafts and 130 in the other half averages 71,
- * which describes nobody and prices him as though it did.
- *
- * Two corrections, and they pull in opposite directions on purpose:
- *
- * - **Spread raises him.** For `v = PEAK · e^(−λ(P−1))`, `E[v]` is `v(μ)` times
- *   the moment generating function of the deviation, whose log is the cumulant
- *   series `λ²κ₂/2 − λ³κ₃/6 + …`. Truncated after the third cumulant that is
- *   exact for a Gaussian and second-order for anything else.
- * - **Skew lowers him again.** Pick distributions are right-skewed by
- *   construction — a player can fall forever and cannot rise past 1.01 — so
- *   `κ₃ > 0` and the third term claws back part of the second. Dropping it is
- *   what would over-correct on precisely the players the first term exists for.
- *
- * **The clamp is the data's, not a tuning constant.** `E[v]` over an empirical
- * distribution cannot exceed the curve at the earliest pick observed, nor fall
- * below it at the latest — so the corrected value is held inside
- * `[v(max_pick), v(min_pick)]`, which is exact, needs no judgement, and is what
- * makes truncating an asymptotic series safe when `λσ` gets large.
- *
- * **What it deliberately does not correct for is that the average conditions on
- * being drafted at all**, and the reason is worth writing down because the fix
- * looks obvious and is not available. `avg(pick_no)` is taken over the drafts
- * that *took* him, so a player taken in a tenth of them is priced as though he
- * always goes there; the whole expectation would be his take rate times this,
- * plus the rest of the time at what a pick past the end of a draft is worth.
- *
- * The blocker is the denominator. A take rate is only a fact about a player if
- * every draft in it *could* have taken him, and on any board wider than a few
- * weeks that is false: the rookie class does not exist in Sleeper's player pool
- * before the NFL draft in late April, so every startup held before it sits in
- * the denominator and can never be in the numerator. It would read as a
- * systematic markdown of exactly the players this scale is most often opened
- * for, in a direction nothing on screen would explain — and with `min_picks`
- * defaulting to 2, the thin tail of a several-thousand-draft board would go to
- * essentially zero. Nothing stored says when a player entered the pool, so the
- * denominator cannot currently be narrowed to the drafts he was available for.
- *
- * It is the right correction and it needs that column, or a measurement saying
- * the bias is smaller than the error it removes. Until then this prices what a
- * player costs *when he is taken*, which is a claim the data supports.
- *
- * With no spread this is {@link adpValue} to the rounding — asserted in the
- * tests, because that is what says the correction is a refinement of the curve
- * rather than a different curve.
- */
-export function expectedAdpValue(
-  dist: AdpDistribution,
-  pool: number,
-  halvings: number,
-): number {
-  const lambda = decay(pool, halvings);
-  const base = curveAt(dist.adp, lambda);
-
-  let taken = base;
-  // Two picks are the fewest that can have a spread and three the fewest that
-  // can have a skew, so each term is taken only where its moment means
-  // something. A non-finite moment is a board that answered something junk;
-  // falling back to the point estimate is the honest reading of it.
-  if (dist.picks >= 2 && Number.isFinite(dist.stdev) && dist.stdev > 0) {
-    const spread = (lambda * dist.stdev) ** 2 / 2;
-    const skew =
-      dist.picks >= 3 && Number.isFinite(dist.m3)
-        ? (lambda ** 3 * dist.m3) / 6
-        : 0;
-    const corrected = base * Math.exp(spread - skew);
-    if (Number.isFinite(corrected)) taken = corrected;
-  }
-
-  // The support bounds the expectation exactly — see the note above. Each end is
-  // applied only where the board reported it, so a missing column degrades to no
-  // clamp rather than to a clamp at zero.
-  if (Number.isFinite(dist.min_pick) && dist.min_pick > 0) {
-    taken = Math.min(taken, curveAt(dist.min_pick, lambda));
-  }
-  if (Number.isFinite(dist.max_pick) && dist.max_pick > 0) {
-    taken = Math.max(taken, curveAt(dist.max_pick, lambda));
-  }
-
-  return Math.round(Math.min(ADP_PEAK, taken));
+  // ADP is an average of 1-based pick numbers, so it is always ≥ 1 in practice;
+  // the guard is only so a junk value can't hand back NaN or something above the
+  // peak. `pool` is floored at 1 so a league with no slots on file can't divide
+  // by zero — the caller supplies a fallback pool for that case.
+  if (!Number.isFinite(adp) || adp <= 1) return ADP_PEAK;
+  const p = pool > 0 ? pool : 1;
+  return Math.round(ADP_PEAK * 2 ** ((-halvings * (adp - 1)) / p));
 }
 
 /** One roster's ADP-derived value, whole and split across its lineup. */

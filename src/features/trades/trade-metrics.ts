@@ -1,7 +1,7 @@
 import { ktcPickPrice, pickTier } from "../../shared/ktc/picks.ts";
 import type { KtcPickMatch, KtcPickTier } from "../../shared/ktc/picks.ts";
 import { ktcBoardValue } from "../../shared/ktc/roster.ts";
-import { expectedAdpValue } from "../../shared/manager/adp-value.ts";
+import { adpValue } from "../../shared/manager/adp-value.ts";
 import { pickSlotKey } from "../../shared/trades/pick-slots.ts";
 import { ordinal } from "../shared/format.ts";
 import type { Metric } from "../shared/metric-cell.ts";
@@ -53,8 +53,8 @@ import type {
  * for the same reason.
  *
  * Pure and free of runtime imports beyond {@link ktcBoardValue} and
- * {@link expectedAdpValue} — both arriving relatively with an explicit `.ts`
- * extension, the way the league filters reach the same files — so they are tested
+ * {@link adpValue} — both arriving relatively with an explicit `.ts` extension,
+ * the way the league filters reach the same files — so the numbers are tested
  * without a fetch behind them, the bar its four sibling catalogues hold.
  */
 
@@ -289,9 +289,7 @@ function adpStats(ctx: TradeSideContext, id: string): AdpBoardStats | null {
 /** That row as draft capital, under the panel's own pool and curve. */
 function adpPlayerValue(ctx: TradeSideContext, id: string): number | null {
   const stats = adpStats(ctx, id);
-  return stats === null
-    ? null
-    : expectedAdpValue(stats, ctx.adpPool, ctx.steepness);
+  return stats === null ? null : adpValue(stats.adp, ctx.adpPool, ctx.steepness);
 }
 
 /** `dynasty` / `redraft`, for the hovers that have to name the market. */
@@ -543,7 +541,7 @@ export const TRADE_METRICS: TradeMetric[] = [
             title: `Not on the ${market} ADP board`,
           };
         }
-        const value = expectedAdpValue(stats, ctx.adpPool, ctx.steepness);
+        const value = adpValue(stats.adp, ctx.adpPool, ctx.steepness);
         return {
           text: value.toLocaleString(),
           value,

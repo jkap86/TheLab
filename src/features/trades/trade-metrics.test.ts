@@ -63,8 +63,8 @@ const adp: Record<string, AdpPlayerPayload> = {
     position: "QB",
     team: "CIN",
     rookie: false,
-    redraft: { picks: 40, adp: 82, min_pick: 60, max_pick: 108, stdev: 0, m3: 0 },
-    dynasty: { picks: 30, adp: 28, min_pick: 12, max_pick: 44, stdev: 0, m3: 0 },
+    redraft: { picks: 40, adp: 82, min_pick: 60, max_pick: 108, stdev: 9.4 },
+    dynasty: { picks: 30, adp: 28, min_pick: 12, max_pick: 44, stdev: 6.1 },
   },
   wr: {
     player_id: "wr",
@@ -72,8 +72,8 @@ const adp: Record<string, AdpPlayerPayload> = {
     position: "WR",
     team: "CIN",
     rookie: false,
-    redraft: { picks: 50, adp: 28, min_pick: 14, max_pick: 40, stdev: 0, m3: 0 },
-    dynasty: { picks: 44, adp: 55, min_pick: 30, max_pick: 80, stdev: 0, m3: 0 },
+    redraft: { picks: 50, adp: 28, min_pick: 14, max_pick: 40, stdev: 4.2 },
+    dynasty: { picks: 44, adp: 55, min_pick: 30, max_pick: 80, stdev: 7.7 },
   },
   // Taken in too few of the board's drafts to have an average on either — a
   // kicker, an IDP, a player past the tail the board is fetched to.
@@ -158,28 +158,6 @@ test("TRADE_METRICS", async (t) => {
       ),
       "6,250",
     );
-  });
-
-  // The fixtures above state no spread so the arithmetic reads in round
-  // numbers; this is the one that proves a card is priced as the expectation
-  // over the board's drafts rather than at their average. See
-  // `expectedAdpValue`: the curve is convex, so a player the board is split
-  // about is worth more than one taken at that average every time, and the
-  // correction has to reach a trade card and not only the drawer's preview.
-  await t.test("a board split about a player prices him above his average", () => {
-    const split = {
-      ...adp,
-      qb: {
-        ...adp.qb!,
-        dynasty: { ...adp.qb!.dynasty!, stdev: 22 },
-      },
-    };
-    const at = (rows: typeof adp) =>
-      Number(
-        metricPreview(cell("adp", { ...ctx({ players: ["qb"] }), adp: rows }))
-          .replace(/,/g, ""),
-      );
-    assert.ok(at(split) > at(adp), `${at(split)} should exceed ${at(adp)}`);
   });
 
   // The panel's slider, reaching the cards rather than only the drawer's own

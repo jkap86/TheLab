@@ -238,7 +238,7 @@ describe("sideContext", () => {
           team: "SF",
           rookie: false,
           redraft: null,
-          dynasty: { picks: 12, adp: 16, min_pick: 8, max_pick: 30, stdev: 4, m3: 0 },
+          dynasty: { picks: 12, adp: 16, min_pick: 8, max_pick: 30, stdev: 4 },
         },
       },
       adpBoard: "dynasty",

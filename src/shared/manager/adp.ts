@@ -27,14 +27,6 @@ export type AdpBoardStats = {
   max_pick: number;
   /** Sample standard deviation of `pick_no`; 0 for a single pick. */
   stdev: number;
-  /**
-   * Third central moment of `pick_no` — `E[(P − μ)³]`, in picks³ rather than the
-   * dimensionless skewness, since {@link expectedAdpValue} wants the moment and
-   * normalising it would divide by a `stdev` that is legitimately 0. Positive
-   * for the right-skewed shape a pick distribution nearly always has; 0 where
-   * there are too few picks to have one.
-   */
-  m3: number;
 };
 
 /**
@@ -48,11 +40,12 @@ export type AdpRow = {
   dynasty: AdpBoardStats | null;
 };
 
-/**
- * A board read: how many drafts matched and how that splits between the two
- * boards ({@link DraftCounts}), plus the page of players.
- */
-export type AdpResult = DraftCounts & {
+export type AdpResult = {
+  /** Drafts that matched the filters, whether or not they contain picks. */
+  draft_count: number;
+  /** How `draft_count` splits into the two boards; the halves sum to it. */
+  redraft_drafts: number;
+  dynasty_drafts: number;
   /** Players matching the filters before `limit`/`offset` — for paging. */
   player_count: number;
   rows: AdpRow[];
@@ -233,16 +226,10 @@ const matchedDraftsSql = (where: string) => `
       JOIN leagues l ON l.league_id = d.league_id
      WHERE ${where}`;
 
-export type DraftCounts = {
+type DraftCounts = {
   draft_count: number;
   redraft_drafts: number;
   dynasty_drafts: number;
-};
-
-const NO_DRAFTS: DraftCounts = {
-  draft_count: 0,
-  redraft_drafts: 0,
-  dynasty_drafts: 0,
 };
 
 async function countMatchedDrafts(
@@ -256,36 +243,14 @@ async function countMatchedDrafts(
        FROM (${matchedDrafts}) md`,
     params,
   );
-  return rows[0] ?? NO_DRAFTS;
+  return rows[0] ?? { draft_count: 0, redraft_drafts: 0, dynasty_drafts: 0 };
 }
 
 /**
- * The third *central* moment of `pick_no` on one board — `E[(P − μ)³]` — from
- * raw moments in the one pass the surrounding aggregate already makes.
- *
- * It is the term that keeps {@link expectedAdpValue}'s spread correction honest:
- * a pick distribution is right-skewed by construction (a player can fall
- * forever and cannot rise past 1.01), so this is positive and pulls back part of
- * what the variance added. Postgres has no skewness aggregate, and the raw-moment
- * identity is what avoids a second pass — the cancellation it is famous for is
- * harmless at this scale, where the terms are ~1e6 and a float8 carries fifteen
- * digits against a moment that matters at ~1e4.
- *
- * Written unrounded rather than off the rounded `adp` column beside it, so the
- * cancellation reads exact inputs.
- */
-function thirdCentralMoment(on: string): string {
-  const m = (power: number) =>
-    `avg(power(dp.pick_no::float8, ${power})) FILTER (WHERE ${on})`;
-  return `(${m(3)} - 3 * ${m(1)} * ${m(2)} + 2 * power(${m(1)}, 3))`;
-}
-
-/**
- * One board's six aggregate columns, prefixed with the board's name. The
+ * One board's five aggregate columns, prefixed with the board's name. The
  * board names come from our own closed vocabulary, not from input; `stdev`'s
  * COALESCE keeps a single-pick board at 0 rather than null, matching the
- * one-board query this replaced, and `m3`'s does the same for the board with
- * too few picks to have a third moment.
+ * one-board query this replaced.
  */
 function boardAggregates(board: "redraft" | "dynasty"): string {
   const on = board === "dynasty" ? "md.dynasty" : "NOT md.dynasty";
@@ -294,8 +259,7 @@ function boardAggregates(board: "redraft" | "dynasty"): string {
               round((avg(dp.pick_no) FILTER (WHERE ${on}))::numeric, 2)::float8 AS ${board}_adp,
               min(dp.pick_no) FILTER (WHERE ${on}) AS ${board}_min_pick,
               max(dp.pick_no) FILTER (WHERE ${on}) AS ${board}_max_pick,
-              round(COALESCE(stddev_samp(dp.pick_no) FILTER (WHERE ${on}), 0)::numeric, 2)::float8 AS ${board}_stdev,
-              round(COALESCE(${thirdCentralMoment(on)}, 0)::numeric, 2)::float8 AS ${board}_m3`;
+              round(COALESCE(stddev_samp(dp.pick_no) FILTER (WHERE ${on}), 0)::numeric, 2)::float8 AS ${board}_stdev`;
 }
 
 type BoardColumns = {
@@ -308,8 +272,6 @@ type BoardColumns = {
   [B in "redraft" | "dynasty" as `${B}_max_pick`]: number | null;
 } & {
   [B in "redraft" | "dynasty" as `${B}_stdev`]: number | null;
-} & {
-  [B in "redraft" | "dynasty" as `${B}_m3`]: number | null;
 };
 
 /** One board's stats off a row's prefixed columns; below `min_picks` is null. */
@@ -327,7 +289,6 @@ function boardStats(
     min_pick: row[`${board}_min_pick`]!,
     max_pick: row[`${board}_max_pick`]!,
     stdev: row[`${board}_stdev`]!,
-    m3: row[`${board}_m3`] ?? 0,
   };
 }
 
@@ -486,15 +447,8 @@ export async function getDraftDensity(): Promise<DraftDensityMonth[]> {
   return rows;
 }
 
-/**
- * One player's average draft position on a board, with the sample behind it.
- *
- * The same shape the paged board reports, and deliberately the *same type*: both
- * reads price players through {@link expectedAdpValue}, which needs the spread
- * and the support as well as the average, and two spellings of one distribution
- * is how a card and the drawer above it come to disagree about a player.
- */
-export type PlayerAdp = AdpBoardStats;
+/** One player's average draft position on a board, with the sample behind it. */
+export type PlayerAdp = { adp: number; picks: number };
 
 /**
  * A player's average on each board; a board that took him in fewer than
@@ -617,16 +571,19 @@ async function computeDraftAdpForPlayers(
   const idsBind = bind(ids);
   const minPicks = bind(filters.min_picks);
 
-  // The same columns the paged board selects, off the same helper. They used to
-  // be spelled out again here, back when this read wanted only the average; with
-  // both reads pricing through `expectedAdpValue` they want the same six, and a
-  // second spelling of them is the drift that ends with a card and the drawer
-  // above it quoting different numbers for one player.
-  const { rows } = await pool.query<BoardColumns & { player_id: string }>(
+  const { rows } = await pool.query<{
+    player_id: string;
+    redraft_adp: number | null;
+    redraft_picks: number;
+    dynasty_adp: number | null;
+    dynasty_picks: number;
+  }>(
     `WITH matched_drafts AS MATERIALIZED (${matchedDrafts})
      SELECT dp.player_id,
-            ${boardAggregates("redraft")},
-            ${boardAggregates("dynasty")}
+            round((avg(dp.pick_no) FILTER (WHERE NOT md.dynasty))::numeric, 2)::float8 AS redraft_adp,
+            (count(*) FILTER (WHERE NOT md.dynasty))::int AS redraft_picks,
+            round((avg(dp.pick_no) FILTER (WHERE md.dynasty))::numeric, 2)::float8 AS dynasty_adp,
+            (count(*) FILTER (WHERE md.dynasty))::int AS dynasty_picks
        FROM draft_picks dp
        JOIN matched_drafts md ON md.draft_id = dp.draft_id
       WHERE dp.player_id = ANY(${idsBind}::varchar[])
@@ -639,8 +596,14 @@ async function computeDraftAdpForPlayers(
   const values = new Map<string, PlayerBoardAdp>();
   for (const r of rows) {
     values.set(r.player_id, {
-      redraft: boardStats(r, "redraft", filters.min_picks),
-      dynasty: boardStats(r, "dynasty", filters.min_picks),
+      redraft:
+        r.redraft_picks >= filters.min_picks && r.redraft_adp !== null
+          ? { adp: r.redraft_adp, picks: r.redraft_picks }
+          : null,
+      dynasty:
+        r.dynasty_picks >= filters.min_picks && r.dynasty_adp !== null
+          ? { adp: r.dynasty_adp, picks: r.dynasty_picks }
+          : null,
     });
   }
   return { ...counts, values };

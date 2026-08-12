@@ -5208,74 +5208,57 @@ stops holding, a comment saying it does would not have caught it.
   KTC column would be choosing between em dashes. Nothing is invalidated either
   way; re-aiming a slot re-enables the query against the same key, and an entry
   inside its stale time is a cache read.
-- **The curve is read as an *expectation* over a player's pick distribution, not
-  at his mean pick — `expectedAdpValue`, and `adpValue` is now the point estimate
-  underneath it.** `avg(pick_no)` was being read as though it described a player,
-  and it does not: taken at 12 in half the drafts and 130 in the other half, he
-  averages 71, which describes nobody. The curve is convex, so by Jensen
-  `E[v(P)] > v(E[P])` and the gap grows with the spread — pricing off the mean
-  **systematically undervalued every polarising player**, which is exactly the
-  rookies and the post-injury names where the question is live. Five things hold
-  it up:
-  - **It is a cumulant series, so it costs no second pass.** For
-    `v = PEAK · e^(−λ(P−1))`, `log E[v]` is `log v(μ) + λ²κ₂/2 − λ³κ₃/6 + …` —
-    exact for a Gaussian, second-order for anything else. `stdev` was already
-    computed and already on the wire; the third moment is two more aggregates in
-    the same `GROUP BY` (`thirdCentralMoment`, from raw moments, whose famous
-    cancellation is harmless where the terms are ~1e6 in a float8 and the moment
-    matters at ~1e4).
-  - **The skew term is not optional.** A pick distribution is right-skewed by
-    construction — a player can slide forever and cannot rise past 1.01 — so
-    `κ₃ > 0` and the third term claws back part of what the second added.
-    Dropping it over-corrects on precisely the players the second term exists
-    for. Measured on a 108-slot pool at the default curve, `σ = 40` is +69%
-    before the skew term and +41% after it.
-  - **The clamp is the data's, not a tuning constant.** An expectation over an
-    empirical distribution cannot exceed the curve at the earliest pick observed
-    nor fall below it at the latest, so the answer is held inside
-    `[v(max_pick), v(min_pick)]` — both already selected. That is what makes
-    truncating an asymptotic series safe when `λσ` gets large, and it needs no
-    judgement.
-  - **With no spread it is `adpValue` to the rounding**, which the tests assert:
-    that is what says this is a refinement of the curve rather than a different
-    curve. `PlayerAdp` is now literally `AdpBoardStats` and the priced read
-    selects `boardAggregates` — the columns the paged board already selected —
-    so the drawer's preview column and the cards it previews read one
-    distribution rather than two spellings of an average.
-  - **The *other* half of that argument was tried and pulled**, and the reason is
-    worth keeping because the fix looks obvious. `avg(pick_no)` also conditions
-    on being drafted, so a player taken in a tenth of the board's drafts is
-    priced as though he always goes there; the whole expectation would weight it
-    by his take rate. The blocker is the denominator: a take rate is only a fact
-    about a player if every draft in it *could* have taken him, and the rookie
-    class does not exist in Sleeper's player pool before the NFL draft in late
-    April — so every startup held before it sits in the denominator and can never
-    be in the numerator. With `min_picks` at 2 it read as a 10–30× markdown of
-    exactly the players this scale is most often opened for, in a direction
-    nothing on screen would explain. Nothing stored says when a player entered
-    the pool. It wants a `pool_entered` column or a measurement saying the bias
-    is smaller than the error it removes; until then this prices what a player
-    costs *when he is taken*, which is a claim the data supports.
-- **What the steepness slider should default to is a measurement nobody has
-  taken, and `scripts/fit-adp-curve.ts` is the harness for taking it.** Every
-  completed trade is a revealed near-indifference between two bundles, so the
-  curve's one free parameter can be fitted to them rather than guessed: price
-  both hauls on the league's own pool and board, score
-  `|log(ΣA / ΣB)|`, and grid-search the steepness. Four decisions in it, and each
-  is what separates a measurement from a number with a decimal point. The score
-  is a **median of logs**, since trades span three orders of magnitude and a
-  handful are salary dumps. It is reported on a **time-held-out** fifth, because
-  a curve chosen and graded on one sample is graded on its own noise. It runs on
-  **player-for-player trades only** — a pick is priced through the rookie ladder
-  and a KTC ratio, so including one measures those as much as the curve. And the
-  **count-asymmetric trades are broken out**, because they are the only ones that
-  carry information about steepness (a 1-for-1 balances under every curve) *and*
-  the ones the model is most wrong about: a 3-for-1 favours the consolidating
-  side for a reason — roster spots are scarce — that this curve has no term for,
-  so a fit would read part of the price of a roster spot as steepness. That term
-  is what a nonparametric fit would add, and whether one is worth building is
-  what the surface's flatness decides. Nothing in the app reads the script and it
-  writes nothing.
+- **The steepness default is a measurement now, and `scripts/fit-adp-curve.ts`
+  is what took it.** It was 4 — a reasonable-sounding number of halvings — and
+  it is 2.75, because every completed trade is a revealed near-indifference
+  between two hauls and the curve that makes the fewest of them look lopsided is
+  the curve the market is using. Price both hauls on the league's own pool and
+  board, score the median `|log(ΣA / ΣB)|`, grid-search the steepness. Over the
+  14,082 two-sided player-for-player trades of 2026, held out by time, the
+  optimum is **2.70** and the old default scored 16% worse. Four things make that
+  a reading rather than a number off a chart, and each is a way the same exercise
+  could have fooled itself:
+  - **Only the count-asymmetric trades identify it.** A 1-for-1 balances under
+    *every* curve, so the even subset prefers the flattest one on offer and its
+    argmin runs to whatever floor the search has — it went to 0.25 of a halving,
+    which is not a reading, it is the degeneracy. The asymmetric subset has a
+    genuine interior minimum with the loss rising either side. The script reports
+    the two apart for that reason alone.
+  - **The search is wider than the slider.** The first run searched
+    `STEEPNESS_RANGE` and came back with 2.05 against a floor of 2.00, which is
+    indistinguishable from a clamp. What a reader may pick and what the market
+    prefers are different questions; if the answer falls outside the control,
+    that is a finding about the control.
+  - **The one bias we know about points the other way**, so 2.70 is a ceiling.
+    A 3-for-1 favours the consolidating side because roster spots are scarce and
+    nothing in this curve prices one, so an uncorrected fit reads part of the
+    price of a roster spot as steepness.
+  - **It is scored on trades it was not fitted across** — the newest fifth of the
+    season — because a curve chosen and graded on one sample is graded on its own
+    noise. It runs on player-for-player trades only, since a pick is priced
+    through the rookie ladder and a KTC ratio and including one measures those.
+- **`avg(pick_no)` is a poor statistic for a convex curve, and the obvious
+  correction is *not* the fix — this is the negative result, and it is here so it
+  is not rediscovered.** The curve is convex, so by Jensen `E[v(P)] > v(E[P])`
+  and reading it at the mean undervalues a player the board is split about. That
+  argument is correct and the correction built on it was shipped and reverted
+  within the day. It is a cumulant series in `λσ`, exact for a Gaussian and
+  useful while `λσ` is well under 1 — and the **dynasty board's median `λσ` is
+  3.32**, where the series does not converge at all. Measured on the real board
+  it moved the median player **2.25×** and the 95th percentile **558×**, and the
+  `min_pick` clamp that was supposed to make truncation safe was the only thing
+  standing between it and absurdity: a bench player taken at pick 1 in one odd
+  draft priced near the peak. The trade fit above confirmed it independently,
+  preferring the plain mean (0.265 against 0.280).
+  The diagnosis is the part worth keeping. A dynasty board whose drafts put one
+  player a hundred picks apart is not describing a polarising player; it is
+  saying **it does not know where he goes**, and that should cost confidence
+  rather than earn convexity value. Whatever replaces the mean — a trimmed
+  average, a median, a shrink toward replacement level weighted by the sample —
+  wants to move in that direction, and wants running through `fit-adp-curve.ts`
+  before it ships. The redraft board is nowhere near this problem (median `λσ`
+  0.41), which is exactly why a change that looked fine in the small can be
+  wrong for most of the app: the value column mostly runs on dynasty leagues.
 
 - **ADP is ordinal, so it cannot be summed — `adp-value` makes it cardinal
   first.** A draft position is a rank where lower is better, so adding raw ADPs

@@ -13,12 +13,29 @@
  * the app reads it and nothing is written to the database. Run it against a
  * database with a season of crawled trades:
  *
- *     DATABASE_URL=... npx tsx scripts/fit-adp-curve.ts [season] [--point]
+ *     DATABASE_URL=... npx tsx scripts/fit-adp-curve.ts [season]
  *
- * `--point` prices on the mean instead of the expectation, which is how to ask
- * the second question this can answer: whether the spread correction lowers the
- * median imbalance at a fixed curve. Run it both ways and compare the row at the
- * default.
+ * ## What it found, the first time it was run
+ *
+ * Over 14,082 two-sided player-for-player trades of the 2026 season (11.6% of
+ * the 123,547 complete trades crawled), the surface is emphatically **not**
+ * flat, and the count-asymmetric subset has a clean interior minimum at
+ * **2.70** — against a default of 4, which is 16% worse by this measure. That
+ * is where `DEFAULT_STEEPNESS` now sits, rounded to the slider's own notch. The
+ * even subset behaved exactly as the note below predicts, running to whatever
+ * floor the search had, which is why the two are reported apart.
+ *
+ * It also settled a change that had been made on the strength of the maths
+ * alone, and settled it against: pricing a player as the *expectation* of the
+ * curve over his pick distribution rather than at his mean pick scored **worse**
+ * here (0.280 against 0.265 at each one's own optimum). The reason turned out to
+ * be that the correction is a cumulant series in `λσ` and needs `λσ` well under
+ * 1, while the dynasty board's median is **3.32** — a board whose drafts put the
+ * same player 100 picks apart is not describing a polarising player, it is
+ * saying it does not know where he goes, and treating that as convexity value
+ * inflated the median player 2.25× and the 95th percentile 558×. The mean is
+ * still a poor statistic for a convex curve; that correction is not the fix, and
+ * anything that replaces it should be measured here before it ships.
  *
  * Read the output before building anything on it. Three outcomes and they mean
  * different things:
@@ -80,11 +97,10 @@ import {
   adpBoardFor,
   adpValue,
   boardSignature,
-  expectedAdpValue,
   getDraftAdpForPlayers,
   leagueAdpPool,
 } from "@/shared/manager";
-import type { AdpBoardStats } from "@/shared/manager";
+import type { PlayerAdp } from "@/shared/manager";
 import { assembleTrade } from "@/shared/trades";
 import type { Trade } from "@/shared/trades";
 
@@ -92,12 +108,21 @@ import type { Trade } from "@/shared/trades";
 const NO_OWNERS = new Map<number, string>();
 
 const season = process.argv[2] ?? String(new Date().getFullYear());
-/** Price on the mean rather than the expectation, to isolate one change. */
-const POINT_ESTIMATE = process.argv.includes("--point");
 
-/** The curve is scored at every notch the slider can actually stop on. */
+/**
+ * The grid the curve is scored on, and it is deliberately **wider than
+ * `STEEPNESS_RANGE`**.
+ *
+ * That range is what the slider offers a reader; this is what the market is
+ * asked to prefer, and they are different questions. Searching the slider's own
+ * bounds is how a fit comes back sitting exactly on one of them with no way to
+ * tell a real optimum from a clamp — which is what the first run of this did,
+ * reporting a best of 2.05 against a floor of 2.00. If the answer is outside
+ * what the slider can express, that is a finding about the slider.
+ */
+const SEARCH = { min: 0.25, max: 10 };
 const CANDIDATES: number[] = [];
-for (let h = STEEPNESS_RANGE.min; h <= STEEPNESS_RANGE.max; h += 0.05) {
+for (let h = SEARCH.min; h <= SEARCH.max + 1e-9; h += 0.05) {
   CANDIDATES.push(Math.round(h * 100) / 100);
 }
 
@@ -157,7 +182,7 @@ function usable(trade: Trade): boolean {
 
 type Priced = {
   /** Each side's player ADP rows, in the league's own market. */
-  sides: AdpBoardStats[][];
+  sides: PlayerAdp[][];
   pool: number;
   /** |A| − |B|: what carries the information about steepness. */
   countGap: number;
@@ -220,11 +245,11 @@ async function main() {
   }
   console.log(`${boards.size} distinct boards to read`);
 
-  const priceMaps = new Map<string, Map<string, AdpBoardStats | null>>();
+  const priceMaps = new Map<string, Map<string, PlayerAdp | null>>();
   for (const [key, entry] of boards) {
     const result = await getDraftAdpForPlayers(entry.filters, [...entry.ids]);
     const board = entry.dynasty ? "dynasty" : "redraft";
-    const map = new Map<string, AdpBoardStats | null>();
+    const map = new Map<string, PlayerAdp | null>();
     for (const [id, sides] of result.values) map.set(id, sides[board]);
     priceMaps.set(key, map);
   }
@@ -246,7 +271,7 @@ async function main() {
       continue;
     }
     priced.push({
-      sides: sides as AdpBoardStats[][],
+      sides: sides as PlayerAdp[][],
       pool: leagueAdpPool(row.total_rosters || 12, row.roster_positions),
       countGap: sides[0]!.length - sides[1]!.length,
     });
@@ -265,13 +290,11 @@ async function main() {
   const fit = priced.slice(cut);
 
   const residual = (t: Priced, halvings: number): number => {
-    const total = (side: AdpBoardStats[]) =>
+    const total = (side: PlayerAdp[]) =>
       side.reduce(
         (sum, stats) =>
           sum +
-          (POINT_ESTIMATE
-            ? adpValue(stats.adp, t.pool, halvings)
-            : expectedAdpValue(stats, t.pool, halvings)),
+          adpValue(stats.adp, t.pool, halvings),
         0,
       );
     const a = total(t.sides[0]!);
@@ -299,11 +322,6 @@ async function main() {
     `fit on ${fit.length}, scored on ${holdout.length} held-out ` +
       `(${asymmetric.length} count-asymmetric, ${symmetric.length} even)`,
   );
-  console.log(
-    POINT_ESTIMATE
-      ? "priced on the mean (--point)\n"
-      : "priced on the expectation over each player's pick distribution\n",
-  );
 
   console.log("halvings   holdout   asymmetric      even");
   let best = { halvings: Number.NaN, score: Number.POSITIVE_INFINITY };
@@ -313,7 +331,7 @@ async function main() {
     // Every fifth notch, plus the current default, so the table stays readable
     // while the search itself runs at full resolution.
     const shown =
-      Math.abs(halvings * 100 - Math.round(halvings * 4) * 25) < 1 ||
+      Math.abs(halvings * 100 - Math.round(halvings * 2) * 50) < 1 ||
       Math.abs(halvings - DEFAULT_STEEPNESS) < 1e-9;
     if (!shown) continue;
     const mark = Math.abs(halvings - DEFAULT_STEEPNESS) < 1e-9 ? " ←default" : "";
@@ -323,6 +341,27 @@ async function main() {
         `${score(symmetric, halvings).toFixed(4).padStart(8)}${mark}`,
     );
   }
+
+  const bestOf = (set: Priced[]) =>
+    CANDIDATES.reduce(
+      (best, h) => {
+        const value = score(set, h);
+        return value < best.score ? { halvings: h, score: value } : best;
+      },
+      { halvings: Number.NaN, score: Number.POSITIVE_INFINITY },
+    );
+  const bestAsym = bestOf(asymmetric);
+  const bestEven = bestOf(symmetric);
+  console.log(
+    `\nargmin — asymmetric ${bestAsym.halvings.toFixed(2)} ` +
+      `(${bestAsym.score.toFixed(4)}), even ${bestEven.halvings.toFixed(2)} ` +
+      `(${bestEven.score.toFixed(4)})`,
+  );
+  console.log(
+    "the asymmetric one is the identifying subset; an even trade balances " +
+      "under every curve, so its argmin running to the floor is the degeneracy " +
+      "and not a reading.",
+  );
 
   const atDefault = score(holdout, DEFAULT_STEEPNESS);
   const gain = ((atDefault - best.score) / atDefault) * 100;
@@ -339,7 +378,8 @@ async function main() {
   const spread = ((worst - best.score) / best.score) * 100;
   console.log(
     `surface spans ${spread.toFixed(1)}% from best to worst across ` +
-      `${STEEPNESS_RANGE.min}–${STEEPNESS_RANGE.max}` +
+      `${SEARCH.min}–${SEARCH.max} (slider offers ` +
+      `${STEEPNESS_RANGE.min}–${STEEPNESS_RANGE.max})` +
       (spread < 5
         ? " — flat. Trades do not identify the steepness at this sample."
         : ""),

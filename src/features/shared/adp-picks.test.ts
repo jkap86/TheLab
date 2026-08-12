@@ -44,7 +44,6 @@ const stats = (adp: number) => ({
   min_pick: 1,
   max_pick: 40,
   stdev: 2,
-  m3: 0,
 });
 
 const player = (

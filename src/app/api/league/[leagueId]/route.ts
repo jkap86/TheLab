@@ -15,7 +15,7 @@ import type { KtcValueSet } from "@/shared/ktc";
 import {
   ADP_VALUE_PARAMS,
   adpBoardFor,
-  expectedAdpValue,
+  adpValue,
   getDraftAdpForPlayers,
   getLeagueAdpBoards,
   getLeagueDetail,
@@ -128,7 +128,7 @@ async function priceRosters(args: {
   for (const [id, boards] of adpResult.values) {
     const entry = boards[boardType];
     if (!entry) continue;
-    adp[id] = expectedAdpValue(entry, pool, halvings);
+    adp[id] = adpValue(entry.adp, pool, halvings);
     adp_position[id] = entry.adp;
   }
 

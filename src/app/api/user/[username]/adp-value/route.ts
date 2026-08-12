@@ -6,8 +6,8 @@ import { isSuperflexLineup } from "@/shared/ktc";
 import {
   ADP_VALUE_PARAMS,
   adpBoardFor,
+  adpValue,
   boardSignature,
-  expectedAdpValue,
   getDraftAdpForPlayers,
   getLeagueAdpBoards,
   getManagerLeagueRosters,
@@ -229,9 +229,7 @@ async function adpValuePayload(
       const values = new Map<string, number>();
       for (const [id, boardAdp] of board.values) {
         const entry = boardAdp[boardType];
-        if (entry) {
-          values.set(id, expectedAdpValue(entry, pool, halvings));
-        }
+        if (entry) values.set(id, adpValue(entry.adp, pool, halvings));
       }
 
       // Every team's starter value, so the manager's can be ranked against them;
