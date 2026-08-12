@@ -1143,11 +1143,16 @@ and `compareLineup` takes that set — holding those slots as they stand *and*
 keeping those players out of the pool for every other slot, since either half
 alone still produces an impossible move. What is left is the best lineup
 reachable *from here*, which is the only version of "points left" a manager can
-act on. Two limits worth knowing: it is day-accurate rather than kickoff-accurate
-(a finished 1pm game stays movable until midnight ET — locking at kickoff needs
-the schedule's `start_time`, a read this does not make), and an empty lock set is
-asserted to be exactly the unlocked answer, so the three horizon callers are
-unaffected by construction.
+act on. Two limits worth knowing, one of them since closed: the lock is
+kickoff-accurate now, but only as far as the schedule answers — `lockedPlayers`
+(`projections/locks`, pure and tested) folds the week's `start_time`s (the
+kickoff ordering's own read) over the day-accurate `game_date` flag, locking at
+the minute and **only ever earlier**, so a schedule that can't be read degrades
+to the old midnight-ET fallback rather than unlocking a played game, and a
+postponed game stays settled once its original date passes (trusting a future
+`start_time` to *unlock* would let one stale schedule row recommend a move on a
+game already played). And an empty lock set is asserted to be exactly the
+unlocked answer, so the three horizon callers are unaffected by construction.
 
 Test the property the code rests on, not just its outputs. The rest-of-season
 totals are only correct because scoring is linear, so `aggregate.test` asserts

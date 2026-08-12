@@ -133,11 +133,13 @@ export type LineupWeekStats = PlayerWeekStats & {
    * neither he nor it can be part of a lineup decision any more.
    *
    * **Day-accurate, because a day is all `game_date` holds.** Sleeper sends a
-   * bare date and the column is a `DATE`, so a player whose 1pm game finished
-   * hours ago still reads as unlocked until the date rolls over in ET. Locking
-   * at kickoff would need the schedule's own `start_time`, which is a different
-   * read; what this gets right is the case that actually bites — a Thursday
-   * starter, still sitting in his slot on Sunday morning.
+   * bare date and the column is a `DATE`, so on its own a 1pm game reads as
+   * unlocked until the date rolls over in ET. It is the *fallback* rather than
+   * the whole answer now: `getWeekLineups` folds the schedule's own
+   * `start_time`s over it (`lockedPlayers` in `./locks`), locking at the
+   * minute wherever the schedule names one — and only ever earlier, so a
+   * schedule that can't be read degrades to this flag rather than unlocking a
+   * played game.
    */
   locked: boolean;
 };

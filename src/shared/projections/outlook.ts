@@ -6,6 +6,7 @@ import type { PlayerWeekStats } from "./aggregate";
 import { isProjectable, lineupCandidates, rosterPlayerIds } from "./candidates";
 import { orderLineupByKickoff } from "./kickoff-order";
 import type { KickoffPlayer, KickoffSeat } from "./kickoff-order";
+import { lockedPlayers } from "./locks";
 import { compareLineup, optimalLineup, recognisedSlots } from "./optimal";
 import type { LineupComparison, LineupSlot } from "./optimal";
 import {
@@ -526,8 +527,12 @@ export type WeekLineups = {
  * swap Sleeper will refuse. {@link listLineupWeekStats} keeps those rows and
  * marks them, and {@link compareLineup} holds their slots — so what comes back
  * is the best lineup reachable *from here*, and `points_left` is points a
- * manager can still go and get. It is day-accurate, since `game_date` is a date:
- * a finished early game stays movable until the date rolls over in ET.
+ * manager can still go and get. The lock is kickoff-accurate wherever the
+ * schedule names an instant: {@link lockedPlayers} folds the week's
+ * `start_time`s — the same read the kickoff ordering below makes — over the
+ * day-accurate `game_date` flag, and the fold only ever locks *earlier*, so a
+ * schedule that can't be read degrades to the midnight-ET fallback rather
+ * than unlocking a played game.
  *
  * **A best-ball league is answered as a league with nothing to decide**, which is
  * the one league where `starters` is not the lineup: Sleeper seats the best one
@@ -572,17 +577,32 @@ export async function getWeekLineups({
   // looks like a working one.
   if (stats.length === 0) return { week, teams: new Map() };
 
-  // One set for the account: whether a game has been played is a fact about the
-  // schedule, so it is the same answer in every league the player is rostered in.
-  const locked = new Set(
+  // Kickoff instants for the lock and the re-seat below, read once for the
+  // account like the positions above: when a player's game kicks off is a fact
+  // about the schedule, not about any league. Judged per read — a failure
+  // costs the ordering (null) and the lock's minute-accuracy (the day fallback
+  // stands), never the lineups.
+  const kickoffs = await kickoffInputs(season, week, playerIds);
+
+  // One set for the account: whether a game has been played is a fact about
+  // the schedule, so it is the same answer in every league the player is
+  // rostered in. Kickoff-accurate where the instants answer, the day-accurate
+  // `game_date` flag where they don't — and the fold only ever locks earlier,
+  // so a schedule that can't be read degrades to the old behaviour rather
+  // than unlocking a played game. The rule lives in `./locks`; `now` is one
+  // reading per request, so every league judges the same instant.
+  const dayLocked = new Set(
     stats.filter((row) => row.locked).map((row) => row.player_id),
   );
-
-  // Kickoff instants for the re-seat below, read once for the account like the
-  // positions above: when a player's game kicks off is a fact about the
-  // schedule, not about any league. Judged per read — the ordering is a column
-  // on top of the lineups, so a failure costs it and nothing else.
-  const kickoffs = await kickoffInputs(season, week, playerIds);
+  const locked = kickoffs
+    ? lockedPlayers({
+        playerIds,
+        dayLocked,
+        teams: kickoffs.teams,
+        kickoffs: kickoffs.byTeam,
+        now: Date.now(),
+      })
+    : dayLocked;
 
   const rowsByPlayer = bucketByPlayer(stats);
 
