@@ -339,6 +339,42 @@ test("per-asset values", async (t) => {
     assert.match(cell!.title, /picks 30–80 over 44 drafts/);
   });
 
+  /**
+   * The track ranks its lines on this, and it has to be the number rather than
+   * the string it prints: `"1,250"` sorts above `"625"` as text, which is a card
+   * that looks ranked and isn't. Null exactly where the text is, so a line the
+   * board has nothing to say about claims no place in the ranking.
+   */
+  await t.test("a cell carries the number behind its text", () => {
+    const priced = read("adp", ctx({ players: ["qb"] }), {
+      kind: "player",
+      id: "qb",
+    });
+    assert.equal(priced?.text, "5,000");
+    assert.equal(priced?.value, 5000);
+
+    const off = read("adp", ctx({ players: ["unpriced"] }), {
+      kind: "player",
+      id: "unpriced",
+    });
+    assert.equal(off?.value, null);
+
+    const moved = pick("2027", 1);
+    const early = read("ktc", ctx({ picks: [moved] }, true, 3), {
+      kind: "pick",
+      pick: moved,
+    });
+    assert.equal(early?.text, "6,000");
+    assert.equal(early?.value, 6000);
+
+    const gone = pick("2024", 1);
+    const unreachable = read("ktc", ctx({ picks: [gone] }), {
+      kind: "pick",
+      pick: gone,
+    });
+    assert.equal(unreachable?.value, null);
+  });
+
   await t.test("a player off the board is a cell with no number", () => {
     const cell = read("adp", ctx({ players: ["unpriced"] }), {
       kind: "player",

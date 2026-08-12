@@ -2684,6 +2684,28 @@ stops holding, a comment saying it does would not have caught it.
     or a pick from a draft KTC no longer carries — is a genuine gap and gets the
     em dash. Only `ktc` has a per-asset form; a count of players is 1 on every
     line, which is a column of ones.
+  - **A track lists its players, then its picks, then FAAB — and ranks each of
+    those blocks by that same per-asset number, descending** (`bundleAssets`
+    for the blocks, `trackLines` for the order inside one). The stored order is
+    nothing to rank on: Sleeper's `adds` is a map from player to roster, so what
+    arrives is whatever it iterated, which put a first-round pick under two
+    throw-ins and the best of three players last on a card a reader is scanning
+    rather than reading. Ranked, the top line of each block is the answer to what
+    this side actually got. Four things hold it up. **The two halves of the
+    ordering are one decision each** — the blocks come back out of `trackLines`
+    in the order `bundleAssets` laid them down (a `Map` keyed by kind, iterated
+    in insertion order), so players-before-picks is never a rank table here
+    agreeing with a construction order there. **The ranking follows the column**,
+    since the number it reads is the one drawn beside the name — re-aiming the
+    value column re-orders the lines, and a metric with no per-asset form
+    (the three counts) ranks nothing and leaves the stored order. **An unpriced
+    line sinks to the bottom of its own block and never out of it**: a kicker no
+    board prices is still a player this side received, and equal values keep the
+    order they arrived in, which is the sort being stable rather than an accident.
+    And **`TradeAssetCell.value` is required, beside the `text` it prints**,
+    because the ordering has to read a number — `"1,250"` sorts above `"625"` as
+    text, which is a card that looks ranked and isn't — and because a metric
+    added later would otherwise quietly rank every one of its lines as unpriced.
   - **A pick is named the way Sleeper names it: its slot where the order is set,
     its round where it isn't, and its origin only when that is a surprise**
     (`features/trades/pick-display`, and `pickLabel` in

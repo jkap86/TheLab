@@ -215,8 +215,22 @@ export type TradeAsset =
  * cell with a null `text` means the metric *does* cover it and has no number: an
  * unpriced player, or a pick from a draft KTC no longer carries, which is a
  * genuine gap and reads as an em dash.
+ *
+ * **`value` is the number `text` prints, and it is what ranks the lines.** A
+ * track lists its players and its picks in the order the column beside them
+ * says they are worth (see `trackLines`), so the ordering has to read a number
+ * rather than the string: `"1,250"` sorts *under* `"625"` as text, which is a
+ * card that looks sorted and isn't. It is required rather than optional, so a
+ * metric added later cannot quietly rank every one of its lines as unpriced,
+ * and it is null exactly where `text` is — a line the board has no number for
+ * has no place to claim in the ranking either.
  */
-export type TradeAssetCell = { text: string | null; title: string };
+export type TradeAssetCell = {
+  text: string | null;
+  /** See above: the number behind `text`, and what the track is ordered on. */
+  value: number | null;
+  title: string;
+};
 
 export type TradeMetric = Metric<TradeSideContext> & {
   /** See {@link TradeAssetCell}; absent where the metric has no per-asset form. */
@@ -228,6 +242,13 @@ export type TradeMetric = Metric<TradeSideContext> & {
  *
  * One ordering in one place, so the value column beside the names cannot fall
  * out of step with them and so both are read off the same list.
+ *
+ * **What it fixes is the blocks, not what is inside them.** Which player leads a
+ * haul is a fact about the column the card is showing — the block is ranked by
+ * what that column says each line is worth — and there is no metric here to ask.
+ * So `trackLines` orders within a block, and it reads the blocks *off this
+ * list* rather than restating them; changing the order here moves the card
+ * without a second edit anywhere.
  */
 export function bundleAssets(bundle: TradeBundle): TradeAsset[] {
   const assets: TradeAsset[] = bundle.players.map((id) => ({
@@ -495,10 +516,16 @@ export const TRADE_METRICS: TradeMetric[] = [
       if (asset.kind === "player") {
         const stats = adpStats(ctx, asset.id);
         if (stats === null) {
-          return { text: null, title: `Not on the ${market} ADP board` };
+          return {
+            text: null,
+            value: null,
+            title: `Not on the ${market} ADP board`,
+          };
         }
+        const value = adpValue(stats.adp, ctx.adpPool, ctx.steepness);
         return {
-          text: adpValue(stats.adp, ctx.adpPool, ctx.steepness).toLocaleString(),
+          text: value.toLocaleString(),
+          value,
           title: adpSampleTitle(stats, ctx.adpBoard),
         };
       }
@@ -510,10 +537,15 @@ export const TRADE_METRICS: TradeMetric[] = [
           // facts about the board the panel is showing, which widening it fixes,
           // and one is a fact about how far out the pick is, which no filter
           // will move.
-          return { text: null, title: ADP_PICK_MISS[match.reason](market) };
+          return {
+            text: null,
+            value: null,
+            title: ADP_PICK_MISS[match.reason](market),
+          };
         }
         return {
           text: match.value.toLocaleString(),
+          value: match.value,
           title: adpPickTitle(match, ctx.adpBoard, asset.pick.round),
         };
       }
@@ -587,6 +619,7 @@ export const TRADE_METRICS: TradeMetric[] = [
         const value = ktcBoardValue(superflex, ktc[asset.id]);
         return {
           text: value === null ? null : value.toLocaleString(),
+          value,
           title:
             value === null
               ? `Not priced on the ${boardName(superflex)}`
@@ -600,11 +633,13 @@ export const TRADE_METRICS: TradeMetric[] = [
         if (!match || value === null) {
           return {
             text: null,
+            value: null,
             title: `Not priced on the ${boardName(superflex)}`,
           };
         }
         return {
           text: value.toLocaleString(),
+          value,
           // The row is named rather than the pick, because it is the row that
           // was priced: a reader who sees "2027 Mid 1st" against a pick whose
           // draft has no order yet can tell the number is the middle of the

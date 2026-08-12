@@ -605,6 +605,91 @@ describe("what the ADP column says", () => {
   });
 });
 
+describe("what order a track lists a haul in", () => {
+  /**
+   * The same trade stored back to front: the unpriced kicker above the priced
+   * back, and the pick no board can reach above the one that is placed. That is
+   * how a haul genuinely arrives — Sleeper's `adds` is a map from player to
+   * roster, so its order says nothing about the trade — which is why what a
+   * reader sees has to be the ranking rather than the storage.
+   */
+  const scrambled: Trade = {
+    ...twoSided,
+    sides: [
+      {
+        roster_id: 1,
+        user_id: "u1",
+        players: ["p3", "p1"],
+        picks: [
+          { season: "2028", round: 2, roster_id: 9, user_id: "u3" },
+          { season: "2027", round: 1, roster_id: 2, user_id: "u2" },
+        ],
+        faab: 55,
+      },
+      twoSided.sides[1],
+    ],
+  };
+
+  /** Where a line is drawn, so the assertions read as the order on the card. */
+  const order = (html: string, ...needles: string[]) =>
+    needles.map((needle) => {
+      const at = html.indexOf(needle);
+      assert.notEqual(at, -1, needle);
+      return at;
+    });
+
+  test("players lead, ranked, and the picks follow doing the same", () => {
+    const [mccaffrey, tucker, first, second] = order(
+      card({ trade: scrambled }),
+      "Christian McCaffrey",
+      "Justin Tucker",
+      "2027 1.03",
+      "2028 2nd",
+    );
+    // Priced above unpriced inside the players block, players above picks, and
+    // the placed first above the pick KTC has no row for.
+    assert.ok(mccaffrey < tucker);
+    assert.ok(tucker < first);
+    assert.ok(first < second);
+  });
+
+  test("the ranking follows the column, not the storage", () => {
+    // The same haul under ADP, where the kicker is off the board and the 2028
+    // second is past the class the ladder priced — so both sink in their own
+    // block rather than out of it.
+    const [mccaffrey, tucker, first, second] = order(
+      card({ trade: scrambled, metric: adpMetric }),
+      "Christian McCaffrey",
+      "Justin Tucker",
+      "2027 1.03",
+      "2028 2nd",
+    );
+    assert.ok(mccaffrey < tucker);
+    assert.ok(tucker < first);
+    assert.ok(first < second);
+  });
+
+  test("FAAB stays last, whatever the column says about the rest", () => {
+    for (const metric of TRADE_METRICS) {
+      const html = card({ trade: scrambled, metric });
+      const [faab, ...assets] = order(
+        html,
+        // The line, not the FAAB column's own hover — which spells the same
+        // words a few elements above it, on the side total.
+        "$55 FAAB<",
+        "Christian McCaffrey",
+        "Justin Tucker",
+        "2027 1.03",
+        "2028 2nd",
+      );
+      assert.ok(
+        assets.every((at) => at < faab),
+        metric.key,
+      );
+    }
+  });
+});
+
 describe("how the sides are laid out", () => {
   test("two sides share the row from `sm` up, with no gap between them", () => {
     // No gap: the sides are regions of one face, so what parts them is a cut

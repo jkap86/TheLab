@@ -182,7 +182,24 @@ export type TradeLine = {
 };
 
 /**
- * A haul as the lines a track draws for it.
+ * A haul as the lines a track draws for it, in the order it draws them.
+ *
+ * **The ordering is two halves and only one of them is decided here.** Which
+ * blocks a haul falls into — players, then picks, then FAAB — is
+ * {@link bundleAssets}, and this reads that answer off the list it returns
+ * rather than restating it. What is decided here is the order *within* a block:
+ * descending by what the column beside the names says each line is worth. The
+ * stored order carries no meaning to rank on — Sleeper's `adds` is a map from
+ * player to roster, so what arrives is whatever it iterated — which left a
+ * first-round pick sitting under two throw-ins and the best of three players
+ * listed last, on a card a reader is scanning rather than reading. Ranked, the
+ * top line of each block is the answer to what this side actually got.
+ *
+ * **An unpriced line sinks to the bottom of its own block and never out of it.**
+ * A kicker the board has no number for is still a player this side received, so
+ * filing him under the picks would be answering a different question; and equal
+ * values keep the order they arrived in, which is `Array.prototype.sort` being
+ * stable — worth stating rather than relying on silently.
  *
  * **Per-asset values are drawn only where there is more than one line to break
  * down**, and each track answers that question for itself. A side that took a
@@ -192,7 +209,9 @@ export type TradeLine = {
  * column appears exactly when it says something the total doesn't. Counted over
  * the lines the metric actually **covers** rather than over the assets, since a
  * player-and-a-pick haul is one priced line as far as KTC is concerned and a
- * FAAB line is not a line KTC has an opinion on at all.
+ * FAAB line is not a line KTC has an opinion on at all. That rule is about the
+ * *column* and not about the order, which is why the ranking runs with the cells
+ * still attached and they are blanked afterwards.
  *
  * The metric reads this track's own haul, so a give line is priced against the
  * bundle it belongs to rather than against the side's take — which is what
@@ -209,9 +228,51 @@ export function trackLines(
   const cells = read ? assets.map((asset) => read(trackContext, asset)) : [];
   const show = cells.filter((cell) => cell !== null).length > 1;
 
-  return assets.map((asset, i) => ({
-    asset,
-    key: assetKey(asset, i),
-    cell: show ? (cells[i] ?? null) : null,
-  }));
+  const ordered = rankTrack(
+    assets.map((asset, i) => ({
+      asset,
+      // Keyed on where the asset arrived rather than on where it lands, so a
+      // key stays with its own line when the reader changes the column and the
+      // ranking moves underneath it.
+      key: assetKey(asset, i),
+      cell: cells[i] ?? null,
+    })),
+  );
+  return show ? ordered : ordered.map((line) => ({ ...line, cell: null }));
+}
+
+/**
+ * One track's lines with each block ranked by value — see {@link trackLines} for
+ * why the blocks themselves are not this function's to choose.
+ */
+function rankTrack(lines: TradeLine[]): TradeLine[] {
+  const blocks = new Map<TradeAsset["kind"], TradeLine[]>();
+  for (const line of lines) {
+    const block = blocks.get(line.asset.kind);
+    if (block) block.push(line);
+    else blocks.set(line.asset.kind, [line]);
+  }
+  // A `Map` iterates in insertion order, so the blocks come back out in the
+  // order `bundleAssets` laid them down. That is what keeps players-before-picks
+  // one decision in one place rather than a rank table here agreeing with a
+  // construction order there.
+  return [...blocks.values()].flatMap((block) => block.sort(byValueDesc));
+}
+
+/**
+ * Descending by value, with every unpriced line below every priced one.
+ *
+ * Written out rather than as `b - a` because an absent value is not a number:
+ * arithmetic on it would have to stand in a zero, which is a claim about the
+ * line ("worth nothing") where the honest one is that this board has no opinion.
+ * So the nulls are ordered against the *presence* of a value, and two of them
+ * tie — which the stable sort turns back into the order they arrived in.
+ */
+function byValueDesc(a: TradeLine, b: TradeLine): number {
+  const left = a.cell?.value ?? null;
+  const right = b.cell?.value ?? null;
+  if (left === right) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return right - left;
 }

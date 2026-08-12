@@ -34,8 +34,9 @@ import { pickOwnerLabel, trackLines } from "./trade-card.utils.ts";
  * element, so the give track cannot end up a step brighter than the take track
  * it must never outrank.
  *
- * Which lines carry a value, and how they are keyed, is {@link trackLines} —
- * pure, and tested where a loop in a component would not be.
+ * What order the lines are in, which of them carry a value, and how they are
+ * keyed, is all {@link trackLines} — pure, and tested where a loop in a
+ * component would not be.
  */
 export function AssetTrack({
   bundle,

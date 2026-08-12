@@ -74,18 +74,66 @@ const counting: TradeMetric = {
   group: "Test",
   label: "Test",
   cell: () => ({ kind: "value", text: "total", title: "the total" }),
-  asset: (_ctx, asset) => ({ text: asset.kind, title: asset.kind }),
+  asset: (_ctx, asset) => ({ text: asset.kind, value: null, title: asset.kind }),
 };
 
 /** One that covers players only — the "not covered" half of the two nulls. */
 const playersOnly: TradeMetric = {
   ...counting,
   asset: (_ctx, asset) =>
-    asset.kind === "player" ? { text: asset.id, title: asset.id } : null,
+    asset.kind === "player"
+      ? { text: asset.id, value: null, title: asset.id }
+      : null,
 };
 
 /** And one with no per-asset form at all, like every count in the catalogue. */
 const totalOnly: TradeMetric = { ...counting, asset: undefined };
+
+/**
+ * What each player is worth to the metric below — `unpriced` being the line a
+ * board has no number for, which is a different answer from a low one.
+ */
+const VALUES: Record<string, number | null> = {
+  p1: 10,
+  p2: 30,
+  p3: 20,
+  tie1: 15,
+  tie2: 15,
+  unpriced: null,
+};
+
+/**
+ * A metric with a number on every line it covers, so the *ranking* is what is
+ * on trial rather than the show/hide rule. A pick is worth more the earlier its
+ * round — arbitrary arithmetic, but arithmetic that agrees with the way a
+ * reader would read the list, so an expectation below can be checked rather
+ * than traced.
+ */
+const valued: TradeMetric = {
+  ...counting,
+  asset: (_ctx, asset) => {
+    if (asset.kind === "player") {
+      const value = VALUES[asset.id] ?? null;
+      return {
+        text: value === null ? null : String(value),
+        value,
+        title: asset.id,
+      };
+    }
+    if (asset.kind === "pick") {
+      const value = 40 - asset.pick.round * 10;
+      return { text: String(value), value, title: `round ${asset.pick.round}` };
+    }
+    return null;
+  },
+};
+
+/** What a line is, in one word: the player, the pick's round, or the kind. */
+const label = (line: { asset: TradeAsset }): string => {
+  if (line.asset.kind === "player") return line.asset.id;
+  if (line.asset.kind === "pick") return `round ${line.asset.pick.round}`;
+  return line.asset.kind;
+};
 
 describe("formatTradeDate", () => {
   test("spells the month out rather than leaving it to a locale", () => {
@@ -325,6 +373,79 @@ describe("trackLines", () => {
     assert.ok(lines.every((l) => l.cell === null));
   });
 
+  test("each block is ranked by what the column beside it is worth", () => {
+    // Stored back to front — which is how a haul arrives, since `adds` is a map
+    // and its iteration order says nothing about the trade.
+    const lines = trackLines(
+      valued,
+      context(),
+      bundle({
+        players: ["p1", "p2", "p3"],
+        picks: [pick({ round: 3 }), pick({ round: 1 }), pick({ round: 2 })],
+        faab: 20,
+      }),
+    );
+    assert.deepEqual(lines.map(label), [
+      "p2",
+      "p3",
+      "p1",
+      "round 1",
+      "round 2",
+      "round 3",
+      "faab",
+    ]);
+  });
+
+  test("an unpriced line sinks in its own block, never out of it", () => {
+    // A kicker the board has no number for is still a player this side
+    // received, so he sorts below the priced players and above the picks.
+    const lines = trackLines(
+      valued,
+      context(),
+      bundle({ players: ["unpriced", "p1", "p2"], picks: [pick()] }),
+    );
+    assert.deepEqual(lines.map(label), ["p2", "p1", "unpriced", "round 1"]);
+  });
+
+  test("lines of equal value keep the order they arrived in", () => {
+    const stored = bundle({ players: ["tie1", "tie2", "p2"] });
+    assert.deepEqual(trackLines(valued, context(), stored).map(label), [
+      "p2",
+      "tie1",
+      "tie2",
+    ]);
+    // Reversed in, reversed out: the sort is stable, so a tie is not an excuse
+    // to shuffle two lines a reader has no way to tell apart.
+    const swapped = bundle({ players: ["tie2", "tie1", "p2"] });
+    assert.deepEqual(trackLines(valued, context(), swapped).map(label), [
+      "p2",
+      "tie2",
+      "tie1",
+    ]);
+  });
+
+  test("a metric with no per-asset form ranks nothing", () => {
+    // There is no number to rank on, so the stored order is what is left — and
+    // the blocks still hold, since those are `bundleAssets`' answer.
+    const lines = trackLines(
+      totalOnly,
+      context(),
+      bundle({ players: ["p1", "p2"], picks: [pick({ round: 3 })] }),
+    );
+    assert.deepEqual(lines.map(label), ["p1", "p2", "round 3"]);
+  });
+
+  test("a key stays with its own line when the ranking moves it", () => {
+    const stored = bundle({ players: ["p1", "p2"] });
+    const [first, second] = trackLines(valued, context(), stored);
+    // p2 outranks p1 and is drawn first, still carrying the key of the line it
+    // arrived as — so re-aiming the column re-orders the rows rather than
+    // handing one row's key to another asset.
+    assert.equal(label(first), "p2");
+    assert.equal(first.key, assetKey({ kind: "player", id: "p2" }, 1));
+    assert.equal(second.key, assetKey({ kind: "player", id: "p1" }, 0));
+  });
+
   test("a line is priced against its own track's haul, not the side's take", () => {
     // The give track passes the side's context and its *own* bundle; a metric
     // reading `received` must see the bundle it was handed, or every give line
@@ -334,7 +455,7 @@ describe("trackLines", () => {
       ...counting,
       asset: (ctx, asset) => {
         seen.push(ctx.received);
-        return { text: asset.kind, title: "" };
+        return { text: asset.kind, value: null, title: "" };
       },
     };
     const take = bundle({ players: ["p1"] });
