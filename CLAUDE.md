@@ -2240,8 +2240,14 @@ stops holding, a comment saying it does would not have caught it.
     punctuation between them would be a third thing saying what the layout
     already says.
   - **What kind of league it was has that line to itself, as one bezel of
-    gauges** (`features/trades/league-specs.ts`, pure and tested; `.lab-bezel`
-    and `.lab-gauge` in `globals.css`). A second-round pick is a different asset
+    gauges** (`features/shared/league-specs.ts` for the run and
+    `features/shared/ui/league-specs.tsx` for the bezel — both moved out of this
+    feature once the leagues list wore the same part, the mover's usual rule;
+    `.lab-bezel` and `.lab-gauge` in `globals.css`). What is still this card's is
+    the *line*, which is why the run is derived in `TradeHeaderLine` rather than
+    inside the bezel: an empty `<header>` is still 8px of padding under a
+    nameplate, so this card has to know there is nothing to draw before it draws
+    the wrapper. A second-round pick is a different asset
     in a 10-team redraft from what it is in a 14-team superflex dynasty, and this
     board spans every crawled league — so the card's only answer to "which of
     those am I looking at" was a league name, which helps nobody who doesn't
@@ -3661,8 +3667,10 @@ stops holding, a comment saying it does would not have caught it.
 
   **The card itself is `features/shared/ui/league-card`, because a third list
   wears it**: the lineup checker's rows are the same card with this week's
-  opponent where the record goes. What is parameterised is exactly the two things
-  that differ — the trailing plate (`ledge`) and the stat columns — and nothing
+  opponent where the record goes. What is parameterised is exactly the three
+  things that differ — the trailing plate (`ledge`), the stat columns, and
+  whether a line under the head names the league's settings (`specs`) — and
+  nothing
   else: the slab, the head's inset, the press, the panel and the whole
   pull-to-the-top-and-cap gesture are one definition, which is what keeps the two
   lists from becoming slightly different products. `CardLedge` is the plate's box
@@ -3687,7 +3695,44 @@ stops holding, a comment saying it does would not have caught it.
   keep one import. It is the same failure the ADP drawer and the league filters
   dialog were each caught by, arrived at without a `dynamic()` anywhere near it.
 
-  Five things in it are decisions rather than styling:
+  Six things in it are decisions rather than styling:
+  - **A line under the head names the league's settings, as the trade card's own
+    bezel of gauges** — type, size, the QB and superflex slots, tight ends, TE
+    premium and best ball, read through the league filters' own predicates so a
+    card and a filter cannot disagree about one league. The argument is the trade
+    card's arriving at the same place from the opposite end: that board spans
+    strangers' leagues, so the name alone helps nobody; this list is a reader's
+    *own* hundred leagues, most of which differ in exactly these six ways, and
+    the only thing that answered "which of these is my superflex dynasty" was the
+    filters dialog — which **narrows** a list rather than describing a row of it,
+    so the answer was gone the moment the dialog closed.
+
+    **Where it goes was measured, and the obvious seat lost.** The head's leading
+    half is a `flex-1` holding nothing but the chevron, so seating the run there
+    reads as free — and at the list's widest (an 864px card) it is: ~400px of
+    room against a four-gauge run's 279px, one row, +11px a card against a
+    line's +47. What that reasoning leaves out is the band nobody develops in. In
+    headless Chromium with the real faces and the compiled stylesheet, at `sm`
+    the cluster leaves **144px** beside four fixed 96px columns, and the same run
+    wraps to *three* rows there — a 137px card against 70px — with a
+    fully-specified league at five rows and 193px. On its own line it is one row
+    at every width from `sm` up (the six-gauge run's natural width is 430px
+    against the 576px a 640px viewport leaves) and two rows only on a phone
+    carrying every conditional gauge. Flat +47px: a 35px bezel and the 12px under
+    it. **A `flex` line box rather than a block one**, since the bezel is
+    `inline-flex` and sat on a text baseline otherwise — 6px of descender leading
+    on every card, which is invisible in review and measurable in a browser.
+
+    Two rules ride on it. **The box is the shell's and the decision is the
+    caller's**, the split `ledge` already draws: the inset is per-state and a
+    caller cannot know which state the card is in, while whether a league has
+    anything to say about itself is a fact about what is being said — so a league
+    the sync has not answered for draws no line at all rather than an empty 12px
+    one. And **it goes below the head, not above it like the trade card's**: the
+    chevron stays at the card's top-left where a disclosure mark belongs, the
+    four columns keep the first line directly under the rail that names them, and
+    the settings read as the context under them — which is the rank the trade
+    card gives the same run, below both manager names there.
   - **The top edge carries two plates, which is the one place this card goes
     further than the trade card.** That readout was in the *head*, between the
     chevron and the stat columns — the one part of the card that has to stay

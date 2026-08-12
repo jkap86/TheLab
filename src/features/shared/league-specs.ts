@@ -5,19 +5,28 @@ import {
   leagueType,
   scoringValue,
   slotCount,
-} from "../shared/league-filters/predicates.ts";
-import { formatRuleValue } from "../shared/league-filters/summaries.ts";
+} from "./league-filters/predicates.ts";
+import { formatRuleValue } from "./league-filters/summaries.ts";
 
 /**
- * What kind of league a trade happened in, as a row of gauges on the card's
- * first interior line.
+ * What kind of league this is, as a run of gauges a card can wear.
+ *
+ * **It is in `features/shared` because a second list wears it**, which is the
+ * mover's rule rather than a filing preference: the trades board wrote it, and
+ * the manager tool's leagues list draws the same run on its own cards. Nothing
+ * about the derivation was ever a fact about a *trade* — what kept it in that
+ * feature was only that the trades board read it first.
  *
  * A trade means different things in different rooms — a second-round pick is a
  * different asset in a 10-team redraft from what it is in a 14-team superflex
  * dynasty, and a tight end is a different asset again where the league pays a
  * premium for one. The board spans every crawled league, so the card had no way
  * to say which of those it was looking at beyond the league's name, which only
- * helps a reader who already knows the league.
+ * helps a reader who already knows the league. **The leagues list is the same
+ * question asked of a reader's own leagues**: a hundred of them under one
+ * account, most of which differ in exactly these six ways, and the only thing
+ * that answered it was the filter dialog — which narrows the list rather than
+ * describing a row of it.
  *
  * **Everything here is read through the league filters' own predicates rather
  * than off the blobs directly.** `slotCount`, `scoringValue`, `leagueType` and

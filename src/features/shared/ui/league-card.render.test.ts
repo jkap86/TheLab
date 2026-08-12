@@ -21,10 +21,11 @@ import {
  * insets and where the disclosure semantics live are strings and conditionals, so
  * every one of them survives a refactor silently or not at all.
  *
- * **This is the shell, so it is rendered with stand-ins for the two things it
- * does not own** — the trailing plate and the stat columns. What each of its two
- * callers puts there is that caller's own test (the leagues list's record ledge,
- * the lineup checker's opponent); what is pinned here is the box they land in.
+ * **This is the shell, so it is rendered with stand-ins for the three things it
+ * does not own** — the trailing plate, the specs bezel and the stat columns. What
+ * each of its two callers puts there is that caller's own test (the leagues list's
+ * record ledge and league specs, the lineup checker's opponent); what is pinned
+ * here is the box they land in.
  *
  * **Only the resting card is rendered, and that is a boundary rather than a
  * gap.** An expanded one mounts the whole league detail panel, which wants a
@@ -117,6 +118,51 @@ describe("the card's material", () => {
     assert.equal(html.split("lab-nameplate").length - 1, 1);
   });
 });
+
+describe("the specs line", () => {
+  /** A stand-in for the specs bezel — what this shell owes it is a line. */
+  const specs = createElement("span", { "data-specs": "" }, "1QB + SF");
+
+  test("it is a line under the head, not a seat inside it", () => {
+    // Measured rather than reasoned: seated in the head's leading half — which
+    // is a `flex-1` holding nothing but the chevron, and looks free — the run has
+    // 144px at `sm` beside four fixed 96px columns, and wraps to three rows there
+    // for an ordinary league and five for a fully-specified one. On its own line
+    // it is one row at every width from `sm` up. See {@link specs}.
+    const html = card({ specs });
+    const columns = html.indexOf("<span>—</span>");
+    const line = html.indexOf("data-specs");
+    assert.ok(columns >= 0 && columns < line, "the stat columns still lead");
+    // Inside the face, so it is part of the card's own surface rather than a
+    // second object under it.
+    assert.ok(line < html.lastIndexOf("</div></div></li>"));
+  });
+
+  test("the line carries the head's own inset, so the two share an edge", () => {
+    // A bezel that started at a different x from the chevron above it would read
+    // as a part laid on the card rather than machined into it — and the inset is
+    // per-state, which is why the box is this shell's and not the caller's.
+    const html = card({ specs });
+    assert.match(html, new RegExp(`class="flex shrink-0 ${literal(REST.head)} pb-3"`));
+  });
+
+  test("it is under the head's own press and never a second one", () => {
+    // The head is the mouse affordance over the card's one toggle, and the
+    // league's name on the plate is the button. A line that grew a control would
+    // be a press inside a press.
+    assert.equal(card({ specs }).split("<button").length - 1, 1);
+  });
+
+  test("a caller with nothing to say costs the card no line at all", () => {
+    // Not an empty one: the box is 12px of padding whatever is in it, and a
+    // league the sync has not answered for has no settings to report. The lineup
+    // checker passes none at any time — its list is about one week's matchups.
+    assert.equal(card({ specs: undefined }), card());
+  });
+});
+
+/** A class list as a regex literal — the arbitrary values are full of brackets. */
+const literal = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 describe("the press", () => {
   test("the league's name is the card's one button, inside the heading", () => {

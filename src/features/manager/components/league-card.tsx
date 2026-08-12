@@ -1,6 +1,8 @@
 "use client";
 
+import { leagueSpecs } from "@/features/shared/league-specs";
 import { CardLedge, LeagueCard as Card } from "@/features/shared/ui/league-card";
+import { LeagueSpecsBezel } from "@/features/shared/ui/league-specs";
 
 import { formatRecord, ordinal } from "../format";
 import { LEAGUE_METRICS, type MetricContext } from "../league-metrics";
@@ -24,8 +26,23 @@ import { MetricColumns } from "./metric-column";
  *
  * That plate is {@link RecordLedge}: the manager's record and where it places
  * them, which is what this list is about. The lineup checker puts this week's
- * opponent in the same seat, which is the whole of the difference between the two
+ * opponent in the same seat, which is most of the difference between the two
  * lists' cards.
+ *
+ * **A line under the head names the league's settings**, as the same bezel of
+ * gauges the trade cards wear (`ui/league-specs`) — type, size, the QB and
+ * superflex slots, tight ends, TE premium and best ball. It is the trades board's
+ * part for a reason that turns out to be this list's too: an account here is a
+ * hundred leagues most of which differ in exactly those six ways, and the only
+ * thing that answered "which of these is my superflex dynasty" was the filter
+ * dialog — which *narrows* a list rather than describing a row of it, so a reader
+ * had to take the answer on trust once the dialog closed. The run is derived by
+ * the same predicates the dialog selects on, so a card and a filter cannot come to
+ * different conclusions about one league.
+ *
+ * Where the line goes and what it costs is the shell's ({@link Card}, and it was
+ * measured rather than guessed); what is decided here is only whether there is
+ * one, which is the same call {@link RecordLedge} makes about its own plate.
  *
  * The four stat columns are each a slot the reader points at a metric — where
  * this manager stands by points, by KTC starter value and by projected points to
@@ -79,6 +96,10 @@ export function LeagueCard({
   onToggle: () => void;
 }) {
   const ctx: MetricContext = { league, ranks, ktc, adp, weeks, valuedAt };
+  // Derived here rather than inside the bezel, because the *line* it sits on is
+  // the card's and an empty one is still 12px of padding — the same split the
+  // record ledge draws, and the same one the trade card's header line makes.
+  const specs = leagueSpecs(league);
 
   return (
     <Card
@@ -86,6 +107,7 @@ export function LeagueCard({
       name={league.name}
       status={league.status}
       ledge={<RecordLedge record={league.record} standing={ranks?.standing ?? null} />}
+      specs={specs.length > 0 ? <LeagueSpecsBezel specs={specs} /> : undefined}
       columns={<MetricColumns metrics={LEAGUE_METRICS} ctx={ctx} columns={columns} />}
       expanded={expanded}
       onToggle={onToggle}

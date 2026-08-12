@@ -18,10 +18,11 @@ import { NAMEPLATE_BUTTON, Nameplate } from "./nameplate";
  * tool's leagues tab wrote it; the lineup checker draws the same card, with this
  * week's opponent where that one puts the record. What is shared is everything a
  * reader judges the card by — the slab, the two plates on its top edge, the head's
- * inset, the panel and the whole opening gesture — and what is not is the two
- * things that differ: what rides on the trailing plate ({@link ledge}) and what
- * the stat columns hold ({@link columns}). Each caller passes those as nodes, and
- * this knows nothing about either catalogue.
+ * inset, the panel and the whole opening gesture — and what is not is the three
+ * things that differ: what rides on the trailing plate ({@link ledge}), what the
+ * stat columns hold ({@link columns}), and whether a line under the head names the
+ * league's settings ({@link specs}). Each caller passes those as nodes, and this
+ * knows nothing about either catalogue.
  *
  * **It is built like a trade card, which is a deliberate move away from the
  * list's glass.** It wore `LIST_ROW_SURFACE` — the tool cards' glass held to
@@ -91,6 +92,7 @@ export function LeagueCard({
   name,
   status,
   ledge,
+  specs,
   columns,
   focusRosterId,
   opponentRosterId,
@@ -112,6 +114,42 @@ export function LeagueCard({
    * about what it is saying.
    */
   ledge?: ReactNode;
+  /**
+   * What kind of league this is, on a line under the head — the specs bezel the
+   * trade cards wear (`ui/league-specs`).
+   *
+   * **The obvious seat is the head's leading half and it was measured and
+   * rejected, which is worth recording because the argument for it is a good
+   * one.** That half is already a `flex-1` holding nothing but the chevron — the
+   * two facts that used to stand there are on the edge now — so a run seated
+   * there costs the difference between a bezel and a stat column rather than a
+   * whole line, and it lands in the half the four columns are not scanned in.
+   * What that reasoning leaves out is how much room the half actually has once
+   * four fixed 96px columns are beside it. Rendered in headless Chromium with the
+   * real faces and the compiled stylesheet: at the list's widest (an 864px card)
+   * the cluster leaves ~400px against a four-gauge run's 279px — one row, +11px,
+   * exactly as promised — but at `sm` it leaves **144px**, and the same run wraps
+   * to *three* rows there (a 137px card against 70px), a six-gauge league to
+   * five (193px). The band is worst precisely where it is invisible on the
+   * machine the layout is being written on.
+   *
+   * **On its own line it is one row at every width from `sm` up**, six gauges
+   * included: the run's natural width is 430px against the 576px a 640px viewport
+   * leaves, and it wraps to two rows only on a phone with every conditional gauge
+   * drawn. Flat +47px — a 35px bezel and the 12px under it — which is the price
+   * stated rather than discovered later, and it is what the trade card pays for
+   * the same part.
+   *
+   * The box is this shell's and the *decision* is the caller's, which is the
+   * split {@link ledge} already draws: the inset is per-state and a caller cannot
+   * know which state the card is in, while whether a league has anything to say
+   * about itself is a fact about what is being said. So a caller with nothing
+   * passes nothing and no line is drawn — a league the sync has not answered for
+   * has no settings to report, and a bezel of em dashes would report six holes
+   * instead of one absence. The lineup checker passes none at all: its list is
+   * about one week's matchups rather than about which leagues these are.
+   */
+  specs?: ReactNode;
   /** The stat columns across the head — see the callers' own catalogues. */
   columns: ReactNode;
   /**
@@ -377,6 +415,19 @@ export function LeagueCard({
                 made a list-wide selection read as a per-card one. */}
             {columns}
           </div>
+
+          {/* The specs line, under the head and inside its own inset. It is
+              rendered only when a caller has something to put on it — the box is
+              this shell's (the inset is per-state, which a caller cannot know)
+              and whether there is anything to say is the caller's, which is the
+              same split {@link ledge} draws.
+
+              `pb-3` and no top padding of its own: the head's own `pb-3` is the
+              gap above, so the line costs the card one bezel plus one gap rather
+              than two. */}
+          {specs && (
+            <div className={`flex shrink-0 ${surface.head} pb-3`}>{specs}</div>
+          )}
 
           {/* No seam and no inset of its own: the panel is on this card's face,
               so what used to be a border between two surfaces would now be a
