@@ -15,11 +15,17 @@ import type {
  * (see `roster-layout`). Split out of `roster-detail`, which keeps the sections
  * and the coverage caveat; this file owns everything below a section heading.
  *
- * Every row in a section is drawn alike. It used to tint a starter the optimal
- * lineup promoted and dim a bench player it sat, which read this half as a diff
- * against what Sleeper has seated — but the two lists *are* the best lineup
- * available, so which section a player is in already says where he belongs, and
- * the marking only said how far the team currently is from agreeing.
+ * Every row of a **season** panel is drawn alike. It used to tint a starter the
+ * optimal lineup promoted and dim a bench player it sat, which read that half as
+ * a diff against what Sleeper has seated — but there the two lists *are* the best
+ * lineup available, so which section a player is in already says where he
+ * belongs, and the marking only said how far the team currently is from agreeing.
+ *
+ * A **week** panel is the case that argument does not cover, and {@link advice}
+ * is what it needs instead: there the starters list is what the team is actually
+ * starting, so which section a player is in says what *is* rather than what
+ * should be, and the difference between the two has nowhere else to appear. See
+ * {@link RosterDetail} for where the two ends of a swap come from.
  *
  * ## A chip is a lineup slot; the letters beside the name are the player
  *
@@ -97,10 +103,49 @@ const SLOT_LABEL: Record<string, string> = {
   IDP_FLEX: "IDP",
 };
 
+/**
+ * What the week's own solve would do with this player, where it disagrees with
+ * the lineup he is in.
+ *
+ * Two values rather than one because a swap has two ends and they sit in two
+ * different lists: `sit` is a starter to take out, `start` is the bench player to
+ * put in. Absent is the ordinary row and by far the common one — most of a lineup
+ * is already right, and a marked row is only worth anything while it is rare.
+ */
+export type LineupAdvice = "sit" | "start";
+
+/**
+ * How each mark is drawn, and the pairing is the app's own rather than a palette.
+ *
+ * `sit` takes the needs-attention amber, which is the tone this app spends on a
+ * verdict rather than a count — the same amber the lineup row's own gap column
+ * wears, one tool over, for the same number read at the team's grain. `start` is
+ * the accent, because it is not a problem: it is where the amber row's points
+ * are, and tinting it amber too would put two alarms on one swap.
+ *
+ * The tone is on the **name**, not on a badge beside it. At ~120px of name track
+ * on a phone a word costs the thing it is marking, and colour is the one signal
+ * that survives the width — while the row keeps a `title` and an `sr-only` for
+ * the reading colour alone cannot carry.
+ */
+const ADVICE: Record<LineupAdvice, { name: string; note: string; label: string }> = {
+  sit: {
+    name: "text-amber-300",
+    note: "Better points available from the bench — move him out",
+    label: "Swap out: ",
+  },
+  start: {
+    name: "text-active",
+    note: "Projected to beat somebody in the lineup — move him in",
+    label: "Swap in: ",
+  },
+};
+
 export function PlayerRow({
   player,
   playerId,
   slot,
+  advice,
   outlook,
   split,
   layout,
@@ -112,6 +157,12 @@ export function PlayerRow({
   player: PlayerSummary | undefined;
   playerId: string;
   slot?: string;
+  /**
+   * What the week's solve would do with this player, where it disagrees with the
+   * lineup he is in. Absent on a season panel, where the list already *is* the
+   * best lineup and there is nothing to disagree with — see {@link LineupAdvice}.
+   */
+  advice?: LineupAdvice;
   outlook?: PlayerOutlook;
   /**
    * How the projection divides between weeks in and out of the lineup. Undefined
@@ -153,6 +204,10 @@ export function PlayerRow({
   const position = empty ? null : (player?.position ?? null);
   const team = empty ? null : (player?.team ?? null);
   const tone = positionTextTone(position);
+
+  // Never on an unfilled slot: there is nobody in it to move, and the solve
+  // names players rather than seats.
+  const mark = empty || !advice ? null : ADVICE[advice];
 
   const ctx = {
     outlook,
@@ -228,13 +283,24 @@ export function PlayerRow({
           the arithmetic, and for why the tier below it is the tightest on this
           half whatever size the name is set in. */}
       <span
-        title={empty ? undefined : name}
+        title={mark ? `${name} — ${mark.note}` : empty ? undefined : name}
         className={`${layout.nameSpan} flex min-w-0 items-baseline gap-1.5 text-[0.9375rem] @4xl:text-base ${
           // Clears the chip's overhang, and only while the chip is overhanging:
           // from `@3xl` it is a cell of the grid and pays for its own width.
           slotLabel ? "pl-[34px] @3xl:pl-0" : ""
-        } ${empty ? "text-foreground/25" : "text-foreground/85"}`}
+        } ${
+          mark
+            ? `${mark.name} font-semibold`
+            : empty
+              ? "text-foreground/25"
+              : "text-foreground/85"
+        }`}
       >
+        {/* What the colour means, for a reader who cannot see it — and what the
+            `title` says for one who cannot hover. `sr-only` is out of flow, so
+            it costs the name track nothing; it leads because that is the order
+            the sentence reads in. */}
+        {mark && <span className="sr-only">{mark.label}</span>}
         <span className="min-w-0 truncate">
           {short === name ? (
             name

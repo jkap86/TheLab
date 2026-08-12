@@ -175,6 +175,12 @@ async function weekLineups({
             league_id: league.league_id,
             rosterPositions: league.roster_positions,
             scoringSettings: league.scoring_settings,
+            // Without it a best-ball league reports a gap against a lineup
+            // nobody sets — see `compareLineup`. It travels here as well as on
+            // the panel's own read because the row and the panel it opens print
+            // the same number, and two answers to one question is the drift the
+            // solver owning this rule exists to stop.
+            bestBall: league.best_ball,
             teams,
           },
         ];

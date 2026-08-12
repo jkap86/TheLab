@@ -136,6 +136,12 @@ export type LeagueRosterSet = {
   roster_positions: string[] | null;
   /** Scoring rules keyed by stat, as stored by Sleeper. */
   scoring_settings: Record<string, number> | null;
+  /**
+   * Whether Sleeper seats this league's lineup itself. Read by the week's lineup
+   * solve, where it is the difference between a gap a manager can act on and one
+   * quoted against a lineup nobody sets — see `compareLineup`.
+   */
+  best_ball: boolean;
   teams: {
     roster_id: number;
     owner_id: string | null;
@@ -172,5 +178,11 @@ export type LeagueDetail = {
    * league's rosters: its numbers, not Sleeper's default PPR.
    */
   scoring_settings: Record<string, number> | null;
+  /**
+   * Whether Sleeper seats this league's lineup itself — see
+   * {@link LeagueRosterSet.best_ball}. It reaches the panel as well as the solve,
+   * since a starters list with nothing to swap has to say why.
+   */
+  best_ball: boolean;
   teams: LeagueTeam[];
 };

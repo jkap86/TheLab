@@ -28,14 +28,43 @@ type SlotRow = { slot: string; player_id: string };
  * One team's full roster — starters and bench — plus its future draft picks, with
  * each player's projected points for the rest of the season.
  *
- * The starters section shows the *best* lineup available to the team, not what
- * it is currently starting (see `outlook`), and the bench follows: everyone the
- * optimal lineup doesn't seat, best available first. Neither list marks the moves
- * against the team's current lineup — a promoted starter is drawn like any other
- * starter and a sat player like any other bench player — so what the two read as
- * is one lineup rather than a diff against another one. IR and taxi players
- * aren't broken out either; they're treated as bench depth (candidates for the
- * lineup like anyone on the bench), so they simply sit in the bench list.
+ * **Which lineup the starters section lists depends on what the panel was opened
+ * on, and the two answers are opposite for the same reason.** A *season* panel
+ * shows the **best** lineup available to the team, not what it is currently
+ * starting: a reader who arrived at a league is asking what its roster is worth,
+ * and there is no single Sunday to set. So neither list marks a move — a promoted
+ * starter is drawn like any other starter — and what the two read as is one
+ * lineup rather than a diff against another one.
+ *
+ * A *week* panel lists what the team is **actually** starting, because a reader
+ * who arrived at a lineup is asking what to change, and a list of the best
+ * available answers that question by hiding it. The difference between the two is
+ * what the marks carry instead: a starter the week's solve would bench is amber,
+ * and the bench player it would start is in the accent, so the two ends of one
+ * swap are legible from either list (see {@link LineupAdvice}). Both come off the
+ * server's own comparison rather than being re-derived here — eligibility,
+ * played-game locking and the dropping of unrecognised slots are all rules that
+ * live in the solver, and a second reading of them on this side of the wire would
+ * be a second answer.
+ *
+ * **Both halves of a head-to-head are marked**, the opponent's included: it is
+ * the same fact about the same week, and a lineup leaving points on the bench is
+ * worth knowing about on the side you are playing as well as your own. What says
+ * which of the two you can act on is the {@link surface} the half is drawn on,
+ * which is what that pairing is for — suppressing the marks there instead would
+ * make the point twice and lose the reading.
+ *
+ * **A best-ball league is a week panel with nothing marked**, and that is the
+ * honest drawing rather than a gap: Sleeper seats such a lineup itself, so the
+ * lineup sent *is* the optimal one and there is no swap to name. The head says so
+ * (see {@link LineupNote}), since a list of perfect starters and a list nobody
+ * sets look identical.
+ *
+ * The bench follows the starters either way: everyone the listed lineup doesn't
+ * seat, best available first — in the week's own points on a week panel, since
+ * that is the number a promotion would be judged on. IR and taxi players aren't
+ * broken out; they're treated as bench depth (candidates for the lineup like
+ * anyone on the bench), so they simply sit in the bench list.
  *
  * The value columns beside each player are slots the reader points at a
  * player-level metric — the projected start/bench split to start with, swappable
@@ -73,6 +102,7 @@ export function RosterDetail({
   onOpenColumn,
   heading,
   surface = "raised",
+  bestBall = false,
 }: {
   team: LeagueTeamView;
   /** Every team in the league, for naming the roster an acquired pick came from. */
@@ -107,6 +137,13 @@ export function RosterDetail({
    * only by the names on them.
    */
   surface?: "raised" | "recessed";
+  /**
+   * Whether Sleeper seats this league's lineup itself, which changes what the
+   * starters list *is* on a week panel — see {@link LineupNote}. It says nothing
+   * about a season panel, whose list is the best rest-of-season lineup whoever
+   * sets the weekly one, so the note is gated on the week rather than on this.
+   */
+  bestBall?: boolean;
 }) {
   const teamOutlook = useMemo(
     () => outlook?.teams.find((t) => t.roster_id === team.roster_id) ?? null,
@@ -118,33 +155,66 @@ export function RosterDetail({
     [teams],
   );
 
-  // Starters are positionally aligned with the league's non-bench slots. The
-  // outlook has already done that pairing (and dropped any slot it doesn't
-  // recognise), so it is only redone here for a league with no projections.
+  // This team's week, where the panel was opened on one and the solve reached
+  // this roster — a week with nothing stored answers for no team at all, which
+  // falls through to the season reading below rather than to an empty lineup.
+  // Roster ids are numbers here and JSON keys there, so the lookup is by
+  // template string, the standings' and the heading's own spelling.
+  const weekLineup = weekView?.team_projection[`${team.roster_id}`] ?? null;
+
+  // Starters are positionally aligned with the league's non-bench slots. Both
+  // sources have already done that pairing (and dropped any slot this app
+  // doesn't recognise), so it is only redone here for a league with neither.
   const starters: SlotRow[] = useMemo(() => {
-    const lineup = teamOutlook?.optimal;
+    // A week's *current* lineup wins over the season's optimal one, which is the
+    // whole difference between the two panels — see the note above. It is the
+    // optimal lineup in a best-ball league, because there that is what is
+    // actually started.
+    const lineup = weekLineup?.lineup ?? teamOutlook?.optimal;
     if (lineup) {
       return lineup.map((s) => ({ slot: s.slot, player_id: s.player_id ?? "" }));
     }
 
     const slots = (rosterPositions ?? []).filter((p) => !NON_STARTING_SLOTS.has(p));
     return team.starters.map((id, i) => ({ slot: slots[i] ?? "FLEX", player_id: id }));
-  }, [teamOutlook, rosterPositions, team.starters]);
+  }, [weekLineup, teamOutlook, rosterPositions, team.starters]);
+
+  // The two ends of the week's swaps, as sets to test a row against. Empty on a
+  // season panel and in a best-ball league, which is what leaves every row plain
+  // in both — the same code path, since "nothing to change" is the same drawing
+  // whichever of the two reasons put it there.
+  const advice = useMemo(
+    () => ({
+      sit: new Set(weekLineup?.sit ?? []),
+      start: new Set(weekLineup?.start ?? []),
+    }),
+    [weekLineup],
+  );
 
   const bench = useMemo(() => {
-    // Everyone not in the optimal starting lineup, IR and taxi included: those
+    // Everyone not in the listed starting lineup, IR and taxi included: those
     // stashes are candidates for the lineup too now, so the ones that don't make
     // it belong here rather than in sections of their own.
     const starting = new Set(starters.map((s) => s.player_id));
     const rest = team.players.filter((id) => id && !starting.has(id));
 
     // Best available first once there are projections to sort on: the point of
-    // the bench in a lineup tool is who you might promote off it.
+    // the bench in a lineup tool is who you might promote off it. On a week
+    // panel that is the *week's* projection and not the season's — a promotion
+    // here is one Sunday's decision, and ordering it by a rest-of-season total
+    // would put the wrong player at the top of the list a marked starter sends
+    // the reader to.
+    if (weekView) {
+      return [...rest].sort(
+        (a, b) =>
+          (weekView.projection[b] ?? 0) - (weekView.projection[a] ?? 0),
+      );
+    }
     if (!outlook) return rest;
     return [...rest].sort(
       (a, b) => (outlook.players[b]?.points ?? 0) - (outlook.players[a]?.points ?? 0),
     );
-  }, [starters, team, outlook]);
+  }, [starters, team, outlook, weekView]);
 
   const horizon = outlook?.weeks.length ?? 0;
 
@@ -193,6 +263,7 @@ export function RosterDetail({
       }`}
     >
       {heading}
+      {weekLineup && bestBall && <LineupNote />}
       {teamOutlook && <LineupCoverage teamOutlook={teamOutlook} />}
 
       <ColumnRail
@@ -223,6 +294,7 @@ export function RosterDetail({
               player={players[row.player_id]}
               playerId={row.player_id}
               slot={row.slot}
+              advice={advice.sit.has(row.player_id) ? "sit" : undefined}
               outlook={outlook?.players[row.player_id]}
               split={teamOutlook?.weekly_split[row.player_id]}
               layout={lineupLayout}
@@ -241,6 +313,7 @@ export function RosterDetail({
                 key={id}
                 player={players[id]}
                 playerId={id}
+                advice={advice.start.has(id) ? "start" : undefined}
                 outlook={outlook?.players[id]}
                 split={teamOutlook?.weekly_split[id]}
                 layout={lineupLayout}
@@ -325,6 +398,29 @@ function ColumnRail({
 }
 
 /**
+ * Why a best-ball week has nothing marked on it.
+ *
+ * Every other week panel lists what the manager has set and marks what to change;
+ * this one lists the lineup Sleeper will seat itself, and a list of unmarked
+ * starters is exactly what a lineup that is *already* right looks like. One line
+ * is what separates "nothing to do" from "nothing you could have done", and it is
+ * also what accounts for the players here differing from the ones Sleeper shows
+ * under Starters — that array is whatever the draft left behind in a league where
+ * nobody sets a lineup.
+ *
+ * Drawn per half rather than once for the panel, the coverage caveat's own
+ * arrangement below: it is a fact about the list it sits over, and a head-to-head
+ * is two lists.
+ */
+function LineupNote() {
+  return (
+    <p className="mb-3 shrink-0 text-[0.7rem] text-foreground/40">
+      Best ball — Sleeper starts this lineup for you.
+    </p>
+  );
+}
+
+/**
  * The one thing the two lists below can't say about themselves: that they aren't
  * the whole roster, because the solver met a slot it doesn't recognise.
  *
@@ -337,9 +433,15 @@ function ColumnRail({
  * it is the difference between. And the **moves** — `start … · sit …` — were the
  * lineup restated in prose above the lineup itself: every name in them was already
  * on a row a few pixels below, in the section that answers where it should be, so
- * what the sentence added over the two lists was a second spelling of them. The
- * rows carry no promoted/sat marking now either: this panel shows the best lineup
- * available, not a diff against the one Sleeper has seated.
+ * what the sentence added over the two lists was a second spelling of them.
+ *
+ * That last one is worth reading beside where those two sets ended up, because
+ * the argument survived being inverted. It was right that a prose line above a
+ * list of the *best* lineup restates the list; it says nothing about a list of
+ * the lineup a team is *actually* starting, which is what a week panel draws — so
+ * `start`/`sit` are marks on the rows there, where a diff has nowhere else to
+ * appear. A season panel still carries neither, for the reason this paragraph
+ * gives: its two lists are the recommendation, so there is nothing to diff.
  *
  * The caveat stays because nothing else on screen can raise it — a roster quietly
  * missing a slot reads as a complete lineup.

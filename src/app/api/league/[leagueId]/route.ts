@@ -278,6 +278,7 @@ async function leaguePayload(
           teams: detail.teams,
           rosterPositions: detail.roster_positions,
           scoringSettings: detail.scoring_settings,
+          bestBall: detail.best_ball,
         }).catch((error) => {
           console.error(
             `[league] week ${week.value} failed for ${leagueId}:`,
@@ -294,6 +295,7 @@ async function leaguePayload(
     status: detail.status,
     roster_positions: detail.roster_positions,
     scoring_settings: detail.scoring_settings,
+    best_ball: detail.best_ball,
     teams: detail.teams.map(({ manager, ...team }) => ({
       ...team,
       manager: manager
@@ -342,6 +344,9 @@ function serializeWeekView(
 
   const team_projection: LeagueWeekViewPayload["team_projection"] = {};
   for (const [rosterId, lineup] of view.team_projection) {
+    // Structurally the payload's own shape already — the lineup's points were
+    // dropped upstream, where the reason belongs — so this is the key conversion
+    // and nothing else.
     team_projection[String(rosterId)] = lineup;
   }
 

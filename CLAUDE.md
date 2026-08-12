@@ -5247,7 +5247,9 @@ stops holding, a comment saying it does would not have caught it.
   is the number the standings are ranked on and states in the column beside it —
   and, eventually, the `start … · sit …` line under that, which restated the two
   lists it sat over rather than any one number. That head is now the coverage
-  caveat and nothing else. Pass the same string to
+  caveat, plus one line on a best-ball week saying why nothing on the list is
+  marked — which is the exception proving the rule rather than a breach of it: it
+  states something no row below it can. Pass the same string to
   `TeamAvatar`'s `label` so its fallback initial matches the name shown next to it.
 - **Rows in that panel give the name its own line — the standings always, the
   roster only where it has to.** Both lists put the team or player name alone on
@@ -5324,28 +5326,94 @@ stops holding, a comment saying it does would not have caught it.
   first name to contract and no break point but a mid-word one. Spending the
   avatar for the rank is the only real lever left there; it is a trade rather
   than a free win, so it stays unmade.
-- **`roster-detail` shows the optimal lineup only** — there is no current/optimal
-  toggle. The current lineup is a click away in Sleeper; what this tool adds is
+- **`roster-detail` shows the optimal lineup on a season panel and the *actual*
+  one on a week panel, and the two opposite answers come from one question: what
+  did the reader arrive asking?** On a season panel there is no current/optimal
+  toggle — the current lineup is a click away in Sleeper, what this tool adds is
   the best lineup available, so the starters list *is* that lineup and the bench
   is everyone it doesn't seat. **The diff against what the team is actually
-  starting is not drawn at all**, which took two things that each looked like the
-  panel's own subject and were the *other* lineup wearing its clothes. The
-  `start … · sit …` prose above the list named players who were already on rows a
-  few pixels below, in the section that answers where each of them should be — the
-  same restatement the team plate and the `Optimal <total>` chip were removed for,
-  and the argument holds harder here because the sentence was a second spelling of
-  the two lists rather than of one number. And a tinted promoted starter beside a
-  dimmed sat bench player made a section's rows unequal on an axis the section
-  isn't about: this half is the lineup to hold, so which list a player is in is
-  the whole of the advice, and the marking only reported how far the team
-  currently is from taking it. What survives as a *number* is the gap, in the
-  readout strip, where it sits beside the two totals it is the difference between
-  — which is also why `optimal.ts` still computes `current` / `current_points`:
-  `points_left` is a difference against them and is on screen. `start` and `sit`
-  ride the contract still, computed and tested, with no client drawing them.
+  starting is not drawn there at all**, which took two things that each looked
+  like the panel's own subject and were the *other* lineup wearing its clothes.
+  The `start … · sit …` prose above the list named players who were already on
+  rows a few pixels below, in the section that answers where each of them should
+  be — the same restatement the team plate and the `Optimal <total>` chip were
+  removed for, and the argument holds harder here because the sentence was a
+  second spelling of the two lists rather than of one number. And a tinted
+  promoted starter beside a dimmed sat bench player made a section's rows unequal
+  on an axis the section isn't about: that half is the lineup to hold, so which
+  list a player is in is the whole of the advice, and the marking only reported
+  how far the team currently is from taking it. What survives as a *number* is
+  the gap, in the readout strip, where it sits beside the two totals it is the
+  difference between — which is also why `optimal.ts` computes `current` /
+  `current_points`: `points_left` is a difference against them and is on screen.
   The one thing left above the list is `LineupCoverage`, the caveat naming slots
   the solver didn't recognise — kept because nothing else on screen can raise it,
   where everything else up there was already said below.
+
+  **A week panel inverts every clause of that, and the inversion is the same
+  sentence read the other way.** A reader who arrived at a *lineup* is asking
+  what to change, and a list of the best available answers that question by
+  hiding it: the players who need moving are the ones the list silently drops,
+  so the one thing a lineup checker exists to show was the one thing not on
+  screen. So the starters section lists **what the team is actually starting**,
+  and `start`/`sit` — computed and tested since the solver was written, and until
+  now drawn by nothing — are what carries the difference: a starter the week's
+  solve would bench is amber, the bench player it would start is in the accent.
+  Five things hold it up.
+  - **The marks are a *diff*, which is exactly why the season panel still refuses
+    them.** The argument above was never "marks are noise"; it was that a list
+    which already *is* the recommendation has nothing to diff against. A list of
+    what is says nothing about what should be, and that gap has nowhere else on
+    the panel to appear.
+  - **Both ends of a swap are marked, because they sit in two different lists.**
+    A starter to move out, with no bench row saying who replaces him, is half an
+    answer — and the bench of a week panel is therefore sorted by the **week's**
+    projection rather than the season's, so the player a marked starter sends the
+    reader to is at the top of the list they land in.
+  - **The lineup travels on the wire** (`TeamWeekProjectionPayload.lineup`,
+    `sit`, `start`) rather than being rebuilt from `starters` on the client,
+    which cannot reproduce it: eligibility is `fantasy_positions` (not on
+    `PlayerSummary`), played-game locking is a server read, and the slots this
+    app doesn't recognise are dropped by the solver's own rule. A second reading
+    of any of the three on the client is a second answer.
+  - **The tone is on the name, not on a badge.** At ~120px of name track on a
+    phone a word costs the thing it is marking. `sit` takes the app's
+    needs-attention amber — the same amber the lineup row's own gap column wears
+    one tool over, for that number at the team's grain — and `start` takes the
+    accent, since it is where those points are rather than a second alarm. A
+    `title` and an `sr-only` carry what colour alone cannot.
+  - **The opponent's half is marked too**, and what says which lineup you can act
+    on is the recessed surface it is drawn on — the pairing that already exists
+    for exactly that. A lineup leaving points on the bench is worth knowing about
+    on the side you are playing.
+- **A best-ball league is the one league where `starters` is not the lineup, and
+  it is answered in the solver rather than at the panel.** Sleeper seats such a
+  lineup itself, from the whole roster, after the games are played — so that
+  array holds whatever the draft left behind, and reading it produced a gap
+  against a lineup nobody sets: advice a manager cannot act on, on every
+  best-ball league in the account, all season. `compareLineup`'s `bestBall` is
+  the fix and it is four consequences of one sentence: `current` **is** the
+  optimal lineup, `points_left` is zero, `start`/`sit` are empty, and `locked` is
+  ignored — a seat chosen after the fact is not constrained by a game already
+  played. Four things travel with it:
+  - **It is one rule, so it reaches everything.** The flag rides on
+    `LeagueTeamsInput`, so the lineup checker's `vs optimal` column (through
+    `/api/user/…/matchups`) and the panel it opens (through
+    `/api/league/[leagueId]`) get the same answer — the row saying `-12.34` over
+    a panel with nothing to swap is precisely the two-answers-to-one-question
+    this codebase keeps closing.
+  - **The setting is read through `BEST_BALL_SQL`**, the fragment `/api/adp`
+    already filters on and the client's `isBestBall` already mirrors, for the
+    reason `LEAGUE_TYPE_SQL` is shared: a league priced as best ball on the board
+    and solved as an ordinary one here is a difference no type can catch. Absent
+    or unparseable reads false, which is what Sleeper's omitted default means.
+  - **The panel says so** (`LineupNote`), because an unmarked lineup is otherwise
+    ambiguous: it reads identically to one the manager got right, and the players
+    listed differ from the ones Sleeper shows under Starters. One line separates
+    "nothing to do" from "nothing you could have done".
+  - **It changes nothing on a season panel**, whose list is the best
+    rest-of-season lineup whoever sets the weekly one — so the note is gated on
+    the week rather than on the flag.
 - **Every roster row carries two numbers, not one: `start` and `bench`.** A
   season total answers the wrong question on both sides of the roster. A backup
   quarterback projected 361 points behind two better starters is worth *nothing* —

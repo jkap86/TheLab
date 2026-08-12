@@ -81,7 +81,18 @@ export const DYNASTY_LEAGUE_TYPE = 2;
  */
 const DYNASTY_BOARD_SQL = `(${LEAGUE_TYPE_SQL} = ${DYNASTY_LEAGUE_TYPE})`;
 
-const BEST_BALL_SQL = `
+/**
+ * Whether Sleeper seats this league's lineup for the manager.
+ *
+ * Exported for the two roster reads that have to *solve* such a league — where a
+ * best-ball team's `starters` array is not what it is starting — for the reason
+ * {@link LEAGUE_TYPE_SQL} is: the board's filter, the client's `isBestBall` and
+ * the lineup solver all answer one question, and a league priced as best ball
+ * here and solved as an ordinary one there is a difference no type can catch.
+ * Absent or unparseable reads false, which is what Sleeper's omitted default
+ * means and what the client's own predicate says.
+ */
+export const BEST_BALL_SQL = `
   (CASE WHEN l.settings->>'best_ball' ~ '^[0-9]+$'
         THEN (l.settings->>'best_ball')::int ELSE 0 END = 1)`;
 

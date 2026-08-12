@@ -1,5 +1,5 @@
 export { getLeagueWeekView } from "./league-week";
-export type { LeagueWeekView, PpgSource } from "./league-week";
+export type { LeagueWeekView, PpgSource, TeamWeekProjection } from "./league-week";
 export { hasStatLine, toStatRows } from "./parse";
 export type { StatRow } from "./parse";
 export { playerPpg, ppgWindow, teamPpg } from "./ppg";

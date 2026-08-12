@@ -105,6 +105,35 @@ export type LeagueRosterValues = {
  */
 export type PpgPayload = { average: number; games: number };
 
+/** One seat of a lineup: which slot, and who is in it (null for an empty one). */
+export type LineupSlotPayload = { slot: string; player_id: string | null };
+
+/**
+ * One team's week: the two totals, the lineup behind them, and the swaps between.
+ *
+ * **The lineup is what that team is *actually* starting**, which is what the
+ * week panel's roster half lists — a reader who arrived at a lineup is asking
+ * what to change, and a list of the best available answers a different question.
+ * It is sent rather than rebuilt from `starters` on the client because a client
+ * cannot reproduce it: the slots this app doesn't recognise are dropped by the
+ * solver's own rule, and a **best-ball** league's `starters` array is not its
+ * lineup at all — Sleeper seats the optimal one there, so that is what this
+ * carries and `sit`/`start` are empty (see `compareLineup`).
+ *
+ * `sit` and `start` are the two ends of the same swaps, so a starter to move out
+ * and the bench player to move in are one answer read from two lists. Points are
+ * *not* on a seat: every one of them is on `projection`, under the same player
+ * id, and a number written twice is a number that can disagree with itself.
+ */
+export type TeamWeekProjectionPayload = {
+  optimal: number;
+  current: number;
+  points_left: number;
+  lineup: LineupSlotPayload[];
+  sit: string[];
+  start: string[];
+};
+
 /**
  * One league read as a **week** — what each subject projects for it, and what
  * each has actually been averaging coming into it.
@@ -136,10 +165,7 @@ export type LeagueWeekViewPayload = {
   /** Player id → his points per game over the window; absent where he has none. */
   ppg: Record<string, PpgPayload>;
   /** Roster id → that team's best and current lineup for the week. */
-  team_projection: Record<
-    string,
-    { optimal: number; current: number; points_left: number }
-  >;
+  team_projection: Record<string, TeamWeekProjectionPayload>;
   /** Roster id → that team's points per game over the same window. */
   team_ppg: Record<string, PpgPayload>;
 };

@@ -248,22 +248,52 @@ function solveAround(
  * — so `points_left` names points a manager can still go and get. Omitted, every
  * slot is free, which is the rest-of-season question and the reading the horizon
  * callers want.
+ *
+ * **`bestBall` is the league where there is no difference to report.** Sleeper
+ * seats a best-ball lineup itself, from the whole roster, after the games have
+ * been played — so what such a team is "currently starting" is not the `starters`
+ * array at all (that holds whatever the draft left behind) but the best lineup
+ * its roster can produce. `current` is therefore the optimal lineup, `points_left`
+ * is zero and `start`/`sit` are empty: there is no move to recommend, and a gap
+ * quoted against a lineup nobody sets is advice a reader cannot act on. `locked`
+ * is deliberately ignored with it, for the same reason — a seat chosen after the
+ * fact is not constrained by a game already played.
  */
 export function compareLineup({
   rosterPositions,
   starters,
   players,
   locked,
+  bestBall = false,
 }: {
   rosterPositions: readonly string[];
   starters: readonly string[];
   players: readonly RosterPlayer[];
   /** Players whose games have been played — see the note above. */
   locked?: ReadonlySet<string>;
+  /** Whether Sleeper seats this league's lineup for you — see the note above. */
+  bestBall?: boolean;
 }): LineupComparison {
   const slots = startingSlots(rosterPositions);
   const known = recognisedSlots(rosterPositions);
   const unknown = [...new Set(slots.filter((slot) => !(slot in SLOT_POSITIONS)))];
+
+  if (bestBall) {
+    const optimal = optimalLineup(known, players);
+    const points = total(optimal);
+    return {
+      optimal,
+      // Copied rather than the same array twice: the two are one lineup here, and
+      // a caller re-seating or sorting either must not silently edit the other.
+      current: optimal.map((seat) => ({ ...seat })),
+      optimal_points: points,
+      current_points: points,
+      points_left: 0,
+      start: [],
+      sit: [],
+      unknown_slots: unknown,
+    };
+  }
 
   const byId = new Map(players.map((p) => [p.player_id, p]));
 

@@ -54,6 +54,30 @@ export type PpgSource = {
   prior: boolean;
 };
 
+/**
+ * One team's week: the two totals, the lineup behind them, and the swaps between.
+ *
+ * The lineup travels because the panel lists it — a week's roster half shows what
+ * the team is *actually* starting, which is the one reading a manager can act on
+ * — and it cannot be rebuilt from Sleeper's `starters` array on the other side of
+ * the wire: unrecognised slots are dropped by a rule that lives in the solver,
+ * and a best-ball league's array is not its lineup at all.
+ */
+export type TeamWeekProjection = {
+  /** The best lineup still reachable. */
+  optimal: number;
+  /** What the lineup it is actually starting projects. */
+  current: number;
+  /** The difference: points still to be had by moving somebody. */
+  points_left: number;
+  /** That current lineup, in slot order. Points are per player on `projection`. */
+  lineup: { slot: string; player_id: string | null }[];
+  /** Started players the best reachable lineup benches. */
+  sit: string[];
+  /** Benched players it starts — the other end of those same swaps. */
+  start: string[];
+};
+
 /** What one league's week looks like: a projection and a form line, per subject. */
 export type LeagueWeekView = {
   week: number;
@@ -63,7 +87,7 @@ export type LeagueWeekView = {
   /** Player id → his points per game over {@link PpgSource.weeks}. */
   ppg: Map<string, Ppg>;
   /** Roster id → that team's best and current lineup for the week. */
-  team_projection: Map<number, { optimal: number; current: number; points_left: number }>;
+  team_projection: Map<number, TeamWeekProjection>;
   /** Roster id → that team's points per game over the same window. */
   team_ppg: Map<number, Ppg>;
 };
@@ -82,6 +106,7 @@ export async function getLeagueWeekView({
   teams,
   rosterPositions,
   scoringSettings,
+  bestBall,
 }: {
   leagueId: string;
   season: string;
@@ -89,6 +114,8 @@ export async function getLeagueWeekView({
   teams: readonly LeagueTeam[];
   rosterPositions: string[] | null;
   scoringSettings: Record<string, number> | null;
+  /** Whether Sleeper seats this league's lineup itself — see `compareLineup`. */
+  bestBall: boolean;
 }): Promise<LeagueWeekView> {
   const playerIds = [
     ...new Set(teams.flatMap((team) => team.players ?? []).filter((id) => id && id !== "0")),
@@ -97,7 +124,15 @@ export async function getLeagueWeekView({
   const [projection, ppgRead, lineups, teamPpgByRoster] = await Promise.all([
     weekProjection({ season, week, playerIds, scoringSettings }),
     playerPpgWindow({ season, week, playerIds, scoringSettings }),
-    teamProjection({ leagueId, season, week, teams, rosterPositions, scoringSettings }),
+    teamProjection({
+      leagueId,
+      season,
+      week,
+      teams,
+      rosterPositions,
+      scoringSettings,
+      bestBall,
+    }),
     teamPpgWindow({ leagueId, week, teams }),
   ]);
 
@@ -225,6 +260,7 @@ async function teamProjection({
   teams,
   rosterPositions,
   scoringSettings,
+  bestBall,
 }: {
   leagueId: string;
   season: string;
@@ -232,7 +268,8 @@ async function teamProjection({
   teams: readonly LeagueTeam[];
   rosterPositions: string[] | null;
   scoringSettings: Record<string, number> | null;
-}): Promise<Map<number, { optimal: number; current: number; points_left: number }>> {
+  bestBall: boolean;
+}): Promise<Map<number, TeamWeekProjection>> {
   const lineups = await getWeekLineups({
     season,
     week,
@@ -241,6 +278,7 @@ async function teamProjection({
         league_id: leagueId,
         rosterPositions,
         scoringSettings,
+        bestBall,
         teams: teams.map((team) => ({
           roster_id: team.roster_id,
           players: team.players,
@@ -252,15 +290,21 @@ async function teamProjection({
     ],
   });
 
-  const byRoster = new Map<
-    number,
-    { optimal: number; current: number; points_left: number }
-  >();
+  const byRoster = new Map<number, TeamWeekProjection>();
   for (const [rosterId, lineup] of lineups.teams.get(leagueId) ?? []) {
     byRoster.set(rosterId, {
       optimal: lineup.optimal_points,
       current: lineup.current_points,
       points_left: lineup.points_left,
+      // The points are dropped: every one of them is on `projection`, keyed by
+      // the same player id the row is drawn from, so carrying them here would be
+      // one number written twice.
+      lineup: lineup.lineup.map((seat) => ({
+        slot: seat.slot,
+        player_id: seat.player_id,
+      })),
+      sit: lineup.sit,
+      start: lineup.start,
     });
   }
   return byRoster;

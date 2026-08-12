@@ -4,7 +4,7 @@ import { aggregateWeeklyStats } from "./aggregate";
 import type { PlayerWeekStats } from "./aggregate";
 import { isProjectable, lineupCandidates, rosterPlayerIds } from "./candidates";
 import { compareLineup, optimalLineup, recognisedSlots } from "./optimal";
-import type { LineupComparison } from "./optimal";
+import type { LineupComparison, LineupSlot } from "./optimal";
 import {
   getProjectedStatKeys,
   getRemainingWeeks,
@@ -240,6 +240,14 @@ export type LeagueTeamsInput = {
   rosterPositions: readonly string[] | null;
   scoringSettings: Record<string, number> | null;
   teams: readonly OutlookRoster[];
+  /**
+   * Whether Sleeper seats this league's lineup itself — read only by
+   * {@link getWeekLineups}, which is the one entry point here that asks what a
+   * roster is *currently* starting. See {@link compareLineup} for what it
+   * changes; absent reads as an ordinary lineup league, which is what Sleeper's
+   * own omitted `best_ball` setting means.
+   */
+  bestBall?: boolean;
 };
 
 /**
@@ -445,6 +453,21 @@ export type TeamWeekLineup = {
   current_points: number;
   /** `optimal − current`: the points the current lineup leaves on the bench. */
   points_left: number;
+  /**
+   * The lineup those totals are read off — what this roster is **actually**
+   * starting, in slot order, with the slots this code doesn't recognise dropped.
+   *
+   * Carried rather than left to be rebuilt from `starters`, because a caller
+   * holding that array cannot reproduce this one: the unrecognised slots come out
+   * by a rule that lives here, and in a best-ball league the array is not the
+   * lineup at all — Sleeper seats the optimal one, so that is what this holds
+   * (see {@link compareLineup}).
+   */
+  lineup: LineupSlot[];
+  /** Started players the best reachable lineup benches — the swaps to make. */
+  sit: string[];
+  /** Benched players it starts: the other end of those same swaps. */
+  start: string[];
 };
 
 export type WeekLineups = {
@@ -490,6 +513,13 @@ export type WeekLineups = {
  * is the best lineup reachable *from here*, and `points_left` is points a
  * manager can still go and get. It is day-accurate, since `game_date` is a date:
  * a finished early game stays movable until the date rolls over in ET.
+ *
+ * **A best-ball league is answered as a league with nothing to decide**, which is
+ * the one league where `starters` is not the lineup: Sleeper seats the best one
+ * itself once the games are in, so `lineup` is the optimal lineup, `points_left`
+ * is zero and there is no swap to name. The flag rides on each league rather than
+ * being derived here, since it is a fact about the league's settings and this
+ * module reads projections. See {@link compareLineup}.
  */
 export async function getWeekLineups({
   season,
@@ -555,12 +585,16 @@ export async function getWeekLineups({
         starters: team.starters,
         players: candidates,
         locked,
+        bestBall: league.bestBall,
       });
 
       byTeam.set(team.roster_id, {
         optimal_points: comparison.optimal_points,
         current_points: comparison.current_points,
         points_left: comparison.points_left,
+        lineup: comparison.current,
+        sit: comparison.sit,
+        start: comparison.start,
       });
     }
     teams.set(league.league_id, byTeam);

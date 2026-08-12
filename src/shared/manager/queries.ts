@@ -1,6 +1,6 @@
 import { pool } from "@/shared/db";
 
-import { DYNASTY_LEAGUE_TYPE, LEAGUE_TYPE_SQL } from "./adp";
+import { BEST_BALL_SQL, DYNASTY_LEAGUE_TYPE, LEAGUE_TYPE_SQL } from "./adp";
 import { ADP_FILTER_DEFAULTS } from "./adp-filters";
 import type { AdpBoardType } from "./adp-filters";
 import { dynastyPickGrid, ownedDraftPicks } from "./draft-picks";
@@ -579,8 +579,12 @@ export async function getManagerLeagueRosters(
     league_id: string;
     roster_positions: string[] | null;
     scoring_settings: Record<string, number> | null;
+    best_ball: boolean;
   }>(
-    `SELECT l.league_id, l.roster_positions, l.scoring_settings
+    // Best ball through the same guarded fragment `/api/adp` filters on, so the
+    // lineup solve and the board can't disagree about which leagues are one.
+    `SELECT l.league_id, l.roster_positions, l.scoring_settings,
+            ${BEST_BALL_SQL} AS best_ball
        FROM leagues l
        JOIN league_users lu
          ON lu.league_id = l.league_id AND lu.user_id = $1
@@ -597,6 +601,7 @@ export async function getManagerLeagueRosters(
         league_id: l.league_id,
         roster_positions: l.roster_positions,
         scoring_settings: l.scoring_settings,
+        best_ball: l.best_ball,
         teams: [],
       },
     ]),
@@ -722,12 +727,15 @@ export async function getLeagueDetail(
     roster_positions: string[] | null;
     scoring_settings: Record<string, number> | null;
     league_type: number;
+    best_ball: boolean;
     previous_league_id: string | null;
   }>(
-    // The type is read through the same guarded fragment `/api/adp` groups
-    // leagues by, so "is this a dynasty league" has one answer across the app.
+    // Both the type and the format are read through the same guarded fragments
+    // `/api/adp` groups and filters leagues by, so "is this a dynasty league"
+    // and "is this best ball" have one answer across the app.
     `SELECT league_id, name, season, status, roster_positions, scoring_settings,
-            ${LEAGUE_TYPE_SQL} AS league_type, previous_league_id
+            ${LEAGUE_TYPE_SQL} AS league_type, ${BEST_BALL_SQL} AS best_ball,
+            previous_league_id
        FROM leagues l WHERE league_id = $1`,
     [leagueId],
   );
@@ -827,6 +835,7 @@ export async function getLeagueDetail(
     status: l.status,
     roster_positions: l.roster_positions,
     scoring_settings: l.scoring_settings,
+    best_ball: l.best_ball,
     teams,
   };
 }

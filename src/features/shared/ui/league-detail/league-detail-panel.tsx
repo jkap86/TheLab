@@ -410,6 +410,7 @@ function Panel({
               weekView={weekView}
               columns={rosterColumns}
               onOpenColumn={rosterEditor.open}
+              bestBall={data.best_ball}
               heading={
                 <RosterHeading
                   team={game.mine}
@@ -444,6 +445,7 @@ function Panel({
             weekView={weekView}
             columns={rosterColumns}
             onOpenColumn={rosterEditor.open}
+            bestBall={data.best_ball}
             surface={game ? "recessed" : "raised"}
             heading={
               game ? (
