@@ -10,6 +10,7 @@ import {
   adpBoardFor,
   adpValue,
   boardSignature,
+  expectedAdpValue,
   defaultBoardChoices,
   parseAdpBoardChoices,
   leagueAdpPool,
@@ -17,7 +18,7 @@ import {
   rosterAdpValue,
   startingSlotCount,
 } from "./adp-value.ts";
-import type { AdpBoardChoices } from "./adp-value.ts";
+import type { AdpBoardChoices, AdpDistribution } from "./adp-value.ts";
 
 // A 12-team league starting 9 — 108 startable slots — at the default steepness.
 const POOL = 108;
@@ -102,6 +103,127 @@ describe("leagueAdpPool", () => {
     // it lives here and not retyped per caller.
     assert.equal(leagueAdpPool(10, null), 10 * TYPICAL_STARTING_SLOTS);
     assert.equal(leagueAdpPool(10, []), 10 * TYPICAL_STARTING_SLOTS);
+  });
+});
+
+/**
+ * A distribution with no spread — the point estimate's own case, and the base
+ * every test below varies one field of.
+ */
+const flat = (adp: number, over: Partial<AdpDistribution> = {}): AdpDistribution => ({
+  adp,
+  picks: 40,
+  stdev: 0,
+  m3: 0,
+  min_pick: 1,
+  max_pick: 400,
+  ...over,
+});
+
+describe("expectedAdpValue", () => {
+  test("with no spread it is the curve read at the average", () => {
+    // The agreement that says this is a refinement of `adpValue` rather than a
+    // different curve: a board whose drafts all took a player at the same pick
+    // has nothing to correct for, and must price him exactly as before.
+    for (const adp of [1, 12, 28, 55, 109, 240]) {
+      assert.equal(
+        expectedAdpValue(flat(adp), POOL, HALVINGS),
+        adpValue(adp, POOL, HALVINGS),
+      );
+    }
+  });
+
+  test("spread raises the value, because the curve is convex", () => {
+    // Jensen: E[v(P)] > v(E[P]) for a convex v, so a player taken early in half
+    // the drafts and late in the other half is worth more than one taken at
+    // their average every time. It is the whole reason the mean is the wrong
+    // statistic — and the players it is wrong about are the rookies and the
+    // post-injury names, which is where the question is live.
+    const point = expectedAdpValue(flat(60), POOL, HALVINGS);
+    const spread = expectedAdpValue(flat(60, { stdev: 25 }), POOL, HALVINGS);
+    assert.ok(spread > point, `${spread} should exceed ${point}`);
+  });
+
+  test("more spread raises it further, monotonically", () => {
+    const values = [0, 5, 10, 20, 30].map((stdev) =>
+      expectedAdpValue(flat(60, { stdev }), POOL, HALVINGS),
+    );
+    for (let i = 1; i < values.length; i++) {
+      assert.ok(values[i]! >= values[i - 1]!, `${values}`);
+    }
+  });
+
+  test("a right skew claws part of that back", () => {
+    // Pick distributions are right-skewed by construction — a player can slide
+    // forever and cannot rise past 1.01 — so the third cumulant is positive and
+    // subtracts. Dropping the term would over-correct on exactly the players the
+    // spread term exists for.
+    const symmetric = expectedAdpValue(flat(60, { stdev: 25 }), POOL, HALVINGS);
+    const skewed = expectedAdpValue(
+      flat(60, { stdev: 25, m3: 25 ** 3 }),
+      POOL,
+      HALVINGS,
+    );
+    assert.ok(skewed < symmetric, `${skewed} should fall short of ${symmetric}`);
+    // ...but not past the point estimate: the two terms are a correction, not a
+    // second opinion about where the player goes.
+    assert.ok(skewed > expectedAdpValue(flat(60), POOL, HALVINGS));
+  });
+
+  test("the observed support clamps it at both ends", () => {
+    // An expectation over an empirical distribution cannot exceed the curve at
+    // the earliest pick seen, nor fall below it at the latest. That is exact
+    // rather than a tuning constant, and it is what makes truncating an
+    // asymptotic series safe when the spread gets large.
+    const wild = expectedAdpValue(
+      flat(60, { stdev: 400, min_pick: 40, max_pick: 90 }),
+      POOL,
+      HALVINGS,
+    );
+    assert.ok(wild <= adpValue(40, POOL, HALVINGS));
+    assert.ok(wild >= adpValue(90, POOL, HALVINGS));
+  });
+
+  test("nothing is ever worth more than the first pick", () => {
+    assert.equal(
+      expectedAdpValue(flat(1, { stdev: 90, min_pick: 1 }), POOL, HALVINGS),
+      ADP_PEAK,
+    );
+  });
+
+  test("a single pick has no spread to read", () => {
+    // A sample of one has no standard deviation and a sample of two no third
+    // moment, so each term is taken only where its moment means something —
+    // a board that answered junk falls back to the point estimate rather than
+    // to a correction built on it.
+    const one = expectedAdpValue(flat(60, { picks: 1, stdev: 40 }), POOL, HALVINGS);
+    assert.equal(one, adpValue(60, POOL, HALVINGS));
+    const two = expectedAdpValue(
+      flat(60, { picks: 2, stdev: 20, m3: 9999 }),
+      POOL,
+      HALVINGS,
+    );
+    assert.equal(two, expectedAdpValue(flat(60, { picks: 2, stdev: 20 }), POOL, HALVINGS));
+  });
+
+  test("a junk moment degrades to the point estimate", () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.equal(
+        expectedAdpValue(flat(60, { stdev: bad }), POOL, HALVINGS),
+        adpValue(60, POOL, HALVINGS),
+      );
+    }
+  });
+
+  test("a steeper curve corrects harder", () => {
+    // The correction is a series in the decay constant, which the steepness
+    // scales — so how much the spread is worth is a fact about the reader's own
+    // curve, not a constant bolted onto the average.
+    const gentle =
+      expectedAdpValue(flat(60, { stdev: 25 }), POOL, 2) / adpValue(60, POOL, 2);
+    const steep =
+      expectedAdpValue(flat(60, { stdev: 25 }), POOL, 8) / adpValue(60, POOL, 8);
+    assert.ok(steep > gentle, `${steep} should exceed ${gentle}`);
   });
 });
 

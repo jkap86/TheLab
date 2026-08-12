@@ -45,6 +45,7 @@ const stats = (adp: number, picks = 20) => ({
   min_pick: 1,
   max_pick: 100,
   stdev: 3,
+  m3: 0,
 });
 
 /** One board row: a player with an average on exactly one of the two markets. */

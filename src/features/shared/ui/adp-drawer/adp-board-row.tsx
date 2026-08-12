@@ -3,7 +3,7 @@ import { memo } from "react";
 import type { AdpBoardStats, AdpBoardType } from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
-import { previewAdpValue } from "../../adp-controls";
+import { previewExpectedAdpValue } from "../../adp-controls";
 import type { LeagueFilters } from "../../league-filters";
 import { PositionBadge } from "../position-badge";
 import { AdpCell, ValueCell } from "./adp-board-cells";
@@ -66,8 +66,12 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   // it without re-asserting that.
   const sole = player[soleBoard];
 
+  // The expectation over the drafts behind the average rather than the curve
+  // read at that average — the number the cards this previews are summed from,
+  // so a drawer showing `v(mean)` over cards summed from `E[v]` would be the
+  // two-answers-to-one-question the board and the cards share a curve to stop.
   const value = (entry: AdpBoardStats | null) =>
-    entry === null ? null : previewAdpValue(entry.adp, rules, steepness);
+    entry === null ? null : previewExpectedAdpValue(entry, rules, steepness);
 
   return (
     <li

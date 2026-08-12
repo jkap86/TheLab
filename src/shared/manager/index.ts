@@ -106,6 +106,7 @@ export type {
   AdpBoardStats,
   AdpResult,
   AdpRow,
+  DraftCounts,
   DraftDensityMonth,
   PlayerAdp,
   PlayerBoardAdp,
@@ -120,13 +121,18 @@ export {
   adpValue,
   boardSignature,
   defaultBoardChoices,
+  expectedAdpValue,
   leagueAdpPool,
   parseAdpBoardChoices,
   parseSteepness,
   rosterAdpValue,
   startingSlotCount,
 } from "./adp-value";
-export type { AdpBoardChoices, AdpRosterValue } from "./adp-value";
+export type {
+  AdpBoardChoices,
+  AdpDistribution,
+  AdpRosterValue,
+} from "./adp-value";
 export {
   parseAdpFilters,
   usesDefaultSeason,

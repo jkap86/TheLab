@@ -103,8 +103,8 @@ const adp: Record<string, AdpPlayerPayload> = {
     position: "RB",
     team: "SF",
     rookie: false,
-    redraft: { picks: 30, adp: 31, min_pick: 20, max_pick: 44, stdev: 5.5 },
-    dynasty: { picks: 25, adp: 16, min_pick: 8, max_pick: 30, stdev: 4.4 },
+    redraft: { picks: 30, adp: 31, min_pick: 20, max_pick: 44, stdev: 0, m3: 0 },
+    dynasty: { picks: 25, adp: 16, min_pick: 8, max_pick: 30, stdev: 0, m3: 0 },
   },
   p2: {
     player_id: "p2",
@@ -112,8 +112,8 @@ const adp: Record<string, AdpPlayerPayload> = {
     position: "WR",
     team: "CIN",
     rookie: false,
-    redraft: { picks: 30, adp: 16, min_pick: 4, max_pick: 26, stdev: 3.3 },
-    dynasty: { picks: 25, adp: 31, min_pick: 12, max_pick: 48, stdev: 6.6 },
+    redraft: { picks: 30, adp: 16, min_pick: 4, max_pick: 26, stdev: 0, m3: 0 },
+    dynasty: { picks: 25, adp: 31, min_pick: 12, max_pick: 48, stdev: 0, m3: 0 },
   },
 };
 

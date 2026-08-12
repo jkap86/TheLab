@@ -5208,6 +5208,75 @@ stops holding, a comment saying it does would not have caught it.
   KTC column would be choosing between em dashes. Nothing is invalidated either
   way; re-aiming a slot re-enables the query against the same key, and an entry
   inside its stale time is a cache read.
+- **The curve is read as an *expectation* over a player's pick distribution, not
+  at his mean pick — `expectedAdpValue`, and `adpValue` is now the point estimate
+  underneath it.** `avg(pick_no)` was being read as though it described a player,
+  and it does not: taken at 12 in half the drafts and 130 in the other half, he
+  averages 71, which describes nobody. The curve is convex, so by Jensen
+  `E[v(P)] > v(E[P])` and the gap grows with the spread — pricing off the mean
+  **systematically undervalued every polarising player**, which is exactly the
+  rookies and the post-injury names where the question is live. Five things hold
+  it up:
+  - **It is a cumulant series, so it costs no second pass.** For
+    `v = PEAK · e^(−λ(P−1))`, `log E[v]` is `log v(μ) + λ²κ₂/2 − λ³κ₃/6 + …` —
+    exact for a Gaussian, second-order for anything else. `stdev` was already
+    computed and already on the wire; the third moment is two more aggregates in
+    the same `GROUP BY` (`thirdCentralMoment`, from raw moments, whose famous
+    cancellation is harmless where the terms are ~1e6 in a float8 and the moment
+    matters at ~1e4).
+  - **The skew term is not optional.** A pick distribution is right-skewed by
+    construction — a player can slide forever and cannot rise past 1.01 — so
+    `κ₃ > 0` and the third term claws back part of what the second added.
+    Dropping it over-corrects on precisely the players the second term exists
+    for. Measured on a 108-slot pool at the default curve, `σ = 40` is +69%
+    before the skew term and +41% after it.
+  - **The clamp is the data's, not a tuning constant.** An expectation over an
+    empirical distribution cannot exceed the curve at the earliest pick observed
+    nor fall below it at the latest, so the answer is held inside
+    `[v(max_pick), v(min_pick)]` — both already selected. That is what makes
+    truncating an asymptotic series safe when `λσ` gets large, and it needs no
+    judgement.
+  - **With no spread it is `adpValue` to the rounding**, which the tests assert:
+    that is what says this is a refinement of the curve rather than a different
+    curve. `PlayerAdp` is now literally `AdpBoardStats` and the priced read
+    selects `boardAggregates` — the columns the paged board already selected —
+    so the drawer's preview column and the cards it previews read one
+    distribution rather than two spellings of an average.
+  - **The *other* half of that argument was tried and pulled**, and the reason is
+    worth keeping because the fix looks obvious. `avg(pick_no)` also conditions
+    on being drafted, so a player taken in a tenth of the board's drafts is
+    priced as though he always goes there; the whole expectation would weight it
+    by his take rate. The blocker is the denominator: a take rate is only a fact
+    about a player if every draft in it *could* have taken him, and the rookie
+    class does not exist in Sleeper's player pool before the NFL draft in late
+    April — so every startup held before it sits in the denominator and can never
+    be in the numerator. With `min_picks` at 2 it read as a 10–30× markdown of
+    exactly the players this scale is most often opened for, in a direction
+    nothing on screen would explain. Nothing stored says when a player entered
+    the pool. It wants a `pool_entered` column or a measurement saying the bias
+    is smaller than the error it removes; until then this prices what a player
+    costs *when he is taken*, which is a claim the data supports.
+- **What the steepness slider should default to is a measurement nobody has
+  taken, and `scripts/fit-adp-curve.ts` is the harness for taking it.** Every
+  completed trade is a revealed near-indifference between two bundles, so the
+  curve's one free parameter can be fitted to them rather than guessed: price
+  both hauls on the league's own pool and board, score
+  `|log(ΣA / ΣB)|`, and grid-search the steepness. Four decisions in it, and each
+  is what separates a measurement from a number with a decimal point. The score
+  is a **median of logs**, since trades span three orders of magnitude and a
+  handful are salary dumps. It is reported on a **time-held-out** fifth, because
+  a curve chosen and graded on one sample is graded on its own noise. It runs on
+  **player-for-player trades only** — a pick is priced through the rookie ladder
+  and a KTC ratio, so including one measures those as much as the curve. And the
+  **count-asymmetric trades are broken out**, because they are the only ones that
+  carry information about steepness (a 1-for-1 balances under every curve) *and*
+  the ones the model is most wrong about: a 3-for-1 favours the consolidating
+  side for a reason — roster spots are scarce — that this curve has no term for,
+  so a fit would read part of the price of a roster spot as steepness. That term
+  is what a nonparametric fit would add, and whether one is worth building is
+  what the surface's flatness decides. Nothing in the app reads the script and it
+  writes nothing.
+
 - **ADP is ordinal, so it cannot be summed — `adp-value` makes it cardinal
   first.** A draft position is a rank where lower is better, so adding raw ADPs
   gives a deep roster a bigger (worse) number and lets a stud *lower* the total.

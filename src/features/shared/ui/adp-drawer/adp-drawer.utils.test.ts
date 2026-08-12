@@ -40,6 +40,7 @@ const stats = (over: Partial<AdpBoardStats> = {}): AdpBoardStats => ({
   min_pick: 1,
   max_pick: 12,
   stdev: 2.35,
+  m3: 0,
   ...over,
 });
 

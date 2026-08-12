@@ -135,8 +135,8 @@ const player = (id: string, over: Partial<AdpPlayerPayload> = {}): AdpPlayerPayl
   position: "WR",
   team: "SF",
   rookie: false,
-  redraft: { picks: 12, adp: Number(id) + 0.5, min_pick: 1, max_pick: 30, stdev: 2.25 },
-  dynasty: { picks: 7, adp: Number(id) + 1.25, min_pick: 2, max_pick: 40, stdev: 3.5 },
+  redraft: { picks: 12, adp: Number(id) + 0.5, min_pick: 1, max_pick: 30, stdev: 2.25, m3: 0 },
+  dynasty: { picks: 7, adp: Number(id) + 1.25, min_pick: 2, max_pick: 40, stdev: 3.5, m3: 0 },
   ...over,
 });
 
@@ -666,8 +666,8 @@ describe("picks on the board", () => {
   const rookies = Array.from({ length: 12 }, (_, i) =>
     player(`r${i + 1}`, {
       rookie: true,
-      redraft: { picks: 9, adp: i + 1, min_pick: 1, max_pick: 30, stdev: 2 },
-      dynasty: { picks: 9, adp: i + 1, min_pick: 1, max_pick: 30, stdev: 2 },
+      redraft: { picks: 9, adp: i + 1, min_pick: 1, max_pick: 30, stdev: 2, m3: 0 },
+      dynasty: { picks: 9, adp: i + 1, min_pick: 1, max_pick: 30, stdev: 2, m3: 0 },
     }),
   );
   const withPicks = (over: Partial<AdpPayload> = {}) =>

@@ -5,7 +5,9 @@ import {
   STEEPNESS_RANGE,
   TYPICAL_STARTING_SLOTS,
   adpValue,
+  expectedAdpValue,
 } from "../../shared/manager/adp-value.ts";
+import type { AdpDistribution } from "../../shared/manager/adp-value.ts";
 import {
   MONTH_ABBREVIATIONS,
   formatRangeDate,
@@ -401,13 +403,44 @@ export function previewDraftTeams(rules: LeagueFilters): number {
   return Number.isInteger(count) && count > 0 ? count : TYPICAL_DRAFT_TEAMS;
 }
 
-/** A board row's draft-capital value under the drawer's current curve. */
+/**
+ * A bare average as draft capital under the drawer's current curve — the curve
+ * read at a point.
+ *
+ * It is what the **pick** rows want, and that is the whole of why it survives
+ * beside {@link previewExpectedAdpValue}. A pick's stand is a *rung* — the Nth
+ * rookie off the ordering board — so the ADP it carries is often interpolated
+ * between two players and has no distribution at all; and where it does have
+ * one, that player's own spread is not the pick's. What makes a 1.03 uncertain
+ * is which player is available at it, which the ladder answers by rank, not how
+ * far that particular rookie slides between drafts. Correcting for the second
+ * would be answering a question nobody asked with a number that looks like the
+ * answer to the first.
+ */
 export function previewAdpValue(
   adp: number,
   rules: LeagueFilters,
   steepness: number,
 ): number {
   return adpValue(adp, previewAdpPool(rules), steepness);
+}
+
+/**
+ * A **player** row's draft-capital value: the same curve as the expectation over
+ * the drafts behind his average rather than read at that average.
+ *
+ * Which is the number the cards are priced on, so this is the one the board's
+ * own Value column has to show — a drawer previewing `v(mean)` over cards summed
+ * from `E[v]` is the two-answers-to-one-question the panel and the cards were
+ * put on one board to stop. See `expectedAdpValue` for what the two corrections
+ * are and why they pull opposite ways.
+ */
+export function previewExpectedAdpValue(
+  stats: AdpDistribution,
+  rules: LeagueFilters,
+  steepness: number,
+): number {
+  return expectedAdpValue(stats, previewAdpPool(rules), steepness);
 }
 
 /** The `rounds_min`/`rounds_max` bounds each rounds bucket sends. */

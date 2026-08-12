@@ -1149,11 +1149,11 @@ describe("adpBoardRows", () => {
     redraft:
       redraft === null
         ? null
-        : { adp: redraft, min_pick: 1, max_pick: 30, picks, stdev: 2 },
+        : { adp: redraft, min_pick: 1, max_pick: 30, picks, stdev: 2, m3: 0 },
     dynasty:
       dynasty === null
         ? null
-        : { adp: dynasty, min_pick: 1, max_pick: 30, picks, stdev: 2 },
+        : { adp: dynasty, min_pick: 1, max_pick: 30, picks, stdev: 2, m3: 0 },
   });
 
   const ids = (rows: AdpPlayerPayload[]) => rows.map((r) => r.player_id);
