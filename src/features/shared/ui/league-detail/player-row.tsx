@@ -146,6 +146,7 @@ export function PlayerRow({
   playerId,
   slot,
   advice,
+  reseat,
   outlook,
   split,
   layout,
@@ -163,6 +164,15 @@ export function PlayerRow({
    * best lineup and there is nothing to disagree with — see {@link LineupAdvice}.
    */
   advice?: LineupAdvice;
+  /**
+   * The seat kickoff order gives this player instead — the same starters, with
+   * earlier games in stricter slots and later games in the flexes, so the
+   * flexible seats stay open longest. Absent for the common row (most seats
+   * don't move), on a season panel, and wherever the week carries no ordering;
+   * the caller also withholds it from a `sit` row, since re-seating a player
+   * who shouldn't start is polishing the wrong lineup.
+   */
+  reseat?: string;
   outlook?: PlayerOutlook;
   /**
    * How the projection divides between weeks in and out of the lineup. Undefined
@@ -208,6 +218,10 @@ export function PlayerRow({
   // Never on an unfilled slot: there is nobody in it to move, and the solve
   // names players rather than seats.
   const mark = empty || !advice ? null : ADVICE[advice];
+
+  // The kickoff re-seat, in the slot chip's own vocabulary — it names a seat,
+  // and two spellings of one slot on one row would read as two slots.
+  const move = empty || !reseat ? null : (SLOT_LABEL[reseat] ?? reseat);
 
   const ctx = {
     outlook,
@@ -323,6 +337,22 @@ export function PlayerRow({
         )}
         {team && (
           <span className="shrink-0 text-[0.7rem] text-foreground/35">{team}</span>
+        )}
+        {/* The kickoff re-seat: same starter, different seat, so the flexes
+            lock last. The accent rather than amber — it is an available move,
+            not points being lost, and the amber on this list already means
+            exactly that. `shrink-0` like the position and team beside it: the
+            name is the only thing that gives, and a clipped seat name would
+            send a reader to the wrong slot. */}
+        {move && (
+          <span
+            title={`Kickoff order — seat him at ${move} and the more flexible slot stays open for the later game`}
+            className="shrink-0 font-mono text-[0.7rem] font-bold tracking-[0.04em] text-active/80"
+          >
+            <span className="sr-only">Re-seat at </span>
+            <span aria-hidden="true">{"→ "}</span>
+            {move}
+          </span>
         )}
       </span>
 

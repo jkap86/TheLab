@@ -17,7 +17,7 @@ const matchup = (
     team_name: null,
     avatar_url: null,
   },
-  projection: { optimal: 120, current: 110, points_left: 10 },
+  projection: { optimal: 120, current: 110, points_left: 10, kickoff_moves: null },
   opponent_projection: 100,
   ...over,
 });
@@ -25,7 +25,7 @@ const matchup = (
 /** A matchup whose own projection is `current`, against `opponent_projection`. */
 const game = (current: number, opponent: number): LeagueMatchupPayload =>
   matchup({
-    projection: { optimal: current, current, points_left: 0 },
+    projection: { optimal: current, current, points_left: 0, kickoff_moves: null },
     opponent_projection: opponent,
   });
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { orderLineupByKickoff } from "./kickoff-order.ts";
+import { kickoffMoves, orderLineupByKickoff } from "./kickoff-order.ts";
 import type { KickoffPlayer, KickoffSeat } from "./kickoff-order.ts";
 
 /**
@@ -241,6 +241,40 @@ describe("orderLineupByKickoff", () => {
       orderLineupByKickoff({ lineup, players }),
       orderLineupByKickoff({ lineup, players: [...players].reverse() }),
     );
+  });
+});
+
+describe("kickoffMoves", () => {
+  test("names each moved player with the seat he leaves and the one he takes", () => {
+    const players = [p("rb_late", "RB", MON), p("rb_early", "RB", THU)];
+    const lineup = [seat("RB", "rb_late"), seat("FLEX", "rb_early")];
+
+    const moves = kickoffMoves(lineup, orderLineupByKickoff({ lineup, players }));
+    assert.deepEqual(moves, [
+      { player_id: "rb_late", from: "RB", to: "FLEX" },
+      { player_id: "rb_early", from: "FLEX", to: "RB" },
+    ]);
+  });
+
+  test("an ordered lineup has no moves, which is a real answer", () => {
+    const lineup = [seat("RB", "rb_early"), seat("FLEX", "rb_late")];
+    assert.deepEqual(kickoffMoves(lineup, lineup), []);
+  });
+
+  test("a move between two seats of one slot is not a move a reader can see", () => {
+    // The ordering never produces one; a caller diffing arbitrary lineups
+    // shouldn't report an index change no rendering could show.
+    const current = [seat("RB", "rb1"), seat("RB", "rb2")];
+    const swapped = [seat("RB", "rb2"), seat("RB", "rb1")];
+    assert.deepEqual(kickoffMoves(current, swapped), []);
+  });
+
+  test("empty seats and players only one side knows are not moves", () => {
+    const current = [seat("RB", null), seat("FLEX", "rb1"), seat("QB", "mystery")];
+    const ordered = [seat("RB", null), seat("WRRB_FLEX", "rb1")];
+    assert.deepEqual(kickoffMoves(current, ordered), [
+      { player_id: "rb1", from: "FLEX", to: "WRRB_FLEX" },
+    ]);
   });
 });
 

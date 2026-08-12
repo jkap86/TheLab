@@ -49,6 +49,31 @@ export async function getPlayersByIds(
 }
 
 /**
+ * Player ids → the NFL team each is on, for joining a player to his game.
+ *
+ * The slim half of {@link getPlayersByIds}, for callers that need nothing a
+ * name resolves — the kickoff-ordered lineup reads a player's game time
+ * through his team and the week's schedule, across the union of every roster
+ * in a request. Null is Sleeper's own "no team" (a free agent, a retired
+ * player), and an id the cache doesn't know is absent — both read as "game
+ * unknown" downstream, never as a guess.
+ */
+export async function getPlayerTeams(
+  ids: string[],
+): Promise<Record<string, string | null>> {
+  if (ids.length === 0) return {};
+
+  const { rows } = await pool.query<{ player_id: string; team: string | null }>(
+    `SELECT player_id, team FROM players WHERE player_id = ANY($1)`,
+    [ids],
+  );
+
+  const out: Record<string, string | null> = {};
+  for (const r of rows) out[r.player_id] = r.team;
+  return out;
+}
+
+/**
  * Which of `ids` are in their first NFL season — Sleeper's `years_exp` of 0.
  *
  * It exists for one caller and one question: `/api/adp` marks the rookies on a

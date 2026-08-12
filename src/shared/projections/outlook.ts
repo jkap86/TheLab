@@ -1,8 +1,11 @@
-import { getFantasyPositions } from "@/shared/players";
+import { getFantasyPositions, getPlayerTeams } from "@/shared/players";
+import { getWeekKickoffs } from "@/shared/schedule";
 
 import { aggregateWeeklyStats } from "./aggregate";
 import type { PlayerWeekStats } from "./aggregate";
 import { isProjectable, lineupCandidates, rosterPlayerIds } from "./candidates";
+import { orderLineupByKickoff } from "./kickoff-order";
+import type { KickoffPlayer, KickoffSeat } from "./kickoff-order";
 import { compareLineup, optimalLineup, recognisedSlots } from "./optimal";
 import type { LineupComparison, LineupSlot } from "./optimal";
 import {
@@ -468,6 +471,18 @@ export type TeamWeekLineup = {
   sit: string[];
   /** Benched players it starts: the other end of those same swaps. */
   start: string[];
+  /**
+   * The same starters re-seated so the lineup locks strict-seats-first —
+   * earlier kickoffs into dedicated slots, later ones into the flexes, in the
+   * same seat order as `lineup`. See `./kickoff-order` for the ordering and
+   * `kickoffMoves` for reading the seat changes off the pair.
+   *
+   * Null is "no answer", never "already ordered": a best-ball league (nobody
+   * seats that lineup — Sleeper does, after the games), a week the schedule
+   * supplies no kickoff instants for, or a kickoff read that failed. Already
+   * ordered is this array equal to `lineup`, seat by seat.
+   */
+  kickoff_order: KickoffSeat[] | null;
 };
 
 export type WeekLineups = {
@@ -520,6 +535,15 @@ export type WeekLineups = {
  * is zero and there is no swap to name. The flag rides on each league rather than
  * being derived here, since it is a fact about the league's settings and this
  * module reads projections. See {@link compareLineup}.
+ *
+ * **Each lineup also comes back re-seated by kickoff** (`kickoff_order`): the
+ * same starters with earlier games in stricter slots and later games in the
+ * flexes, so a manager can keep the flexible seats open longest — see
+ * `./kickoff-order`, where the ordering lives. Its inputs are the one read here
+ * that leaves this app's own data (the schedule call, through
+ * `shared/schedule`'s in-memory cache), and it is judged per read: a schedule
+ * that can't be read costs the ordering — null, never an identity lineup
+ * dressed up as "already ordered" — and nothing else.
  */
 export async function getWeekLineups({
   season,
@@ -553,6 +577,12 @@ export async function getWeekLineups({
   const locked = new Set(
     stats.filter((row) => row.locked).map((row) => row.player_id),
   );
+
+  // Kickoff instants for the re-seat below, read once for the account like the
+  // positions above: when a player's game kicks off is a fact about the
+  // schedule, not about any league. Judged per read — the ordering is a column
+  // on top of the lineups, so a failure costs it and nothing else.
+  const kickoffs = await kickoffInputs(season, week, playerIds);
 
   const rowsByPlayer = bucketByPlayer(stats);
 
@@ -595,12 +625,83 @@ export async function getWeekLineups({
         lineup: comparison.current,
         sit: comparison.sit,
         start: comparison.start,
+        // Null for a best-ball league before anything is looked up: Sleeper
+        // seats that lineup after the games, so there is no seat order for a
+        // manager to set — the same reason its sit/start are empty.
+        kickoff_order: league.bestBall
+          ? null
+          : kickoffOrdered(comparison.current, positions, kickoffs, locked),
       });
     }
     teams.set(league.league_id, byTeam);
   }
 
   return { week, teams };
+}
+
+/** What re-seating a lineup by kickoff needs: each player's team, each team's instant. */
+type KickoffInputs = {
+  teams: Record<string, string | null>;
+  byTeam: Map<string, number>;
+};
+
+/**
+ * The kickoff instants behind {@link TeamWeekLineup.kickoff_order}, for the
+ * union of every roster in the request — the schedule's week through
+ * `shared/schedule`'s read-through cache, and each player's NFL team to join
+ * him to it.
+ *
+ * Null when there is nothing honest to order against: a week the schedule
+ * names no believable instants for, or either read failing outright. The
+ * ordering itself holds any *single* player it can't date (see
+ * `./kickoff-order`), but with nothing dated at all the identity answer would
+ * read as "already ordered" — a claim about a schedule this process hasn't
+ * seen — so the whole ordering answers null instead.
+ */
+async function kickoffInputs(
+  season: string,
+  week: number,
+  playerIds: string[],
+): Promise<KickoffInputs | null> {
+  try {
+    const [byTeam, teams] = await Promise.all([
+      getWeekKickoffs(season, week),
+      getPlayerTeams(playerIds),
+    ]);
+    if (byTeam.size === 0) return null;
+    return { teams, byTeam };
+  } catch (error) {
+    console.error(`[projections] kickoff inputs failed for week ${week}:`, error);
+    return null;
+  }
+}
+
+/**
+ * One team's lineup re-seated by kickoff — the thin join between the lookups
+ * above and the pure ordering, deciding nothing itself: eligibility, holds and
+ * the objective all live in `./kickoff-order`, and a player whose team or
+ * instant is unknown arrives there as a null kickoff and keeps his seat.
+ */
+function kickoffOrdered(
+  lineup: readonly LineupSlot[],
+  positions: Record<string, string[]>,
+  kickoffs: KickoffInputs | null,
+  locked: ReadonlySet<string>,
+): KickoffSeat[] | null {
+  if (!kickoffs) return null;
+
+  const players: KickoffPlayer[] = [];
+  for (const seat of lineup) {
+    if (!seat.player_id) continue;
+    const team = kickoffs.teams[seat.player_id] ?? null;
+    players.push({
+      player_id: seat.player_id,
+      positions: positions[seat.player_id] ?? [],
+      kickoff: team === null ? null : (kickoffs.byTeam.get(team) ?? null),
+    });
+  }
+
+  return orderLineupByKickoff({ lineup, players, locked });
 }
 
 /**

@@ -71,6 +71,8 @@ const weekView = {
   ppg: {},
   team_projection: {
     // A lineup with something left on the bench, and one already optimal.
+    // Neither carries a kickoff ordering, which is "no answer" and draws no
+    // re-seat marks — the marked case has its own fixtures below.
     "1": {
       optimal: 142.6,
       current: 131.2,
@@ -78,6 +80,7 @@ const weekView = {
       lineup: lineup("7"),
       sit: ["7"],
       start: ["8"],
+      kickoff_order: null,
     },
     "2": {
       optimal: 128.05,
@@ -86,6 +89,7 @@ const weekView = {
       lineup: lineup("8"),
       sit: [],
       start: [],
+      kickoff_order: null,
     },
   },
   team_ppg: {},
@@ -254,5 +258,79 @@ describe("a season panel is untouched by any of it", () => {
     assert.match(html, /grid-cols-\[minmax\(0,1fr\)_2\.875rem_2\.875rem\]/);
     assert.equal(marked(html, "Ashton Jeanty"), null);
     assert.doesNotMatch(html, /Swap out: /);
+  });
+});
+
+describe("the kickoff re-seat marks", () => {
+  // Two backs the seats can trade: Jeanty at RB, Bijan in the flex, and the
+  // ordering wanting them the other way around.
+  const reseatTeam = { ...team(3, "jkap"), players: ["7", "8"], starters: ["7", "8"] };
+
+  const view = (over: object = {}) =>
+    ({
+      week: 5,
+      ppg_source: { season: "2026", weeks: 4, prior: false },
+      projection: { "7": 12.4, "8": 18.4 },
+      ppg: {},
+      team_projection: {
+        "3": {
+          optimal: 30.8,
+          current: 30.8,
+          points_left: 0,
+          lineup: [
+            { slot: "RB", player_id: "7" },
+            { slot: "FLEX", player_id: "8" },
+          ],
+          sit: [],
+          start: [],
+          kickoff_order: [
+            { slot: "RB", player_id: "8" },
+            { slot: "FLEX", player_id: "7" },
+          ],
+          ...over,
+        },
+      },
+      team_ppg: {},
+    }) as never;
+
+  const renderHalf = (weekView: never) =>
+    renderToStaticMarkup(
+      createElement(RosterDetail, {
+        team: reseatTeam,
+        teams: [reseatTeam],
+        players,
+        rosterPositions: ["RB", "FLEX", "BN"],
+        outlook: null,
+        values,
+        weekView,
+        columns: ["week_proj"],
+        onOpenColumn: () => {},
+      } as never),
+    );
+
+  test("marks both ends of a seat trade with the seat each should take", () => {
+    // A trade has two ends in one list — unlike a swap, whose ends sit in two —
+    // and half a trade is advice a reader cannot follow.
+    const html = renderHalf(view());
+    assert.match(html, /seat him at FLEX/);
+    assert.match(html, /seat him at RB/);
+    // What the arrow means, written where a reader who cannot see it will reach.
+    assert.equal(html.split("Re-seat at ").length - 1, 2);
+  });
+
+  test("a swap out outranks a re-seat, so a name never wears two marks", () => {
+    // Re-seating a player the solve would bench is polishing the wrong lineup;
+    // the other end of the trade keeps its mark.
+    const html = renderHalf(view({ sit: ["7"] }));
+    assert.equal(marked(html, "Ashton Jeanty"), "sit");
+    assert.equal(html.split("Re-seat at ").length - 1, 1);
+    assert.match(html, /seat him at RB/);
+    assert.doesNotMatch(html, /seat him at FLEX/);
+  });
+
+  test("no ordering draws no marks — null is never `already ordered`", () => {
+    // Best ball, or a week the schedule names no instants for: claiming either
+    // lineup is already in order would be the wrong answer that looks right.
+    assert.doesNotMatch(renderHalf(view({ kickoff_order: null })), /Re-seat at /);
   });
 });

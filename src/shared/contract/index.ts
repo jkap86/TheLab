@@ -132,6 +132,20 @@ export type TeamWeekProjectionPayload = {
   lineup: LineupSlotPayload[];
   sit: string[];
   start: string[];
+  /**
+   * The same starters re-seated so the lineup locks its strict seats first —
+   * earlier kickoffs in dedicated slots, later ones in the flexes, in the same
+   * seat order as `lineup`, so the two diff index by index. Which players move
+   * (and to where) is read off the pair with `kickoffMoves`
+   * (`shared/projections/kickoff-order`, pure and client-importable) — the
+   * same function the matchups route counts {@link MatchupProjectionPayload.kickoff_moves}
+   * with, so the card's count and the panel's marks cannot disagree.
+   *
+   * Null is "no answer", never "already ordered": a best-ball league (Sleeper
+   * seats that lineup after the games), or a week the schedule supplies no
+   * kickoff instants for. Already ordered is this array equal to `lineup`.
+   */
+  kickoff_order: LineupSlotPayload[] | null;
 };
 
 /**
@@ -687,6 +701,18 @@ export type MatchupProjectionPayload = {
    * best one available.
    */
   points_left: number;
+  /**
+   * How many starters sit in a different seat than kickoff order wants —
+   * earlier games belong in strict slots and later games in the flexes, so the
+   * flexible seats stay open longest (see `shared/projections/kickoff-order`).
+   *
+   * Counted with `kickoffMoves` over the same `kickoff_order` the league
+   * panel's week view marks player by player, so this badge and those marks
+   * are one rule. Zero is a real answer — the lineup already locks
+   * strict-seats-first — where null is no answer at all: a best-ball league,
+   * or a week the schedule supplies no kickoff instants for.
+   */
+  kickoff_moves: number | null;
 };
 
 /** One league's matchup for the manager: their roster, and who it is playing. */

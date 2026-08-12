@@ -132,7 +132,14 @@ describe("the stat columns", () => {
   test("the shortfall reads against the optimal lineup, not toward it", () => {
     const gap = render(
       3,
-      matchup({ projection: { optimal: 132.5, current: 120.16, points_left: 12.34 } }),
+      matchup({
+        projection: {
+          optimal: 132.5,
+          current: 120.16,
+          points_left: 12.34,
+          kickoff_moves: null,
+        },
+      }),
     );
     // `current − optimal`: a lineup with points on its bench is *behind* the best
     // one available, so the number carries a minus and never a plus. Amber
@@ -146,7 +153,9 @@ describe("the stat columns", () => {
     // `-0.00`, which down a list looks like a number that failed to arrive.
     const set = render(
       3,
-      matchup({ projection: { optimal: 120, current: 120, points_left: 0 } }),
+      matchup({
+        projection: { optimal: 120, current: 120, points_left: 0, kickoff_moves: null },
+      }),
     );
     assert.match(set, />set</);
     assert.equal(set.includes("text-amber-300"), false);
@@ -189,8 +198,9 @@ describe("the stat columns", () => {
     );
     assert.equal(headings.split("<button").length - 1, 4);
     assert.equal(headings.split('aria-haspopup="dialog"').length - 1, 4);
-    assert.equal(headings.split(">Blank<").length - 1, 3);
+    assert.equal(headings.split(">Blank<").length - 1, 2);
     assert.match(headings, />Vs optimal</);
+    assert.match(headings, />Kickoff</);
   });
 });
 

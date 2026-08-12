@@ -76,6 +76,13 @@ export type TeamWeekProjection = {
   sit: string[];
   /** Benched players it starts — the other end of those same swaps. */
   start: string[];
+  /**
+   * The same starters re-seated by kickoff, or null where there is no answer —
+   * the solver's own field, passed through whole. See
+   * {@link TeamWeekProjectionPayload.kickoff_order} for what the two spellings
+   * of nothing mean on the other side of the wire.
+   */
+  kickoff_order: { slot: string; player_id: string | null }[] | null;
 };
 
 /** What one league's week looks like: a projection and a form line, per subject. */
@@ -305,6 +312,8 @@ async function teamProjection({
       })),
       sit: lineup.sit,
       start: lineup.start,
+      // Already seat-shaped — the ordering never carried points to drop.
+      kickoff_order: lineup.kickoff_order,
     });
   }
   return byRoster;

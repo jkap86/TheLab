@@ -4,6 +4,7 @@ import { useMemo, type ReactNode } from "react";
 
 // Imported directly rather than through the projections barrel, which would
 // pull `pg`-backed code into the client bundle — see `slots.ts`.
+import { kickoffMoves } from "@/shared/projections/kickoff-order";
 import { NON_STARTING_SLOTS } from "@/shared/projections/slots";
 
 import { PLAYER_METRICS, PLAYER_METRICS_BY_KEY } from "../../roster-metrics";
@@ -191,6 +192,20 @@ export function RosterDetail({
     [weekLineup],
   );
 
+  // Player id → the seat kickoff order gives him instead, read off the pair
+  // with the same `kickoffMoves` the matchups route counts the card's badge
+  // with, so the badge and these marks cannot disagree. Empty when the week
+  // carries no ordering (a season panel, best ball, no schedule instants) and
+  // when nothing moves — the common case, which is what keeps the mark rare
+  // enough to mean something.
+  const reseat = useMemo(() => {
+    const ordered = weekLineup?.kickoff_order;
+    if (!ordered) return new Map<string, string>();
+    return new Map(
+      kickoffMoves(weekLineup.lineup, ordered).map((move) => [move.player_id, move.to]),
+    );
+  }, [weekLineup]);
+
   const bench = useMemo(() => {
     // Everyone not in the listed starting lineup, IR and taxi included: those
     // stashes are candidates for the lineup too now, so the ones that don't make
@@ -295,6 +310,14 @@ export function RosterDetail({
               playerId={row.player_id}
               slot={row.slot}
               advice={advice.sit.has(row.player_id) ? "sit" : undefined}
+              // A starter the solve benches outranks a seat move: re-seating a
+              // player who shouldn't be starting is polishing the wrong lineup,
+              // and two marks on one name is one too many to read.
+              reseat={
+                advice.sit.has(row.player_id)
+                  ? undefined
+                  : reseat.get(row.player_id)
+              }
               outlook={outlook?.players[row.player_id]}
               split={teamOutlook?.weekly_split[row.player_id]}
               layout={lineupLayout}

@@ -1,6 +1,6 @@
 import { getNflSchedule } from "@/shared/sleeper";
 
-import { openingKickoff } from "./parse";
+import { openingKickoff, weekKickoffs } from "./parse";
 
 /**
  * A published schedule's opener moves essentially never, so half a day of
@@ -45,5 +45,43 @@ export async function getFirstKickoff(season: string): Promise<number | null> {
     // Decide per read whether a failure is fatal: a countdown is decoration
     // on the header, so a stale instant — or none — beats a failed page.
     return hit?.kickoff ?? null;
+  }
+}
+
+type WeekCacheEntry = { at: number; kickoffs: Map<string, number> };
+
+const weekCache = new Map<string, WeekCacheEntry>();
+
+/**
+ * Team → kickoff instant for one week of a season, per Sleeper's schedule call
+ * — empty when Sleeper hasn't scheduled it, or schedules it only to the day.
+ *
+ * The same read-through cache as {@link getFirstKickoff}, one entry per
+ * `(season, week)`, and the same three rules: the timestamp records the
+ * *attempt*, so a week answering empty waits out its shorter TTL instead of
+ * refetching per request; a failed fetch stores nothing and serves the stale
+ * answer if one exists; and a failure never throws — the kickoff-ordered
+ * lineup this feeds is decoration on top of the week's lineups, so the
+ * degraded answer is "no instants", which its reader spells as no answer
+ * rather than as a lineup claimed to be already ordered.
+ */
+export async function getWeekKickoffs(
+  season: string,
+  week: number,
+): Promise<Map<string, number>> {
+  const key = `${season}:${week}`;
+  const hit = weekCache.get(key);
+  if (hit) {
+    const ttl = hit.kickoffs.size === 0 ? RETRY_NULL_MS : FRESH_MS;
+    if (Date.now() - hit.at < ttl) return hit.kickoffs;
+  }
+
+  try {
+    const games = await getNflSchedule(season);
+    const kickoffs = weekKickoffs(games, week);
+    weekCache.set(key, { at: Date.now(), kickoffs });
+    return kickoffs;
+  } catch {
+    return hit?.kickoffs ?? new Map();
   }
 }

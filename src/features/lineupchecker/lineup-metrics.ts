@@ -47,9 +47,9 @@ const NO_PROJECTION = "No projection for this week";
 /**
  * Every metric a lineup column can show.
  *
- * One real entry so far, plus the blank a column opens on. They share a bay
+ * Two real entries so far, plus the blank a column opens on. They share a bay
  * rather than being grouped, since a caption per family is what makes a dozen
- * metrics scannable and two of them under two captions is two captions.
+ * metrics scannable and a handful under several captions is mostly captions.
  */
 export const LINEUP_METRICS: LineupMetric[] = [
   {
@@ -107,6 +107,62 @@ export const LINEUP_METRICS: LineupMetric[] = [
     },
   },
   {
+    key: "kickoff",
+    label: "Kickoff",
+    /**
+     * How many starters sit in a different seat than kickoff order wants —
+     * earlier games in the dedicated slots, later games in the flexes, so the
+     * flexible seats stay open longest. The count is the route's own
+     * (`kickoff_moves`, counted with the same `kickoffMoves` the expanded
+     * panel marks rows with), so this cell and those marks cannot disagree;
+     * the moves themselves are one press away, on the panel.
+     *
+     * Three readings, the `vs optimal` column's own grammar:
+     *
+     * - **`2 to move` in amber where seats should trade.** It is a verdict
+     *   rather than a count — the whole column exists to be acted on before
+     *   the early games kick off — so it wears the needs-attention tone the
+     *   gap beside it wears.
+     * - **`in order` where it is zero**, not `0`: zero is a real answer and a
+     *   good one, and a column of zeroes reads as a metric with nothing to
+     *   say rather than as lineups that are already right.
+     * - **An em dash where there is no answer at all** — no projection for
+     *   the week, a best-ball league (Sleeper seats that lineup itself), or a
+     *   week the schedule names no kickoff instants for. Absent is never
+     *   "already ordered".
+     */
+    cell: ({ matchup }) => {
+      const projection = matchup?.projection ?? null;
+      if (!projection) return { kind: "value", text: null, title: NO_PROJECTION };
+
+      const moves = projection.kickoff_moves;
+      if (moves === null) {
+        return {
+          kind: "value",
+          text: null,
+          title:
+            "No kickoff order for this week — best ball, or no schedule instants published",
+        };
+      }
+      if (moves === 0) {
+        return {
+          kind: "value",
+          text: "in order",
+          title:
+            "Every starter is already seated for kickoff — strict slots lock first, the flexes stay open longest",
+        };
+      }
+      return {
+        kind: "value",
+        text: `${moves} to move`,
+        tone: "alert",
+        title: `${moves} starter${
+          moves === 1 ? "" : "s"
+        } could trade seats so the flexes lock last — open the league for the moves`,
+      };
+    },
+  },
+  {
     key: "blank",
     /**
      * A column showing nothing, and the metric three of the four slots open on.
@@ -134,18 +190,18 @@ export const LINEUP_METRICS: LineupMetric[] = [
 
 /**
  * The four columns a lineup row opens with: what each lineup is giving up
- * against its best, and three columns left for the metrics this grain has yet to
- * grow.
+ * against its best, how far its seats are from kickoff order, and two columns
+ * left for the metrics this grain has yet to grow.
  *
- * Three slots holding one key is legitimate and the columns machinery is written
+ * Two slots holding one key is legitimate and the columns machinery is written
  * for it — `assignColumn` swaps a slot with whichever slot held the metric it is
  * being pointed at, and the editor asks what the *armed* slot holds rather than
- * where a key first appears, so arming the third blank lights the entry a reader
+ * where a key first appears, so arming the second blank lights the entry a reader
  * pressed a blank heading to reach.
  */
 export const DEFAULT_LINEUP_COLUMNS: string[] = [
   "vs_optimal",
-  "blank",
+  "kickoff",
   "blank",
   "blank",
 ];

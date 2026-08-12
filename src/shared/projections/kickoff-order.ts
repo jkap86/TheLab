@@ -134,6 +134,52 @@ export function orderLineupByKickoff({
   return result;
 }
 
+/** One seat change between a lineup and its kickoff-ordered re-seat. */
+export type KickoffMove = {
+  player_id: string;
+  /** The slot he is seated in. */
+  from: string;
+  /** The slot the ordering seats him in instead. */
+  to: string;
+};
+
+/**
+ * The seat changes between a lineup and its kickoff-ordered re-seat, one per
+ * player who moves.
+ *
+ * Derived rather than carried on the wire, and derived *here*, once: the
+ * matchups route counts these for the lineup checker's column and the week
+ * panel marks each moved player's row with his `to`, and two spellings of
+ * "which seats changed" would let the count and the marks disagree.
+ *
+ * A move is a player whose **slot name** differs between the two lineups. Two
+ * seats of one slot trading occupants would change indices and nothing a
+ * reader could see — {@link orderLineupByKickoff} never produces one (equal
+ * seats carry no ordering gain, and the fewest-moves tie-break keeps them
+ * put), and a caller comparing arbitrary lineups shouldn't report it either.
+ * Empty means already ordered; what a null ordering means is decided before
+ * coming here, since null is "no answer" and there is nothing to diff.
+ */
+export function kickoffMoves(
+  current: readonly KickoffSeat[],
+  ordered: readonly KickoffSeat[],
+): KickoffMove[] {
+  const seatOf = new Map<string, string>();
+  for (const seat of ordered) {
+    if (seat.player_id) seatOf.set(seat.player_id, seat.slot);
+  }
+
+  const moves: KickoffMove[] = [];
+  for (const seat of current) {
+    if (!seat.player_id) continue;
+    const to = seatOf.get(seat.player_id);
+    if (to !== undefined && to !== seat.slot) {
+      moves.push({ player_id: seat.player_id, from: seat.slot, to });
+    }
+  }
+  return moves;
+}
+
 /**
  * Maximum-weight perfect assignment of seats to players — the Hungarian
  * algorithm with potentials, O(n³) over a square integer matrix. A lineup is a

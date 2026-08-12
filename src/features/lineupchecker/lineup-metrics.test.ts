@@ -30,12 +30,20 @@ const ctx = (projection: MatchupProjection | null): LineupMetricContext => ({
   matchup: { roster_id: 1, opponent: null, projection, opponent_projection: null },
 });
 
-/** The cell as a value cell, which is the only shape this catalogue returns. */
-const value = (context: LineupMetricContext) => {
-  const cell = metric("vs_optimal").cell(context);
+/** A projection with the kickoff count defaulted, for the tests it is beside the point of. */
+const proj = (
+  over: Pick<MatchupProjection, "optimal" | "current" | "points_left"> &
+    Partial<MatchupProjection>,
+): MatchupProjection => ({ kickoff_moves: null, ...over });
+
+/** The named metric's cell as a value cell, the only shape this catalogue returns. */
+const cellOf = (key: string, context: LineupMetricContext) => {
+  const cell = metric(key).cell(context);
   assert.equal(cell.kind, "value");
   return cell as Extract<typeof cell, { kind: "value" }>;
 };
+
+const value = (context: LineupMetricContext) => cellOf("vs_optimal", context);
 
 describe("vs optimal", () => {
   test("reads as a shortfall against the best lineup, not a bonus toward it", () => {
@@ -43,7 +51,7 @@ describe("vs optimal", () => {
     // and the column is `current − optimal`, so a bench holding 12.34 points puts
     // the lineup 12.34 *behind* — which is what a minus in front of a number
     // means everywhere else in this app.
-    const cell = value(ctx({ optimal: 132.5, current: 120.16, points_left: 12.34 }));
+    const cell = value(ctx(proj({ optimal: 132.5, current: 120.16, points_left: 12.34 })));
     assert.equal(cell.text, "-12.34");
     assert.equal(cell.tone, "alert");
   });
@@ -51,7 +59,7 @@ describe("vs optimal", () => {
   test("names both totals and the gap on the hover", () => {
     // The column has room for one number; what it is measured against is the
     // thing a reader needs before acting on it.
-    const cell = value(ctx({ optimal: 132.5, current: 120.16, points_left: 12.34 }));
+    const cell = value(ctx(proj({ optimal: 132.5, current: 120.16, points_left: 12.34 })));
     assert.match(cell.title, /120\.16/);
     assert.match(cell.title, /132\.50/);
     assert.match(cell.title, /12\.34/);
@@ -61,7 +69,7 @@ describe("vs optimal", () => {
     // Zero is a real answer and a good one — the team is already starting the
     // best lineup available — where a run of `-0.00` down a list reads as
     // numbers that failed to arrive. Untinted, since there is nothing to do.
-    const cell = value(ctx({ optimal: 120, current: 120, points_left: 0 }));
+    const cell = value(ctx(proj({ optimal: 120, current: 120, points_left: 0 })));
     assert.equal(cell.text, "set");
     assert.equal(cell.tone, undefined);
   });
@@ -76,6 +84,52 @@ describe("vs optimal", () => {
   });
 });
 
+describe("kickoff", () => {
+  test("counts the seats to trade, and it is a verdict", () => {
+    const cell = cellOf(
+      "kickoff",
+      ctx(proj({ optimal: 120, current: 120, points_left: 0, kickoff_moves: 2 })),
+    );
+    assert.equal(cell.text, "2 to move");
+    assert.equal(cell.tone, "alert");
+  });
+
+  test("a lineup already in order is a word, untinted", () => {
+    // Zero is a real answer and a good one — strict seats lock first, the
+    // flexes stay open — where a column of `0`s reads as a metric with nothing
+    // to say.
+    const cell = cellOf(
+      "kickoff",
+      ctx(proj({ optimal: 120, current: 120, points_left: 0, kickoff_moves: 0 })),
+    );
+    assert.equal(cell.text, "in order");
+    assert.equal(cell.tone, undefined);
+  });
+
+  test("no ordering is an em dash, never `in order`", () => {
+    // Null is best ball or a week with no schedule instants — claiming those
+    // lineups are already ordered would be the one wrong answer that looks
+    // like a working one. So is a league with no projection at all.
+    const unordered = cellOf(
+      "kickoff",
+      ctx(proj({ optimal: 120, current: 120, points_left: 0 })),
+    );
+    assert.equal(unordered.text, null);
+    assert.equal(unordered.tone, undefined);
+    assert.equal(cellOf("kickoff", ctx(null)).text, null);
+    assert.equal(cellOf("kickoff", { matchup: null }).text, null);
+  });
+
+  test("one move reads singular on the hover", () => {
+    const cell = cellOf(
+      "kickoff",
+      ctx(proj({ optimal: 120, current: 120, points_left: 0, kickoff_moves: 1 })),
+    );
+    assert.equal(cell.text, "1 to move");
+    assert.match(cell.title, /1 starter could/);
+  });
+});
+
 describe("the blank column", () => {
   test("prints nothing and says so, so a heading has a name to press", () => {
     const cell = metric("blank").cell({ matchup: null });
@@ -86,10 +140,10 @@ describe("the blank column", () => {
 });
 
 describe("the default board", () => {
-  test("opens on the shortfall and leaves the rest blank", () => {
+  test("opens on the shortfall and the kickoff order, and leaves the rest blank", () => {
     assert.deepEqual(DEFAULT_LINEUP_COLUMNS, [
       "vs_optimal",
-      "blank",
+      "kickoff",
       "blank",
       "blank",
     ]);

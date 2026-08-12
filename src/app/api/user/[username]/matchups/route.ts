@@ -10,6 +10,7 @@ import type { LeagueRosterSet, ManagerMatchup } from "@/shared/manager";
 import {
   getUpcomingWeek,
   getWeekLineups,
+  kickoffMoves,
   LAST_REGULAR_WEEK,
 } from "@/shared/projections";
 import type { LeagueTeamsInput, WeekLineups } from "@/shared/projections";
@@ -109,6 +110,12 @@ export async function GET(
               optimal: own.optimal_points,
               current: own.current_points,
               points_left: own.points_left,
+              // The count and the panel's per-player marks read one ordering
+              // through one function, so the two cannot disagree; null passes
+              // through as "no answer", which is not a zero.
+              kickoff_moves: own.kickoff_order
+                ? kickoffMoves(own.lineup, own.kickoff_order).length
+                : null,
             }
           : null,
         // The opponent's *current* lineup — see the payload's own note on why it
