@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ManagerLeague } from "@/shared/manager";
 
 import { TRADE_METRICS } from "../../trade-metrics";
+import type { TradeMetric } from "../../trade-metrics";
 import type {
   AdpPlayerPayload,
   KtcValue,
@@ -47,7 +48,20 @@ const SPEC_CAPTION_PROBE = SPEC_CAPTION.split(" ")[0];
 
 const ktcMetric = TRADE_METRICS.find((m) => m.key === "ktc")!;
 const adpMetric = TRADE_METRICS.find((m) => m.key === "adp")!;
-const playersMetric = TRADE_METRICS.find((m) => m.key === "players")!;
+
+/**
+ * A metric with nothing to say per line, which the catalogue no longer holds —
+ * the haul counts were its only instance and they are gone, since each counted
+ * lines the card draws by name a few pixels below. `TradeMetric.asset` stays
+ * optional all the same, so the card still has to draw one: the side total, and
+ * no per-line column beside it.
+ */
+const totalOnly: TradeMetric = {
+  key: "total-only",
+  group: "Test",
+  label: "Test",
+  cell: () => ({ kind: "value", text: "12", title: "a side total" }),
+};
 
 const players: Record<string, PlayerSummary> = {
   p1: { name: "Christian McCaffrey", position: "RB", team: "SF" } as PlayerSummary,
@@ -525,10 +539,10 @@ describe("what a value column says", () => {
   });
 
   test("a metric with no per-asset form prices no line", () => {
-    const html = card({ metric: playersMetric });
+    const html = card({ metric: totalOnly });
     assert.doesNotMatch(html, /title="Dynasty KTC/);
     // The side total is still there — it is the per-line column that isn't.
-    assert.match(html, /players received/);
+    assert.match(html, /a side total/);
   });
 
   test("the board follows the league's own lineup", () => {

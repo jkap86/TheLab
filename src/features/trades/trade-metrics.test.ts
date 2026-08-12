@@ -282,15 +282,20 @@ test("TRADE_METRICS", async (t) => {
     assert.match(gone.title, /Nothing in this haul is priced/);
   });
 
-  // A count is a fact about the trade either way: this side took only picks.
-  await t.test("the haul counts print zero rather than an em dash", () => {
-    assert.equal(metricPreview(cell("players", ctx({}))), "0");
-    assert.equal(metricPreview(cell("picks", ctx({}))), "0");
-  });
-
-  await t.test("FAAB is absent below a dollar, since most trades move none", () => {
-    assert.equal(metricPreview(cell("faab", ctx({ faab: 0 }))), "—");
-    assert.equal(metricPreview(cell("faab", ctx({ faab: 25 }))), "$25");
+  /**
+   * The catalogue carried a `Haul` family too — a count of players, of picks and
+   * of FAAB — and each said what the lines drawn underneath it already say, one
+   * per row. Two things go with removing them and both are worth pinning: the
+   * picker is value lenses only, and *every* column has a per-asset form, which
+   * is what orders the track under it. A count-shaped metric added later ranks
+   * nothing, so this is the test to read before deleting.
+   */
+  await t.test("every column prices the haul, and prices it per line", () => {
+    assert.deepEqual(
+      TRADE_METRICS.map((metric) => metric.key),
+      ["adp", "ktc"],
+    );
+    assert.ok(TRADE_METRICS.every((metric) => metric.asset));
   });
 });
 
@@ -599,10 +604,4 @@ test("per-asset values", async (t) => {
     assert.equal(read("ktc", ctx({ faab: 25 }), { kind: "faab", amount: 25 }), null);
   });
 
-  // A count of players is 1 on every line, which is a column of ones.
-  await t.test("the haul counts have no per-asset form", () => {
-    for (const key of ["players", "picks", "faab"]) {
-      assert.equal(TRADE_METRICS.find((m) => m.key === key)!.asset, undefined);
-    }
-  });
 });

@@ -41,9 +41,16 @@ import type {
  * the total worth trusting: a side total says which haul was bigger and nothing
  * about which piece of it carried the weight, and "three players for a first" is
  * a different trade depending on whether the three are 8,000 apiece or 800.
- * {@link TradeMetric.asset} is that reading, and it is optional because most of
- * this catalogue has no per-asset form — a count of players is 1 on every line,
- * which is a column of ones.
+ * {@link TradeMetric.asset} is that reading, and it also ranks the lines a track
+ * draws (see `trackLines`), so a column without one leaves the haul in whatever
+ * order Sleeper stored it.
+ *
+ * It stays **optional** all the same, and nothing in the catalogue takes that
+ * path today — the haul counts did, and they are gone. What the option is for is
+ * a metric with genuinely nothing to say per line, which is a state the card
+ * has to draw rather than one the catalogue happens to be in; a count-shaped
+ * column could come back without a component changing. The tests pin that path
+ * for the same reason.
  *
  * Pure and free of runtime imports beyond {@link ktcBoardValue} and
  * {@link adpValue} — both arriving relatively with an explicit `.ts` extension,
@@ -406,7 +413,19 @@ function adpPickTitle(
 
 /**
  * Every metric a trade card's value column can show, in the order the picker
- * lists them: what the haul is worth, then what it is made of.
+ * lists them.
+ *
+ * **They are two lenses on what a haul is worth, and nothing that counts it.**
+ * The catalogue used to carry a `Haul` family beside them — players, picks and
+ * FAAB, each a count of one kind of line — and what those columns said is
+ * exactly what the card draws underneath them: the lines themselves, named, one
+ * per row. A number over a list that is on screen is the restatement this
+ * codebase keeps having to remove (the trade filters' summary line, the league
+ * panel's team plate), and here it also cost the reader something, because the
+ * column is what *ranks* the tracks now — a count has no per-asset form, so
+ * picking one silently put the lines back in Sleeper's arbitrary order (see
+ * `trackLines`). Two columns that both price the haul are what is left, and
+ * every column now orders the lines under it.
  *
  * **ADP leads, and it is what a card opens on** — the column used to be KTC's
  * dynasty board and now reads the board the ADP panel in the app bar is
@@ -659,47 +678,6 @@ export const TRADE_METRICS: TradeMetric[] = [
 
       return null;
     },
-  },
-  {
-    key: "players",
-    group: "Haul",
-    label: "Players",
-    cell: ({ received }) => ({
-      kind: "value",
-      // A count, so zero is an answer rather than an absence — a side that took
-      // only picks received no players, which is a fact about the trade.
-      text: String(received.players.length),
-      title: `${received.players.length} player${
-        received.players.length === 1 ? "" : "s"
-      } received`,
-    }),
-  },
-  {
-    key: "picks",
-    group: "Haul",
-    label: "Picks",
-    cell: ({ received }) => ({
-      kind: "value",
-      text: String(received.picks.length),
-      title: `${received.picks.length} draft pick${
-        received.picks.length === 1 ? "" : "s"
-      } received`,
-    }),
-  },
-  {
-    key: "faab",
-    group: "Haul",
-    label: "FAAB",
-    cell: ({ received }) => ({
-      kind: "value",
-      // Unlike the counts, absent rather than `$0`: FAAB moves in a minority of
-      // trades, so a zero on every other card is a column spent saying nothing.
-      text: received.faab > 0 ? `$${received.faab.toLocaleString()}` : null,
-      title:
-        received.faab > 0
-          ? `$${received.faab.toLocaleString()} FAAB received`
-          : "No FAAB moved",
-    }),
   },
 ];
 

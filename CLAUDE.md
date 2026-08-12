@@ -2682,8 +2682,25 @@ stops holding, a comment saying it does would not have caught it.
     total's hover already draws: FAAB gets no cell at all, since a dash there
     would report a hole in a board it was never on, while an unpriced *player* —
     or a pick from a draft KTC no longer carries — is a genuine gap and gets the
-    em dash. Only `ktc` has a per-asset form; a count of players is 1 on every
-    line, which is a column of ones.
+    em dash.
+  - **The picker holds two lenses on what a haul is worth and nothing that
+    counts it, and the counts were removed rather than never written.** A `Haul`
+    family sat beside ADP and KTC — players, picks and FAAB, each a count of one
+    kind of line — and what those columns said is exactly what the card draws
+    underneath them: the lines themselves, named, one per row. That is the
+    restatement this codebase keeps having to remove (the trade filters' summary
+    line, the league panel's team plate), and here it cost the reader something
+    besides a column, because the value column is what **ranks** the tracks: a
+    count has no per-asset form, so picking one silently put every haul back in
+    Sleeper's arbitrary order. What is left is two columns that both price the
+    haul, and every column orders the lines under it —
+    `trade-metrics.test.ts` pins both halves, since neither is a claim a type can
+    carry. `TradeMetric.asset` stays **optional** all the same and nothing takes
+    that path today: what it is for is a metric with genuinely nothing to say per
+    line, which is a state the card has to draw (and does, and is tested for)
+    rather than one the catalogue happens to be in. Nothing had to migrate —
+    `resolveColumns` falls back per slot, so a reader who had picked one of the
+    three gets the default board rather than a blank column.
   - **A track lists its players, then its picks, then FAAB — and ranks each of
     those blocks by that same per-asset number, descending** (`bundleAssets`
     for the blocks, `trackLines` for the order inside one). The stored order is
