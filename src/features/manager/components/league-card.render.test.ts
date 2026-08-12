@@ -7,19 +7,22 @@ import type { LeagueRankSet, ManagerLeague } from "../types";
 import { LeagueCard } from "./league-card";
 
 /**
- * What this list puts on the card's trailing plate: the manager's record here,
- * and where that record places them.
+ * What this list puts in the card's two seats: the manager's record and standing
+ * on the trailing plate, and what kind of league it is in the head's quiet half.
  *
  * The card itself — the slab, the two plates, the head's insets, the press and
  * the geometry it shares with the heading rail — is
- * `features/shared/ui/league-card` and is tested there. What is left for this
- * file is the one thing that is *this* list's: the ledge. The lineup checker
- * seats this week's opponent in the same box and tests its own.
+ * `features/shared/ui/league-card` and is tested there, as is the fact that a
+ * seated node lands beside the chevron. What is left for this file is what *this*
+ * list seats. The lineup checker puts this week's opponent in the same plate,
+ * seats no specs, and tests its own.
  *
- * Both facts used to sit in the head between the chevron and the stat columns,
- * which is the one part of the card that has to stay quiet — so what these pin is
- * that they are on the *edge*, that the plate is a housing rather than a second
- * name, and that "absent is not zero" survived the move.
+ * Both record facts used to sit in the head between the chevron and the stat
+ * columns, which is the one part of the card that has to stay quiet — so what
+ * these pin is that they are on the *edge*, that the plate is a housing rather
+ * than a second name, and that "absent is not zero" survived the move. The specs
+ * pin the same rule read the other way: the run says nothing rather than guessing
+ * where a league has not answered.
  */
 
 const league: ManagerLeague = {
@@ -117,7 +120,11 @@ describe("the record ledge", () => {
       ranks: { standing: null, points: null, proj: null, proj_bench: null },
     });
     assert.match(html, /lab-readout[^"]*">0-0</);
-    assert.doesNotMatch(html, /lab-engraved/);
+    // Probed by what the standing *says* rather than by its finish: the specs
+    // bezel seated in the head cuts its captions into the floor the same way, so
+    // `lab-engraved` alone stopped being this plate's own mark the moment a
+    // second part on the card wore one.
+    assert.doesNotMatch(html, /by record/);
   });
 
   test("a league with neither fact has no plate at all", () => {
@@ -128,5 +135,66 @@ describe("the record ledge", () => {
     const html = card({ league: { ...league, record: null } });
     assert.equal(html.split("lab-nameplate").length - 1, 1);
     assert.doesNotMatch(html, /lab-readout/);
+  });
+});
+
+describe("the league specs", () => {
+  test("what kind of league it is, on the card rather than in the filters", () => {
+    // An account here is a hundred leagues most of which differ in exactly these
+    // ways, and the only thing that answered "which of these is my superflex
+    // dynasty" was the filter dialog — which narrows a list rather than
+    // describing a row of it.
+    const html = card();
+    assert.match(html, /Dynasty/);
+    assert.match(html, /12 Team/);
+    assert.match(html, /1QB \+ SF/);
+    assert.match(html, /1TE/);
+  });
+
+  test("it is the trades board's bezel, not a second drawing of one", () => {
+    // The part moved to `features/shared/ui` when this list became its second
+    // caller. A copy would be two answers to what a league's settings look like,
+    // and the material is what a reader crossing between the tools recognises.
+    const html = card();
+    assert.equal(html.split("lab-bezel").length - 1, 1);
+    assert.equal(html.split("lab-gauge").length - 1, 4);
+  });
+
+  test("it is on the card's own face, below the four columns", () => {
+    // The four columns are what a list a hundred rows long is scanned on, so
+    // they keep the first line and the settings read as the context under them —
+    // the rank the trade card gives the same run, which sits below both manager
+    // names there.
+    const html = card();
+    const wall = html.indexOf("lab-slab lab-notch-lg");
+    const columns = html.indexOf("divide-x divide-foreground/10");
+    const bezel = html.indexOf("lab-bezel");
+    assert.ok(wall >= 0 && bezel > wall, "the run is inside the card's face");
+    assert.ok(columns >= 0 && columns < bezel, "and after the stat columns");
+  });
+
+  test("a league the sync has not answered for draws no line", () => {
+    // Whether there is anything to say is this list's call, not the shell's: an
+    // empty line is 12px of padding on every card of an account still syncing,
+    // and a bezel of em dashes would report six holes instead of one absence.
+    const html = card({
+      league: {
+        ...league,
+        settings: { type: 9 },
+        roster_positions: null,
+        total_rosters: 0,
+      },
+    });
+    assert.doesNotMatch(html, /lab-bezel/);
+    assert.doesNotMatch(html, /pb-3">/);
+  });
+
+  test("an unsynced lineup drops the lineup gauges rather than reading them as zero", () => {
+    // The rule this list shares with the filters it is drawn from: null is not
+    // zero. The league is still a 12-team dynasty and still says so.
+    const html = card({ league: { ...league, roster_positions: null } });
+    assert.match(html, /Dynasty/);
+    assert.match(html, /12 Team/);
+    assert.doesNotMatch(html, /0QB|0TE/);
   });
 });

@@ -5,6 +5,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { ManagerLeague } from "@/shared/manager";
 
+// The bezel's own classes, from where they live now: the leagues list draws the
+// same run on its cards, so the part moved to `features/shared/ui` and these
+// moved with it. What is still this card's is the *line* it sits on.
+import { SPEC_CAPTION, SPEC_SEAM } from "@/features/shared/ui/league-specs";
+
 import { TRADE_METRICS } from "../../trade-metrics";
 import type {
   AdpPlayerPayload,
@@ -14,12 +19,7 @@ import type {
   TradeManager,
 } from "../../types";
 import { TradeCard } from "./trade-card";
-import {
-  SIDE_SEAM_COLUMN,
-  SIDE_SEAM_ROW,
-  SPEC_CAPTION,
-  SPEC_SEAM,
-} from "./trade-card.constants.ts";
+import { SIDE_SEAM_COLUMN, SIDE_SEAM_ROW } from "./trade-card.constants.ts";
 
 /**
  * The card without a DOM.

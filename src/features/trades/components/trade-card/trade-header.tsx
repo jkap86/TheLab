@@ -4,8 +4,10 @@ import type { ManagerLeague } from "@/shared/manager";
 // way, but the card's own imports are all module paths and a barrel here would
 // be the one arrow pointing at everything that barrel re-exports.
 //
-// `./nameplate` and not `./league-card`: the ledge is re-exported from there for
-// the two lists that already read it, and that module statically imports the
+import { leagueSpecs } from "@/features/shared/league-specs";
+import { LeagueSpecsBezel } from "@/features/shared/ui/league-specs";
+// `ui/nameplate` and not `ui/league-card`: the ledge is re-exported from there
+// for the two lists that already read it, and that module statically imports the
 // whole league-detail subtree — which this page keeps behind a press.
 import {
   CardLedge,
@@ -13,16 +15,7 @@ import {
   Nameplate,
 } from "@/features/shared/ui/nameplate";
 
-import { leagueSpecs } from "../../league-specs";
-import {
-  SPEC_BAY,
-  SPEC_BEZEL,
-  SPEC_CAPTION,
-  SPEC_GAUGE,
-  SPEC_SEAM,
-  SPEC_TONE,
-  TRADE_HEADER_LINE,
-} from "./trade-card.constants.ts";
+import { TRADE_HEADER_LINE } from "./trade-card.constants.ts";
 import { formatTradeDate, formatTradeTime } from "./trade-card.utils.ts";
 
 /**
@@ -155,17 +148,18 @@ export function TradeInstantLedge({
  * The card's first interior line: what kind of league this was, as one bezel of
  * gauges.
  *
- * **Each fact is a value in a window with its unit cut into the floor above
- * it**, which is the one spelling that tells a reader what `1QB + SF` is a count
- * of without a hover — and there is no hover on a phone, which is the width the
- * run is tightest at. That is what the whole part is for; everything else about
- * it follows from making a run of six read as one instrument (see
- * {@link SPEC_BEZEL}).
+ * **The bezel itself is `features/shared/ui/league-specs`**, since the manager
+ * tool's leagues list draws the same run on its own cards — the mover's rule, and
+ * moving the derivation without the drawing would have been half a move. What is
+ * left here is the *line*: which is all this card ever contributed, and is
+ * exactly what the other caller does not want, since a league card has a head
+ * with room in it and this one has a face that is otherwise all sides.
  *
- * **Nothing here is a chip.** The app bar's grammar is that raised means press
- * me, and six raised pills per card across the couple of dozen the virtualiser
- * keeps mounted is a hundred and fifty apparent controls that do nothing. Both
- * of this part's depths run *downward* for exactly that reason.
+ * **The run is derived here rather than inside the bezel**, which is what lets
+ * the line be dropped whole. An empty `<header>` is still 8px of padding under a
+ * nameplate, so this card has to know there is nothing to draw *before* it draws
+ * the wrapper — where the leagues list, seating the part in a head that exists
+ * either way, only needs the bezel's own null.
  */
 export function TradeHeaderLine({
   league,
@@ -178,30 +172,14 @@ export function TradeHeaderLine({
 }) {
   const specs = leagueSpecs(league);
 
-  // Nothing at all rather than an empty bezel: a league the list hasn't answered
-  // for has no settings to report, and a housing of em dashes would be reporting
+  // Nothing at all rather than an empty line: a league the list hasn't answered
+  // for has no settings to report, and a bezel of em dashes would be reporting
   // six holes instead of one absence.
   if (specs.length === 0) return null;
 
   return (
     <header className={TRADE_HEADER_LINE}>
-      <div className={SPEC_BEZEL}>
-        {specs.map((spec, i) => (
-          <span
-            key={spec.key}
-            title={spec.title}
-            // The seam is applied by index rather than by an adjacent-sibling
-            // selector, which Tailwind has none of — the same arithmetic the
-            // sides one level down use, and for the same reason.
-            className={`${SPEC_BAY} ${i === 0 ? "" : SPEC_SEAM}`}
-          >
-            <span className={SPEC_CAPTION}>{spec.caption}</span>
-            <span className={`${SPEC_GAUGE} ${SPEC_TONE[spec.tone]}`}>
-              {spec.label}
-            </span>
-          </span>
-        ))}
-      </div>
+      <LeagueSpecsBezel specs={specs} />
     </header>
   );
 }
