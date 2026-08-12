@@ -2,6 +2,8 @@ import type { LeagueTeam } from "@/shared/manager";
 import { getPreviousLeagueScores, listRosterWeekPoints } from "@/shared/manager";
 import type { RosterWeekPoints } from "@/shared/manager";
 import { getWeekLineups, listLineupWeekStats, scoreStatLine } from "@/shared/projections";
+import { getWeekGames } from "@/shared/schedule";
+import type { TeamGame } from "@/shared/schedule";
 
 import { playerPpg, ppgWindow, teamPpg } from "./ppg";
 import type { Ppg, StatLine } from "./ppg";
@@ -97,14 +99,31 @@ export type LeagueWeekView = {
   team_projection: Map<number, TeamWeekProjection>;
   /** Roster id → that team's points per game over the same window. */
   team_ppg: Map<number, Ppg>;
+  /**
+   * NFL team → its game this week, which is what lets a player row say who he
+   * plays and when.
+   *
+   * Keyed by **team and not by player**: which game a player is in is a fact
+   * about the club on his row, so keying it per player would carry the same
+   * kickoff a dozen times over a league's rosters and leave twelve copies of it
+   * free to disagree. The client joins on the team it already draws.
+   *
+   * Empty is a schedule this process could not read — never "everyone is on a
+   * bye". A team missing from a *non-empty* map is the bye, which is the
+   * distinction {@link weekGames} keeps and the reason the whole map crosses
+   * rather than one entry per rostered team.
+   */
+  games: Map<string, TeamGame>;
 };
 
 /**
  * Assemble {@link LeagueWeekView} for one league and one week.
  *
- * The four reads are independent of each other and run together; each decides
+ * The five reads are independent of each other and run together; each decides
  * for itself whether a failure is fatal at the call site above, since a panel
- * missing one column is worth more than a panel that failed.
+ * missing one column is worth more than a panel that failed. The schedule read
+ * decides for itself down in {@link getWeekGames}, which answers an empty map
+ * rather than throwing — its own note says why.
  */
 export async function getLeagueWeekView({
   leagueId,
@@ -128,7 +147,7 @@ export async function getLeagueWeekView({
     ...new Set(teams.flatMap((team) => team.players ?? []).filter((id) => id && id !== "0")),
   ];
 
-  const [projection, ppgRead, lineups, teamPpgByRoster] = await Promise.all([
+  const [projection, ppgRead, lineups, teamPpgByRoster, games] = await Promise.all([
     weekProjection({ season, week, playerIds, scoringSettings }),
     playerPpgWindow({ season, week, playerIds, scoringSettings }),
     teamProjection({
@@ -141,6 +160,11 @@ export async function getLeagueWeekView({
       bestBall,
     }),
     teamPpgWindow({ leagueId, week, teams }),
+    // The same fetch the lineup solve above reads its kickoff instants from,
+    // through one process-wide cache — so a panel naming a player's kickoff and
+    // the ordering that re-seats him for it cost one schedule request between
+    // them, and read one answer.
+    getWeekGames(season, week),
   ]);
 
   return {
@@ -150,6 +174,7 @@ export async function getLeagueWeekView({
     ppg: ppgRead.ppg,
     team_projection: lineups,
     team_ppg: teamPpgByRoster,
+    games,
   };
 }
 

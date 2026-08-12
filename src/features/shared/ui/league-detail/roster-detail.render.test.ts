@@ -52,6 +52,9 @@ const team = (id: number, name: string) => ({
   picks: [],
 });
 
+/** Sunday 1:05 PM local, so the rendered string is the same in any zone. */
+const SUNDAY = new Date(2026, 8, 13, 13, 5).getTime();
+
 const players = {
   "9": { player_id: "9", name: "Josh Allen", position: "QB", team: "BUF" },
   "7": { player_id: "7", name: "Ashton Jeanty", position: "RB", team: "LV" },
@@ -93,6 +96,12 @@ const weekView = {
     },
   },
   team_ppg: {},
+  // Two of the three clubs on these rosters play; ATL is on a bye, which is an
+  // absence from a non-empty map rather than an entry saying so.
+  games: {
+    BUF: { opponent: "MIA", home: true, kickoff: SUNDAY },
+    LV: { opponent: "KC", home: false, kickoff: SUNDAY },
+  },
 } as never;
 
 const values = {
@@ -125,6 +134,22 @@ const half = (id: number, name: string, opponent: boolean, bestBall = false) =>
         weekView,
         opponent,
       }),
+    } as never),
+  );
+
+/** The same half as the leagues list and the trades board draw it: no week at all. */
+const seasonHalf = () =>
+  renderToStaticMarkup(
+    createElement(RosterDetail, {
+      team: team(1, "jkap"),
+      teams: [team(1, "jkap")],
+      players,
+      rosterPositions: ["QB", "RB", "BN"],
+      outlook: null,
+      values: { ...values, ktc: { "7": 8200 } },
+      weekView: null,
+      columns: ["start", "bench"],
+      onOpenColumn: () => {},
     } as never),
   );
 
@@ -193,6 +218,29 @@ describe("a week panel's own half", () => {
     assert.doesNotMatch(html, /Swap out: /);
     assert.doesNotMatch(html, /Best ball/);
   });
+
+  test("gives every player his NFL game, and a bye where there isn't one", () => {
+    // The two facts a lineup is set on. Whether they are *drawn* is what this
+    // asserts; what each one says is `playerGame`, pure and tested beside this.
+    const html = half(1, "jkap", false);
+    assert.match(html, /vs MIA/);
+    assert.match(html, /@ KC/);
+    assert.match(html, /Sun 1:05p/);
+    // Bijan's club plays no game in this fixture, which is a bye — and a bye is
+    // an absence from the week rather than an entry saying so, so a row reading
+    // it as "not known" would quietly say nothing at all.
+    assert.match(html, />BYE</);
+  });
+
+  test("a season panel names no game, because there is no week to read one from", () => {
+    // The one thing that must not follow this feature onto the leagues list and
+    // the trades board: those panels are a rest-of-season shape with no Sunday
+    // in them, so an opponent there would be a claim about a week nobody asked
+    // about.
+    const html = seasonHalf();
+    assert.doesNotMatch(html, />BYE</);
+    assert.doesNotMatch(html, /Sun 1:05p/);
+  });
 });
 
 describe("the opponent's half", () => {
@@ -239,19 +287,7 @@ describe("a season panel is untouched by any of it", () => {
     // this half used to head itself with stays gone — the standings beside it
     // names the team, which is the argument that removed it. The marks stay gone
     // too: that list *is* the best lineup, so there is nothing to disagree with.
-    const html = renderToStaticMarkup(
-      createElement(RosterDetail, {
-        team: team(1, "jkap"),
-        teams: [team(1, "jkap")],
-        players,
-        rosterPositions: ["QB", "RB", "BN"],
-        outlook: null,
-        values: { ...values, ktc: { "7": 8200 } },
-        weekView: null,
-        columns: ["start", "bench"],
-        onOpenColumn: () => {},
-      } as never),
-    );
+    const html = seasonHalf();
     assert.match(html, /lab-plate lab-plate-sm/);
     assert.doesNotMatch(html, /lab-trough/);
     assert.doesNotMatch(html, />jkap</);
@@ -291,6 +327,7 @@ describe("the kickoff re-seat marks", () => {
         },
       },
       team_ppg: {},
+      games: {},
     }) as never;
 
   const renderHalf = (weekView: never) =>

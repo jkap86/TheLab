@@ -50,6 +50,11 @@ export type SectionLayout = {
    */
   statStart: string;
   /**
+   * Where the player's NFL game sits — the second line, under the name, in
+   * whichever shape the row is in. See {@link GAME_SEAT}.
+   */
+  gameSeat: string;
+  /**
    * The recessed lane the two number columns run down, or null where there are
    * no numbers to run down it. Drawn once per section rather than once per row
    * (see `.lab-lane`), so this is the width of both tracks plus the gap between
@@ -57,6 +62,45 @@ export type SectionLayout = {
    */
   lane: string | null;
 };
+
+/**
+ * The seat the week's opponent and kickoff take: a second line, under the name,
+ * in both shapes — which is the same cell in the narrow one and a new line in
+ * the wide one.
+ *
+ * **It costs the narrow shape nothing at all**, and that is the whole reason it
+ * is placed rather than appended to the name run. Below `@3xl` the name spans
+ * the row's first line and the numbers start in the *second* track of the
+ * second (see {@link SectionLayout.statStart}), so the leading cell of that line
+ * — the one the retired meta cell used to hold — is already empty and already
+ * paid for. Above `@3xl` the row is one line with no free cell in it, so this
+ * makes a second one; a week panel's rows are two lines tall there and a season
+ * panel's are untouched, since no game is drawn without a week to read one from.
+ *
+ * **The alternative was the name's width and it was measured and rejected.** As
+ * a trailing token in the name run — where the position and the NFL team sit —
+ * `vs WAS Sun 12:00p` measures 87px in Geist at `0.65rem`, against a name track
+ * of ~160px at `@3xl` on a week panel (one value column, so `ONE_NUMBER`) and
+ * ~150px on a phone. Either way it takes over half the field this list is
+ * scanned on, and `Christian McCaffrey` — 135.6px — truncates at every tier.
+ * Height is the cheaper of the two here: a wrapped row is still legible where a
+ * name cut to `Christian McC…` is the one column with nowhere else to go.
+ *
+ * What that leaves the game itself is ~96px on a 390px phone (a ~150px row less
+ * the 46px value track and the 8px gap), which is the budget `playerGame`'s own
+ * clock spelling is measured against.
+ *
+ * **The row is explicit, not just the column**, which is what keeps the numbers
+ * where they are. With an automatic row the cursor lands here before the value
+ * cells are placed and drags them onto the second line with it — the wide shape
+ * would put its numbers under the name and the narrow shape would open a third
+ * line. A definite position is placed before every auto item and simply occupies
+ * its cell, so nothing else moves.
+ *
+ * One string for all three templates because it is one fact about all three: the
+ * name is track 1 below `@3xl` and track 2 from it, in every one of them.
+ */
+const GAME_SEAT = "row-start-2 col-start-1 @3xl:col-start-2";
 
 // Written out rather than assembled, so Tailwind sees every class string whole.
 /**
@@ -72,6 +116,7 @@ export const NO_NUMBERS: SectionLayout = {
   // Nothing to place: this layout is paired with an empty column list, so no
   // row using it draws a value cell at all.
   statStart: "",
+  gameSeat: GAME_SEAT,
   lane: null,
 };
 
@@ -167,8 +212,10 @@ export const SPLIT_LAYOUT: SectionLayout = {
   // Two lines: the name group spans the row. One line: it is one cell of it,
   // between the slot lane and the numbers.
   nameSpan: "col-span-3 @3xl:col-span-1",
-  // Row two, second track — the first is under the name and belongs to nothing.
+  // Row two, second track — the first is under the name and is where the week's
+  // game sits, or is empty on a season panel.
   statStart: "@max-3xl:col-start-2",
+  gameSeat: GAME_SEAT,
   // Both tracks plus the `gap-x-2` between them.
   lane: "w-[7.5rem]",
 };
@@ -198,6 +245,7 @@ export const ONE_NUMBER: SectionLayout = {
     "@3xl:grid-cols-[2.125rem_minmax(0,1fr)_3.5rem]",
   nameSpan: "col-span-2 @3xl:col-span-1",
   statStart: "@max-3xl:col-start-2",
+  gameSeat: GAME_SEAT,
   lane: "w-[3.5rem]",
 };
 
