@@ -155,7 +155,8 @@ export const TEAM_METRICS: TeamMetric[] = [
       // above means one grain up — each week's best lineup, read for one week.
       // What it is currently starting rides on the hover rather than in a third
       // column: the gap between the two is the lineup checker's whole subject,
-      // and it already has a readout of its own in the panel's telemetry.
+      // and that tool states it in a column of its own on the row that opens
+      // this panel.
       const { optimal, current, points_left } = weekProjection;
       return {
         kind: "value",

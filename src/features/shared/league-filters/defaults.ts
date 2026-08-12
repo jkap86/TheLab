@@ -229,6 +229,13 @@ export const NO_TRADE_DEADLINE = 99;
  * Redraft lit on the rail is an empty list with nothing on screen saying which
  * of them emptied it. The same argument `omit` makes for a whole row, at the
  * grain of one key.
+ *
+ * **The league detail panel's Settings tab reads the same set for the same
+ * shape of reason**, which is why this is exported rather than private to the
+ * menu: that list names both keys itself, in words, at the head of the column —
+ * `type` and `best_ball` are digits nobody can read — so the generic run below
+ * has to skip exactly the two the head has already stated. One set, so a third
+ * key given a named home in either place cannot be left duplicated in the other.
  */
 export const NON_SETTING_KEYS: ReadonlySet<string> = new Set([
   "type",

@@ -107,7 +107,8 @@ const SEAT = {
  * **It lives here rather than beside the league card that wrote it, and the
  * reason is a bundle rather than a filing preference.** The trade card is the
  * third caller (its ledge holds the instant), and `ui/league-card.tsx` statically
- * imports `LeagueDetailPanel` — two dense tables, a rank dial and a query hook.
+ * imports `LeagueDetailPanel` — two dense tables, two settings lists and a query
+ * hook.
  * Importing one name from that module pulls the whole subtree into the graph of
  * whatever imported it, which on the trades board is the first paint of a page
  * whose panel is deliberately behind a press (see `trades/league-sheet`). This

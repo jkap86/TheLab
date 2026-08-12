@@ -179,6 +179,20 @@ export type LeagueDetail = {
    */
   scoring_settings: Record<string, number> | null;
   /**
+   * League config — waivers, the trade deadline, playoff shape — as stored by
+   * Sleeper, and the same blob {@link ManagerLeague.settings} carries.
+   *
+   * Read by nothing on the server: the panel's Settings tab is what asked for
+   * it, and it is a blob rather than promoted columns for the reason the schema
+   * note gives — promote a key when something queries or joins on it. What is
+   * *not* in here is worth knowing before reaching for a key: the roster count
+   * is `total_rosters` on the league row (the teams are on this payload, so the
+   * panel counts them), and the format is read through `BEST_BALL_SQL` into
+   * {@link best_ball} rather than off `settings.best_ball`, so the panel and the
+   * board cannot disagree about what best ball is.
+   */
+  settings: Record<string, unknown> | null;
+  /**
    * Whether Sleeper seats this league's lineup itself — see
    * {@link LeagueRosterSet.best_ball}. It reaches the panel as well as the solve,
    * since a starters list with nothing to swap has to say why.

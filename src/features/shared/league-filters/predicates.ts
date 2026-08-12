@@ -212,8 +212,23 @@ export function matchesSettingRule(
   return value !== null && compare(value, rule.op, rule.value);
 }
 
+/**
+ * A league as far as its `settings` blob — everything {@link leagueType} reads.
+ *
+ * Widened from `ManagerLeague` because the league detail panel asks the same
+ * question of a different shape: `/api/league/[leagueId]` sends one league's blob
+ * beside its rosters, not a `ManagerLeague`, and its Settings tab has to name the
+ * type the same way the filters and the trade cards do. A structural parameter
+ * costs existing callers nothing — a `ManagerLeague` still satisfies it — and it
+ * is the alternative to a second copy of the fallback below.
+ */
+export type LeagueSettingsBlob = { settings: Record<string, unknown> | null };
+
 /** Read a numeric field out of a league's Sleeper `settings` blob. */
-function settingNumber(league: ManagerLeague, key: string): number | undefined {
+function settingNumber(
+  league: LeagueSettingsBlob,
+  key: string,
+): number | undefined {
   const value = league.settings?.[key];
   return typeof value === "number" ? value : undefined;
 }
@@ -229,10 +244,10 @@ function settingNumber(league: ManagerLeague, key: string): number | undefined {
  * Sleeper omits `type` for standard redraft leagues, so a missing value is 0 —
  * the same assumption `/api/adp` makes in SQL, and the reason this is a function
  * rather than a field read at each call site: the share cards count dynasty and
- * redraft leagues off it too, and a second copy of the fallback is a second
- * chance to forget it.
+ * redraft leagues off it too, the league detail panel's Settings tab names it in
+ * words, and a second copy of the fallback is a second chance to forget it.
  */
-export function leagueType(league: ManagerLeague): number {
+export function leagueType(league: LeagueSettingsBlob): number {
   return settingNumber(league, "type") ?? 0;
 }
 

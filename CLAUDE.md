@@ -2123,7 +2123,7 @@ stops holding, a comment saying it does would not have caught it.
     because the trigger is a trade card three modules away rather than anything
     in the sheet's own file — so the seam is a module boundary by construction.
     It is the heaviest thing behind a press here (the whole `ui/league-detail`
-    subtree: two dense tables, a rank dial, a draft-pick list, two metric
+    subtree: two dense tables, two settings lists, a draft-pick list, two metric
     catalogues and a query hook), and it takes no `loading` fallback, unlike the
     filters key: nothing is holding its place on the page, so a placeholder would
     be a flash rather than a reserved box.
@@ -3636,7 +3636,7 @@ stops holding, a comment saying it does would not have caught it.
   **`CardLedge` itself lives in `ui/nameplate.tsx`, and that is a bundle
   decision rather than a filing one.** The trade card became its third caller
   (its ledge holds the instant), and *this* module statically imports
-  `LeagueDetailPanel` — two dense tables, a rank dial, a draft-pick list and a
+  `LeagueDetailPanel` — two dense tables, two settings lists, a draft-pick list and a
   query hook. A barrel is one module to the bundler and so is a component file:
   importing one name from here pulls the whole subtree into the graph of
   whatever imported it, which on the trades board is the first paint of a page
@@ -3762,10 +3762,9 @@ stops holding, a comment saying it does would not have caught it.
     roster row paints square across the card's rounded corners.
 - **What scrolls under that cap is each half of the panel, not the card's
   contents.** One scroll box over the whole panel is the obvious spelling and it
-  takes the wrong things with it. The telemetry strip states the *selected*
-  team's rank and totals and the row that selects one is in the table below, so
-  scrolling the roster left three numbers on screen with nothing naming whose
-  they were; each half's column headings are what say which metric its value
+  takes the wrong things with it. The tab strip is the only way back to whichever
+  of the panel's two readings is not on screen, so scrolling the roster carried
+  the way out of the roster off with it; each half's column headings are what say which metric its value
   columns are pointed at, so a list past its own heading is a column of
   unlabelled numbers — and those headings are what open the columns editor, so
   the panel's only controls were the first thing to leave. And the two lists are wildly unequal
@@ -4858,35 +4857,60 @@ stops holding, a comment saying it does would not have caught it.
   stable over the standings order the server sends, so ties, unprojected teams
   and a league with no outlook at all degrade to the standings rather than to a
   shuffle.
-- **The panel leads with a readout, and it is the selected team's, not the
-  league's.** `PanelTelemetry` is a rank dial and two milled cells — projected
-  and on bench — above both halves, because a panel that opens onto two dense
-  tables otherwise asks the reader to derive its own headline. Three rules
-  in it, and the first is the one worth arguing with:
-  - **The overlap with the `proj` / `bench` columns is paid on purpose.** Those
-    columns exist to compare teams *against each other* and the readout states
-    one team, which are different questions off the same number — and the columns
-    are pickable, so neither is reliably on screen anyway. Restating a number at a
-    different grain is not the sin the roster panel's dropped team plate was;
-    restating it at the *same* grain is.
-  - **The panel says nothing about the lineup a team is currently seating, and
-    the lineup gap was the last of three removals that got it there.** The roster
-    half's head carried the gap above the list it belongs to, then the
-    `start … · sit …` names under it, then a cell in this strip; each removal
-    asked what the panel is *for*, and the answer is the best lineup available
-    rather than a diff against another one — which the two lists below already
-    are. Nothing about the contract moved: `points_left` is still computed, still
-    sent, and still read by the lineup checker's own gap column and the
-    standings' week-projection hover, which are where a reader is asking that
-    question rather than this one. What it leaves is a strip with no verdict on
-    it, so the amber the app spends on "needs attention" is unspent here and the
-    accent stays available for the one lit standings row.
-  - **The dial's arc is the rank, not the points.** A full ring is the best roster
-    in the league and an empty one the worst, so it reads as "how far up this
-    field am I" — the points are in the cell beside it and have no field to be
-    placed against. It goes through the same `rankOf` the collapsed card's rank
-    metrics use, so a chip on the card and the dial in the panel it opens can't
-    disagree, all-zero guard included: an undrafted league has no leader.
+- **The panel leads with a tab strip — Standings and Settings — and what it
+  replaced was a readout of numbers already on screen.** That band held
+  `PanelTelemetry`: a rank dial and two milled cells, projected and on bench, for
+  the *selected* team. Each of the three survives the swap in the place it was
+  actually read. The rank **is** the standings' own ordering, and every row wears
+  it as a tab on its corner, so the dial was a second drawing of the table under
+  it. Projected and on bench are two of the metrics that table's value columns
+  open on, which the strip's own note conceded ("the overlap with the
+  `proj` / `bench` columns is paid on purpose") — a defensible trade while the
+  band had nothing better to hold, and not one worth making against a reading the
+  app did not offer at all. Five things about what is there now:
+  - **Settings answers a question no part of this app answered.** What a league
+    pays for a reception and whether it has a trade deadline were facts a card
+    could hint at (the trade card's gauges say type, size and the QB/TE slots) and
+    nothing could state. It matters most where a reader has no prior knowledge of
+    the league, which is exactly the trades board — every crawled league in the
+    season, most of them strangers'.
+  - **Two columns of one material, because both are read.** Everywhere else in
+    this panel the raised/recessed pairing is load-bearing — the standings is the
+    field you read and the roster the one you act on — and there is no such split
+    between a scoring list and a settings list, so inventing one would say
+    something untrue. Both are troughs, each scrolling under its own fixed
+    heading, the 50/50 split held at every width the way the two halves beside
+    them hold it.
+  - **The lit tab is recessed and the other is raised**, which is the app bar's
+    grammar rather than a segmented control: "you are here" against "press me",
+    the pairing `AdpBayRail` already draws one control over. The rail is
+    `inline-flex` for the trade card's bezel reason — a housing that reached both
+    walls would have to be filled, and two tabs across a card read as a table
+    header.
+  - **A head-to-head draws no strip**, on the tabs' own terms rather than as an
+    exception: `Standings` would name a table the lineup checker's panel
+    deliberately does not have. That is the same gate the telemetry strip sat
+    behind, arrived at from the other direction.
+  - **It names nothing itself.** Every label, ranking and value name in
+    `league-settings.ts` comes from `league-filters` — `SETTING_KEYS`,
+    `COMMON_SCORING_KEYS`, `settingKeyLabel`, `scoringKeyLabel`,
+    `formatRuleValue`, the sentinel and the named values — so the word a reader
+    narrows on is the word this panel prints back. Two readings are the module's
+    own and both are the codebase's existing rules read once more:
+    - **A stored scoring zero is dropped**, because `scoringValue`'s rule is that
+      an absent key is 0 — so a league that omits `rec` and one that stores
+      `rec: 0` are the same league, and a list drawing them differently would be
+      reporting Sleeper's serialisation rather than the league's scoring. It is
+      also what keeps the column from opening with forty rows of nothing.
+    - **Three facts lead the settings column because a bare walk of the blob
+      answers them badly**: teams is not in the blob at all (the payload's own
+      rosters are counted), and `type: 2` / `best_ball: 1` are a filter's
+      vocabulary rather than a reader's — so they are named from the rails that
+      offer them and the generic run skips exactly those two, which is
+      `NON_SETTING_KEYS` read a second time for the same shape of reason. The
+      format comes from the payload's `best_ball` (that is `BEST_BALL_SQL`'s
+      answer) rather than from the blob beside it, so the panel cannot disagree
+      with the board that priced the card it opened from.
 - **The collapsed card's stat columns are four slots the reader aims, not four
   fixed rankings.** `league-metrics.ts` is the catalogue of what a slot can hold
   and how to read it off the cached ranks and KTC value — the card hard-coded
@@ -5348,9 +5372,10 @@ stops holding, a comment saying it does would not have caught it.
   on an axis the section isn't about: that half is the lineup to hold, so which
   list a player is in is the whole of the advice, and the marking only reported
   how far the team currently is from taking it. What survives as a *number* is
-  the gap, in the readout strip, where it sits beside the two totals it is the
-  difference between — which is also why `optimal.ts` computes `current` /
-  `current_points`: `points_left` is a difference against them and is on screen.
+  the gap, which is the lineup checker's own column on the row that opens this
+  panel and the week projection's hover inside it — which is also why
+  `optimal.ts` computes `current` / `current_points`: `points_left` is a
+  difference against them and is on screen.
   The one thing left above the list is `LineupCoverage`, the caveat naming slots
   the solver didn't recognise — kept because nothing else on screen can raise it,
   where everything else up there was already said below.

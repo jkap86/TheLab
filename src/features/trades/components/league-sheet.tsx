@@ -192,8 +192,8 @@ export function LeagueSheet({
             scrolling halves, and every `min-h-0` in that chain has to resolve
             against a definite height — so what a holder owes it is a bound, not
             a scroller. `overflow-y-auto` here would satisfy nothing and quietly
-            turn the whole panel back into one long scroll with its telemetry
-            strip and both sets of column headings riding away. The leagues list
+            turn the whole panel back into one long scroll with its tab strip
+            and both sets of column headings riding away. The leagues list
             supplies the same bound by capping its open card at the viewport;
             this dialog is a fixed height, so `min-h-0 flex-1` is the whole of
             it.

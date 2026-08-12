@@ -61,9 +61,32 @@ export function settingKeyOptions(leagues: readonly ManagerLeague[]): string[] {
       }
     }
   }
-  const rank = new Map(SETTING_KEYS.map((setting, i) => [setting.key, i]));
-  const at = (key: string) => rank.get(key) ?? SETTING_KEYS.length;
-  return [...present].sort((a, b) => at(a) - at(b) || a.localeCompare(b));
+  return rankKeys([...present], SETTING_KEYS.map((setting) => setting.key));
+}
+
+/**
+ * Keys in a ranking table's order, with everything it doesn't name after them,
+ * alphabetically.
+ *
+ * The two menus below and above both end this way, and the league detail panel's
+ * Settings tab is a third reader — a list of one league's own keys rather than of
+ * the keys a menu may offer, but ordered by the same tables for the same reason.
+ * Written once so a key promoted up `SETTING_KEYS` moves in the list a reader
+ * *reads* as well as in the menu they pick from.
+ *
+ * Ranked into a map rather than through `indexOf` inside the comparator: a
+ * season's leagues carry ~60 distinct keys, so the sort makes a few hundred
+ * comparisons and each would otherwise be two linear scans of the table.
+ *
+ * Sorts a copy; the argument is left alone.
+ */
+export function rankKeys(
+  keys: readonly string[],
+  order: readonly string[],
+): string[] {
+  const rank = new Map(order.map((key, i) => [key, i]));
+  const at = (key: string) => rank.get(key) ?? order.length;
+  return [...keys].sort((a, b) => at(a) - at(b) || a.localeCompare(b));
 }
 
 /**
@@ -80,12 +103,7 @@ export function scoringKeyOptions(leagues: readonly ManagerLeague[]): string[] {
     }
   }
   const keys = present.size ? [...present] : [...COMMON_SCORING_KEYS];
-  // Ranked once into a map rather than through `indexOf` inside the comparator:
-  // a season's leagues carry ~60 distinct keys, so the sort makes a few hundred
-  // comparisons and each was two linear scans of a fifteen-element array.
-  const rank = new Map(COMMON_SCORING_KEYS.map((key, i) => [key, i]));
-  const at = (key: string) => rank.get(key) ?? COMMON_SCORING_KEYS.length;
-  return keys.sort((a, b) => at(a) - at(b) || a.localeCompare(b));
+  return rankKeys(keys, COMMON_SCORING_KEYS);
 }
 
 /**

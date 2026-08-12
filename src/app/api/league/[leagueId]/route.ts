@@ -295,6 +295,7 @@ async function leaguePayload(
     status: detail.status,
     roster_positions: detail.roster_positions,
     scoring_settings: detail.scoring_settings,
+    settings: detail.settings,
     best_ball: detail.best_ball,
     teams: detail.teams.map(({ manager, ...team }) => ({
       ...team,

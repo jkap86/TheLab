@@ -384,9 +384,9 @@ export function LeagueCard({
               which is where the container query that sizes it can see a width.
 
               **It clips; it no longer scrolls.** One scroll box over the whole
-              panel carried the readout strip and both column headings away with
-              the rows, so the numbers a reader had scrolled to were unlabelled
-              and the team the roster belongs to unnamed. The scrolling moved
+              panel carried its head and both column headings away with the
+              rows, so the numbers a reader had scrolled to were unlabelled and
+              the way back to the panel's other tab was off screen. The scrolling moved
               down into the two halves, which each keep their own heading fixed
               over their own list (see {@link LeagueDetailPanel}) — so what is
               left here is the clip the collapse animation needs, since a `0fr`

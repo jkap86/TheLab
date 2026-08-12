@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 
 // Both imported directly rather than through their barrels, which would pull
 // `pg`-backed code into the client bundle — see `slots.ts` and `rank.ts`.
@@ -34,7 +34,8 @@ import { usePersistedColumns } from "../../use-persisted-columns";
 import type { ColumnsEditor as ColumnsEditorComponent } from "../columns-editor";
 import { PanelLoading, PanelMessage } from "../panel-message";
 import { headToHead } from "./head-to-head";
-import { PanelTelemetry } from "./panel-telemetry";
+import { PanelSettings } from "./panel-settings";
+import { PanelTabs, panelBodyId, panelTabId, type PanelTab } from "./panel-tabs";
 import { RosterDetail } from "./roster-detail";
 import { RosterHeading } from "./roster-heading";
 import { Standings } from "./standings";
@@ -79,14 +80,13 @@ const ColumnsEditor = dynamic(
  *
  * **The panel is a fixed head over two independently scrolling halves.** The
  * card caps itself at the viewport, and the whole panel used to scroll inside
- * that cap as one box — which carried away the two things a reader needs in
- * order to read what is left. The telemetry strip states the *selected* team's
- * rank and totals, so scrolling the roster out from under it left the numbers
- * describing a team the panel no longer named; and each half's column headings
- * are what say which metric its value columns are pointed at, so a list scrolled
- * past its own heading is a column of unlabelled numbers. The headings are also
- * the panel's only controls — pressing one opens the columns editor armed on
- * that slot — and a control that scrolls away is one you have to go back for.
+ * that cap as one box — which carried away the things a reader needs in order to
+ * read what is left. The head is the tab strip, which is the only way back to
+ * whichever reading is not on screen; and each half's column headings are what
+ * say which metric its value columns are pointed at, so a list scrolled past its
+ * own heading is a column of unlabelled numbers. Those headings are controls too
+ * — pressing one opens the columns editor armed on that slot — and a control
+ * that scrolls away is one you have to go back for.
  *
  * **Aiming a column is the lists' own dialog, not a menu of this panel's.** Each
  * table used to hang a flat catalogue under whichever heading was pressed, which
@@ -298,6 +298,17 @@ function Panel({
     PLAYER_METRICS,
   );
 
+  // Which reading is on screen: the league's standings and rosters, or its own
+  // configuration. Local and not persisted, because the panel mounts when a card
+  // is expanded or a sheet is opened — a reader presses a league to see how it is
+  // going, so that is what opening one shows, whatever the last league they
+  // looked up its scoring for.
+  const [tab, setTab] = useState<PanelTab>("standings");
+  // One root for the strip's ids and the body's, so a tab and the box it names
+  // cannot disagree — and unique per panel, since a leagues list can hold this
+  // open beside a trade sheet's copy.
+  const baseId = useId();
+
   // One editor per table, because they are two catalogues and two selections —
   // a team's aggregate and a player's number are not choices from one list. Each
   // holds which heading opened it, so a press lands on the column the reader
@@ -365,100 +376,124 @@ function Panel({
   // padding is set by a query on itself changes the content box that query is
   // measured against, so the threshold moves as it is crossed. The container is
   // one level up, around every state this panel can be in.
+
+  // A head-to-head draws no strip, and that is the tabs' own rule rather than an
+  // exception to it: `Standings` names a table that panel deliberately does not
+  // have (two rosters, no league table between them), and a tab naming an absent
+  // table is worse than no tab. So the strip follows the standings rather than
+  // the caller — the leagues list and the trades board always, and a week panel
+  // on a bye, which falls through to the same arrangement and is a league worth
+  // reading the settings of like any other.
+  //
+  // The body is a tab panel exactly where there are tabs above to name it: a
+  // `tabpanel` role on the head-to-head would point `aria-labelledby` at a tab
+  // that is not in the document.
+  const tabbed = !game;
+  const tabPanel = tabbed
+    ? {
+        id: panelBodyId(baseId),
+        role: "tabpanel",
+        "aria-labelledby": panelTabId(baseId, tab),
+      }
+    : {};
+
   return (
     <div className="flex min-h-0 flex-col">
-      {/* Outside the inset on purpose: the readout is the card's head
-          continuing, so it runs the full width under its own seam rather than
-          sitting in the body as a third object between the name and the
-          detail. It is also the line that must not move — it names the team
-          both halves are about — which is what `shrink-0` on its own root says
-          now that the halves below it are what scroll. */}
-      {/* Not on a head-to-head, and that is the strip's own rule rather than an
-          exception to it: everything it states is the *selected* team's, and a
-          panel showing two rosters has no selection for it to be about — full
-          bleed above both halves it would be three numbers attributable to
-          either. What it was for is not lost, it is stated twice and correctly
-          attributed: each half's {@link RosterHeading} carries that team's name
-          and what it projects for the week, which is the reading a reader who
-          arrived at a *lineup* is after. The rank dial goes with it, since where
-          a roster places over the rest of the season is the question the season
-          panel answers. */}
-      {data.outlook && !game && (
-        <PanelTelemetry
-          outlook={data.outlook}
-          team={data.outlook.teams.find(
-            (t) => t.roster_id === selected.roster_id,
-          )}
-        />
-      )}
-      <div className="flex min-h-0 flex-col pb-3 pl-3 pr-2 pt-2 @lg:pb-5 @lg:pl-5 @lg:pr-4 @lg:pt-3">
-        {/* The same 50/50 split either way, and the halves keep the roles the
-            materials give them: the left one is acted on and the right one is
-            read. On a season panel that is the roster against the standings; on
-            a week panel it is the reader's own lineup against the one they are
-            playing, which is the same distinction — you can move your own
-            players and not theirs. */}
-        <div className="grid min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-1.5 @lg:gap-4">
-          {game ? (
-            <RosterDetail
-              team={game.mine}
-              teams={teams}
-              players={data.players}
-              rosterPositions={data.roster_positions}
-              outlook={data.outlook}
-              values={data.values}
-              weekView={weekView}
-              columns={rosterColumns}
-              onOpenColumn={rosterEditor.open}
-              bestBall={data.best_ball}
-              heading={
-                <RosterHeading
-                  team={game.mine}
-                  weekView={weekView}
-                  opponent={false}
-                />
-              }
-            />
-          ) : (
-            <Standings
-              teams={teams}
-              outlook={data.outlook}
-              values={data.values}
-              weekView={weekView}
-              selectedId={selected.roster_id}
-              onSelect={setSelectedId}
-              columns={teamColumns}
-              onOpenColumn={teamEditor.open}
-            />
-          )}
-          {/* One selection across both halves, so the columns line up across
-              the panel and one pick moves them together — the same rule that
-              holds a column steady down a list, read sideways. The editor is
-              one editor for the same reason: two rosters are one catalogue. */}
-          <RosterDetail
-            team={game ? game.theirs : selected}
-            teams={teams}
-            players={data.players}
-            rosterPositions={data.roster_positions}
-            outlook={data.outlook}
-            values={data.values}
-            weekView={weekView}
-            columns={rosterColumns}
-            onOpenColumn={rosterEditor.open}
+      {/* Outside the inset on purpose: the strip is the card's head continuing,
+          so it runs the full width under its own seam rather than sitting in the
+          body as a third object between the name and the detail. It is also the
+          line that must not move, which is what `shrink-0` inside it says now
+          that the halves below are what scroll. */}
+      {tabbed && <PanelTabs tab={tab} onTab={setTab} baseId={baseId} />}
+      <div
+        {...tabPanel}
+        className="flex min-h-0 flex-col pb-3 pl-3 pr-2 pt-2 @lg:pb-5 @lg:pl-5 @lg:pr-4 @lg:pt-3"
+      >
+        {tabbed && tab === "settings" ? (
+          <PanelSettings
+            scoring={data.scoring_settings}
+            settings={data.settings}
+            // Not `total_rosters`: this payload carries the rosters themselves,
+            // so counting them costs nothing and cannot disagree with the table
+            // in the tab beside it.
+            teams={teams.length}
             bestBall={data.best_ball}
-            surface={game ? "recessed" : "raised"}
-            heading={
-              game ? (
-                <RosterHeading
-                  team={game.theirs}
-                  weekView={weekView}
-                  opponent
-                />
-              ) : undefined
-            }
           />
-        </div>
-        <OutlookCaveat data={data} />
+        ) : (
+          <>
+            {/* The same 50/50 split either way, and the halves keep the roles the
+                materials give them: the left one is acted on and the right one is
+                read. On a season panel that is the roster against the standings; on
+                a week panel it is the reader's own lineup against the one they are
+                playing, which is the same distinction — you can move your own
+                players and not theirs. */}
+            <div className="grid min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-1.5 @lg:gap-4">
+              {game ? (
+                <RosterDetail
+                  team={game.mine}
+                  teams={teams}
+                  players={data.players}
+                  rosterPositions={data.roster_positions}
+                  outlook={data.outlook}
+                  values={data.values}
+                  weekView={weekView}
+                  columns={rosterColumns}
+                  onOpenColumn={rosterEditor.open}
+                  bestBall={data.best_ball}
+                  heading={
+                    <RosterHeading
+                      team={game.mine}
+                      weekView={weekView}
+                      opponent={false}
+                    />
+                  }
+                />
+              ) : (
+                <Standings
+                  teams={teams}
+                  outlook={data.outlook}
+                  values={data.values}
+                  weekView={weekView}
+                  selectedId={selected.roster_id}
+                  onSelect={setSelectedId}
+                  columns={teamColumns}
+                  onOpenColumn={teamEditor.open}
+                />
+              )}
+              {/* One selection across both halves, so the columns line up across
+                  the panel and one pick moves them together — the same rule that
+                  holds a column steady down a list, read sideways. The editor is
+                  one editor for the same reason: two rosters are one catalogue. */}
+              <RosterDetail
+                team={game ? game.theirs : selected}
+                teams={teams}
+                players={data.players}
+                rosterPositions={data.roster_positions}
+                outlook={data.outlook}
+                values={data.values}
+                weekView={weekView}
+                columns={rosterColumns}
+                onOpenColumn={rosterEditor.open}
+                bestBall={data.best_ball}
+                surface={game ? "recessed" : "raised"}
+                heading={
+                  game ? (
+                    <RosterHeading
+                      team={game.theirs}
+                      weekView={weekView}
+                      opponent
+                    />
+                  ) : undefined
+                }
+              />
+            </div>
+            {/* Under the standings and not under the settings: it is a caveat
+                about the projections those two lists are drawn from, and a
+                league's scoring pays what it pays whether or not Sleeper
+                projects every category of it. */}
+            <OutlookCaveat data={data} />
+          </>
+        )}
       </div>
 
       {/* Two dialogs, one per table, each mounted from the first press onward —

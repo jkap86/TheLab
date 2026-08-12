@@ -452,11 +452,12 @@ function LineupNote() {
  * beside this panel are ranked on, and the selected row states it under whichever
  * projection column is aimed at it, with the horizon spelled out once in that
  * table's footer. The *gap* is a headline about this team rather than a note on
- * its bench, so it is a cell in the panel's readout strip, beside the two totals
- * it is the difference between. And the **moves** — `start … · sit …` — were the
- * lineup restated in prose above the lineup itself: every name in them was already
- * on a row a few pixels below, in the section that answers where it should be, so
- * what the sentence added over the two lists was a second spelling of them.
+ * its bench, so it is the lineup checker's own column on the row that opens this
+ * panel, and the week projection's hover here. And the **moves** —
+ * `start … · sit …` — were the lineup restated in prose above the lineup itself:
+ * every name in them was already on a row a few pixels below, in the section that
+ * answers where it should be, so what the sentence added over the two lists was a
+ * second spelling of them.
  *
  * That last one is worth reading beside where those two sets ended up, because
  * the argument survived being inverted. It was right that a prose line above a

@@ -127,9 +127,9 @@ const TradeSearch = dynamic(
  * The league a card opens into, loaded the first time one is pressed.
  *
  * The heaviest thing on this page behind a press: the sheet pulls in the whole
- * `ui/league-detail` subtree — two dense tables, the rank dial, the draft-pick
- * list, two metric catalogues and a query hook — and none of it is on screen at
- * first paint. The seam is a module boundary rather than an export name, which is
+ * `ui/league-detail` subtree — two dense tables, two settings lists, the
+ * draft-pick list, two metric catalogues and a query hook — and none of it is on
+ * screen at first paint. The seam is a module boundary rather than an export name, which is
  * what the split actually needs: the trigger is the card, three modules away, so
  * nothing static reaches this chunk. It is deliberately not re-exported from
  * `features/trades/index.ts` or from `features/shared`, since a barrel naming it

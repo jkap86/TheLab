@@ -726,6 +726,7 @@ export async function getLeagueDetail(
     status: string;
     roster_positions: string[] | null;
     scoring_settings: Record<string, number> | null;
+    settings: Record<string, unknown> | null;
     league_type: number;
     best_ball: boolean;
     previous_league_id: string | null;
@@ -734,6 +735,7 @@ export async function getLeagueDetail(
     // `/api/adp` groups and filters leagues by, so "is this a dynasty league"
     // and "is this best ball" have one answer across the app.
     `SELECT league_id, name, season, status, roster_positions, scoring_settings,
+            settings,
             ${LEAGUE_TYPE_SQL} AS league_type, ${BEST_BALL_SQL} AS best_ball,
             previous_league_id
        FROM leagues l WHERE league_id = $1`,
@@ -835,6 +837,7 @@ export async function getLeagueDetail(
     status: l.status,
     roster_positions: l.roster_positions,
     scoring_settings: l.scoring_settings,
+    settings: l.settings,
     best_ball: l.best_ball,
     teams,
   };
