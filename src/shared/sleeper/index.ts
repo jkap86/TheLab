@@ -29,7 +29,7 @@ export {
 export { getNflState } from "./state";
 export { getAllPlayers } from "./players";
 export { fetchWeekProjections } from "./projections";
-export { getNflSchedule } from "./schedule";
+export { getNflWeekScores } from "./scores";
 export { fetchWeekStats } from "./stats";
 export type {
   SleeperUser,
@@ -45,5 +45,5 @@ export type {
   SleeperPlayer,
   SleeperPlayerMap,
   SleeperProjection,
-  SleeperScheduleGame,
+  SleeperScoreGame,
 } from "./types";

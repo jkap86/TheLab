@@ -1,4 +1,4 @@
-import { getNflSchedule } from "@/shared/sleeper";
+import { getNflWeekScores } from "@/shared/sleeper";
 
 import { openingKickoff, weekGames } from "./parse";
 import type { TeamGame } from "./parse";
@@ -38,7 +38,9 @@ export async function getFirstKickoff(season: string): Promise<number | null> {
   }
 
   try {
-    const games = await getNflSchedule(season);
+    // Week 1's scoreboard rather than the whole season: the opener is the
+    // earliest game on it, and this is the only Sleeper call that dates one.
+    const games = await getNflWeekScores(season, 1);
     const kickoff = openingKickoff(games);
     cache.set(season, { at: Date.now(), kickoff });
     return kickoff;
@@ -82,8 +84,7 @@ export async function getWeekGames(
   }
 
   try {
-    const schedule = await getNflSchedule(season);
-    const games = weekGames(schedule, week);
+    const games = weekGames(await getNflWeekScores(season, week));
     weekCache.set(key, { at: Date.now(), games });
     return games;
   } catch {

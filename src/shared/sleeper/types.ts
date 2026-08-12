@@ -225,12 +225,24 @@ export type SleeperNflState = {
 };
 
 /**
- * One game of a season's NFL schedule, from the undocumented data host (the
- * projections' host, same caveats). Every field is optional because nothing
- * about this endpoint is promised — read from it defensively and treat an
- * unrecognisable entry as absent rather than guessing at it.
+ * One game of a week's NFL scoreboard, from the undocumented data host (the
+ * projections' host, same caveats) —
+ * `GET api.sleeper.com/scores/nfl/regular/<season>/<week>`.
+ *
+ * **This is the only Sleeper endpoint that publishes a kickoff instant**, which
+ * is why a scoreboard call backs a module named for the schedule. The obvious
+ * source — `schedule/nfl/regular/<season>` — carries `status, date, home, week,
+ * game_id, away` and *never* a time: not in an upcoming season, and not in a
+ * finished one either (checked against 2024, 2025 and 2026). Reading it for an
+ * hour it does not have is what left every kickoff-instant reader on a fallback
+ * for as long as they existed, silently, so nothing may go back to it.
+ *
+ * Every field is optional because nothing about this endpoint is promised —
+ * read from it defensively and treat an unrecognisable entry as absent rather
+ * than guessing at it. The two teams live on `metadata` rather than at the top
+ * level, which is the one shape difference from the schedule call.
  */
-export type SleeperScheduleGame = {
+export type SleeperScoreGame = {
   game_id?: string | null;
   week?: number | null;
   status?: string | null;
@@ -238,6 +250,8 @@ export type SleeperScheduleGame = {
   date?: string | null;
   /** Kickoff as epoch ms — Sleeper's usual clock (drafts, `last_modified`). */
   start_time?: number | null;
-  home?: string | null;
-  away?: string | null;
+  metadata?: {
+    home_team?: string | null;
+    away_team?: string | null;
+  } | null;
 };

@@ -5546,7 +5546,8 @@ stops holding, a comment saying it does would not have caught it.
   - **`weekKickoffs` is derived from `weekGames` rather than walked for itself**,
     and one `getWeekGames` cache entry serves both readers — so the panel naming
     a player's kickoff and the ordering that re-seats him for it cost one
-    schedule request between them and read one answer.
+    scoreboard request between them (see the gotcha on why it is the scoreboard
+    and not the schedule) and read one answer.
   - **It takes a seat on the row's second line** (`SectionLayout.gameSeat`),
     which costs the narrow shape *nothing*: the leading cell of that line — the
     retired meta cell's — is already there and already paid for, since the
@@ -5774,14 +5775,44 @@ stops holding, a comment saying it does would not have caught it.
   and the v1 host answers that path with 200 and an object of empty objects, so a
   wrong base looks like working code with no data. Build the URL with
   `sleeperDataUrl`, not `sleeperUrl`.
-- **The season schedule lives on that host too**
-  (`schedule/nfl/regular/<season>`), and nothing about it is promised: read it
-  through `shared/schedule/parse`, which trusts only a week-1 `start_time` that
-  is plausibly epoch *milliseconds* — Sleeper's usual clock, but a seconds
-  epoch would read as January 1970 and count down to fifty years ago, so the
-  parse rejects the wrong unit rather than believing it. A schedule that names
-  dates without times answers null, and the client falls back to the NFL
-  calendar table's provisional instant instead of the server inventing an hour.
+- **Kickoff instants come from the *scoreboard*, never the schedule, and that
+  is the correction to make if anything ever reaches for the obvious endpoint
+  again.** `schedule/nfl/regular/<season>` looks like the source and cannot be:
+  it carries `status, date, home, week, game_id, away` and **no `start_time` at
+  all** — not for an upcoming season and not for a finished one, checked against
+  2024, 2025 and 2026. Everything needing an hour reads
+  `scores/nfl/regular/<season>/<week>` (`getNflWeekScores`), which publishes a
+  believable ms `start_time` on all sixteen games of a week, months ahead
+  (`status: pre_game`), plus the two teams on **`metadata.home_team` /
+  `metadata.away_team`** rather than at the top level — the one shape difference,
+  and the one a port back to the schedule shape would silently fail on, since
+  reading the wrong keys yields no teams rather than an error.
+
+  **What that mistake cost is the lesson, because nothing failed.** Three
+  readers — the lineup checker's kickoff ordering, the minute-accurate game lock
+  and the season countdown — were built on the schedule call and each degraded
+  politely, exactly as designed: `weekKickoffs` answered an empty map, so
+  `kickoffInputs` answered null, so `kickoff_order` was null in every league of
+  every week of every season and the Kickoff column was a permanent em dash;
+  the lock fell back to day accuracy; the countdown fell back to the NFL
+  calendar's provisional instant — which for 2026 is the Thursday after Labor
+  Day and the real opener is a **Wednesday**, so it was a day out and looked
+  right. Tests passed throughout, because they construct rows *with* a
+  `start_time`. **A fallback that fires always is indistinguishable from a
+  feature that works**, so a field a whole feature rests on gets one assertion
+  against the live payload before the feature is built on it.
+
+  The plausibility window stays and stays a *rejection*: a believable
+  `start_time` is epoch milliseconds inside 2000–2100, and a seconds epoch reads
+  as January 1970 and would count down to fifty years ago, so the parse refuses
+  the wrong unit rather than converting it — this drives lineup advice and game
+  locking, where believing a wrong instant is worse than having none. What it
+  must never be asked to absorb is a *missing* field, which is what made the
+  above invisible: an absent `start_time` and a rejected one produce the same
+  empty answer. A week with no believable instant answers null and the client
+  falls back to the calendar table rather than the server inventing an hour, and
+  an unscheduled season (or a week past the regular season) answers `[]`, which
+  is the ordinary shape of "no answer" here rather than an error.
 - **A weekly projections response is ~9,400 entries and only ~800 are real.** The
   rest are placeholders for players with no game that week: `game_id` null and
   nothing in `stats` but ADP keys. Store them and every one reads as "projected
