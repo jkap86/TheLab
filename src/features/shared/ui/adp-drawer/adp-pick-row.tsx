@@ -6,9 +6,14 @@ import { previewAdpValue } from "../../adp-controls";
 import type { LeagueFilters } from "../../league-filters";
 import type { AdpPickRow as AdpPick, AdpPickStats } from "../../adp-picks";
 import { ordinal } from "../../format";
-import { AdpCell, ValueCell } from "./adp-board-cells";
+import { AdpCell, KtcCell, ValueCell } from "./adp-board-cells";
 import { BOARD_ROW_CLASS, ADP_ROW_HEIGHT } from "./adp-drawer.constants.ts";
-import { PICK_TAKEN_TITLE, pickCellTitle, pickValueTitle } from "./adp-drawer.utils.ts";
+import {
+  PICK_TAKEN_TITLE,
+  ktcPickTitle,
+  pickCellTitle,
+  pickValueTitle,
+} from "./adp-drawer.utils.ts";
 
 /**
  * One draft pick's row, in the same list and the same grid as the players.
@@ -113,6 +118,19 @@ export const AdpPickBoardRow = memo(function AdpPickBoardRow({
           />
         </>
       )}
+      {/* KTC's own price for the pick, not this board's reading of one. The ADP
+          cells beside it are the *rung* — the rookie the pick returns, averaged
+          out of the drafts on screen — which is this app's arithmetic; a column
+          headed KTC has to carry KTC's number or it is putting one under the
+          other's name. See `AdpPickRow.ktc`. */}
+      <KtcCell
+        value={pick.ktc?.sf ?? null}
+        title={ktcPickTitle(pick.label, pick.ktcExact)}
+      />
+      <KtcCell
+        value={pick.ktc?.oneqb ?? null}
+        title={ktcPickTitle(pick.label, pick.ktcExact)}
+      />
     </li>
   );
 });

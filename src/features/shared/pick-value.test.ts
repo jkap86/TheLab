@@ -62,6 +62,9 @@ function row(
     rookie,
     redraft: market === "redraft" ? board : null,
     dynasty: market === "dynasty" ? board : null,
+    // The ladder is built from ADP alone — KTC is asked only what *waiting*
+    // costs, which `ktcPicks` carries separately.
+    ktc: null,
   };
 }
 

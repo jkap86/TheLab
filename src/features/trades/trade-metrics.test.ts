@@ -65,6 +65,8 @@ const adp: Record<string, AdpPlayerPayload> = {
     rookie: false,
     redraft: { picks: 40, adp: 82, min_pick: 60, max_pick: 108, stdev: 9.4 },
     dynasty: { picks: 30, adp: 28, min_pick: 12, max_pick: 44, stdev: 6.1 },
+    // The trade card prices KTC off its own map; the board row carries none.
+    ktc: null,
   },
   wr: {
     player_id: "wr",
@@ -74,6 +76,7 @@ const adp: Record<string, AdpPlayerPayload> = {
     rookie: false,
     redraft: { picks: 50, adp: 28, min_pick: 14, max_pick: 40, stdev: 4.2 },
     dynasty: { picks: 44, adp: 55, min_pick: 30, max_pick: 80, stdev: 7.7 },
+    ktc: null,
   },
   // Taken in too few of the board's drafts to have an average on either — a
   // kicker, an IDP, a player past the tail the board is fetched to.
@@ -85,6 +88,7 @@ const adp: Record<string, AdpPlayerPayload> = {
     rookie: false,
     redraft: null,
     dynasty: null,
+    ktc: null,
   },
 };
 

@@ -1154,6 +1154,8 @@ describe("adpBoardRows", () => {
       dynasty === null
         ? null
         : { adp: dynasty, min_pick: 1, max_pick: 30, picks, stdev: 2 },
+    // Nothing here reads a KTC price: these tests are about the ADP ordering.
+    ktc: null,
   });
 
   const ids = (rows: AdpPlayerPayload[]) => rows.map((r) => r.player_id);

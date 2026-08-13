@@ -49,6 +49,59 @@ export function takenTitle(board: AdpBoardType): string {
   return `Share of the ${board} board’s drafts the player was taken in`;
 }
 
+/** Which of KTC's two boards a column reads. */
+export type KtcBoard = "sf" | "oneqb";
+
+/**
+ * How each is spelled in a heading 40px wide — which is to say without the word
+ * `KTC` in front of it.
+ *
+ * Measured rather than chosen: `KTC 1QB` with a sort caret is 56.1px, and buying
+ * the pair that width costs 40px out of a name track that has 128 in the board's
+ * densest state. The attribution moves to {@link ktcTitle}, which has room for
+ * the source *and* for the caveat that matters more — see `BOARD_COLUMNS_ONE`
+ * for the whole arithmetic.
+ */
+export const KTC_BOARD_NAMES: Record<KtcBoard, string> = {
+  sf: "SF",
+  oneqb: "1QB",
+};
+
+/**
+ * A KTC heading's hover, and the one place the board's biggest caveat is stated.
+ *
+ * **KTC's board is a dynasty board, and these columns sit beside a redraft
+ * average as readily as a dynasty one.** That is not a mismatch to hide — it is
+ * a second lens on the player rather than a per-market price — but a reader
+ * comparing a redraft ADP against a KTC number has to know the two are not
+ * answering the same question, and the column is 44px of digits with nowhere to
+ * say so. Hence here, on both headings, whichever markets are on screen.
+ */
+export function ktcTitle(board: KtcBoard): string {
+  const lineup =
+    board === "sf"
+      ? "superflex (two-quarterback) leagues"
+      : "single-quarterback leagues";
+  return `KeepTradeCut’s dynasty trade value for ${lineup} — a dynasty board whichever ADP column it is read beside, and unpriced for kickers, defences and the deep end of every position`;
+}
+
+/**
+ * A KTC cell's hover on a *pick* row: which of KTC's rows the number came off.
+ *
+ * A player's price needs no such line — KTC prices the player, and the heading
+ * has already said which board. A pick is the case where the two vocabularies
+ * only nearly line up: KTC publishes three thirds of a round for the drafts it
+ * has an opinion about and one untiered row for the rest, so a number is
+ * routinely read off a broader row than the pick being priced. Saying so is the
+ * same "priced" against "priced exactly" distinction the trade card draws.
+ */
+export function ktcPickTitle(label: string, exact: boolean): string {
+  const base = `KeepTradeCut’s own price for the ${label}`;
+  return exact
+    ? base
+    : `${base}, estimated from a broader row than this pick’s own third of the round`;
+}
+
 /**
  * One ADP cell's hover: the spread behind the average, and the sample it was
  * taken over. It carries what the Taken column says in single-board mode, so
@@ -120,6 +173,28 @@ export function pickValueTitle(
 ): string {
   if (stats.discount === 1) return valueTitle(leagues);
   return `${valueTitle(leagues)} · discounted to ${Math.round(stats.discount * 100)}% for a ${pick.season} draft`;
+}
+
+/**
+ * A sortable heading's accessible name: what the column is, how it is sorted,
+ * and what pressing it will do.
+ *
+ * All three, because none of them is otherwise available. The visible label is
+ * an abbreviation a 44px column has room for (`ADP D`, `1QB`), the sort state is
+ * a caret glyph that is `aria-hidden` decoration, and what a press does is the
+ * thing a reader cannot discover without making it. `aria-sort` is the usual
+ * answer and is not available here: it belongs to a `columnheader`, and this
+ * board is a list of `<li>` rather than a table — claiming a role the markup
+ * doesn't have would be worse than spelling it out.
+ */
+export function sortHeadingLabel(
+  name: string,
+  direction: "asc" | "desc" | null,
+): string {
+  if (direction === null) return `${name} — activate to sort`;
+  return direction === "asc"
+    ? `${name}, sorted ascending — activate to sort descending`
+    : `${name}, sorted descending — activate to sort ascending`;
 }
 
 /**

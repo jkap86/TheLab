@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { AdpBoardType } from "@/shared/manager";
 
@@ -11,6 +11,15 @@ import {
   shownAdpBoards,
 } from "../../adp-controls";
 import { adpBoardEntries, adpPickRows, pickDiscountBoard } from "../../adp-picks";
+import {
+  type AdpSort,
+  type AdpSortColumn,
+  DEFAULT_ADP_SORT,
+  isValueSort,
+  nextAdpSort,
+  resolveAdpSort,
+  sortAdpEntries,
+} from "../../adp-sort";
 import type { LeagueScope } from "../../league-scope";
 import type { AdpState } from "../../use-adp";
 import { AdpBoardHeader } from "./adp-board-header";
@@ -104,6 +113,41 @@ export function AdpBoard({
     [rows],
   );
 
+  const both = controls.boards === "both";
+  const soleBoard: AdpBoardType = soleBoardOf(controls.boards);
+
+  // What the reader has ordered the list on, defaulting to the board's own
+  // merge. It lives here rather than on `AdpControls` because it is a fact about
+  // *this list on screen*: that store is shared with the trades board and the
+  // lineup checker, is seeded from a league, and drives four priced reads — none
+  // of which has any business changing because somebody sorted a column. It
+  // survives a filter change on purpose (a reader sorting by KTC and then
+  // narrowing the population is still asking the same question) and dies with
+  // the drawer, which unmounts on close.
+  const [sort, setSort] = useState<AdpSort>(DEFAULT_ADP_SORT);
+  // Resolved against what this mode actually draws, so toggling a board off
+  // cannot leave the list ordered on a column that has left the screen — see
+  // `resolveAdpSort` for why this is read at render rather than written back.
+  const activeSort = resolveAdpSort(sort, both, soleBoard);
+  const handleSort = useCallback(
+    (column: AdpSortColumn) => setSort((current) => nextAdpSort(current, column)),
+    [],
+  );
+
+  // Only a value sort reads the curve, so only a value sort re-sorts under the
+  // slider — otherwise every one of the ~24 notches across a drag would re-key
+  // and re-order a thousand rows for an ordering the curve cannot change.
+  const sortSteepness = isValueSort(activeSort) ? steepness : 0;
+  const sorted = useMemo(
+    () =>
+      sortAdpEntries(rows, activeSort, {
+        soleBoard,
+        rules: controls.leagueRules,
+        steepness: sortSteepness,
+      }),
+    [rows, activeSort, soleBoard, controls.leagueRules, sortSteepness],
+  );
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Back to the top whenever the board becomes a *different board*. The query is
@@ -127,7 +171,12 @@ export function AdpBoard({
     // `auto`, never smooth: this is not a gesture the reader made, and a glide
     // under a list that is being replaced is two motions fighting.
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
-  }, [identity]);
+    // A press on a heading is the same event as a filter press for this
+    // purpose: the rows under the reader are about to be different rows, and
+    // staying at row four hundred is exactly the failure the identity reset
+    // above exists to prevent. `activeSort` is a fresh object only when a
+    // heading is pressed, so this fires on the press and on nothing else.
+  }, [identity, activeSort]);
 
   const { redraft_drafts, dynasty_drafts, player_count } = board.data ?? {
     redraft_drafts: null,
@@ -135,8 +184,6 @@ export function AdpBoard({
     player_count: null,
   };
   const shown = shownAdpBoards(controls.boards);
-  const both = controls.boards === "both";
-  const soleBoard: AdpBoardType = soleBoardOf(controls.boards);
   const soleDrafts = soleBoard === "dynasty" ? dynasty_drafts : redraft_drafts;
 
   return (
@@ -168,8 +215,10 @@ export function AdpBoard({
             redraftDrafts={redraft_drafts}
             dynastyDrafts={dynasty_drafts}
             rules={controls.leagueRules}
+            sort={activeSort}
             refreshing={board.stale}
             onToggleBoard={(next) => onChange(withBoardToggle(controls, next))}
+            onSort={handleSort}
           />
           {/* `keepPreviousData` holds these rows through a filter change, so
               while `stale` they are the *previous* board's answer wearing the
@@ -185,11 +234,11 @@ export function AdpBoard({
             aria-busy={board.stale || undefined}
             className={`transition-opacity duration-200 ${board.stale ? "opacity-40" : ""}`}
           >
-            {rows.length === 0 ? (
+            {sorted.length === 0 ? (
               <AdpBoardNoRows board={soleBoard} />
             ) : (
               <AdpBoardRows
-                rows={rows}
+                rows={sorted}
                 scrollRef={scrollRef}
                 both={both}
                 soleBoard={soleBoard}

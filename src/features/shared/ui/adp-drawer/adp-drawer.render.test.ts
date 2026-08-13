@@ -18,6 +18,13 @@ import {
   defaultAdpControls,
   seedFromLeague,
 } from "../../adp-controls.ts";
+import { adpBoardEntries } from "../../adp-picks.ts";
+import {
+  type AdpSortColumn,
+  DEFAULT_ADP_SORT,
+  nextAdpSort,
+  sortAdpEntries,
+} from "../../adp-sort.ts";
 import { DEFAULT_LEAGUE_FILTERS } from "../../league-filters/defaults.ts";
 import { ALL_LEAGUES } from "../../league-scope.ts";
 import type { AdpState } from "../../use-adp.ts";
@@ -38,8 +45,13 @@ import {
   ADP_ROW_OVERSCAN,
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
+  KTC_COLUMN_SEAT,
 } from "./adp-drawer.constants.ts";
-import { PICK_TAKEN_TITLE, withLeagueFilters } from "./adp-drawer.utils.ts";
+import {
+  PICK_TAKEN_TITLE,
+  ktcTitle,
+  withLeagueFilters,
+} from "./adp-drawer.utils.ts";
 
 /**
  * The drawer without a DOM.
@@ -137,6 +149,9 @@ const player = (id: string, over: Partial<AdpPlayerPayload> = {}): AdpPlayerPayl
   rookie: false,
   redraft: { picks: 12, adp: Number(id) + 0.5, min_pick: 1, max_pick: 30, stdev: 2.25 },
   dynasty: { picks: 7, adp: Number(id) + 1.25, min_pick: 2, max_pick: 40, stdev: 3.5 },
+  // Unpriced unless a case asks: KTC carries ~500 players, so an em dash in
+  // those columns is the common row rather than the exception.
+  ktc: null,
   ...over,
 });
 
@@ -765,9 +780,197 @@ describe("the column configurations", () => {
     }
   });
 
-  test("the value columns are seated behind the panel's own container query", () => {
-    // `@md`, which measures the drawer rather than the viewport.
-    assert.match(drawer(), /hidden text-right @md:block/);
+  test("the collapsible columns are seated behind the panel's own container queries", () => {
+    // `@md` and `@lg`, which measure the drawer rather than the viewport — the
+    // panel is narrower than the screen everywhere a laptop is involved.
+    const html = drawer();
+    assert.match(html, /hidden @md:block/);
+    assert.match(html, new RegExp(KTC_COLUMN_SEAT));
+  });
+
+  test("the KTC pair is drawn whichever markets are lit, and seated as one", () => {
+    // KTC publishes superflex and 1QB; this board's own two columns are redraft
+    // and dynasty. Those are different axes, so the same two KTC columns are
+    // right in both modes — a branch that drew them per market would be
+    // claiming a per-market price KTC does not publish.
+    for (const boards of ["both", "redraft", "dynasty"] as const) {
+      const html = drawer({ controls: { ...defaultAdpControls("2026"), boards } });
+      // `SF` and `1QB` rather than `KTC SF` / `KTC 1QB`: the longer pair does
+      // not fit a 40px track once a sort caret is on it, so the source lives in
+      // the hover and the accessible name. See `BOARD_COLUMNS_ONE`.
+      assert.match(html, />SF</, `${boards}: expected an SF heading`);
+      assert.match(html, />1QB</, `${boards}: expected a 1QB heading`);
+      assert.match(html, /aria-label="KeepTradeCut superflex dynasty value/);
+      assert.match(html, /aria-label="KeepTradeCut 1QB dynasty value/);
+      // The heading and its cells cross the tier together, or the label is
+      // sitting over the wrong numbers at some width. Two headings plus two
+      // cells on each of the three player rows.
+      const seated = (html.match(new RegExp(KTC_COLUMN_SEAT, "g")) ?? []).length;
+      assert.equal(seated, 2 + 2 * 3, `${boards}: heading and cells must share a seat`);
+    }
+  });
+
+  test("a KTC price is a number, and an unpriced player an em dash", () => {
+    const html = drawer({
+      board: loaded({
+        players: [
+          player("1", { ktc: { sf: 9412, oneqb: 8770 } }),
+          // KTC carries ~500 dynasty skill players, so "no price" is the
+          // ordinary state of a kicker rather than a gap in the data.
+          player("2", { ktc: null }),
+          // And one board priced while the other isn't is a real row too.
+          player("3", { ktc: { sf: 6000, oneqb: null } }),
+        ],
+      }),
+    });
+    // Read off the KTC cells specifically rather than the whole panel: a bare
+    // `>0<` matches the rolling draft counter's digit strip, which is why the
+    // "never a zero" rule has to be asserted against the cells that could
+    // wrongly render one.
+    const priced = [...html.matchAll(/tabular-nums text-foreground\/60"[^>]*>([^<]+)</g)];
+    assert.deepEqual(priced.map((m) => m[1]), ["9,412", "8,770", "6,000"]);
+    // Three unpriced cells — both of player 2's, and player 3's 1QB — each an
+    // em dash and never a zero.
+    const blank = html.match(/hidden @lg:block text-right text-xs text-foreground\/25"?>—</g);
+    assert.equal(blank?.length, 3);
+  });
+
+  test("the headings say which board KTC's number is from", () => {
+    // The board's biggest caveat, and the only place there is room for it: KTC
+    // scrapes a *dynasty* board, so these columns sit beside a redraft average
+    // as readily as a dynasty one.
+    const html = drawer({ controls: { ...defaultAdpControls("2026"), boards: "redraft" } });
+    assert.ok(html.includes(ktcTitle("sf")));
+    assert.ok(html.includes(ktcTitle("oneqb")));
+    assert.match(html, /a dynasty board whichever ADP column it is read beside/);
+  });
+});
+
+describe("the columns sort", () => {
+  test("every heading is a button that names its column and its state", () => {
+    const html = drawer();
+    const headings = [...html.matchAll(/<button[^>]*aria-label="([^"]*activate to sort[^"]*)"/g)];
+    // Nine in both-boards mode: rank, name, position, two ADP, two value, two
+    // KTC. Every one of them a real control with a name — `aria-sort` is not
+    // available to a list of `<li>`, so the label carries the state instead.
+    assert.equal(headings.length, 9);
+    // The board opens on its own merge, which is a column like any other rather
+    // than a fourth "unsorted" state the header would have to draw differently.
+    const sorted = headings.filter((m) => m[1].includes("sorted"));
+    assert.deepEqual(sorted.map((m) => m[1]), [
+      "Board order, sorted ascending — activate to sort descending",
+    ]);
+  });
+
+  test("only the lit column takes the accent, and it carries a caret", () => {
+    const html = drawer();
+    // Sort headings only — `text-active` is the app's "this is the state that
+    // matters" token and is spent elsewhere in the drawer's chrome too.
+    const lit = [
+      ...html.matchAll(
+        /<button[^>]*aria-label="[^"]*activate to sort[^"]*"[^>]*class="([^"]*)"[^>]*>([^<]*)/g,
+      ),
+    ].filter((m) => m[1].includes("text-active"));
+    assert.equal(lit.length, 1);
+    assert.equal(lit[0][2], "#");
+    // Decoration: the direction is in the accessible name, so the glyph is
+    // hidden rather than read out as a character of the label.
+    assert.match(html, /aria-hidden="true" class="ml-0\.5 text-\[0\.5rem\]">▲/);
+  });
+
+  test("a heading press reaches nextAdpSort, and a second press flips it", () => {
+    const presses: AdpSortColumn[] = [];
+    const tree = AdpBoardHeader({
+      both: true,
+      shown: { redraft: true, dynasty: true },
+      soleBoard: "redraft",
+      soleDrafts: 900,
+      redraftDrafts: 900,
+      dynastyDrafts: 304,
+      rules: DEFAULT_LEAGUE_FILTERS,
+      sort: DEFAULT_ADP_SORT,
+      onToggleBoard: () => {},
+      onSort: (column) => presses.push(column),
+    });
+    const headings = elements(tree).filter(
+      (el) => typeof el.props.onSort === "function" && el.props.column !== undefined,
+    );
+    assert.equal(headings.length, 9);
+    for (const el of headings) press(el, "onSort")(el.props.column);
+    assert.deepEqual(presses, [
+      "rank",
+      "name",
+      "position",
+      "adp_redraft",
+      "adp_dynasty",
+      "value_redraft",
+      "value_dynasty",
+      "ktc_sf",
+      "ktc_oneqb",
+    ]);
+    // What each of those presses *means* is `nextAdpSort`'s, tested beside it —
+    // this is only the wiring.
+    assert.deepEqual(nextAdpSort(DEFAULT_ADP_SORT, "rank"), {
+      column: "rank",
+      direction: "desc",
+    });
+  });
+
+  test("the single-board headings sort the market that is lit", () => {
+    // One heading reading "ADP" is a different column depending on which board
+    // is up, which is why the sort vocabulary is board-qualified rather than
+    // positional.
+    for (const boards of ["redraft", "dynasty"] as const) {
+      const presses: AdpSortColumn[] = [];
+      const tree = AdpBoardHeader({
+        both: false,
+        shown: { redraft: boards === "redraft", dynasty: boards === "dynasty" },
+        soleBoard: boards,
+        soleDrafts: 900,
+        redraftDrafts: 900,
+        dynastyDrafts: 304,
+        rules: DEFAULT_LEAGUE_FILTERS,
+        sort: DEFAULT_ADP_SORT,
+        onToggleBoard: () => {},
+        onSort: (column) => presses.push(column),
+      });
+      const headings = elements(tree).filter((el) => el.props.column !== undefined);
+      for (const el of headings) press(el, "onSort")(el.props.column);
+      assert.ok(presses.includes(`adp_${boards}`));
+      assert.ok(presses.includes(`value_${boards}`));
+      assert.ok(presses.includes("taken"));
+      // And never the market that isn't drawn.
+      const other = boards === "redraft" ? "dynasty" : "redraft";
+      assert.ok(!presses.includes(`adp_${other}`));
+    }
+  });
+
+  test("sorting a column reorders the rows on screen", () => {
+    // The board's own merge is by ADP, so a KTC sort has to produce a different
+    // list — this is the end-to-end check that the sort reaches the rendered
+    // rows rather than only the header's own state.
+    const players = [
+      player("1", { ktc: { sf: 10, oneqb: 10 } }),
+      player("2", { ktc: { sf: 9000, oneqb: 9000 } }),
+      player("3", { ktc: { sf: 500, oneqb: 500 } }),
+    ];
+    const html = drawer({ board: loaded({ players }) });
+    const order = (markup: string) =>
+      [...markup.matchAll(/Player (\d)/g)].map((m) => m[1]);
+    assert.deepEqual(order(html), ["1", "2", "3"], "the board opens in ADP order");
+
+    // Pressing a heading is state this static render cannot make, so the
+    // ordering itself is pinned in `adp-sort.test.ts`; what is checked here is
+    // that the rows the drawer renders are the sorted list and not `rows`.
+    const sorted = sortAdpEntries(
+      adpBoardEntries(players, [], "both"),
+      { column: "ktc_sf", direction: "desc" },
+      { soleBoard: "redraft", rules: DEFAULT_LEAGUE_FILTERS, steepness: 3 },
+    );
+    assert.deepEqual(
+      sorted.map((row) => (row.kind === "player" ? row.player.player_id : row.key)),
+      ["2", "3", "1"],
+    );
   });
 });
 
@@ -940,7 +1143,9 @@ describe("what the controls do", () => {
       redraftDrafts: 900,
       dynastyDrafts: 304,
       rules: DEFAULT_LEAGUE_FILTERS,
+      sort: DEFAULT_ADP_SORT,
       onToggleBoard: (board) => toggles.push(board),
+      onSort: () => {},
     });
     const keys = elements(tree).filter((el) => typeof el.props.onToggle === "function");
     assert.equal(keys.length, 2);

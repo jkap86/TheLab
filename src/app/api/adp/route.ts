@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { AdpPayload, AdpPlayerPayload, ApiErrorPayload } from "@/shared/contract";
-import { getKtcPickBoard } from "@/shared/ktc";
+import { getKtcPickBoard, getKtcValuesBySleeperId } from "@/shared/ktc";
 import { getDraftAdp, parseAdpFilters, usesDefaultSeason } from "@/shared/manager";
 import { getPlayersByIds, getRookieClassIds } from "@/shared/players";
 import { getActiveSeason } from "@/shared/season";
@@ -98,20 +98,28 @@ async function board(request: Request) {
   try {
     const result = await getDraftAdp(filters);
     const ids = result.rows.map((r) => r.player_id);
-    // Three reads beside the aggregate that has already done the expensive work,
+    // Four reads beside the aggregate that has already done the expensive work,
     // none of which waits on another. The second is what makes a pick column
     // possible at all — the *current* class through the rookie-class seam (see
     // `shared/players/rookie-class` for what keeps historical classes out),
     // since ranking the rookies on this board *is* the pick ladder. The third
-    // is the only thing KTC is asked for: what waiting costs, which ADP cannot
-    // answer for a pick whose class nobody can name yet. It is a few dozen rows
-    // off a 500-row table, and it is read whole because the anchor the discount
-    // is measured against is a fact about the board rather than about any pick
-    // — see `AdpPayload.pick_ktc`.
-    const [players, rookies, pickKtc] = await Promise.all([
+    // is what waiting costs, which ADP cannot answer for a pick whose class
+    // nobody can name yet. It is a few dozen rows off a 500-row table, and it is
+    // read whole because the anchor the discount is measured against is a fact
+    // about the board rather than about any pick — see `AdpPayload.pick_ktc`.
+    //
+    // The fourth is the KTC columns' own read, and it is narrowed to this page's
+    // ids where the pick board is not: a player price is a fact about *a player*,
+    // so the page names exactly the ones it will draw, where the discount's
+    // anchor is a fact about the board and cannot be asked for by pick. It is
+    // keyed on `sleeper_id`, which the sync resolves by name — so the ~6% of
+    // rostered players KTC doesn't carry, and every kicker and defence, are
+    // simply absent from the map and read as an em dash rather than a zero.
+    const [players, rookies, pickKtc, ktc] = await Promise.all([
       getPlayersByIds(ids),
       getRookieClassIds(ids),
       getKtcPickBoard(),
+      getKtcValuesBySleeperId(ids),
     ]);
 
     const payload: AdpPayload = {
@@ -130,6 +138,10 @@ async function board(request: Request) {
           rookie: rookies.has(row.player_id),
           redraft: row.redraft,
           dynasty: row.dynasty,
+          // Absent means KTC has never heard of him; present with two nulls
+          // means KTC knows him and prices him nowhere. Both read as an em dash,
+          // and neither is a zero — see `AdpPlayerPayload.ktc`.
+          ktc: ktc.values[row.player_id] ?? null,
         };
       }),
       pick_ktc: pickKtc,

@@ -1,4 +1,4 @@
-import { ktcPickBoardRows } from "../../shared/ktc/picks.ts";
+import { ktcPickBoardRows, ktcPickPrice, pickTier } from "../../shared/ktc/picks.ts";
 import type { KtcPickPrice } from "../../shared/ktc/picks.ts";
 import { adpBoardRows } from "./adp-controls.ts";
 import type { AdpShownBoards } from "./adp-controls.ts";
@@ -90,6 +90,33 @@ export type AdpPickRow = {
   label: string;
   redraft: AdpPickStats | null;
   dynasty: AdpPickStats | null;
+  /**
+   * What KTC itself prices this pick at, on both of its boards — null where its
+   * board has no row for this season and round.
+   *
+   * **A pick's KTC column is read straight off KTC rather than derived**, which
+   * is the one place the two halves of this module part company. The ADP columns
+   * beside it are the *rung* — the rookie the pick returns, averaged out of the
+   * drafts on screen — and that is a reading this app makes. KTC publishes the
+   * pick itself (`"2027 Mid 1st"`), so quoting anything else in a column headed
+   * KTC would be putting this app's arithmetic under someone else's name.
+   *
+   * It is also why this sits on the row rather than inside {@link AdpPickStats}:
+   * those are per *ADP market* (redraft/dynasty), and KTC's two boards are
+   * superflex and 1QB, which is a different axis entirely. One pick, one KTC
+   * price per KTC board, whichever ADP column it is being read beside.
+   */
+  ktc: KtcPickPrice | null;
+  /**
+   * False where the row above is broader than the pick's own third of the round
+   * — the untiered "2029 1st" standing in for an early one, or the mid tier
+   * standing in for a pick with no draft order yet.
+   *
+   * The same "priced" against "priced exactly" distinction {@link KtcPickMatch}
+   * draws, carried through so the cell's hover can name the row it read rather
+   * than passing a stand-in off as KTC's answer about this pick.
+   */
+  ktcExact: boolean;
 };
 
 /**
@@ -204,6 +231,17 @@ export function adpPickRows({
     // past the class the board priced, or a season KTC cannot discount — and an
     // em-dash row on both columns would say nothing either of them doesn't.
     if (!redraft && !dynasty) return;
+    // KTC's own price for the pick, on the same terms `ktcPickPrice` gives every
+    // other caller: a numbered pick asks for its third of the round and falls
+    // back to the untiered row, and one with no slot asks the other way round.
+    // Unlike the discount above, this is asked for *every* row including the
+    // current class — a 2026 1.03 has a KTC row of its own, and leaving the
+    // column blank there would report a gap in a board that has an answer.
+    const ktc = ktcPickPrice(
+      ktcPicks,
+      { season, round },
+      slot === null ? null : pickTier(slot, teams),
+    );
     rows.push({
       key: `pick:${season}:${round}:${slot ?? "mid"}`,
       season,
@@ -212,6 +250,10 @@ export function adpPickRows({
       label: pickLabel({ season, round }, slot),
       redraft,
       dynasty,
+      ktc: ktc?.price ?? null,
+      // No row at all is not an inexact one: an unpriced pick draws an em dash,
+      // which owes the reader no explanation about which third it read.
+      ktcExact: ktc?.exact ?? true,
     });
   };
 

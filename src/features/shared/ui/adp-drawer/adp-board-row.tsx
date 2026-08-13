@@ -6,9 +6,9 @@ import type { AdpPlayerPayload } from "@/shared/contract";
 import { previewAdpValue } from "../../adp-controls";
 import type { LeagueFilters } from "../../league-filters";
 import { PositionBadge } from "../position-badge";
-import { AdpCell, ValueCell } from "./adp-board-cells";
+import { AdpCell, KtcCell, ValueCell } from "./adp-board-cells";
 import { BOARD_ROW_CLASS, ADP_ROW_HEIGHT } from "./adp-drawer.constants.ts";
-import { adpCellTitle, takenShare } from "./adp-drawer.utils.ts";
+import { adpCellTitle, ktcTitle, takenShare } from "./adp-drawer.utils.ts";
 
 /**
  * One player's row.
@@ -112,6 +112,11 @@ export const AdpBoardRow = memo(function AdpBoardRow({
           <ValueCell value={value(sole)} />
         </>
       )}
+      {/* Outside the branch, because KTC's two boards are superflex and 1QB —
+          a different axis from the redraft and dynasty markets the branch is
+          about, so the same two cells are right whichever of those is lit. */}
+      <KtcCell value={player.ktc?.sf ?? null} title={ktcTitle("sf")} />
+      <KtcCell value={player.ktc?.oneqb ?? null} title={ktcTitle("oneqb")} />
     </li>
   );
 });

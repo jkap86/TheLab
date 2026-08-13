@@ -18,11 +18,70 @@ import { DEFAULT_ADP_ROUNDS } from "../../adp-controls";
  * They are constants rather than anything built at render time for a second
  * reason: a class Tailwind cannot read as a literal string is a class it does
  * not emit, so the grid would simply not exist in the stylesheet.
+ *
+ * **The KTC pair is a tail at `@lg`, and both halves of that are arithmetic
+ * rather than taste.** It is a *tail* because a collapsible column added in the
+ * middle moves every column after it as the panel crosses the tier — the reader
+ * watches the board step sideways — where one appended at the trailing edge
+ * leaves everything already on screen exactly where it was. And it is `@lg`
+ * (32rem) rather than the `@md` the value columns use because the densest state
+ * is both boards plus both values plus both KTC columns, which is nine:
+ *
+ *     fixed   1.75 + 2.25 + 3 + 3 + 3.25 + 3.25 + 2.5 + 2.5 = 21.5rem
+ *     gaps    8 × `gap-2`                                   =  4rem
+ *     chrome                                                = 408px
+ *
+ * against a 36rem panel's 536px of row (the panel, less its `px-4` and the
+ * list's own `px-1`), which leaves the name **128px** — about what a roster row
+ * gets on a phone, where `Christian McCaffrey` measures 127px. At the 32rem
+ * panel this drawer used to be, that same state left 64px, which is no name at
+ * all; the panel is 36rem for exactly this reason. Single-board at `@lg` is
+ * eight columns, 348px of chrome, and a 188px name.
+ *
+ * **Three tracks are a step wider than they were, and every one of those steps
+ * is the headings becoming controls** rather than a change of mind about the
+ * numbers: a lit heading carries a direction caret after its label, and that
+ * caret costs 10.4px. Measured in headless Chromium against the real `woff2`
+ * and the compiled type — the practice this codebase keeps for a fixed track,
+ * because both failure modes are invisible in review — `ADP R ▲` is 44.1px
+ * against the 44px track `ADP R` fitted, `Taken ▲` is 46.3 against 40, and
+ * `Pos ▲` is 33.6 against 32. All three clipped *inside their own word* the
+ * moment the column was sorted, which reads as broken where a clipped name only
+ * reads as long. So the fixed tracks give way (2 → 2.25, 2.75 → 3, 2.5 → 3) and
+ * the name, which truncates gracefully, absorbs it — the roster panel's own
+ * rule about which field should lose a fight for width.
+ *
+ * **That measurement is also why the KTC headings are `SF` and `1QB` rather
+ * than `KTC SF` and `KTC 1QB`.** The longer pair is 45.7px and 56.1px with a
+ * caret, and buying them their own width costs 40px out of a name that has 128
+ * — so the source moves to the hover and the accessible name ({@link ktcTitle}),
+ * where there is room to say `KeepTradeCut` properly and to state the caveat
+ * that matters far more than the attribution: it is a *dynasty* board whichever
+ * ADP column it is sitting beside.
+ *
+ * A narrower window keeps the old board's shape: below `@lg` the KTC pair is
+ * absent, below `@md` the value pair is too, and a phone draws precisely the six
+ * (or five) columns it always did — a little tighter, since those three tracks
+ * widen at every tier. One board on a 390px phone leaves the name 98px against
+ * the 114 it had, which still holds `Ja'Marr Chase` (92.4px); both boards there
+ * are 158px against 162.
  */
 export const BOARD_COLUMNS_ONE =
-  "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.5rem_3.25rem]";
+  "grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_3.25rem] @lg:grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_3.25rem_2.5rem_2.5rem]";
 export const BOARD_COLUMNS_BOTH =
-  "grid-cols-[1.75rem_1fr_2rem_2.75rem_2.75rem] @md:grid-cols-[1.75rem_1fr_2rem_2.75rem_2.75rem_3.25rem_3.25rem]";
+  "grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem] @md:grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_3.25rem_3.25rem] @lg:grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_3.25rem_3.25rem_2.5rem_2.5rem]";
+
+/**
+ * The seat a KTC column wears, on a heading and on a cell alike.
+ *
+ * One string because the two have to cross the tier together — a heading seated
+ * a tier apart from the column under it is a label over the wrong numbers, which
+ * is invisible in review and obvious on screen. `block` rather than
+ * `inline-block`: Tailwind v4 emits the display utilities alphabetically, so
+ * `.hidden` beats `.block` (which is what makes this hide at all) and loses to
+ * every `.inline*`.
+ */
+export const KTC_COLUMN_SEAT = "hidden @lg:block";
 
 /**
  * The `<li>` every row of the board wears, whichever kind of row it is.

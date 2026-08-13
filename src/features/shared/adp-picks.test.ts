@@ -57,6 +57,9 @@ const player = (
   rookie: false,
   redraft: stats(50),
   dynasty: stats(50),
+  // KTC has no opinion by default: it prices ~500 dynasty skill players, so an
+  // absent price is the board's ordinary state rather than a special case.
+  ktc: null,
   ...over,
 });
 
@@ -217,6 +220,85 @@ describe("adpPickRows", () => {
     });
     assert.equal(labelled(list, "2026 1.01")?.redraft?.adp, 10);
     assert.equal(labelled(list, "2026 1.01")?.dynasty, null);
+  });
+});
+
+describe("the KTC price a pick row carries", () => {
+  /**
+   * The board above prices its future seasons untiered only, which is the
+   * common shape. This one carries the three thirds of a 2027 first as well, so
+   * a numbered pick can be shown reading its *own* third rather than the
+   * round's — the distinction `ktcExact` exists to report.
+   */
+  const TIERED = {
+    ...KTC,
+    [ktcPickKey("2026", 1, "early")]: price(9000),
+    [ktcPickKey("2026", 1, "late")]: price(7000),
+  };
+
+  test("it is KTC's own row, not this board's reading of one", () => {
+    // The whole argument for the column: the ADP cells beside it are the rung —
+    // the rookie the pick returns, averaged out of the drafts on screen — which
+    // is this app's arithmetic. A column headed KTC has to carry KTC's number.
+    const list = rows();
+    const near = labelled(list, "2027 1st");
+    assert.deepEqual(near?.ktc, price(6000));
+    assert.deepEqual(labelled(list, "2028 1st")?.ktc, price(3000));
+    // And it is emphatically not the ADP rung's value: the two columns are
+    // different scales and the row carries both.
+    assert.notEqual(near?.ktc?.sf, near?.redraft?.adp);
+  });
+
+  test("the current class is priced too, not just the future seasons", () => {
+    // The discount above asks KTC nothing for the class in hand — the ladder
+    // *is* that class. The column is a different question: a 2026 1.01 has a
+    // KTC row of its own, and leaving it blank would report a gap in a board
+    // that has an answer.
+    const list = rows({ ktcPicks: TIERED, teams: 3, players: [...ROOKIES, rookie("r5", 50)] });
+    assert.deepEqual(labelled(list, "2026 1.01")?.ktc, price(9000));
+    assert.equal(labelled(list, "2026 1.01")?.ktcExact, true);
+  });
+
+  test("a slot reads its own third of the round", () => {
+    // slot 1 of 3 is early, slot 3 late — `pickTier`'s own terciles, asked here
+    // so the board and the trade card place a pick the same way.
+    const list = rows({ ktcPicks: TIERED, teams: 3, players: [...ROOKIES, rookie("r5", 50)] });
+    assert.equal(labelled(list, "2026 1.01")?.ktc?.sf, 9000);
+    assert.equal(labelled(list, "2026 1.03")?.ktc?.sf, 7000);
+  });
+
+  test("a broader row stands in, and says that it did", () => {
+    // KTC publishes no mid 2026 first here, so the mid pick falls back to the
+    // untiered row — a number worth showing and worth marking, the same
+    // "priced" against "priced exactly" distinction the trade card draws.
+    const withUntiered = { ...TIERED, [ktcPickKey("2026", 1, null)]: price(8000) };
+    const list = rows({
+      ktcPicks: withUntiered,
+      teams: 3,
+      players: [...ROOKIES, rookie("r5", 50)],
+    });
+    assert.equal(labelled(list, "2026 1.02")?.ktc?.sf, 8000);
+    assert.equal(labelled(list, "2026 1.02")?.ktcExact, false);
+  });
+
+  test("a pick KTC has no row for is null, never a nearby pick's price", () => {
+    // The one wrong answer here that would look like a working one. The 2026
+    // rows are absent from `KTC`, so the numbered class is unpriced by KTC even
+    // though the board places every one of them on a rung.
+    const list = rows();
+    const first = labelled(list, "2026 1.01");
+    assert.equal(first?.ktc, null);
+    // Still a real row, because its ADP column answers — the KTC column is one
+    // reading of a pick and not the reason it is listed.
+    assert.equal(first?.redraft?.adp, 10);
+    // And an absent row is not an inexact one: there is nothing to explain.
+    assert.equal(first?.ktcExact, true);
+  });
+
+  test("KTC gone leaves every numbered pick unpriced and listed", () => {
+    const list = rows({ ktcPicks: {} });
+    assert.ok(list.length > 0, "the class is numbered off the board, not off KTC");
+    assert.ok(list.every((row) => row.ktc === null));
   });
 });
 

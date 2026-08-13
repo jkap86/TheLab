@@ -3210,7 +3210,22 @@ stops holding, a comment saying it does would not have caught it.
     the Taken and Value columns at every width; both trade Taken for the second
     ADP (its share moves to the ADP cells' hover) and seat the two value
     columns only from `@md` up — the panel is its own `@container`, so that
-    measures the drawer, not the viewport. `boards` lives on `AdpControls`
+    measures the drawer, not the viewport. **A third pair sits past those, and
+    it is the one pair the board keys do not touch**: KTC's superflex and 1QB
+    prices, `SF` and `1QB`, seated from `@lg` and drawn whichever markets are
+    lit. KTC publishes *dynasty* values and nothing else, so the same two
+    numbers stand beside a redraft average as beside a dynasty one — a second
+    lens on the player rather than a per-market price, which is why the columns
+    are named for KTC's two boards and not for this board's two markets, and why
+    the headings' hover is where that caveat is stated. It is a **tail** because
+    a collapsible column added mid-row makes the board step sideways as the
+    panel crosses a tier, and `@lg` rather than `@md` because nine columns is
+    408px of chrome: the panel went 32rem → 36rem to keep the name track at
+    128px in that state, which is what a roster row gets on a phone. A pick row
+    carries KTC's *own* price for the pick (`AdpPickRow.ktc`, off the `pick_ktc`
+    board the payload already sent) rather than this app's rung arithmetic — a
+    column headed KTC has to carry KTC's number or it is filing one under the
+    other's name. `boards` lives on `AdpControls`
     beside `steepness` and shares its standing exactly: display state, never on
     the query string (the cache would split into two entries holding identical
     payloads) and never counted as a narrowing. What "Match a league…" seeds
@@ -3359,6 +3374,30 @@ stops holding, a comment saying it does would not have caught it.
   near-misses right: the `all` preset and a custom window with neither end set
   resolve to the same bounds, so that is not a new list and the reader keeps their
   place.
+
+  **A heading press is that same event, and it resets the scroll for the same
+  reason.** Every column sorts now (`adp-sort.ts`, pure and tested), and the
+  board's own merge is spelled as a *column* rather than as a null "unsorted"
+  state — so `#` is lit like any other heading and pressing it reverses the
+  board, which needs no control of its own. Five rules hold it up. **A row with
+  no answer sinks in both directions**, because an em dash is not a small number
+  and `null`-as-`-Infinity` floats every unpriced kicker to the top of an
+  ascending KTC column. **Every sort is total**, tying back to the merge by
+  index, so a column of em dashes still comes back in a fixed order rather than
+  the engine's. **A value sort is not an ADP sort reversed** — for a player the
+  two agree, which is what makes the pick case easy to lose, since a future pick
+  carries a discount and is worth less than the rung it stands on. **A sort
+  cannot outlive the column it names**: toggling a board off takes two columns
+  with it, so `resolveAdpSort` falls back to the merge — at *render*, not
+  written back, so toggling that board on again returns the reader to the sort
+  they chose. And **the sort is local to `AdpBoard`, never on `AdpControls`** —
+  that store is shared with the trades board and the lineup checker, is seeded
+  from a league, and drives four priced reads, none of which has any business
+  moving because somebody sorted a column. The one thing that reads the curve is
+  a value sort, which is why `isValueSort` gates the steepness dependency: the
+  other nine columns are invariant to the slider, and re-sorting a thousand rows
+  on each of a drag's ~24 notches would be work for an ordering that cannot
+  change.
 - **The season is the board's population; the window is a cut inside it.** The
   drawer leads with a row of season segments (`seasonOptions`, taken from the
   density rows so a season nobody has crawled isn't offered, with the current one
