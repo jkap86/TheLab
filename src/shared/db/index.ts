@@ -26,6 +26,7 @@ export {
   AdvisoryLockTimeoutError,
   ADVISORY_LOCK_WAIT_MS,
   LOCK_KEYS,
+  leagueSyncLockKey,
   managerSyncLockKey,
 } from "./lock";
 export type { AdvisoryLockKey } from "./lock";

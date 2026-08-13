@@ -23,6 +23,14 @@
  * ~11-requests-per-league fan-out on *every* request until Sleeper recovers.
  * Hence two timestamps and two questions, which is what the schema already had
  * room for.
+ *
+ * **{@link leagueRefreshGate} is the same decision at the other grain**, and it
+ * lives here rather than in a module of its own because it is the same question
+ * — is a sync due — asked of one league instead of a manager's whole graph. What
+ * differs is who is asking: the manager gate throttles a read that refreshes
+ * *itself*, so its window is a freshness policy, while the league gate stands
+ * behind a key somebody pressed, so its window is only there to stop a hammer.
+ * Keeping them in one file is what makes that difference legible.
  */
 
 /** How long a **fully successful** sync stays fresh before a re-fetch is due. */
@@ -125,6 +133,118 @@ export function managerSyncGate(
   }
   return { run: true, complete, reason: "due" };
 }
+
+/**
+ * How long one league's on-demand refresh suppresses the next one.
+ *
+ * **Short, and short on purpose — this is a hammer bound, not a freshness
+ * policy.** The whole point of the key behind it is that a manager sets a lineup
+ * in Sleeper, comes back and presses it, so a window sized like
+ * {@link SYNC_TTL_MS} would refuse exactly the press it exists to serve. What it
+ * has to stop is a held-down key (or a wedged client) turning into a
+ * ~11-request fan-out per press, and fifteen seconds does that while leaving the
+ * round trip through Sleeper's app comfortably clear.
+ *
+ * It is deliberately *not* the crawler's TTL either. That one answers "how
+ * often is this league worth re-reading on nobody's behalf"; this one answers
+ * "how often may somebody ask", and a reader who has just changed something
+ * knows more about whether a re-read is worth it than any interval does.
+ */
+export const LEAGUE_REFRESH_COOLDOWN_MS = 15 * 1000;
+
+/** What `leagues` knows about when one league was last read from Sleeper. */
+export type LeagueRefreshState = {
+  /** Last **successful** graph write, or null for a row with no graph behind it. */
+  updatedAt: Date | null;
+  /**
+   * Last attempt of any outcome — stamped by this refresh and by the crawler as
+   * it claims a batch, which is what makes it the honest thing to throttle on:
+   * either way somebody asked Sleeper about this league moments ago.
+   */
+  attemptAt: Date | null;
+};
+
+/** Why a league refresh was or wasn't run. */
+export type LeagueRefreshReason =
+  /** Nothing suppresses it: re-read the league. */
+  | "due"
+  /** Another refresh landed while this caller queued on the lock. */
+  | "raced"
+  /** An attempt is still inside {@link LEAGUE_REFRESH_COOLDOWN_MS}. */
+  | "cooldown";
+
+export type LeagueRefreshGate = {
+  /** Whether this caller should re-read the league from Sleeper. */
+  run: boolean;
+  reason: LeagueRefreshReason;
+  /**
+   * How long until a refused caller would be accepted, in ms — 0 when it wasn't
+   * refused, and 0 for a race, which is refused because the work is *already
+   * done* rather than because it is too soon to do it.
+   */
+  retryAfterMs: number;
+};
+
+/**
+ * Decide whether one league is worth re-reading from Sleeper right now.
+ *
+ * Asked **inside** the per-league advisory lock and nowhere else, which is the
+ * one place it differs in shape from {@link managerSyncGate}: that gate is asked
+ * twice because the route ahead of it decides whether to open a stream at all,
+ * and this one has no such caller — the press *is* the decision, and everything
+ * before the lock would only be re-deciding it against a state the lock's winner
+ * is about to change.
+ *
+ * The two arms in order:
+ *
+ * 1. **A race is a success, not a refusal.** An attempt at or after
+ *    `requestedAt` means another presser (a second tab, a second reader of the
+ *    same league) ran the fan-out while this one waited on the lock, so what is
+ *    stored is what this caller queued for. Re-running is the duplicate work the
+ *    lock exists to prevent, and reporting it as a throttle would tell a reader
+ *    their data is stale at the exact moment it is freshest.
+ * 2. **Otherwise the cooldown**, measured from the last attempt of any outcome.
+ *    A failed attempt buys the same quiet as a successful one — the same rule
+ *    `attempt_at` carries one grain up — because a league Sleeper is currently
+ *    failing on is the last one worth being asked about repeatedly.
+ */
+export function leagueRefreshGate(
+  state: LeagueRefreshState | null,
+  { now, requestedAt }: { now: number; requestedAt: number },
+): LeagueRefreshGate {
+  const attemptAt = state?.attemptAt?.getTime() ?? null;
+
+  if (attemptAt !== null && attemptAt >= requestedAt) {
+    return { run: false, reason: "raced", retryAfterMs: 0 };
+  }
+  if (attemptAt !== null && now - attemptAt < LEAGUE_REFRESH_COOLDOWN_MS) {
+    return {
+      run: false,
+      reason: "cooldown",
+      // Never negative: the arm above has already excluded a future stamp, but
+      // a clock that moved between the read and this arithmetic must not hand a
+      // client a `Retry-After` it reads as "immediately" by wrapping.
+      retryAfterMs: Math.max(0, LEAGUE_REFRESH_COOLDOWN_MS - (now - attemptAt)),
+    };
+  }
+  return { run: true, reason: "due", retryAfterMs: 0 };
+}
+
+/**
+ * Stamp a league's refresh attempt: `$1` league.
+ *
+ * Only `sync_attempt_at` — `updated_at` is what says a graph was written, and
+ * `persistLeagueGraph` owns it. Written *before* the fetch rather than after, so
+ * a refresh that fails at Sleeper still holds the cooldown: a league that cannot
+ * be read is the one a retrying client would ask about hardest.
+ *
+ * The column is the crawler's own, reused rather than duplicated, and both
+ * readings survive: a league somebody just refreshed rotates to the back of its
+ * priority tier, which is the right answer — it is the least stale thing in the
+ * queue.
+ */
+export const LEAGUE_REFRESH_ATTEMPT_SQL = `
+  UPDATE leagues SET sync_attempt_at = now() WHERE league_id = $1`;
 
 /**
  * Record a sync attempt: `$1` user, `$2` season, `$3` whether it completed.

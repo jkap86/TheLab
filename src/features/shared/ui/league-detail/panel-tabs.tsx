@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from "react";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
 
 /** Which of the panel's two readings is on screen. */
 export type PanelTab = "standings" | "settings";
@@ -24,7 +24,42 @@ export const panelTabId = (baseId: string, tab: PanelTab) =>
 export const panelBodyId = (baseId: string) => `${baseId}-panel`;
 
 /**
- * The band on the card's head that switches the panel between its standings and
+ * The band across the top of the panel: whatever switches it on the leading
+ * edge, whatever acts on it on the trailing one.
+ *
+ * **It is its own component because the two things it holds are independent.**
+ * It began as the tab strip's own wrapper, which was right while the strip was
+ * the only thing that could be up there — and a head-to-head draws no strip (see
+ * {@link LeagueDetailPanel}), so the moment a *second* part wanted this seat the
+ * band was a box that only existed when the other occupant did. The sync key on
+ * a week panel is exactly that part: the panel it belongs to is the one with no
+ * tabs.
+ *
+ * `justify-between` with the trailing seat's own `ml-auto` is what keeps the two
+ * ends fixed whichever is drawn — a band holding only a key still puts it on the
+ * right, where a bare flex row would have left it hard against the left edge
+ * under the league's name.
+ *
+ * The band itself is unchanged from when the strip owned it, because what it is
+ * has not changed: full bleed under a machined seam (a dark cut with a lit far
+ * wall), which is what makes it read as the card's head continuing rather than as
+ * a third object between the league's name and its detail. It does not scroll —
+ * the two halves below are the panel's scrolling parts and this is the head they
+ * scroll under — which is what `shrink-0` says here.
+ *
+ * The left inset clears the same cyan rail the card's name line clears, so the
+ * band starts under the league's name rather than under its edge.
+ */
+export function PanelHead({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-2 border-t border-black/40 py-1.5 pl-5 pr-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] @lg:py-2 @lg:pr-4">
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The control on that band that switches the panel between its standings and
  * this league's settings.
  *
  * **It holds the seat the telemetry strip used to.** That strip was a rank dial
@@ -35,12 +70,8 @@ export const panelBodyId = (baseId: string) => `${baseId}-panel`;
  * own value columns open on. So what the swap costs is a restatement, and what it
  * buys is the league's own configuration, which nothing in the app said at all.
  *
- * The band itself is unchanged, because what it is has not changed: full bleed
- * under a machined seam (a dark cut with a lit far wall), which is what makes it
- * read as the card's head continuing rather than as a third object between the
- * league's name and its detail. It does not scroll — the two halves below it are
- * the panel's scrolling parts and this is the head they scroll under — which is
- * `shrink-0`'s job here as it was there.
+ * The band it sits on is {@link PanelHead}, which is shared with whatever takes
+ * the trailing seat.
  *
  * **The material is the app bar's grammar and not a segmented control.** The lit
  * tab is a recessed well ("you are here", the bar's own current-page chip) and
@@ -90,43 +121,44 @@ export function PanelTabs({
   };
 
   return (
-    // The left inset clears the same cyan rail the card's name line clears, so
-    // the strip starts under the league's name rather than under its chevron.
-    <div className="shrink-0 border-t border-black/40 py-1.5 pl-5 pr-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] @lg:py-2 @lg:pr-4">
-      <div
-        role="tablist"
-        aria-label="League detail"
-        onKeyDown={onKeyDown}
-        className="lab-trough inline-flex items-stretch gap-1 rounded-[10px] p-1"
-      >
-        {PANEL_TABS.map(({ id, label }, i) => {
-          const active = id === tab;
-          return (
-            <button
-              key={id}
-              ref={(node) => {
-                keys.current[i] = node;
-              }}
-              type="button"
-              role="tab"
-              id={panelTabId(baseId, id)}
-              aria-selected={active}
-              aria-controls={panelBodyId(baseId)}
-              // Roving: the strip is one Tab stop, and the arrows above are how
-              // a reader reaches the tab that isn't lit.
-              tabIndex={active ? 0 : -1}
-              onClick={() => onTab(id)}
-              className={`rounded-[7px] px-3 py-1 text-[0.65rem] font-bold uppercase tracking-[0.12em] transition-colors @lg:text-[0.7rem] ${
-                active
-                  ? "lab-well text-active"
-                  : "lab-chip lab-chip-sm text-foreground/60"
-              }`}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
+    <div
+      role="tablist"
+      aria-label="League detail"
+      onKeyDown={onKeyDown}
+      // `shrink-0` because the strip now shares its band: the sync key's note
+      // beside it is the part written to give way (`min-w-0 truncate`), and
+      // without this a narrow panel would compress `Standings` instead — a
+      // truncated label on a control the reader has to recognise, where a
+      // truncated note is still a note.
+      className="lab-trough inline-flex shrink-0 items-stretch gap-1 rounded-[10px] p-1"
+    >
+      {PANEL_TABS.map(({ id, label }, i) => {
+        const active = id === tab;
+        return (
+          <button
+            key={id}
+            ref={(node) => {
+              keys.current[i] = node;
+            }}
+            type="button"
+            role="tab"
+            id={panelTabId(baseId, id)}
+            aria-selected={active}
+            aria-controls={panelBodyId(baseId)}
+            // Roving: the strip is one Tab stop, and the arrows above are how
+            // a reader reaches the tab that isn't lit.
+            tabIndex={active ? 0 : -1}
+            onClick={() => onTab(id)}
+            className={`rounded-[7px] px-3 py-1 text-[0.65rem] font-bold uppercase tracking-[0.12em] transition-colors @lg:text-[0.7rem] ${
+              active
+                ? "lab-well text-active"
+                : "lab-chip lab-chip-sm text-foreground/60"
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }

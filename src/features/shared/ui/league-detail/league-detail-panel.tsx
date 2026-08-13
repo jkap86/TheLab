@@ -35,10 +35,17 @@ import type { ColumnsEditor as ColumnsEditorComponent } from "../columns-editor"
 import { PanelLoading, PanelMessage } from "../panel-message";
 import { headToHead } from "./head-to-head";
 import { PanelSettings } from "./panel-settings";
-import { PanelTabs, panelBodyId, panelTabId, type PanelTab } from "./panel-tabs";
+import {
+  PanelHead,
+  PanelTabs,
+  panelBodyId,
+  panelTabId,
+  type PanelTab,
+} from "./panel-tabs";
 import { RosterDetail } from "./roster-detail";
 import { RosterHeading } from "./roster-heading";
 import { Standings } from "./standings";
+import { LeagueSyncKey } from "./sync-key";
 import { managerLabel } from "./team-label";
 import type { LeagueDetailResult, LeagueTeamView, TeamOutlook } from "./types";
 
@@ -389,6 +396,24 @@ function Panel({
   // `tabpanel` role on the head-to-head would point `aria-labelledby` at a tab
   // that is not in the document.
   const tabbed = !game;
+  /**
+   * Whether this panel offers to re-read its league from Sleeper.
+   *
+   * Derived from the week rather than passed down as a flag, and the derivation
+   * is the argument: a `week` is what the lineup checker sends and what the
+   * leagues list and the trades board do not, so a panel that has one is by
+   * construction the one somebody is *setting a lineup* in — which is the only
+   * reading of a league that a reader can go and change in Sleeper and want back
+   * within the minute. Everywhere else this panel is opened, a fifteen-minute
+   * crawl is exactly current enough, and on the trades board — every crawled
+   * league, most of them strangers' — a key per card would be a public control
+   * for spending Sleeper budget on leagues nobody here plays in.
+   *
+   * It is deliberately *not* gated on there being a game: a bye week and a week
+   * the crawler has not reached both draw the standings, and both are weeks a
+   * reader may have just changed something in.
+   */
+  const syncable = week !== null;
   const tabPanel = tabbed
     ? {
         id: panelBodyId(baseId),
@@ -399,12 +424,22 @@ function Panel({
 
   return (
     <div className="flex min-h-0 flex-col">
-      {/* Outside the inset on purpose: the strip is the card's head continuing,
+      {/* Outside the inset on purpose: the band is the card's head continuing,
           so it runs the full width under its own seam rather than sitting in the
           body as a third object between the name and the detail. It is also the
           line that must not move, which is what `shrink-0` inside it says now
-          that the halves below are what scroll. */}
-      {tabbed && <PanelTabs tab={tab} onTab={setTab} baseId={baseId} />}
+          that the halves below are what scroll.
+
+          Two independent occupants, either of which can be the only one: a
+          head-to-head has no strip to switch and a season panel has nothing to
+          sync, so the band is drawn for whichever is there and skipped when
+          neither is. */}
+      {(tabbed || syncable) && (
+        <PanelHead>
+          {tabbed && <PanelTabs tab={tab} onTab={setTab} baseId={baseId} />}
+          {syncable && <LeagueSyncKey leagueId={data.league_id} />}
+        </PanelHead>
+      )}
       <div
         {...tabPanel}
         className="flex min-h-0 flex-col pb-3 pl-3 pr-2 pt-2 @lg:pb-5 @lg:pl-5 @lg:pr-4 @lg:pt-3"

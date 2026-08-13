@@ -17,6 +17,22 @@ export type {
   LeagueSyncResult,
 } from "./sync";
 export {
+  getLeagueRefreshState,
+  leagueRefreshAdmission,
+  leagueRefreshConcurrency,
+  refreshLeague,
+} from "./league-refresh";
+export type { LeagueRefreshResult } from "./league-refresh";
+export {
+  LEAGUE_REFRESH_COOLDOWN_MS,
+  leagueRefreshGate,
+} from "./sync-freshness";
+export type {
+  LeagueRefreshGate,
+  LeagueRefreshReason,
+  LeagueRefreshState,
+} from "./sync-freshness";
+export {
   createManagerSyncAdmission,
   managerSyncAdmission,
   managerSyncConcurrency,

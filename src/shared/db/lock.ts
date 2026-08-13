@@ -27,11 +27,39 @@ export const LOCK_KEYS = {
 } as const satisfies Record<string, AdvisoryLockKey>;
 
 /**
- * The per-manager league sync's lock key: one lock per manager, in a class of
- * its own so hashed ids can't collide with the fixed keys above. The hash is
- * FNV-1a folded to a signed int32 — collisions across managers are possible and
- * only cost an unnecessary skip, never a correctness failure.
+ * The class ids reserved for locks whose *identity is data*, one class each.
+ *
+ * A per-key lock is computed rather than listed — you cannot enumerate every
+ * manager or every league in {@link LOCK_KEYS} ahead of time — so what is
+ * reserved here is the class id rather than the pair. Two classes and not one:
+ * a manager id and a league id are both digit strings out of Sleeper, so a
+ * single class would let one manager's sync and one league's refresh contend on
+ * a hash collision between two ids that have nothing to do with each other.
  */
+const HASHED_LOCK_CLASSES = {
+  /** {@link managerSyncLockKey} — a manager's whole league graph. */
+  managerSync: 8675310,
+  /** {@link leagueSyncLockKey} — one league's graph, refreshed on demand. */
+  leagueSync: 8675311,
+} as const;
+
+/**
+ * FNV-1a folded to a signed int32, which is the width `pg_advisory_lock`'s
+ * two-int form takes.
+ *
+ * Collisions inside a class are possible and cost only an unnecessary wait —
+ * two unrelated ids taking turns — never a correctness failure, since what the
+ * lock protects is duplicated work rather than a shared row.
+ */
+function hashedLockKey(classId: number, id: string): AdvisoryLockKey {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return [classId, hash | 0];
+}
+
 /** Thrown by {@link withBlockingAdvisoryLock} when the wait budget runs out. */
 export class AdvisoryLockTimeoutError extends Error {
   constructor(key: AdvisoryLockKey, waitMs: number) {
@@ -139,13 +167,29 @@ export async function withBlockingAdvisoryLock<T>(
   }
 }
 
+/** One lock per manager, around their whole league graph's sync. */
 export function managerSyncLockKey(userId: string): AdvisoryLockKey {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < userId.length; i++) {
-    hash ^= userId.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return [8675310, hash | 0];
+  return hashedLockKey(HASHED_LOCK_CLASSES.managerSync, userId);
+}
+
+/**
+ * One lock per league, around a single league's graph.
+ *
+ * Taken by the on-demand refresh behind the league panel's sync key, and taken
+ * *blocking* for that caller's reason: a second reader pressing it while a
+ * refresh runs wants the answer, not merely the work done, so it queues and
+ * serves what the winner just wrote rather than starting a second fan-out at
+ * the same league.
+ *
+ * It deliberately does **not** coordinate with the crawler's refresh pass, which
+ * claims leagues in a batch under {@link LOCK_KEYS.leagueCrawl}: the two writers
+ * of one league's graph write the same rows from the same upstream, so the worst
+ * an overlap costs is a duplicated fetch. Widening the crawler to take a lock per
+ * league in its batch would put that many held sessions on one tick, which is the
+ * pool problem the batch size exists to bound.
+ */
+export function leagueSyncLockKey(leagueId: string): AdvisoryLockKey {
+  return hashedLockKey(HASHED_LOCK_CLASSES.leagueSync, leagueId);
 }
 
 /**

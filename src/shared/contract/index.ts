@@ -264,6 +264,62 @@ export type LeagueDetailPayload = Omit<LeagueDetail, "teams"> & {
   week_view?: LeagueWeekViewPayload | null;
 };
 
+/**
+ * `POST /api/league/[leagueId]/sync` — what an on-demand refresh of one league
+ * did.
+ *
+ * **Every outcome that is not a failure is a 200 carrying one of these**, which
+ * is the shape this route wants rather than a status code per answer: a caller
+ * pressing a sync key has already got what it needs from the *panel's* own
+ * refetch, and what this payload adds is which of four things happened. A
+ * cooldown is not an error — the reader asked twice and the second ask was
+ * cheap — and a race is a success under another name, so spelling either as a
+ * 4xx would put a red note on the screen for a league that is perfectly current.
+ * Only "this league is not in the corpus" (404) and a database failure (503/500)
+ * leave this shape.
+ */
+export type LeagueSyncPayload = {
+  league_id: string;
+  /**
+   * What happened, in the reader's terms:
+   *
+   * - `synced` — re-read from Sleeper and written.
+   * - `fresh` — somebody else's refresh of this league landed while this one
+   *   waited, so the stored graph is already what was asked for.
+   * - `cooldown` — asked again inside the window; nothing was fetched.
+   * - `locked` — a refresh is running and outran the wait, or this process had
+   *   no room to start one. Read again shortly.
+   * - `gone` — Sleeper no longer serves this league.
+   * - `failed` — Sleeper answered badly, or the graph would not persist.
+   */
+  status: "synced" | "fresh" | "cooldown" | "locked" | "gone" | "failed";
+  /**
+   * Whether the stored graph is now known-current — true for `synced` and
+   * `fresh` and nothing else.
+   *
+   * It is a field rather than something the client re-derives from `status`, for
+   * the reason {@link SyncSummary.complete} is one: "did this work" is the
+   * question every caller actually asks, and a client deriving it from a union
+   * is a client that will get a case wrong when the union grows.
+   */
+  synced: boolean;
+  /**
+   * Milliseconds until another refresh of this league would be accepted — 0
+   * whenever nothing is holding one off, which includes every successful answer.
+   */
+  retry_after_ms: number;
+  /**
+   * When this league's graph was last written, ISO-8601, or null for a league
+   * with no graph behind it yet.
+   *
+   * It travels because it is the one thing a refused answer can honestly say: a
+   * reader told "cooldown" wants to know how stale what they are looking at
+   * actually is, and on this route that is the difference between "somebody
+   * refreshed it four seconds ago" and "we have never managed to read it".
+   */
+  updated_at: string | null;
+};
+
 /** A manager's leagues, sent once from cache and again after a refresh. */
 export type LeaguesResultMessage = {
   type: "result";

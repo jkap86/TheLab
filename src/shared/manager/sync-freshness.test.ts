@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  LEAGUE_REFRESH_ATTEMPT_SQL,
+  LEAGUE_REFRESH_COOLDOWN_MS,
   MANAGER_SYNC_STAMP_SQL,
   SYNC_ATTEMPT_TTL_MS,
   SYNC_TTL_MS,
+  leagueRefreshGate,
   managerSyncGate,
+  type LeagueRefreshState,
   type ManagerSyncState,
 } from "./sync-freshness.ts";
 
@@ -187,5 +191,87 @@ describe("the two TTLs", () => {
     // SYNC_TTL_MS of quiet. A manager whose leagues keep half-failing must not
     // start costing *more* upstream traffic than one whose leagues succeed.
     assert.equal(SYNC_ATTEMPT_TTL_MS, SYNC_TTL_MS);
+  });
+});
+
+const refreshState = (attemptAt: Date | null): LeagueRefreshState => ({
+  updatedAt: null,
+  attemptAt,
+});
+
+/** The gate as the refresh asks it when nothing was queued for. */
+const refreshNow = (s: LeagueRefreshState | null) =>
+  leagueRefreshGate(s, { now: NOW, requestedAt: NOW });
+
+describe("leagueRefreshGate", () => {
+  test("a league nobody has ever asked about is due", () => {
+    assert.deepEqual(refreshNow(null), {
+      run: true,
+      reason: "due",
+      retryAfterMs: 0,
+    });
+    assert.deepEqual(refreshNow(refreshState(null)), {
+      run: true,
+      reason: "due",
+      retryAfterMs: 0,
+    });
+  });
+
+  test("a press inside the cooldown is refused, and told how long to wait", () => {
+    const gate = refreshNow(refreshState(ago(5_000)));
+    assert.equal(gate.run, false);
+    assert.equal(gate.reason, "cooldown");
+    assert.equal(gate.retryAfterMs, LEAGUE_REFRESH_COOLDOWN_MS - 5_000);
+  });
+
+  test("past the cooldown it is due again", () => {
+    const gate = refreshNow(refreshState(ago(LEAGUE_REFRESH_COOLDOWN_MS)));
+    assert.deepEqual(gate, { run: true, reason: "due", retryAfterMs: 0 });
+  });
+
+  test("a refresh that landed while this caller queued is a race, not a cooldown", () => {
+    // The distinction the whole gate exists for: this caller started waiting on
+    // the lock at `requestedAt` and somebody else's fan-out finished after that,
+    // so what is stored is exactly what was asked for. Reported as a throttle it
+    // would tell a reader their data is stale at its very freshest.
+    const queuedAt = NOW - 30_000;
+    const gate = leagueRefreshGate(refreshState(ago(2_000)), {
+      now: NOW,
+      requestedAt: queuedAt,
+    });
+    assert.deepEqual(gate, { run: false, reason: "raced", retryAfterMs: 0 });
+  });
+
+  test("a race is never reported as a wait, however recent the attempt", () => {
+    // `retryAfterMs` is what a client counts down; a race has nothing to wait
+    // for, so a non-zero value here would park a key that should be live.
+    const gate = leagueRefreshGate(refreshState(new Date(NOW)), {
+      now: NOW,
+      requestedAt: NOW - 1,
+    });
+    assert.equal(gate.retryAfterMs, 0);
+  });
+
+  test("the cooldown is short enough to serve the press it exists for", () => {
+    // It is a hammer bound rather than a freshness policy: a reader sets a
+    // lineup in Sleeper and comes straight back, so a window anywhere near the
+    // manager TTL would refuse exactly the press this is built for.
+    assert.ok(LEAGUE_REFRESH_COOLDOWN_MS < SYNC_TTL_MS / 10);
+  });
+});
+
+describe("LEAGUE_REFRESH_ATTEMPT_SQL", () => {
+  test("it stamps the attempt and never the write", () => {
+    // `updated_at` is what says a graph landed and `persistLeagueGraph` owns it.
+    // Stamping it here would report a failed fetch as a successful sync to the
+    // crawler's own queue, which reads exactly that column to decide what is due.
+    assert.match(LEAGUE_REFRESH_ATTEMPT_SQL, /SET sync_attempt_at = now\(\)/);
+    assert.doesNotMatch(LEAGUE_REFRESH_ATTEMPT_SQL, /updated_at/);
+  });
+
+  test("it addresses one league, by a bound parameter", () => {
+    assert.match(LEAGUE_REFRESH_ATTEMPT_SQL, /WHERE league_id = \$1/);
+    const used = [...LEAGUE_REFRESH_ATTEMPT_SQL.matchAll(/\$(\d+)/g)].map((m) => m[1]);
+    assert.deepEqual([...new Set(used)], ["1"]);
   });
 });

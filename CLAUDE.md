@@ -48,12 +48,17 @@ src/shared/    Domain logic, one folder per concern.
   `/api/league/[leagueId]`, `/api/adp`, `/api/adp/density`, `/api/adp/leagues`
   and the three `/api/trades*` routes answer from what the background syncs have
   stored; a slice that hasn't been synced comes back empty
-  rather than fetched on demand. (`/api/user/[username]`, `…/leagues` and
-  `/api/picktracker/[leagueId]` are the deliberate exceptions — resolving a
+  rather than fetched on demand. (`/api/user/[username]`, `…/leagues`,
+  `/api/picktracker/[leagueId]` and `POST /api/league/[leagueId]/sync` are the
+  deliberate exceptions — resolving a
   manager and syncing their leagues is what the user routes are *for*, which is
-  why the leagues one streams progress, and the pick tracker follows a draft
-  *while it happens*, for any league id whether a sync has seen it or not; a
-  cached copy would be behind the room. **Every other route under that prefix is
+  why the leagues one streams progress; the pick tracker follows a draft
+  *while it happens*, for any league id whether a sync has seen it or not, and a
+  cached copy would be behind the room; and the fourth *is* the thing that
+  refreshes, so there is nothing else it could read from — see the lineup
+  checker's sync key below. Note which of the two `/api/league/[leagueId]` routes
+  is which: the read is cache-backed like every other panel read, and only the
+  `sync` child under it fetches. **Every other route under that prefix is
   *not* an exception** — `…/players`, `…/leaguemates`, `…/ranks`, `…/ktc` and
   `…/adp-value` today: they read the rosters and membership that stream writes,
   so a manager it has never run for gets an empty answer rather than a second
@@ -408,7 +413,13 @@ a permanent band on the plate.
 the id into the object slot under one class id, because you cannot enumerate
 every manager in `LOCK_KEYS` ahead of time. The rule above still holds for the
 fixed locks; this is the escape hatch for a lock whose identity is data, and it
-is why the class id is what's reserved rather than the pair. Both helpers drop
+is why the class id is what's reserved rather than the pair. **There are two such
+classes now** (`HASHED_LOCK_CLASSES`), and a second one rather than a shared
+namespace is the point: `leagueSyncLockKey(leagueId)` hashes ids from the same
+alphabet as the manager keys — Sleeper's are all digit strings — so one class
+would let a manager's sync and an unrelated league's refresh take turns on a
+collision between two ids that have nothing to do with each other. A third grain
+wants a third class, not a longer key. Both helpers drop
 the connection when *unlock* fails rather than returning it to the pool: a
 session lock outlives `release()`, so a recycled connection would hold the key
 until the process dies.
@@ -5014,6 +5025,15 @@ stops holding, a comment saying it does would not have caught it.
     exception: `Standings` would name a table the lineup checker's panel
     deliberately does not have. That is the same gate the telemetry strip sat
     behind, arrived at from the other direction.
+  - **The strip is one of two occupants of that band, so the band is its own
+    component** (`PanelHead`). It was the strip's own wrapper for as long as the
+    strip was the only thing that could be up there, which the bullet above is
+    the tell for: the panel with no tabs is exactly the panel the sync key
+    belongs to, so a band nested inside the strip would have been a box that only
+    existed when the *other* occupant did. `justify-between` plus the trailing
+    seat's own `ml-auto` is what holds both ends whichever is drawn, and the
+    tablist takes `shrink-0` now that it shares a row — the note beside the key
+    is the part written to give way.
   - **It names nothing itself.** Every label, ranking and value name in
     `league-settings.ts` comes from `league-filters` — `SETTING_KEYS`,
     `COMMON_SCORING_KEYS`, `settingKeyLabel`, `scoringKeyLabel`,
@@ -5034,6 +5054,75 @@ stops holding, a comment saying it does would not have caught it.
       format comes from the payload's `best_ball` (that is `BEST_BALL_SQL`'s
       answer) rather than from the blob beside it, so the panel cannot disagree
       with the board that priced the card it opened from.
+- **The trailing end of that band is a sync key, and it is the app's one
+  reader-driven write.** This panel is where a lineup is *read* and Sleeper is
+  where one is *set*, so the flow it exists for — see the shortfall, go and make
+  the swap, come back — ends at whatever the crawler last stored, which in season
+  is up to fifteen minutes old. Nothing about the crawl can be tuned to serve
+  that: the TTL is a capacity claim over the whole corpus, and shortening it to
+  seconds is that corpus times eleven requests a minute for one reader's benefit.
+  So `POST /api/league/[leagueId]/sync` re-reads one league on request, through
+  `refreshLeague` and then through `syncLeagueGraphs` — the same function the
+  manager sync and the crawler's refresh pass call, so a league refreshed here is
+  written by the same code, gated on the same stored week tails and reconciled by
+  the same guards. Six decisions in it:
+  - **It is drawn on a week panel and nowhere else, derived rather than passed.**
+    A `week` is what the lineup checker sends and what the leagues list and the
+    trades board do not, so a panel that has one is by construction the one
+    somebody is setting a lineup in — "a head-to-head draws no strip" read the
+    other way. It matters most where it is *absent*: the trades board spans every
+    crawled league, most of them strangers', and a key on each of those cards is
+    a public control for spending Sleeper budget on leagues nobody here plays in.
+    It is deliberately not gated on there being a *game*, since a bye and an
+    unsynced week are both weeks a reader may have just changed something in.
+  - **Four bounds, and none is redundant** — they are argued together in
+    `refreshLeague` because each alone makes the others look like belt and
+    braces. The league must **already be stored** (a refresh re-reads the corpus,
+    it is not a way to make this app fetch an arbitrary league id). A
+    **per-league advisory lock**, blocking, so a second presser gets the winner's
+    answer instead of starting a second fan-out — and the only bound of the four
+    that survives a second dyno. A **cooldown inside that lock**, so a held-down
+    key is not a fan-out per press. And a **process-wide admission**
+    (`leagueRefreshAdmission`), because the lock is per league and a hundred
+    leagues is a hundred locks that never contend, each holding a pool connection
+    across a Sleeper fan-out — the arithmetic `sync-admission` spells out one
+    grain up, and exactly what an unbounded public write route would reproduce.
+  - **The cooldown is a hammer bound, not a freshness policy**
+    (`LEAGUE_REFRESH_COOLDOWN_MS`, fifteen seconds, in `sync-freshness` beside
+    the manager gate it mirrors). A window sized like `SYNC_TTL_MS` would refuse
+    exactly the press this exists to serve. It stamps `sync_attempt_at` — the
+    crawler's own column, reused rather than duplicated — **before** the fetch,
+    so a league Sleeper is failing on holds it too, and `updated_at` stays what
+    only `persistLeagueGraph` writes.
+  - **A race is a success, not a refusal.** An attempt landing after this caller
+    began queueing means somebody else's fan-out wrote what it was waiting for;
+    reported as a throttle it would tell a reader their data is stale at its very
+    freshest. `leagueRefreshGate` draws that line and `LeagueSyncPayload.synced`
+    is where the two say the same thing to a client.
+  - **Every outcome but "not in the corpus" is a 200.** A cooldown is not an
+    error and a race is a success under another name, so spelling either as a 4xx
+    would put a red note over a league that is perfectly current. Only a 404 and
+    the database's own 503 leave that shape.
+  - **The press invalidates two entries, and the second is not this panel's.**
+    `useLeagueRefresh` marks the league's detail *prefix* (every board and week
+    of it) and the lineup checker's whole cache, because the **card** the panel
+    opened out of prints that league's shortfall off
+    `/api/user/[username]/matchups` — leave it and a reader gets a panel saying
+    nothing is left on the bench over a row still quoting the twelve points they
+    just moved. That is why `lineupQueryKeys` is in `features/shared` now: a
+    shared part invalidating them cannot reach into a feature for the key, and a
+    second spelling here would be two entries for one question. Never a bare
+    `invalidateQueries()`. What it does *not* send is an `AbortSignal` — a
+    refresh fills shared Postgres state rather than this component's answer, the
+    leagues route's own reasoning, so a card closed mid-refresh must not throw
+    away budget already spent.
+  - **A success says nothing; a press that fetched nothing speaks**
+    (`syncStatusNote`, pure and tested). The refetch is what the reader is
+    looking at, so a "Synced" badge beside changed rows would be the key
+    congratulating itself — and the presses that leave the screen *identical*
+    (cooldown, a refresh already running, a Sleeper failure) are the ones with
+    nothing on screen to explain them. Only the two that mean "this league could
+    not be read" take the attention amber; a cooldown is ordinary operation.
 - **The collapsed card's stat columns are four slots the reader aims, not four
   fixed rankings.** `league-metrics.ts` is the catalogue of what a slot can hold
   and how to read it off the cached ranks and KTC value — the card hard-coded
