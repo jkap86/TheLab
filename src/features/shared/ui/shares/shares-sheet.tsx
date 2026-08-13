@@ -387,7 +387,7 @@ export function SharesSheet<T extends ShareRow>({
 
           <button
             type="button"
-            onClick={() => ref.current?.close()}
+            onClick={() => closeDialog(ref.current)}
             aria-label="Close"
             className="lab-chip lab-chip-sm grid size-7 shrink-0 place-items-center rounded-full text-foreground/55 transition-colors hover:text-active"
           >

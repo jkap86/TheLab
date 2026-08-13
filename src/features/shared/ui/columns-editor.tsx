@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { groupMetrics } from "../columns";
+import { closeDialog, openDialog } from "../dialog-open.ts";
 import {
   metricPreview,
   type ColumnPreset,
@@ -121,17 +122,29 @@ export function ColumnsEditor<C>({
   // The one thing a `<dialog>` can't be told declaratively. `close` fires for
   // Escape and the backdrop alike, so the parent hears every way out through
   // the element's own event rather than through each of them separately.
+  //
+  // Through `openDialog`/`closeDialog` rather than the element's own methods,
+  // for the reason stated where they live: `showModal()` throws — on a dialog
+  // already open non-modally, on one detached between the press and this effect,
+  // and by absence on an engine that never shipped it — and a throw here is an
+  // uncaught error inside a commit, which React answers by unmounting to the
+  // nearest boundary. On a route with none that is the whole page blanking on the
+  // press meant to open the editor. The shares sheet's rule, applied to a dialog
+  // that opens *inside* it.
   useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) return;
     if (openSlot === null) {
-      if (dialog.open) dialog.close();
-    } else if (!dialog.open) {
-      dialog.showModal();
-      // The panel takes the focus rather than the close button `showModal`
-      // would autofocus — see `LeagueFiltersModal`.
-      panelRef.current?.focus();
+      closeDialog(ref.current);
+      return;
     }
+    // Only a *fresh* open moves the focus. `already-open` is this effect running
+    // again over a dialog that is up — a remount, or React's development
+    // double-invoke — and stealing the focus back from whatever the reader has
+    // since tabbed to would be the editor fighting them.
+    const outcome = openDialog(ref.current);
+    if (outcome !== "modal" && outcome !== "non-modal") return;
+    // The panel takes the focus rather than the close button `showModal`
+    // would autofocus — see `LeagueFiltersModal`.
+    panelRef.current?.focus();
   }, [openSlot]);
 
   const groups = groupMetrics(metrics, "Metrics");
@@ -159,7 +172,7 @@ export function ColumnsEditor<C>({
       // The backdrop is the dialog's own pseudo-element, so a click landing on
       // the dialog box itself is a click outside the panel.
       onClick={(event) => {
-        if (event.target === ref.current) ref.current?.close();
+        if (event.target === ref.current) closeDialog(ref.current);
       }}
       className="m-auto w-[min(760px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.72)] backdrop:backdrop-blur-sm"
     >
@@ -193,7 +206,7 @@ export function ColumnsEditor<C>({
             </span>
             <button
               type="button"
-              onClick={() => ref.current?.close()}
+              onClick={() => closeDialog(ref.current)}
               aria-label="Close"
               className="lab-chip lab-chip-sm ml-auto grid size-7 place-items-center rounded-full text-foreground/55 transition-colors hover:text-active"
             >
@@ -396,7 +409,7 @@ export function ColumnsEditor<C>({
             )}
             <button
               type="button"
-              onClick={() => ref.current?.close()}
+              onClick={() => closeDialog(ref.current)}
               className="ml-auto rounded-lg bg-active px-4 py-2 text-sm font-bold text-[#04141a] shadow-[0_0_24px_-6px_rgba(0,255,229,0.7)] transition-[filter] hover:brightness-110"
             >
               Done

@@ -5,6 +5,7 @@ import {
   MONTH_ABBREVIATIONS,
   formatRangeDate,
   formatRangeMonth,
+  msUntilNextLocalMidnight,
   shiftDays,
   shiftMonths,
   todayIso,
@@ -38,6 +39,51 @@ describe("todayIso", () => {
     // start a day early.
     assert.equal(todayIso(new Date(2026, 7, 5, 23, 59, 59)), "2026-08-05");
     assert.equal(todayIso(new Date(2026, 7, 5, 0, 0, 0)), "2026-08-05");
+  });
+});
+
+describe("msUntilNextLocalMidnight", () => {
+  test("lands exactly on the next local midnight", () => {
+    // Asserted as the *instant* rather than as a duration, so it holds in
+    // whatever zone the test runs in — including the two days a year where the
+    // duration is not 24 hours.
+    for (const now of [
+      new Date(2026, 7, 13, 9, 0, 0),
+      new Date(2026, 7, 13, 23, 59, 59),
+      new Date(2026, 7, 13, 0, 0, 0),
+      new Date(2026, 11, 31, 18, 30, 0),
+      new Date(2026, 1, 28, 12, 0, 0),
+    ]) {
+      const at = new Date(now.getTime() + msUntilNextLocalMidnight(now));
+      assert.equal(
+        todayIso(at),
+        todayIso(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)),
+        `${now.toString()} → the day after`,
+      );
+      assert.equal(at.getHours(), 0, now.toString());
+      assert.equal(at.getMinutes(), 0);
+      assert.equal(at.getSeconds(), 0);
+      assert.equal(at.getMilliseconds(), 0);
+    }
+  });
+
+  test("is always a wait, and never longer than a long day", () => {
+    // Zero or negative would arm a timer in the past — a wake-up that publishes
+    // the day it already had and immediately re-arms for no time at all, which
+    // is the one way this becomes the poll it exists not to be. The upper bound
+    // is 25 hours because a daylight-saving fall-back makes a local day that
+    // long; anything past it would mean the calendar arithmetic had slipped a
+    // whole day.
+    for (const now of [
+      new Date(2026, 7, 13, 0, 0, 0),
+      new Date(2026, 7, 13, 23, 59, 59, 999),
+      new Date(2026, 2, 8, 1, 30, 0),
+      new Date(2026, 10, 1, 1, 30, 0),
+    ]) {
+      const ms = msUntilNextLocalMidnight(now);
+      assert.ok(ms > 0, `${now.toString()} → ${ms}`);
+      assert.ok(ms <= 25 * 3_600_000, `${now.toString()} → ${ms}`);
+    }
   });
 });
 

@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 
+import { closeDialog, openDialog } from "../../dialog-open.ts";
 import { DEFAULT_LEAGUE_FILTERS, type LeagueFilters } from "../../league-filters";
 import { isBackdropPress } from "./league-filters-modal.utils.ts";
 
@@ -31,11 +32,12 @@ import { isBackdropPress } from "./league-filters-modal.utils.ts";
  * the *dialog* has ever had one, so what is left here is the filters alone.
  *
  * **The calls are unreachable without a document; the decisions behind them are
- * not**, which is the same line `use-adp-drawer-lifecycle` draws. `showModal`,
- * the focus move onto the panel and the `close` that three paths share all need
- * a real dialog element and are covered by the manual checklist. What is left to
- * be wrong independently of the DOM — whether a completed press was on the
- * backdrop — is in `league-filters-modal.utils` and tested there.
+ * not**, which is the same line `use-adp-drawer-lifecycle` draws. The focus move
+ * onto the panel needs a real dialog element and is covered by the manual
+ * checklist. Both of the things that could be wrong independently of the DOM are
+ * elsewhere and tested there: whether a completed press was on the backdrop is
+ * `league-filters-modal.utils`, and what opening a `<dialog>` does when the
+ * platform refuses is `dialog-open`.
  */
 export function useLeagueFiltersModal(
   filters: LeagueFilters,
@@ -58,8 +60,17 @@ export function useLeagueFiltersModal(
     // that don't go through the trigger at all — a caller opening it
     // programmatically, or a re-entrant press on an engine that delivers one.
     // An `InvalidStateError` here would take down the render that asked.
-    const dialog = dialogRef.current;
-    if (dialog && !dialog.open) dialog.showModal();
+    //
+    // Which is exactly what {@link openDialog} answers, and asking it rather
+    // than the element is what covers the *other* two throws as well: a dialog
+    // detached between the press and this call, and an engine with no
+    // `showModal` at all. Its last resort is the `open` attribute — the same
+    // panel without the top layer, which beats a dialog nobody can open.
+    const outcome = openDialog(dialogRef.current);
+    // Nothing on screen is nothing to focus. Every other outcome — including
+    // `already-open`, which is what the re-entrant press above arrives as —
+    // leaves the panel up and takes the focus exactly as it always did.
+    if (outcome === "detached" || outcome === "failed") return;
     // `showModal` autofocuses the first focusable descendant, which here is the
     // close button — so the dialog opened with an X wearing a focus ring, which
     // reads as a pressed or selected control rather than as the way out (and on
@@ -70,14 +81,16 @@ export function useLeagueFiltersModal(
   }, [filters]);
 
   // Closing discards the draft on exactly the terms Escape does, since the draft
-  // is reseeded on open. No `open` check to match the one in `open` above:
-  // `close` on a dialog with no `open` attribute returns without doing anything,
-  // so the asymmetry is the platform's rather than an oversight.
-  const close = useCallback(() => dialogRef.current?.close(), []);
+  // is reseeded on open. `closeDialog` rather than the element's own method for
+  // the symmetry alone — `close` on a dialog with no `open` attribute is a spec'd
+  // no-op, so unlike its counterpart above this one was never a throw waiting to
+  // happen; what the helper adds is the fallback for an engine that shut the
+  // panel through the attribute in the first place.
+  const close = useCallback(() => closeDialog(dialogRef.current), []);
 
   const apply = useCallback(() => {
     onChange(draft);
-    dialogRef.current?.close();
+    closeDialog(dialogRef.current);
   }, [draft, onChange]);
 
   const reset = useCallback(() => setDraft(DEFAULT_LEAGUE_FILTERS), []);
@@ -104,7 +117,7 @@ export function useLeagueFiltersModal(
     const began = pressedTarget.current;
     pressedTarget.current = null;
     if (isBackdropPress(dialogRef.current, began, event.target))
-      dialogRef.current?.close();
+      closeDialog(dialogRef.current);
   }, []);
 
   return {

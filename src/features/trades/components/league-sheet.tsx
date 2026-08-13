@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { ManagerLeague } from "@/shared/manager";
 
+import { closeDialog, openDialog } from "@/features/shared/dialog-open";
 import { LeagueDetailPanel } from "@/features/shared/ui/league-detail";
 
 import { useTradeTimeline } from "../hooks/use-trade-timeline";
@@ -108,23 +109,32 @@ export function LeagueSheet({
   // The one thing a `<dialog>` can't be told declaratively. `close` fires for
   // Escape and the backdrop alike, so the parent hears every way out through one
   // handler.
+  //
+  // **Every call here goes through `openDialog`/`closeDialog`, because
+  // `showModal()` throws** — on a dialog already open non-modally, on one
+  // detached between the press and this effect, and by absence on an engine that
+  // never shipped it. Each is an exception inside a commit, which React answers
+  // by tearing the tree down to the nearest boundary; on this route that is the
+  // whole board blanking on the press meant to open a league. The shares sheet's
+  // rule, and its fallback: the same panel without the top layer beats a sheet
+  // nobody can open.
   useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) return;
     if (!open) {
-      if (dialog.open) dialog.close();
+      closeDialog(ref.current);
       return;
     }
-    if (!dialog.open) {
-      dialog.showModal();
-      // `showModal` autofocuses the first focusable descendant, which here is
-      // the close key — a control wearing a focus ring reads as pressed, and
-      // "the way out" is a poor first thing to point at. The scroll region takes
-      // it instead: this sheet is opened to be read, and focusing the box that
-      // scrolls is what makes Page Down and the arrow keys work on arrival. The
-      // trap and Escape still belong to the dialog.
-      bodyRef.current?.focus();
-    }
+    // Only a *fresh* open moves the focus. `already-open` is this effect running
+    // again over a sheet that is up, where taking the focus back from whatever
+    // the reader has since tabbed to would be the sheet fighting them.
+    const outcome = openDialog(ref.current);
+    if (outcome !== "modal" && outcome !== "non-modal") return;
+    // `showModal` autofocuses the first focusable descendant, which here is
+    // the close key — a control wearing a focus ring reads as pressed, and
+    // "the way out" is a poor first thing to point at. The scroll region takes
+    // it instead: this sheet is opened to be read, and focusing the box that
+    // scrolls is what makes Page Down and the arrow keys work on arrival. The
+    // trap and Escape still belong to the dialog.
+    bodyRef.current?.focus();
   }, [open]);
 
   return (
@@ -140,7 +150,7 @@ export function LeagueSheet({
       // The backdrop is the dialog's own pseudo-element, so a click landing on
       // the dialog box itself is a click outside the panel.
       onClick={(event) => {
-        if (event.target === ref.current) ref.current?.close();
+        if (event.target === ref.current) closeDialog(ref.current);
       }}
       className="m-auto h-[min(90vh,58rem)] w-[min(1180px,calc(100vw-1.5rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.55)]"
     >
@@ -179,7 +189,7 @@ export function LeagueSheet({
 
           <button
             type="button"
-            onClick={() => ref.current?.close()}
+            onClick={() => closeDialog(ref.current)}
             aria-label="Close"
             className="lab-chip lab-chip-sm grid size-7 shrink-0 place-items-center rounded-full text-foreground/55 transition-colors hover:text-active"
           >

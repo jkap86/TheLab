@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 
-import { adpBoardRead, todayIso, useAdp } from "@/features/shared";
+import { adpBoardRead, useAdp, useTodayIso } from "@/features/shared";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { useAdpControls } from "../filters-context";
@@ -61,9 +61,12 @@ export function ManagerPlayers({ searched }: { searched: string }) {
   // it, it doesn't wait on the leagues stream: the board is a fact about the
   // crawled drafts, so it can be asked for the moment the page mounts.
   const { controls, scope } = useAdpControls();
+  // Watched rather than read once, so a relative window follows the calendar in
+  // a tab left open overnight — see {@link useTodayIso}.
+  const today = useTodayIso();
   const adpRead = useMemo(
-    () => adpBoardRead(controls, scope, todayIso()),
-    [controls, scope],
+    () => adpBoardRead(controls, scope, today),
+    [controls, scope, today],
   );
   const adp = useAdp(adpRead);
 

@@ -20,12 +20,12 @@ import {
   adpBoardRead,
   rookieOrderingBoard,
   startupPricingBoard,
-  todayIso,
   useAdp,
   useAdpControls,
   useAdpDensity,
   useAdpLeagues,
   useStoredAccount,
+  useTodayIso,
 } from "@/features/shared";
 import type { LeagueFilters } from "@/features/shared";
 import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
@@ -250,6 +250,13 @@ export function TradesHome({ season }: { season: string }) {
     loading: leaguesLoading,
   } = useTradeLeagues(season);
 
+  // Resolved once for the whole page rather than per trade, and *watched* rather
+  // than read: everything below that is relative — the three ADP windows and the
+  // seek's own far bound — is resolved against a date, so a tab left open
+  // overnight would go on asking about yesterday until something unrelated
+  // re-rendered it. See {@link useTodayIso}; between midnights it costs nothing.
+  const today = useTodayIso();
+
   // The ADP board's own selection, seated in the app bar rather than beside
   // the trade filters below: it narrows the crawled *market*, not this
   // page's trades, the same split the manager tool draws between its league
@@ -278,8 +285,8 @@ export function TradesHome({ season }: { season: string }) {
     enabled: everOpenedBoard,
   });
   const adpQuery = useMemo(
-    () => adpBoardRead(adpControls, adpScope, todayIso()),
-    [adpControls, adpScope],
+    () => adpBoardRead(adpControls, adpScope, today),
+    [adpControls, adpScope, today],
   );
   // The two boards a rookie *pick* is valued off, which are deliberately not
   // whichever one the panel is displaying — see `rookieOrderingBoard`. They are
@@ -294,12 +301,12 @@ export function TradesHome({ season }: { season: string }) {
   // fetch of its own. No board is fetched per card, per trade or per pick: both
   // are read once into the ladders below.
   const rookieQuery = useMemo(
-    () => adpBoardRead(rookieOrderingBoard(adpControls), adpScope, todayIso()),
-    [adpControls, adpScope],
+    () => adpBoardRead(rookieOrderingBoard(adpControls), adpScope, today),
+    [adpControls, adpScope, today],
   );
   const startupQuery = useMemo(
-    () => adpBoardRead(startupPricingBoard(adpControls), adpScope, todayIso()),
-    [adpControls, adpScope],
+    () => adpBoardRead(startupPricingBoard(adpControls), adpScope, today),
+    [adpControls, adpScope, today],
   );
   // **Not gated on the drawer being open**, unlike the manager tool's Leagues
   // and Leaguemates tabs: the cards' value column reads this board, so it is on
@@ -351,9 +358,6 @@ export function TradesHome({ season }: { season: string }) {
   // `accountless` — an account buys a filter here, it doesn't unlock the tool.
   const account = useStoredAccount();
 
-  // Resolved once per render rather than per trade, and against a date rather
-  // than the clock, so the list only moves when the day does.
-  const today = todayIso();
   const bounds = useMemo(
     () => tradeSeekBounds(tradeFilters.seek, today),
     [tradeFilters.seek, today],

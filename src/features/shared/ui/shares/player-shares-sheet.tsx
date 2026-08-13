@@ -6,7 +6,7 @@ import type { AdpPlayerPayload } from "@/shared/contract";
 
 import { useAdpControls } from "../../adp-controls-context";
 import { adpBoardRead } from "../../adp-controls";
-import { todayIso } from "../../date-range";
+import { useTodayIso } from "../../use-today-iso.ts";
 import {
   DEFAULT_PLAYER_COLUMNS,
   PLAYER_SHARE_COLUMN_PRESETS,
@@ -48,9 +48,12 @@ export function PlayerSharesSheet({
   // The board the ADP columns read, behind the same gate. It is not keyed to the
   // manager, so the drawer and the Players tab share this entry with the sheet.
   const { controls, scope } = useAdpControls();
+  // Watched rather than read once, so a relative window follows the calendar in
+  // a sheet left open overnight — see {@link useTodayIso}.
+  const today = useTodayIso();
   const adpRead = useMemo(
-    () => adpBoardRead(controls, scope, todayIso()),
-    [controls, scope],
+    () => adpBoardRead(controls, scope, today),
+    [controls, scope, today],
   );
   const adp = useAdp(adpRead, { enabled: open });
   const adpByPlayer = useMemo(() => {

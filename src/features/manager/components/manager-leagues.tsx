@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { adpValueRead, todayIso } from "@/features/shared";
+import { adpValueRead, useTodayIso } from "@/features/shared";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { useAdpControls } from "../filters-context";
@@ -113,9 +113,13 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   // more. Scoring and superflex are the exception and stay behind on the server,
   // matched per league — see `adpValueRead`.
   const { controls, scope } = useAdpControls();
+  // Watched rather than read once: a relative window ("last 30 days") is
+  // resolved against a date, so a tab left open overnight would go on pricing
+  // these cards off yesterday's board — see {@link useTodayIso}.
+  const today = useTodayIso();
   const adpBoard = useMemo(
-    () => adpValueRead(controls, scope, todayIso()),
-    [controls, scope],
+    () => adpValueRead(controls, scope, today),
+    [controls, scope, today],
   );
   const adp = useManagerAdpValue(searched, view.userId, leagues, adpBoard, {
     enabled: needs.adp || editorOpened,

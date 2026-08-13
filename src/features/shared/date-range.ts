@@ -22,6 +22,33 @@ export function todayIso(now: Date = new Date()): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+/**
+ * How long until {@link todayIso} answers something else, where the reader is.
+ *
+ * The pair to it: that one reads the day, this one says when it turns over. A
+ * relative window ("last 30 days") is resolved against a date, so a tab left open
+ * overnight goes on asking about yesterday until something re-renders it — see
+ * {@link useTodayIso}, which is the one caller and exists for that.
+ *
+ * Local rather than UTC, because it is the local day being watched, and built
+ * from the calendar fields rather than by adding 86,400,000ms: a day is 23 or 25
+ * hours long either side of a daylight-saving change, and the `Date` constructor
+ * is what knows which. It is always positive — the next local midnight is by
+ * construction after any instant on the day before it.
+ */
+export function msUntilNextLocalMidnight(now: Date = new Date()): number {
+  const next = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+    0,
+    0,
+    0,
+    0,
+  );
+  return next.getTime() - now.getTime();
+}
+
 /** Shift a `YYYY-MM-DD` by whole days, in UTC so no zone can move the boundary. */
 export function shiftDays(date: string, days: number): string {
   const ms = Date.parse(`${date}T00:00:00Z`) + days * 86_400_000;

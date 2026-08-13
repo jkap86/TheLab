@@ -180,6 +180,103 @@ describe("createManagerSyncAdmission", () => {
     assert.equal(admission.stats().active, 2);
   });
 
+  test("a manager stays in flight until its *last* holder releases", () => {
+    // The regression the in-flight count replaced a set for. Two cold callers
+    // for one manager are both admitted by design — neither has cache to serve —
+    // so the key has two holders, and against a set the first of them to finish
+    // deleted the entry outright. What that admitted next was not a wasted
+    // permit: it was a third caller queueing on the same per-manager advisory
+    // lock the second sync is still holding, occupying a pool connection to
+    // repeat a fan-out already in flight.
+    const admission = createManagerSyncAdmission(3);
+    const first = admit(admission, "alice:2026", false);
+    const second = admit(admission, "alice:2026", false);
+    assert.equal(admission.stats().inFlight, 1, "one manager, two holders");
+
+    first.release();
+
+    const behind = admission.reserve("alice:2026", { dedupe: true });
+    assert.equal(behind.ok, false, "the second sync is still running");
+    assert.equal(behind.ok === false && behind.reason, "duplicate");
+    assert.equal(admission.stats().active, 1, "and the permit it held came back");
+
+    second.release();
+    assert.equal(admission.stats().inFlight, 0);
+    // Only now is the manager reservable again — and it is, rather than being
+    // stuck as a duplicate of a sync nobody is running.
+    admit(admission, "alice:2026", true);
+  });
+
+  test("the count follows the holders, one release at a time", () => {
+    const admission = createManagerSyncAdmission(4);
+    const held = [0, 1, 2].map(() => admit(admission, "alice:2026", false));
+
+    for (const [i, reservation] of held.entries()) {
+      assert.equal(
+        admission.reserve("alice:2026", { dedupe: true }).ok,
+        false,
+        `still in flight with ${held.length - i} holders`,
+      );
+      reservation.release();
+    }
+    assert.equal(admission.stats().inFlight, 0, "and empty once the last goes");
+    assert.equal(admission.stats().active, 0, "with every permit back");
+  });
+
+  test("one manager in flight is not another manager's duplicate", () => {
+    // The count is per key, so a busy manager narrows nothing for anyone else —
+    // what bounds *them* is the semaphore, which refuses with `busy` and never
+    // with `duplicate`.
+    const admission = createManagerSyncAdmission(3);
+    admit(admission, "alice:2026", false);
+    admit(admission, "alice:2026", false);
+    admit(admission, "bob:2026", true);
+    assert.equal(admission.stats().inFlight, 2, "two managers, three holders");
+  });
+
+  test("a doubled release cannot retire a sibling's registration", () => {
+    // The counting makes the idempotence load-bearing in a second way: a
+    // `finally` reachable twice would otherwise decrement a key this reservation
+    // no longer holds, closing the entry a *live* sync is still registered under
+    // and opening the very dedupe window the count exists to keep shut.
+    const admission = createManagerSyncAdmission(3);
+    const first = admit(admission, "alice:2026", false);
+    admit(admission, "alice:2026", false);
+
+    first.release();
+    first.release();
+    first.release();
+
+    const behind = admission.reserve("alice:2026", { dedupe: true });
+    assert.equal(behind.ok, false);
+    assert.equal(behind.ok === false && behind.reason, "duplicate");
+    assert.equal(admission.stats().active, 1, "and the cap is unwidened");
+  });
+
+  test("a thrown sync gives back its own registration and no more", () => {
+    // The route releases in a `finally`, so a failure looks like this — and with
+    // a sibling sync running under the same key, what it must not do is take
+    // that one's registration with it.
+    const admission = createManagerSyncAdmission(3);
+    const survivor = admit(admission, "alice:2026", false);
+
+    const failing = admit(admission, "alice:2026", false);
+    try {
+      throw new Error("Sleeper timed out");
+    } catch {
+      failing.release();
+    }
+
+    assert.equal(
+      admission.reserve("alice:2026", { dedupe: true }).ok,
+      false,
+      "the survivor is still syncing this manager",
+    );
+    survivor.release();
+    assert.equal(admission.stats().inFlight, 0, "and nothing is leaked behind it");
+    admit(admission, "alice:2026", true);
+  });
+
   test("a cold sync in flight still dedupes a cached caller behind it", () => {
     // What the route's own map did: by the time this arrives the cold sync has
     // committed some leagues, so there is cache to serve and no reason to run a

@@ -4,7 +4,8 @@ import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "
 
 import type { ManagerLeague } from "@/shared/manager";
 
-import { type AdpControls, seasonOptions, todayIso } from "../../adp-controls";
+import { type AdpControls, seasonOptions } from "../../adp-controls";
+import { useTodayIso } from "../../use-today-iso.ts";
 import type { LeagueScope } from "../../league-scope";
 import { useReturnFocus } from "../../use-return-focus";
 import type { AdpState } from "../../use-adp";
@@ -187,7 +188,11 @@ export function AdpDrawer({
   // control reads it to place its handles and the board reads it to know when it
   // has become a *different* board, and those two answering to different days
   // would be a list that resets for a window nobody moved.
-  const today = todayIso();
+  //
+  // Watched rather than read once, for the reason every relative window here is
+  // — a drawer open across midnight would otherwise go on describing yesterday's
+  // board. See {@link useTodayIso}.
+  const today = useTodayIso();
 
   // The footer's premise line, as the dialog's description: a board priced on an
   // assumed pool is exactly the caveat a reader should hear on arrival rather

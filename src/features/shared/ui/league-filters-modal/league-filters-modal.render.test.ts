@@ -9,6 +9,7 @@ import {
 } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import type { DialogLike } from "../../dialog-open.ts";
 import {
   DEFAULT_LEAGUE_FILTERS,
   type FilterRule,
@@ -42,9 +43,14 @@ import { useLeagueFiltersModal } from "./use-league-filters-modal.ts";
  * server, so this needs no browser and no dependency), and calling the hook-free
  * sections as plain functions answers what their controls *do*, since a React
  * element carries its handlers as props. What neither reaches is anything an
- * effect owns — `showModal`, the focus move onto the panel, the outside-press
- * dismissal and Escape's innermost-first rule all need a real dialog element.
- * Those live in `use-league-filters-modal` and are documented there.
+ * effect owns — the focus move onto the panel, the outside-press dismissal and
+ * Escape's innermost-first rule all need a real dialog element. Those live in
+ * `use-league-filters-modal` and are documented there.
+ *
+ * Opening and closing are the exception, and deliberately so: they go through
+ * `openDialog`/`closeDialog`, which are typed against the handful of properties
+ * they touch rather than against `HTMLDialogElement` — so the hook's own wiring
+ * to them is reachable here with a fake in the ref.
  *
  * **There is no longer a state that the modal cannot reach.** While the fixed
  * filters were collapsed rows, the open popover had to be rendered on its own —
@@ -889,6 +895,99 @@ function mountHook(
   assert.equal(captured.length, 1, "expected the probe to have run the hook once");
   return captured[0];
 }
+
+/** A `<dialog>` as much as `openDialog` needs one, with the calls counted. */
+function fakeDialog(over: Partial<DialogLike> = {}) {
+  const dialog: DialogLike & { open: boolean } = {
+    open: false,
+    isConnected: true,
+    showModal() {
+      dialog.open = true;
+    },
+    close() {
+      dialog.open = false;
+    },
+    setAttribute(name) {
+      if (name === "open") dialog.open = true;
+    },
+    removeAttribute(name) {
+      if (name === "open") dialog.open = false;
+    },
+    ...over,
+  };
+  return dialog;
+}
+
+describe("opening and closing the dialog", () => {
+  test("a `showModal` that throws leaves the panel on screen, not the page down", () => {
+    // The failure: `showModal()` throws on a dialog already open non-modally, on
+    // one detached between the press and the call, and by absence on an engine
+    // that never shipped it — and this one is reached from a *press*, so the
+    // exception lands in React's event handling and takes the tree to the
+    // nearest boundary. On these routes there is none, so the page blanks on the
+    // press meant to open the filters. `openDialog` answers with the `open`
+    // attribute instead: the same panel without the top layer, which beats a
+    // dialog nobody can open.
+    const hook = mountHook(DEFAULT_LEAGUE_FILTERS);
+    const dialog = fakeDialog({
+      showModal() {
+        throw new DOMException("already open", "InvalidStateError");
+      },
+    });
+    hook.dialogRef.current = dialog as unknown as HTMLDialogElement;
+
+    hook.open();
+    assert.equal(dialog.open, true, "the fallback spelling took");
+  });
+
+  test("the ordinary press is still a modal, and a second one does not re-open", () => {
+    const hook = mountHook(DEFAULT_LEAGUE_FILTERS);
+    let modals = 0;
+    const dialog = fakeDialog({
+      showModal() {
+        modals += 1;
+        dialog.open = true;
+      },
+    });
+    hook.dialogRef.current = dialog as unknown as HTMLDialogElement;
+
+    hook.open();
+    assert.equal(modals, 1);
+    assert.equal(dialog.open, true);
+
+    // The re-entrant press this hook has always guarded: `showModal` on a dialog
+    // that is up is itself one of the throws.
+    hook.open();
+    assert.equal(modals, 1, "asked once, however often it is pressed");
+  });
+
+  test("every way out shuts it, and a throwing `close` still does", () => {
+    for (const shut of [
+      (hook: ReturnType<typeof useLeagueFiltersModal>) => hook.close(),
+      (hook: ReturnType<typeof useLeagueFiltersModal>) => hook.apply(),
+    ]) {
+      const hook = mountHook(DEFAULT_LEAGUE_FILTERS);
+      const dialog = fakeDialog({
+        close() {
+          throw new Error("no");
+        },
+      });
+      hook.dialogRef.current = dialog as unknown as HTMLDialogElement;
+      hook.open();
+      shut(hook);
+      assert.equal(dialog.open, false);
+    }
+  });
+
+  test("nothing in the ref is a no-op rather than a throw", () => {
+    // An effect — or a press — can arrive after the dialog has been unmounted by
+    // a navigation. There is nothing to open and nothing to report.
+    const hook = mountHook(DEFAULT_LEAGUE_FILTERS);
+    hook.open();
+    hook.close();
+    hook.apply();
+  });
+});
 
 describe("the draft the dialog edits", () => {
   test("it is seeded from the applied filters", () => {

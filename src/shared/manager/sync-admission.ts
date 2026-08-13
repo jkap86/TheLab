@@ -132,15 +132,21 @@ export function managerSyncConcurrency(
 export function createManagerSyncAdmission(limit: number): ManagerSyncAdmission {
   const limiter = createLimiter(limit);
   /**
-   * Keys this process is currently syncing — see `reserve`'s `dedupe`.
+   * How many reservations this process is holding per key — see `reserve`'s
+   * `dedupe`.
    *
-   * A set of keys rather than a count, which the two cold callers one key can
-   * legitimately have share an entry in: the first of them to finish clears it.
-   * That is what the route's own map did, and it costs only a dedupe window,
-   * never a permit — the permits are the limiter's and are counted one per
-   * holder.
+   * **A count and not a set, because one key can legitimately be held twice.**
+   * Two cold callers for one manager are both admitted on purpose (a cold caller
+   * has nothing cached to serve and needs its own progress stream), so the key
+   * has two holders — and against a set the *first* of them to finish deleted
+   * the entry outright, which handed the dedupe window to whoever asked next
+   * while the second sync was still running. What that admits is not a spare
+   * permit spent on nothing: it is a caller queueing on the same per-manager
+   * advisory lock the running sync holds, occupying a pool connection for as
+   * long as `ADVISORY_LOCK_WAIT_MS` allows, to repeat a fan-out that is already
+   * in flight. Counted, the key is in flight until its *last* holder releases.
    */
-  const inFlight = new Set<string>();
+  const inFlight = new Map<string, number>();
 
   return {
     reserve(key, { dedupe }) {
@@ -154,18 +160,28 @@ export function createManagerSyncAdmission(limit: number): ManagerSyncAdmission 
 
       // Registered whatever `dedupe` said, so the map answers for every holder
       // rather than only for the ones that could have been refused by it.
-      inFlight.add(key);
+      inFlight.set(key, (inFlight.get(key) ?? 0) + 1);
       let released = false;
       return {
         ok: true,
         release() {
+          // Idempotent, and it is the *count* that makes that matter here: a
+          // `finally` reachable twice would otherwise decrement a key its own
+          // reservation no longer holds, retiring a sibling sync's registration
+          // and opening exactly the dedupe window this counting closes.
           if (released) return;
           released = true;
-          inFlight.delete(key);
+          const held = inFlight.get(key) ?? 0;
+          if (held <= 1) inFlight.delete(key);
+          else inFlight.set(key, held - 1);
           permit();
         },
       };
     },
+    // `size` is *keys*, which is what this has always reported and what the
+    // route's log line means by it: how many managers are being synced, not how
+    // many requests are watching one. The limiter's `active` is the permit count
+    // and is where the two differ.
     stats: () => ({ ...limiter.stats(), inFlight: inFlight.size }),
   };
 }

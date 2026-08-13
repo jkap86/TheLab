@@ -43,10 +43,12 @@ export {
   MONTH_ABBREVIATIONS,
   formatRangeDate,
   formatRangeMonth,
+  msUntilNextLocalMidnight,
   shiftDays,
   shiftMonths,
   todayIso,
 } from "./date-range";
+export { useTodayIso } from "./use-today-iso";
 export { ordinal } from "./format";
 export { firstKickoff, nflMarkers, nflMarkersIn } from "./nfl-calendar";
 export type { NflMarker, NflMarkerKind } from "./nfl-calendar";

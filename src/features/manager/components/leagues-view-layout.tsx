@@ -10,10 +10,10 @@ import {
   adpNarrowingCount,
   adpBoardRead,
   filterSummary,
-  todayIso,
   useAdp,
   useAdpDensity,
   useAdpLeagues,
+  useTodayIso,
 } from "@/features/shared";
 import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 import { useLatchedDisclosure } from "@/features/shared/use-latched-disclosure";
@@ -142,9 +142,12 @@ export function LeaguesViewLayout({
   // is what the shared cache buys — on the Players tab, whose own column already
   // reads this board, opening the drawer now shows it immediately and asks for
   // nothing. (It used to be two fetches of an identical query, one per hook.)
+  // Watched rather than read once, so a relative window follows the calendar in
+  // a tab left open overnight — see {@link useTodayIso}.
+  const today = useTodayIso();
   const read = useMemo(
-    () => adpBoardRead(controls, boardScope, todayIso()),
-    [controls, boardScope],
+    () => adpBoardRead(controls, boardScope, today),
+    [controls, boardScope, today],
   );
   const board = useAdp(read, { enabled: boardOpen });
 

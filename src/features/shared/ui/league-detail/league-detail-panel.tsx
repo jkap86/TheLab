@@ -11,8 +11,9 @@ import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 // The module paths rather than `features/shared`'s own barrel, which this file is
 // inside of: a barrel importing a subtree that imports the barrel is a cycle, and
 // this panel is deliberately absent from it in any case (see `./index.ts`).
-import { adpValueRead, todayIso } from "../../adp-controls";
+import { adpValueRead } from "../../adp-controls";
 import { useAdpControls } from "../../adp-controls-context";
+import { useTodayIso } from "../../use-today-iso.ts";
 import {
   DEFAULT_PLAYER_COLUMNS,
   DEFAULT_WEEK_PLAYER_COLUMNS,
@@ -181,9 +182,12 @@ export function LeagueDetailPanel({
   // driven by a *different* selection from the card that opened it is what this
   // replaced.
   const { controls, scope } = useAdpControls();
+  // Watched rather than read once, so a relative window follows the calendar in
+  // a panel left open overnight — see {@link useTodayIso}.
+  const today = useTodayIso();
   const board = useMemo(
-    () => adpValueRead(controls, scope, todayIso()),
-    [controls, scope],
+    () => adpValueRead(controls, scope, today),
+    [controls, scope, today],
   );
   const { data, loading, error } = useLeagueDetail(leagueId, board, week);
 
