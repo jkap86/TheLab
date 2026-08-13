@@ -136,8 +136,18 @@ async function adpValuePayload(
   }
 
   // The league type isn't carried on the roster set (only the ADP board needs
-  // it), so read it here — it decides which side of its fetch each league reads.
-  const adpBoards = await getLeagueAdpBoards(withOwn.map((l) => l.league_id));
+  // it), so read it here — it says which of its fetch's two sides is each
+  // league's native market.
+  //
+  // **Started here and awaited below, with everything else.** Nothing between
+  // this line and that one reads it: the grouping is a fact about each league's
+  // own scoring and lineup, and the fetch answers both markets whichever the
+  // league plays in. Awaited on the spot, a lightweight metadata query stood in
+  // front of the two expensive reads — the lineup solves and the boards — for no
+  // reason but statement order. Both of the functions the grouping calls are
+  // total, so there is no synchronous throw between the two points that could
+  // leave this promise without a handler.
+  const adpBoardsPromise = getLeagueAdpBoards(withOwn.map((l) => l.league_id));
 
   // Group the leagues by the fetch that prices them, collecting each fetch's
   // rostered player ids as we go — one query per distinct board rather than one
@@ -164,7 +174,14 @@ async function adpValuePayload(
     }
   }
 
-  const [lineups, boardResults] = await Promise.all([
+  const [adpBoards, lineups, boardResults] = await Promise.all([
+    // Unguarded, exactly as it was when it stood on its own line: which market a
+    // league plays in decides which column reads as native, so a failure here is
+    // the whole payload's failure and belongs to the route's own catch. Moving it
+    // into this join does not make it fail-fast for anything else — the lineups
+    // guard themselves below, and a board fetch that throws already took the
+    // request down.
+    adpBoardsPromise,
     // The same lineup the expanded panel lists as Starters, so a column and the
     // card it opens can't disagree about who starts. A projections read that
     // fails costs the split and the rank and not the value — pricing a roster

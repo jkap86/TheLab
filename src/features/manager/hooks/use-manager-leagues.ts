@@ -1,12 +1,13 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import {
   cachedLeaguesRevision,
   publishManagerLeagues,
 } from "@/features/shared/leagues-cache";
+import type { ManagerLeaguesData } from "@/features/shared/leagues-stream";
 import { errorMessage } from "@/shared/util";
 
 import { STALE_TIMES } from "../query-config";
@@ -109,13 +110,10 @@ export function useManagerLeagues(searched: string): ManagerLeaguesState {
     staleTime: STALE_TIMES.leagues,
   });
 
-  const revalidate = useCallback(() => {
-    void queryClient.fetchQuery({
-      queryKey,
-      queryFn: ({ signal }) => run(signal),
-      staleTime: 0,
-    });
-  }, [queryClient, queryKey, run]);
+  const revalidate = useCallback(
+    () => revalidateLeagues(queryClient, queryKey, run),
+    [queryClient, queryKey, run],
+  );
 
   const data = query.data ?? null;
   return {
@@ -130,4 +128,44 @@ export function useManagerLeagues(searched: string): ManagerLeaguesState {
     revision: data?.revision ?? null,
     revalidate,
   };
+}
+
+/**
+ * Run the stream again past this entry's stale time, and let the *query* own how
+ * it went.
+ *
+ * `revalidate` returns void, so the promise `fetchQuery` hands back has nobody
+ * to hand a failure to — and a bare `void` in front of it says "ignore the
+ * value", never "ignore the rejection". A re-read fails for the ordinary reasons
+ * the first read does (Sleeper unreachable behind the route, the dyno out of
+ * budget, the browser offline), so the unhandled rejection was not a theoretical
+ * one; what kept it out of production is only that nothing is wired to this yet,
+ * which is exactly the state in which it is cheapest to fix.
+ *
+ * **The rejection is swallowed rather than reported, and that is the whole
+ * decision this function names.** `fetchQuery` writes the failure into the same
+ * cache entry the hook is already reading — the query's own `error`, or
+ * `refreshError` where the stream had leagues to keep — so the reader has been
+ * told. Logging here would be the same failure twice, and rethrowing it would be
+ * a crash for a control that has already reported itself.
+ *
+ * Exported so that contract can be driven directly: the hook cannot be, without
+ * a renderer this repo deliberately does not carry, and the property worth
+ * pinning — a rejected re-read escapes nowhere — is invisible in review and
+ * silent in the type.
+ */
+export function revalidateLeagues(
+  queryClient: QueryClient,
+  queryKey: readonly unknown[],
+  run: (signal?: AbortSignal) => Promise<ManagerLeaguesData>,
+): void {
+  void queryClient
+    .fetchQuery({
+      queryKey,
+      queryFn: ({ signal }) => run(signal),
+      staleTime: 0,
+    })
+    .catch(() => {
+      // Deliberately empty: see above. The query state is the report.
+    });
 }

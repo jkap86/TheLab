@@ -75,7 +75,27 @@ async function priceRosters(args: {
   } = args;
   const superflex = isSuperflexLineup(rosterPositions);
 
-  const [ktcSet, adpBoards] = await Promise.all([
+  // Which population the ADP is averaged over: the reader's board, matched to
+  // this league's own scoring and lineup. Pure, and it reads none of the three
+  // results below — which is what lets the priced board start beside them rather
+  // than behind them.
+  const board = adpBoardFor({
+    season,
+    rosterPositions,
+    scoringSettings,
+    board: chosenBoard,
+  });
+
+  // Three independent reads, started together. The ADP *board type* says which
+  // of the two markets this league reads and the priced ADP answers both, so the
+  // second does not depend on the first — awaiting them in turn was a serial
+  // wait on a lightweight metadata query in front of the expensive one.
+  //
+  // Each still guards its own failure inside the `Promise.all`, which is the
+  // point: pricing a roster is a bonus on top of the standings, so a lens that
+  // can't answer costs its own column and never the league. Nothing here rejects,
+  // so this is a join and not a fail-fast batch.
+  const [ktcSet, adpBoards, adpResult] = await Promise.all([
     getKtcValuesBySleeperId(playerIds).catch((error): KtcValueSet => {
       console.error(`[league] KTC failed for ${leagueId}:`, errorMessage(error));
       return { values: {}, updated_at: null };
@@ -87,6 +107,22 @@ async function priceRosters(args: {
       );
       return new Map();
     }),
+    getDraftAdpForPlayers(board, playerIds).catch(
+      (error): {
+        draft_count: number;
+        redraft_drafts: number;
+        dynasty_drafts: number;
+        values: Map<string, PlayerBoardAdp>;
+      } => {
+        console.error(`[league] ADP failed for ${leagueId}:`, errorMessage(error));
+        return {
+          draft_count: 0,
+          redraft_drafts: 0,
+          dynasty_drafts: 0,
+          values: new Map(),
+        };
+      },
+    ),
   ]);
 
   const ktc: Record<string, number> = {};
@@ -99,23 +135,6 @@ async function priceRosters(args: {
 
   // The fetch answers both league-type boards; this league reads its own side.
   const boardType = adpBoards.get(leagueId) ?? "redraft";
-  const board = adpBoardFor({
-    season,
-    rosterPositions,
-    scoringSettings,
-    board: chosenBoard,
-  });
-  const adpResult = await getDraftAdpForPlayers(board, playerIds).catch(
-    (error): {
-      draft_count: number;
-      redraft_drafts: number;
-      dynasty_drafts: number;
-      values: Map<string, PlayerBoardAdp>;
-    } => {
-      console.error(`[league] ADP failed for ${leagueId}:`, errorMessage(error));
-      return { draft_count: 0, redraft_drafts: 0, dynasty_drafts: 0, values: new Map() };
-    },
-  );
 
   // The pool is this league's own — teams × its starting slots — where the curve
   // applied across it is the reader's. Both halves matter: two leagues on one

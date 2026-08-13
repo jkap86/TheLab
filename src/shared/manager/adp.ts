@@ -2,6 +2,7 @@ import { pool } from "@/shared/db";
 import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
 import { TtlPromiseCache, deepFreeze } from "@/shared/util";
 
+import { adpComputeAdmission } from "./adp-admission";
 import type { AdpFilters } from "./adp-filters";
 import { ADP_BOARD_CACHE, adpBoardCacheKey } from "./read-cache";
 
@@ -333,10 +334,17 @@ const boardResultCache = new TtlPromiseCache<AdpResult>(ADP_BOARD_CACHE);
  * holds the same object, so an in-place sort or annotation would edit what every
  * later reader gets. The SQL below is untouched by any of that; a miss runs
  * exactly the two statements it always ran.
+ *
+ * **And a miss is admitted rather than simply started** — see
+ * {@link adpComputeAdmission} for why the cache alone is not a bound. The
+ * limiter wraps the *loader*, which is the only placement that keeps all three
+ * of the properties this read needs: a hit never reaches it (the cache answers
+ * before `compute` is called at all), same-key callers coalesce onto the one
+ * promise that is queueing, and only the distinct cold boards contend.
  */
 export async function getDraftAdp(filters: AdpFilters): Promise<AdpResult> {
   return boardResultCache.read(adpBoardCacheKey(filters), () =>
-    computeDraftAdp(filters),
+    adpComputeAdmission.run(() => computeDraftAdp(filters)),
   );
 }
 
@@ -545,8 +553,15 @@ export async function getDraftAdpForPlayers(
   const { where, params } = draftSelection(filters);
 
   const cacheKey = JSON.stringify([where, params, filters.min_picks, ids]);
+  // Admitted on the same terms as the paged board, and it is the caller that
+  // makes it matter here: one manager's page prices up to six distinct boards,
+  // so this is the read most able to produce several cold keys at once. See
+  // {@link adpComputeAdmission} for why the limiter wraps the loader rather than
+  // this function — a cached board must not queue behind a cold one.
   return boardCache.read(cacheKey, () =>
-    computeDraftAdpForPlayers(filters, ids, where, params),
+    adpComputeAdmission.run(() =>
+      computeDraftAdpForPlayers(filters, ids, where, params),
+    ),
   );
 }
 
