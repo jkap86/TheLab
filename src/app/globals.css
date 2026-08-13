@@ -1556,6 +1556,35 @@ body {
     opacity: 0.9;
   }
 }
+/* League sync key (features/shared/ui/league-detail/sync-key) — the turning half
+   of the mark.
+
+   **Only the rotor turns; the hub is a sibling and stays put.** That is the whole
+   of what makes this read as a machined part rather than a spinning icon: an
+   axle you can see the arcs turning *around*. It takes a class rather than
+   `animate-spin` because the two halves have to be separable — `animate-spin` is
+   a shorthand carrying its own duration, and an arbitrary `animation-duration`
+   beside it is a fight decided by Tailwind's emission order rather than by
+   anything readable at the call site. 1.2s rather than Tailwind's 1s: an
+   instrument turns deliberately, and at 14px a faster spin reads as a flicker.
+
+   `view-box` and not `fill-box`, which is what `.flask-bub` needs one component
+   over. A bubble pivots on itself; this has to pivot on the *hub*, which is a
+   point in the viewBox — and it only coincides with the rotor's own bounding-box
+   centre because the two arcs happen to be 180°-symmetric today. Spelling it
+   against the viewBox is what keeps a future asymmetric mark from wobbling. */
+.sync-rotor {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+.sync-rotor-on {
+  animation: sync-rotor-spin 1.2s linear infinite;
+}
+@keyframes sync-rotor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @keyframes flask-steam {
   0% {
     transform: translateY(0) scale(0.6);
@@ -1720,6 +1749,10 @@ body {
    a modal, where a frozen entrance animation would leave it invisible. */
 @media (prefers-reduced-motion: reduce) {
   .flask-loader *,
+  /* The rotor freezes at its resting angle rather than vanishing — the mark is
+     still a sync mark, and what carries the *status* for a reader who asked for
+     less motion is the word beside it and the key's live region. */
+  .sync-rotor-on,
   .lab-anim,
   .filters-dialog-panel,
   .filters-segment-pop,

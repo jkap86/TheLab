@@ -70,11 +70,31 @@ describe("the league sync key", () => {
     assert.doesNotMatch(key(), /role="alert"|aria-live="assertive"/);
   });
 
-  test("the turning mark is motion-safe, so the word survives the reduction", () => {
-    // Under `prefers-reduced-motion` what is left has to be the *status*, which
-    // is the label; a spin cancelled with no word beside it is a key that never
-    // reports it is working. The mark is static until a press, so the variant is
-    // what this pins rather than the class being present now.
-    assert.doesNotMatch(key(), /(?<!motion-safe:)animate-spin/);
+  test("the mark is still at rest — nothing turns until something is asked for", () => {
+    const html = key();
+    assert.match(html, /class="sync-rotor "/);
+    assert.doesNotMatch(html, /sync-rotor-on/);
+  });
+
+  test("the hub is a sibling of the rotor, not inside it", () => {
+    // The whole reason the mark is drawn this way: arcs turning *around* a fixed
+    // axle read as a machined part, where a whole icon spinning is the spinner
+    // every app has. Move the hub inside the group and it orbits with the arcs —
+    // which renders perfectly and quietly throws the idea away.
+    const html = key();
+    // `[\s\S]` rather than the `s` flag, which this tsconfig's target predates.
+    const rotor = html.match(/<g class="sync-rotor[^"]*">([\s\S]*?)<\/g>/);
+    assert.ok(rotor, "expected a rotor group");
+    assert.doesNotMatch(rotor[1], /<circle/);
+    assert.match(html, /<\/g><circle cx="8" cy="8"/);
+  });
+
+  test("the accent is spent on the mark and never on the key", () => {
+    // At rest neither is lit. The lit half is asserted here as an absence
+    // because the pressed state is the hook's, but the rule it protects is that
+    // the *face* must never take the accent — a key with no off state has no
+    // business looking like it is in an on one.
+    const html = key();
+    assert.doesNotMatch(html, /<button[^>]*text-active/);
   });
 });

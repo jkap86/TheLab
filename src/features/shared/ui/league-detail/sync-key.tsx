@@ -26,7 +26,9 @@ import { lastUpdatedNote, syncStatusNote } from "./sync-status";
  *
  * What it says back is {@link syncStatusNote}'s, which is where the rule lives
  * and is tested: a press that changed something is answered by the rows, and a
- * press that fetched nothing has to speak.
+ * press that fetched nothing has to speak. The *mark* reports the same thing
+ * without words — see {@link SyncIcon}, which turns and takes the accent while
+ * the request is out.
  */
 export function LeagueSyncKey({ leagueId }: { leagueId: string }) {
   const { refresh, pending, result, error } = useLeagueRefresh(leagueId);
@@ -78,29 +80,63 @@ export function LeagueSyncKey({ leagueId }: { leagueId: string }) {
 }
 
 /**
- * A circular arrow, turning while the request is out.
+ * The mark: two opposed arcs turning about a hub that doesn't.
  *
- * The spin is `motion-safe:` rather than a class cancelled under
- * `prefers-reduced-motion`, so a reader who asked for less motion gets a static
- * mark and the *word* beside it — the same call the flask loader makes, where
- * what has to survive the reduction is the status rather than the animation.
+ * **The hub is the point of it, and it is a sibling of the rotor rather than
+ * inside it.** A whole icon spinning is a spinner — every app has one, and it
+ * says "waiting" rather than anything about this app. Arcs turning *around* a
+ * fixed axle is a machined part, which is the grammar everything else on this
+ * panel is built in: the trough under the tab strip, the wells, the app bar's
+ * raised keys. It costs one element and a transform origin (see `.sync-rotor` in
+ * `globals.css`, which pivots on the viewBox's centre rather than the rotor's own
+ * box, so the axle is the pivot by construction).
+ *
+ * **Two arcs with solid heads rather than one arc with a chevron.** The single
+ * arc it replaced was the smallest thing that reads as "refresh", which is a
+ * different bar from being worth looking at. Drawn and measured in a browser at
+ * 14px: stroked chevron heads merge into the arc and read as lumps at this size,
+ * where filled triangles keep their point — so the heads are triangles, and the
+ * arcs stop at ~130° each to leave a gap the heads can be read against.
+ *
+ * **14px rather than 12.** The extra two pixels are what the hub and the second
+ * head need to be legible; below that the mark silts up and the decoration is
+ * mud, which is the trade this codebase keeps making explicit about small parts.
+ *
+ * **The accent is spent here and nowhere else on the key.** While the request is
+ * out the mark takes `active` and a soft glow — the same lit-lamp spelling the
+ * nameplate's status dot uses — and the label and the key's face stay exactly as
+ * they are. That is the app bar's rule about a narrowed board lighting the *bars*
+ * rather than the face, read at this scale: the signal rides on the part that
+ * already means "sync", so the key never looks like it is in an on state it has
+ * no off state for.
  */
 function SyncIcon({ spinning }: { spinning: boolean }) {
   return (
     <svg
       viewBox="0 0 16 16"
-      className={`size-3 shrink-0 ${spinning ? "motion-safe:animate-spin" : ""}`}
+      className={`size-3.5 shrink-0 transition-colors ${
+        spinning
+          ? "text-active drop-shadow-[0_0_3px_rgba(0,255,229,0.55)]"
+          : ""
+      }`}
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.6"
+      strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {/* An arc rather than a closed ring, so the arrowhead has somewhere to be:
-          a full circle with a head on it reads as a clock at 12px. */}
-      <path d="M13.5 8a5.5 5.5 0 1 1-1.7-3.97" />
-      <path d="M13.5 2.2V4.6h-2.4" />
+      <g className={`sync-rotor ${spinning ? "sync-rotor-on" : ""}`}>
+        {/* 200°→325° and its 180° twin, so the pair is symmetric about the hub
+            and the rotor's turn looks the same at every angle. Each head is a
+            filled triangle seated on the arc's end, pointing along the travel. */}
+        <path d="M3.07 6.20A5.25 5.25 0 0 1 12.30 4.99" />
+        <path d="M13.86 3.90L14.02 7.45L10.74 6.08Z" fill="currentColor" stroke="none" />
+        <path d="M12.93 9.80A5.25 5.25 0 0 1 3.70 11.01" />
+        <path d="M2.14 12.10L1.98 8.55L5.26 9.92Z" fill="currentColor" stroke="none" />
+      </g>
+      {/* The axle. Outside the rotor, which is what makes the turn read. */}
+      <circle cx="8" cy="8" r="1.15" fill="currentColor" stroke="none" />
     </svg>
   );
 }
