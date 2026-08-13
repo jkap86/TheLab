@@ -5,7 +5,7 @@ import {
   pool,
   withBlockingAdvisoryLock,
 } from "@/shared/db";
-import { createLimiter, getLeague } from "@/shared/sleeper";
+import { cacheBustToken, createLimiter, getLeague } from "@/shared/sleeper";
 import type { Limiter } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
@@ -214,13 +214,34 @@ async function refreshLeagueLocked(
   // cooldown too — see {@link LEAGUE_REFRESH_ATTEMPT_SQL}.
   await pool.query(LEAGUE_REFRESH_ATTEMPT_SQL, [leagueId]);
 
+  /**
+   * One cache-busting token for this press, on every request it fans out to.
+   *
+   * **Without it this whole path can be a no-op that reports success.** Sleeper
+   * is behind a CDN, so a roster read seconds after somebody set a lineup can be
+   * answered from an edge copy minted before they did — and every layer below
+   * would then behave perfectly: a 200 with the old starters is persisted as the
+   * league's current state, `updated_at` advances, the panel refetches, and the
+   * reader sees exactly what they saw before pressing. That is the one failure
+   * this route cannot distinguish from working, which is why the token is minted
+   * here rather than left as something a caller may pass.
+   *
+   * It is minted **once** and shared by the ~11 requests below, so a press is one
+   * group in an access log rather than eleven unrelated ones. The refresh's own
+   * cooldown is seconds wide, so two presses can never mint the same millisecond
+   * and re-request a URL the edge has already answered.
+   */
+  const fresh = cacheBustToken();
+
   // The league itself is re-read rather than replayed from our row, the
   // crawler's own reason: name, status, settings and scoring drift, and the
   // persisted row comes from this payload. It is also the probe — a null answer
-  // is Sleeper's 200-with-null (404 folded in) for a league it has dropped.
+  // is Sleeper's 200-with-null (404 folded in) for a league it has dropped, and
+  // it carries the token too, or the answer deciding whether to tombstone a
+  // league could be a cached one.
   let league;
   try {
-    league = await getLeague(leagueId);
+    league = await getLeague(leagueId, fresh);
   } catch (error) {
     console.warn(
       `[league-refresh] could not fetch league ${leagueId}:`,
@@ -238,13 +259,27 @@ async function refreshLeagueLocked(
   }
 
   const currentWeek = await getCurrentWeek();
-  const result = await syncLeagueGraphs([league], currentWeek, { concurrency: 1 });
+  const result = await syncLeagueGraphs([league], currentWeek, {
+    concurrency: 1,
+    fresh,
+  });
 
   // `syncLeagueGraphs` counts a league's failure rather than throwing it, so the
   // count is what says whether anything was written. `updated_at` was stamped
   // inside that write, so a successful run reports the moment it happened rather
   // than re-reading a row to be told what it just set.
-  return result.loaded === 1
-    ? { status: "synced", updatedAt: new Date() }
-    : { status: "failed", updatedAt: state.updatedAt };
+  if (result.loaded !== 1) return { status: "failed", updatedAt: state.updatedAt };
+
+  // The one success this app logs, and it earns the line: a refresh that fetched
+  // stale data and a refresh that never ran look identical from the outside —
+  // unchanged rows either way — so this is what separates them without guessing.
+  // The roster count says Sleeper answered with a league rather than an empty
+  // shell, and the token is the query parameter those requests carried, so the
+  // press can be found in an upstream access log. It is bounded by the cooldown,
+  // so it cannot become chatter.
+  console.info(
+    `[league-refresh] ${leagueId} re-read from Sleeper ` +
+      `(${result.counts.rosters} rosters, matchup weeks ${result.counts.matchups}, _=${fresh})`,
+  );
+  return { status: "synced", updatedAt: new Date() };
 }

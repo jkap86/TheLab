@@ -84,11 +84,20 @@ const weeksIn = ({ from, to }: WeekRange): number[] => {
  * transactions to the current week and no matchups at all, so a shared range
  * would skip its whole season. Callers pass the full range on a first sync and a
  * short tail window on refreshes — see {@link syncManagerLeagues}.
+ *
+ * `options.fresh` is a cache-busting token applied to **every** request this
+ * makes, and the background callers pass none. One token for the whole graph
+ * rather than one per request: it is the *press* that wants an uncached answer,
+ * so the eleven-odd requests it fans out to are one group in an access log. See
+ * {@link freshUrl} for why a query parameter and not a header, and
+ * {@link refreshLeague} for the only caller that sends one.
  */
 export async function fetchLeagueGraph(
   league: SleeperLeague,
   weeks: GraphWeeks,
+  options: { fresh?: string } = {},
 ): Promise<LeagueGraph> {
+  const { fresh } = options;
   const txWeeks = weeks.transactions;
   const matchupWeeks = weeks.matchups;
 
@@ -105,20 +114,20 @@ export async function fetchLeagueGraph(
   const matchups: WeekMatchup[] = [];
 
   const [rosters, users, tradedPicks, drafts] = await Promise.all([
-    getLeagueRosters(league.league_id),
-    getLeagueUsers(league.league_id),
-    getLeagueTradedPicks(league.league_id),
-    getLeagueDrafts(league.league_id),
+    getLeagueRosters(league.league_id, fresh),
+    getLeagueUsers(league.league_id, fresh),
+    getLeagueTradedPicks(league.league_id, fresh),
+    getLeagueDrafts(league.league_id, fresh),
     mapWithConcurrency(jobs, CHILD_FETCH_CONCURRENCY, async (job) => {
       if (job.kind === "tx") {
         transactions.push(
-          ...(await getLeagueTransactions(league.league_id, job.week)),
+          ...(await getLeagueTransactions(league.league_id, job.week, fresh)),
         );
         return;
       }
       // Tagged on arrival: a matchup row names its roster but not its week, and
       // the request is the only place the week is known.
-      const week = await getLeagueMatchups(league.league_id, job.week);
+      const week = await getLeagueMatchups(league.league_id, job.week, fresh);
       matchups.push(...week.map((m) => ({ ...m, week: job.week })));
     }),
   ]);
@@ -130,7 +139,7 @@ export async function fetchLeagueGraph(
   // would be persisted as if it were the draft's whole board.
   const draftPicks = (
     await collectWithConcurrency(drafts, CHILD_FETCH_CONCURRENCY, (d) =>
-      getDraftPicks(d.draft_id),
+      getDraftPicks(d.draft_id, fresh),
     )
   ).flat();
 

@@ -5094,6 +5094,30 @@ stops holding, a comment saying it does would not have caught it.
     crawler's own column, reused rather than duplicated — **before** the fetch,
     so a league Sleeper is failing on holds it too, and `updated_at` stays what
     only `persistLeagueGraph` writes.
+  - **Every request that press makes is cache-busted, and nothing else is**
+    (`sleeper/fresh.ts`, `freshUrl`/`cacheBustToken`). Sleeper sits behind a CDN,
+    so a roster read seconds after somebody set a lineup can be answered from an
+    edge copy minted before they did — and every layer below then behaves
+    perfectly: a 200 with the old starters is stored as the league's current
+    state, `updated_at` advances, the panel refetches, and the reader sees what
+    they saw before pressing. **That is the one failure this path cannot tell
+    from working**, which is why the token is minted inside `refreshLeague`
+    rather than left as something a caller may pass. It is one token for the
+    whole ~11-request graph, so a press is one group in an access log, and it is
+    a timestamp so two presses can never re-request a URL the edge has already
+    answered. Threaded as an optional last argument through the league getters
+    and `fetchLeagueGraph` rather than switched on in `sleeperGet`, because the
+    scheduled callers want the opposite: the crawler is promising a
+    fifteen-minute TTL, so an edge copy is inside its own error bars and letting
+    the CDN answer costs Sleeper's origin nothing. **A `Cache-Control: no-cache`
+    request header is deliberately not sent** and should not be added later as
+    though it did the same job — the major CDNs ignore it from anonymous
+    clients, so it would read as a fix while changing nothing.
+  - **The successful refresh is the one success this app logs.** A refresh that
+    fetched stale data and a refresh that never ran look identical from outside —
+    unchanged rows either way — so the line naming the league, the roster count
+    and the token is what separates them without guessing. The cooldown is what
+    keeps it from becoming chatter.
   - **A race is a success, not a refusal.** An attempt landing after this caller
     began queueing means somebody else's fan-out wrote what it was waiting for;
     reported as a throttle it would tell a reader their data is stale at its very

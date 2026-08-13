@@ -161,9 +161,21 @@ export async function syncLeagueGraphs(
   options: {
     concurrency?: number;
     onProgress?: (progress: SyncProgress) => void;
+    /**
+     * A cache-busting token for every Sleeper request this makes — see
+     * {@link freshUrl}.
+     *
+     * Absent for both scheduled callers, deliberately: the crawler and a
+     * manager's league sync are both promising a TTL measured in minutes, so an
+     * edge copy is inside their own error bars and letting the CDN answer costs
+     * Sleeper's origin nothing. The only caller that sends one is
+     * {@link refreshLeague}, where a reader has just changed something and
+     * pressed a key that says "re-read this".
+     */
+    fresh?: string;
   } = {},
 ): Promise<LeagueSyncResult> {
-  const { concurrency = LEAGUE_FETCH_CONCURRENCY, onProgress } = options;
+  const { concurrency = LEAGUE_FETCH_CONCURRENCY, onProgress, fresh } = options;
   const total = leagues.length;
 
   const leagueIds = leagues.map((l) => l.league_id);
@@ -190,7 +202,9 @@ export async function syncLeagueGraphs(
 
   await mapWithConcurrency(leagues, concurrency, async (league) => {
     try {
-      const graph = await fetchLeagueGraph(league, weeksFor(league.league_id));
+      const graph = await fetchLeagueGraph(league, weeksFor(league.league_id), {
+        fresh,
+      });
       await persistLeagueGraph(graph);
       // The pre-trade rosters ride on this pass because this is where both of
       // their inputs land — the current rosters and the transaction log — and
