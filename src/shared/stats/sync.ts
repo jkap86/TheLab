@@ -49,22 +49,20 @@ export const STATS_TTL_MS = 60 * 60 * 1000;
 export const STATS_SETTLED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
- * How many finished seasons are kept *beyond* the previous one — the comps
- * pool's depth, and the reason a comp can be a 2022 season rather than only
- * last year's. Three, for a five-season corpus in all: enough that "whose
- * age-24 season does this look like" has real answers, cheap enough that the
- * one-time backfill is ~54 week fetches trickling through the per-tick cap.
+ * How far back the archive reaches — every finished season behind the previous
+ * one, down to this floor, which is the comps pool's depth.
+ *
+ * **The floor is a runaway stop, not a claim about what Sleeper carries.** How
+ * deep the source actually goes is discovered by fetching: an archive week is
+ * fetched exactly once (see the null TTL below), so a season the feed doesn't
+ * have answers eighteen empty weeks, each stamped and never asked about again,
+ * and — storing no rows — never appears in `listStoredSeasons` or anywhere
+ * downstream. The oldest season on the comps board is therefore exactly the
+ * oldest one the source has, and a dead season's whole lifetime cost is one
+ * pass of probes. 2000 sits below any plausible NFL stats feed, so the stop
+ * never truncates real data.
  */
-export const STATS_ARCHIVE_SEASONS = 3;
-
-/**
- * How long an archive week stays fresh — the third tier the settled clock used
- * to argue it didn't need, and what changed is the reader: the previous season
- * feeds a PPG fallback and is worth healing monthly, where a three-year-old
- * week's numbers never move again. A year keeps the re-read cost of three
- * extra seasons at one pass per season per year instead of twelve.
- */
-export const STATS_ARCHIVE_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+export const STATS_ARCHIVE_FLOOR_SEASON = "2000";
 
 /**
  * Settled weeks fetched per run, so the backfill trickles instead of arriving as
@@ -144,12 +142,28 @@ export type StatsSyncSummary = {
  * refetch them every tick, and, because the per-tick cap takes the earliest
  * stale weeks first, crowd out weeks that do have something to store.
  * `stat_week_syncs` stamps the attempt.
+ *
+ * A null `ttlMs` means **once, ever**: a week stamped at any time is fresh
+ * forever — the archive's clock, where a years-old week's numbers never move
+ * again and a season the feed doesn't carry must cost its probes exactly once.
+ * A failed or refused fetch still stamps nothing, so those retry on either
+ * clock.
  */
 async function staleTargets(
   targets: readonly Target[],
-  ttlMs: number,
+  ttlMs: number | null,
 ): Promise<Target[]> {
   if (targets.length === 0) return [];
+
+  const params: unknown[] = [
+    targets.map((t) => t.season),
+    targets.map((t) => t.week),
+  ];
+  let stampIsFresh = "TRUE";
+  if (ttlMs !== null) {
+    params.push(msInterval(ttlMs));
+    stampIsFresh = `s.synced_at > now() - $3::interval`;
+  }
 
   const { rows } = await pool.query<{ season: string; week: number }>(
     `SELECT t.season, t.week
@@ -159,8 +173,8 @@ async function staleTargets(
               FROM stat_week_syncs s
              WHERE s.season = t.season
                AND s.week = t.week
-               AND s.synced_at > now() - $3::interval)`,
-    [targets.map((t) => t.season), targets.map((t) => t.week), msInterval(ttlMs)],
+               AND ${stampIsFresh})`,
+    params,
   );
 
   const due = new Set(rows.map((r) => `${r.season}:${r.week}`));
@@ -231,12 +245,13 @@ function writeWeek(
  * Fetch and store actual weekly stat lines.
  *
  * With no options it covers every week the NFL has played this season, the
- * whole of the season before it, and {@link STATS_ARCHIVE_SEASONS} finished
- * seasons behind that, on three clocks: the week being played and the one
- * still being corrected are refreshed hourly, the settled and previous-season
- * weeks monthly, and the archive yearly — the slow tiers sharing one per-run
- * cap (see {@link SETTLED_WEEKS_PER_TICK}), settled first, so the backfill
- * trickles and last season fills before 2022 does.
+ * whole of the season before it, and every finished season behind that down to
+ * {@link STATS_ARCHIVE_FLOOR_SEASON}, on three clocks: the week being played
+ * and the one still being corrected are refreshed hourly, the settled and
+ * previous-season weeks monthly, and an archive week exactly **once, ever** —
+ * the slow tiers sharing one per-run cap (see {@link SETTLED_WEEKS_PER_TICK}),
+ * settled first, so the backfill trickles and last season fills before the
+ * deep ones do.
  *
  * **The previous season is not an optional extra.** A points-per-game average is
  * counted over the weeks *before* the one on screen, so in week 1 there is
@@ -268,8 +283,7 @@ export async function syncStats(
     ttlMs?: number;
     settledTtlMs?: number;
     settledPerRun?: number;
-    archiveSeasonCount?: number;
-    archiveTtlMs?: number;
+    archiveFloor?: string;
   } = {},
 ): Promise<StatsSyncSummary> {
   const {
@@ -277,8 +291,7 @@ export async function syncStats(
     ttlMs = STATS_TTL_MS,
     settledTtlMs = STATS_SETTLED_TTL_MS,
     settledPerRun = SETTLED_WEEKS_PER_TICK,
-    archiveSeasonCount = STATS_ARCHIVE_SEASONS,
-    archiveTtlMs = STATS_ARCHIVE_TTL_MS,
+    archiveFloor = STATS_ARCHIVE_FLOOR_SEASON,
   } = options;
 
   const summary = await withAdvisoryLock(LOCK_KEYS.playerStats, async () => {
@@ -323,14 +336,15 @@ export async function syncStats(
             : []),
         ];
 
-    // The archive: finished seasons behind the previous one, on the yearly
-    // clock. Never part of an explicit backfill (that names its own weeks),
-    // and behind the settled tier in the queue, so a cold database fills last
-    // season before it reaches for 2022 — newest season first, newest week
-    // first, the same convergence rule as the tier above it.
+    // The archive: every finished season behind the previous one down to the
+    // floor, fetched once each. Never part of an explicit backfill (that names
+    // its own weeks), and behind the settled tier in the queue, so a cold
+    // database fills last season before it reaches for the deep ones — newest
+    // season first, newest week first, the same convergence rule as the tier
+    // above it.
     const archive: Target[] = explicitWeeks
       ? []
-      : archiveSeasons(season, archiveSeasonCount).flatMap((s) =>
+      : archiveSeasons(season, archiveFloor).flatMap((s) =>
           allRegularWeeks()
             .reverse()
             .map((week) => ({ season: s, week, settled: true })),
@@ -338,7 +352,10 @@ export async function syncStats(
 
     const liveDue = force ? live : await staleTargets(live, ttlMs);
     const settledStale = await staleTargets(settled, settledTtlMs);
-    const archiveStale = await staleTargets(archive, archiveTtlMs);
+    // Null TTL: an archive week is fetched once, ever — stored or empty, its
+    // stamp retires it, which is both what "populated once" means and what
+    // makes probing past the feed's real floor affordable.
+    const archiveStale = await staleTargets(archive, null);
     // One cap over both slow tiers: the trickle is about the burst on Sleeper,
     // and two caps would be twice the burst under another name.
     const slowStale = [...settledStale, ...archiveStale];

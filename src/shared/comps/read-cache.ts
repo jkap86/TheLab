@@ -18,16 +18,17 @@ export const COMPS_POOL_VERSION = 2;
  * own tick. The client's result stale time (five minutes) sits deliberately
  * below it — a stale client read costs a request this answers warm.
  *
- * **The bound is 32 and must stay above the count of stored seasons.** The
- * pool deepens by one season a year with no code change, and every season is
+ * **The bound must stay above the count of stored seasons.** Every season is
  * read on every request (the subject's comps span all of them) — a cap the
  * working set outgrows would evict and rebuild a season per request, which is
- * cache churn wearing a cache's name. 32 is three decades of headroom.
+ * cache churn wearing a cache's name. The stats archive reaches to
+ * `STATS_ARCHIVE_FLOOR_SEASON` (2000), so the corpus can hold ~27 seasons the
+ * day the backfill finishes; 64 keeps decades of headroom past that.
  */
 export const COMPS_POOL_CACHE = {
   name: "comps-pool",
   ttlMs: 15 * 60 * 1000,
-  max: 32,
+  max: 64,
 } as const;
 
 /**
