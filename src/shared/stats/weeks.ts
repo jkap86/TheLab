@@ -121,3 +121,21 @@ export function previousSeason(season: string): string | null {
 export function allRegularWeeks(): number[] {
   return Array.from({ length: LAST_REGULAR_WEEK }, (_, i) => i + 1);
 }
+
+/**
+ * The finished seasons *behind* the previous one, newest first — the archive
+ * the comps pool is deep because of.
+ *
+ * Starts at two seasons back, because {@link previousSeason} is its own tier
+ * with its own reason (the week-1 PPG fallback) and its own clock; these exist
+ * for a different reader — a comp is worth little from a corpus one season
+ * deep — and never enter either faster tier. Newest first, so a cold backfill
+ * fills the seasons nearest living memory before the deep ones.
+ */
+export function archiveSeasons(season: string, count: number): string[] {
+  const year = Number(season);
+  if (!Number.isInteger(year) || year < 1920) return [];
+  return Array.from({ length: Math.max(0, Math.trunc(count)) }, (_, i) =>
+    String(year - 2 - i),
+  );
+}

@@ -15,6 +15,8 @@ export { startStatsScheduler, STATS_INTERVAL_MS } from "./scheduler";
 export {
   syncStats,
   SETTLED_WEEKS_PER_TICK,
+  STATS_ARCHIVE_SEASONS,
+  STATS_ARCHIVE_TTL_MS,
   STATS_SETTLED_TTL_MS,
   STATS_TTL_MS,
 } from "./sync";
@@ -27,6 +29,7 @@ export {
 export type { StatsValidation } from "./validate";
 export {
   allRegularWeeks,
+  archiveSeasons,
   liveWeeks,
   playedWeeks,
   previousSeason,

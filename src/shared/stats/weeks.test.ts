@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { LAST_REGULAR_WEEK } from "../projections/weeks.ts";
 import {
+  archiveSeasons,
   liveWeeks,
   playedWeeks,
   previousSeason,
@@ -55,4 +56,17 @@ test("the previous season is the year before, and only when it is a year", () =>
   assert.equal(previousSeason("2026"), "2025");
   assert.equal(previousSeason("not-a-year"), null);
   assert.equal(previousSeason(""), null);
+});
+
+test("the archive starts behind the previous season and runs newest first", () => {
+  // The previous season is its own tier (the PPG fallback, on the monthly
+  // clock), so the archive must never overlap it — a week in two tiers is a
+  // week gated by whichever TTL was asked about first.
+  assert.deepEqual(archiveSeasons("2026", 3), ["2024", "2023", "2022"]);
+  assert.ok(!archiveSeasons("2026", 5).includes(previousSeason("2026")!));
+});
+
+test("an empty or junk archive request is empty, never a throw", () => {
+  assert.deepEqual(archiveSeasons("2026", 0), []);
+  assert.deepEqual(archiveSeasons("not-a-year", 3), []);
 });
