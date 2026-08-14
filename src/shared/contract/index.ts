@@ -13,6 +13,11 @@ import type {
   SyncProgress,
   SyncSummary,
 } from "@/shared/manager";
+import type {
+  CompsBasis,
+  CompsFieldFamily,
+  CompsPosition,
+} from "@/shared/comps";
 import type { KtcRosterValue, KtcValue } from "@/shared/ktc";
 import type { PlaceholderPick } from "@/shared/picktracker";
 import type { PlayersSyncSummary, PlayerSummary } from "@/shared/players";
@@ -1394,6 +1399,106 @@ export type StatsSyncPayload = StatsSyncSummary;
 export type KickoffPayload = {
   season: string;
   kickoff: number | null;
+};
+
+/**
+ * One field of a comps comparison as the route ran it: the catalogue's
+ * identity, the weight actually applied, and the field's mean/stdev **over the
+ * comparison population** (`candidates_eligible`) — the population the z-scores
+ * were taken against, which deliberately never includes the subject. Null
+ * mean/stdev means no candidate was eligible.
+ */
+export type CompsFieldSpecPayload = {
+  key: string;
+  label: string;
+  family: CompsFieldFamily;
+  weight: number;
+  per_game: boolean;
+  pool_mean: number | null;
+  pool_stdev: number | null;
+};
+
+/**
+ * One player-season on a comps answer.
+ *
+ * `team` is the player's **current** team — `players` stores no historical
+ * team — so the client styles it uniformly as secondary ("Current: PHI") on
+ * every row rather than guessing which rows are historical. `values` holds the
+ * weighted fields only, already resolved under the request's basis (per-game
+ * fields divided by `games`), so the number on screen is byte-for-byte the one
+ * the distance was computed from.
+ */
+export type CompsSeasonRowPayload = {
+  player_id: string;
+  season: string;
+  name: string;
+  position: string | null;
+  team: string | null;
+  games: number;
+  values: Record<string, number | null>;
+};
+
+/**
+ * One comp. `similarity` is `round(100·exp(−distance))` — a fixed monotone
+ * score, never rescaled within a result set, and presented as "Similarity 82",
+ * never as "82% match".
+ */
+export type CompsResultRowPayload = CompsSeasonRowPayload & {
+  distance: number;
+  similarity: number;
+};
+
+/**
+ * `GET /api/comps` — the k nearest player-seasons to a subject, over every
+ * stored season, under the caller's fields and weights.
+ *
+ * The counts follow the pipeline order: `candidates_considered` survived the
+ * position filter, `min_games` and the identity exclusion;
+ * `candidates_eligible` also carried every weighted field, and is the KNN
+ * population. A candidate missing several weighted fields increments each
+ * field's `excluded_missing` entry while removing one row, so those counts sum
+ * to **at least** the difference between the two. `dropped_fields` names
+ * requested fields the *subject* couldn't answer — dropped and reported rather
+ * than a 400.
+ *
+ * Market fields are anchored *entering* the subject's season (KTC's latest
+ * snapshot at or before that season's Sept 1 — or today, mid-offseason — and
+ * ADP over that season's drafts started by the same date). The ADP anchor
+ * inherits the ADP module's date-bound caveat: a draft Sleeper never dated is
+ * dropped by the bound.
+ */
+export type CompsPayload = {
+  subject: CompsSeasonRowPayload;
+  basis: CompsBasis;
+  fields: CompsFieldSpecPayload[];
+  dropped_fields: string[];
+  /** The candidate positions the pool was filtered to. */
+  positions: CompsPosition[];
+  min_games: number;
+  /** Every season the pool spans, newest first — the corpus depth, honestly. */
+  seasons: string[];
+  candidates_considered: number;
+  candidates_eligible: number;
+  excluded_missing: Record<string, number>;
+  results: CompsResultRowPayload[];
+};
+
+/** One pickable subject: a supported-position player with stored stats. */
+export type CompsPlayerOptionPayload = {
+  player_id: string;
+  name: string;
+  position: CompsPosition;
+  /** Current team, as on every comps row. */
+  team: string | null;
+  /** The seasons this player has stored stats in, newest first. */
+  seasons: string[];
+};
+
+/** `GET /api/comps/players` — the picker list, supported positions only. */
+export type CompsPlayersPayload = {
+  players: CompsPlayerOptionPayload[];
+  /** Every stored season, newest first. */
+  seasons: string[];
 };
 
 /** The error body every league API route returns on a non-2xx. */

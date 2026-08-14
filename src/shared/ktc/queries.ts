@@ -70,6 +70,49 @@ export async function getKtcValuesBySleeperId(
   return foldKtcValues(rows);
 }
 
+/**
+ * How far back an as-of read will reach for a snapshot. Wide enough to ride out
+ * a gap in the daily series (the backfill exists because gaps happen), narrow
+ * enough that the answer still means "KTC around that date" rather than a price
+ * from a different part of the calendar.
+ */
+export const KTC_AS_OF_WINDOW_DAYS = 45;
+
+/**
+ * KTC values *as of a date*: per player, the latest `ktc_value_history`
+ * snapshot at or before `anchorIso`, reaching back at most
+ * {@link KTC_AS_OF_WINDOW_DAYS}.
+ *
+ * **Strictly backwards-looking, which is the point.** The comps pool anchors a
+ * historical season's market read at that season's start; a
+ * nearest-in-either-direction pick would quietly price "entering 2025" off an
+ * October scrape — information from after the anchor wearing its date. A player
+ * with no snapshot in the window is absent, which the caller reads as unknown
+ * and never as zero.
+ *
+ * This is the first read against the history table the backfill has been
+ * filling; `sleeper_id` rides on `ktc_values` (the match is per KTC entry, not
+ * per day), and two KTC entries resolving to one Sleeper id go through
+ * {@link foldKtcValues} exactly as the current-values read does — the
+ * duplicate-resolution rule must not depend on which table the numbers came
+ * from.
+ */
+export async function getKtcValuesAsOf(anchorIso: string): Promise<KtcValueSet> {
+  const { rows } = await pool.query<KtcValueRow>(
+    `SELECT DISTINCT ON (h.ktc_id)
+            v.sleeper_id, h.sf_value, h.oneqb_value, h.date AS updated_at
+       FROM ktc_value_history h
+       JOIN ktc_values v USING (ktc_id)
+      WHERE v.sleeper_id IS NOT NULL
+        AND h.date <= $1::date
+        AND h.date > $1::date - $2::int
+      ORDER BY h.ktc_id, h.date DESC`,
+    [anchorIso, KTC_AS_OF_WINDOW_DAYS],
+  );
+
+  return foldKtcValues(rows);
+}
+
 /** KTC's pick rows, keyed by {@link ktcPickKey} — see {@link getKtcPickBoard}. */
 export type KtcPickBoard = Record<string, KtcPickPrice>;
 

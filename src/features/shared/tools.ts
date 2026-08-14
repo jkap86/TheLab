@@ -19,16 +19,22 @@ export type ToolIconName =
   | "leaguemates"
   | "picktracker"
   | "trades"
-  | "lineup";
+  | "lineup"
+  | "comps";
 
 /**
  * The heading a tool sits under in the menu. The split is what a tool is
  * *about*: the manager views read one account's portfolio across every league,
- * the rest read what happens inside a league.
+ * league tools read what happens inside a league, and player tools read the
+ * player pool itself — no account and no league in the question at all.
  */
-export type ToolGroup = "Manager" | "League tools";
+export type ToolGroup = "Manager" | "League tools" | "Player tools";
 
-export const TOOL_GROUPS: ToolGroup[] = ["Manager", "League tools"];
+export const TOOL_GROUPS: ToolGroup[] = [
+  "Manager",
+  "League tools",
+  "Player tools",
+];
 
 export type Tool = {
   /** Where the tool points with no account resolved — and how the grid and the
@@ -125,6 +131,18 @@ export const tools: Tool[] = [
     group: "League tools",
     icon: "lineup",
     pattern: "/lineupchecker",
+  },
+  {
+    href: "/comps",
+    text: "Comps",
+    description:
+      "Find the player-seasons most similar to any player, on the stats and weights you choose.",
+    group: "Player tools",
+    icon: "comps",
+    pattern: "/comps",
+    // A question about the player pool, not about anyone's account — like
+    // Trades, live without a resolved username.
+    accountless: true,
   },
 ];
 

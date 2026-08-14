@@ -24,8 +24,10 @@ export {
 export type { KtcValidation } from "./validate";
 export {
   getKtcValuesBySleeperId,
+  getKtcValuesAsOf,
   countPricedKtcValues,
   getKtcPickBoard,
+  KTC_AS_OF_WINDOW_DAYS,
 } from "./queries";
 export type { KtcValue, KtcValueSet, KtcPickBoard } from "./queries";
 export {

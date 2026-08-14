@@ -4,7 +4,12 @@ export { hasStatLine, toStatRows } from "./parse";
 export type { StatRow } from "./parse";
 export { playerPpg, ppgWindow, teamPpg } from "./ppg";
 export type { Ppg, StatLine } from "./ppg";
-export { listPlayerStatLines, listStoredStatWeeks } from "./queries";
+export {
+  listPlayerStatLines,
+  listSeasonStatLines,
+  listStoredSeasons,
+  listStoredStatWeeks,
+} from "./queries";
 export type { PlayerStatWeek } from "./queries";
 export { startStatsScheduler, STATS_INTERVAL_MS } from "./scheduler";
 export {

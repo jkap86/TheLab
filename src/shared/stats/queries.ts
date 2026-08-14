@@ -74,6 +74,45 @@ export async function listStoredStatWeeks({
   return rows.map((r) => r.week);
 }
 
+/**
+ * Every stored stat line of one season — the comps pool's read, so it takes no
+ * week or player narrowing: the pool is every player-season and
+ * {@link listPlayerStatLines} answers `[]` the moment either list is empty,
+ * which is exactly wrong for "all of them".
+ *
+ * A row per player per week *played* — `hasStatLine` is the ingestion filter,
+ * so counting a player's rows counts his games, the denominator `playerPpg`
+ * already reads it as.
+ */
+export async function listSeasonStatLines({
+  season,
+}: {
+  season: string;
+}): Promise<PlayerStatWeek[]> {
+  const { rows } = await pool.query<PlayerStatWeek>(
+    `SELECT player_id, week, COALESCE(stats, '{}'::jsonb) AS stats
+       FROM player_week_stats
+      WHERE season = $1`,
+    [season],
+  );
+  return rows;
+}
+
+/**
+ * Every season with any stat line stored, newest first.
+ *
+ * This is what makes the comps pool deepen by one season a year with no code
+ * change: the corpus holds the current and previous seasons today, and each
+ * September adds one — the caller reads what is here rather than assuming a
+ * depth.
+ */
+export async function listStoredSeasons(): Promise<string[]> {
+  const { rows } = await pool.query<{ season: string }>(
+    `SELECT DISTINCT season FROM player_week_stats ORDER BY season DESC`,
+  );
+  return rows.map((r) => r.season);
+}
+
 // What a *team* averaged is not read here: it comes off `matchups`, which the
 // manager module owns — see `listRosterWeekPoints` and `getPreviousLeagueScores`
 // there. A module owns its tables, and this one owns `player_week_stats`.
