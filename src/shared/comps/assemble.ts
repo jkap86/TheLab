@@ -66,6 +66,13 @@ const STAT_FIELDS = COMPS_FIELDS.filter(
 );
 
 /**
+ * The line-read fields whose keys are unverified, so absent-is-zero only holds
+ * in a season whose feed demonstrably carries the key — see `gated` in the
+ * catalogue.
+ */
+const GATED_FIELDS = STAT_FIELDS.filter((field) => field.gated === true);
+
+/**
  * Sleeper's own totals on a stored line — the keys `scoreStatLine` refuses to
  * score (they restate an answer rather than naming an event), summed here for
  * exactly that reason: they *are* the answer, and "how did that season go" is
@@ -140,6 +147,12 @@ export function assemblePoolRows({
   const teamTgt = new Map<string, number>();
   const teamRush = new Map<string, number>();
 
+  // The season's vocabulary for the gated keys: one line carrying the key is
+  // proof the feed publishes it this season, and a player without it is then a
+  // real zero. No line carrying it means the season can't answer the field —
+  // for anyone — and null is the only honest reading.
+  const vocabulary = new Set<string>();
+
   for (const line of statLines) {
     let entry = byPlayer.get(line.player_id);
     if (!entry) {
@@ -168,6 +181,11 @@ export function assemblePoolRows({
     if (stats) {
       for (const field of STAT_FIELDS) {
         entry.totals[field.key] += stat(stats, field.statKey as string);
+      }
+      for (const field of GATED_FIELDS) {
+        if (!vocabulary.has(field.key) && (field.statKey as string) in stats) {
+          vocabulary.add(field.key);
+        }
       }
       for (const [i, key] of POINTS_KEYS.entries()) {
         entry.points[i] += stat(stats, key);
@@ -213,8 +231,12 @@ export function assemblePoolRows({
     const values: Record<string, number | null> = {};
     for (const field of STAT_FIELDS) {
       // Summed floats carry binary noise; two decimals is the precision the
-      // stats are quoted at.
-      values[field.key] = round2(entry.totals[field.key]);
+      // stats are quoted at. A gated field outside the season's vocabulary is
+      // unknown, never zero.
+      values[field.key] =
+        field.gated === true && !vocabulary.has(field.key)
+          ? null
+          : round2(entry.totals[field.key]);
     }
     values.tgt_share = share(entry.shareTgt, entry.cells, teamTgt);
     values.rush_share = share(entry.shareRush, entry.cells, teamRush);
@@ -272,11 +294,16 @@ export function seasonLine(
 
   const line: Record<string, number | null> = {};
   for (const field of STAT_FIELDS) {
-    line[field.key] = resolve(
-      typeof row.values[field.key] === "number"
-        ? (row.values[field.key] as number)
-        : 0,
-    );
+    const raw = row.values[field.key];
+    // A gated field the season couldn't answer stays null on the line too —
+    // "Air yards 0" for a 2005 season would be the zero-wearing-a-label the
+    // gate exists to prevent.
+    line[field.key] =
+      typeof raw === "number"
+        ? resolve(raw)
+        : field.gated === true
+          ? null
+          : resolve(0);
   }
   line.pts_ppr = resolve(row.points.ppr);
   line.pts_half_ppr = resolve(row.points.half_ppr);

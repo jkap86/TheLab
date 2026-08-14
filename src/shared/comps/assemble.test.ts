@@ -219,6 +219,40 @@ describe("assemblePoolRows", () => {
     assert.equal(rows.find((r) => r.player_id === "1")!.values.tgt_share, 0);
   });
 
+  test("a gated key inside the season's vocabulary reads absent-as-zero", () => {
+    // One line carrying rec_air_yd proves the feed publishes it this season,
+    // so a player without it is a real 0 — the ordinary production rule.
+    const rows = assemble({
+      statLines: [
+        line("1", { rec_air_yd: 80 }, 1),
+        line("1", { rec_air_yd: 72.5 }, 2),
+        line("2", { rec: 4 }, 1),
+      ],
+    });
+    assert.equal(rows.find((r) => r.player_id === "1")!.values.rec_air_yd, 152.5);
+    assert.equal(rows.find((r) => r.player_id === "2")!.values.rec_air_yd, 0);
+  });
+
+  test("a gated key outside the vocabulary is null for everyone", () => {
+    // No line all season mentions the key: the feed doesn't publish it there
+    // (or the key's spelling is wrong), and either way zero would be a lie.
+    const rows = assemble({
+      statLines: [line("1", { rec: 4, rec_yd: 60 }), line("2", { rec: 2 })],
+    });
+    assert.equal(rows.find((r) => r.player_id === "1")!.values.rec_air_yd, null);
+    assert.equal(rows.find((r) => r.player_id === "2")!.values.pass_air_yd, null);
+    // The ungated keys keep the plain absent-is-zero reading beside them.
+    assert.equal(rows.find((r) => r.player_id === "2")!.values.rec_yd, 0);
+  });
+
+  test("an explicit zero opens the gate — present is present", () => {
+    const rows = assemble({
+      statLines: [line("1", { rec_air_yd: 0 }), line("2", { rec: 2 })],
+    });
+    assert.equal(rows.find((r) => r.player_id === "1")!.values.rec_air_yd, 0);
+    assert.equal(rows.find((r) => r.player_id === "2")!.values.rec_air_yd, 0);
+  });
+
   test("KTC history joins by id and absence is null, never zero", () => {
     const rows = assemble({
       statLines: [line("1", { rec: 1 }), line("2", { rec: 1 })],
@@ -267,6 +301,28 @@ describe("seasonLine", () => {
     const empty = { ...row, games: 0 };
     assert.equal(seasonLine(empty, "per_game").rec, null);
     assert.equal(seasonLine(empty, "total").rec, 8);
+  });
+
+  test("a closed-gate field is null on the line too, never 'Air yards 0'", () => {
+    // The row above was assembled from lines with no rec_air_yd anywhere.
+    assert.equal(seasonLine(row, "total").rec_air_yd, null);
+    assert.equal(seasonLine(row, "per_game").rec_air_yd, null);
+  });
+
+  test("an open-gate field resolves under the basis like any other total", () => {
+    const open = assemblePoolRows({
+      statLines: [
+        line("1", { rec_air_yd: 90 }, 1),
+        line("1", { rec_air_yd: 60 }, 2),
+      ],
+      profiles: {},
+      ktc: {},
+      ktcHistory: {},
+      adp: new Map(),
+      season: "2025",
+    })[0];
+    assert.equal(seasonLine(open, "total").rec_air_yd, 150);
+    assert.equal(seasonLine(open, "per_game").rec_air_yd, 75);
   });
 
   test("the derived shares stay off the line — a rate is not a season total", () => {
