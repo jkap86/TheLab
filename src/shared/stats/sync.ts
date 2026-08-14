@@ -65,15 +65,17 @@ export const STATS_SETTLED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const STATS_ARCHIVE_FLOOR_SEASON = "2000";
 
 /**
- * Settled weeks fetched per run, so the backfill trickles instead of arriving as
- * one very large tick.
+ * Settled and archive weeks fetched per run, so the backfill trickles instead
+ * of arriving as one very large tick.
  *
- * The `HORIZON_WEEKS_PER_TICK` shape and the same argument: a tick that pulls a
- * whole season at once is a burst on Sleeper and a long stretch of held advisory
- * lock. Two a tick at the loop's interval walks a season and its predecessor —
- * ~36 weeks — inside five hours, comfortably within their month-long TTL.
+ * The `HORIZON_WEEKS_PER_TICK` shape and the same argument: a tick that pulls
+ * a whole season at once is a burst on Sleeper and a long stretch of held
+ * advisory lock. Six is sized against the archive it now feeds — ~450
+ * once-ever weeks, walked in about six hours at the loop's five-minute tick —
+ * while staying a bounded burst: each response is ~5MB fetched sequentially,
+ * so a full tick is ~30MB spread over the seconds it takes, not a spike.
  */
-export const SETTLED_WEEKS_PER_TICK = 2;
+export const SETTLED_WEEKS_PER_TICK = 6;
 
 const COLUMNS = [
   "season", "week", "player_id", "company", "team", "opponent", "game_id",

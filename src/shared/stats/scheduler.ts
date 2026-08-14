@@ -13,19 +13,23 @@ import { syncStats } from "./sync";
  * several megabytes a week per tick all offseason for a season whose numbers
  * stopped moving in January.
  *
- * It also sets the pace of the two-season backfill: at
- * {@link SETTLED_WEEKS_PER_TICK}, this interval walks ~36 weeks in about five
- * hours, comfortably inside their month-long TTL.
+ * It also sets the pace of the archive backfill, which is why it is five
+ * minutes rather than the fifteen it started at: the archive is ~450 weeks
+ * fetched once each, and at {@link SETTLED_WEEKS_PER_TICK} per tick this
+ * interval walks all of it in about six hours — recent seasons inside the
+ * first hour — instead of days. The steady state is unchanged by the shorter
+ * interval: a tick that finds nothing due costs one query, and the per-week
+ * gates, not the tick rate, decide what is fetched.
  */
-export const STATS_INTERVAL_MS = 15 * 60 * 1000;
+export const STATS_INTERVAL_MS = 5 * 60 * 1000;
 
 async function tick(): Promise<void> {
   const { locked, season, synced, deferred, empty, failed, rejected } =
     await syncStats();
   if (locked) return;
 
-  // Silent when everything was fresh — the common case, every 15 minutes, and
-  // the *only* case all offseason once the backfill has settled.
+  // Silent when everything was fresh — the common case, every tick, and the
+  // *only* case all offseason once the backfill has settled.
   if (
     synced.length === 0 &&
     empty.length === 0 &&
