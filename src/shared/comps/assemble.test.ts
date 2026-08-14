@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { ageAtSeasonStart, assemblePoolRows } from "./assemble.ts";
+import { ageAtSeasonStart, assemblePoolRows, seasonLine } from "./assemble.ts";
 
 import type {
   CompsProfileInput,
@@ -146,5 +146,53 @@ describe("assemblePoolRows", () => {
       statLines: [line("1", { rec_yd: 0.1 }), line("1", { rec_yd: 0.2 })],
     });
     assert.equal(rows[0].values.rec_yd, 0.3);
+  });
+
+  test("fantasy points total across weeks, per scoring, and never score", () => {
+    const rows = assemble({
+      statLines: [
+        line("1", { rec: 5, pts_ppr: 20.5, pts_half_ppr: 18, pts_std: 15.5 }),
+        line("1", { rec: 3, pts_ppr: 10.5, pts_half_ppr: 9, pts_std: 7.5 }),
+      ],
+    });
+    assert.deepEqual(rows[0].points, { ppr: 31, half_ppr: 27, std: 23 });
+    // The points keys stay out of `values` — a KNN field they are not.
+    assert.equal(rows[0].values.pts_ppr, undefined);
+  });
+});
+
+describe("seasonLine", () => {
+  const row = assemblePoolRows({
+    statLines: [
+      line("1", { rec: 5, rec_yd: 60, pts_ppr: 16.5 }),
+      line("1", { rec: 3, rec_yd: 40, pts_ppr: 8.5 }),
+    ],
+    profiles: {},
+    ktc: {},
+    adp: new Map(),
+    season: "2025",
+  })[0];
+
+  test("carries every production key plus the three point totals", () => {
+    const total = seasonLine(row, "total");
+    assert.equal(total.rec, 8);
+    assert.equal(total.rec_yd, 100);
+    assert.equal(total.pass_yd, 0);
+    assert.equal(total.pts_ppr, 25);
+    assert.equal(total.pts_half_ppr, 0);
+    assert.equal(total.pts_std, 0);
+  });
+
+  test("resolves under the basis exactly as the weighted fields do", () => {
+    const perGame = seasonLine(row, "per_game");
+    assert.equal(perGame.rec, 4);
+    assert.equal(perGame.rec_yd, 50);
+    assert.equal(perGame.pts_ppr, 12.5);
+  });
+
+  test("a zero-game season has no per-game reading", () => {
+    const empty = { ...row, games: 0 };
+    assert.equal(seasonLine(empty, "per_game").rec, null);
+    assert.equal(seasonLine(empty, "total").rec, 8);
   });
 });

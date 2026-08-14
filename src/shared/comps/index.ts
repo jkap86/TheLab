@@ -1,4 +1,4 @@
-export { assemblePoolRows, ageAtSeasonStart } from "./assemble";
+export { assemblePoolRows, ageAtSeasonStart, seasonLine } from "./assemble";
 export type {
   CompsAdpInput,
   CompsKtcInput,

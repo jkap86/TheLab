@@ -9,6 +9,7 @@ import {
   resolveSubjectPosition,
   resolveSubjectSeason,
   runCompsKnn,
+  seasonLine,
 } from "@/shared/comps";
 
 import { readFailureResponse } from "../read-failure";
@@ -147,8 +148,9 @@ function refusalResponse(refusal: CompsRefusal) {
 }
 
 /**
- * A pool row down to what the client draws: the weighted fields only, each
- * resolved under the basis — byte-for-byte the numbers the distance used.
+ * A pool row down to what the client draws: the weighted fields, each resolved
+ * under the basis — byte-for-byte the numbers the distance used — and beside
+ * them the whole season line, which is what "how did that season go" reads.
  */
 function rowPayload(
   row: CompsPoolRow,
@@ -159,6 +161,10 @@ function rowPayload(
   for (const field of fields) {
     values[field.key] = round(fieldValue(row, field, basis));
   }
+  const line: Record<string, number | null> = {};
+  for (const [key, value] of Object.entries(seasonLine(row, basis))) {
+    line[key] = round(value);
+  }
   return {
     player_id: row.player_id,
     season: row.season,
@@ -167,6 +173,7 @@ function rowPayload(
     team: row.team,
     games: row.games,
     values,
+    line,
   };
 }
 

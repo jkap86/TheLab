@@ -18,6 +18,7 @@ const subject = (values: CompsPoolRow["values"], games = 17): CompsPoolRow => ({
   team: null,
   games,
   values,
+  points: { ppr: 0, half_ppr: 0, std: 0 },
 });
 
 describe("compsSeasonAnchor", () => {
