@@ -1,4 +1,3 @@
-import { MONTH_ABBREVIATIONS } from "../../../shared/date-range.ts";
 import {
   SIDE_SEAM_COLUMN,
   SIDE_SEAM_ROW,
@@ -33,55 +32,19 @@ import type {
  */
 
 /**
- * The completed date, e.g. `Jul 15, 2026`. Spelled out through the shared month
- * table rather than `toLocaleDateString` so it reads the same wherever the page
- * is opened — the same rule the ADP range labels follow. An undated trade (one
- * Sleeper filed without a timestamp) says so rather than showing an epoch.
+ * How a trade's instant is spelled, on the card and on the timeline rail alike.
+ *
+ * **Both moved to `features/shared/format` and are re-exported here**, the usual
+ * mover's habit: the rail names its stops with the same two spellings and is now
+ * drawn on the leagues list as well as over this board, so a shared part cannot
+ * reach into this feature for them. The names stay `formatTrade*` at this call
+ * site because that is what the card and its tests already import; what they are
+ * called where they live says what they actually format, which is an instant.
  */
-export function formatTradeDate(at: number | null): string {
-  if (at === null) return "date unknown";
-  const d = new Date(at);
-  return `${MONTH_ABBREVIATIONS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-
-/**
- * The time of day the trade went through, e.g. `3:07 PM`, or the empty string
- * where Sleeper filed no timestamp.
- *
- * It holds the slot the scoring week used to. A week is a coarser reading of the
- * same instant the date beside it already gives — "Aug 1, 2026 · Wk 1" says
- * twice when, and says it in a unit that means nothing for most of the calendar,
- * since Sleeper files an offseason trade under no week at all. The clock time is
- * what the date was missing: trades come in flurries, and which of this
- * afternoon's five deals landed first is a question the card couldn't answer.
- *
- * Read in the **reader's own zone**, unlike the season-shaped dates elsewhere in
- * the app: `TODAY_ET` is Eastern because it decides what the NFL has played,
- * where this is a wall-clock reading of a moment for whoever is looking at it.
- * It is still spelled out by hand rather than through `toLocaleTimeString`, so
- * the digits match the date it sits beside in every locale.
- *
- * **It used to carry its own ` · ` separator and does not now**, which is worth
- * knowing before one is added back: the two facts shared a single readout on the
- * card's first interior line, so the separator had to live on the *time* — that
- * being the half that vanishes for an undated trade, and a dangling "date
- * unknown ·" is the failure it prevented. They are two elements on a plate now
- * (see `TradeInstantLedge`), parted by a gap and a change of material, so a
- * punctuation mark between them would be a third thing saying what the layout
- * already does — and the empty string is what draws no element at all.
- *
- * It is a second function rather than a branch inside {@link formatTradeDate}
- * because the two answer differently to a missing timestamp: the date says so in
- * words, and the time simply isn't there to say it twice.
- */
-export function formatTradeTime(at: number | null): string {
-  if (at === null) return "";
-  const d = new Date(at);
-  const hours = d.getHours();
-  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-  const minutes = String(d.getMinutes()).padStart(2, "0");
-  return `${hour12}:${minutes} ${hours < 12 ? "AM" : "PM"}`;
-}
+export {
+  formatInstantDate as formatTradeDate,
+  formatInstantTime as formatTradeTime,
+} from "../../../shared/format.ts";
 
 /**
  * Which way a side is cut off the one before it.

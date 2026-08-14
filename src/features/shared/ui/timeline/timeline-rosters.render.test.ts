@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { PlayerSummary } from "@/shared/players";
 
-import type { TimelineRoster } from "../timeline.ts";
+import type { TimelineRoster } from "../../timeline.ts";
 import { TimelineRosters, type TimelineManager } from "./timeline-rosters.tsx";
 
 /**

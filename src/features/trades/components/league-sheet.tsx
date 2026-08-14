@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import type { ManagerLeague } from "@/shared/manager";
 
 import { closeDialog, openDialog } from "@/features/shared/dialog-open";
 import { LeagueDetailPanel } from "@/features/shared/ui/league-detail";
-
-import { useTradeTimeline } from "../hooks/use-trade-timeline";
-import { timelineMoveCount, timelineRosters, timelineStop } from "../timeline";
-import { TimelineRail } from "./timeline-rail";
-import { TimelineRosters } from "./timeline-rosters";
-import { formatTradeDate } from "./trade-card/trade-card.utils.ts";
+// The module path rather than the `features/shared` barrel, for the reason the
+// panel above it takes one: the subtree is heavy enough that a barrel re-export
+// would ship it to every page importing anything shared.
+import { TimelineView } from "@/features/shared/ui/timeline";
 
 /** Which league a trade card asked for, and where its roster half should open. */
 export type OpenLeague = {
@@ -245,99 +243,30 @@ export function LeagueSheet({
 /**
  * The rail and whatever it is pointing at.
  *
- * A component of its own because it holds state the dialog above it must not:
- * where the rail is standing. Mounted from the sheet's own `open` gate and keyed
- * on the trade, so both of the things that should reset it — closing the sheet,
- * and pressing a different card — reset it by construction rather than through an
- * effect watching for them.
+ * A component of its own because {@link TimelineView} holds state the dialog above
+ * it must not: where the rail is standing. Mounted from the sheet's own `open`
+ * gate and keyed on the trade, so both of the things that should reset it —
+ * closing the sheet, and pressing a different card — reset it by construction
+ * rather than through an effect watching for them.
+ *
+ * **The rail itself is `features/shared/ui/timeline` and is anchored on the
+ * trade**, which is the whole of what this sheet contributes to it: the leagues
+ * list draws the same rail over the same views with no anchor at all, so what
+ * varies between the two is one {@link TimelineSource} and the body behind "now".
  */
 function SheetBody({ league }: { league: OpenLeague }) {
-  // How many of the league's newest moves are reversed. **Zero rather than a
-  // stop index**, so it is meaningful before the payload lands: the sheet opens
-  // at the present whether or not the timeline has answered, which is what makes
-  // the rail additive rather than something the panel has to wait for.
-  const [back, setBack] = useState(0);
-
-  // Which manager the historical half is showing, seeded from the roster the
-  // trade card opened on.
-  //
-  // **Held here rather than in the view, so it survives the rail moving.** The
-  // roster list is rebuilt at every stop; a selection held inside it would reset
-  // as the reader dragged, which is the one thing a timeline must not do — the
-  // question being asked is what *this* manager held over time, so the manager is
-  // what stays fixed while the moment moves. It is deliberately *not* shared with
-  // the detail panel's own selection: that one is seeded the same way and then
-  // owned by the panel, and reaching into it would mean the shared panel
-  // reporting a selection it currently keeps to itself.
-  const [rosterId, setRosterId] = useState<number | null>(league.rosterId);
-
-  const { data } = useTradeTimeline(league.tradeId);
-
-  const moves = timelineMoveCount(data);
-  const stop = timelineStop(data, back);
-  // Only where the reader has actually stepped back. At "now" this would be the
-  // current rosters — which the panel below already draws, from its own read —
-  // so computing it would be a rewind of nothing for an answer nobody shows.
-  const rosters = useMemo(
-    () => (stop.back > 0 ? timelineRosters(data, stop.back) : []),
-    [data, stop.back],
-  );
-
   return (
-    <>
-      {/* No rail where there is nothing to scrub: a trade Sleeper filed with no
-          timestamp has no moment to rewind to, and a league whose rosters are not
-          stored has nothing to rewind from. Both come back as no timeline, and
-          both leave the sheet exactly as it was before this existed — which is a
-          better answer than a dead slider explaining itself. A timeline with the
-          trade as its only move is still a rail, since "before it" is a stop. */}
-      {moves > 0 && (
-        <TimelineRail
-          stop={stop}
-          moves={moves}
-          players={data?.players ?? EMPTY_PLAYERS}
-          onChange={setBack}
-        />
-      )}
-
-      {stop.back === 0 ? (
-        <LeagueDetailPanel
-          leagueId={league.leagueId}
-          focusRosterId={league.rosterId ?? undefined}
-        />
-      ) : (
-        <TimelineRosters
-          rosters={rosters}
-          players={data?.players ?? EMPTY_PLAYERS}
-          managers={data?.managers ?? EMPTY_MANAGERS}
-          selectedId={rosterId}
-          onSelect={setRosterId}
-          caveat={rosterCaveat(stop.at)}
-        />
-      )}
-    </>
+    <TimelineView
+      source={{ kind: "trade", id: league.tradeId }}
+      seedRosterId={league.rosterId}
+    >
+      <LeagueDetailPanel
+        leagueId={league.leagueId}
+        focusRosterId={league.rosterId ?? undefined}
+      />
+    </TimelineView>
   );
 }
-
-/**
- * The line above a past league, which has two jobs and states both plainly.
- *
- * It says *which moment* this is, because the rail's own readout is a row up and
- * a reader who has scrolled the grid can no longer see it. And it says the rosters
- * are **reconstructed**, because nothing about a list of names admits that it was
- * derived — Sleeper stores no history, so this is today's rosters with every move
- * since undone, and the two limits of that walk (a draft is not a transaction, and
- * the pick horizon is today's) are exactly the kind of thing a reader should be
- * told once rather than discover.
- */
-function rosterCaveat(at: number | null): string {
-  const when = at === null ? "this point" : formatTradeDate(at);
-  return `Every roster as it stood on ${when} — reconstructed by undoing every move since, so a class drafted after this date is already on the roster that took it.`;
-}
-
-/** Stable empties, so a render before the payload lands changes no identity. */
-const EMPTY_PLAYERS = {};
-const EMPTY_MANAGERS = {};
 
 function CloseIcon() {
   return (

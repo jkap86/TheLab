@@ -107,6 +107,7 @@ export function LeagueCard({
   focusRosterId,
   opponentRosterId,
   week = null,
+  wrapPanel,
   expanded,
   onToggle,
 }: {
@@ -197,6 +198,30 @@ export function LeagueCard({
    * {@link LeagueDetailPanel}.
    */
   week?: number | null;
+  /**
+   * Put something *around* the panel — the leagues list wraps it in a timeline
+   * rail running back to the league's oldest stored move.
+   *
+   * **A wrapper the caller supplies rather than a flag this reads, and the reason
+   * is the bundle rather than the API.** A `timeline` boolean reads better at
+   * both call sites and puts `ui/timeline` in this module's static graph, which is
+   * *every* list wearing this card — so the lineup checker shipped a rail it can
+   * never draw, and named its chunk. A component file is one module to the
+   * bundler exactly as a barrel is (the rule `ui/nameplate` exists for), so the
+   * seam has to be a module boundary: the caller that wants the rail imports it,
+   * and the caller that doesn't never mentions it.
+   *
+   * The panel itself is still built here and handed over, so its four props keep
+   * one spelling — the drift a shared card exists to stop — and a caller that
+   * passes nothing renders it exactly as before.
+   *
+   * Which list wants one is the same judgement {@link ledge} and {@link week}
+   * already draw: the leagues list is about a season, so "what did this league
+   * look like in October" is a question its cards are opened with; the lineup
+   * checker's is about one Sunday, and a season of waivers under a head-to-head
+   * answers something that list never asked.
+   */
+  wrapPanel?: (panel: ReactNode) => ReactNode;
   /** Whether this is the league currently open — one at a time, list-wide. */
   expanded: boolean;
   /** Open this league, or close it if it is the one already open. */
@@ -331,6 +356,18 @@ export function LeagueCard({
   // mid-collapse reads as the card jumping. It is the plate until the panel is
   // gone.
   const surface = mounted ? OPEN : REST;
+
+  // What the card opens into. Built here so its four props have one spelling
+  // whether or not a caller wraps it — an element is not a mount, so naming it
+  // costs nothing.
+  const panel = (
+    <LeagueDetailPanel
+      leagueId={leagueId}
+      focusRosterId={focusRosterId}
+      opponentRosterId={opponentRosterId}
+      week={week}
+    />
+  );
 
   return (
     // The plates hang off the card's top edge, so they are siblings of the
@@ -505,13 +542,15 @@ export function LeagueCard({
                 open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
               }`}
             >
+              {/* Whatever a caller wraps the panel in goes *inside* this box
+                  rather than above it, so it collapses with the panel it belongs
+                  to: a rail left outside the animating wrapper would sit on a
+                  closed card with nothing under it to scrub. Anything wrapped in
+                  here owes this column the same `min-h-0` chain the panel keeps
+                  (see {@link LeagueDetailPanel}) — the cap above is what makes
+                  the halves scroll rather than the page. */}
               <div className="relative flex min-h-0 flex-col overflow-hidden rounded-b-xl">
-                <LeagueDetailPanel
-                  leagueId={leagueId}
-                  focusRosterId={focusRosterId}
-                  opponentRosterId={opponentRosterId}
-                  week={week}
-                />
+                {wrapPanel ? wrapPanel(panel) : panel}
               </div>
             </div>
           )}

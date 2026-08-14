@@ -34,15 +34,15 @@ import { TRADE_SORT_SQL } from "./sql";
  * first pass and after any gap. Everything older is left alone, which is what
  * makes a steady-state pass cost one indexed query and no write at all.
  *
- * **{@link getTradeTimeline} is the exception to the paragraph above, and it is
- * the exception that paragraph already allows.** The argument against deriving
- * was about a *board page*: twenty trades from twenty leagues, so twenty whole
- * transaction logs per request. The league sheet's timeline is one league, on a
- * press, in a modal — the same class of read as `/api/league/[leagueId]` — and
- * what it wants is a thing no table stores: **every** roster at an **arbitrary**
- * moment, where `trade_rosters` holds the participants at one. So it reads the
- * log and hands it to the browser rather than the answer, which is what makes
- * scrubbing free after the first request.
+ * **{@link getTradeTimeline} and {@link getLeagueTimeline} are the exception to
+ * the paragraph above, and it is the exception that paragraph already allows.**
+ * The argument against deriving was about a *board page*: twenty trades from
+ * twenty leagues, so twenty whole transaction logs per request. A timeline is one
+ * league, on a press, behind a disclosure — the same class of read as
+ * `/api/league/[leagueId]` — and what it wants is a thing no table stores:
+ * **every** roster at an **arbitrary** moment, where `trade_rosters` holds the
+ * participants at one. So it reads the log and hands it to the browser rather
+ * than the answer, which is what makes scrubbing free after the first request.
  */
 
 /** Inclusive week range this sync re-fetched — {@link WeekRange}, structurally. */
@@ -400,21 +400,27 @@ export type TimelineEvent = {
   draft_picks: TimelinePick[];
 };
 
-/** Everything the league sheet's timeline replays. */
-export type TradeTimeline = {
+/** Everything a timeline replays. */
+export type RosterTimeline = {
   league_id: string;
-  /** When the trade completed, epoch milliseconds. */
-  traded_at: number;
+  /**
+   * The trade the rail stops at, or null where it runs the league's whole log.
+   *
+   * The two callers differ in this field and in nothing else — see
+   * {@link getLeagueTimeline}.
+   */
+  anchor: { transaction_id: string; at: number } | null;
   /** Every roster as it stands now — what {@link rewindRosters} rewinds from. */
   rosters: LeagueRosterState[];
   /**
-   * The league's completed moves from the trade forward, **newest first** and
-   * ending with the trade itself.
+   * The league's completed moves, **newest first** — ending with the anchoring
+   * trade where there is one, and with the oldest move on file where there is
+   * not.
    *
    * Newest-first because that is the direction the walk runs and the order the
    * board is read in (`TRADE_SORT_SQL`); the client turns it into a left-to-right
-   * rail. Ending *with* the trade because the list is truncated there — see the
-   * note in {@link getTradeTimeline} on why the read cannot simply take
+   * rail. Ending *with* the anchoring trade because the list is truncated there —
+   * see the note in {@link getTradeTimeline} on why the read cannot simply take
    * everything at or after the trade's timestamp.
    */
   events: TimelineEvent[];
@@ -448,7 +454,7 @@ export type TradeTimeline = {
  */
 export async function getTradeTimeline(
   transactionId: string,
-): Promise<TradeTimeline | null> {
+): Promise<RosterTimeline | null> {
   const trade = await readTrade(transactionId);
   if (!trade || trade.at === null) return null;
 
@@ -472,10 +478,63 @@ export async function getTradeTimeline(
 
   return {
     league_id: trade.league_id,
-    traded_at: trade.at,
+    anchor: { transaction_id: transactionId, at: trade.at },
     rosters,
     events: tail.slice(0, index + 1),
   };
+}
+
+/**
+ * The same replay with its far end taken off: one league's rosters at any moment
+ * from **its oldest stored move** to today.
+ *
+ * This is {@link getTradeTimeline} with the anchor removed, which is the whole of
+ * the difference — same rosters, same log, same total order, same reversal. What
+ * changes is only where the events stop, so the leagues list gets a rail running
+ * all the way back rather than one bounded by a trade the reader happened to
+ * press.
+ *
+ * **"All the way back" is this league id's log and no further, which is a real
+ * limit rather than a shortcut.** A Sleeper league id *is* one season, and a
+ * dynasty chain links seasons through `previous_league_id` — so the obvious
+ * extension is to keep walking into last year. It is not sound: rosters carry
+ * over between seasons through no transaction at all, so there is nothing to
+ * reverse across the boundary and a walk that crossed it would report last
+ * season's league as though this season's roster had always been on it. The
+ * honest far end is the first move this league recorded, which is roughly the
+ * post-draft roster — subject to the two limits `./rewind` documents, of which
+ * "a draft is not a transaction" is the one that bites hardest at exactly this
+ * end of the rail.
+ *
+ * **Cost is the same order as the anchored read on a first sync**, which is what
+ * makes it affordable: `syncTradeRosters` already walks a league's whole log the
+ * first time it sees one, over the same rows through the same
+ * `transactions_league_idx`. What it costs the *wire* is a season of moves rather
+ * than a window of them — bounded by the season, sent once, and reused for as
+ * long as the browser's own TTL allows, since scrubbing it costs no further
+ * requests.
+ *
+ * Null on the same three terms as the anchored read, plus one of its own: a
+ * league nobody has moved a player in has no rail to draw, and reporting an empty
+ * one would be a control that explains itself instead of doing anything.
+ */
+export async function getLeagueTimeline(
+  leagueId: string,
+): Promise<RosterTimeline | null> {
+  const [rosters, events] = await Promise.all([
+    readLeagueRosterStates(leagueId),
+    readTimelineEvents(leagueId, null),
+  ]);
+  // Rosters are what the walk rewinds *from*, so none is nothing to say — the
+  // same reading `getTradeTimeline` takes, and the same one `readLeagueRosterStates`
+  // hands back an empty list to express.
+  if (rosters.length === 0 || events.length === 0) return null;
+
+  // No truncation, because there is no anchor to truncate at: every completed
+  // dated move in the league is a stop, and the far end is simply the last of
+  // them. The `findIndex` the anchored read needs exists only to keep the tail
+  // from running *past* its trade.
+  return { league_id: leagueId, anchor: null, rosters, events };
 }
 
 /** The trade's league and the moment the timeline is anchored on. */
@@ -496,16 +555,32 @@ async function readTrade(
  *
  * A second function rather than a column added to that one because the two have
  * different jobs: the sync reverses a tail and never says when anything happened,
- * and paying for a column on every league sync to serve a modal nobody may open
+ * and paying for a column on every league sync to serve a control nobody may open
  * is the wrong way round. Every other clause is identical, deliberately — the
  * walk is only correct on one total order, and two spellings of it is how a
  * snapshot ends up taken at a different point in the log from the trade the board
  * shows.
+ *
+ * **`oldest` of null is the whole log**, which is what {@link getLeagueTimeline}
+ * asks for. It is spelled as an absent *bound* rather than as a sentinel epoch,
+ * because the two are not the same read: `>= 0` would still be a comparison the
+ * planner has to apply to every row, and — more to the point — it would silently
+ * acquire a meaning if a timestamp were ever negative. An undated move is
+ * excluded either way, and by the same clause it is excluded by everywhere else
+ * here: it cannot be placed in the total order the reversal depends on.
  */
 async function readTimelineEvents(
   leagueId: string,
-  oldest: number,
+  oldest: number | null,
 ): Promise<TimelineEvent[]> {
+  const params: unknown[] = [leagueId];
+  // Both spellings drop an undated row — `NULL >= n` is null, and the explicit
+  // `IS NOT NULL` is what says so where there is no bound to do it implicitly.
+  const window =
+    oldest === null
+      ? `coalesce(t.status_updated, t.created) IS NOT NULL`
+      : `coalesce(t.status_updated, t.created) >= $${params.push(oldest)}`;
+
   const { rows } = await pool.query<RewindTransaction & { at: number }>(
     `SELECT t.transaction_id, t.type, t.roster_ids, t.adds, t.drops,
             t.draft_picks,
@@ -513,9 +588,9 @@ async function readTimelineEvents(
        FROM transactions t
       WHERE t.league_id = $1
         AND t.status = 'complete'
-        AND coalesce(t.status_updated, t.created) >= $2
+        AND ${window}
       ORDER BY ${TRADE_SORT_SQL} DESC, t.transaction_id DESC`,
-    [leagueId, oldest],
+    params,
   );
   return rows.map(narrowEvent);
 }

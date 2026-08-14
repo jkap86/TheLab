@@ -3,6 +3,12 @@
 import { leagueSpecs } from "@/features/shared/league-specs";
 import { CardLedge, LeagueCard as Card } from "@/features/shared/ui/league-card";
 import { LeagueSpecsBezel } from "@/features/shared/ui/league-specs";
+// **Imported here rather than inside the shared card, which is the whole reason
+// that card takes a wrapper instead of a flag.** A component file is one module
+// to the bundler, so a `TimelineView` named in `ui/league-card` would ship the
+// rail to every list wearing the card — the lineup checker's among them, which
+// draws none. Named here, the chunk belongs to this route.
+import { TimelineView } from "@/features/shared/ui/timeline";
 
 import { formatRecord, ordinal } from "../format";
 import { LEAGUE_METRICS, type MetricContext } from "../league-metrics";
@@ -47,6 +53,15 @@ import { MetricColumns } from "./metric-column";
  * Where the line goes and what it costs is the shell's ({@link Card}, and it was
  * measured rather than guessed); what is decided here is only whether there is
  * one, which is the same call {@link RecordLedge} makes about its own plate.
+ *
+ * **An open card carries a timeline rail, running back to the league's oldest
+ * stored move.** It is the trades board's own rail with its trade anchor removed
+ * (`ui/timeline`): there the sheet is opened *from* a trade and stops at it, here
+ * the card is opened for the league, so the only honest far end is as far back as
+ * the reconstruction reaches. This list is the one that asks for it — a season's
+ * worth of leagues, opened to see how each is going, where "and what did it look
+ * like in October" is the next question — which is why the lineup checker's
+ * identical card passes nothing: that list is about one Sunday.
  *
  * The four stat columns are each a slot the reader points at a metric — where
  * this manager stands by points, by KTC starter value and by projected points to
@@ -113,6 +128,16 @@ export function LeagueCard({
       ledge={<RecordLedge record={league.record} standing={ranks?.standing ?? null} />}
       specs={specs.length > 0 ? <LeagueSpecsBezel specs={specs} /> : undefined}
       columns={<MetricColumns metrics={LEAGUE_METRICS} ctx={ctx} columns={columns} />}
+      wrapPanel={(panel) => (
+        <TimelineView
+          source={{ kind: "league", id: league.league_id }}
+          // No seed: this list arrives at a league rather than at a team, the
+          // same call it makes about the panel's own `focusRosterId`, so the
+          // historical half opens on the head of the list.
+        >
+          {panel}
+        </TimelineView>
+      )}
       expanded={expanded}
       onToggle={onToggle}
     />

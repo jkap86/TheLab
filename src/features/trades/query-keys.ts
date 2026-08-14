@@ -41,15 +41,9 @@ export const tradesQueryKeys = {
    */
   rosters: (transactionId: string) =>
     ["trades", "rosters", transactionId] as const,
-  /**
-   * One trade's league timeline — every roster, at every moment from the trade to
-   * today — keyed on the trade alone for {@link tradesQueryKeys.rosters}' reason.
-   *
-   * **The rail's position is deliberately not in it.** A stop is arithmetic over
-   * this one payload rather than a request of its own, which is the whole point of
-   * sending the log instead of the answer: keying on the position would turn a
-   * drag into a request per notch for data the browser is already holding.
-   */
-  timeline: (transactionId: string) =>
-    ["trades", "timeline", transactionId] as const,
+  // The timeline's key is **not** here, and that is the mover's rule rather than
+  // an omission: the leagues list draws the same rail off the same payload, so
+  // the entry stopped being a trades answer and lives in
+  // `features/shared/timeline-query` under a prefix of its own. Adding a second
+  // spelling back here would be two cache entries for one question.
 };

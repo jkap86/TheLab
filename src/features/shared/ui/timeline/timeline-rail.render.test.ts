@@ -3,8 +3,8 @@ import { describe, test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { timelineStop } from "../timeline.ts";
-import type { TradeTimelinePayload } from "@/shared/contract";
+import { timelineOrigin, timelineStop } from "../../timeline.ts";
+import type { RosterTimelinePayload } from "@/shared/contract";
 import type { PlayerSummary } from "@/shared/players";
 
 import { TimelineRail } from "./timeline-rail.tsx";
@@ -32,11 +32,10 @@ const players: Record<string, PlayerSummary> = {
 };
 
 /** Three moves, so the rail has four stops: now, two afters, and the trade. */
-const payload: TradeTimelinePayload = {
-  transaction_id: "t1",
+const payload: RosterTimelinePayload = {
   timeline: {
     league_id: "L",
-    traded_at: 100,
+    anchor: { transaction_id: "t1", at: 1_760_000_000_000 },
     rosters: [],
     events: [
       {
@@ -74,16 +73,23 @@ const payload: TradeTimelinePayload = {
 
 const MOVES = payload.timeline!.events.length;
 
-function rail(back: number): string {
+function rail(back: number, from: RosterTimelinePayload = payload): string {
   return renderToStaticMarkup(
     createElement(TimelineRail, {
-      stop: timelineStop(payload, back),
+      stop: timelineStop(from, back),
       moves: MOVES,
+      origin: timelineOrigin(from),
       players,
       onChange: () => {},
     }),
   );
 }
+
+/** The same three moves with no trade to stop at — the leagues list's rail. */
+const unanchored: RosterTimelinePayload = {
+  ...payload,
+  timeline: { ...payload.timeline!, anchor: null },
+};
 
 /** The slider's rendered `value`, which is the whole of the inversion. */
 function sliderValue(html: string): string | null {
@@ -171,5 +177,45 @@ describe("the timeline rail's keys", () => {
     const atTrade = rail(MOVES);
     assert.match(atTrade, /aria-pressed="true"[^>]*lab-chip-on[^>]*>Trade</);
     assert.match(atTrade, /aria-pressed="false"[^>]*>Now</);
+  });
+});
+
+describe("the same rail with no trade to stop at", () => {
+  test("the far key is named for the log's start, not for a trade", () => {
+    // The leagues list opens a card rather than a deal, so its rail runs all the
+    // way back — and a key labelled `Trade` there would be pointing at something
+    // the reader never picked and the payload does not carry.
+    const html = rail(MOVES, unanchored);
+    assert.match(html, /aria-pressed="true"[^>]*lab-chip-on[^>]*>Start</);
+    assert.doesNotMatch(html, />Trade</);
+  });
+
+  test("its far stop says what it comes before, in the same seat", () => {
+    assert.match(rail(MOVES, unanchored), /before the oldest move on file/);
+  });
+
+  test("the far-end key is the only difference at every stop but the far one", () => {
+    // The claim worth pinning is that this is one control with two far ends
+    // rather than two rails — so rather than re-asserting the inversion, the step
+    // keys and the middle stops piece by piece, the two renders are compared
+    // *whole* with that one key cut out of each. Anything else that ever diverges
+    // fails here, which is what a per-piece test could not do.
+    //
+    // The far stop itself is excluded because its readout is the second place the
+    // origin's wording is meant to appear (`stopSummary`), which the test above
+    // pins directly. Every other stop has no business differing at all.
+    const withoutOriginKey = (html: string) =>
+      html.replace(
+        /<button[^>]*title="The league as it stood[^"]*"[^>]*>.*?<\/button>/,
+        "",
+      );
+
+    for (const back of [0, 1, MOVES - 1]) {
+      assert.equal(
+        withoutOriginKey(rail(back, unanchored)),
+        withoutOriginKey(rail(back)),
+        `stop ${back} differs by more than its far-end key`,
+      );
+    }
   });
 });

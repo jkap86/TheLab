@@ -10,6 +10,68 @@
  * over its own cards.
  */
 
+import { MONTH_ABBREVIATIONS } from "./date-range.ts";
+
+/**
+ * A moment's date, e.g. `Jul 15, 2026`. Spelled out through the shared month
+ * table rather than `toLocaleDateString` so it reads the same wherever the page
+ * is opened — the same rule the ADP range labels follow. An instant nothing is
+ * known about (a trade Sleeper filed without a timestamp) says so rather than
+ * showing an epoch.
+ *
+ * **It came here from the trade card with the timeline rail**, which names its
+ * stops the same way — a rail drawn on the leagues list could not reach a
+ * formatter inside the trades feature, and a second spelling of a date is how one
+ * screen ends up reading `Jul 15, 2026` beside another reading `15/07/2026`.
+ * `trade-card.utils.ts` re-exports both under their old names, so the card and
+ * its tests keep the import they had.
+ */
+export function formatInstantDate(at: number | null): string {
+  if (at === null) return "date unknown";
+  const d = new Date(at);
+  return `${MONTH_ABBREVIATIONS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+/**
+ * The time of day, e.g. `3:07 PM`, or the empty string where there is no instant
+ * to read.
+ *
+ * On a trade card it holds the slot the scoring week used to. A week is a coarser
+ * reading of the same instant the date beside it already gives — "Aug 1, 2026 ·
+ * Wk 1" says twice when, and says it in a unit that means nothing for most of the
+ * calendar, since Sleeper files an offseason trade under no week at all. The
+ * clock time is what the date was missing: moves come in flurries, and which of
+ * this afternoon's five landed first is a question a date cannot answer. The
+ * timeline rail names its stops for exactly that reason.
+ *
+ * Read in the **reader's own zone**, unlike the season-shaped dates elsewhere in
+ * the app: `TODAY_ET` is Eastern because it decides what the NFL has played,
+ * where this is a wall-clock reading of a moment for whoever is looking at it.
+ * It is still spelled out by hand rather than through `toLocaleTimeString`, so
+ * the digits match the date it sits beside in every locale.
+ *
+ * **It used to carry its own ` · ` separator and does not now**, which is worth
+ * knowing before one is added back: the two facts shared a single readout on the
+ * trade card's first interior line, so the separator had to live on the *time* —
+ * that being the half that vanishes for an undated trade, and a dangling "date
+ * unknown ·" is the failure it prevented. They are two elements on a plate now
+ * (see `TradeInstantLedge`), parted by a gap and a change of material, so a
+ * punctuation mark between them would be a third thing saying what the layout
+ * already does — and the empty string is what draws no element at all.
+ *
+ * It is a second function rather than a branch inside {@link formatInstantDate}
+ * because the two answer differently to a missing instant: the date says so in
+ * words, and the time simply isn't there to say it twice.
+ */
+export function formatInstantTime(at: number | null): string {
+  if (at === null) return "";
+  const d = new Date(at);
+  const hours = d.getHours();
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${hour12}:${minutes} ${hours < 12 ? "AM" : "PM"}`;
+}
+
 /**
  * A number as an ordinal, e.g. `1` → `"1st"`, `2` → `"2nd"`, `13` → `"13th"`.
  *

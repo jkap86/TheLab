@@ -1,52 +1,53 @@
 "use client";
 
-import type { PlayerSummary } from "../types";
+import type { PlayerSummary } from "@/shared/players";
 
+import { formatInstantDate, formatInstantTime } from "../../format";
 import {
   moveKindLabel,
   movedPlayerNames,
+  type TimelineOrigin,
   type TimelineStop,
-} from "../timeline";
-import {
-  formatTradeDate,
-  formatTradeTime,
-} from "./trade-card/trade-card.utils.ts";
+} from "../../timeline";
 
 /**
- * Where in the league's history the sheet is reading, and how to move it.
+ * Where in the league's history its host is reading, and how to move it.
  *
- * **The one control the league sheet has**, and it is a *position* rather than a
+ * **The one control either host adds**, and it is a *position* rather than a
  * setting — which is what decides everything about how it is drawn. The trades
  * board's own seek key is the same idea one level out (a place in a chronological
  * list, pinned rather than filed with the filters), and the argument is the same:
  * a control a reader reaches for *while reading* has to be on screen while they
- * read. So this sits under the sheet's header, above the rosters it moves, and
- * nothing about it is behind a press.
+ * read. So this sits above the rosters it moves, and nothing about it is behind a
+ * press.
  *
  * **It opens at "now" and every stop before it is in the past.** That is the
- * conservative half of replacing the card's disclosure: a sheet opened from a
- * card shows the league exactly as it always did, and the history is a drag away.
- * The far end of the rail is the reading the disclosure used to be — the league
- * as it stood before this trade — which is now one of many stops rather than the
- * only one available.
+ * conservative half of the whole arrangement: a league opened from a card shows
+ * exactly what it always did, and the history is a drag away. What the far end
+ * *is* differs by host and is named by {@link TimelineOrigin} rather than decided
+ * here — the trades sheet stops at the trade the reader pressed, the leagues card
+ * runs to the oldest move on file.
  *
  * **Live, with no preview/commit split**, which is where it parts company with
  * the ADP drawer's steepness slider. That one commits on release because a
  * committed value re-fetches every league's team value, so a drag across the
  * range would fire two dozen requests; a stop here is arithmetic over a payload
- * the browser already holds (see `../timeline`), so there is nothing to protect a
- * dragging finger from and watching the rosters change under it is the point.
+ * the browser already holds (see `../../timeline`), so there is nothing to protect
+ * a dragging finger from and watching the rosters change under it is the point.
  */
 export function TimelineRail({
   stop,
   moves,
+  origin,
   players,
   onChange,
 }: {
   /** Where the rail is now — see {@link TimelineStop}. */
   stop: TimelineStop;
-  /** How many moves the rail spans; the far end is the league before the trade. */
+  /** How many moves the rail spans; the far end is the league before the oldest. */
   moves: number;
+  /** What that far end is called — see {@link timelineOrigin}. */
+  origin: TimelineOrigin;
   /** Names for the players a move touched, for the line under the date. */
   players: Readonly<Record<string, PlayerSummary>>;
   /** Move to a stop, counted back from now. */
@@ -59,7 +60,7 @@ export function TimelineRail({
   // there is a rail to be at the end of.
   const position = moves - stop.back;
   const atNow = stop.back === 0;
-  const atTrade = stop.back >= moves;
+  const atOrigin = stop.back >= moves;
 
   return (
     <div className="shrink-0 border-b border-foreground/10 px-3 py-2 sm:px-4">
@@ -74,11 +75,11 @@ export function TimelineRail({
               and the secondary engraved beside it, so the rail reads as the same
               instrument as the card the reader pressed to get here. */}
           <span className="lab-readout shrink-0 rounded px-1.5 py-px text-[11.5px] font-semibold leading-4 tabular-nums text-foreground/85">
-            {atNow ? "Now" : formatTradeDate(stop.at)}
+            {atNow ? "Now" : formatInstantDate(stop.at)}
           </span>
           {!atNow && stop.at !== null && (
             <span className="lab-engraved shrink-0 text-[10.5px] font-semibold leading-4 tabular-nums text-foreground/70">
-              {formatTradeTime(stop.at)}
+              {formatInstantTime(stop.at)}
             </span>
           )}
           {/* **Its own line below `sm`, inline from it**, which is one element
@@ -90,18 +91,21 @@ export function TimelineRail({
               rather than `sm:flex-1` alone, since Tailwind emits `basis-auto`
               after `flex-1` and the pair would resolve back to a shared line. */}
           <span className="min-w-0 flex-1 basis-full truncate text-[11px] text-foreground/45 sm:basis-auto">
-            {stopSummary(stop, players)}
+            {stopSummary(stop, origin, players)}
           </span>
         </p>
 
         <span className="flex shrink-0 items-center gap-1">
           {/* Named ends. A bare slider can say where you are and not what either
-              end *is*, and one of these two is the reading the card's disclosure
-              used to carry — so it is worth a press rather than a full drag. */}
+              end *is*, and the far one is a reading worth a press rather than a
+              full drag — a drag that is the whole width of a season's moves on
+              the unanchored rail. Its wording is the payload's (see
+              {@link timelineOrigin}) rather than this component's, so the key
+              cannot promise a trade on a rail that has none. */}
           <EndKey
-            label="Trade"
-            title="The league as it stood before this trade"
-            on={atTrade}
+            label={origin.key}
+            title={origin.title}
+            on={atOrigin}
             onClick={() => onChange(moves)}
           />
           <EndKey
@@ -119,7 +123,7 @@ export function TimelineRail({
         <StepKey
           label="One move earlier"
           glyph="‹"
-          disabled={atTrade}
+          disabled={atOrigin}
           onClick={() => onChange(stop.back + 1)}
         />
         <input
@@ -132,7 +136,7 @@ export function TimelineRail({
           aria-label="Point in this league's history"
           // The stop's own words, so a screen reader hears "Jun 30, 2026 — waiver"
           // rather than a slider position that means nothing on its own.
-          aria-valuetext={stopSummary(stop, players)}
+          aria-valuetext={stopSummary(stop, origin, players)}
           onChange={(e) => onChange(moves - Number(e.target.value))}
         />
         <StepKey
@@ -150,20 +154,24 @@ export function TimelineRail({
  * What this stop is, in words.
  *
  * Three readings, because the three kinds of stop answer different questions. The
- * present needs no move to name it; the far end is named by the trade it comes
- * *before*, which is the one stop whose move is not part of it; and everything
- * between is named by the move that produced it.
+ * present needs no move to name it; the far end is named by what it comes
+ * *before*, which is the one stop whose move is not part of it and the one reading
+ * that differs between the two hosts; and everything between is named by the move
+ * that produced it.
  */
 function stopSummary(
   stop: TimelineStop,
+  origin: TimelineOrigin,
   players: Readonly<Record<string, PlayerSummary>>,
 ): string {
   if (stop.kind === "now") return "as they stand today";
-  if (stop.kind === "before") return "before this trade";
+  if (stop.kind === "before") return origin.summary;
 
   const kind = moveKindLabel(stop.event?.type ?? null);
   const moved = movedPlayerNames(stop.event, players);
-  return moved ? `after ${kind.toLowerCase()} · ${moved}` : `after ${kind.toLowerCase()}`;
+  return moved
+    ? `after ${kind.toLowerCase()} · ${moved}`
+    : `after ${kind.toLowerCase()}`;
 }
 
 /**

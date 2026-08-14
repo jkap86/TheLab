@@ -1,16 +1,22 @@
 import type { PlayerSummary } from "@/shared/players";
 
 /**
- * Laying out a pre-trade roster for reading.
+ * Laying out a reconstructed roster for reading.
  *
- * A snapshot arrives as what it is stored as — an unordered list of player ids —
- * and a dynasty roster is thirty to fifty of them. Printed in that order it is a
- * wall nobody reads, so the one job here is turning it into the shape every
+ * A rewound roster arrives as what it is stored as — an unordered list of player
+ * ids — and a dynasty roster is thirty to fifty of them. Printed in that order it
+ * is a wall nobody reads, so the one job here is turning it into the shape every
  * fantasy roster has been written in for thirty years: grouped by position, in
  * the order a lineup is filled.
  *
- * Pure and free of runtime imports, so it tests like its neighbours in this
- * feature — `PlayerSummary` arrives as an erased `import type`.
+ * **It was `features/trades/roster-before` and moved whole**, the mover's rule:
+ * the timeline that reads it is drawn on the leagues list too, and it was never
+ * about trades in the first place — a list of player ids is a list of player ids
+ * whichever walk produced it. No shim was left behind, because the view that
+ * imported it moved in the same step and nothing else ever did.
+ *
+ * Pure and free of runtime imports, so it tests like its neighbours here —
+ * `PlayerSummary` arrives as an erased `import type`.
  */
 
 /**

@@ -41,6 +41,7 @@ export type {
   TradeRosterSnapshot,
 } from "./rewind";
 export {
+  getLeagueTimeline,
   getTradeRosters,
   getTradeTimeline,
   readLeagueRosterStates,
@@ -48,12 +49,13 @@ export {
 } from "./roster-history";
 export type {
   LeagueRosterState,
+  RosterTimeline,
   SyncedWeeks,
   TimelineEvent,
   TimelinePick,
   TradeRosterRow,
-  TradeTimeline,
 } from "./roster-history";
+export { resolveTimelinePayload } from "./timeline-payload";
 export {
   countTradeTotals,
   countTrades,

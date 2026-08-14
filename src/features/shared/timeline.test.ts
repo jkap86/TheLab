@@ -5,19 +5,20 @@ import {
   moveKindLabel,
   movedPlayerNames,
   timelineMoveCount,
+  timelineOrigin,
   timelineRosters,
   timelineStop,
   tradeRosterIds,
 } from "./timeline.ts";
 import type {
-  TradeTimelineEventPayload,
-  TradeTimelinePayload,
+  RosterTimelineEventPayload,
+  RosterTimelinePayload,
 } from "@/shared/contract";
 import type { PlayerSummary } from "@/shared/players";
 
 const event = (
-  overrides: Partial<TradeTimelineEventPayload> = {},
-): TradeTimelineEventPayload => ({
+  overrides: Partial<RosterTimelineEventPayload> = {},
+): RosterTimelineEventPayload => ({
   transaction_id: "x",
   type: "waiver",
   at: 0,
@@ -32,11 +33,10 @@ const event = (
  * A two-team league: the trade moved `moved` from roster 2 to roster 1, then
  * roster 1 claimed `pickup` and roster 2 swapped `cut` for `late`.
  */
-const payload = (): TradeTimelinePayload => ({
-  transaction_id: "t1",
+const payload = (): RosterTimelinePayload => ({
   timeline: {
     league_id: "L",
-    traded_at: 100,
+    anchor: { transaction_id: "t1", at: 100 },
     rosters: [
       { roster_id: 1, user_id: "u1", players: ["moved", "pickup"], picks: [] },
       { roster_id: 2, user_id: "u2", players: ["late"], picks: [] },
@@ -71,13 +71,26 @@ const payload = (): TradeTimelinePayload => ({
   managers: {},
 });
 
+/**
+ * The same league read the way the leagues list asks for it: no anchoring trade,
+ * so the rail runs to the oldest move on file and nothing on it "dealt".
+ *
+ * The events are deliberately the identical three, because the point being pinned
+ * is that *only* the anchor differs — every stop, every rewind and every date is
+ * the same answer read from the same log.
+ */
+const unanchored = (): RosterTimelinePayload => {
+  const p = payload();
+  p.timeline!.anchor = null;
+  return p;
+};
+
 const names = (rosters: ReturnType<typeof timelineRosters>, id: number) =>
   rosters.find((r) => r.roster_id === id)?.players;
 
 describe("timelineStop", () => {
   test("no timeline is one stop, and it is now", () => {
-    const empty: TradeTimelinePayload = {
-      transaction_id: "t1",
+    const empty: RosterTimelinePayload = {
       timeline: null,
       players: {},
       managers: {},
@@ -205,8 +218,78 @@ describe("tradeRosterIds", () => {
     assert.deepEqual(tradeRosterIds(payload()), [1, 2]);
   });
 
+  test("an unanchored rail names nobody, though its oldest move is a trade", () => {
+    // The whole-league rail ends at the oldest move on file, which may perfectly
+    // well *be* a trade — and it is not "this trade", because the reader did not
+    // arrive from one. Reading the last event regardless is how every leagues-list
+    // card would mark two rosters as having "dealt" in a deal nobody asked about.
+    assert.deepEqual(tradeRosterIds(unanchored()), []);
+  });
+
   test("no timeline names nobody", () => {
     assert.deepEqual(tradeRosterIds(null), []);
+  });
+});
+
+describe("timelineOrigin", () => {
+  test("an anchored rail names its far end after the trade it stops at", () => {
+    const origin = timelineOrigin(payload());
+    assert.equal(origin.key, "Trade");
+    assert.match(origin.summary, /this trade/);
+  });
+
+  test("an unanchored rail promises no trade anywhere in its wording", () => {
+    // The key, its hover and the readout are the three places a rail says what
+    // its far end is, and on the leagues list none of them may say "trade" —
+    // there isn't one, and a key labelled for a trade that does not exist is the
+    // control lying about where it goes.
+    const origin = timelineOrigin(unanchored());
+    for (const line of [origin.key, origin.title, origin.summary]) {
+      assert.doesNotMatch(line, /trade/i);
+    }
+  });
+
+  test("it says *on file* rather than claiming the beginning of time", () => {
+    // A reconstruction reaches exactly as far as this league's stored log, which
+    // is one season. A far end promising more would be the one wrong answer here
+    // that looks like a working one.
+    assert.match(timelineOrigin(unanchored()).summary, /on file/);
+  });
+
+  test("no timeline reads as unanchored rather than throwing", () => {
+    // The rail is drawn from the payload, and the payload arrives after its host
+    // opens — so this is asked once per open before there is anything to ask
+    // about.
+    assert.equal(timelineOrigin(null).key, timelineOrigin(unanchored()).key);
+  });
+});
+
+describe("an unanchored rail reads the same log the anchored one does", () => {
+  test("the stops are identical, because only the far end's *name* differs", () => {
+    for (const back of [0, 1, 2, 3, 99]) {
+      assert.deepEqual(timelineStop(unanchored(), back), timelineStop(payload(), back));
+    }
+  });
+
+  test("the rewind is identical, and the order falls back to roster id", () => {
+    // Nothing dealt, so the sort has only its tiebreaker left — which is the same
+    // order this league happens to be in either way, and is asserted here so a
+    // change to the sort cannot quietly reorder one host and not the other.
+    for (const back of [0, 1, 2, 3]) {
+      const rows = timelineRosters(unanchored(), back);
+      assert.deepEqual(
+        rows.map((r) => r.roster_id),
+        [1, 2, 3],
+      );
+      assert.deepEqual(
+        rows.map((r) => r.players),
+        timelineRosters(payload(), back).map((r) => r.players),
+      );
+      assert.deepEqual(
+        rows.map((r) => r.dealt),
+        [false, false, false],
+      );
+    }
   });
 });
 

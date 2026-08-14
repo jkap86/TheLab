@@ -682,7 +682,7 @@ export type TradeRostersPayload = {
 };
 
 /**
- * One move in a league, as the sheet's timeline replays and labels it.
+ * One move in a league, as a timeline replays and labels it.
  *
  * **The blobs travel in Sleeper's own spelling**, which is what lets the browser
  * hand an event straight to `rewindRosters` — the reversal is one function, and
@@ -691,7 +691,7 @@ export type TradeRostersPayload = {
  * `draft_picks` carries the origin plus both ends of the move, because that is
  * what undoing one needs.
  */
-export type TradeTimelineEventPayload = {
+export type RosterTimelineEventPayload = {
   transaction_id: string;
   /** Sleeper's `type` — `trade`, `waiver`, `free_agent`, `commissioner`. */
   type: string | null;
@@ -703,11 +703,11 @@ export type TradeTimelineEventPayload = {
   adds: Record<string, number>;
   /** Player id → the roster that gave him up. */
   drops: Record<string, number>;
-  draft_picks: TradeTimelinePickPayload[];
+  draft_picks: RosterTimelinePickPayload[];
 };
 
 /** A pick as one move handed it over. */
-export type TradeTimelinePickPayload = {
+export type RosterTimelinePickPayload = {
   season: string;
   round: number;
   /** The roster the pick originally belongs to — Sleeper's own `roster_id`. */
@@ -718,7 +718,7 @@ export type TradeTimelinePickPayload = {
 };
 
 /** One roster as it stands now — the state the replay rewinds from. */
-export type TradeTimelineRosterPayload = {
+export type RosterTimelineRosterPayload = {
   roster_id: number;
   /** Who holds it, for naming the block. Null on an orphaned roster. */
   user_id: string | null;
@@ -734,11 +734,11 @@ export type TradeTimelineRosterPayload = {
    * one it has to do anyway, since a rewound roster's picks are computed here
    * rather than sent.
    */
-  picks: TradeTimelineHeldPickPayload[];
+  picks: RosterTimelineHeldPickPayload[];
 };
 
 /** A future pick as a roster holds it, named by where it came from. */
-export type TradeTimelineHeldPickPayload = {
+export type RosterTimelineHeldPickPayload = {
   season: string;
   round: number;
   /** The roster the pick originally belongs to — Sleeper's own `roster_id`. */
@@ -746,8 +746,26 @@ export type TradeTimelineHeldPickPayload = {
 };
 
 /**
- * `GET /api/trades/timeline?trade=<id>` — everything needed to read a league's
- * rosters at any moment between one trade and today.
+ * What a timeline's far end *is*, where the rail was opened from a trade.
+ *
+ * **Null on a whole-league rail, and that is the only difference between the two
+ * readings.** The trades board opens a sheet from a card, so its rail is anchored
+ * on that trade and stops there; the leagues list opens a card from nothing in
+ * particular, so its rail runs to the oldest move on file. Everything else about
+ * the payload — the rosters it rewinds from, the log it rewinds through, the
+ * arithmetic that turns the two into a stop — is identical, which is why this is
+ * one field rather than two payloads.
+ */
+export type RosterTimelineAnchorPayload = {
+  transaction_id: string;
+  /** When it completed, epoch milliseconds — the rail's oldest stop. */
+  at: number;
+};
+
+/**
+ * Everything needed to read a league's rosters at any past moment — answered by
+ * `GET /api/trades/timeline?trade=<id>` from one trade, and by
+ * `GET /api/league/[leagueId]/timeline` from the whole of the league's log.
  *
  * **The log crosses the wire, not the answer**, which is the whole design. A stop
  * on the rail is the current rosters with everything since it reversed, and there
@@ -756,48 +774,56 @@ export type TradeTimelineHeldPickPayload = {
  * arithmetic a browser does thousands of times a second. One request buys every
  * stop, so scrubbing costs nothing.
  *
- * **It replaced a disclosure on the card, and is a strictly wider answer than the
- * one that lived there.** That block asked what the *participants* held *before*
- * the trade, off the stored `trade_rosters` snapshot; this answers what **any**
- * roster held at **any** point from the trade forward, of which "the sides,
- * before it" is the leftmost stop. What it costs is a derivation per request
- * rather than a row read — acceptable here for the reason `getTradeTimeline`
- * states: one league, on a press, in a modal.
+ * **It replaced a disclosure on the trade card, and is a strictly wider answer
+ * than the one that lived there.** That block asked what the *participants* held
+ * *before* the trade, off the stored `trade_rosters` snapshot; this answers what
+ * **any** roster held at **any** point from the trade forward, of which "the
+ * sides, before it" is the leftmost stop. What it costs is a derivation per
+ * request rather than a row read — acceptable here for the reason
+ * `getTradeTimeline` states: one league, on a press, behind a disclosure.
  *
- * **An unanswerable trade is `null`, and the sheet draws no rail at all.** A
+ * **The unanchored reading is the same payload with the bound removed**, and it is
+ * what the leagues list draws: no trade to anchor on, so the events are the
+ * league's completed moves *all the way back* and the far stop is the league
+ * before the oldest of them. It is the same shape because it is the same question
+ * with one limit taken off, which is what keeps a single rail, a single reversal
+ * and a single set of caveats serving both screens.
+ *
+ * **An unanswerable timeline is `null`, and its host draws no rail at all.** A
  * trade Sleeper filed with no timestamp has no moment to rewind to (the rule the
- * snapshot walk already keeps), and a league whose rosters are not stored has
- * nothing to rewind from. Neither is an error, and neither stops the sheet
- * showing the league as it stands.
+ * snapshot walk already keeps), a league nobody has moved a player in has nothing
+ * to rewind, and a league whose rosters are not stored has nothing to rewind
+ * *from*. None is an error, and none stops the league being shown as it stands.
  *
  * The reconstruction's own two limits ride along and are worth knowing before
- * trusting a stop: a draft is not a transaction, so a stop reaching back across a
- * rookie draft over-reports that class; and the pick horizon is today's, so a
- * pick in a season already drafted is absent unless a reversed trade names it.
- * See `shared/trades/rewind`.
+ * trusting a stop — and they bite harder on the unanchored rail, which is the one
+ * thing about it that is not simply "more of the same": a draft is not a
+ * transaction, so a stop reaching back across a rookie draft over-reports that
+ * class; and the pick horizon is today's, so a pick in a season already drafted is
+ * absent unless a reversed trade names it. See `shared/trades/rewind`.
  */
-export type TradeTimelinePayload = {
-  transaction_id: string;
+export type RosterTimelinePayload = {
   /**
-   * The timeline itself, or null where this trade has none — see above.
+   * The timeline itself, or null where there is none to draw — see above.
    *
    * Nested rather than flattened into nullable fields so that "no timeline" is
    * one check rather than three that could disagree.
    */
   timeline: {
     league_id: string;
-    /** When the trade completed, epoch milliseconds — the rail's oldest stop. */
-    traded_at: number;
+    /** The trade the rail stops at, or null where it runs the whole log. */
+    anchor: RosterTimelineAnchorPayload | null;
     /** Every roster in the league, in roster-id order. */
-    rosters: TradeTimelineRosterPayload[];
+    rosters: RosterTimelineRosterPayload[];
     /**
-     * The league's completed moves from the trade forward, **newest first**,
-     * ending with the trade itself.
+     * The league's completed moves, **newest first** — ending with the anchoring
+     * trade where there is one, and with the league's oldest stored move where
+     * there is not.
      *
      * Newest-first is the direction the reversal runs and the order the board is
      * read in; the rail turns it into a left-to-right run of stops.
      */
-    events: TradeTimelineEventPayload[];
+    events: RosterTimelineEventPayload[];
   } | null;
   /**
    * Player ids → name/position/team for everyone the timeline can name — every

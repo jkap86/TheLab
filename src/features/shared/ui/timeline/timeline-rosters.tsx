@@ -1,14 +1,14 @@
 "use client";
 
-import { shortPlayerName } from "@/features/shared/format";
-import { pickLabel } from "@/features/shared/pick-value";
-import { Avatar } from "@/features/shared/ui/avatar";
-import { positionTextTone } from "@/features/shared/ui/position-badge";
+import type { PlayerSummary } from "@/shared/players";
 
-import { groupRosterByPosition } from "../roster-before";
-import type { RosterPlayer } from "../roster-before";
-import type { TimelineRoster } from "../timeline";
-import type { PlayerSummary } from "../types";
+import { shortPlayerName } from "../../format";
+import { pickLabel } from "../../pick-value";
+import { groupRosterByPosition } from "../../roster-groups";
+import type { RosterPlayer } from "../../roster-groups";
+import type { TimelineRoster } from "../../timeline";
+import { Avatar } from "../avatar";
+import { positionTextTone } from "../position-badge";
 
 /**
  * The league at one past moment, in the detail panel's own two-column shape:
@@ -293,7 +293,8 @@ function TimelineRosterDetail({
 
         {roster.picks.length > 0 && (
           <div className="mt-3">
-            {/* `h3`, not `h4`: the sheet's league name is the `h2` above it. The
+            {/* `h3`, not `h4`: the league's name is the `h2` above it in both
+                hosts — the sheet's own header and the card's nameplate. The
                 picks are the tail of this list rather than a section of it, which
                 is where the panel puts its own. */}
             <h3 className="mb-1 truncate px-1 text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-foreground/45 @lg:text-xs">

@@ -6,7 +6,7 @@ import type { PlayerSummary } from "@/shared/players";
 import {
   UNKNOWN_POSITION,
   groupRosterByPosition,
-} from "./roster-before.ts";
+} from "./roster-groups.ts";
 
 const player = (
   player_id: string,
