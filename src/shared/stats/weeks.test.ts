@@ -61,12 +61,21 @@ test("the previous season is the year before, and only when it is a year", () =>
 test("the archive starts behind the previous season and runs newest first", () => {
   // The previous season is its own tier (the PPG fallback, on the monthly
   // clock), so the archive must never overlap it — a week in two tiers is a
-  // week gated by whichever TTL was asked about first.
-  assert.deepEqual(archiveSeasons("2026", 3), ["2024", "2023", "2022"]);
-  assert.ok(!archiveSeasons("2026", 5).includes(previousSeason("2026")!));
+  // week gated by whichever clock was asked about first.
+  assert.deepEqual(archiveSeasons("2026", "2022"), ["2024", "2023", "2022"]);
+  assert.ok(!archiveSeasons("2026", "2000").includes(previousSeason("2026")!));
 });
 
-test("an empty or junk archive request is empty, never a throw", () => {
-  assert.deepEqual(archiveSeasons("2026", 0), []);
-  assert.deepEqual(archiveSeasons("not-a-year", 3), []);
+test("the archive runs down to the floor inclusive", () => {
+  const seasons = archiveSeasons("2026", "2000");
+  assert.equal(seasons.at(0), "2024");
+  assert.equal(seasons.at(-1), "2000");
+  assert.equal(seasons.length, 25);
+});
+
+test("a floor at or above the archive's start is empty, never a throw", () => {
+  assert.deepEqual(archiveSeasons("2026", "2025"), []);
+  assert.deepEqual(archiveSeasons("2026", "2030"), []);
+  assert.deepEqual(archiveSeasons("not-a-year", "2000"), []);
+  assert.deepEqual(archiveSeasons("2026", "junk"), []);
 });

@@ -123,19 +123,27 @@ export function allRegularWeeks(): number[] {
 }
 
 /**
- * The finished seasons *behind* the previous one, newest first — the archive
- * the comps pool is deep because of.
+ * The finished seasons *behind* the previous one, newest first, down to
+ * `floor` — the archive the comps pool is deep because of.
  *
  * Starts at two seasons back, because {@link previousSeason} is its own tier
  * with its own reason (the week-1 PPG fallback) and its own clock; these exist
  * for a different reader — a comp is worth little from a corpus one season
  * deep — and never enter either faster tier. Newest first, so a cold backfill
  * fills the seasons nearest living memory before the deep ones.
+ *
+ * The floor is a runaway stop, not a claim about availability: how far back
+ * Sleeper actually has data is *discovered* by fetching — a season it doesn't
+ * carry answers empty weeks, which are stamped once and never asked about
+ * again, and a season that stores no rows never surfaces anywhere.
  */
-export function archiveSeasons(season: string, count: number): string[] {
+export function archiveSeasons(season: string, floor: string): string[] {
   const year = Number(season);
+  const floorYear = Number(floor);
   if (!Number.isInteger(year) || year < 1920) return [];
-  return Array.from({ length: Math.max(0, Math.trunc(count)) }, (_, i) =>
+  if (!Number.isInteger(floorYear) || floorYear < 1920) return [];
+  const count = year - 1 - floorYear;
+  return Array.from({ length: Math.max(0, count) }, (_, i) =>
     String(year - 2 - i),
   );
 }
