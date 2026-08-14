@@ -4,10 +4,11 @@ export {
   getPlayersByIds,
   getMatchablePlayers,
   getPlayerIdsByPosition,
+  getPlayerProfiles,
   getFantasyPositions,
   getPlayerTeams,
   getRookiePlayerIds,
 } from "./queries";
-export type { PlayerSummary, MatchablePlayer } from "./queries";
+export type { PlayerSummary, MatchablePlayer, PlayerProfile } from "./queries";
 export { getRookieClassIds, CURRENT_ROOKIE_CLASS } from "./rookie-class";
 export type { RookieClass } from "./rookie-class";

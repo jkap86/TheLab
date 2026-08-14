@@ -190,6 +190,58 @@ export async function getFantasyPositions(
 }
 
 /**
+ * A player as the comps tool profiles one: identity plus the birth date the
+ * age-at-season read is made from.
+ */
+export type PlayerProfile = {
+  player_id: string;
+  name: string;
+  position: string | null;
+  /** The player's *current* team — the table stores no historical one. */
+  team: string | null;
+  /** `YYYY-MM-DD`, or null when Sleeper has no full birth date on file. */
+  birth_date: string | null;
+};
+
+/**
+ * Profiles for the player ids given, keyed by id; missing ids are absent.
+ *
+ * `birth_date` is lifted out of the blob the way `getMatchablePlayers` lifts
+ * `birth_year`, guarded by the same habit — Sleeper promises no types, so the
+ * full-date shape is checked before the value is trusted — and kept the whole
+ * date rather than the year, because an age *at* a date wants the day.
+ */
+export async function getPlayerProfiles(
+  ids: string[],
+): Promise<Record<string, PlayerProfile>> {
+  if (ids.length === 0) return {};
+
+  const { rows } = await pool.query<Row & { birth_date: string | null }>(
+    `SELECT player_id, full_name, first_name, last_name, position, team,
+            CASE WHEN data->>'birth_date' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                 THEN data->>'birth_date' END AS birth_date
+       FROM players
+      WHERE player_id = ANY($1)`,
+    [ids],
+  );
+
+  const out: Record<string, PlayerProfile> = {};
+  for (const r of rows) {
+    const name =
+      r.full_name ??
+      ([r.first_name, r.last_name].filter(Boolean).join(" ") || r.player_id);
+    out[r.player_id] = {
+      player_id: r.player_id,
+      name,
+      position: r.position,
+      team: r.team,
+      birth_date: r.birth_date,
+    };
+  }
+  return out;
+}
+
+/**
  * A cached player projected down to the fields cross-source name matching needs
  * — see `@/shared/ktc`'s `resolveSleeperIds`. `active` and `birth_year` are
  * lifted out of the raw Sleeper payload so callers never have to know how that

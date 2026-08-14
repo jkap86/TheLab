@@ -60,6 +60,13 @@ const PATHS: Record<ToolIconName, React.ReactNode> = {
       <path d="M11 7.5h9.5M11 16.5h9.5" />
     </>
   ),
+  // Two overlapping profiles side by side — one player measured against another.
+  comps: (
+    <>
+      <circle cx="9" cy="12" r="5.5" />
+      <circle cx="15" cy="12" r="5.5" />
+    </>
+  ),
 };
 
 export function ToolIcon({ name }: { name: ToolIconName }) {

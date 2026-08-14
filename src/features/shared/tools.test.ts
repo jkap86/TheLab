@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   activeTool,
   isToolActive,
+  TOOL_GROUPS,
   toolHref,
   tools,
   toolsInGroup,
@@ -51,9 +52,16 @@ test("activeTool names the tool the bar is standing in", () => {
 });
 
 test("every tool lands in a group, and the groups partition the catalogue", () => {
-  const grouped = [
-    ...toolsInGroup("Manager"),
-    ...toolsInGroup("League tools"),
-  ];
+  const grouped = TOOL_GROUPS.flatMap((group) => toolsInGroup(group));
   assert.equal(grouped.length, tools.length);
+});
+
+test("Comps is a player tool, live without an account", () => {
+  const comps = tools.find((t) => t.text === "Comps")!;
+  assert.equal(comps.group, "Player tools");
+  assert.equal(comps.accountless, true);
+  // No `hrefFor`: a username buys this tool nothing, so the account changes
+  // nothing about where it points.
+  assert.equal(toolHref(comps, "jkap86"), "/comps");
+  assert.equal(activeTool("/comps")?.text, "Comps");
 });
