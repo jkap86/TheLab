@@ -11,8 +11,9 @@
  * 3: the derived usage shares and KTC history fields joined `values`. The
  * career fields did not — they are derived at read time (`withCareerValues`),
  * so cached rows never carry them.
+ * 4: the vocabulary-gated air-yards fields joined `values`.
  */
-export const COMPS_POOL_VERSION = 3;
+export const COMPS_POOL_VERSION = 4;
 
 /**
  * How long an assembled season pool is worth reusing, and how many are kept.

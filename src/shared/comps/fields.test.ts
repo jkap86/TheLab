@@ -43,6 +43,23 @@ describe("COMPS_FIELDS", () => {
     }
   });
 
+  test("gated marks unverified line-read production keys, never defaulted", () => {
+    // Gated values are nullable (a season whose feed lacks the key), so the
+    // no-default rule applies; and gated-plus-derived would be contradictory —
+    // derived fields aren't read off a line at all.
+    for (const field of COMPS_FIELDS) {
+      if (field.gated !== true) continue;
+      assert.equal(field.family, "production", `${field.key} gated family`);
+      assert.equal(field.derived, undefined, `${field.key} gated and derived`);
+      assert.notEqual(field.statKey, undefined, `${field.key} gated statKey`);
+      assert.deepEqual(field.defaultWeights, {}, `${field.key} defaults`);
+    }
+    assert.deepEqual(
+      COMPS_FIELDS.filter((f) => f.gated === true).map((f) => f.key),
+      ["pass_air_yd", "rec_air_yd"],
+    );
+  });
+
   test("derived appears only on production fields, and never with a default", () => {
     // Derived values are nullable (a season whose feed lacks the inputs), so a
     // default weight would silently exclude those seasons from every first

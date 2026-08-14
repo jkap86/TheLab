@@ -7,14 +7,15 @@
  * spellings back onto the query string. It is pure and imports nothing, so the
  * client deep-imports it and the tests load it under Node's runner.
  *
- * **Every production `statKey` below is verified against stored stat lines**
- * (the verbatim fixtures in `projections/score.test.ts` carry all thirteen), not
- * guessed from Sleeper's docs — a wrong key here is not an error, it is a column
- * of zeroes that quietly flattens every distance it is weighted into. That is
- * also why there is no snap-count field in v1: `stats/parse.ts` says a played
- * line carries snap counts only "usually", and nothing in the repo pins the
- * key's spelling, so it waits for verification rather than shipping as a
- * maybe-dead control.
+ * **Every ungated production `statKey` below is verified against stored stat
+ * lines** (the verbatim fixtures in `projections/score.test.ts` carry all
+ * thirteen), not guessed from Sleeper's docs — a wrong key here is not an
+ * error, it is a column of zeroes that quietly flattens every distance it is
+ * weighted into. An *unverified* key may ship only behind `gated`, which turns
+ * that failure into an honest absence — see the flag's doc. That is also why
+ * there is no snap-count field in v1: `stats/parse.ts` says a played line
+ * carries snap counts only "usually", and nothing in the repo pins the key's
+ * spelling.
  */
 
 /**
@@ -50,6 +51,18 @@ export type CompsField = {
    * excludes the seasons that can't answer it, a press the reader makes.
    */
   derived?: true;
+  /**
+   * A line-read production field whose key is *not* verified against stored
+   * lines, gated on the season's own vocabulary: absent-is-zero applies only
+   * in a season where at least one stored line carries the key, and a season
+   * whose feed never mentions it answers null for everyone. That is the
+   * difference between the failure the header warns about and a safe one — an
+   * unverified key that turns out not to exist reads as an honestly inert
+   * field (dropped for the subject, exclusions counted for candidates), never
+   * as a column of zeroes quietly flattening every distance. Nullable, so the
+   * no-default rule applies for the derived fields' reason.
+   */
+  gated?: true;
   /**
    * Whether the per-game basis divides this field by games played. True for
    * exactly the production fields: age-per-game and KTC-per-game are nonsense,
@@ -109,6 +122,15 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     statKey: "pass_int",
     perGame: true,
     defaultWeights: { QB: 40 },
+  },
+  {
+    key: "pass_air_yd",
+    label: "Passing air yards",
+    family: "production",
+    statKey: "pass_air_yd",
+    gated: true,
+    perGame: true,
+    defaultWeights: {},
   },
   {
     key: "rush_att",
@@ -177,12 +199,24 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     perGame: true,
     defaultWeights: { WR: 60, TE: 60 },
   },
+  // Air yards, gated on the season's vocabulary — the one production key in
+  // the catalogue not verified against a stored line (no repo fixture carries
+  // it and the feed can't be probed from here), which is exactly what `gated`
+  // exists for: if the key is real it works, and if Sleeper never publishes it
+  // the field is inert and says so rather than zero-filling.
+  {
+    key: "rec_air_yd",
+    label: "Receiving air yards",
+    family: "production",
+    statKey: "rec_air_yd",
+    gated: true,
+    perGame: true,
+    defaultWeights: {},
+  },
   // The two usage shares — the player's count over his team's count in the
   // games he played, with the team read off each stored week rather than the
   // profile, so a traded player's share is honest on both sides of the move.
-  // Derived from verified keys (`rec_tgt`, `rush_att`) — this is the only kind
-  // of "advanced stat" the feed can support: it publishes no air-yards or
-  // route data, so anything finer would be a column of zeroes wearing a label.
+  // Derived from verified keys (`rec_tgt`, `rush_att`).
   {
     key: "tgt_share",
     label: "Target share %",
