@@ -178,6 +178,96 @@ describe("assemblePoolRows", () => {
     assert.equal(b.rush_share, 95);
   });
 
+  test("snaps are gated on the season's vocabulary, like every unverified key", () => {
+    // The whole reason the snap fields could ship at all: nothing in the repo
+    // pins `off_snp`, so a season whose feed never mentions it answers null
+    // for everyone rather than reporting that nobody played a snap.
+    const without = assemble({ statLines: [line("1", { rec_tgt: 8 })] });
+    assert.equal(without[0].values.off_snp, null);
+    assert.equal(without[0].values.snap_pct, null);
+    assert.equal(without[0].values.tgt_per_snap, null);
+
+    // One line carrying it is proof the season publishes it — and a player
+    // without it is then a real zero, the absent-is-zero production rule.
+    const with_ = assemble({
+      statLines: [
+        line("1", { rec_tgt: 8, off_snp: 40 }),
+        line("2", { rec_tgt: 1 }),
+      ],
+    });
+    assert.equal(with_.find((r) => r.player_id === "1")!.values.off_snp, 40);
+    assert.equal(with_.find((r) => r.player_id === "2")!.values.off_snp, 0);
+  });
+
+  test("snap share is the player's snaps over his team's, off the same lines", () => {
+    const rows = assemble({
+      statLines: [
+        line("1", { off_snp: 45, tm_off_snp: 60 }),
+        line("1", { off_snp: 15, tm_off_snp: 60 }),
+      ],
+    });
+    // 60 of 120 — read off the lines themselves, so no teammate's row is
+    // needed and a traded player is exact on both sides of the move.
+    assert.equal(rows[0].values.snap_pct, 50);
+    assert.deepEqual(rows[0].rates?.snap_pct, { n: 6000, d: 120 });
+  });
+
+  test("a snap share needs its own denominator, not just snaps", () => {
+    // `tm_off_snp` is the key no field is named after, so it needs the gate
+    // as much as the numerator does: snaps with no team snaps published is a
+    // share nobody can take.
+    const rows = assemble({ statLines: [line("1", { off_snp: 45 })] });
+    assert.equal(rows[0].values.off_snp, 45);
+    assert.equal(rows[0].values.snap_pct, null);
+  });
+
+  test("targets per snap counts only the weeks its denominator can speak for", () => {
+    // Week 2 carries targets and no snap count: counting those targets over
+    // week 1's snaps alone would inflate the rate. The rule the usage shares
+    // already keep by pairing on team-weeks.
+    const rows = assemble({
+      statLines: [
+        line("1", { rec_tgt: 10, off_snp: 50 }, 1),
+        line("1", { rec_tgt: 6 }, 2),
+      ],
+    });
+    assert.equal(rows[0].values.tgt_per_snap, 0.2);
+    assert.deepEqual(rows[0].rates?.tgt_per_snap, { n: 10, d: 50 });
+  });
+
+  test("every derived rate carries components that reproduce its own value", () => {
+    // The agreement windows rest on: pooling is Σn / Σd whatever the rate is,
+    // which only works while `n / d` *is* the value on every one of them.
+    const rows = assemble({
+      statLines: [
+        line("1", { rec_tgt: 8, rush_att: 4, off_snp: 40, tm_off_snp: 64 }, 1, "PHI"),
+        line("2", { rec_tgt: 2, rush_att: 6 }, 1, "PHI"),
+      ],
+    });
+    const row = rows.find((r) => r.player_id === "1")!;
+    for (const [key, parts] of Object.entries(row.rates ?? {})) {
+      assert.equal(
+        Math.round((parts.n / parts.d) * 100) / 100,
+        row.values[key],
+        `${key} components disagree with its value`,
+      );
+    }
+    assert.deepEqual(Object.keys(row.rates ?? {}).sort(), [
+      "rush_share",
+      "snap_pct",
+      "tgt_per_snap",
+      "tgt_share",
+    ]);
+  });
+
+  test("a rate that can't be taken leaves no components behind", () => {
+    // Null is unknown, and a component pair for an unknown rate would let a
+    // window pool a number the season never answered.
+    const rows = assemble({ statLines: [line("1", { rec_tgt: 8 })] });
+    assert.equal(rows[0].values.tgt_share, null);
+    assert.equal(rows[0].rates?.tgt_share, undefined);
+  });
+
   test("a traded player's share reads each half against the right offense", () => {
     // 8 of 10 on PHI, then 2 of 8 on DAL: 10 of 18 overall — the denominators
     // are the team-weeks he appeared in, not either team's whole season.

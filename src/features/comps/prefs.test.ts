@@ -10,7 +10,9 @@ import {
   resetPosition,
   serializeCompsPrefs,
   setPositionWeights,
+  setPositionWindows,
   weightsFor,
+  windowsFor,
 } from "./prefs.ts";
 
 describe("parseCompsPrefs", () => {
@@ -41,14 +43,14 @@ describe("parseCompsPrefs", () => {
       v: COMPS_PREFS_VERSION,
       basis: "per_game",
       weightsByPosition: {
-        WR: { rec: 80, off_snp: 50, rec_yd: "lots", rec_tgt: 101 },
+        WR: { rec: 80, kick_ret_yd: 50, rec_yd: "lots", rec_tgt: 101 },
         K: { fgm: 100 },
       },
     });
     const prefs = parseCompsPrefs(raw);
     // The one good key survives; nothing else resets it.
     assert.equal(prefs.weightsByPosition.WR?.rec, 80);
-    assert.equal(prefs.weightsByPosition.WR?.off_snp, undefined);
+    assert.equal(prefs.weightsByPosition.WR?.kick_ret_yd, undefined);
     assert.equal(prefs.weightsByPosition.WR?.rec_yd, undefined);
     assert.equal(prefs.weightsByPosition.WR?.rec_tgt, undefined);
     assert.equal("K" in prefs.weightsByPosition, false);
@@ -92,6 +94,18 @@ describe("weightsFor / per-position boards", () => {
     assert.deepEqual(weightsFor(reset, "WR"), defaultWeightBoard("WR"));
   });
 
+  test("reset clears both halves — one key on screen means one reset", () => {
+    const customized = setPositionWindows(
+      setPositionWeights(DEFAULT_COMPS_PREFS, "WR", { rec: 10 }),
+      "WR",
+      { rec_tgt: "prev3" },
+    );
+    const reset = resetPosition(customized, "WR");
+    assert.equal(isCustomized(reset, "WR"), false);
+    assert.equal("WR" in reset.windowsByPosition, false);
+    assert.deepEqual(windowsFor(reset, "WR").rec_tgt, "season");
+  });
+
   test("market fields default to 0 on every position's opening board", () => {
     for (const position of ["QB", "RB", "WR", "TE"] as const) {
       const board = defaultWeightBoard(position);
@@ -100,5 +114,70 @@ describe("weightsFor / per-position boards", () => {
       assert.equal(board.adp_dynasty, 0);
       assert.equal(board.adp_redraft, 0);
     }
+  });
+});
+
+describe("windowsFor / per-position windows", () => {
+  test("an untouched position reads every field over its own season", () => {
+    const board = windowsFor(DEFAULT_COMPS_PREFS, "WR");
+    assert.ok(Object.keys(board).length > 0);
+    assert.ok(Object.values(board).every((window) => window === "season"));
+    // Only the fields that take one are on the board at all — an age has no
+    // window, so a row for it would be a control the editor must not draw.
+    assert.equal("age" in board, false);
+    assert.equal("ktc_sf" in board, false);
+  });
+
+  test("only what the reader moved is stored — absent *is* the default", () => {
+    // One spelling of "default", which is what keeps `isCustomized` honest: a
+    // board whose windows are all `season` is not a customized board.
+    const moved = setPositionWindows(DEFAULT_COMPS_PREFS, "WR", {
+      rec_tgt: "prev3",
+      rec_yd: "season",
+    });
+    assert.deepEqual(moved.windowsByPosition.WR, { rec_tgt: "prev3" });
+    assert.equal(isCustomized(moved, "WR"), true);
+
+    const back = setPositionWindows(moved, "WR", { rec_tgt: "season" });
+    assert.equal("WR" in back.windowsByPosition, false);
+    assert.equal(isCustomized(back, "WR"), false);
+  });
+
+  test("a WR window never follows the reader onto a QB subject", () => {
+    const prefs = setPositionWindows(DEFAULT_COMPS_PREFS, "WR", {
+      rec_tgt: "career_best",
+    });
+    assert.equal(windowsFor(prefs, "WR").rec_tgt, "career_best");
+    assert.equal(windowsFor(prefs, "QB").rec_tgt, "season");
+  });
+
+  test("a stored blob survives the build that wrote it", () => {
+    // The codec's own rule, applied to the second map: a window this build
+    // doesn't know, a field it dropped, or a field that stopped taking a
+    // window all fall away on their own rather than resetting the board.
+    const raw = JSON.stringify({
+      v: COMPS_PREFS_VERSION,
+      basis: "per_game",
+      windowsByPosition: {
+        WR: {
+          rec_tgt: "prev2",
+          rec_yd: "last_year",
+          kick_ret_yd: "prev3",
+          age: "career_best",
+        },
+        K: { rec: "prev1" },
+      },
+    });
+    const prefs = parseCompsPrefs(raw);
+    assert.deepEqual(prefs.windowsByPosition.WR, { rec_tgt: "prev2" });
+    assert.equal("K" in prefs.windowsByPosition, false);
+  });
+
+  test("windows round-trip through the codec", () => {
+    const prefs = setPositionWindows(DEFAULT_COMPS_PREFS, "TE", {
+      snap_pct: "prev3_best",
+    });
+    const back = parseCompsPrefs(serializeCompsPrefs(prefs));
+    assert.equal(windowsFor(back, "TE").snap_pct, "prev3_best");
   });
 });

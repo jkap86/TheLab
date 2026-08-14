@@ -17,6 +17,7 @@ import type {
   CompsBasis,
   CompsFieldFamily,
   CompsPosition,
+  CompsWindowKey,
 } from "@/shared/comps";
 import type { KtcRosterValue, KtcValue } from "@/shared/ktc";
 import type { PlaceholderPick } from "@/shared/picktracker";
@@ -1428,14 +1429,29 @@ export type KickoffPayload = {
 };
 
 /**
- * One field of a comps comparison as the route ran it: the catalogue's
- * identity, the weight actually applied, and the field's mean/stdev **over the
- * comparison population** (`candidates_eligible`) — the population the z-scores
- * were taken against, which deliberately never includes the subject. Null
- * mean/stdev means no candidate was eligible.
+ * One *dimension* of a comps comparison as the route ran it: a catalogue field
+ * read over a window of seasons, the weight actually applied, and the
+ * mean/stdev **over the comparison population** (`candidates_eligible`) — the
+ * population the z-scores were taken against, which deliberately never includes
+ * the subject. Null mean/stdev means no candidate was eligible.
+ *
+ * `key` is the dimension — the field key for the default window and a
+ * composite for any other — and is what `values` and `excluded_missing` are
+ * keyed by, so one string identifies one column of the comparison wherever it
+ * appears. `field` and `window` are that key's halves, sent rather than left to
+ * be parsed: the client composes the on-screen name from the same catalogues
+ * the server resolved them against.
+ *
+ * `per_game` is the *catalogue's* flag — whether this field is a per-game
+ * quantity at all — and not whether the number was divided by something. Under
+ * a window it was divided by the window's games rather than the season's, which
+ * is a resolution detail the payload has no reason to carry and the label has
+ * every reason not to.
  */
 export type CompsFieldSpecPayload = {
   key: string;
+  field: string;
+  window: CompsWindowKey;
   label: string;
   family: CompsFieldFamily;
   weight: number;
@@ -1450,9 +1466,10 @@ export type CompsFieldSpecPayload = {
  * `team` is the player's **current** team — `players` stores no historical
  * team — so the client styles it uniformly as secondary ("Current: PHI") on
  * every row rather than guessing which rows are historical. `values` holds the
- * weighted fields only, already resolved under the request's basis (per-game
- * fields divided by `games`), so the number on screen is byte-for-byte the one
- * the distance was computed from.
+ * weighted dimensions only, keyed as `fields[].key` and already resolved under
+ * the request's basis (per-game fields divided by `games`, or by the window's
+ * own games where one was asked for), so the number on screen is byte-for-byte
+ * the one the distance was computed from.
  *
  * `line` is the whole season beside them — every production total plus
  * Sleeper's three generic fantasy-point totals (`pts_ppr`, `pts_half_ppr`,
@@ -1494,8 +1511,9 @@ export type CompsResultRowPayload = CompsSeasonRowPayload & {
  * population. A candidate missing several weighted fields increments each
  * field's `excluded_missing` entry while removing one row, so those counts sum
  * to **at least** the difference between the two. `dropped_fields` names
- * requested fields the *subject* couldn't answer — dropped and reported rather
- * than a 400.
+ * requested *dimensions* (`fields[].key` spelling) the subject couldn't
+ * answer — dropped and reported rather than a 400, which is what a career
+ * window on a rookie subject produces.
  *
  * Market fields are anchored *entering* the subject's season (KTC's latest
  * snapshot at or before that season's Sept 1 — or today, mid-offseason — and

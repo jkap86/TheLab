@@ -60,3 +60,59 @@ describe("buildCompsQuery", () => {
     assert.ok(new URLSearchParams(query).get("fields"));
   });
 });
+
+describe("buildCompsQuery windows", () => {
+  test("all-default windows send no windows= at all", () => {
+    // A third parallel list full of "season" would only lengthen the cache key
+    // for a board the server would read identically without it.
+    const query = buildCompsQuery(
+      selection({
+        weights: { ...defaultWeightBoard("WR"), rec: 0 },
+        windows: { rec_tgt: "season" },
+      }),
+    );
+    assert.equal(new URLSearchParams(query).get("windows"), null);
+  });
+
+  test("windows travel positionally, aligned with the fields they belong to", () => {
+    const query = buildCompsQuery(
+      selection({
+        weights: { ...defaultWeightBoard("WR") },
+        windows: { rec_tgt: "prev3", rec_yd: "career_best" },
+      }),
+    );
+    const params = new URLSearchParams(query);
+    const fields = params.get("fields")!.split(",");
+    const windows = params.get("windows")!.split(",");
+    assert.equal(fields.length, windows.length);
+    assert.equal(windows[fields.indexOf("rec_tgt")], "prev3");
+    assert.equal(windows[fields.indexOf("rec_yd")], "career_best");
+    assert.equal(windows[fields.indexOf("rec")], "season");
+  });
+
+  test("a window on a weighted field makes an otherwise-default board explicit", () => {
+    // The board's *weights* are the position's defaults, so without this it
+    // would fold back to no fields= and the window would be silently dropped.
+    const query = buildCompsQuery(
+      selection({
+        weights: defaultWeightBoard("WR"),
+        windows: { rec_tgt: "prev3" },
+      }),
+    );
+    assert.ok(new URLSearchParams(query).get("fields"));
+    assert.ok(new URLSearchParams(query).get("windows"));
+  });
+
+  test("a window on an unweighted field changes nothing and never travels", () => {
+    // It computes no number, so it is not a customized board — the same rule
+    // the prefs codec keeps when it declines to store a default.
+    const query = buildCompsQuery(
+      selection({
+        weights: defaultWeightBoard("WR"),
+        // `fum_lost` carries no default weight for a receiver.
+        windows: { fum_lost: "career_best" },
+      }),
+    );
+    assert.equal(query, "player_id=4034");
+  });
+});

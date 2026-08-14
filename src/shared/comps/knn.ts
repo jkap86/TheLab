@@ -43,6 +43,16 @@ export type CompsPoolRow = {
   games: number;
   values: Record<string, number | null>;
   /**
+   * The numerator and denominator behind each derived rate on `values`, scaled
+   * so the value is exactly `n / d`. What they are for is *windows*: pooling
+   * three seasons of target share is Σtargets over Σteam-targets, and only the
+   * components can say that — a mean of three seasons' shares is a different
+   * number wearing the same label. Optional because a row assembled without
+   * them is still a legitimate row; it simply can't pool a rate, which reads as
+   * the window answering null rather than answering approximately.
+   */
+  rates?: Record<string, { n: number; d: number }>;
+  /**
    * Season fantasy-point totals under Sleeper's three generic scorings — what
    * "how did that season go" is answered with. Display only, never a KNN
    * field: the comparison is *criteria* (usage, profile, market) and this is
@@ -94,6 +104,12 @@ export type CompsKnnOutput = {
  * distance and the payload's display values go through, so they cannot
  * disagree. Null means the row doesn't answer this field: a market unknown, or
  * a per-game read of a season with no games to divide by.
+ *
+ * `key` is a *dimension* key, which for the default window is the catalogue's
+ * own and for any other is `windows.ts`'s composite. A windowed value was
+ * materialized already resolved under the basis — its divisor is the window's
+ * games, not this season's — so its spec carries `perGame: false` and this
+ * function is the same one either way rather than growing a branch.
  */
 export function fieldValue(
   row: CompsPoolRow,

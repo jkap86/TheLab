@@ -12,10 +12,13 @@
  * thirteen), not guessed from Sleeper's docs — a wrong key here is not an
  * error, it is a column of zeroes that quietly flattens every distance it is
  * weighted into. An *unverified* key may ship only behind `gated`, which turns
- * that failure into an honest absence — see the flag's doc. That is also why
- * there is no snap-count field in v1: `stats/parse.ts` says a played line
- * carries snap counts only "usually", and nothing in the repo pins the key's
- * spelling.
+ * that failure into an honest absence — see the flag's doc. **That is exactly
+ * how the snap fields ship**: `stats/parse.ts` says a played line carries snap
+ * counts only "usually" and nothing in the repo pins `off_snp`/`tm_off_snp`, so
+ * the three of them (snaps, snap share, targets per snap) are gated on the
+ * season's own vocabulary rather than trusted — if the keys are real they
+ * work, and if a season's feed never mentions them the fields are inert and
+ * say so instead of reporting that everybody played no snaps.
  */
 
 /**
@@ -43,14 +46,27 @@ export type CompsField = {
    */
   statKey?: string;
   /**
-   * A production field computed at assembly from verified keys rather than
-   * read off a line — the two usage shares. A derived field is already a rate,
-   * so it carries no statKey, is never divided by games, and is *nullable*
-   * (null where the season's lines name no team, or the team keys aren't in
+   * A production field computed at assembly rather than read off a line — the
+   * usage shares and the two snap rates. A derived field is already a rate, so
+   * it carries no statKey, is never divided by games, and is *nullable* (null
+   * where the season's lines name no team, or the keys behind it aren't in
    * that season's feed) — which is why none is ever defaulted: weighting one
    * excludes the seasons that can't answer it, a press the reader makes.
+   *
+   * Assembly writes each one's numerator and denominator onto the row's
+   * `rates` beside the value, which is what lets a multi-season window pool the
+   * rate *exactly* rather than averaging seasons' rates into an approximation
+   * of it.
    */
   derived?: true;
+  /**
+   * The raw stat keys a derived field is computed from, where those keys are
+   * unverified — the `gated` rule for a field that reads no single line. The
+   * field answers only in a season whose feed demonstrably carries **every**
+   * key named here; elsewhere it is null for everyone, which is the honest
+   * absence rather than a rate over a denominator that was never published.
+   */
+  requires?: readonly string[];
   /**
    * A line-read production field whose key is *not* verified against stored
    * lines, gated on the season's own vocabulary: absent-is-zero applies only
@@ -213,6 +229,20 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     perGame: true,
     defaultWeights: {},
   },
+  // Snaps, gated on the same terms as air yards — `stats/parse.ts` promises
+  // only that a played line "usually" carries them. Weightable in its own
+  // right: how often a player was on the field is the usage number the counts
+  // below are all denominated by, and two players with the same targets on
+  // very different snap counts are not the same player.
+  {
+    key: "off_snp",
+    label: "Snaps",
+    family: "production",
+    statKey: "off_snp",
+    gated: true,
+    perGame: true,
+    defaultWeights: {},
+  },
   // The two usage shares — the player's count over his team's count in the
   // games he played, with the team read off each stored week rather than the
   // profile, so a traded player's share is honest on both sides of the move.
@@ -222,6 +252,33 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "Target share %",
     family: "production",
     derived: true,
+    perGame: false,
+    defaultWeights: {},
+  },
+  // Snap share — the player's offensive snaps over his team's, read off each
+  // week's own line rather than aggregated from teammates, so it is exact for a
+  // traded player and needs nobody else's row to answer. The share every other
+  // usage number is read against: 20% of the targets on 90% of the snaps is a
+  // different player from the same targets on 45%.
+  {
+    key: "snap_pct",
+    label: "Snap share %",
+    family: "production",
+    derived: true,
+    requires: ["off_snp", "tm_off_snp"],
+    perGame: false,
+    defaultWeights: {},
+  },
+  // Targets per snap — how often being on the field turned into a look, which
+  // separates a route-runner from a blocker at identical snap counts. The
+  // numerator counts only the weeks the denominator can speak for, the rule the
+  // shares above already keep.
+  {
+    key: "tgt_per_snap",
+    label: "Targets / snap",
+    family: "production",
+    derived: true,
+    requires: ["off_snp"],
     perGame: false,
     defaultWeights: {},
   },
@@ -321,6 +378,23 @@ const byKey = new Map(COMPS_FIELDS.map((field) => [field.key, field]));
 /** The catalogue entry for a wire key, or undefined for a key it never held. */
 export function compsField(key: string): CompsField | undefined {
   return byKey.get(key);
+}
+
+/**
+ * Whether a field can be read over a window of seasons rather than the anchor
+ * season alone.
+ *
+ * **Derived from the family rather than flagged per field**, the
+ * `DEFENSIVE_SLOTS` rule, and the family is the honest test: a window pools its
+ * seasons additively, which is what a count or a usage rate *is* and what a
+ * price is not. Two seasons of targets pool into targets; two seasons of KTC
+ * pool into nothing anybody has a name for, and two ages into an absurdity. So
+ * the production family windows and the other two read the season they are
+ * anchored to — which is also where `career_ppg` and `ktc_peak_sf` already
+ * live, as named answers to the one cross-season question each family has.
+ */
+export function compsFieldTakesWindow(field: CompsField): boolean {
+  return field.family === "production";
 }
 
 /** Whether `position` is one this tool supports as a subject. */

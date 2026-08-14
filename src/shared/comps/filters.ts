@@ -1,8 +1,10 @@
 import { integer, isSeason } from "../query/parse.ts";
 
-import { compsField, isCompsPosition } from "./fields.ts";
+import { compsField, compsFieldTakesWindow, isCompsPosition } from "./fields.ts";
+import { DEFAULT_COMPS_WINDOW, isCompsWindow } from "./windows.ts";
 
 import type { CompsPosition } from "./fields.ts";
+import type { CompsWindowKey } from "./windows.ts";
 
 /**
  * `/api/comps`'s query string, validated and nothing else — the
@@ -13,8 +15,17 @@ import type { CompsPosition } from "./fields.ts";
 /** Which number a production field contributes: a per-game average or the season total. */
 export type CompsBasis = "per_game" | "total";
 
-/** One weighted field, as the caller asked for it. Weight is always positive here. */
-export type CompsWeightedField = { key: string; weight: number };
+/**
+ * One weighted field, as the caller asked for it: weight always positive, and
+ * the window it is read over — the default being the subject's own season,
+ * which is what every request written before windows existed means and what an
+ * omitted `windows=` still means.
+ */
+export type CompsWeightedField = {
+  key: string;
+  weight: number;
+  window: CompsWindowKey;
+};
 
 export type CompsFilters = {
   player_id: string;
@@ -42,8 +53,8 @@ export const COMPS_MIN_GAMES_DEFAULT = 4;
 const PLAYER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
- * `fields=` and `weights=` are parallel lists, which is why this module does
- * **not** read them through the shared `list()` primitive: that one
+ * `fields=`, `weights=` and `windows=` are parallel lists, which is why this
+ * module does **not** read them through the shared `list()` primitive: that one
  * deduplicates, so `weights=100,50,100` would silently arrive as two items and
  * desync from its three fields. This split preserves order and repetition, and
  * duplicate *fields* are then rejected by name — an error, never a silent
@@ -127,10 +138,14 @@ function parseFields(
   | { ok: false; error: string } {
   const keys = rawList(params, "fields");
   const weights = rawList(params, "weights");
+  const windows = rawList(params, "windows");
 
   if (keys.length === 0) {
-    if (weights.length > 0) {
-      return { ok: false, error: "weights= without fields= names nothing." };
+    if (weights.length > 0 || windows.length > 0) {
+      return {
+        ok: false,
+        error: "weights= or windows= without fields= names nothing.",
+      };
     }
     return { ok: true, value: null };
   }
@@ -170,10 +185,48 @@ function parseFields(
     }
   }
 
+  // Absent windows read as "every field over its own season" — what the tool
+  // answered before windows existed, so an old bookmark and the shortest curl
+  // both keep meaning exactly what they meant.
+  const parsedWindows =
+    windows.length === 0 ? keys.map(() => DEFAULT_COMPS_WINDOW) : windows;
+
+  if (parsedWindows.length !== keys.length) {
+    return {
+      ok: false,
+      error: `fields= names ${keys.length} fields but windows= carries ${parsedWindows.length}.`,
+    };
+  }
+
+  for (const [i, window] of parsedWindows.entries()) {
+    if (!isCompsWindow(window)) {
+      return {
+        ok: false,
+        error: `Invalid window for ${keys[i]}: ${window}.`,
+      };
+    }
+    // A window pools its seasons additively, which an age or a price is not —
+    // refused by name rather than silently ignored, or a caller would get a
+    // board that quietly isn't the one it asked for.
+    if (
+      window !== DEFAULT_COMPS_WINDOW &&
+      !compsFieldTakesWindow(compsField(keys[i])!)
+    ) {
+      return {
+        ok: false,
+        error: `${keys[i]} is read over its own season only; it takes no window.`,
+      };
+    }
+  }
+
   // A zero weight is the caller switching a field off, so it leaves here — a
   // field that contributes nothing must not exclude candidates missing it.
   const value = keys
-    .map((key, i) => ({ key, weight: parsedWeights[i] }))
+    .map((key, i) => ({
+      key,
+      weight: parsedWeights[i],
+      window: parsedWindows[i] as CompsWindowKey,
+    }))
     .filter((field) => field.weight > 0);
 
   if (value.length === 0) {

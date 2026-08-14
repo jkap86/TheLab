@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 
 import {
   compsField,
+  compsWantedFields,
   fieldValue,
   getCompsPools,
+  parseCompsDimensionKey,
   parseCompsFilters,
   resolveCompsFields,
   resolveSubjectPosition,
@@ -11,6 +13,7 @@ import {
   runCompsKnn,
   seasonLine,
   withCareerValues,
+  withWindowValues,
 } from "@/shared/comps";
 
 import { readFailureResponse } from "../read-failure";
@@ -37,10 +40,13 @@ export const dynamic = "force-dynamic";
  *   GET /api/comps?player_id=4034
  *   GET /api/comps?player_id=4034&season=2024&basis=total
  *       &fields=rec,rec_yd,age&weights=100,80,50&k=5&min_games=6&positions=WR,TE
+ *   GET /api/comps?player_id=4034&fields=rec_tgt,snap_pct
+ *       &weights=100,80&windows=prev3,season
  *
  * Everything is optional but the player: the season defaults to the subject's
  * latest stored one, the fields to the subject position's catalogue defaults,
- * and the candidate positions to the subject's own. The route is a thin
+ * the window of every field to that season itself, and the candidate positions
+ * to the subject's own. The route is a thin
  * composition — the grammar is `parseCompsFilters`, each decision is a pure
  * function in `shared/comps/resolve`, and the KNN itself is
  * `shared/comps/knn`, all tested where they live.
@@ -79,15 +85,26 @@ export async function GET(request: Request) {
     const season = resolveSubjectSeason(filters.season, subjectSeasons);
     if (!season.ok) return refusalResponse(season);
 
-    const subject = pools
-      .find((pool) => pool.season === season.season)!
-      .rows.find((row) => row.player_id === filters.player_id)!;
+    const subjectRow = (
+      seasonPools: { season: string; rows: readonly CompsPoolRow[] }[],
+    ) =>
+      seasonPools
+        .find((pool) => pool.season === season.season)!
+        .rows.find((row) => row.player_id === filters.player_id)!;
 
-    const position = resolveSubjectPosition(subject.position);
+    const position = resolveSubjectPosition(subjectRow(pools).position);
     if (!position.ok) return refusalResponse(position);
 
+    // Which windows were asked for has to be known before the subject can be
+    // asked whether it answers them, so the dimensions are materialized onto
+    // every row first — one more pure pass, and none at all for a request that
+    // named no window, which is every default board.
+    const wanted = compsWantedFields(filters.fields, position.position);
+    const windowed = withWindowValues(pools, wanted, filters.basis);
+    const subject = subjectRow(windowed);
+
     const fields = resolveCompsFields({
-      explicit: filters.fields,
+      explicit: wanted,
       position: position.position,
       subject,
       basis: filters.basis,
@@ -97,7 +114,7 @@ export async function GET(request: Request) {
     const positions = filters.positions ?? [position.position];
     const knn = runCompsKnn({
       subject,
-      candidates: pools.flatMap((pool) => pool.rows),
+      candidates: windowed.flatMap((pool) => pool.rows),
       fields: fields.fields,
       basis: filters.basis,
       k: filters.k,
@@ -108,15 +125,24 @@ export async function GET(request: Request) {
     const payload: CompsPayload = {
       subject: rowPayload(subject, fields.fields, filters.basis),
       basis: filters.basis,
-      fields: fields.fields.map((field, i) => ({
-        key: field.key,
-        label: compsField(field.key)?.label ?? field.key,
-        family: compsField(field.key)?.family ?? "production",
-        weight: field.weight,
-        per_game: field.perGame,
-        pool_mean: round(knn.fieldStats[i].mean),
-        pool_stdev: round(knn.fieldStats[i].stdev),
-      })),
+      fields: fields.fields.map((spec, i) => {
+        const { field, window } = parseCompsDimensionKey(spec.key);
+        const catalogue = compsField(field);
+        return {
+          key: spec.key,
+          field,
+          window,
+          label: catalogue?.label ?? field,
+          family: catalogue?.family ?? "production",
+          weight: spec.weight,
+          // The catalogue's flag, never the spec's: a windowed per-game field
+          // resolves with `perGame: false` (it was divided by the window's own
+          // games already) and is still a per-game number on screen.
+          per_game: catalogue?.perGame ?? false,
+          pool_mean: round(knn.fieldStats[i].mean),
+          pool_stdev: round(knn.fieldStats[i].stdev),
+        };
+      }),
       dropped_fields: fields.dropped,
       positions,
       min_games: filters.min_games,

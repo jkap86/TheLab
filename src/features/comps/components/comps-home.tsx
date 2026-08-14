@@ -12,14 +12,19 @@ import {
   isCustomized,
   resetPosition,
   setPositionWeights,
+  setPositionWindows,
   weightsFor,
+  windowsFor,
 } from "../prefs";
 import { useCompsPrefs } from "../use-comps-prefs";
 import { FieldEditor } from "./field-editor";
 import { PlayerPicker } from "./player-picker";
 import { ResultsList } from "./results-list";
 
+import { compsDimensionLabel } from "../../../shared/comps/windows";
+
 import type { CompsBasis } from "../../../shared/comps/filters";
+import type { CompsWindowKey } from "../../../shared/comps/windows";
 import type { CompsPlayerOptionPayload } from "../types";
 
 /**
@@ -45,28 +50,41 @@ export function CompsHome() {
     () => (position ? weightsFor(prefs, position) : null),
     [prefs, position],
   );
+  const windows = useMemo(
+    () => (position ? windowsFor(prefs, position) : null),
+    [prefs, position],
+  );
 
   // Only a *customized* board travels; the untouched one goes as no fields= at
   // all, sharing the default board's cache entry. Debounced as a string so a
-  // drag across a slider is one request, not one per notch.
+  // drag across a slider is one request, not one per notch — and the windows
+  // ride in the same string, since a window change is exactly as expensive a
+  // re-fetch as a weight change and settling them apart would fire two.
   const customized = position !== null && isCustomized(prefs, position);
-  const weightsKey =
-    customized && weights ? JSON.stringify(weights) : "";
-  const settledWeightsKey = useDebouncedValue(weightsKey, 250);
-  const weightsPending = settledWeightsKey !== weightsKey;
+  const boardKey =
+    customized && weights && windows
+      ? JSON.stringify({ weights, windows })
+      : "";
+  const settledBoardKey = useDebouncedValue(boardKey, 250);
+  const weightsPending = settledBoardKey !== boardKey;
 
   const query = useMemo(() => {
     if (!subject) return null;
+    const board = settledBoardKey
+      ? (JSON.parse(settledBoardKey) as {
+          weights: Record<string, number>;
+          windows: Record<string, CompsWindowKey>;
+        })
+      : null;
     return buildCompsQuery({
       playerId: subject.player_id,
       season,
       basis: prefs.basis,
       position: subject.position,
-      weights: settledWeightsKey
-        ? (JSON.parse(settledWeightsKey) as Record<string, number>)
-        : null,
+      weights: board?.weights ?? null,
+      windows: board?.windows,
     });
-  }, [subject, season, prefs.basis, settledWeightsKey]);
+  }, [subject, season, prefs.basis, settledBoardKey]);
 
   const comps = useComps(query);
   const updating = comps.stale || weightsPending || (comps.loading && !!comps.data);
@@ -156,22 +174,38 @@ export function CompsHome() {
 
           {comps.data && !editorOpen && (
             <p className="text-xs text-foreground/45">
-              Comparing on {fieldSummary(comps.data.fields.map((f) => f.label))}
+              {/* The dimension label, not the field's: a board comparing on
+                  three years of targets and one that compares on last season's
+                  are different boards, and the summary is the only place that
+                  says which one is on screen while the editor is shut. */}
+              Comparing on{" "}
+              {fieldSummary(
+                comps.data.fields.map((f) => compsDimensionLabel(f.key)),
+              )}
               {" · "}
               {comps.data.basis === "per_game" ? "per game" : "season totals"}
             </p>
           )}
 
-          {editorOpen && position && weights && (
+          {editorOpen && position && weights && windows && (
             <FieldEditor
               position={position}
               weights={weights}
+              windows={windows}
               customized={customized}
               onWeight={(key, weight) =>
                 update(
                   setPositionWeights(prefs, position, {
                     ...weights,
                     [key]: weight,
+                  }),
+                )
+              }
+              onWindow={(key, window) =>
+                update(
+                  setPositionWindows(prefs, position, {
+                    ...windows,
+                    [key]: window,
                   }),
                 )
               }

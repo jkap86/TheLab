@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import {
   compsSeasonAnchor,
+  compsWantedFields,
   resolveCompsFields,
   resolveSubjectPosition,
   resolveSubjectSeason,
@@ -83,6 +84,20 @@ describe("resolveSubjectPosition", () => {
   });
 });
 
+describe("compsWantedFields", () => {
+  test("defaults read their own season, and an explicit list is passed through", () => {
+    // The list the route materializes windows from *is* the list it resolves,
+    // which is the whole reason this is one function rather than two readings
+    // of `explicit ?? defaults`.
+    const defaults = compsWantedFields(null, "WR");
+    assert.ok(defaults.length > 0);
+    assert.ok(defaults.every((field) => field.window === "season"));
+
+    const explicit = [{ key: "rec_yd", weight: 70, window: "prev2" as const }];
+    assert.deepEqual(compsWantedFields(explicit, "WR"), explicit);
+  });
+});
+
 describe("resolveCompsFields", () => {
   test("null explicit fields resolve to the position's defaults", () => {
     const resolved = resolveCompsFields({
@@ -100,8 +115,8 @@ describe("resolveCompsFields", () => {
   test("explicit fields keep their weights and perGame comes from the catalogue", () => {
     const resolved = resolveCompsFields({
       explicit: [
-        { key: "rec_yd", weight: 70 },
-        { key: "age", weight: 30 },
+        { key: "rec_yd", weight: 70, window: "season" as const },
+        { key: "age", weight: 30, window: "season" as const },
       ],
       position: "WR",
       subject: subject({ rec_yd: 1200, age: 24 }),
@@ -114,11 +129,48 @@ describe("resolveCompsFields", () => {
     ]);
   });
 
+  test("a windowed field resolves to its dimension key, and never divides twice", () => {
+    // The window value was materialized already resolved under the basis — its
+    // divisor was the window's own games — so carrying `perGame` through would
+    // divide it again by this season's.
+    const resolved = resolveCompsFields({
+      explicit: [
+        { key: "rec_yd", weight: 70, window: "prev3" },
+        { key: "rec_tgt", weight: 30, window: "season" },
+      ],
+      position: "WR",
+      subject: subject({ "rec_yd@prev3": 900, rec_tgt: 100 }),
+      basis: "per_game",
+    });
+    assert.ok(resolved.ok);
+    assert.deepEqual(resolved.fields, [
+      { key: "rec_yd@prev3", weight: 70, perGame: false },
+      { key: "rec_tgt", weight: 30, perGame: true },
+    ]);
+  });
+
+  test("a subject with no career behind it drops the window, reported by dimension", () => {
+    // A rookie under a career window: the reader asked about the player, not
+    // the window, so the answer is the comparison that can be made plus a note
+    // naming the part that couldn't.
+    const resolved = resolveCompsFields({
+      explicit: [
+        { key: "rec_yd", weight: 100, window: "season" },
+        { key: "rec_tgt", weight: 60, window: "prev3" },
+      ],
+      position: "WR",
+      subject: subject({ rec_yd: 900, "rec_tgt@prev3": null }),
+      basis: "total",
+    });
+    assert.ok(resolved.ok);
+    assert.deepEqual(resolved.dropped, ["rec_tgt@prev3"]);
+  });
+
   test("a subject-missing field is dropped and reported, never a 400", () => {
     const resolved = resolveCompsFields({
       explicit: [
-        { key: "rec_yd", weight: 100 },
-        { key: "ktc_sf", weight: 40 },
+        { key: "rec_yd", weight: 100, window: "season" as const },
+        { key: "ktc_sf", weight: 40, window: "season" as const },
       ],
       position: "WR",
       subject: subject({ rec_yd: 1200, ktc_sf: null }),
@@ -134,7 +186,7 @@ describe("resolveCompsFields", () => {
 
   test("a subject answering nothing refuses with the named code", () => {
     const resolved = resolveCompsFields({
-      explicit: [{ key: "ktc_sf", weight: 40 }],
+      explicit: [{ key: "ktc_sf", weight: 40, window: "season" }],
       position: "WR",
       subject: subject({ ktc_sf: null }),
       basis: "total",
@@ -147,8 +199,8 @@ describe("resolveCompsFields", () => {
     // The parser can't see games; this is where that read has to land.
     const resolved = resolveCompsFields({
       explicit: [
-        { key: "rec_yd", weight: 100 },
-        { key: "age", weight: 50 },
+        { key: "rec_yd", weight: 100, window: "season" as const },
+        { key: "age", weight: 50, window: "season" as const },
       ],
       position: "WR",
       subject: subject({ rec_yd: 0, age: 24 }, 0),

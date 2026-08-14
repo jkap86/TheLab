@@ -1,5 +1,6 @@
 import { compsField, defaultWeightsFor, isCompsPosition } from "./fields.ts";
 import { fieldValue } from "./knn.ts";
+import { compsDimensionKey, DEFAULT_COMPS_WINDOW } from "./windows.ts";
 
 import type { CompsPosition } from "./fields.ts";
 import type { CompsBasis, CompsWeightedField } from "./filters.ts";
@@ -84,6 +85,29 @@ export function resolveSubjectPosition(
 }
 
 /**
+ * What the comparison was *asked* for: the caller's explicit list, or the
+ * position's defaults every one of which reads its own season.
+ *
+ * Split out of `resolveCompsFields` because the route needs it one step
+ * earlier than it needs the resolution — the windows have to be materialized
+ * onto the pool before the subject can be asked whether it answers them, and
+ * the answer to "which windows" is exactly this list. One function, so the
+ * dimensions materialized are by construction the dimensions resolved.
+ */
+export function compsWantedFields(
+  explicit: CompsWeightedField[] | null,
+  position: CompsPosition,
+): CompsWeightedField[] {
+  return (
+    explicit ??
+    defaultWeightsFor(position).map((field) => ({
+      ...field,
+      window: DEFAULT_COMPS_WINDOW,
+    }))
+  );
+}
+
+/**
  * The fields the comparison actually runs on: the caller's explicit list or
  * the position's defaults, minus any field the *subject* doesn't answer.
  *
@@ -104,19 +128,26 @@ export function resolveCompsFields({
   subject: CompsPoolRow;
   basis: CompsBasis;
 }): { ok: true; fields: CompsFieldSpec[]; dropped: string[] } | CompsRefusal {
-  const wanted = explicit ?? defaultWeightsFor(position);
+  const wanted = compsWantedFields(explicit, position);
 
   const fields: CompsFieldSpec[] = [];
   const dropped: string[] = [];
-  for (const { key, weight } of wanted) {
+  for (const { key, weight, window } of wanted) {
     const field = compsField(key);
     // The parser validated explicit keys and defaults come from the
     // catalogue, so an unknown key here is a programming error; skipping it
     // beats crashing on it.
     if (field === undefined) continue;
-    const spec = { key, weight, perGame: field.perGame };
+    const spec = {
+      key: compsDimensionKey(key, window),
+      weight,
+      // A windowed value was materialized already resolved under the basis, so
+      // the per-game divisor must not be applied a second time — its divisor
+      // was the window's own games and this row's are the wrong ones.
+      perGame: window === DEFAULT_COMPS_WINDOW && field.perGame,
+    };
     if (fieldValue(subject, spec, basis) === null) {
-      dropped.push(key);
+      dropped.push(spec.key);
     } else {
       fields.push(spec);
     }

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { PositionBadge } from "@/features/shared";
 
+import { compsDimensionLabel } from "../../../shared/comps/windows";
 import { pointsSummary, seasonCompareRows } from "../season-line";
 
 import type { CompsPayload, CompsResultRowPayload } from "../types";
@@ -42,8 +43,14 @@ export function ResultsList({
         {payload.dropped_fields.length > 0 && (
           <>
             {" "}
-            · not compared on {payload.dropped_fields.join(", ")} (no value for
-            the subject)
+            {/* Named, not keyed: a career window on a subject with no career
+                behind it lands here, and "rec_tgt@prev3" tells a reader
+                nothing about which of their choices went unanswered. */}
+            · not compared on{" "}
+            {payload.dropped_fields
+              .map((key) => compsDimensionLabel(key).toLowerCase())
+              .join(", ")}{" "}
+            (no value for the subject)
           </>
         )}
         {stale && <span className="ml-2 text-active/80">Updating…</span>}

@@ -73,6 +73,28 @@ const STAT_FIELDS = COMPS_FIELDS.filter(
 const GATED_FIELDS = STAT_FIELDS.filter((field) => field.gated === true);
 
 /**
+ * Every unverified *stat key* worth watching for: the gated fields' own keys
+ * plus the raw keys the derived fields are computed from. Tracked as stat keys
+ * rather than field keys because the two part company — `tm_off_snp` is a
+ * denominator no field is named after, and `snap_pct` is a field named after no
+ * key.
+ */
+const WATCHED_KEYS: readonly string[] = [
+  ...new Set([
+    ...GATED_FIELDS.map((field) => field.statKey as string),
+    ...COMPS_FIELDS.flatMap((field) => field.requires ?? []),
+  ]),
+];
+
+/** Per derived field, the keys its season's feed has to carry to answer it. */
+const REQUIRED_KEYS: Record<string, readonly string[]> = Object.fromEntries(
+  COMPS_FIELDS.filter((field) => field.derived === true).map((field) => [
+    field.key,
+    field.requires ?? [],
+  ]),
+);
+
+/**
  * Sleeper's own totals on a stored line — the keys `scoreStatLine` refuses to
  * score (they restate an answer rather than naming an event), summed here for
  * exactly that reason: they *are* the answer, and "how did that season go" is
@@ -106,10 +128,15 @@ export function ageAtSeasonStart(
 const stat = (
   stats: Record<string, number> | null,
   key: string,
-): number => {
-  const value = stats?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-};
+): number => finite(stats?.[key]) ?? 0;
+
+/**
+ * A finite number or null — the *other* reading, for the keys whose absence is
+ * unknown rather than zero: a week with no snap count says nothing about how
+ * many snaps were played, where a week with no reception says there were none.
+ */
+const finite = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
 
 export function assemblePoolRows({
   statLines,
@@ -139,6 +166,12 @@ export function assemblePoolRows({
       cells: string[];
       shareTgt: number;
       shareRush: number;
+      /** Snaps and team snaps over the weeks carrying *both* keys. */
+      snapPlayer: number;
+      snapTeam: number;
+      /** Snaps, and the targets from the same weeks — a different week set. */
+      snaps: number;
+      snapTgt: number;
     }
   >();
 
@@ -165,6 +198,10 @@ export function assemblePoolRows({
         cells: [],
         shareTgt: 0,
         shareRush: 0,
+        snapPlayer: 0,
+        snapTeam: 0,
+        snaps: 0,
+        snapTgt: 0,
       };
       byPlayer.set(line.player_id, entry);
     }
@@ -182,13 +219,27 @@ export function assemblePoolRows({
       for (const field of STAT_FIELDS) {
         entry.totals[field.key] += stat(stats, field.statKey as string);
       }
-      for (const field of GATED_FIELDS) {
-        if (!vocabulary.has(field.key) && (field.statKey as string) in stats) {
-          vocabulary.add(field.key);
-        }
+      for (const key of WATCHED_KEYS) {
+        if (!vocabulary.has(key) && key in stats) vocabulary.add(key);
       }
       for (const [i, key] of POINTS_KEYS.entries()) {
         entry.points[i] += stat(stats, key);
+      }
+
+      // The snap rates, each summed only over the weeks that can answer it:
+      // targets-per-snap over the weeks carrying snaps, snap share over the
+      // weeks carrying snaps *and* the team's. A numerator counting a week its
+      // denominator never saw is the failure the usage shares below already
+      // avoid by pairing on team-weeks.
+      const snaps = finite(stats.off_snp);
+      if (snaps !== null) {
+        entry.snaps += snaps;
+        entry.snapTgt += stat(stats, "rec_tgt");
+        const teamSnaps = finite(stats.tm_off_snp);
+        if (teamSnaps !== null) {
+          entry.snapPlayer += snaps;
+          entry.snapTeam += teamSnaps;
+        }
       }
     }
 
@@ -204,22 +255,21 @@ export function assemblePoolRows({
     }
   }
 
-  // A share out of the team-week cells the player actually appeared in — so a
-  // midseason trade reads each half against the right offense — as a
-  // percentage. Null where nothing can be attributed (no team on any line) or
-  // the denominator is empty (a season whose feed lacks the key entirely,
-  // which must not read as everyone commanding 0%).
-  const share = (
-    numerator: number,
+  // The team-week denominator a share is taken against: the cells the player
+  // actually appeared in, so a midseason trade reads each half against the
+  // right offense.
+  const teamTotal = (
     cells: readonly string[],
     totals: ReadonlyMap<string, number>,
-  ): number | null => {
-    if (cells.length === 0) return null;
+  ): number => {
     let denominator = 0;
     for (const cell of cells) denominator += totals.get(cell) ?? 0;
-    if (denominator <= 0) return null;
-    return round2((numerator / denominator) * 100);
+    return denominator;
   };
+
+  /** Whether the season's feed carries every key a derived field needs. */
+  const answers = (key: string): boolean =>
+    (REQUIRED_KEYS[key] ?? []).every((required) => vocabulary.has(required));
 
   const rows: CompsPoolRow[] = [];
   for (const [player_id, entry] of byPlayer) {
@@ -228,18 +278,60 @@ export function assemblePoolRows({
     const history = ktcHistory[player_id];
     const marketAdp = adp.get(player_id);
 
+    // Every derived rate's own numerator and denominator, scaled so the value
+    // is exactly `n / d` whatever the unit — a percentage carries the ×100 in
+    // its numerator. That uniformity is what lets a multi-season window pool
+    // any of them as Σn / Σd without knowing which rate it is holding.
+    const rates: Record<string, { n: number; d: number }> = {};
+    const rate = (
+      key: string,
+      n: number,
+      d: number,
+      known: boolean,
+    ): number | null => {
+      // Null where nothing can be attributed, where the denominator is empty,
+      // or where the season's feed never published the keys — none of which
+      // may read as everyone commanding 0%.
+      if (!known || !(d > 0)) return null;
+      rates[key] = { n, d };
+      return round2(n / d);
+    };
+
     const values: Record<string, number | null> = {};
     for (const field of STAT_FIELDS) {
       // Summed floats carry binary noise; two decimals is the precision the
       // stats are quoted at. A gated field outside the season's vocabulary is
       // unknown, never zero.
       values[field.key] =
-        field.gated === true && !vocabulary.has(field.key)
+        field.gated === true && !vocabulary.has(field.statKey as string)
           ? null
           : round2(entry.totals[field.key]);
     }
-    values.tgt_share = share(entry.shareTgt, entry.cells, teamTgt);
-    values.rush_share = share(entry.shareRush, entry.cells, teamRush);
+    const attributed = entry.cells.length > 0;
+    values.tgt_share = rate(
+      "tgt_share",
+      entry.shareTgt * 100,
+      teamTotal(entry.cells, teamTgt),
+      attributed,
+    );
+    values.rush_share = rate(
+      "rush_share",
+      entry.shareRush * 100,
+      teamTotal(entry.cells, teamRush),
+      attributed,
+    );
+    values.snap_pct = rate(
+      "snap_pct",
+      entry.snapPlayer * 100,
+      entry.snapTeam,
+      answers("snap_pct"),
+    );
+    values.tgt_per_snap = rate(
+      "tgt_per_snap",
+      entry.snapTgt,
+      entry.snaps,
+      answers("tgt_per_snap"),
+    );
     values.age = ageAtSeasonStart(profile?.birth_date ?? null, season);
     values.ktc_sf = marketKtc?.sf ?? null;
     values.ktc_oneqb = marketKtc?.oneqb ?? null;
@@ -259,6 +351,7 @@ export function assemblePoolRows({
       team: profile?.team ?? null,
       games: entry.games,
       values,
+      rates,
       points: {
         ppr: round2(entry.points[0]),
         half_ppr: round2(entry.points[1]),

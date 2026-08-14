@@ -24,6 +24,8 @@ const spec = (
   over: Partial<CompsFieldSpecPayload> = {},
 ): CompsFieldSpecPayload => ({
   key,
+  field: key,
+  window: "season",
   label: key,
   family: "production",
   weight: 100,
@@ -137,5 +139,37 @@ describe("pointsSummary", () => {
       pointsSummary(rowPayload({ line: { pts_ppr: null } }), "per_game"),
       null,
     );
+  });
+});
+
+describe("seasonCompareRows with windows", () => {
+  test("a windowed field is its own row, labelled with the stretch it covers", () => {
+    // The line is always the anchor season, so a field weighted over three
+    // years is a different number that happens to share a name — folding the
+    // two together would put the weight on a number the distance never read.
+    const subject = rowPayload({
+      line: { rec_tgt: 100 },
+      values: { "rec_tgt@prev3": 78 },
+    });
+    const comp = rowPayload({
+      line: { rec_tgt: 90 },
+      values: { "rec_tgt@prev3": 81 },
+    });
+    const rows = seasonCompareRows(
+      [spec("rec_tgt@prev3", { field: "rec_tgt", window: "prev3" })],
+      subject,
+      comp,
+      "total",
+    );
+
+    const line = rows.find((r) => r.key === "rec_tgt")!;
+    assert.equal(line.weight, null, "the season's own row carries no weight");
+    assert.equal(line.subject, 100);
+
+    const windowed = rows.find((r) => r.key === "rec_tgt@prev3")!;
+    assert.equal(windowed.label, "Targets · prev 3 yrs");
+    assert.equal(windowed.weight, 100);
+    assert.equal(windowed.subject, 78);
+    assert.equal(windowed.comp, 81);
   });
 });

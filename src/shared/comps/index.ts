@@ -12,6 +12,7 @@ export {
   COMPS_FIELDS,
   COMPS_POSITIONS,
   compsField,
+  compsFieldTakesWindow,
   defaultWeightsFor,
   isCompsPosition,
 } from "./fields";
@@ -39,8 +40,21 @@ export {
 } from "./read-cache";
 export {
   compsSeasonAnchor,
+  compsWantedFields,
   resolveCompsFields,
   resolveSubjectPosition,
   resolveSubjectSeason,
 } from "./resolve";
 export type { CompsRefusal } from "./resolve";
+export {
+  COMPS_WINDOWS,
+  COMPS_WINDOW_KEYS,
+  compsDimensionKey,
+  compsDimensionLabel,
+  compsWindow,
+  DEFAULT_COMPS_WINDOW,
+  isCompsWindow,
+  parseCompsDimensionKey,
+  withWindowValues,
+} from "./windows";
+export type { CompsWindow, CompsWindowKey } from "./windows";
