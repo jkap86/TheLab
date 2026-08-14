@@ -1,10 +1,13 @@
 export { assemblePoolRows, ageAtSeasonStart, seasonLine } from "./assemble";
 export type {
   CompsAdpInput,
+  CompsKtcHistoryInput,
   CompsKtcInput,
   CompsProfileInput,
   CompsStatLineInput,
 } from "./assemble";
+export { withCareerValues, PREV_SEASONS_WINDOW } from "./career";
+export type { CompsSeasonPool } from "./career";
 export {
   COMPS_FIELDS,
   COMPS_POSITIONS,

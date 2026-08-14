@@ -74,6 +74,9 @@ export async function listStoredStatWeeks({
   return rows.map((r) => r.week);
 }
 
+/** A season-read line: the weekly stats plus the team the player was on. */
+export type SeasonStatLine = PlayerStatWeek & { team: string | null };
+
 /**
  * Every stored stat line of one season — the comps pool's read, so it takes no
  * week or player narrowing: the pool is every player-season and
@@ -83,14 +86,20 @@ export async function listStoredStatWeeks({
  * A row per player per week *played* — `hasStatLine` is the ingestion filter,
  * so counting a player's rows counts his games, the denominator `playerPpg`
  * already reads it as.
+ *
+ * `team` rides along because it is the row's *historical* team — Sleeper names
+ * it on each week's line, where the players cache only knows the current one —
+ * which is what makes a usage share honest across a trade or a decade. Null
+ * where the feed didn't say, which the share derivations read as "can't
+ * attribute", never as a team.
  */
 export async function listSeasonStatLines({
   season,
 }: {
   season: string;
-}): Promise<PlayerStatWeek[]> {
-  const { rows } = await pool.query<PlayerStatWeek>(
-    `SELECT player_id, week, COALESCE(stats, '{}'::jsonb) AS stats
+}): Promise<SeasonStatLine[]> {
+  const { rows } = await pool.query<SeasonStatLine>(
+    `SELECT player_id, week, team, COALESCE(stats, '{}'::jsonb) AS stats
        FROM player_week_stats
       WHERE season = $1`,
     [season],

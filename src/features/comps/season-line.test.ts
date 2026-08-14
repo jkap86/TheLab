@@ -43,6 +43,26 @@ describe("seasonCompareRows", () => {
     assert.ok(keys.includes("pts_ppr"));
   });
 
+  test("a weighted derived share renders exactly once, off values", () => {
+    // tgt_share is production-family but not on `line` (a rate, not a total);
+    // the line loop must skip it or the table draws an empty duplicate row
+    // beside the real one from the extras loop.
+    const subject = rowPayload({ line: { rec: 5 }, values: { tgt_share: 24.5 } });
+    const comp = rowPayload({ line: { rec: 4 }, values: { tgt_share: 22 } });
+    const rows = seasonCompareRows(
+      [spec("tgt_share", { per_game: false, weight: 80, pool_mean: 18 })],
+      subject,
+      comp,
+      "per_game",
+    );
+    const shares = rows.filter((r) => r.key === "tgt_share");
+    assert.equal(shares.length, 1);
+    assert.equal(shares[0].subject, 24.5);
+    assert.equal(shares[0].comp, 22);
+    // Already a rate: the basis must not mark it per-game.
+    assert.equal(shares[0].perGame, false);
+  });
+
   test("a weighted field never vanishes, even at zero on both sides", () => {
     const subject = rowPayload({ line: { rush_yd: 0 }, values: { rush_yd: 0 } });
     const comp = rowPayload({ line: { rush_yd: 0 }, values: { rush_yd: 0 } });

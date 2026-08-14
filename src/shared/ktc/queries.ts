@@ -1,5 +1,7 @@
 import { pool } from "@/shared/db";
 
+import { foldKtcSfHistory } from "./history-stats";
+import type { KtcSfHistory, KtcSfHistoryRow } from "./history-stats";
 import { ktcPickKey, parseKtcPickName } from "./picks";
 import type { KtcPickPrice } from "./picks";
 import { foldKtcValues } from "./values";
@@ -111,6 +113,70 @@ export async function getKtcValuesAsOf(anchorIso: string): Promise<KtcValueSet> 
   );
 
   return foldKtcValues(rows);
+}
+
+/**
+ * How far apart the two endpoints of a trend read sit. Ninety days because the
+ * question is "how was the market moving into this season" — long enough that
+ * a camp battle or a breakout August registers as a slope rather than a blip,
+ * short enough that the move is about *this* season and not the one before.
+ */
+export const KTC_TREND_WINDOW_DAYS = 90;
+
+/**
+ * The superflex history read behind the comps market fields: per player, the
+ * career-peak value at or before `anchorIso` and the move over the
+ * {@link KTC_TREND_WINDOW_DAYS} entering it.
+ *
+ * Strictly backwards-looking on every part, {@link getKtcValuesAsOf}'s own
+ * rule: the peak scans everything up to the anchor and nothing after it, and
+ * each trend endpoint is an as-of read with the same
+ * {@link KTC_AS_OF_WINDOW_DAYS} lookback — so a gap in the daily series widens
+ * to the nearest earlier snapshot and never to a later one. The peak's grain
+ * drives the join (every entry with any history before the anchor), because a
+ * player who has fallen off the board by the anchor still *has* a career high
+ * — an as-of-driven join would erase exactly the faded players a peak field
+ * exists to recognise. Duplicate entries resolving to one Sleeper id go
+ * through {@link foldKtcSfHistory}, which is pure for the reason
+ * `foldKtcValues` is.
+ */
+export async function getKtcSfHistoryAsOf(
+  anchorIso: string,
+): Promise<Record<string, KtcSfHistory>> {
+  const { rows } = await pool.query<KtcSfHistoryRow>(
+    `WITH peak AS (
+       SELECT ktc_id, max(sf_value) AS sf_value
+         FROM ktc_value_history
+        WHERE sf_value IS NOT NULL AND date <= $1::date
+        GROUP BY ktc_id
+     ), asof AS (
+       SELECT DISTINCT ON (ktc_id) ktc_id, sf_value
+         FROM ktc_value_history
+        WHERE sf_value IS NOT NULL
+          AND date <= $1::date
+          AND date > $1::date - $2::int
+        ORDER BY ktc_id, date DESC
+     ), prior AS (
+       SELECT DISTINCT ON (ktc_id) ktc_id, sf_value
+         FROM ktc_value_history
+        WHERE sf_value IS NOT NULL
+          AND date <= $1::date - $3::int
+          AND date > $1::date - $3::int - $2::int
+        ORDER BY ktc_id, date DESC
+     )
+     SELECT v.sleeper_id,
+            peak.sf_value  AS peak_sf,
+            asof.sf_value  AS asof_sf,
+            prior.sf_value AS prior_sf
+       FROM peak
+       JOIN ktc_values v USING (ktc_id)
+       LEFT JOIN asof USING (ktc_id)
+       LEFT JOIN prior USING (ktc_id)
+      WHERE v.sleeper_id IS NOT NULL`,
+    [anchorIso, KTC_AS_OF_WINDOW_DAYS, KTC_TREND_WINDOW_DAYS],
+  );
+
+  return foldKtcSfHistory(rows);
 }
 
 /** KTC's pick rows, keyed by {@link ktcPickKey} — see {@link getKtcPickBoard}. */

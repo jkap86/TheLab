@@ -25,11 +25,15 @@ export type { KtcValidation } from "./validate";
 export {
   getKtcValuesBySleeperId,
   getKtcValuesAsOf,
+  getKtcSfHistoryAsOf,
   countPricedKtcValues,
   getKtcPickBoard,
   KTC_AS_OF_WINDOW_DAYS,
+  KTC_TREND_WINDOW_DAYS,
 } from "./queries";
 export type { KtcValue, KtcValueSet, KtcPickBoard } from "./queries";
+export { foldKtcSfHistory } from "./history-stats";
+export type { KtcSfHistory, KtcSfHistoryRow } from "./history-stats";
 export {
   ktcPickBaseSeason,
   ktcPickBoardRows,
