@@ -71,8 +71,13 @@ export function seasonCompareRows(
     });
   };
 
+  // Line-read production only: a derived share is not on `line` (it is a rate,
+  // not a season total), so it reaches the table through the weighted-extras
+  // loop below — a line row here would draw an empty duplicate beside it.
   for (const field of COMPS_FIELDS) {
-    if (field.family === "production") lineRow(field.key, field.label);
+    if (field.family === "production" && field.derived !== true) {
+      lineRow(field.key, field.label);
+    }
   }
   for (const [key, label] of Object.entries(POINTS_LABELS)) {
     lineRow(key, label);

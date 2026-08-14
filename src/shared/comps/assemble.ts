@@ -15,6 +15,14 @@ import type { CompsPoolRow } from "./knn.ts";
 /** One stored weekly line, as `listSeasonStatLines` returns it. */
 export type CompsStatLineInput = {
   player_id: string;
+  week: number;
+  /**
+   * The team the player was on *that week* — the row's own attribution, which
+   * is what makes a usage share honest across a trade. Null where the feed
+   * didn't say, which excludes the line from both ends of a share rather than
+   * filing it under a guessed team.
+   */
+  team: string | null;
   stats: Record<string, number> | null;
 };
 
@@ -42,8 +50,19 @@ export type CompsAdpInput = ReadonlyMap<
   { redraft: { adp: number } | null; dynasty: { adp: number } | null }
 >;
 
-const PRODUCTION_FIELDS = COMPS_FIELDS.filter(
-  (field) => field.family === "production",
+/**
+ * KTC history per player id — peak and trend entering the season, both nullable
+ * on the market family's terms: a season before KTC existed, or a player its
+ * board never carried, is unknown and never zero.
+ */
+export type CompsKtcHistoryInput = Record<
+  string,
+  { peak: number | null; trend: number | null }
+>;
+
+/** The production fields read straight off a line — the derived ones aren't. */
+const STAT_FIELDS = COMPS_FIELDS.filter(
+  (field) => field.family === "production" && field.derived !== true,
 );
 
 /**
@@ -76,32 +95,64 @@ export function ageAtSeasonStart(
   return Math.round(age * 100) / 100;
 }
 
+/** A finite stat off a line, else 0 — the absent-is-zero production rule. */
+const stat = (
+  stats: Record<string, number> | null,
+  key: string,
+): number => {
+  const value = stats?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+};
+
 export function assemblePoolRows({
   statLines,
   profiles,
   ktc,
+  ktcHistory,
   adp,
   season,
 }: {
   statLines: readonly CompsStatLineInput[];
   profiles: Record<string, CompsProfileInput>;
   ktc: CompsKtcInput;
+  ktcHistory: CompsKtcHistoryInput;
   adp: CompsAdpInput;
   season: string;
 }): CompsPoolRow[] {
   // One accumulator per player: games, production and point totals in a
-  // single pass.
+  // single pass. The share numerators are tracked apart from the totals —
+  // they sum only the team-attributed lines, so numerator and denominator
+  // always describe the same weeks.
   const byPlayer = new Map<
     string,
-    { games: number; totals: Record<string, number>; points: number[] }
+    {
+      games: number;
+      totals: Record<string, number>;
+      points: number[];
+      cells: string[];
+      shareTgt: number;
+      shareRush: number;
+    }
   >();
+
+  // Team-week usage totals, the share denominators: what the whole team threw
+  // and ran in each week, keyed by the row's own team attribution.
+  const teamTgt = new Map<string, number>();
+  const teamRush = new Map<string, number>();
 
   for (const line of statLines) {
     let entry = byPlayer.get(line.player_id);
     if (!entry) {
       const totals: Record<string, number> = {};
-      for (const field of PRODUCTION_FIELDS) totals[field.key] = 0;
-      entry = { games: 0, totals, points: [0, 0, 0] };
+      for (const field of STAT_FIELDS) totals[field.key] = 0;
+      entry = {
+        games: 0,
+        totals,
+        points: [0, 0, 0],
+        cells: [],
+        shareTgt: 0,
+        shareRush: 0,
+      };
       byPlayer.set(line.player_id, entry);
     }
 
@@ -114,36 +165,64 @@ export function assemblePoolRows({
     // An absent production key is a real 0: Sleeper omits what didn't happen,
     // which is the opposite reading from the market fields' null-is-unknown.
     const stats = line.stats;
-    if (!stats) continue;
-    for (const field of PRODUCTION_FIELDS) {
-      const value = stats[field.statKey as string];
-      if (typeof value === "number" && Number.isFinite(value)) {
-        entry.totals[field.key] += value;
+    if (stats) {
+      for (const field of STAT_FIELDS) {
+        entry.totals[field.key] += stat(stats, field.statKey as string);
+      }
+      for (const [i, key] of POINTS_KEYS.entries()) {
+        entry.points[i] += stat(stats, key);
       }
     }
-    for (const [i, key] of POINTS_KEYS.entries()) {
-      const value = stats[key];
-      if (typeof value === "number" && Number.isFinite(value)) {
-        entry.points[i] += value;
-      }
+
+    if (line.team !== null) {
+      const cell = `${line.team}:${line.week}`;
+      entry.cells.push(cell);
+      const tgt = stat(stats, "rec_tgt");
+      const rush = stat(stats, "rush_att");
+      entry.shareTgt += tgt;
+      entry.shareRush += rush;
+      teamTgt.set(cell, (teamTgt.get(cell) ?? 0) + tgt);
+      teamRush.set(cell, (teamRush.get(cell) ?? 0) + rush);
     }
   }
+
+  // A share out of the team-week cells the player actually appeared in — so a
+  // midseason trade reads each half against the right offense — as a
+  // percentage. Null where nothing can be attributed (no team on any line) or
+  // the denominator is empty (a season whose feed lacks the key entirely,
+  // which must not read as everyone commanding 0%).
+  const share = (
+    numerator: number,
+    cells: readonly string[],
+    totals: ReadonlyMap<string, number>,
+  ): number | null => {
+    if (cells.length === 0) return null;
+    let denominator = 0;
+    for (const cell of cells) denominator += totals.get(cell) ?? 0;
+    if (denominator <= 0) return null;
+    return round2((numerator / denominator) * 100);
+  };
 
   const rows: CompsPoolRow[] = [];
   for (const [player_id, entry] of byPlayer) {
     const profile = profiles[player_id];
     const marketKtc = ktc[player_id];
+    const history = ktcHistory[player_id];
     const marketAdp = adp.get(player_id);
 
     const values: Record<string, number | null> = {};
-    for (const field of PRODUCTION_FIELDS) {
+    for (const field of STAT_FIELDS) {
       // Summed floats carry binary noise; two decimals is the precision the
       // stats are quoted at.
-      values[field.key] = Math.round(entry.totals[field.key] * 100) / 100;
+      values[field.key] = round2(entry.totals[field.key]);
     }
+    values.tgt_share = share(entry.shareTgt, entry.cells, teamTgt);
+    values.rush_share = share(entry.shareRush, entry.cells, teamRush);
     values.age = ageAtSeasonStart(profile?.birth_date ?? null, season);
     values.ktc_sf = marketKtc?.sf ?? null;
     values.ktc_oneqb = marketKtc?.oneqb ?? null;
+    values.ktc_peak_sf = history?.peak ?? null;
+    values.ktc_trend_sf = history?.trend ?? null;
     values.adp_dynasty = marketAdp?.dynasty?.adp ?? null;
     values.adp_redraft = marketAdp?.redraft?.adp ?? null;
 
@@ -171,14 +250,17 @@ export function assemblePoolRows({
 const round2 = (value: number): number => Math.round(value * 100) / 100;
 
 /**
- * The whole season as one line — every production total plus the three
- * fantasy-point totals, resolved under the basis exactly as the weighted
+ * The whole season as one line — every line-read production total plus the
+ * three fantasy-point totals, resolved under the basis exactly as the weighted
  * fields are (per-game divides by games; a zero-game season has no per-game
  * reading and answers null).
  *
  * This is what "how did that season go" reads off: a comp is picked on the
  * weighted criteria, and this line is the outcome those criteria led to,
- * whatever was weighted.
+ * whatever was weighted. The derived shares are deliberately not on it — they
+ * are comparison criteria rather than season totals, already rates, and
+ * nullable — so they reach the reader the way the profile and market fields
+ * do: on `values`, when weighted.
  */
 export function seasonLine(
   row: CompsPoolRow,
@@ -189,7 +271,7 @@ export function seasonLine(
     perGame ? (row.games > 0 ? total / row.games : null) : total;
 
   const line: Record<string, number | null> = {};
-  for (const field of PRODUCTION_FIELDS) {
+  for (const field of STAT_FIELDS) {
     line[field.key] = resolve(
       typeof row.values[field.key] === "number"
         ? (row.values[field.key] as number)

@@ -11,7 +11,9 @@ import type {
 const line = (
   player_id: string,
   stats: Record<string, number> | null,
-): CompsStatLineInput => ({ player_id, stats });
+  week = 1,
+  team: string | null = null,
+): CompsStatLineInput => ({ player_id, week, team, stats });
 
 const profile = (over: Partial<CompsProfileInput> = {}): CompsProfileInput => ({
   name: "Some Player",
@@ -28,6 +30,7 @@ const assemble = (
     statLines: [],
     profiles: {},
     ktc: {},
+    ktcHistory: {},
     adp: new Map(),
     season: "2025",
     ...over,
@@ -159,16 +162,86 @@ describe("assemblePoolRows", () => {
     // The points keys stay out of `values` — a KNN field they are not.
     assert.equal(rows[0].values.pts_ppr, undefined);
   });
+
+  test("a usage share is the player's count over his team-week totals", () => {
+    const rows = assemble({
+      statLines: [
+        line("1", { rec_tgt: 8, rush_att: 1 }, 1, "PHI"),
+        line("2", { rec_tgt: 2, rush_att: 19 }, 1, "PHI"),
+      ],
+    });
+    const a = rows.find((r) => r.player_id === "1")!.values;
+    const b = rows.find((r) => r.player_id === "2")!.values;
+    assert.equal(a.tgt_share, 80);
+    assert.equal(b.tgt_share, 20);
+    assert.equal(a.rush_share, 5);
+    assert.equal(b.rush_share, 95);
+  });
+
+  test("a traded player's share reads each half against the right offense", () => {
+    // 8 of 10 on PHI, then 2 of 8 on DAL: 10 of 18 overall — the denominators
+    // are the team-weeks he appeared in, not either team's whole season.
+    const rows = assemble({
+      statLines: [
+        line("1", { rec_tgt: 8 }, 1, "PHI"),
+        line("2", { rec_tgt: 2 }, 1, "PHI"),
+        line("1", { rec_tgt: 2 }, 2, "DAL"),
+        line("3", { rec_tgt: 6 }, 2, "DAL"),
+        // A PHI week he wasn't there for must not enter his denominator.
+        line("2", { rec_tgt: 12 }, 2, "PHI"),
+      ],
+    });
+    const traded = rows.find((r) => r.player_id === "1")!.values;
+    assert.equal(traded.tgt_share, Math.round((10 / 18) * 10000) / 100);
+  });
+
+  test("no team attribution means no share — and no denominator means no share", () => {
+    const rows = assemble({
+      statLines: [
+        // No line names a team: nothing can be attributed.
+        line("1", { rec_tgt: 8 }, 1, null),
+        // Attributed, but nobody on the team has the key that week — a feed
+        // without targets must not read as everyone commanding 0%.
+        line("2", { rec: 4 }, 1, "PHI"),
+      ],
+    });
+    assert.equal(rows.find((r) => r.player_id === "1")!.values.tgt_share, null);
+    assert.equal(rows.find((r) => r.player_id === "2")!.values.tgt_share, null);
+  });
+
+  test("an attributed zero against a live denominator is a real 0% share", () => {
+    const rows = assemble({
+      statLines: [
+        line("1", { rec_tgt: 0 }, 1, "PHI"),
+        line("2", { rec_tgt: 10 }, 1, "PHI"),
+      ],
+    });
+    assert.equal(rows.find((r) => r.player_id === "1")!.values.tgt_share, 0);
+  });
+
+  test("KTC history joins by id and absence is null, never zero", () => {
+    const rows = assemble({
+      statLines: [line("1", { rec: 1 }), line("2", { rec: 1 })],
+      ktcHistory: { "1": { peak: 9500, trend: -400 } },
+    });
+    const known = rows.find((r) => r.player_id === "1")!.values;
+    assert.equal(known.ktc_peak_sf, 9500);
+    assert.equal(known.ktc_trend_sf, -400);
+    const unknown = rows.find((r) => r.player_id === "2")!.values;
+    assert.equal(unknown.ktc_peak_sf, null);
+    assert.equal(unknown.ktc_trend_sf, null);
+  });
 });
 
 describe("seasonLine", () => {
   const row = assemblePoolRows({
     statLines: [
-      line("1", { rec: 5, rec_yd: 60, pts_ppr: 16.5 }),
-      line("1", { rec: 3, rec_yd: 40, pts_ppr: 8.5 }),
+      line("1", { rec: 5, rec_yd: 60, pts_ppr: 16.5 }, 1, "CIN"),
+      line("1", { rec: 3, rec_yd: 40, pts_ppr: 8.5 }, 2, "CIN"),
     ],
     profiles: {},
     ktc: {},
+    ktcHistory: {},
     adp: new Map(),
     season: "2025",
   })[0];
@@ -194,5 +267,13 @@ describe("seasonLine", () => {
     const empty = { ...row, games: 0 };
     assert.equal(seasonLine(empty, "per_game").rec, null);
     assert.equal(seasonLine(empty, "total").rec, 8);
+  });
+
+  test("the derived shares stay off the line — a rate is not a season total", () => {
+    // They reach the reader on `values` when weighted, like the profile and
+    // market fields; on the line they would be divided by games under the
+    // per-game basis, which is nonsense for something already a rate.
+    assert.equal(seasonLine(row, "total").tgt_share, undefined);
+    assert.equal(seasonLine(row, "per_game").tgt_share, undefined);
   });
 });

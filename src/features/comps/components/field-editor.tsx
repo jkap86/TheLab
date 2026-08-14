@@ -88,6 +88,13 @@ export function FieldEditor({
                 ),
               )}
             </ul>
+            {family === "profile" && (
+              <p className="mt-2 text-[11px] leading-4 text-foreground/40">
+                Career and recent form read stored prior seasons — weighting
+                one removes first-year seasons, which have no prior form to
+                measure.
+              </p>
+            )}
             {family === "market" && (
               <p className="mt-2 text-[11px] leading-4 text-foreground/40">
                 Weighting a market value removes players it doesn&apos;t price

@@ -20,24 +20,42 @@ describe("COMPS_FIELDS", () => {
     assert.equal(new Set(keys).size, keys.length);
   });
 
-  test("a statKey is present exactly on the production fields", () => {
+  test("a statKey is present exactly on the line-read production fields", () => {
+    // A derived field is computed at assembly, so a statKey on one would be a
+    // key nothing reads — and a non-derived production field without one would
+    // assemble as a column of zeroes.
     for (const field of COMPS_FIELDS) {
       assert.equal(
         field.statKey !== undefined,
-        field.family === "production",
+        field.family === "production" && field.derived !== true,
         `${field.key}: statKey and family disagree`,
       );
     }
   });
 
-  test("perGame is true exactly for production — age-per-game is nonsense", () => {
+  test("perGame is true exactly for line-read production — a share is already a rate", () => {
     for (const field of COMPS_FIELDS) {
       assert.equal(
         field.perGame,
-        field.family === "production",
+        field.family === "production" && field.derived !== true,
         `${field.key}: perGame and family disagree`,
       );
     }
+  });
+
+  test("derived appears only on production fields, and never with a default", () => {
+    // Derived values are nullable (a season whose feed lacks the inputs), so a
+    // default weight would silently exclude those seasons from every first
+    // board — the market fields' own rule.
+    for (const field of COMPS_FIELDS) {
+      if (field.derived !== true) continue;
+      assert.equal(field.family, "production", `${field.key} derived family`);
+      assert.deepEqual(field.defaultWeights, {}, `${field.key} defaults`);
+    }
+    assert.deepEqual(
+      COMPS_FIELDS.filter((f) => f.derived === true).map((f) => f.key),
+      ["rush_share", "tgt_share"],
+    );
   });
 
   test("every default weight is positive and within 0–100", () => {
@@ -72,6 +90,15 @@ describe("COMPS_FIELDS", () => {
         {},
         `${field.key} defaults a market weight`,
       );
+    }
+  });
+
+  test("the career fields carry no default — a rookie season answers null", () => {
+    // Same argument as the market rule one test up: a defaulted nullable field
+    // silently excludes every season that can't answer it, and every player's
+    // first stored season can't.
+    for (const key of ["career_ppg", "prev3_ppg"]) {
+      assert.deepEqual(compsField(key)?.defaultWeights, {}, key);
     }
   });
 });

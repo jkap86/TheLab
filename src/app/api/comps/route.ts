@@ -10,6 +10,7 @@ import {
   resolveSubjectSeason,
   runCompsKnn,
   seasonLine,
+  withCareerValues,
 } from "@/shared/comps";
 
 import { readFailureResponse } from "../read-failure";
@@ -57,7 +58,11 @@ export async function GET(request: Request) {
   const filters = parsed.filters;
 
   try {
-    const pools = await getCompsPools();
+    // The career fields are corpus-relative (season N reads seasons < N), so
+    // they are derived over the whole set here rather than stored on the
+    // per-season cached pools — one pure pass per request, and a deepening
+    // archive re-answers them without waiting out anyone's TTL.
+    const pools = withCareerValues(await getCompsPools());
 
     const subjectSeasons = pools
       .filter((pool) =>

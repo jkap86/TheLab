@@ -10,7 +10,7 @@ export {
   listStoredSeasons,
   listStoredStatWeeks,
 } from "./queries";
-export type { PlayerStatWeek } from "./queries";
+export type { PlayerStatWeek, SeasonStatLine } from "./queries";
 export { startStatsScheduler, STATS_INTERVAL_MS } from "./scheduler";
 export {
   syncStats,

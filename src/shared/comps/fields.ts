@@ -35,11 +35,21 @@ export type CompsField = {
   label: string;
   family: CompsFieldFamily;
   /**
-   * The stored stat line's spelling of this field; production only. Absent from
-   * a played line means the event didn't happen, so assembly reads it as a real
-   * zero — the opposite of the market fields' null-is-unknown.
+   * The stored stat line's spelling of this field; production only, and only
+   * where the value is read straight off a line. Absent from a played line
+   * means the event didn't happen, so assembly reads it as a real zero — the
+   * opposite of the market fields' null-is-unknown.
    */
   statKey?: string;
+  /**
+   * A production field computed at assembly from verified keys rather than
+   * read off a line — the two usage shares. A derived field is already a rate,
+   * so it carries no statKey, is never divided by games, and is *nullable*
+   * (null where the season's lines name no team, or the team keys aren't in
+   * that season's feed) — which is why none is ever defaulted: weighting one
+   * excludes the seasons that can't answer it, a press the reader makes.
+   */
+  derived?: true;
   /**
    * Whether the per-game basis divides this field by games played. True for
    * exactly the production fields: age-per-game and KTC-per-game are nonsense,
@@ -128,6 +138,14 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     defaultWeights: { RB: 60 },
   },
   {
+    key: "rush_share",
+    label: "Rush share %",
+    family: "production",
+    derived: true,
+    perGame: false,
+    defaultWeights: {},
+  },
+  {
     key: "rec_tgt",
     label: "Targets",
     family: "production",
@@ -159,6 +177,20 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     perGame: true,
     defaultWeights: { WR: 60, TE: 60 },
   },
+  // The two usage shares — the player's count over his team's count in the
+  // games he played, with the team read off each stored week rather than the
+  // profile, so a traded player's share is honest on both sides of the move.
+  // Derived from verified keys (`rec_tgt`, `rush_att`) — this is the only kind
+  // of "advanced stat" the feed can support: it publishes no air-yards or
+  // route data, so anything finer would be a column of zeroes wearing a label.
+  {
+    key: "tgt_share",
+    label: "Target share %",
+    family: "production",
+    derived: true,
+    perGame: false,
+    defaultWeights: {},
+  },
   {
     key: "fum_lost",
     label: "Fumbles lost",
@@ -178,6 +210,26 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     perGame: false,
     defaultWeights: { QB: 60, RB: 60, WR: 60, TE: 60 },
   },
+  // Career-to-date production entering the season, derived from the pool's own
+  // prior seasons at read time (`withCareerValues`) — strictly *before* this
+  // one, the market anchor's own semantics, so a season can't be compared on
+  // points it hadn't scored yet. Corpus-relative: "career" reaches as far as
+  // the stats archive has backfilled, and a first stored season answers null
+  // (a rookie has no prior form, which is a fact and not a zero).
+  {
+    key: "career_ppg",
+    label: "Career PPR/g",
+    family: "profile",
+    perGame: false,
+    defaultWeights: {},
+  },
+  {
+    key: "prev3_ppg",
+    label: "Prev 3 seasons PPR/g",
+    family: "profile",
+    perGame: false,
+    defaultWeights: {},
+  },
 
   // Market — all nullable (absent is unknown, never zero), all defaulting to 0:
   // weighting one excludes every unpriced candidate, which the editor says out
@@ -192,6 +244,24 @@ export const COMPS_FIELDS: readonly CompsField[] = [
   {
     key: "ktc_oneqb",
     label: "KTC (1QB)",
+    family: "market",
+    perGame: false,
+    defaultWeights: {},
+  },
+  // KTC's history read at the same anchor: the career-high superflex value on
+  // record entering the season, and the 90-day move into it (negative means
+  // falling). Superflex only — the dominant board; a 1QB pair would double the
+  // bay for the four leagues in a hundred that read it.
+  {
+    key: "ktc_peak_sf",
+    label: "KTC peak (SF)",
+    family: "market",
+    perGame: false,
+    defaultWeights: {},
+  },
+  {
+    key: "ktc_trend_sf",
+    label: "KTC 90-day trend (SF)",
     family: "market",
     perGame: false,
     defaultWeights: {},

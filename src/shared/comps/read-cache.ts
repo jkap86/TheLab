@@ -7,8 +7,12 @@
 /**
  * Bump when the pool row's shape or the catalogue's stat keys change, so a
  * process holding yesterday's shape doesn't serve it under today's reader.
+ *
+ * 3: the derived usage shares and KTC history fields joined `values`. The
+ * career fields did not — they are derived at read time (`withCareerValues`),
+ * so cached rows never carry them.
  */
-export const COMPS_POOL_VERSION = 2;
+export const COMPS_POOL_VERSION = 3;
 
 /**
  * How long an assembled season pool is worth reusing, and how many are kept.
