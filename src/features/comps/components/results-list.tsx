@@ -4,6 +4,8 @@ import { useState } from "react";
 
 import { PositionBadge } from "@/features/shared";
 
+import { pointsSummary, seasonCompareRows } from "../season-line";
+
 import type { CompsPayload, CompsResultRowPayload } from "../types";
 
 /**
@@ -84,6 +86,7 @@ function ResultRow({
   onToggle: () => void;
 }) {
   const samePlayer = row.player_id === payload.subject.player_id;
+  const points = pointsSummary(row, payload.basis);
   return (
     <li className="rounded-xl border border-foreground/10 bg-foreground/[0.02]">
       <button
@@ -112,6 +115,14 @@ function ResultRow({
           </span>
           <span className="mt-0.5 block text-xs text-foreground/40">
             {row.games} games
+            {/* The outcome, on the row itself: the whole reason a comp is
+                worth opening is how that season actually went. */}
+            {points && (
+              <>
+                {" · "}
+                <span className="text-foreground/60">{points}</span>
+              </>
+            )}
             {row.team && <> · Current: {row.team}</>}
           </span>
         </span>
@@ -124,34 +135,55 @@ function ResultRow({
       </button>
       {open && (
         <div className="border-t border-foreground/10 px-4 py-3">
+          {/* The whole season side by side, not just the weighted fields: the
+              criteria picked the comp, and this is the outcome they led to.
+              A weighted row wears its weight, so what drove the match stays
+              legible inside the full line. */}
           <table className="w-full text-xs">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-wider text-foreground/35">
-                <th className="py-1 pr-2 font-medium">Field</th>
-                <th className="py-1 pr-2 text-right font-medium">
-                  {payload.subject.name}
+                <th className="py-1 pr-2 font-medium">
+                  {payload.basis === "per_game" ? "Per game" : "Season"}
                 </th>
-                <th className="py-1 pr-2 text-right font-medium">{row.name}</th>
+                <th className="py-1 pr-2 text-right font-medium">
+                  {payload.subject.name} ’{payload.subject.season.slice(2)}
+                </th>
+                <th className="py-1 pr-2 text-right font-medium">
+                  {row.name} ’{row.season.slice(2)}
+                </th>
                 <th className="py-1 text-right font-medium">Pool avg</th>
               </tr>
             </thead>
             <tbody>
-              {payload.fields.map((field) => (
-                <tr key={field.key} className="border-t border-foreground/5">
+              {seasonCompareRows(
+                payload.fields,
+                payload.subject,
+                row,
+                payload.basis,
+              ).map((line) => (
+                <tr key={line.key} className="border-t border-foreground/5">
                   <td className="py-1 pr-2 text-foreground/60">
-                    {field.label}
-                    {field.per_game && payload.basis === "per_game" && (
+                    {line.label}
+                    {line.perGame && (
                       <span className="text-foreground/30"> /g</span>
+                    )}
+                    {line.weight !== null && (
+                      <span
+                        className="ml-1 text-[10px] text-active/60"
+                        title={`Weighted ${line.weight} in this comparison`}
+                      >
+                        w{line.weight}
+                      </span>
                     )}
                   </td>
                   <td className="py-1 pr-2 text-right tabular-nums text-foreground/80">
-                    {cell(payload.subject.values[field.key])}
+                    {cell(line.subject)}
                   </td>
                   <td className="py-1 pr-2 text-right tabular-nums text-foreground/80">
-                    {cell(row.values[field.key])}
+                    {cell(line.comp)}
                   </td>
                   <td className="py-1 text-right tabular-nums text-foreground/45">
-                    {cell(field.pool_mean)}
+                    {cell(line.poolMean)}
                   </td>
                 </tr>
               ))}
@@ -160,6 +192,8 @@ function ResultRow({
           <p className="mt-2 text-[11px] text-foreground/35">
             Distance {row.distance} · similarity is 100·e
             <sup>−distance</sup>, a fixed score rather than a percentage.
+            Fantasy points are Sleeper&apos;s generic scorings, not any
+            league&apos;s.
           </p>
         </div>
       )}

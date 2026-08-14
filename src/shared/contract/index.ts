@@ -1453,6 +1453,15 @@ export type CompsFieldSpecPayload = {
  * weighted fields only, already resolved under the request's basis (per-game
  * fields divided by `games`), so the number on screen is byte-for-byte the one
  * the distance was computed from.
+ *
+ * `line` is the whole season beside them — every production total plus
+ * Sleeper's three generic fantasy-point totals (`pts_ppr`, `pts_half_ppr`,
+ * `pts_std`), resolved under the same basis. It is what "how did that season
+ * go" reads off: the weighted fields are the *criteria* a comp was picked on,
+ * and the line is the *outcome* those criteria led to. The points are
+ * display-only and never weightable — and they are Sleeper's generic
+ * scorings, which is honest here precisely because this board belongs to no
+ * league.
  */
 export type CompsSeasonRowPayload = {
   player_id: string;
@@ -1462,6 +1471,7 @@ export type CompsSeasonRowPayload = {
   team: string | null;
   games: number;
   values: Record<string, number | null>;
+  line: Record<string, number | null>;
 };
 
 /**

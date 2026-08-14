@@ -8,7 +8,7 @@
  * Bump when the pool row's shape or the catalogue's stat keys change, so a
  * process holding yesterday's shape doesn't serve it under today's reader.
  */
-export const COMPS_POOL_VERSION = 1;
+export const COMPS_POOL_VERSION = 2;
 
 /**
  * How long an assembled season pool is worth reusing, and how many are kept.

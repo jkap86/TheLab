@@ -1,5 +1,6 @@
 import { COMPS_FIELDS } from "./fields.ts";
 
+import type { CompsBasis } from "./filters.ts";
 import type { CompsPoolRow } from "./knn.ts";
 
 /**
@@ -45,6 +46,14 @@ const PRODUCTION_FIELDS = COMPS_FIELDS.filter(
   (field) => field.family === "production",
 );
 
+/**
+ * Sleeper's own totals on a stored line — the keys `scoreStatLine` refuses to
+ * score (they restate an answer rather than naming an event), summed here for
+ * exactly that reason: they *are* the answer, and "how did that season go" is
+ * the question every comp exists to be asked.
+ */
+const POINTS_KEYS = ["pts_ppr", "pts_half_ppr", "pts_std"] as const;
+
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
 
 /**
@@ -80,10 +89,11 @@ export function assemblePoolRows({
   adp: CompsAdpInput;
   season: string;
 }): CompsPoolRow[] {
-  // One accumulator per player: games and production totals in a single pass.
+  // One accumulator per player: games, production and point totals in a
+  // single pass.
   const byPlayer = new Map<
     string,
-    { games: number; totals: Record<string, number> }
+    { games: number; totals: Record<string, number>; points: number[] }
   >();
 
   for (const line of statLines) {
@@ -91,7 +101,7 @@ export function assemblePoolRows({
     if (!entry) {
       const totals: Record<string, number> = {};
       for (const field of PRODUCTION_FIELDS) totals[field.key] = 0;
-      entry = { games: 0, totals };
+      entry = { games: 0, totals, points: [0, 0, 0] };
       byPlayer.set(line.player_id, entry);
     }
 
@@ -109,6 +119,12 @@ export function assemblePoolRows({
       const value = stats[field.statKey as string];
       if (typeof value === "number" && Number.isFinite(value)) {
         entry.totals[field.key] += value;
+      }
+    }
+    for (const [i, key] of POINTS_KEYS.entries()) {
+      const value = stats[key];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        entry.points[i] += value;
       }
     }
   }
@@ -142,7 +158,46 @@ export function assemblePoolRows({
       team: profile?.team ?? null,
       games: entry.games,
       values,
+      points: {
+        ppr: round2(entry.points[0]),
+        half_ppr: round2(entry.points[1]),
+        std: round2(entry.points[2]),
+      },
     });
   }
   return rows;
+}
+
+const round2 = (value: number): number => Math.round(value * 100) / 100;
+
+/**
+ * The whole season as one line — every production total plus the three
+ * fantasy-point totals, resolved under the basis exactly as the weighted
+ * fields are (per-game divides by games; a zero-game season has no per-game
+ * reading and answers null).
+ *
+ * This is what "how did that season go" reads off: a comp is picked on the
+ * weighted criteria, and this line is the outcome those criteria led to,
+ * whatever was weighted.
+ */
+export function seasonLine(
+  row: CompsPoolRow,
+  basis: CompsBasis,
+): Record<string, number | null> {
+  const perGame = basis === "per_game";
+  const resolve = (total: number): number | null =>
+    perGame ? (row.games > 0 ? total / row.games : null) : total;
+
+  const line: Record<string, number | null> = {};
+  for (const field of PRODUCTION_FIELDS) {
+    line[field.key] = resolve(
+      typeof row.values[field.key] === "number"
+        ? (row.values[field.key] as number)
+        : 0,
+    );
+  }
+  line.pts_ppr = resolve(row.points.ppr);
+  line.pts_half_ppr = resolve(row.points.half_ppr);
+  line.pts_std = resolve(row.points.std);
+  return line;
 }

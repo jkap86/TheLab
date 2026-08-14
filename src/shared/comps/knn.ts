@@ -42,6 +42,15 @@ export type CompsPoolRow = {
   /** Games played: the count of stored weekly lines, `playerPpg`'s own rule. */
   games: number;
   values: Record<string, number | null>;
+  /**
+   * Season fantasy-point totals under Sleeper's three generic scorings — what
+   * "how did that season go" is answered with. Display only, never a KNN
+   * field: the comparison is *criteria* (usage, profile, market) and this is
+   * the *outcome*, which is what the reader came to see. `pts_ppr` is fine
+   * here precisely because this board belongs to no league — the house rule
+   * reserves it for exactly this generic, league-less context.
+   */
+  points: { ppr: number; half_ppr: number; std: number };
 };
 
 /** A field as the KNN weighs it: resolved key, positive weight, basis rule. */
