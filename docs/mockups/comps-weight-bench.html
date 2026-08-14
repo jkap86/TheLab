@@ -1,0 +1,926 @@
+<title>Comps weight bench — four organisations, three window seats</title>
+
+<style>
+  /* ------------------------------------------------------------------
+     Ninth in the series, so the palette, the faces and the section
+     grammar are lifted from `trades-scope-and-seek.html` — which took them
+     from src/app/globals.css. A mock that looked like a different product
+     from the eight before it would be arguing about the wrong thing.
+
+     What is new here is the *weight bench*: a control whose subject is a
+     set of continuous proportions rather than a selection, and which has
+     just grown a second axis per row (which seasons a stat is read over).
+     Four ways to organise it, and three seats for the new axis.
+     ------------------------------------------------------------------ */
+  *, *::before, *::after { box-sizing: border-box; }
+  /* A class that sets `display` outranks the UA's `[hidden]` rule, and every
+     floating part here sets one. Stated once rather than per component. */
+  [hidden] { display: none !important; }
+
+  :root {
+    color-scheme: dark;
+
+    --bench: #050b12;
+    --app-bg: rgb(10, 20, 30);
+
+    --well: #07131e;
+    --slot: #040e17;
+
+    --active: #00ffe5;
+    --active-deep: #00b0a0;
+    --on-active: #052029;
+    --edge: #05121d;
+    --edge-active: #00776b;
+
+    --fg: #ffffff;
+    --amber: #fbbf24;
+
+    --measure: 66ch;
+
+    --display: "Orbitron", "Eurostile", "Bahnschrift", ui-sans-serif, system-ui, sans-serif;
+    --body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  }
+
+  /* Inlined rather than linked: the artifact CSP blocks font CDNs, and a
+     silent fallback here would lose the one face that makes the app the
+     app. Variable weight axis, subset latin. */
+  @font-face {
+    font-family: "Orbitron";
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: block;
+    src: url(data:font/woff2;base64,d09GMgABAAAAAC4YABQAAAAAZxAAAC2oAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGoF/G5sKHCg/SFZBUoRnBmA/U1RBVHQnJgCEWC9gEQgK0jy+JguCeAAwuiIBNgIkA4VsBCAFh0AHg2MMBxspWhNuDDdsHMAGuPNAoqhXg1Nq8l8nb4V0G9TP0uik5WxD3d21rSq5wyIVzIqHd0LQ4BUSba/YM938WMuCEfa80/V+8qDvzpMNs/SFxNI3Fh+hsU9yDSI3mz3gRFRAgyYqGsBYgyUKWJJXBNI0Fg4VkxgExQKi+EpMaaaUpqZ03wRTPr2bN6aWrzX/fkvh4dd6fuf+Zmd2X3uCsVm6iIjFZsjdIOyPc70Pkoaa0vEHhk0BOtJT7mBTGsiNhSYGnr4/+J299zVB+Clq+tB4APQIQ4o4oPbnaVv/ZxiYGSpURlQGQTcSc7dxa3z4q4Pr7P6odN/7vqhv4Waru2wAJhZDS6QOw/8jN/68wKStNIa2iL/pv378zeN3CYZxERVGHvik0v8b08amsfynNfO9mczl+v/MTq6AqFph6ji7c8keFRBlUgZhWg/kAB0IR8LV9f9MTds/mFtpeZRt4pJC5JPgkOnQi+eYispPrV+/OzOLxcxgAXDJM4FdgvH0BBz4dMDi+O4InmwsqADA8SgHhRDolBFoPfKiQkqdU5Vjl0LtouncuXPf2cYqdcBrc2pdgkaJzbf13f77fCdhcJY701VSCWKDTUVuxW7y5q92P8bUijPZXb5xImGecgKhvu18IGDBz8v/ameh4IfAAwQ8eIHAB74I/AUiCBWOIEoUghgxCOQSECh8hEAtE4HWcASj5CMoVILAwoLAqhqBgxPBPp1YOOggFgiARhQAMUCIAgEB0GyzPAABrv1O+h4+8gemZxZCiyvhSDQWT6TW0plsLl8olsqV9Q2hKpLZHNqDy/PiC/w+TTV0fZPVZnds3r6jrXv/wR6tblg+YygyjrVWVIGAAGpqIAB4iKBG6b6NKgDf8d1VBz7YAPDhgwRAQNX8bKiDqLv6PAoLysUUOYoGO/Hzc0FIW0gQMoc3ssY/EHcv6ml4i3pfvt/QD2/9Ky/3vr93N7p85LP7HtaBtzZbh0WKUneCQIG+874P4/bf5vtm88LU3uejFyGjUzNqNCZ1HwyAoAY6YOzyrVKJUxfB1uzBq/DmwOrlqO0ky/AJtN2lIPz0wsAe2BPzcR8cjMU4BMuwHMfhJJyC1ThTDjuPWr83DgH87hBs7OPW6SAKXBBcWxcdQPk28TE9RU/MI7wf32fvEt11J9wRSv5HPs/P0bP9LDi6E7O/2ev2rJ24B1ybL8cVsH5bLSt/gfPNaCZqRL2m05tmHa11tayC8mHOy37xU8yJpkgMb7zX6wsESgSe4MEbPvDTh78gwcRChJKIFC3GQHKDJEqioJIsg5qG1ggjZcmmxzAoUMjIpJSZRTkrG7uabuxopgXWYsEAPLHyA2xPCPs1goHAi0NgS7QBhF+gkdzwGkNbGJAFvEqG4qtA+QWcYxcNL2O7yFJQFz93adGTAV4oA15xYenIZTy4adatZgZpkdLOnNptPnl1soLnU3wkS+cqNenTHS8ARgLKZIHnLdlAhsV+UQgoYSx+5TO7AkUspXVxOdD1rNngaEuvAXg0A+BDUarF/QERsEiNd5TC2NKazlK429mSrQFeM/jKaFp1o979Ew2eZ294WkwfUSE2GAksGUQKuGBGKMQxSyMLUzlxp546WijtGtRMLBrODGttRRS4tA+SgZsoA4dqoyHSkNWGpZKNw52ugLhZrNzMgsvBpu9IB0sn5GR4vaAu0Stc2xPqV2Vf1KhgtyksMmtsBO5k1uIzgE3YfdpjB9cVnN4jSJ7w9dXh8VUQXF4OqKOVcoSGR8qsSGYnsUEWctDYOrZIK4I2kE5OTS6OmVNSQzVg5Cmh5CeewFp4XcSGRuCZJZsAQfTgsYwFz+M5IOCCN5JbuMQywOM0Q/HqUFh6/hsOyCUZOjrivV+RLtJFtpqtrC3f3qwsNehbLYw8U1xk2IX3idvrfaP7e+iMzDoYS4ucqUL91xApDYYlokjJGyqZ70X/wv7AXqcLgjbIwpSlUwDSGzoVBUhnLzwEFDUDwGbMQV5C2OByk0vgosGhcJo6PesIoFfIdgcwyFRBBchCIKOwd1xFXZuuqWbvwhQz4do587JrG1QGlOUC6gjH4ghIohPqruPX4kJGUV42koHzdubbzEN6QAtr8g72kdxZm6lLB0MDnNO0wPnCiO6blgkAWRpmuEGIpjPrs4oPC1uidMI8ZvZaAM3KS3TuWjeZSB25J1ycJi6Q6VjGR3gw1uCPcAbWWmkNOBxOqDeV9UMRHmeJ7CT3oWB6GjSxch5tagQQHwknX4Ekg6UmTbJ1ODEY1TGAfeZ2czB20qGYYN+niXAW0q/sZMCF0sg3rBwHOlY8AFPqkw4YTkghfAbSbrsvux9DFzgL6cWiwe+PMWalR5lbd4slg8y0Kn//Fr3PpWIOh+YC3C+DXLsLAfsVzdfjwJ41H+Oa2CXNn2nmDX9gp7XjlsiIsNr49vBMpbMF0+8tuSXMxMsNIv9Ly4QsTrhAaFMoTNKWM2lohO5LVnnDbAA5OyDCWmAdBwiKUNBMPjIa1kw9EzBSsvoKLMlwxDCzS/EluJ9rpERdN9TQ6ENZDVyGSnJpRZyGKaA/XKBfhPtgGY7GYsxH0mIKihYKA5SLwEXMl5Abktx/0tH2Y+myS0hhlO1N/Z2OpZ9KZM1zgaF2clCEdXgYSt0RC54fZnO7ZKC6aS/tPEE+rMgiaaQaTvNZ9MwC6rDsCjljYekdf9Z0DkAK9pU0MAsJsx4gH6aNQUnnH6iYxrMfLSBRNlDpjC2mnSU/OcD/AkCAU5BSsEdMpUbsB1QElbKG2tEwdko6Sz/0dMP/KoW9FyRydJqcsz+LAOReZDbwCJyDRrVmI7SJ+EFiw/G+53a01ckjF1EYNFXxKbtA34L2BDxyWlCPk9DI9jYEQYABF0gDnN4OrkQHiRokNcBFDcShke46TvZSSAZSP2Y6cfZekNb+QHxfEEVfGz4MQESAhAsckA+LIoi6RFI8U8MIJIhDusDAtlCM5HtqWiIYcN1AwD9NI5mRxIXSKLFJlgKbpYWRzS1ih6zJcIEhVZBKsNrTp0hhizgQlYJ6LQyqTqJo3FC5gXgAHMVFmJyHBAEgEyMsQek7phDSJSKShvABxKlIDhw6qXyQ5WujRCJAQtUVQDZgBMC7GQC/CwRagBgLgzpJRNEQkSyACBB8gUJiFY1lthaEmFdjSoTiBzCvyDDylrXMkB1uX6fUYQqsZ7X6wV2zpVco5kMAId+Fm4vS/AH66idw9b4l/UlIyYQZIFyESFGr+Oax4sRLWMmlMrRPkSrNYEN8JH1Fl5lhc52hhhm+rH/2UXLkypO/tu+piFGx0cYYq8S4JV6Whc0rVKpSvc5/e9eq41TvYw0auYzXZIKJJplsiqmmmW6GZjPNMtscc80z3wILLbLYEksts9wKK62y2hprrbPeBhu1aNVmk8222Gqb7XbYaZfd9mj3iQ57r5seiv0OOOiQTx12xFHHHHfCSQTAbQSA9zmcWC9fbxpHSMHfq4c5nA9Eey2/OLzPt+0pPG8gwPcBPavOESP6Bbe1QXcAeOHN8Kvuih/ylD87sHM2tTVW4ADUoiwGZMfzE5PElKCXboYqgAb57xQa4jzJ04C/eQPg9i3qDYAAAKXLHoAEBQICLggAERqAGDXhV7WLAIA3xKIoqI3CAkARQlYAdRpAAIBQ5E+5L4sqrmbn7cthSdbQrDl5IPA4ryLs0Puzr2MCWz5PfVXKxe3tXd9t/qsDFAAWABGWy695NqUDaKhxQCFeqnGm26HdAYcdddxtj7zwq7+984FMhiGv5tN8XoTFYnElXxiaaWSamVbm+aefKAKJBGlKbdVuP5u2zrnjiVd+9+9FYTDe/pMxMw30kQIDvkcvAORDFoX36/TBWQu8+xNmhRnhBeFFYWBhavg3uGnBslA8/8vczxFoACY7fQH4BgAAX4QifBIQqtAAQIYhO9pghnXmarNbu/UrLzvHZlOiO9m8FSp3ri0N9fb8719fVL6nqPLLf4n5llrp8C8BD9Uiey22y0bNWm1yQodZOKDAggfYoMGFF3y9pBXoHd3+BnhEHp7SWyV4wZxSmcG+L/iRNC2mMw33eVa+p3OLjPVuvCSlt6n2Z6laAiiCY+QPPop6KYiHK+SLInQSBNnkYZUGwLmHnbRA4eEgVoDCQ6EDivVUdjCw6fN/7P+JAQAvCcDDAF4RXQLwt4nNAP4DAAbm/zuFRLIaZ7PED1+TWfoYdKKjtCA4F+S3mmGObMD4Jailqz81u2fnSUvLppQxbVKMNHX6YQ6anfhJEMC+BjZuqeOOMeKR6NOcNFzLmS5XcPkkKYZJaGeHYngceElaSkZJcIrIcD8vmZKOuqwbopqUjbVSnJRt1pIUpHSZq0WtuUJSTl1ci5NoeTwbfi3aXEGpzvlLoZjd7qNJadqV7U73iR2f6Fv6WqtU1RGltjZjmmXnO7iFZlTsvHVTvOySXaNDVCHlrSf8kM9ZOSy5PLC1JBYucL0LPXS+ou5c+5lD+6i12MxIGe25RHxLIJU9mg0BPgI8IrKlp1k6j4u0N8XZcKg7h7PVB2QptFOSnJezsmzyaOtsYqeGqPdRxiIzkdOI9ZliIfW5KYRZtwyrsPynJKSifF1hYFmsTk20qqGuZYU6TcVQfRi+tNEtio2bwNssR/LMlG7asj3mNm6u6I5Dbq7DlefPLrgxzA9gveOEnO2nhg6+1DXG+tRGJngh4/dJj01tgD+hT2+zk7/92YyIEXbktlWg84zwmuvXCqYr9YHbddsO3Vq1e/s/F94qfT1KbtlMbZRG9TS7A+1mOBtvNEoeyRhxMCLn3g0Znh4hqc86sT7QywxvuFN2CaQ94OZQwPFeckM3tcT1rComOL2zyz0bHe/Wt38X4zGplbddMWqHJyVlPsTjXN18NnWPlEI63Nk1ORltQ0/v1HpR6m3mUS54jaw5Ryt9c0VrqM6MTXSLnuiarKrRZNiBQozIlmVSIUocsGlBfDUdlXn6FWUmnBUMaoUa6FyEyZy19B7cQHg0qq4ynQtlXrsLpvod8PjmjApaEb30sSm7PzES+nQ6T6TnZzvGdzRrbqJlgDV0FNna9jtdTsOo9GJpUCE1Mgm1++Wbtog+lOsH74HOatlU86R2N7Yp6pjwM6JX4iRkdY1sDDCzbymcgjFfv5cHMsQl65K2LQ0HPgcfFI5HTDBONgK+uqTHOwvk4pPvTM0uepYahWAzgxWzErOBzHpx1hw7BChX6GTg+8Q5BfVzcbf+jSX4gnkuHtMSkbNXl/GlPvPz6t6MFtiK37RgfTREL5kr52SvympNd6Phjv5vsbQ+q7BmRXpW2cKcRsZdM0LHMBWZbjJ9SnW1XE6e7Sj6ytZaQ9Y2OQspWaT6zDkVKa8XF8ok1DKo9bBSIfmSfD0xJI+SO0YIx8dQt+UubgSqMLJZaKHBYZBqHmYx51iGy0h1bvUcx3MwFTzmLJWCnrjOgFTMlHRCD6kv4LQsBnIop5wr386A19Eaa+ryWfB3BfqFXGhNBiEjAvpV5ie4J02Yn+brbCYOB5QureejUagFgvYzX4pRpQEu+6zdutaWMtEVg74MHcH2wXTJ0puYlpsaxxTKH5JM6WSSnEljwTjjI3YVw8PF/kO358NohxgQSjS/QbkiYicsz9+wnutQznA9N8C8bkPL+oGWSvZx2/zObQOHpdh4ZARXafMBDZgma6jnHLIhAVj71D0BAysGpXqeskZ9di4iSwqHYdFMGM3LbyKxtVxuGLHPySZQ9OCP1+tGVI49RaB91rRYEStmc+gbPU5frWgpF9tmmQS5nFXtwIzw3w7rY6H5iqT1ZC7F0ddKdrpT1bZMCllx5UG32xdpubbXD3K/sBhTyLrPhaeldIHuo9fowu1bfU6hfecepBVLe53S11Jnr7RY7xHnoc83xkFYKXzdJgAdfZpt0Kt/uc3c/kWtX7n2QcXInME9qeNLNvLtY/NLA9tHOMUT8q+yvR+tFgqGXRAWCTc2DajSqcSBkeI1RbpIX9RbU8cgrae4Vb5iVP6lG+IrZSl7YGVMaKpyGiH6kNEe4aFDDIt9ziC1R59RUkwPI5LQ9Bw2po5bnapPTRfri3tra42+80qvJvLK2EpiU4t9l4HUO/rmGXqk9DhjyuszOXv0rhHzhOvhhKDRpa9sg06Bjp86lrvbZ97THNms77toyu1iqfkv6T3pX2aph3fEOFpVIbynyx/zCswbMKMoxqQ/yvdLsuGHvvYfA0gXW7F3mrRYL34M2zRJRsltPI53jwVRgBlqfY8+YwY6MVWnGNhr/xqXsfV2aX2zs7l0y21Eg3O76G7mncyyU7Ins7iTHP6qsm5AHEis4Quq/4v6N6paQ1zEFrV7Q9RAkHV+XEBpn9LSm1eAJDgbBdCTy5JwS8209O7bZl2l8AHzQNYp6Hqgn72no5tAZ4z3dkfvpPvN0ZQLhj4SMsPsr/6p9AlLohcqUMzZOSy9jJQ2S8fqOyQzgDfJkSbsu6y+z9yf8pB5iJWyrs1ls88y1AOGlqXlxC6RSQzv6HkwIkuAraDEQlmvUzZ5s6H/M///gdVfwWC/b1Mzm0WyV6paPi+zbKyKU7kK6S6mS/JGXVBAx+j0+8EUG5p6AU7+AcNflgZnDGdktFlGNe7IYCBTNDy29ct/HISWcCSkRg1sLQMcXMgsLCljyqCC7r0UhV36LmGT8HdvdxmeJ/6okQH1HorgU980VP0SI0Xcc+hVpb21xfO2LYPBZM6qkG9Ufo2Yh+Q853wTmVxuFH6Nb2bzPs8HMfeTS0eBrgncYcwwNcQnhzSX4Q4So6vksTVaC32htwHLiGJZpKJIRq2+FovTbTuiHj+Mdo9MTWGmXJHbnjK8hlr41xwtRGjhQubs/8z/k7rJ+8z9VMGEumLT5xciQ2sWvKlPllmthQe+1Bbv339yv+Nq547O0U+1wx+9vPUScSC/h/8eTBynnp1+VkN+D/4jnDhOf3vqW6z5GkvYkb7B3FBCU6JT6JlQof7PmXkmr2LjkGjyhTb6J7bshSLZr8V6UPFZtyVaEXmNLIZncNXNqTn9ur4HqeATOHWyPtFwRMyImeBP9Dd8LcZNDPbDlhYahP3lnvnmRwRfH9EVJ8gQZJ3tr8jMvbL1fHvW/OigPWxuDN7iZG/JjydLrtQz9SdfemFpkcjpECaEIerImuY/MphicrWwapyTOmlZBwPWX7yUzX5t8FGxFUOwWzAskHua931hJXgwHvoyUSNqpN+qQ/TP3bv/ilbP9QHeubY90Y5rDCIYVUeQjhI2W0LigTvoK9EED4lWiq9NkXbLaKDwS3s2BLCE0vRDtXZbKmfhAVMWnJMJ5b8Ppb7yTiS22X1dGRnhGJiaf6W9aavUm+AwHP1NNrSenAODbQlsuI4YGe2U+gkrhRfbOKeADTHQRdrixuivjxRLFBcXNea+k3QCk/AvpZxkQc9OnvQJ3qsTi/1DxIEhIf7ikECsSoMmbvS0FXF9c1cltDAbV8QH5a6MGz01M37MZORB2VHBzBj2bDdzPnmHPmUHp5I0M5P6eVuYE4oOxhJh02jeW7C6DdmgYf9jXFX17+PgnqnXUU6/sbLA5H0ho83SEMPsoxfHCWFCkAJG/CgnNoil9Qger5fiXHqJHT+Zv9tJN2WvQWPQdYyGJBGSakPbkIkCfY0YZcPOp6XPtxsmAxXurFtw5Dqm/43RyrWGdXeQ9h7MPAbKd2BGf0d3QA+PW8T9hbLgXH3Tg7IcMj1Q/o8HhuYNbTQeMLkDSW8PrA8n3gdaLGGW/PytH2l1G7S1lNbaGFuVzWCrsJql3hjeCCuFFe2G9qp2pr3Wlb5h3iC0AY1zFy1QsvO585n5bw1vOzaYt40PL8/tmLvy54H1YzR0vdJHun7pepkv3tXINN6QzqDhpQ8WVglv/NxZV0+3pxrE1DqL/9dXnoEbEFQKtwqbBDcQCcb2u42xXZBuWrzUHCATGARXHt9u4QUzY/69h0F7OVo3MBs2MhvbmLZW8K6dCcb1V1qvhzmql9uW2xUbr62/WmRX2qAPvqaJp4zonc3jX0vSTGA4DPtaJQ9ulGYcr41KV35jwToBVn5rUbQxg6g/wzR0O2UxkVXh7WFRw2XDw4Ik8dHy/lgIR9eYEzVXiwSTjCoKROYmtUJWIM27hccAiRhK274KZ0ehVJRiiBeudktLT+MRPGZapwyZ9rpW3xUvGJte8XHxqpYvfGDW5H534LTiCwHTmd/3PgoYE7tIaUXotFaxONeWbJCt8FZcz8VcejGze27uiAWj/nkT8ZX+a1658x0ghkcb8DkECSJ0dUv/bmbqYQSLBDPNCeIEhu4vcBUWiRdh9wqVB0oWyWAJqy2gbMAZ5gwGzQgkgvctAYn2yhbppYsQd0B5eU2bkL8gD/zTND21enA1gtcEvA9QBSslLrimYQ9lD4GBxqjdrdTJNXJlRGZaTNDSIzBImTkEdYsiWvLCW1A0DYyOaQ6gIhAAHujcdkvu3nz/ttXu02vd6H1AOYh4WRqHIFo+NfAyxQcvVXx8bLkZ+795p9o3389Ruw+WG1aoG7zakjjAmxUJ3qRIfFzrZuVgrdyot7y3vLfcUjBeZSUj6AQl2apjCr9e66beB5SDUXW3A5+iHRgLDNYYUPh1y01ylM1g5328GfZf1fs06YZV6AKPsYyVg6PfqmK0ihMUfr3WTcpBy2rkjgMwWCWg8OuWmyxHabUesI/Fnb5Pu3U0ycZIPuPggccRPOjmQ+WBQ/+LgIzHlfU75Jz/r1ez/pHzAACA/j/SgMVjrWfl03omTbnQs1tKv7o01eOA6sqhpHwaNxGkJ3AAeW8e8A2rL9+BPyC6A22QUsDisrqpsJpmrVc+rWPiE5qLJNyDQHEwNbu8lkXOlXfJUuKFNZL61ZmVOhWeUl7LIvXdMMGQBDqp40O2+6uNfFen/zZ3RQJaCKlWzS3NU8rTCreq18NBNSWfQyxeFjmYd+nYmNbPROjIWo/mqANU2p54Wj7NOiU3RyH+50W2BFd3G8nsCVdpxPerdhEiAAgIQJY4BQBZBvBCBLkkqTIMla1ai0+d8MBXfvC7v72LF1GENrJDH8VhCmtMieWxMTriRJyLL+P7+C16421SVHgOTWeuzVv5OH/ON/lfgUWzfCusUmtk5ZWpmmpqza6FtbzWVmtdrS/r/ybs0M7oYZ3TBT22P+6Nva9P9IW+1t19v5/2j/1Blk7MDBntVE3tuGbyNM+8OTYP5rUMwcEi8Sni+8Tvgr8FA8HzwVBwkfAREVKqnMpIB/k68j0kp86q+2SJ6qR2UV+k/qkH9Zi+Rj2hVqkM9U/eJj8if4v8M/LfmX+ZF8x1+YxcWFgstt9O2xW7TlZIkt1yHlfxGE/xDG/xTv6qaEOPa5tv8BN+zR/1p/7y8A1/W/nusTx5dUXdrN6p3qs+pn6z+uvqn/k/+n/6Z/yLfsSf81fqs952gQcDaifAFBDSG5NJYoobFWjMRh4wYr08CAIZueaolqUiDLmHhqbtbg+2XEK6tAyh7TPDwzOFIBmCvackkl2qClhjr3riAJiROKKXgj+Ixate3nIObsO5kdeMjMy2vEYTPisMt0z3QQgCHHDaGjH3xkugbZFvMlUVruCYqQzV0+KSffqjKnDb58bG5uS1RJbScqG4LiiNaaGgr88BgQA4SAh1sABblgJqMVEcUfkGRB475oYmUqeQbJS3HC/1m2E67OyZ48f76p88gH4BaxThjaFYEbxsQKa41CxQpvmpp5AKTAJyxw7QuIFESEqrgtpa+xrKIyA4SeAHlSsFThngPg/ulwHsdku1IKbPiOzhRAuFIjww4+nc+DbCiksenGpZLqE4ynOCfyF9fY65zQ0UgAYLuYeEoc0eaEHY9BsiPzP47qzDwf1QIzCnnQV59RyxWYJ8GSgue+RRuGQyC2hKQk1luROpSbl8lqLOp9xurh9raUGSO9CJsOnpk0MDCsCSp/qx3zCaA3Sp3Fm5nMsNHqiMXgB6uCOiU+wWP7fgyFRSkziHhpBkckjWBb/jXHkWyWHrurwRar9VkBuBlCAjtmynDORK+DipnQ82D+QMkgBVyCCiK6+zZdZ5jUd/oqvPPElIwJ7O9JCckpDsW+VszK1Ja6Qtx5aFAh9a2LZNxjgqYwFtbrkOVu0skFy+fLYKOViuEPkZWx9AA9udYg3IVFm2jys4H3FLQb7L8UhCoQ4haQZHT9HJgEMwUqmpKXVYlfi217bOjY7OqQJ27eEKnnjrWKdS/hUmPJ5qOYrI42LT04vF5RLyTpMRW1qa5D6G0GcLvrSBIIIWfBiGoQtqu6yBKNs6MuEMKJadVEFhYahL32qYctg5Dr72g46ApaHi9fSyfuZ/udzVinM+5oLfo6bJAbEa9aJ52D0HH1LsJR4olfMKxSXpXg5JOuAuggNIchc6EVw5qUUSzM3S6El79c4mh4NDUE1w7D0JLgKmWwB1l1jHueA3p5Bk9/Awkkw5I9QPhG5RgHX5fyRXJmB0dG5VEJhR1qMgy44FLyR5do2JUVZHiNQC4gHElL0sG6R1hDgyMiv+46VbA1H0j1hHTvSIzlok+cMN0SOVqzHSlFP8jIMFdo3R9Qa9C5FvzkSL/hbViF0pCkJxxWqPra0s268q82YSWJahrmHAMG0yQWgqQIosV5lVIaQOXwaKuVkglPMQ4BgADFIKdf1KojRaZaz5+2VY1oMbzHy5X5FYq9OTE4WBTkD4g3dWBSEnLHSPyAyySX6mI0Ht8oXA1XBDb/FlV6E25SwWnYFvMNcVVbEzrJ21eeR8ogRjY/PgBRgudi0XEzCG8gJiXPLj/BjdryUr4ZIoJsLM/MfaXbCqClD640BU5uuQ5mCwjT5RNyyoKnalIPw5mgdZ2XKCQpVCcISdygJb04+NFSClkpwddx0ImaAbVwGzCPlUlQGrmmyfhfjU0X12O4zFuMZ1FcvmH0ul0zLZtfxrhuMwhwNd96D9KTMzoF+nFZZbsCqT0Ntr67Aj9RiMYVEIWO9DJJUpRnZZdWfPPvz58Kr6+vWE9QRS6E6+lTEGZEZyg5VipiCftkrBFwtreNtG8ITjtFBctcjwFUKfK5zETg77h1os4NKGIEDsQ8rKzIqxX08a6X++5NxhmzHXeBQ5ip2VbT0snc/JsY1mPsJIjCXLEV5me+WuaprIIAk8EUBhEox6I4YZtsIjjE3JipFhNYRXiAKBIx9WhzW+SQc45aapTVFKmleLVc6cQaZaXPWox2LHo5b4zMxSji+jqMz7RMkKDkej6guUH+wbbG3YpPuPUSJb1poo2jcdTsQLLx/FK7783dOn7+Y7ZVgPFqn0F6vFFB/LbYBYWxenaDoTGh8PcbFq4qSxiAWmQgFrXy21b/EQZDkJXnzPHlGTZQIoMzciFFehPYk6YclB+rERMKiC2LQ28eWqgqYU1H8R8vUPmiOs8uVAw1Iqd908efdvK6ve3DZIojTGIfieP+WUk0DgcTMn7iOICZnsCu50XU6YhI6uSXAq16FpXeTtl8HKfN0oIlnmTEiR+r3v7QKDihcMdtTWhl9FjNZH4mnVCBMEF/xe5HE1yQ6v16d9LMsZ+rYDVDFSnKdytC+4Ep+9hkEf3QO/hF8Sd8+eLpr9NrlEE87sZlkOyVQtzSuxEidLsZXmBlW/fyOead/W33/pSyPpe7NcsB0FUBkyH4At73jH3hSX2IhNTkIndm7uTCsVlLsCRX19VVEVvCSQ4jbui8d92nrjNfJ6m61ik9dwmS+LIp8JBCAmwolTdtlgSvO7fzd57RMzCSdOWO8MDNyJTw0OTllPII3B7I+slf1yhXjMu+LzMKTZxXOy+qSpqViA+K5lPpXJ5deJAFPH1gFo9bP7dy1PgQ/WoAd+JXqJcqvYU4YelzhD2zjkrMqkEwV0a5EobEP8ydK3ZnIeE2luj/6lj0Wvd6HQ1KTi7dvd+Q5lDhipUCR7VAnM6PQO66kJuWS6yazFIsfdLlJZKN9LdhHzguL43ZWiIH04DpXIG7yxc2CTAWIVAmr6V0tUiQjfA1Wylf5WivbxASDAWIyu5BUArR5CqBTXkks5KhSSyT2BK0m19jwWGKu1ZPxoiUC321wPfEkRjjJECFpe2yaLXlIqTzzzzIRFgXPB8phPJvnH9h7Zr7QzmzpYltHyfAqbSxJ1xO4Cy4GkP9TnqyJrBBZtWxMEW3bWYYQ2RFarBw4wdaTAkTrKrcHRNknpZVphQAVCFbmRwo29nSbofYqsfkHz2mL5TpoKr6OElbiJ18pY+PDtG/Q5p/HpeyTVrsNxOUQHwDGU6jBQLHYhr6AkHE6ICP9zgCdra0+oXeFdunLjzs5OzeIZwF4RiYSJhR0sZnqQwpog9kSvKBT0cfES2cxrwpM9mgmavClBrTy8dy/3jsoS1j4AKuHu6c6MpOpwVMlLxRxN54oPtpsPEaTbt2dmoS6d3ru3duvr9oIJaKS9fTv/8KaazmbN6psPc7efh/pJYQGA3iZWUUPl0cZGfNnZfXYIiJeRlCmZ3JCeObaj69ixWwMMh2qy2X37bt7UahG/NK2NtHECKbZhXycLR0ibV8eDCsV43kTqpGCi0IV0W+C1x0jiVMh5XriFYNfJrVMMfh7T0lsmkNabD4IyelDvkcSpESQdPx1iUAB1A86+jqiLNrZtxWLTpu5Dh7o3GSlQ1zqlmUTb734cCQjEhE8iK5cEckeeoYt2uT7ubxHd5dEZzBsFujYC4+OhGLWZYePKUKLFadexcMtM3FooTHJeo+Pgwe7u8HvscmhZZrM8ERqHSF19WTCTqEL08R9kD+Kil+1SC7CK9YpAqIQfRxUsmH2mce3C2hPniGHV0T96iB/pJL6p9l9V7zzGMB1v+fjHFTOrherF6ZW8cIGAyTWaLFQP26sqtt3Y/Mm3dX6cSj8+P/RVA45FJ/3+JGK+g+2VBZezG+dDHGWSx2yHsVe6Def83ST8bcGbIrvM0sxwNZIqKjy4FkmGyoyup9eGuAb2V4zEM7qsxiYmm1HpNNRnSVOvdN2Vlt26qEdvMD9q8DfxvvnYJn/DI8YxRQs66MWi90IkZCRxhTAlfQ3UPkZ6J5vrFuGSGBNHWdCxJWMCH1SnnMYOy7dRM6oxzslnjPz4BnepwUDsIm7I/QYjyXUShoYH9FRwJRqLD9xJtTK69GSCXonYbEn69sCbTL+aajnciQTKlvOJ4nKijCDVzy8nli8ujFlhmzW/iHzPVseMjc1XellG9Ouoe99ugZhaJCD9wXF9by3/4tFHum5Zd97D7AM60i+vRC7Grl6N0Q9Y2BKz91+p4BVEnRZnLTFjV9tnMoBZaP1nhUQUy4sCtKn5RtteeyOvdnK6bLZRnFEoVhSKu2JTNnsxy/EJMvHoV9mDTfXzVxIL6RNi+CwE5heTg5yn484oGG4J1GEQYfX1HDk/3wb3rNoUh+o8wAqN8GZ/nh7wPCmNdQKcaOutkEwuZ2lAinqb1azXanscSryRzc76faVryGhTW7YmDkW6Bh0aTJi/tOQlnrdqKGqslVARKh+7nl5htPuDL5yZ6D7zwgff7Op+M780G3zW2SU+GApHeoZDQX7//h/9YfBZ/vCj/Tuk9ddhB4cOO6nqvTTPR9eKsXSx5J65mI4V16I82tJ9wP2np72tn/6T+8AWhSLMaJWRHp9PG1W0QaVAR+Lufu+nvTeCkze8n36v21HgNZv0tYCEMPMn5jYpQELEIugs8MVJDCR0HMDUs0QyGt1SlMSpc0+oXbtSe8obFKkgHTGbTTWWDVw0Uin+57Uh/7wpvLbi81VaAUNfnk5lA8l1L9yslAZYmPnnY2up1KA77OJU/daeazEwEIv5/Y+mpnzMUXGsWCIWiyzZ3LybRf5uDimJxLy7tKjOLkbW1rlCtZiamAjdH0fz+yF4g8OxpWMulESqD7Zot1+4cWPiArNdxUVs5trmYUwSnUrgsuDFGG/WzovqAoGFdDCWgQDYnnvuQSX6Inb5byD+ffZ1NJiVuuZmndIu+v2i3e02Xr8374uWH4hv/vp1vT5689//vhl1j/NgsaAOze/Ob9onTHgv9AbI7x/E7ek7dZs5hLlcJxmV14ztRabF1A1/XtE/LzAcubio17dTn17k/NNTZpFBqRweL0G8avoDV6kfqVSJSvXGWFnyl8ibCEHyM0ZR/0rJZKl6zUffE3lrcfNiWVKTVNcnowZ5KDQ9reGRzBByeg18Y6W9hcNTojiDiJiXpuCj6GRqzTd4hKSnAtnIeMsBeP1eiCQ1e1T0FwDBk3HkLe9L6N6vPZCnmF+ENQBurs8gAF58GFZ3vIQcVt0AGhQAgAA/+p/glJL6b6GPvpdfrFP7k2h10u607TZUqzZ4VVJwVBpp8x7u9W26pdAg1UMaQHpH88A3Fb3eYLNCpK6XC22Vsuq3OYSq4MVEuX2BXDK1/uUnzd9EJZkfhZ1WfrGVi9sIkneUUtIcpcg7LZTTSuNzTBJ0Hew7hythl1lPOXtFTxuVHor20BCURav5kX7t8ZlnURO3yd6lmuPks/Khx9lIMRuoUqKBLumUsJlS4+s9HKNpG8D/xAvDxrhxi0H2JNVqdnvOR1jpUjfNfYqWPRVSZw0WS5MZIslDVl1gsQ6ejuxzae7uPbm79Z8d+qTRiv0ocENIxhM0xQWH+FMkQEqk+kYqKX2oIpI0HAyey1SrOoex1IhvhSrtpHaPMi6DvcYBEcINYvUXNlNJV0Q2L0XmIF+b6TLKvOU30+38Gd2RJzhkjX57VcKqqbaDcjOl5JhY/yl8mAJ0Gt1BC1EnFP3LI864y7rBKj0wJCdYfU+W1ST5k9ED8QiAUww40GLPg6RSu/IPBRYI2xNAb67LEIEwx0MU+KRDslplCLEhSUGIg6CkcXqmBB3Bh8I3UwjgjaeoIrZ9hCKlO8SC0NkQG1wcDXHgZ2eIBg8t0qMeQ4iLUFNDnpAZE+IhiDrkhQHEf37eEAPyNChj49LAqU4sDQeLcjW6O9TEBLcYuTO9B+txfNVPrkGFWrYD5SArH8+ml1kqm3ElU78FN2pp22cjXW+02F0vTXxho3INbCPu0sE4jdwhuXPyhVWJl2eYUQ4Rw6si8ZZqUDSQDeUko1AiUZyEWn9Q8Vok5dk/boPlypNrqME1/YnKBVK7qQcmhdsmrmidbAqJgiFUzOZO5gtuN8jyslSm8YBq2t6IRFT/rMbgVrFlpcYro+JyTrXik6kKjiYtTnnFDFXWcz5OjSYnMcGGdUc2dlM2nZ8jMSyX+snmsqidoLT6Mv9FMnEovDzKD20SPTKnAAPccE0Zt3KdVggXwSpSlArX3dT1s0/mv+Uz3W7vXeKV6fvtcUeVe/Y7sIVp8/seqPZwGxP/Me1Ix6aGg12dWluDdAZZ39P4x7uZ3Edc25Sqx29p4hOTnLRZiU9O8YM7m+TCsPl0zWaasb3p8n9y0ri9Ug+cLwFChNqLjR1ktpvPBzT8ZPCCN0zM0qkJ9yrFNWGCAx6+J/zawhwemIuPX/3mOAmp/iy4COOJBWYrHZtwCE08CJd4Eh6W0VrqsReeeOrl6/g/toSEngT20L8NznecO2n3Hvm/5lZb8X+i5TwtP8a7hKFbbce8PZ6u3w7rUdrWPZYPp95eCgAAAA==) format("woff2");
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 620px at 12% -8%, rgba(0, 255, 229, 0.07), transparent 62%),
+      radial-gradient(900px 520px at 92% 4%, rgba(0, 120, 190, 0.09), transparent 60%),
+      var(--bench);
+    color: var(--fg);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------------------------------------------------------- shell */
+  .wrap { max-width: 1380px; margin: 0 auto; padding: 0 20px 96px; }
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    margin-bottom: 40px;
+    background: linear-gradient(180deg, rgba(14, 32, 45, 0.92), rgba(6, 16, 24, 0.92));
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 255, 229, 0.16);
+    box-shadow: 0 6px 0 -1px #030a11, 0 12px 26px -14px rgba(0, 0, 0, 0.9);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .bar::-webkit-scrollbar { display: none; }
+  .bar__mark {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--active);
+    text-shadow: 0 0 16px rgba(0, 255, 229, 0.5);
+    white-space: nowrap;
+  }
+  .bar__keys { display: flex; gap: 6px; margin-left: auto; }
+  .bar__key {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.72);
+    text-decoration: none;
+    white-space: nowrap;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+    transition: background 0.15s, color 0.15s;
+  }
+  .bar__key:hover { background: linear-gradient(170deg, #34586f, #162b38); color: #fff; }
+  .bar__key:active { transform: translateY(2px); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.18), 0 1px 0 var(--edge); }
+
+  /* ------------------------------------------------------------ masthead */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: rgba(255, 255, 255, 0.38);
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.07;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 12px 0 0;
+    background: linear-gradient(96deg, #ffffff 18%, var(--active) 92%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lede {
+    max-width: var(--measure);
+    margin: 20px 0 0;
+    font-size: 17px;
+    color: rgba(255, 255, 255, 0.74);
+  }
+  .lede b { color: #fff; font-weight: 600; }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 20px;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; margin: 0 0 6px; color: #fff; }
+  p { margin: 0; }
+  .prose { max-width: var(--measure); color: rgba(255, 255, 255, 0.72); }
+  .prose + .prose { margin-top: 14px; }
+  .prose b { color: #fff; font-weight: 600; }
+  em { color: rgba(255, 255, 255, 0.88); font-style: italic; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 255, 229, 0.08);
+    border: 1px solid rgba(0, 255, 229, 0.14);
+    color: #9ffff2;
+    white-space: nowrap;
+  }
+
+  section { margin-top: 64px; }
+  .rule { height: 1px; background: linear-gradient(90deg, rgba(0, 255, 229, 0.5), rgba(255, 255, 255, 0.08) 40%, transparent); }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .sec-head .eyebrow { margin-left: auto; }
+
+  /* ---------------------------------------------------------- prose cards */
+  .cards {
+    display: grid;
+    gap: 14px;
+    margin-top: 26px;
+    grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  }
+  .card {
+    padding: 16px 17px 17px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+  .card p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .card p + p { margin-top: 9px; }
+  .card__tag {
+    display: inline-block;
+    margin-bottom: 9px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--active);
+    background: rgba(0, 255, 229, 0.09);
+    border: 1px solid rgba(0, 255, 229, 0.22);
+  }
+  .card--warn .card__tag { color: var(--amber); background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.28); }
+
+  /* -------------------------------------------------------------- options */
+  .opt { margin-top: 76px; scroll-margin-top: 76px; }
+  .opt__head { display: flex; align-items: flex-start; gap: 14px; }
+  .opt__letter {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      0 3px 0 var(--edge-active),
+      0 8px 18px -6px rgba(0, 255, 229, 0.45);
+  }
+  .opt__letter--pair { font-size: 13px; letter-spacing: -0.02em; }
+  .opt--alt .opt__letter {
+    color: rgba(255, 255, 255, 0.8);
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.22), 0 3px 0 var(--edge);
+  }
+  .opt__thesis { margin-top: 5px; font-size: 15px; color: rgba(255, 255, 255, 0.6); max-width: var(--measure); }
+  .opt__body { display: grid; gap: 16px; margin-top: 22px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .opt__body { grid-template-columns: 1fr 1fr; } }
+  /* A grid item's `min-width: auto` is its min-content width, so one nowrap run
+     inside a note widens the track past the page. */
+  .opt__body > * { min-width: 0; }
+  .note h3 { display: flex; align-items: center; gap: 7px; }
+  .note h3::before {
+    content: "";
+    width: 3px;
+    height: 13px;
+    border-radius: 2px;
+    background: var(--active);
+    box-shadow: 0 0 8px rgba(0, 255, 229, 0.7);
+  }
+  .note--cost h3::before { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, 0.6); }
+  .note p { font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+  .note p + p { margin-top: 10px; }
+
+  .price {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    max-width: 100%;
+  }
+  .price--good { color: var(--active); background: rgba(0, 255, 229, 0.09); border-color: rgba(0, 255, 229, 0.28); }
+
+  /* --------------------------------------------------- the mock enclosure */
+  .screen {
+    margin-top: 26px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    background: var(--app-bg);
+    box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+  }
+  .screen__tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.34);
+  }
+  .screen__tab b { color: rgba(0, 255, 229, 0.8); font-weight: 600; }
+  .screen__tab .live {
+    margin-left: auto;
+    color: var(--active);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .screen__tab .live::before {
+    content: "";
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--active);
+    box-shadow: 0 0 8px rgba(0, 255, 229, 0.9);
+  }
+  .screen__stage { padding: 22px; overflow-x: auto; }
+  /* The trades page is `PageShell width="wide"` — `max-w-4xl` with `px-4` — so
+     the board lays out at 864px. The stage is held to that rather than to its
+     frame, or every row below would wrap at a width no reader has. */
+  .stage-inner { min-width: 864px; }
+  .stage-inner + .stage-inner { margin-top: 28px; }
+  .stage-cap {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 9px;
+  }
+
+  /* The phone column: the same option at 390px, because the row's wrapping is
+     most of the argument and it only shows up at the width it happens at. */
+  .split { display: grid; gap: 24px; }
+  @media (min-width: 1300px) { .split { grid-template-columns: minmax(0, 1fr) 388px; align-items: start; } }
+  .phone .stage-inner { min-width: 0; width: 358px; }
+  .phone .screen__stage { padding: 14px; overflow: visible; }
+
+  /* ---- the chip family and the mono caption, verbatim from the eighth mock ---- */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: none;
+    padding: 5px 13px 6px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+    background: linear-gradient(170deg, #2a4a60, #12242f);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.45),
+      0 3px 0 var(--edge),
+      0 6px 11px -5px rgba(0, 0, 0, 0.75);
+  }
+  .chip--on {
+    color: var(--on-active);
+    background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+      inset 0 -6px 10px -8px rgba(0, 90, 82, 0.9),
+      0 3px 0 var(--edge-active),
+      0 6px 14px -5px rgba(0, 255, 229, 0.4);
+  }
+  /* `.lab-chip-sm`: the thinner wall, for a key that sets a value rather than
+     opening a dialog. `.lab-chip-on.lab-chip-sm` re-states the thin wall, or a
+     lit key in a row of small ones stands a pixel prouder than its neighbours. */
+  .chip--sm { padding: 3px 10px 4px; font-size: 11.5px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -2px 4px rgba(0,0,0,0.4), 0 2px 0 var(--edge), 0 4px 8px -4px rgba(0,0,0,0.7); }
+  .chip--sm.chip--on { box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -5px 9px -8px rgba(0,90,82,0.9), 0 2px 0 var(--edge-active), 0 4px 10px -4px rgba(0,255,229,0.35); }
+  /* A key with nothing behind it: flat and unlit, the app bar's rule at this
+     size — a part that does nothing when pressed must not look pressable. */
+  .chip--dead { color: rgba(255, 255, 255, 0.25); background: none; box-shadow: none; cursor: not-allowed; }
+  .caret { font-size: 8px; opacity: 0.6; }
+
+  .lab { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255, 255, 255, 0.4); flex: none; }
+
+  /* ------------------------------------------------- the shared vocabulary */
+  /* Every option draws the same seven-field board, so the difference between
+     them is the *organisation* and never the data. Load 470: targets 100,
+     receiving yards 100, receptions 80, receiving TDs 60, age 60, snap share
+     45, targets/snap 25. */
+
+  .panel {
+    border-radius: 16px;
+    padding: 20px 16px 16px;
+    background: linear-gradient(168deg, #16293a, #0a1622 62%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -24px 44px -26px rgba(0, 0, 0, 0.9),
+      0 4px 0 var(--edge),
+      0 20px 34px -16px rgba(0, 0, 0, 0.85);
+  }
+  .panel-wrap { position: relative; padding-top: 12px; }
+  .plate {
+    position: absolute; left: 16px; top: 0; z-index: 2;
+    padding: 4px 12px 5px; border-radius: 6px;
+    font-family: var(--display); font-size: 10px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: #fff;
+    background: linear-gradient(172deg, #4d7d9c 0%, #2f566f 55%, #1f3b50 100%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.4),
+      0 2px 0 var(--edge),
+      0 5px 10px -4px rgba(0, 0, 0, 0.8);
+  }
+
+  .bezel {
+    display: inline-flex; gap: 4px; padding: 4px; border-radius: 8px;
+    background: linear-gradient(180deg, #04101c, #0b1d29);
+    box-shadow:
+      inset 0 5px 11px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(0, 0, 0, 0.9),
+      inset 0 -1.5px 0 rgba(255, 255, 255, 0.13),
+      inset 0 0 0 1px rgba(0, 255, 229, 0.07), 0 1px 0 rgba(255, 255, 255, 0.09);
+  }
+  .gauge {
+    position: relative; overflow: hidden; min-width: 54px;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 4px 8px 3px; border-radius: 4px;
+    background: linear-gradient(180deg, #030d17, #0a1c28);
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.95), inset 0 -1px 0 rgba(0, 255, 229, 0.16),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  }
+  .gauge::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(112deg, rgba(255,255,255,0.09) 0 30%, transparent 52%);
+  }
+  .gauge b { font-family: var(--display); font-size: 12px; color: rgba(255,255,255,0.85); font-variant-numeric: tabular-nums; }
+  .gauge i { font-style: normal; font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.35); }
+
+  .mix {
+    display: flex; gap: 1px; height: 12px; padding: 2px; border-radius: 4px;
+    background: #040e17; overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.9), inset 0 -1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(0,255,229,0.1);
+  }
+  .mix i {
+    border-radius: 1px;
+    background: linear-gradient(180deg, #b9fff7, #00d6c0);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 1px 1px 0 rgba(0,60,55,0.9), 0 0 8px rgba(0,255,229,0.75);
+  }
+
+  .bay {
+    border-radius: 12px; padding: 8px 10px 10px;
+    background: #06111b;
+    box-shadow:
+      inset 0 6px 14px -4px rgba(0,0,0,0.9), inset 0 -2px 6px rgba(0,0,0,0.5),
+      inset 0 0 0 1px rgba(0,255,229,0.1);
+  }
+  .bay > h4 {
+    margin: 0 0 6px; padding: 0 4px;
+    font-family: var(--display); font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: rgba(255,255,255,0.45); font-weight: 500;
+    text-shadow: 0 -1px 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .bay p.hint { margin: 8px 4px 0; font-size: 11px; line-height: 15px; color: rgba(255,255,255,0.4); }
+
+  /* A row of the bench: rail, label, slider, readout, and the window seat. */
+  .wrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 0 4px 10px; position: relative; }
+  .wrow::before {
+    content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 16px; border-radius: 999px; background: rgba(255,255,255,0.1);
+  }
+  .wrow.on::before {
+    background: linear-gradient(180deg, #c8fff9, #00b0a0);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.95), 3px 0 14px rgba(0,255,229,0.5);
+  }
+  .wrow > label { width: 120px; flex: none; font-size: 12px; color: rgba(255,255,255,0.35); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wrow.on > label { color: rgba(255,255,255,0.8); }
+
+  .sld { position: relative; height: 18px; flex: 1 1 80px; min-width: 72px; }
+  .sld::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 6px; height: 6px; border-radius: 999px;
+    background: linear-gradient(180deg, #0a1620, #16303e);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.75), inset 0 -1px 0 rgba(255,255,255,0.06);
+  }
+  .sld u {
+    position: absolute; top: 6px; left: 0; height: 6px; border-radius: 999px; width: var(--v);
+    background: linear-gradient(180deg, #0e7d74, #0a5650); text-decoration: none;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
+  }
+  .sld b {
+    position: absolute; top: 1px; left: var(--v); width: 16px; height: 16px; margin-left: -8px;
+    border-radius: 999px; background: linear-gradient(180deg, #a8fff4, #00ddc6);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.85), 0 2px 0 var(--edge-active), 0 4px 10px -3px rgba(0,255,229,0.45);
+  }
+  .sld.flat u { display: none; }
+
+  .rdt {
+    flex: none; width: 32px; text-align: center; padding: 2px 4px; border-radius: 4px;
+    font-family: var(--display); font-size: 10px; font-variant-numeric: tabular-nums;
+    color: rgba(255,255,255,0.3);
+    background: linear-gradient(180deg, #04101a, #0b1b28);
+    box-shadow: inset 0 2px 7px rgba(0,0,0,0.85), inset 0 -1px 0 rgba(255,255,255,0.06), inset 0 0 0 1px rgba(0,255,229,0.1);
+  }
+  .wrow.on .rdt { color: var(--active); }
+
+  /* The window seat, as a slot cut into the bay floor. */
+  .wsel {
+    position: relative; flex: none; width: 136px; padding: 3px 18px 4px 7px; border-radius: 4px;
+    font-size: 15px; line-height: 20px; color: rgba(255,255,255,0.25);
+    background: #040e17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.9), inset 0 -1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(0,255,229,0.1);
+  }
+  .wrow.on .wsel { color: rgba(255,255,255,0.45); }
+  .wrow.on .wsel.moved { color: var(--active); }
+  .wsel::after { content: "▾"; position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 8px; color: rgba(255,255,255,0.4); }
+
+  /* ------------------------------------------------ B · the channel rack */
+  .rack { display: flex; gap: 8px; padding: 10px 10px 8px; border-radius: 12px; background: #06111b;
+    box-shadow: inset 0 6px 14px -4px rgba(0,0,0,0.9), inset 0 -2px 6px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(0,255,229,0.1); }
+  .chan { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 8px 4px 7px; border-radius: 8px;
+    background: linear-gradient(165deg, #1c3547, #0d1e2b 66%);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 -18px 34px -24px rgba(0,0,0,0.85), 0 2px 0 var(--edge), 0 10px 20px -12px rgba(0,0,0,0.8); }
+  .chan > span.nm { font-size: 10px; line-height: 12px; text-align: center; color: rgba(255,255,255,0.72); height: 24px; overflow: hidden; }
+  .fad { position: relative; width: 26px; height: 116px; border-radius: 5px; background: #040e17;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.95), inset 0 0 0 1px rgba(0,255,229,0.09); }
+  .fad u { position: absolute; left: 10px; right: 10px; bottom: 0; height: var(--v); border-radius: 3px; text-decoration: none;
+    background: linear-gradient(180deg, #00d6c0, #0a4f4a); box-shadow: 0 0 8px rgba(0,255,229,0.4); }
+  .fad::before { content: ""; position: absolute; left: 12px; right: 12px; top: 6px; bottom: 6px; border-radius: 2px; background: rgba(255,255,255,0.05); }
+  .fad b { position: absolute; left: 2px; right: 2px; bottom: calc(var(--v) - 7px); height: 14px; border-radius: 3px;
+    background: linear-gradient(180deg, #cffff9, #00c9b4);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.9), 0 2px 0 var(--edge-active), 0 4px 10px -3px rgba(0,255,229,0.5); }
+  .fad b::after { content: ""; position: absolute; left: 3px; right: 3px; top: 6px; height: 1px; background: rgba(0,40,38,0.65); }
+  .chan .rdt { width: 34px; }
+  .chan .wmini { width: 100%; text-align: center; padding: 2px 3px 3px; border-radius: 3px; font-size: 9px;
+    letter-spacing: 0.04em; color: rgba(255,255,255,0.4); background: #040e17;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.9), inset 0 0 0 1px rgba(0,255,229,0.09); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chan .wmini.moved { color: var(--active); }
+
+  .bin { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+  .bin .chip { font-size: 11px; padding: 3px 9px 4px; }
+  .bin .lab { width: 100%; margin-bottom: 2px; }
+
+  /* ------------------------------------------------ C · the priority ladder */
+  .ladder { display: flex; flex-direction: column; gap: 5px; }
+  .lrow { display: flex; align-items: center; gap: 10px; padding: 7px 10px 8px; border-radius: 8px;
+    background: linear-gradient(165deg, #1c3547, #0d1e2b 66%);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.1), 0 2px 0 var(--edge), 0 8px 16px -12px rgba(0,0,0,0.8); }
+  .lrow .grip { flex: none; width: 10px; color: rgba(255,255,255,0.25); font-size: 12px; letter-spacing: 1px; line-height: 8px; }
+  .lrow .nm { flex: 1 1 auto; min-width: 0; font-size: 12.5px; color: rgba(255,255,255,0.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tiers { display: flex; gap: 2px; flex: none; padding: 2px; border-radius: 4px; background: #040e17;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.9), inset 0 0 0 1px rgba(0,255,229,0.1); }
+  .tiers i { width: 13px; height: 14px; border-radius: 2px; background: linear-gradient(180deg, #1f4256, #12293a);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 1px 1px 0 rgba(0,0,0,0.7); }
+  .tiers i.on { background: linear-gradient(180deg, #b9fff7, #00d6c0);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 1px 1px 0 rgba(0,60,55,0.9), 0 0 8px rgba(0,255,229,0.7); }
+  .lrow .pct { flex: none; width: 34px; text-align: right; font-family: var(--display); font-size: 10px; color: rgba(255,255,255,0.5); font-variant-numeric: tabular-nums; }
+
+  /* ------------------------------------------------ D · preset boards */
+  .boards { display: flex; flex-wrap: wrap; gap: 7px; }
+  .board { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding: 7px 12px 8px; border-radius: 9px; min-width: 132px;
+    background: linear-gradient(180deg, #14293a, #0b1a26);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.13), 0 3px 0 var(--edge), 0 8px 16px -9px rgba(0,0,0,0.85); }
+  .board.on { background: linear-gradient(180deg, #0c5f5a, #06413f); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.35), 0 3px 0 var(--edge-active), 0 0 18px -4px rgba(0,255,229,0.5); }
+  .board .t { font-family: var(--display); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.9); }
+  .board .s { font-size: 10.5px; color: rgba(255,255,255,0.45); }
+  .board.on .s { color: rgba(210,255,250,0.8); }
+  .board .spark { display: flex; gap: 1.5px; align-items: flex-end; height: 12px; margin-top: 1px; }
+  .board .spark i { width: 4px; border-radius: 1px; background: rgba(255,255,255,0.25); }
+  .board.on .spark i { background: rgba(190,255,248,0.9); }
+
+  /* ---------------------------------------------------- the window seats */
+  .stepper { display: flex; align-items: center; gap: 5px; flex: none; }
+  .stepper .k { width: 20px; height: 22px; display: grid; place-items: center; border-radius: 4px; font-size: 11px; color: rgba(255,255,255,0.7);
+    background: linear-gradient(180deg, #1b3347, #102331); box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 2px 0 var(--edge); }
+  .stepper .k.dead { color: rgba(255,255,255,0.18); box-shadow: none; background: rgba(255,255,255,0.03); }
+  .stepper .rd { width: 96px; text-align: center; padding: 3px 4px 4px; border-radius: 4px; font-family: var(--display); font-size: 9px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.5); background: #040e17;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.9), inset 0 -1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(0,255,229,0.1); }
+  .stepper .rd.moved { color: var(--active); }
+
+  .bayhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; padding: 0 4px; }
+  .bayhead h4 { margin: 0; }
+  .ovr { flex: none; margin-left: auto; font-size: 10px; color: rgba(255,255,255,0.4); }
+  .tagw { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px 2px; border-radius: 999px; font-size: 10px;
+    color: var(--active); background: rgba(0,255,229,0.1); box-shadow: inset 0 0 0 1px rgba(0,255,229,0.3); }
+  .tagw::before { content: "◧"; font-size: 8px; opacity: 0.8; }
+
+  .cols2 { display: grid; gap: 12px; }
+  @media (min-width: 900px) { .cols2 { grid-template-columns: 1fr 1fr; } }
+  .cols2--start { align-items: start; }
+</style>
+
+
+<div class="bar">
+  <a href="#a">A · The bench</a>
+  <a href="#b">B · The channel rack</a>
+  <a href="#c">C · The priority ladder</a>
+  <a href="#d">D · Boards first</a>
+  <a href="#seats">The window seat</a>
+  <a href="#pick">What to build</a>
+</div>
+
+<div class="wrap">
+  <header style="padding:56px 0 12px">
+    <p class="eyebrow">Comps · the comparison weights · four organisations, three seats</p>
+    <h1>Twenty-nine sliders, of which seven are doing anything</h1>
+    <p class="lede">
+      The weight bench is the one control on this page whose <b>shape is the answer</b>: which
+      stats are in the comparison, how hard each pulls, and — since windows landed — over what
+      stretch of career each is read. It ships as one row per catalogue field, and that is the
+      thing worth re-deciding, because the catalogue is twenty-nine fields long and a tuned board
+      is about seven of them. <b>Twenty-two rows report that they are switched off.</b>
+    </p>
+    <p class="lede" style="margin-top:14px">
+      All four options below draw the identical board — a receiver tuned to targets over the
+      previous three years, receiving yards at his career best, snap share at the best of his
+      last three, and the usual production and age underneath — so the only thing that varies
+      between them is the organisation. Every one is drawn at a laptop width and at 390px,
+      because what a bench costs is mostly height and height only shows up on a phone.
+    </p>
+  </header>
+
+  <div class="rule"></div>
+
+  <section style="margin-top:40px">
+    <div class="sec-head"><h2>What the bench costs today</h2><p class="eyebrow">Measured, headless Chromium, real faces</p></div>
+    <div class="cards">
+      <div class="card">
+        <span class="card__tag">780px</span>
+        <p>The panel's height at a laptop width, with production two-up. On a 390px screen it is
+          <b>3,800px</b> — ten screens of controls to reach the six fields under Market values.</p>
+      </div>
+      <div class="card">
+        <span class="card__tag">22 of 29</span>
+        <p>Rows at weight 0 on a tuned board. Each still spends a label, a slider, a readout and —
+          in production — a window slot, which is the widest control in the row.</p>
+      </div>
+      <div class="card card--warn">
+        <span class="card__tag">16px</span>
+        <p>The window control has to be set at the iOS zoom floor, so it is the <b>largest type in
+          a row of 12px labels</b>. Twenty of them shouting "This season" is the loudest thing on
+          the panel and the least informative.</p>
+      </div>
+      <div class="card">
+        <span class="card__tag">Fixable anywhere</span>
+        <p>The track does not flood to the weight — the thumb is the only cue, so a row reads as
+          "on" only by its rail. Every option below floods it; it costs nothing and belongs in
+          whichever one is built.</p>
+      </div>
+    </div>
+    <p class="prose" style="margin-top:20px">
+      None of that is an argument for hiding the catalogue. A reader who wants target share at
+      the career best has to be able to find target share. It is an argument that <b>the board
+      and the catalogue are two different things</b> — the board is what you are comparing on,
+      the catalogue is what you could add — and today they are drawn as one list in which the
+      board is scattered.
+    </p>
+  </section>
+
+  <div class="rule" style="margin-top:52px"></div>
+
+
+  <section class="opt" id="a">
+    <div class="opt__head">
+      <span class="opt__letter">A</span>
+      <div>
+        <h2>The bench, as it ships</h2>
+        <p class="opt__thesis">One row per field, three family bays, everything on screen and nothing behind a press.</p>
+      </div>
+    </div>
+    
+        <div class="split">
+          <div class="screen">
+            <div class="screen__stage"><div class="stage-inner">
+              <p class="stage-cap">Laptop — production two-up, profile and market beneath</p>
+              <div class="panel-wrap"><span class="plate">Comparison weights</span><div class="panel"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div class="bezel"><span class="gauge"><b>7</b><i>fields</i></span><span class="gauge"><b>470</b><i>load</i></span><span class="gauge"><b>3</b><i>windows</i></span><span class="gauge"><b>WR</b><i>board</i></span></div><span style="margin-left:auto" class="chip chip--sm">Reset WR</span></div><div class="mix"><i style="width:21.2766%" title="Targets"></i><i style="width:21.2766%" title="Receiving yards"></i><i style="width:17.0213%" title="Receptions"></i><i style="width:12.7660%" title="Receiving TDs"></i><i style="width:12.7660%" title="Age"></i><i style="width:9.5745%" title="Snap share %"></i><i style="width:5.3191%" title="Targets / snap"></i></div><div style="margin-top:12px"><div class="bay"><h4>Production</h4><div style="display:grid;grid-template-columns:1fr 1fr;column-gap:20px"><div class="wrow"><label>Pass attempts</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Completions</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Passing yards</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Passing TDs</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Interceptions</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Passing air yards</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Rush attempts</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Rushing yards</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Rushing TDs</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Rush share %</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow on"><label>Targets</label><span class="sld flat" style="--v:100%"><b></b></span><span class="rdt">100</span><span class="wsel moved">Prev 3 yrs</span></div><div class="wrow on"><label>Receptions</label><span class="sld flat" style="--v:80%"><b></b></span><span class="rdt">80</span><span class="wsel">This season</span></div><div class="wrow on"><label>Receiving yards</label><span class="sld flat" style="--v:100%"><b></b></span><span class="rdt">100</span><span class="wsel moved">Career best</span></div><div class="wrow on"><label>Receiving TDs</label><span class="sld flat" style="--v:60%"><b></b></span><span class="rdt">60</span><span class="wsel">This season</span></div><div class="wrow"><label>Receiving air yards</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Snaps</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Target share %</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow on"><label>Snap share %</label><span class="sld flat" style="--v:45%"><b></b></span><span class="rdt">45</span><span class="wsel moved">Prev 3 best</span></div><div class="wrow on"><label>Targets / snap</label><span class="sld flat" style="--v:25%"><b></b></span><span class="rdt">25</span><span class="wsel">This season</span></div><div class="wrow"><label>Fumbles lost</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div></div><p class="hint">Air yards, snaps and the usage rates only exist where the stat feed supplies them — weighting one narrows the comparison to seasons that can answer it. So does a window.</p></div><div class="cols2 cols2--start" style="margin-top:12px"><div class="bay"><h4>Profile</h4><div><div class="wrow on"><label>Age</label><span class="sld flat" style="--v:60%"><b></b></span><span class="rdt">60</span><span class="wsel">This season</span></div><div class="wrow"><label>Career PPR/g</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Prev 3 seasons PPR/g</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div></div></div><div class="bay"><h4>Market values</h4><div><div class="wrow"><label>KTC (Superflex)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>KTC (1QB)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>KTC peak (SF)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>KTC 90-day trend (SF)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>ADP (Dynasty)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>ADP (Redraft)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div></div></div></div></div></div></div>
+            </div></div>
+          </div>
+          <div class="screen phone">
+            <div class="screen__stage"><div class="stage-inner">
+              <p class="stage-cap">390px — the row wraps and the window takes a line of its own</p>
+              <div class="panel-wrap"><span class="plate">Comparison weights</span><div class="panel"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div class="bezel"><span class="gauge"><b>7</b><i>fields</i></span><span class="gauge"><b>470</b><i>load</i></span><span class="gauge"><b>3</b><i>windows</i></span><span class="gauge"><b>WR</b><i>board</i></span></div><span style="margin-left:auto" class="chip chip--sm">Reset WR</span></div><div class="mix"><i style="width:21.2766%" title="Targets"></i><i style="width:21.2766%" title="Receiving yards"></i><i style="width:17.0213%" title="Receptions"></i><i style="width:12.7660%" title="Receiving TDs"></i><i style="width:12.7660%" title="Age"></i><i style="width:9.5745%" title="Snap share %"></i><i style="width:5.3191%" title="Targets / snap"></i></div><div style="margin-top:12px"><div class="bay"><h4>Production</h4><div><div class="wrow"><label>Pass attempts</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Completions</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Passing yards</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Passing TDs</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Interceptions</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Passing air yards</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Rush attempts</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Rushing yards</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Rushing TDs</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Rush share %</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow on"><label>Targets</label><span class="sld flat" style="--v:100%"><b></b></span><span class="rdt">100</span><span class="wsel moved">Prev 3 yrs</span></div><div class="wrow on"><label>Receptions</label><span class="sld flat" style="--v:80%"><b></b></span><span class="rdt">80</span><span class="wsel">This season</span></div><div class="wrow on"><label>Receiving yards</label><span class="sld flat" style="--v:100%"><b></b></span><span class="rdt">100</span><span class="wsel moved">Career best</span></div><div class="wrow on"><label>Receiving TDs</label><span class="sld flat" style="--v:60%"><b></b></span><span class="rdt">60</span><span class="wsel">This season</span></div><div class="wrow"><label>Receiving air yards</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Snaps</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Target share %</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow on"><label>Snap share %</label><span class="sld flat" style="--v:45%"><b></b></span><span class="rdt">45</span><span class="wsel moved">Prev 3 best</span></div><div class="wrow on"><label>Targets / snap</label><span class="sld flat" style="--v:25%"><b></b></span><span class="rdt">25</span><span class="wsel">This season</span></div><div class="wrow"><label>Fumbles lost</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div></div><p class="hint">Air yards, snaps and the usage rates only exist where the stat feed supplies them — weighting one narrows the comparison to seasons that can answer it. So does a window.</p></div><div class="cols2 cols2--start" style="margin-top:12px"><div class="bay"><h4>Profile</h4><div><div class="wrow on"><label>Age</label><span class="sld flat" style="--v:60%"><b></b></span><span class="rdt">60</span><span class="wsel">This season</span></div><div class="wrow"><label>Career PPR/g</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>Prev 3 seasons PPR/g</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div></div></div><div class="bay"><h4>Market values</h4><div><div class="wrow"><label>KTC (Superflex)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>KTC (1QB)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>KTC peak (SF)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>KTC 90-day trend (SF)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>ADP (Dynasty)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div><div class="wrow"><label>ADP (Redraft)</label><span class="sld flat" style="--v:0%"><b></b></span><span class="rdt">0</span><span class="wsel">This season</span></div></div></div></div></div></div></div>
+            </div></div>
+          </div>
+        </div>
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p>Nothing is hidden and nothing is a step: a reader who wants a field can see that it
+        exists, what it is called, and that it is currently off. The lit rail down the leading
+        edge is the only thing separating the seven that matter from the twenty-two that don't,
+        and it does read.</p>
+        <p>It is also the only option where <b>adding a field and weighing it are one gesture</b> —
+        drag from 0 and it is in. Every other option below makes that two.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p>The board is scattered through the catalogue. Targets and Age are eleven rows apart
+        with nine switched-off rows between them, so the thing the reader tuned cannot be read as
+        a unit — which is exactly what the mix strip at the top had to be invented to say.</p>
+        <p>On a phone it is ten screens, and the window control is drawn twenty times to say
+        "This season" nineteen of them.</p>
+      </div>
+    </div>
+    <p style="margin-top:14px"><span class="price price--good">Ships today</span></p>
+  </section>
+
+
+  <section class="opt opt--alt" id="b">
+    <div class="opt__head">
+      <span class="opt__letter">B</span>
+      <div>
+        <h2>The channel rack</h2>
+        <p class="opt__thesis">The board is a rack of faders — one channel per field that is <em>in</em> — and the catalogue is a parts bin under it.</p>
+      </div>
+    </div>
+    
+        <div class="split">
+          <div class="screen">
+            <div class="screen__stage"><div class="stage-inner">
+              <p class="stage-cap">Laptop — seven channels, and the whole board readable at once</p>
+              <div class="panel-wrap"><span class="plate">Comparison weights</span><div class="panel"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div class="bezel"><span class="gauge"><b>7</b><i>fields</i></span><span class="gauge"><b>470</b><i>load</i></span><span class="gauge"><b>3</b><i>windows</i></span><span class="gauge"><b>WR</b><i>board</i></span></div><span style="margin-left:auto" class="chip chip--sm">Reset WR</span></div><div class="mix"><i style="width:21.2766%" title="Targets"></i><i style="width:21.2766%" title="Receiving yards"></i><i style="width:17.0213%" title="Receptions"></i><i style="width:12.7660%" title="Receiving TDs"></i><i style="width:12.7660%" title="Age"></i><i style="width:9.5745%" title="Snap share %"></i><i style="width:5.3191%" title="Targets / snap"></i></div><div style="margin-top:12px"><div class="rack"><div class="chan"><span class="nm">Targets</span><span class="fad" style="--v:108px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">100</span><span class="wmini moved">Prev 3 yrs</span></div><div class="chan"><span class="nm">Receiving yards</span><span class="fad" style="--v:108px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">100</span><span class="wmini moved">Career best</span></div><div class="chan"><span class="nm">Receptions</span><span class="fad" style="--v:88px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">80</span><span class="wmini">This season</span></div><div class="chan"><span class="nm">Receiving TDs</span><span class="fad" style="--v:68px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">60</span><span class="wmini">This season</span></div><div class="chan"><span class="nm">Age</span><span class="fad" style="--v:68px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">60</span><span class="wmini">This season</span></div><div class="chan"><span class="nm">Snap share %</span><span class="fad" style="--v:53px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">45</span><span class="wmini moved">Prev 3 best</span></div><div class="chan"><span class="nm">Targets / snap</span><span class="fad" style="--v:33px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">25</span><span class="wmini">This season</span></div></div><div class="bin"><span class="lab">Not in the comparison — press to add</span><span class="chip chip--sm">+ Pass attempts</span><span class="chip chip--sm">+ Completions</span><span class="chip chip--sm">+ Passing yards</span><span class="chip chip--sm">+ Passing TDs</span><span class="chip chip--sm">+ Interceptions</span><span class="chip chip--sm">+ Passing air yards</span><span class="chip chip--sm">+ Rush attempts</span><span class="chip chip--sm">+ Rushing yards</span><span class="chip chip--sm">+ Rushing TDs</span><span class="chip chip--sm">+ Rush share %</span><span class="chip chip--sm">+ Receiving air yards</span><span class="chip chip--sm">+ Snaps</span><span class="chip chip--sm">+ Target share %</span><span class="chip chip--sm">+ Fumbles lost</span><span class="chip chip--sm">+ Career PPR/g</span><span class="chip chip--sm">+ Prev 3 seasons PPR/g</span><span class="chip chip--sm">+ KTC (Superflex)</span><span class="chip chip--sm">+ KTC (1QB)</span><span class="chip chip--sm">+ KTC peak (SF)</span><span class="chip chip--sm">+ KTC 90-day trend (SF)</span><span class="chip chip--sm">+ ADP (Dynasty)</span><span class="chip chip--sm">+ ADP (Redraft)</span></div></div></div></div>
+            </div></div>
+          </div>
+          <div class="screen phone">
+            <div class="screen__stage"><div class="stage-inner">
+              <p class="stage-cap">390px — the rack scrolls sideways; the bin wraps</p>
+              <div class="panel-wrap"><span class="plate">Comparison weights</span><div class="panel"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div class="bezel"><span class="gauge"><b>7</b><i>fields</i></span><span class="gauge"><b>470</b><i>load</i></span><span class="gauge"><b>3</b><i>windows</i></span><span class="gauge"><b>WR</b><i>board</i></span></div><span style="margin-left:auto" class="chip chip--sm">Reset WR</span></div><div class="mix"><i style="width:21.2766%" title="Targets"></i><i style="width:21.2766%" title="Receiving yards"></i><i style="width:17.0213%" title="Receptions"></i><i style="width:12.7660%" title="Receiving TDs"></i><i style="width:12.7660%" title="Age"></i><i style="width:9.5745%" title="Snap share %"></i><i style="width:5.3191%" title="Targets / snap"></i></div><div style="margin-top:12px"><div class="rack"><div class="chan"><span class="nm">Targets</span><span class="fad" style="--v:108px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">100</span><span class="wmini moved">Prev 3 yrs</span></div><div class="chan"><span class="nm">Receiving yards</span><span class="fad" style="--v:108px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">100</span><span class="wmini moved">Career best</span></div><div class="chan"><span class="nm">Receptions</span><span class="fad" style="--v:88px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">80</span><span class="wmini">This season</span></div><div class="chan"><span class="nm">Receiving TDs</span><span class="fad" style="--v:68px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">60</span><span class="wmini">This season</span></div><div class="chan"><span class="nm">Age</span><span class="fad" style="--v:68px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">60</span><span class="wmini">This season</span></div><div class="chan"><span class="nm">Snap share %</span><span class="fad" style="--v:53px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">45</span><span class="wmini moved">Prev 3 best</span></div><div class="chan"><span class="nm">Targets / snap</span><span class="fad" style="--v:33px"><u></u><b></b></span><span class="rdt" style="color:var(--active)">25</span><span class="wmini">This season</span></div></div><div class="bin"><span class="lab">Not in the comparison — press to add</span><span class="chip chip--sm">+ Pass attempts</span><span class="chip chip--sm">+ Completions</span><span class="chip chip--sm">+ Passing yards</span><span class="chip chip--sm">+ Passing TDs</span><span class="chip chip--sm">+ Interceptions</span><span class="chip chip--sm">+ Passing air yards</span><span class="chip chip--sm">+ Rush attempts</span><span class="chip chip--sm">+ Rushing yards</span><span class="chip chip--sm">+ Rushing TDs</span><span class="chip chip--sm">+ Rush share %</span><span class="chip chip--sm">+ Receiving air yards</span><span class="chip chip--sm chip--dead">+11 more</span></div></div></div></div>
+            </div></div>
+          </div>
+        </div>
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p>The board becomes an <b>object</b> rather than a scattering: seven channels side by
+        side, heights comparable at a glance, which is the same information the mix strip carries
+        but on the control itself rather than in a summary above it. This is the option that most
+        looks like the instrument the rest of the app is drawn as.</p>
+        <p>Height is a far better encoding of a proportion than a horizontal slider in a stack —
+        the eye compares adjacent columns natively, and the tallest channel is the answer to
+        "what is this comparison mostly about".</p>
+        <p>The panel comes down to <b>~330px</b> at a laptop width, and the catalogue is one dense
+        tray instead of twenty-two rows.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p>A channel is ~74px wide, so a field's name gets two short lines — "Receiving air
+        yards" and "KTC 90-day trend (SF)" both truncate, and the label is the only thing saying
+        what the fader controls.</p>
+        <p><b>The phone is the real cost.</b> Seven channels do not fit 390px, so the rack either
+        scrolls sideways — a horizontal scroller inside a page, which this codebase avoids — or
+        falls back to option A's rows, which makes it two designs either side of a breakpoint.</p>
+        <p>Adding a field is two gestures: press it in the bin, then raise its fader from zero.</p>
+      </div>
+    </div>
+    
+  </section>
+
+
+  <section class="opt opt--alt" id="c">
+    <div class="opt__head">
+      <span class="opt__letter">C</span>
+      <div>
+        <h2>The priority ladder</h2>
+        <p class="opt__thesis">Drop the 0–100 slider. The board is a ranked stack, weight is five notches, and the reader drags the thing they care about to the top.</p>
+      </div>
+    </div>
+    
+        <div class="split">
+          <div class="screen">
+            <div class="screen__stage"><div class="stage-inner">
+              <p class="stage-cap">Laptop — ranked, five notches, share stated per row</p>
+              <div class="panel-wrap"><span class="plate">Comparison weights</span><div class="panel"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div class="bezel"><span class="gauge"><b>7</b><i>fields</i></span><span class="gauge"><b>470</b><i>load</i></span><span class="gauge"><b>3</b><i>windows</i></span><span class="gauge"><b>WR</b><i>board</i></span></div><span style="margin-left:auto" class="chip chip--sm">Reset WR</span></div><div class="mix"><i style="width:21.2766%" title="Targets"></i><i style="width:21.2766%" title="Receiving yards"></i><i style="width:17.0213%" title="Receptions"></i><i style="width:12.7660%" title="Receiving TDs"></i><i style="width:12.7660%" title="Age"></i><i style="width:9.5745%" title="Snap share %"></i><i style="width:5.3191%" title="Targets / snap"></i></div><div class="bay" style="margin-top:12px"><h4>Drag to rank · press a notch to weigh</h4><div class="ladder"><div class="lrow"><span class="grip">⠿</span><span class="nm">Targets</span><span class="tagw">Prev 3 yrs</span><span class="tiers"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="pct">22%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Receiving yards</span><span class="tagw">Career best</span><span class="tiers"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="pct">22%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Receptions</span><span class="tiers"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i></span><span class="pct">17%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Receiving TDs</span><span class="tiers"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span><span class="pct">13%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Age</span><span class="tiers"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span><span class="pct">13%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Snap share %</span><span class="tagw">Prev 3 best</span><span class="tiers"><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i><i class=""></i></span><span class="pct">9%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Targets / snap</span><span class="tiers"><i class="on"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span><span class="pct">4%</span></div></div><div class="bin"><span class="lab">Off the board</span><span class="chip chip--sm">+ Pass attempts</span><span class="chip chip--sm">+ Completions</span><span class="chip chip--sm">+ Passing yards</span><span class="chip chip--sm">+ Passing TDs</span><span class="chip chip--sm">+ Interceptions</span><span class="chip chip--sm">+ Passing air yards</span><span class="chip chip--sm">+ Rush attempts</span><span class="chip chip--sm">+ Rushing yards</span><span class="chip chip--sm">+ Rushing TDs</span><span class="chip chip--sm">+ Rush share %</span><span class="chip chip--sm">+ Receiving air yards</span><span class="chip chip--sm">+ Snaps</span><span class="chip chip--sm">+ Target share %</span><span class="chip chip--sm">+ Fumbles lost</span><span class="chip chip--sm">+ Career PPR/g</span><span class="chip chip--sm">+ Prev 3 seasons PPR/g</span><span class="chip chip--sm">+ KTC (Superflex)</span><span class="chip chip--sm">+ KTC (1QB)</span><span class="chip chip--sm">+ KTC peak (SF)</span><span class="chip chip--sm">+ KTC 90-day trend (SF)</span><span class="chip chip--sm">+ ADP (Dynasty)</span><span class="chip chip--sm">+ ADP (Redraft)</span></div></div></div></div>
+            </div></div>
+          </div>
+          <div class="screen phone">
+            <div class="screen__stage"><div class="stage-inner">
+              <p class="stage-cap">390px — the same rows, unchanged</p>
+              <div class="panel-wrap"><span class="plate">Comparison weights</span><div class="panel"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div class="bezel"><span class="gauge"><b>7</b><i>fields</i></span><span class="gauge"><b>470</b><i>load</i></span><span class="gauge"><b>3</b><i>windows</i></span><span class="gauge"><b>WR</b><i>board</i></span></div><span style="margin-left:auto" class="chip chip--sm">Reset WR</span></div><div class="mix"><i style="width:21.2766%" title="Targets"></i><i style="width:21.2766%" title="Receiving yards"></i><i style="width:17.0213%" title="Receptions"></i><i style="width:12.7660%" title="Receiving TDs"></i><i style="width:12.7660%" title="Age"></i><i style="width:9.5745%" title="Snap share %"></i><i style="width:5.3191%" title="Targets / snap"></i></div><div class="bay" style="margin-top:12px"><h4>Drag to rank · press a notch to weigh</h4><div class="ladder"><div class="lrow"><span class="grip">⠿</span><span class="nm">Targets</span><span class="tagw">Prev 3 yrs</span><span class="tiers"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="pct">22%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Receiving yards</span><span class="tagw">Career best</span><span class="tiers"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="pct">22%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Receptions</span><span class="tiers"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i></span><span class="pct">17%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Receiving TDs</span><span class="tiers"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span><span class="pct">13%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Age</span><span class="tiers"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span><span class="pct">13%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Snap share %</span><span class="tagw">Prev 3 best</span><span class="tiers"><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i><i class=""></i></span><span class="pct">9%</span></div><div class="lrow"><span class="grip">⠿</span><span class="nm">Targets / snap</span><span class="tiers"><i class="on"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span><span class="pct">4%</span></div></div><div class="bin"><span class="lab">Off the board</span><span class="chip chip--sm">+ Pass attempts</span><span class="chip chip--sm">+ Completions</span><span class="chip chip--sm">+ Passing yards</span><span class="chip chip--sm">+ Passing TDs</span><span class="chip chip--sm">+ Interceptions</span><span class="chip chip--sm">+ Passing air yards</span><span class="chip chip--sm">+ Rush attempts</span><span class="chip chip--sm">+ Rushing yards</span><span class="chip chip--sm">+ Rushing TDs</span><span class="chip chip--sm">+ Rush share %</span></div></div></div></div>
+            </div></div>
+          </div>
+        </div>
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p>It asks the question a reader actually arrives with. Nobody wants targets at 85 rather
+        than 80; they want <b>targets to matter most and age to matter a bit</b>, which is a rank
+        and a coarse magnitude. Five notches reproduce this very board to within a percentage
+        point — the shares beside the notches are 22/22/17/13/13/9/4 against the slider board's
+        21/21/17/13/13/10/5.</p>
+        <p>Order carries meaning that the bench throws away: the top row <em>is</em> the
+        comparison's subject. And the per-row share turns the mix strip into something you can
+        read a number off rather than only a picture.</p>
+        <p>Identical at every width — the row has no control wide enough to force a wrap.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p>It is a change to the <em>model</em>, not just the layout. Weights stay 0–100 on the
+        wire, but a reader who had 85 stored gets snapped to a notch, and fine control is gone
+        for good. That is a real capability removed, and the KNN is sensitive enough that
+        somebody will miss it.</p>
+        <p>Drag-to-rank is the one interaction here that has no keyboard equivalent without extra
+        work, and it is the primary gesture.</p>
+      </div>
+    </div>
+    
+  </section>
+
+
+  <section class="opt" id="d">
+    <div class="opt__head">
+      <span class="opt__letter">D</span>
+      <div>
+        <h2>Boards first, bench behind</h2>
+        <p class="opt__thesis">Lead with four named boards — one press each — and put whichever bench above behind a Tune key.</p>
+      </div>
+    </div>
+    
+        <div class="split">
+          <div class="screen">
+            <div class="screen__stage"><div class="stage-inner">
+              <p class="stage-cap">Laptop — four boards, and the tuned one says what it is</p>
+              <div class="panel-wrap"><span class="plate">Comparison weights</span><div class="panel"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div class="bezel"><span class="gauge"><b>7</b><i>fields</i></span><span class="gauge"><b>470</b><i>load</i></span><span class="gauge"><b>3</b><i>windows</i></span><span class="gauge"><b>WR</b><i>board</i></span></div><span style="margin-left:auto" class="chip chip--sm">Reset WR</span></div><div class="mix"><i style="width:21.2766%" title="Targets"></i><i style="width:21.2766%" title="Receiving yards"></i><i style="width:17.0213%" title="Receptions"></i><i style="width:12.7660%" title="Receiving TDs"></i><i style="width:12.7660%" title="Age"></i><i style="width:9.5745%" title="Snap share %"></i><i style="width:5.3191%" title="Targets / snap"></i></div><div style="margin-top:12px" class="boards"><span class="board"><span class="t">Usage twin</span><span class="s">targets, share, snaps</span><span class="spark"><i style="height:12px"></i><i style="height:12px"></i><i style="height:10px"></i><i style="height:6px"></i><i style="height:4px"></i></span></span><span class="board on"><span class="t">Producer</span><span class="s">yards, TDs, catches</span><span class="spark"><i style="height:12px"></i><i style="height:10px"></i><i style="height:10px"></i><i style="height:8px"></i><i style="height:6px"></i></span></span><span class="board"><span class="t">Same curve</span><span class="s">age + career form</span><span class="spark"><i style="height:10px"></i><i style="height:8px"></i><i style="height:12px"></i><i style="height:6px"></i><i style="height:6px"></i></span></span><span class="board"><span class="t">Market twin</span><span class="s">KTC + ADP</span><span class="spark"><i style="height:8px"></i><i style="height:12px"></i><i style="height:10px"></i><i style="height:10px"></i><i style="height:6px"></i></span></span></div><div style="display:flex;align-items:center;gap:10px;margin-top:12px"><span class="chip chip--sm">Tune this board ▾</span><span style="font-size:11.5px;color:rgba(255,255,255,0.45)">Producer, retuned — targets over the previous 3 years, receiving yards at the career best.</span></div></div></div>
+            </div></div>
+          </div>
+          <div class="screen phone">
+            <div class="screen__stage"><div class="stage-inner">
+              <p class="stage-cap">390px — the same four, wrapped</p>
+              <div class="panel-wrap"><span class="plate">Comparison weights</span><div class="panel"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div class="bezel"><span class="gauge"><b>7</b><i>fields</i></span><span class="gauge"><b>470</b><i>load</i></span><span class="gauge"><b>3</b><i>windows</i></span><span class="gauge"><b>WR</b><i>board</i></span></div><span style="margin-left:auto" class="chip chip--sm">Reset WR</span></div><div class="mix"><i style="width:21.2766%" title="Targets"></i><i style="width:21.2766%" title="Receiving yards"></i><i style="width:17.0213%" title="Receptions"></i><i style="width:12.7660%" title="Receiving TDs"></i><i style="width:12.7660%" title="Age"></i><i style="width:9.5745%" title="Snap share %"></i><i style="width:5.3191%" title="Targets / snap"></i></div><div style="margin-top:12px" class="boards"><span class="board"><span class="t">Usage twin</span><span class="s">targets, share, snaps</span><span class="spark"><i style="height:12px"></i><i style="height:12px"></i><i style="height:10px"></i><i style="height:6px"></i><i style="height:4px"></i></span></span><span class="board on"><span class="t">Producer</span><span class="s">yards, TDs, catches</span><span class="spark"><i style="height:12px"></i><i style="height:10px"></i><i style="height:10px"></i><i style="height:8px"></i><i style="height:6px"></i></span></span><span class="board"><span class="t">Same curve</span><span class="s">age + career form</span><span class="spark"><i style="height:10px"></i><i style="height:8px"></i><i style="height:12px"></i><i style="height:6px"></i><i style="height:6px"></i></span></span><span class="board"><span class="t">Market twin</span><span class="s">KTC + ADP</span><span class="spark"><i style="height:8px"></i><i style="height:12px"></i><i style="height:10px"></i><i style="height:10px"></i><i style="height:6px"></i></span></span></div><div style="display:flex;align-items:center;gap:10px;margin-top:12px"><span class="chip chip--sm">Tune this board ▾</span><span style="font-size:11.5px;color:rgba(255,255,255,0.45)">Producer, retuned — targets over the previous 3 years, receiving yards at the career best.</span></div></div></div>
+            </div></div>
+          </div>
+        </div>
+    <div class="opt__body">
+      <div class="note">
+        <h3>What it buys</h3>
+        <p>It answers the question most readers have, which is not "how much should targets
+        weigh" but "compare them on <em>usage</em>". Four presses replace the whole bench for the
+        common cases, and the sentence under the key states what the current board is doing —
+        including the windows, which is the one thing a tuned board otherwise says nowhere.</p>
+        <p>It is <b>orthogonal</b>: it sits on top of A, B or C rather than competing with them,
+        and it is the cheapest of the four to build — the presets are four literals and the
+        columns editor's <code>ColumnPreset</code> is the precedent.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>What it costs</h3>
+        <p>It does not make the bench smaller; it makes it rarer. Whoever presses Tune still
+        meets whichever of A/B/C is behind it, so this is a layer and never an answer on its own.</p>
+        <p>Four boards is a claim about what readers want, and a badly chosen set is worse than
+        none — a preset nobody presses is a row of chrome above the control they actually use.</p>
+      </div>
+    </div>
+    
+  </section>
+
+  <div class="rule" style="margin-top:60px"></div>
+
+  <section id="seats" style="margin-top:44px">
+    <div class="sec-head"><h2>Three seats for the window</h2><p class="eyebrow">The new axis, and where it sits on a row</p></div>
+    <p class="prose" style="margin-top:14px">
+      Whichever organisation wins, the window has to sit somewhere, and it is the control that
+      broke the row's proportions: it is pinned at 16px by the iOS zoom floor, so it is
+      physically the largest thing in a 12px row and it is drawn on every production field
+      whether or not it has been moved.
+    </p>
+    <p class="prose" style="margin-top:12px">
+      The third seat is the one worth arguing about, because it questions the premise. <b>Is a
+      window per stat what a reader wants, or one window for the board with exceptions?</b>
+      "Compare them on the last three years" is a sentence about the whole comparison; "targets
+      over three years but snap share this season" is a real question and a rarer one.
+    </p>
+
+    <div class="split" style="margin-top:24px">
+      <div class="screen"><div class="screen__stage"><div class="stage-inner">
+        <p class="stage-cap">S1 — the select on every row <b style="color:var(--active)">(ships today)</b></p>
+        <div class="bay"><div class="bayhead"><h4>Production</h4></div><div class="wrow on"><label>Targets</label><span class="sld flat" style="--v:100%"><b></b></span><span class="rdt">100</span><span class="wsel moved">Prev 3 yrs</span></div><div class="wrow on"><label>Receptions</label><span class="sld flat" style="--v:80%"><b></b></span><span class="rdt">80</span><span class="wsel">This season</span></div><div class="wrow on"><label>Snap share %</label><span class="sld flat" style="--v:45%"><b></b></span><span class="rdt">45</span><span class="wsel moved">Prev 3 best</span></div></div>
+        <p class="stage-cap" style="margin-top:18px">S2 — a stepper, the trades circle's own instrument</p>
+        <div class="bay"><div class="bayhead"><h4>Production</h4></div><div class="wrow on"><label>Targets</label><span class="sld flat" style="--v:100%"><b></b></span><span class="rdt">100</span><span class="stepper"><span class="k">‹</span><span class="rd moved">Prev 3 yrs</span><span class="k">›</span></span></div><div class="wrow on"><label>Receptions</label><span class="sld flat" style="--v:80%"><b></b></span><span class="rdt">80</span><span class="stepper"><span class="k dead">‹</span><span class="rd">This season</span><span class="k">›</span></span></div><div class="wrow on"><label>Snap share %</label><span class="sld flat" style="--v:45%"><b></b></span><span class="rdt">45</span><span class="stepper"><span class="k">‹</span><span class="rd moved">Prev 3 best</span><span class="k">›</span></span></div></div>
+        <p class="stage-cap" style="margin-top:18px">S3 — one window for the bay, overrides as tags</p>
+        <div class="bay"><div class="bayhead"><h4>Production</h4><span class="stepper"><span class="k">‹</span><span class="rd moved">Prev 3 yrs</span><span class="k">›</span></span><span class="ovr">board-wide · 2 overridden</span></div><div class="wrow on"><label>Targets</label><span class="sld flat" style="--v:100%"><b></b></span><span class="rdt">100</span><span class="tagw">Prev 3 yrs</span></div><div class="wrow on"><label>Receptions</label><span class="sld flat" style="--v:80%"><b></b></span><span class="rdt">80</span><span style="font-size:11px;color:rgba(255,255,255,0.22)">—</span></div><div class="wrow on"><label>Snap share %</label><span class="sld flat" style="--v:45%"><b></b></span><span class="rdt">45</span><span class="tagw">Prev 3 best</span></div></div>
+      </div></div></div>
+      <div class="screen phone"><div class="screen__stage"><div class="stage-inner">
+        <p class="stage-cap">The three, at 390px</p>
+        <div class="bay"><div class="bayhead"><h4>Production</h4></div><div class="wrow on"><label>Targets</label><span class="sld flat" style="--v:100%"><b></b></span><span class="rdt">100</span><span class="wsel moved">Prev 3 yrs</span></div><div class="wrow on"><label>Receptions</label><span class="sld flat" style="--v:80%"><b></b></span><span class="rdt">80</span><span class="wsel">This season</span></div><div class="wrow on"><label>Snap share %</label><span class="sld flat" style="--v:45%"><b></b></span><span class="rdt">45</span><span class="wsel moved">Prev 3 best</span></div></div>
+        <div style="height:10px"></div>
+        <div class="bay"><div class="bayhead"><h4>Production</h4></div><div class="wrow on"><label>Targets</label><span class="sld flat" style="--v:100%"><b></b></span><span class="rdt">100</span><span class="stepper"><span class="k">‹</span><span class="rd moved">Prev 3 yrs</span><span class="k">›</span></span></div><div class="wrow on"><label>Receptions</label><span class="sld flat" style="--v:80%"><b></b></span><span class="rdt">80</span><span class="stepper"><span class="k dead">‹</span><span class="rd">This season</span><span class="k">›</span></span></div><div class="wrow on"><label>Snap share %</label><span class="sld flat" style="--v:45%"><b></b></span><span class="rdt">45</span><span class="stepper"><span class="k">‹</span><span class="rd moved">Prev 3 best</span><span class="k">›</span></span></div></div>
+        <div style="height:10px"></div>
+        <div class="bay"><div class="bayhead"><h4>Production</h4><span class="stepper"><span class="k">‹</span><span class="rd moved">Prev 3 yrs</span><span class="k">›</span></span><span class="ovr">board-wide · 2 overridden</span></div><div class="wrow on"><label>Targets</label><span class="sld flat" style="--v:100%"><b></b></span><span class="rdt">100</span><span class="tagw">Prev 3 yrs</span></div><div class="wrow on"><label>Receptions</label><span class="sld flat" style="--v:80%"><b></b></span><span class="rdt">80</span><span style="font-size:11px;color:rgba(255,255,255,0.22)">—</span></div><div class="wrow on"><label>Snap share %</label><span class="sld flat" style="--v:45%"><b></b></span><span class="rdt">45</span><span class="tagw">Prev 3 best</span></div></div>
+      </div></div></div>
+    </div>
+
+    <div class="opt__body" style="margin-top:24px">
+      <div class="note">
+        <h3>S1 · the select</h3>
+        <p>Every window one press away, on the row it belongs to, and the platform gives the
+          keyboard and touch behaviour free. It is the only seat where the reader can see the
+          seven options exist without discovering them.</p>
+        <p><b>Costs</b> 136px of every production row and reads "This season" nineteen times.</p>
+      </div>
+      <div class="note">
+        <h3>S2 · the stepper</h3>
+        <p>Two keys and a readout, at 9px — the seat is <b>96px</b> and the type is free of the
+          zoom floor because nothing is focusable that takes text. The windows are in radius
+          order, so stepping is a walk outward from this season, which is the ordering the
+          catalogue already has.</p>
+        <p><b>Costs</b> up to three presses to reach a named window, and the set is invisible
+          until you walk it — the trade the trades board's circle already made deliberately.</p>
+      </div>
+      <div class="note note--cost">
+        <h3>S3 · one window, overrides as tags</h3>
+        <p>The bay carries the board's window and a row carries nothing at all unless it differs,
+          where it wears a tag. A default board is <b>one control instead of twenty</b>, and the
+          row goes back to label · slider · readout.</p>
+        <p><b>Costs</b> a second concept — per-row override — and a gesture to reach it that none
+          of these mocks draws. It is also the only seat that changes what the prefs store: a
+          board-wide window plus a sparse override map.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="rule" style="margin-top:60px"></div>
+
+  <section id="pick" style="margin-top:44px">
+    <div class="sec-head"><h2>What to build</h2><p class="eyebrow">A recommendation, not a vote</p></div>
+    <p class="prose" style="margin-top:14px">
+      <b>D over B, with S3.</b> The boards are the cheapest thing on this page and they answer
+      most of the traffic; the rack is the organisation that makes a tuned board readable as one
+      object, which is the failure the mix strip was papering over; and one window for the bay
+      takes the largest control in the row off nineteen rows that had nothing to say with it.
+    </p>
+    <p class="prose" style="margin-top:12px">
+      The honest caveat is that <b>B has a phone problem and D does not fix it</b> — a rack of
+      seven channels cannot be drawn at 390px without either a sideways scroller or a fallback to
+      A's rows. If that is unacceptable, the answer is <b>A with S3 and a parts bin</b>: keep the
+      rows, keep the catalogue in a tray, and the panel comes down to about a third of its height
+      without inventing a layout that only exists on a laptop.
+    </p>
+    <p class="prose" style="margin-top:12px">
+      C is the most interesting and the most expensive to be wrong about. It should not be built
+      until somebody has asked whether anyone actually moves a weight to 85 — which is a question
+      the stored boards can answer, and nobody has looked.
+    </p>
+  </section>
+</div>
