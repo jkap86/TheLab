@@ -104,3 +104,67 @@ export function useSubjectFilters(): SubjectFiltersValue {
   }
   return value;
 }
+
+type ManagerSeasonValue = {
+  /** The season the page is reading. */
+  season: string;
+  /**
+   * The season the app itself is in — the ladder's ceiling, and the value
+   * {@link seasonParam} compares against to decide whether a request names a
+   * season at all.
+   */
+  activeSeason: string;
+  setSeason: (season: string) => void;
+};
+
+const ManagerSeasonContext = createContext<ManagerSeasonValue | null>(null);
+
+/**
+ * Which season's leagues the three tabs are reading, driven by the header
+ * plate's season stepper.
+ *
+ * **A fourth store rather than a field on the league filters, and the split is
+ * the one the subject selection already sits on.** Those filters narrow the
+ * leagues the page holds; the season decides which leagues it holds at all — it
+ * re-keys the stream and every read hanging off it — so it is a population and
+ * not a predicate. `LeagueFilters` is also the type the trades board runs over
+ * leagues it has no account for, and a manager's *viewing* season means nothing
+ * there.
+ *
+ * Mounted beside the other three in the manager layout and keyed there by the
+ * searched manager, so the selection follows you between tabs and starts fresh
+ * when you look at someone else — the same reset the filters get, and the right
+ * one here: which season you were reading about one manager is not a claim about
+ * the next.
+ *
+ * The current season arrives as a prop rather than being derived from a clock,
+ * for the reason the ADP controls take theirs the same way: the layout is a
+ * server component and `getActiveSeason()` is a server-side fact, where a client
+ * guess would be a guess about when Sleeper rolls a league year over.
+ */
+export function ManagerSeasonProvider({
+  season: activeSeason,
+  children,
+}: {
+  /** The app's current season — the initial selection and the ladder's top. */
+  season: string;
+  children: React.ReactNode;
+}) {
+  const [season, setSeason] = useState(activeSeason);
+  return (
+    <ManagerSeasonContext.Provider value={{ season, activeSeason, setSeason }}>
+      {children}
+    </ManagerSeasonContext.Provider>
+  );
+}
+
+/** The season being read. Throws outside the manager layout's provider. */
+export function useManagerSeason(): ManagerSeasonValue {
+  const value = useContext(ManagerSeasonContext);
+  if (!value) {
+    throw new Error(
+      "useManagerSeason must be used within a ManagerSeasonProvider",
+    );
+  }
+  return value;
+}

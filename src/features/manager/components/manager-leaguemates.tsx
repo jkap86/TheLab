@@ -36,6 +36,8 @@ export function ManagerLeaguemates({ searched }: { searched: string }) {
     searched,
     view.userId,
     view.data?.leagues ?? null,
+    true,
+    view.seasonRead,
   );
 
   const selfId = view.data?.user.user_id;

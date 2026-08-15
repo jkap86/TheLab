@@ -219,10 +219,29 @@ export function fetchManagerResource<T>(
    * method follows the body, so the route parses one query either way.
    */
   scoped?: { method: "GET" | "POST"; search: URLSearchParams; body: unknown } | null,
+  /**
+   * Which season's leagues to read, or `undefined` for the app's current one.
+   *
+   * Omission is the *shared* spelling rather than a shortcut: the routes default
+   * an absent `?season` to `getActiveSeason()` and these keys file it under
+   * `"default"`, so naming the current season explicitly would open a second
+   * entry holding the identical answer — see {@link seasonParam}, which is the
+   * one place that decision is made.
+   *
+   * Applied here rather than folded into `path` by each hook, because the two
+   * transports spell a parameter differently (a query string for the four plain
+   * reads, `scoped.search` for the ADP valuation's POST) and a rule five callers
+   * have to remember is a rule one of them eventually won't. It is deliberately
+   * *not* the ADP board's own `board_season`, which rides in `scoped.search` and
+   * says which drafts the prices come from; this one says which leagues are on
+   * screen.
+   */
+  season?: string,
 ): Promise<T> {
   if (scoped) {
     const search = new URLSearchParams(scoped.search);
     if (userId) search.set("user_id", userId);
+    if (season) search.set("season", season);
     return fetchScoped<T>(
       `/api/user/${encodeURIComponent(searched)}/${path}`,
       { ...scoped, search },
@@ -230,13 +249,15 @@ export function fetchManagerResource<T>(
       signal,
     );
   }
+  const extra = new URLSearchParams();
+  if (userId) extra.set("user_id", userId);
+  if (season) extra.set("season", season);
   // `path` already carries a query string for some callers, which is why the
   // separator is chosen rather than assumed.
-  const hint = userId
-    ? `${path.includes("?") ? "&" : "?"}user_id=${encodeURIComponent(userId)}`
-    : "";
+  const query = extra.toString();
+  const suffix = query ? `${path.includes("?") ? "&" : "?"}${query}` : "";
   return fetchJson<T>(
-    `/api/user/${encodeURIComponent(searched)}/${path}${hint}`,
+    `/api/user/${encodeURIComponent(searched)}/${path}${suffix}`,
     fallbackError,
     signal,
   );

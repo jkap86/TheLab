@@ -40,12 +40,12 @@ export function useManagerRanks(
    * asks for `?projections=0` and the server skips the solves entirely; see
    * `managerDataRequirements`.
    */
-  options: { projections: boolean } = { projections: true },
+  options: { projections: boolean; season?: string } = { projections: true },
 ): ManagerRanksState {
-  const { projections } = options;
+  const { projections, season } = options;
   const queryKey = useMemo(
-    () => managerQueryKeys.ranks(searched, undefined, { projections }),
-    [searched, projections],
+    () => managerQueryKeys.ranks(searched, season, { projections }),
+    [searched, season, projections],
   );
   return useManagerResource<ManagerRanksResult>(
     queryKey,
@@ -57,5 +57,8 @@ export function useManagerRanks(
     projections ? "ranks" : "ranks?projections=0",
     "Failed to load ranks",
     STALE_TIMES.ranks,
+    true,
+    null,
+    season,
   );
 }

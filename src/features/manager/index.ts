@@ -29,5 +29,6 @@
 export {
   AdpControlsProvider,
   LeagueFiltersProvider,
+  ManagerSeasonProvider,
   SubjectFiltersProvider,
 } from "./filters-context";

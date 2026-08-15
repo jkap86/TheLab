@@ -16,9 +16,11 @@ import { recordBarParts } from "./manager-header.utils.ts";
  *
  * The `pt` clears the plate's corner tabs rather than the row being pushed below
  * them: the avatar is the row's height either way, so the plate is exactly as
- * tall as it was with both pills on the name line. It is the tab's own height
- * plus a hairline and nothing more — the plate is pinned over the list, so every
- * pixel of padding here is a pixel of the list it covers.
+ * tall as it was with both pills on the name line. It is the tallest tab's own
+ * height plus a hairline and nothing more, and it is one number at every width
+ * because it has to clear the *stepper* spelling of the season tab — 22px of key
+ * against 20px of bare digits — whether or not this page draws one. Branching on
+ * that would make the plate two heights for one card.
  */
 export function ManagerSummary({
   user,
@@ -62,7 +64,7 @@ export function ManagerSummary({
     // spells out: 21px from the leading edge and 17px from the trailing one is
     // what the bordered box gave, and the trailing 6px is now wall.
     <div
-      className={`relative z-[1] flex items-center gap-3 pl-[21px] pr-[11px] pt-[22px] sm:gap-4 sm:pl-[25px] sm:pr-[15px] sm:pt-6 ${padding}`}
+      className={`relative z-[1] flex items-center gap-3 pl-[21px] pr-[11px] pt-6 sm:gap-4 sm:pl-[25px] sm:pr-[15px] ${padding}`}
     >
       <Avatar url={user.avatar_url} name={name} size="lg" />
 

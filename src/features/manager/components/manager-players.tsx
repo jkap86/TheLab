@@ -47,6 +47,8 @@ export function ManagerPlayers({ searched }: { searched: string }) {
     searched,
     view.userId,
     view.data?.leagues ?? null,
+    true,
+    view.seasonRead,
   );
 
   const shares = useMemo(

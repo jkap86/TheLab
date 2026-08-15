@@ -52,11 +52,20 @@ export function useManagerAdpValue(
   userId: string | null,
   leagues: ManagerLeague[] | null,
   board: AdpRead,
-  { enabled = true }: { enabled?: boolean } = {},
+  {
+    enabled = true,
+    /**
+     * Which season's *rosters* are being priced — not to be confused with the
+     * board's own `board_season` inside `board.search`, which says which drafts
+     * the prices come from. The two are independent on purpose: a 2024 roster is
+     * legitimately read against this year's market.
+     */
+    season,
+  }: { enabled?: boolean; season?: string } = {},
 ): ManagerAdpValueState {
   const queryKey = useMemo(
-    () => managerQueryKeys.adpValue(searched, undefined, board.key),
-    [searched, board.key],
+    () => managerQueryKeys.adpValue(searched, season, board.key),
+    [searched, season, board.key],
   );
   return useManagerResource<ManagerAdpValueResult>(
     queryKey,
@@ -68,5 +77,6 @@ export function useManagerAdpValue(
     STALE_TIMES.adpValue,
     enabled,
     board,
+    season,
   );
 }

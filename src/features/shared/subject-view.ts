@@ -40,6 +40,26 @@ export type SubjectView = {
    */
   searched: string;
   /**
+   * Which season's rosters and membership the rail's own reads should ask for,
+   * or `undefined` for the app's current one.
+   *
+   * **Undefined is the shared spelling and not merely a default.** The routes
+   * fill an absent `?season` with `getActiveSeason()` and `managerQueryKeys`
+   * files it under `"default"`, so a caller that named the current season would
+   * open a second entry holding the identical answer — see {@link seasonParam}.
+   * The lineup checker passes nothing at all (it reads the season it is in), and
+   * the manager tabs pass a *past* season only when their header's stepper has
+   * been walked back to one.
+   *
+   * **`seasonRead` rather than `season`, because a page already has one of
+   * those and it is not this.** The lineup checker carries the season its
+   * *payload* came back with, for display; this is the season its *requests* ask
+   * for, and the two differ in both type and meaning — the display one is null
+   * until a result lands, this one is undefined for the commonest case. Sharing
+   * a name would have made the collision a matter of which file you were reading.
+   */
+  seasonRead?: string;
+  /**
    * The manager's canonical Sleeper id, or null before it has been resolved.
    *
    * Sent with every sub-resource read so the route needn't ask Sleeper who the

@@ -2,9 +2,13 @@
 
 import { useCallback, useMemo } from "react";
 
-import { matchesFilters } from "@/features/shared";
+import { matchesFilters, seasonParam } from "@/features/shared";
 import type { SubjectView } from "@/features/shared/subject-view";
-import { useLeagueFilters, useSubjectFilters } from "../filters-context";
+import {
+  useLeagueFilters,
+  useManagerSeason,
+  useSubjectFilters,
+} from "../filters-context";
 import { EMPTY_SUBJECT_INDEX, matchesSubjects } from "../subjects";
 import type { Subject, SubjectIndex, SubjectLabel } from "../subjects";
 import { useManagerLeagues } from "./use-manager-leagues";
@@ -44,7 +48,20 @@ import { useManagerPlayers } from "./use-manager-players";
  * whether or not anything is mounted to notice.
  */
 export function useFilteredLeagues(searched: string) {
-  const stream = useManagerLeagues(searched);
+  /**
+   * Which season every read on this page asks for.
+   *
+   * `undefined` for the current one, which is the spelling the pick tracker and
+   * the lineup checker also use — see {@link seasonParam}. It is resolved once,
+   * here, because the whole page has to move together: a league list from one
+   * season beside rosters, membership, ranks, values and a valuation from
+   * another is the two-answers-to-one-question failure with no error and no
+   * wrong-looking number, only wrong rows.
+   */
+  const { season, activeSeason } = useManagerSeason();
+  const seasonRead = seasonParam(season, activeSeason);
+
+  const stream = useManagerLeagues(searched, seasonRead);
   const { filters, setFilters } = useLeagueFilters();
   const { subjects, setSubjects } = useSubjectFilters();
 
@@ -70,12 +87,14 @@ export function useFilteredLeagues(searched: string) {
     userId,
     leaguesForResources,
     narrowing,
+    seasonRead,
   );
   const members = useManagerLeaguemates(
     searched,
     userId,
     leaguesForResources,
     narrowing,
+    seasonRead,
   );
   const index: SubjectIndex = useMemo(
     () =>
@@ -166,6 +185,16 @@ export function useFilteredLeagues(searched: string) {
   return {
     ...stream,
     searched,
+    /**
+     * The season this page's reads are keyed on — `undefined` for the current
+     * one, the shared spelling. {@link SubjectView} takes it so the rail and the
+     * two shares sheets count over the season the list under them is from, and
+     * the views take it for their own resource reads.
+     *
+     * Not `season`, which on the lineup checker's own view means the season its
+     * *payload* came back with. Two names because they are two facts.
+     */
+    seasonRead,
     /**
      * The manager's canonical Sleeper id, or null before the stream has said.
      *
