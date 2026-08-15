@@ -597,6 +597,7 @@ export function SubjectRail({
           <SubjectPanel
             id={panelId}
             inputRef={inputRef}
+            onClose={close}
             query={query}
             onQuery={setQuery}
             results={results}
@@ -677,6 +678,7 @@ function RailSeam() {
 function SubjectPanel({
   id,
   inputRef,
+  onClose,
   query,
   onQuery,
   results,
@@ -690,6 +692,26 @@ function SubjectPanel({
   /** The trigger's `aria-controls` target. */
   id: string;
   inputRef: React.RefObject<HTMLInputElement | null>;
+  /**
+   * The way out, drawn as a key beside the field.
+   *
+   * The panel already closes three ways — Escape, a press outside it, a second
+   * press on the trigger — and none of the three is *visible*. Escape is not a
+   * key a phone has; a press outside is the gesture that dismisses it and also
+   * the gesture that picks a league card underneath, so a reader who wants only
+   * to get out has to find somewhere harmless to press; and the trigger is a
+   * 10px slot on the rail above, whose label reads "Add" once a subject is
+   * chosen rather than saying it is a toggle. So the panel states its own exit,
+   * which is what every other floating surface here does — the drawer's header
+   * key, the sheets', the filters dialog's.
+   *
+   * It is the same `close` the other three run, so there is one way out with
+   * four doors rather than four exits: the query is cleared with the panel, and
+   * the focus goes back to the trigger through {@link useReturnFocus} — which is
+   * what makes the key usable from the keyboard as well, since focus is inside
+   * the panel when it is pressed.
+   */
+  onClose: () => void;
   query: string;
   onQuery: (value: string) => void;
   results: SubjectOption[];
@@ -729,16 +751,39 @@ function SubjectPanel({
       className="absolute left-4 right-4 top-full z-40 mt-1.5 flex max-h-[min(60vh,26rem)] flex-col gap-1.5 rounded-xl border border-active/25 bg-gradient-to-b from-[#1b3040] to-[#0d1c27] p-2 shadow-[0_24px_50px_-20px_rgba(0,0,0,0.95),0_0_36px_-16px_rgba(0,255,229,0.35)] sm:max-w-[26rem]"
       style={{ animation: "dialog-rise 0.14s cubic-bezier(0.2,0.9,0.3,1)" }}
     >
-      <div className="flex shrink-0 items-center gap-2 rounded-lg border border-foreground/10 bg-[#06111b] px-2.5 py-1.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] focus-within:border-active/60">
-        <SearchIcon />
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          placeholder="Search players and leaguemates"
-          aria-label="Search players and leaguemates"
-          className={SEARCH_FIELD}
-        />
+      {/* The field and the way out share the pinned row, which is what keeps the
+          key on screen while the results scroll under it — a close key that
+          scrolled away would be the search trigger's problem again.
+
+          `min-w-0` on the field is what lets it give the key its 28px: without
+          it the input's own intrinsic width is the box's floor and the key is
+          pushed past the panel's edge on a phone. */}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-foreground/10 bg-[#06111b] px-2.5 py-1.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] focus-within:border-active/60">
+          <SearchIcon />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => onQuery(e.target.value)}
+            placeholder="Search players and leaguemates"
+            aria-label="Search players and leaguemates"
+            className={SEARCH_FIELD}
+          />
+        </div>
+
+        {/* The app's close key, to the pixel — the shares sheets', the league
+            sheet's, the filters dialog's and the columns editor's are one
+            spelling, and a fifth of its own would be a part that reads as
+            something else doing the same job. Raised, because it is pressed;
+            the field beside it is recessed, because it is typed into. */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="lab-chip lab-chip-sm grid size-7 shrink-0 place-items-center rounded-full text-foreground/55 transition-colors hover:text-active"
+        >
+          <CloseIcon />
+        </button>
       </div>
 
       {error && !loading && (
@@ -862,6 +907,27 @@ function SearchIcon() {
     >
       <circle cx="7" cy="7" r="4.5" />
       <path d="M10.5 10.5 14 14" />
+    </svg>
+  );
+}
+
+/**
+ * The cross at 12px, on this file's own 16 viewBox — the same two strokes the
+ * sheets and dialogs draw, since a close key that is recognisably the app's is
+ * the whole of what makes it findable.
+ */
+function CloseIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="h-3 w-3 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+    >
+      <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
     </svg>
   );
 }
