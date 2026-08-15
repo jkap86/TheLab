@@ -265,7 +265,7 @@ export function SubjectRail({
   // season the page is reading, so a rail counting subjects over the current
   // season's rosters while the list under it is a past one is the wrong answer
   // wearing a settled count. Undefined on both callers in the ordinary case, so
-  // the entries stay the shared ones — see {@link SubjectView.season}.
+  // the entries stay the shared ones — see {@link SubjectView.seasonRead}.
   const rosters = useManagerPlayers(
     view.searched,
     view.userId,
