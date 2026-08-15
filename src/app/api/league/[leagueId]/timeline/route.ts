@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getLeagueTimeline, resolveTimelinePayload } from "@/shared/trades";
 
 import { readFailureResponse } from "../../../read-failure";
+import { withReadTiming } from "../../../read-timing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,8 +39,10 @@ export async function GET(
   // so there is no malformed-request branch to draw, unlike the trades sibling
   // whose trade id is a query parameter a caller can simply omit.
   try {
-    const payload = await resolveTimelinePayload(
-      await getLeagueTimeline(leagueId),
+    const payload = await withReadTiming(
+      "league.timeline",
+      `league=${leagueId}`,
+      async () => resolveTimelinePayload(await getLeagueTimeline(leagueId)),
     );
     return NextResponse.json(payload, {
       headers: {

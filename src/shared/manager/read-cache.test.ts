@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { AdpFilters } from "./adp-filters.ts";
-import { adpBoardCacheKey, managerRanksCacheKey } from "./read-cache.ts";
+import {
+  ADP_BOARD_CACHE,
+  LEAGUE_DETAIL_CACHE,
+  MANAGER_RANKS_CACHE,
+  adpBoardCacheKey,
+  managerRanksCacheKey,
+} from "./read-cache.ts";
 
 /**
  * A cache key is wrong *silently*. Too narrow and one population's board is
@@ -151,5 +157,36 @@ describe("managerRanksCacheKey", () => {
       managerRanksCacheKey("12", "32026", full),
       managerRanksCacheKey("123", "2026", full),
     );
+  });
+});
+
+describe("the core League Details cache", () => {
+  test("is bounded, and generously enough to cover a session's leagues", () => {
+    // A hundred-league account browsed for a few minutes, several readers at a
+    // time — and an entry is a dozen rosters, their members and their picks, so
+    // the bound is in leagues rather than in bytes.
+    assert.ok(LEAGUE_DETAIL_CACHE.max >= 256);
+    assert.ok(Number.isFinite(LEAGUE_DETAIL_CACHE.max));
+  });
+
+  test("expires sooner than the browser entry it stands behind", () => {
+    // The house rule every cache here keeps: a layer's TTL is shorter than the
+    // one in front of it, so a client entry going stale costs a request this
+    // answers from memory rather than four queries. `LEAGUE_DETAIL_STALE_TIME`
+    // is five minutes; this must stay under it.
+    assert.ok(LEAGUE_DETAIL_CACHE.ttlMs < 5 * 60 * 1000);
+    // …and comfortably inside the crawler's fastest tier, which is what bounds
+    // how wrong a cached answer can be.
+    assert.ok(LEAGUE_DETAIL_CACHE.ttlMs <= 15 * 60 * 1000);
+  });
+
+  test("the three caches are three names", () => {
+    // They share one debug channel (`CACHE_DEBUG=on`), so a duplicated name
+    // would make two caches indistinguishable in the only place they are
+    // observable.
+    const names = [ADP_BOARD_CACHE, MANAGER_RANKS_CACHE, LEAGUE_DETAIL_CACHE].map(
+      (c) => c.name,
+    );
+    assert.equal(new Set(names).size, names.length);
   });
 });

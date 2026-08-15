@@ -109,9 +109,11 @@ function invalidateAfterRefresh(
     result.synced || result.status === "cooldown";
   if (!wrote) return;
 
-  // The league *prefix*, so every board and every week of this league goes with
-  // it — the panel is keyed on both, and neither is re-derivable from a graph
-  // that has just changed underneath them.
+  // The league *prefix*, so all four of this league's entries go with it — the
+  // core rosters, the prices on every board, the outlook and every week. None of
+  // them is re-derivable from a graph that has just changed underneath it, and
+  // addressing the prefix is what keeps that true as entries are added: the
+  // split into four cost this line nothing.
   void queryClient.invalidateQueries({
     queryKey: leagueQueryKeys.league(leagueId),
   });

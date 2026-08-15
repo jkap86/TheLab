@@ -1,5 +1,4 @@
 import type {
-  LeagueDetailPayload,
   LeagueRosterValues,
   LeagueTeamPayload,
   LeagueWeekViewPayload,
@@ -47,5 +46,15 @@ export type LeagueWeekView = LeagueWeekViewPayload | null;
 /** A team as sent to the client (manager avatar id resolved to a URL). */
 export type LeagueTeamView = LeagueTeamPayload;
 
-/** The `/api/league/[leagueId]` response this panel is drawn from. */
-export type LeagueDetailResult = LeagueDetailPayload;
+/**
+ * What this panel is drawn from: the core league read with whichever of its
+ * three enrichments have landed.
+ *
+ * It is no longer one route's response — the prices, the outlook and the week
+ * are three requests of their own now — so it is assembled by
+ * {@link useLeagueDetail} and aliased here rather than in the contract, which
+ * holds wire shapes and this is not one. The panel's own components are
+ * unchanged by that: they always took empty prices and a null outlook as "no
+ * answer yet", which is exactly what a request still in flight looks like.
+ */
+export type { LeagueDetailResult } from "../../use-league-detail";

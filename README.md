@@ -39,7 +39,8 @@ while you work.
 | `STATS_SYNC` | no | on | Set to `off` to disable the weekly actual stat-line sync, likewise a multi-megabyte download per week. |
 | `KTC_SYNC` | no | on | Set to `off` to disable the KeepTradeCut values refresh and its per-player history backfill. |
 | `NFL_DRAFT_SYNC` | no | on | Set to `off` to disable the NFL draft-position refresh — one ~2.6MB CSV, twice a day. The cheapest of the loops by a wide margin. |
-| `CACHE_DEBUG` | no | off | Set to `on` to log every read of the two server-side caches (the full ADP board, a manager's ranks) as `hit`, `miss` or `coalesced`. Development only — these are the hottest reads in the app. |
+| `CACHE_DEBUG` | no | off | Set to `on` to log every read of the three server-side caches (the full ADP board, a manager's ranks, one league's core detail) as `hit`, `miss` or `coalesced`. Development only — these are the hottest reads in the app. |
+| `READ_TIMING` | no | off | Set to `on` to log how long each League Details read took, one line per route (`league.core`, `league.values`, `league.outlook`, `league.week`, `league.timeline`). Development only, for the same reason: a line per request is a production log nobody can read past. |
 
 Only the exact word `off` disables a loop. Anything else runs, including junk: a
 typo that stopped the syncs would leave the database quietly unfilled for hours
@@ -104,7 +105,11 @@ receives, so the two ends can't drift without a type error.
 | --- | --- |
 | `GET /api/user/[username]` | Resolve a Sleeper user. |
 | `GET /api/user/[username]/leagues` | A manager's leagues, as a **newline-delimited JSON stream** (`result` / `progress` / `error` messages). Serves cached data immediately and pushes a second `result` when a background refresh finishes. |
-| `GET /api/league/[leagueId]` | One league's standings and rosters, with player ids resolved to names. |
+| `GET /api/league/[leagueId]` | One league's **core**: standings, rosters, members and owned draft picks, with player ids resolved to names. This is what the detail panel renders on. |
+| `GET/POST /api/league/[leagueId]/values` | The same league's KTC and ADP prices, on the ADP drawer's board. Answers a POST when the board's league rules are too long for a request line. |
+| `GET /api/league/[leagueId]/outlook` | Every roster's best rest-of-season lineup. `null` when the league can't be projected. |
+| `GET /api/league/[leagueId]/week?week=N` | The same league read as one week — projections, points per game and each team's current-versus-optimal lineup. |
+| `GET /api/league/[leagueId]/timeline` | The league's stored moves, for the history rail. Fetched only once a reader opens the history. |
 | `POST /api/players/sync` | Refresh the cached players map. `?force=1` bypasses the freshness gate. **Internal** — see below. |
 | `GET /api/projections` | A week of stored projections, ranked by the requested scoring. Reads only — it never calls Sleeper. |
 | `POST /api/projections/sync` | Refresh stored weekly projections. Defaults to the current and next week if stale; `?force=1` ignores the freshness gate, `?week=1,2` backfills specific weeks (at most 18), `?season=2025` picks another season. **Internal** — see below. |

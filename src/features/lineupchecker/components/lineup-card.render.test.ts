@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { ManagerLeague } from "@/shared/manager";
 
+import { withQueryClient } from "@/features/shared/query-test-support";
 import { MetricHeadings } from "@/features/shared/ui/metric-column";
 
 import {
@@ -52,14 +53,14 @@ const matchup = (over: Partial<LeagueMatchup> = {}): LeagueMatchup => ({
 
 const render = (week: number | null, matchup: LeagueMatchup | undefined) =>
   renderToStaticMarkup(
-    createElement(LineupCard, {
+    withQueryClient(createElement(LineupCard, {
       league,
       week,
       matchup,
       columns: DEFAULT_LINEUP_COLUMNS,
       expanded: false,
       onToggle: () => {},
-    }),
+    })),
   );
 
 describe("the opponent ledge", () => {

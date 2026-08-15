@@ -81,9 +81,21 @@ src/shared/    Domain logic, one folder per concern.
   takes the weeks still ahead from `game_date` rather than `state/nfl`, so it can
   only ever name weeks that are actually here to read.
 - A route that needs several independent reads should `Promise.all` them, and
-  decide per read whether a failure is fatal. `/api/league/[leagueId]` catches
-  its projections read and sends `outlook: null` — the rosters are the point of
-  that route and the lineups are a bonus on top.
+  decide per read whether a failure is fatal. `/api/league/[leagueId]/values`
+  catches each of its two lenses and sends an empty map — the rosters are the
+  point of that panel and the prices are a bonus on top.
+  **And a read that is *only* a bonus should ask a further question: does it
+  belong on this response at all?** That one used to answer with the prices, the
+  rest-of-season outlook and (on request) a week's projections joined onto the
+  rosters, so the first paint of a panel whose subject is rosters-and-standings
+  waited on the slowest of four reads — ~305–490ms of database work against ~53ms
+  for the structural half, and ~535–600ms once a week was asked for. Catching per
+  read made each of them *survivable*; it could not make any of them stop
+  blocking. The three are `./values`, `./outlook` and `./week` now, keyed apart on
+  the client so a board change re-fetches prices alone and a week change
+  projections alone, and the panel renders on the core with the rest filling in.
+  Reach for the split when a read is both slow and optional; a fast optional read
+  is a field.
   **The question is per read, not per `Promise.all`, and phrasing it around the
   parallel case is how one route missed it.** `/api/user/[username]/ranks` reads
   sequentially on purpose — which rosters to project is the first read's answer —
@@ -179,6 +191,24 @@ the full ADP board (a ~500ms aggregate over 1.5M picks) and a manager's ranks (a
 lineup solve per team per remaining week: ~29,000 solves for a 400-league
 account, and *CPU on the web process*, so two readers are two spells of a blocked
 event loop rather than two queries a database can interleave).
+
+**There are three of them now, and the third is there for a second reason worth
+naming: one open makes four requests.** A league's *core* detail —
+`readLeagueDetail`, `LEAGUE_DETAIL_CACHE`, three minutes, 256 leagues — is not
+expensive the way those two are (a handful of small queries), and it is read by
+all four of the League Details routes, since the values, the outlook and the week
+each need the same rosters, slots and scoring before they can compute anything.
+Uncached, splitting one payload into four requests would have turned one league
+read into four, which is the tax a split is supposed to avoid paying rather than
+introduce. It is also the read a reader re-issues most: the panel mounts on
+expand and unmounts on collapse, over a list of a hundred leagues opened
+casually.
+**It is the one cache here invalidated on *write* as well as by time.**
+`persistLeagueGraph` forgets the league after its transaction commits, which is
+what makes the lineup checker's sync key honest — a reader told Sleeper has
+confirmed their change must not be shown a three-minute-old roster. After rather
+than before, since a read starting between an early invalidation and the commit
+would cache exactly the rows the write is replacing.
 
 `TtlPromiseCache` (`shared/util`) is that layer, and it is `BoundedCache` plus
 the one thing that class deliberately refuses: an **in-flight map**, so ten
@@ -3859,6 +3889,31 @@ stops holding, a comment saying it does would not have caught it.
   `Nameplate` itself is in `features/shared` under the mover's rule: the plate's
   box, its rail and the heading's type are shared, and the *control* inside it is
   not, because the two cards open different things.
+- **A hover warms the league the reader is about to open, and three bounds are
+  what keep that from being a request per card** (`useLeaguePrefetch`). It is the
+  **core** read alone: the prices, the outlook and the week are the expensive
+  ones, and speculatively solving a lineup per team per week for every card a
+  pointer crosses would cost far more than the hover could save. It is **fine
+  pointers only** (`hasFinePointer`), because `pointerenter` fires on a touch and
+  a tap would otherwise prefetch and then immediately fetch — the request twice,
+  on the connection least able to afford it; keyboard focus is exempt, since
+  focus is deliberate on any device. And it is **debounced** at 120ms and
+  cancelled on leave, which is comfortably under the time it takes to move a hand
+  to a card and press it and comfortably over what a passing pointer spends on a
+  row. `prefetchQuery` is itself a no-op inside the entry's stale time, so a
+  reader moving back and forth over one card costs one request rather than one
+  per crossing.
+- **What an open card does *not* start is the timeline.** The history rail is
+  behind a `History` key and its query is disabled until that key is pressed —
+  the read is the heaviest either of its hosts makes, and mounting the card used
+  to fire it at exactly the moment the panel beside it was making its own reads,
+  so a card opened to glance at the standings paid for a season of moves nobody
+  scrubbed. Nothing after the press changed, cache included, so opening the
+  history twice still costs one request. The seat is a fixed height across its
+  four states (unopened, reading, nothing stored, the rail), so pressing the key
+  moves nothing under it — and "nothing stored" is a *word* rather than the
+  nothing it used to draw, since a control that vanishes on press is worse than
+  one that says what it found.
 - **An open league card is one screen: pulled to the top, capped there, and
   scrolling inside itself** (in two places — see the bullet after this one). The
   panel is several hundred rows in a deep dynasty
@@ -5538,16 +5593,42 @@ stops holding, a comment saying it does would not have caught it.
   the moment a caller varies one — leagues priced off somebody else's window with
   nothing in the payload to say so.
 
-  **`useLeagueDetail` clears on a new league and holds through a new board, and
-  that is one rule rather than two exceptions.** It is the one read on these
-  pages whose previous answer can be *about something else*, which is why it
-  never took `keepPreviousData`: a new league id must show nothing rather than
-  leave the last league's rosters on screen under the new name. A new board of
-  the same league is the opposite case — the rows are right and two columns are
-  about to move — so blanking several hundred of them is the flash every other
-  hook here refuses. The placeholder is therefore kept only when the previous
-  key names this same league, which is what `leagueQueryKeys.league` is: a
-  prefix to compare against, since the whole key is what just changed.
+  **`useLeagueDetail` is four queries, and which of them a press reaches is the
+  whole design.** `core` (rosters, standings, members, picks, names) depends on
+  neither the board nor the week; `values` carries the board; `outlook` carries
+  neither; `week` carries the week. That used to be *one* key with the board and
+  the week as segments, because it was one payload — so narrowing the drawer or
+  stepping a week discarded a dozen rosters, their managers, their picks and
+  several hundred player names to move two columns. The panel renders on `core`
+  alone and reads the other three as "no answer yet", which is a state every one
+  of its components already drew an em dash for; only `core`'s failure is the
+  panel's failure.
+
+  **They are combined as state and never awaited together.** Composing them
+  behind a `Promise.all` in one `queryFn` recreates exactly the blocking the
+  split removed, with three extra requests as the only difference.
+
+  **`core` clears on a new league; `values` and `week` hold through a new board
+  or a new week, and that is one rule rather than three exceptions.** These are
+  the reads whose previous answer can be *about something else*, which is why
+  none of them takes bare `keepPreviousData`: a new league id must show nothing
+  rather than leave the last league's rosters on screen under the new name. A new
+  board or week of the same league is the opposite case — the rows are right and
+  two columns are about to move — so blanking several hundred of them is the
+  flash every other hook here refuses. The placeholder is therefore kept only
+  when the previous key names this same league, which is what
+  `leagueQueryKeys.league` is: a prefix to compare against, since the whole key
+  is what just changed. It is also what one invalidation of a refreshed league
+  reaches, so the split cost `useLeagueRefresh` nothing.
+
+  **And the panel's own selection had to stop being *initialised* from the
+  ranking.** The standings are ordered by projected points, so the head of the
+  list is the standings leader before the outlook lands and the projected leader
+  after — a `useState(teams[0])` therefore pinned whichever row happened to lead
+  during the first render, which is now always the wrong one. It is null until a
+  reader actually presses a row, and `teams[0]` is read as a fallback: the panel
+  opens on the standings leader, follows the ranking the moment it arrives, and
+  any press pins the choice for good.
 - **A list of managers is labelled by username, a team by team name.** `ui.tsx`
   has both — `managerLabel` (display_name → team_name → roster number) and
   `teamLabel` (the reverse) — and the column heading says which one it is.

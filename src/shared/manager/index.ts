@@ -59,6 +59,7 @@ export type { CrawlCandidate, CrawlClock, CrawlPriority } from "./crawl-priority
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
   LEAGUE_COLUMNS_SQL,
+  adpBoardTypeOf,
   getAdpLeagues,
   toManagerLeague,
   getLeagueDetail,
@@ -89,6 +90,11 @@ export type {
 export { orderByProjectedPoints, projectedRank, rankOf, standingScore } from "./rank";
 export type { LeagueRank, ProjectedRank } from "./rank";
 export { readManagerRanks } from "./ranks-read";
+export {
+  clearLeagueDetailCache,
+  invalidateLeagueDetail,
+  readLeagueDetail,
+} from "./league-detail-read";
 export { parseManagerRanksOptions } from "./read-cache";
 export type { ManagerRanksOptions } from "./read-cache";
 export {

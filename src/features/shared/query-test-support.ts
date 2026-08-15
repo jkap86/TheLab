@@ -1,4 +1,5 @@
-import type { QueryClient } from "@tanstack/react-query";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import { createElement, type ReactElement } from "react";
 
 import { createQueryClient } from "./query-client.ts";
 
@@ -115,3 +116,23 @@ export function createTestQueryClient(): QueryClient {
 /** Let the microtask queue and any pending timers run. */
 export const flush = (ms = 5): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * A tree under a query client, for the render tests.
+ *
+ * The app mounts one `QueryClientProvider` at the root layout, so every
+ * component below it may read a client — and the league card does, to warm a
+ * league's core read on hover. `renderToStaticMarkup` has no such root, so a
+ * markup test of that card would throw on `useQueryClient` rather than assert
+ * anything about markup.
+ *
+ * A fresh client per call, since these tests fetch nothing and share nothing: a
+ * module-level one would let a stray query in one file be observed by another.
+ */
+export function withQueryClient(element: ReactElement): ReactElement {
+  return createElement(
+    QueryClientProvider,
+    { client: createTestQueryClient() },
+    element,
+  );
+}

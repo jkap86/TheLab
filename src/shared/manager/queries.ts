@@ -665,10 +665,27 @@ export async function getLeagueAdpBoards(
   );
 
   const byLeague = new Map<string, AdpBoardType>();
-  for (const r of rows) {
-    byLeague.set(r.league_id, r.type_code === 2 ? "dynasty" : "redraft");
-  }
+  for (const r of rows) byLeague.set(r.league_id, adpBoardTypeOf(r.type_code));
   return byLeague;
+}
+
+/**
+ * Which of the two ADP markets a `LEAGUE_TYPE_SQL` code reads — dynasty for
+ * Sleeper's `settings.type` 2, redraft for everything else, keeper included.
+ *
+ * One line, and it exists so that a caller who *already holds* the code does not
+ * have to re-read `leagues` to learn the same thing. {@link getLeagueDetail}
+ * carries it now ({@link LeagueDetail.league_type}), so the league panel's value
+ * columns resolve their board from the read they had already made rather than
+ * from a second query for one row — which is the same league answering the same
+ * question twice, a few milliseconds apart, over the same connection pool.
+ *
+ * Both readings go through here rather than one spelling the comparison out, for
+ * the reason `BEST_BALL_SQL` is shared: a board and a panel that disagree about
+ * whether a league is dynasty is a wrong number rather than an error.
+ */
+export function adpBoardTypeOf(typeCode: number): AdpBoardType {
+  return typeCode === DYNASTY_LEAGUE_TYPE ? "dynasty" : "redraft";
 }
 
 type TeamRow = {
@@ -839,6 +856,10 @@ export async function getLeagueDetail(
     scoring_settings: l.scoring_settings,
     settings: l.settings,
     best_ball: l.best_ball,
+    // Already selected for the pick grid above, and carried out rather than
+    // dropped: it is what the values read needs to pick an ADP market, and
+    // buying it there cost a second query for a league already in hand.
+    league_type: l.league_type,
     teams,
   };
 }

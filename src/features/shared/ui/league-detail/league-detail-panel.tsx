@@ -74,6 +74,17 @@ const ColumnsEditor = dynamic(
  * Loads its own data the first time it mounts, which is when whatever holds it
  * is opened.
  *
+ * **It renders on the structural read and lets the rest fill in.** The rosters,
+ * the standings, the managers and the player names are one request; the KTC and
+ * ADP prices, the rest-of-season lineups and (on a week panel) that week's
+ * projections are three more, each landing on its own. So the loading state ends
+ * as soon as there is a league to draw, and the value columns sit at an em dash
+ * for the moment it takes their own read to answer rather than holding the whole
+ * panel behind the slowest of four. Nothing below this needed changing for that:
+ * every one of those components already drew an em dash for "no answer", which
+ * is exactly what a request still in flight looks like. See
+ * {@link useLeagueDetail}.
+ *
  * **It is in `features/shared` because a second tool draws it**, which is the
  * mover's rule and not a filing preference: the leagues list expands a card into
  * this panel, and the trades board opens a trade card into the same thing, since
@@ -267,12 +278,19 @@ function Panel({
   // next time this re-renders. A caller opening the panel at a different team
   // remounts it (the sheet keys on the pair), which is free — the detail is a
   // cached query by then.
-  const [selectedId, setSelectedId] = useState<number>(
-    focusRosterId ?? teams[0].roster_id,
-  );
+  //
+  // **Null until something is actually chosen**, which the outlook arriving
+  // separately is what makes necessary. The head of `teams` is the projected
+  // leader once the outlook lands and the standings leader before it, so a
+  // selection *initialised* to `teams[0]` would pin whichever row happened to
+  // lead during the first render — the standings leader, always, since the
+  // projections are now a request behind. Read as a fallback instead, the panel
+  // opens on the standings leader and follows the ranking the moment it arrives,
+  // and any press pins the choice for good.
+  const [pickedId, setPickedId] = useState<number | null>(focusRosterId ?? null);
   // A roster the league doesn't hold — a trade whose participants have since been
   // replaced — falls back to the head of the list rather than to nothing.
-  const selected = teams.find((t) => t.roster_id === selectedId) ?? teams[0];
+  const selected = teams.find((t) => t.roster_id === pickedId) ?? teams[0];
 
   // Each table's two value columns are slots the reader points at a metric — the
   // standings at a team-level one, the roster at a player-level one. Stored on
@@ -494,7 +512,7 @@ function Panel({
                   values={data.values}
                   weekView={weekView}
                   selectedId={selected.roster_id}
-                  onSelect={setSelectedId}
+                  onSelect={setPickedId}
                   columns={teamColumns}
                   onOpenColumn={teamEditor.open}
                 />

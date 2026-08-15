@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
+import { useLeaguePrefetch } from "../use-league-prefetch";
 // The module path rather than the `features/shared` barrel: the panel is a
 // subtree deep enough that re-exporting it there would ship it to every page
 // importing anything shared — see `ui/league-detail/index.ts`.
@@ -233,6 +234,13 @@ export function LeagueCard({
   // object.
   const panelId = useId();
 
+  // A hover or a tab-stop that rests here is a reader about to open this league,
+  // so its structural read is started before the press rather than after it —
+  // core alone, on a fine pointer, after a beat. See {@link useLeaguePrefetch}
+  // for each of those three bounds; without them this is a request per card a
+  // pointer crosses.
+  const prefetch = useLeaguePrefetch(leagueId);
+
   // Opening and closing are two states of one gesture, so the panel is animated
   // in *and* out — which takes two flags rather than one, because an unmounted
   // element cannot play an exit. `closing` keeps a panel in the tree past the
@@ -376,6 +384,12 @@ export function LeagueCard({
     // which is not true one list over (see {@link Nameplate}).
     <li
       ref={ref}
+      // On the card rather than on the name's button: the whole head is the
+      // press target, so the whole head is where intent shows. `onFocus`
+      // bubbles from that button, which is the card's one focusable control.
+      onPointerEnter={prefetch.onPointerEnter}
+      onPointerLeave={prefetch.onPointerLeave}
+      onFocus={prefetch.onFocus}
       className={`${SCROLL_OFFSET} pt-3 ${mounted ? OPEN_BOX : "relative"}`}
     >
       {/* **The top edge is one row rather than two placed parts**, which is what

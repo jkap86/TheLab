@@ -131,6 +131,25 @@ export class TtlPromiseCache<V extends object> {
     return this.resolved.get(key);
   }
 
+  /**
+   * Drop one key, for a caller that has just rewritten what is behind it.
+   *
+   * **Both halves, which is what makes it an invalidation rather than a nudge.**
+   * Dropping the resolved entry alone would leave a computation that started
+   * before the write still holding the key: it reads the old rows, settles, and
+   * stores them for a full TTL — precisely the staleness this call exists to
+   * end, arriving a moment *after* it. Retiring the in-flight entry too makes
+   * `settle` report that something newer owns the key, so that computation still
+   * answers the callers already waiting on it (they asked before the write) and
+   * simply does not store what it read.
+   *
+   * The next reader misses and recomputes, which is the point.
+   */
+  forget(key: string): void {
+    this.resolved.delete(key);
+    this.pending.delete(key);
+  }
+
   /** For tests, and for a sync that knows it has invalidated everything. */
   clear(): void {
     this.resolved.clear();

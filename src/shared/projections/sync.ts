@@ -12,6 +12,7 @@ import { fetchWeekProjections, getNflState } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
 import { toProjectionRows } from "./parse";
+import { clearProjectionMetaCaches } from "./queries";
 import type { ProjectionRow } from "./parse";
 import { validateWeekProjections } from "./validate";
 import { horizonWeeks, targetWeeks } from "./weeks";
@@ -312,6 +313,11 @@ export async function syncProjections(
 
         const removed = await writeWeek(season, week, validation.rows);
         await markWeekSynced(season, week);
+        // The horizon and the stat-key vocabulary are derived from these rows
+        // and cached per season for minutes, so a week that has just landed —
+        // or one whose last game has just passed — is published now rather than
+        // waiting out a TTL behind the sync that produced it.
+        clearProjectionMetaCaches();
         synced.push({ week, rows: validation.rows.length, removed });
       } catch (error) {
         failed.push(week);
