@@ -74,11 +74,27 @@ export type ManagerLeaguesState = {
  * whether its own data is due a refresh, and the stream delivers whatever a
  * background sync has since written.
  */
-export function useManagerLeagues(searched: string): ManagerLeaguesState {
+export function useManagerLeagues(
+  searched: string,
+  /**
+   * Which season's leagues, or `undefined` for the app's current one.
+   *
+   * **The omission is what keeps three tools on one entry**, which is why the
+   * header's stepper resolves through {@link seasonParam} rather than naming the
+   * season it is showing: the pick tracker and the lineup checker read this same
+   * stream with no season at all, and an explicit current season would file the
+   * identical answer under a second key. A past season is a different selection
+   * and gets its own entry, dependent invalidations included.
+   */
+  season?: string,
+): ManagerLeaguesState {
   const queryClient = useQueryClient();
-  // Memoised on the manager alone: a fresh key array every render is a new
-  // `useQuery` key object and a rebuilt `revalidate` for nothing.
-  const queryKey = useMemo(() => managerQueryKeys.leagues(searched), [searched]);
+  // Memoised on the manager and the season: a fresh key array every render is a
+  // new `useQuery` key object and a rebuilt `revalidate` for nothing.
+  const queryKey = useMemo(
+    () => managerQueryKeys.leagues(searched, season),
+    [searched, season],
+  );
 
   // Both entry points — the query and the manual re-read — run the same stream
   // into the same entry. Neither asks the server to force a Sleeper sync; the
@@ -95,13 +111,19 @@ export function useManagerLeagues(searched: string): ManagerLeaguesState {
     (signal?: AbortSignal) =>
       fetchManagerLeagues({
         searched,
+        season,
         signal,
         // Carried forward so a re-run continues the refresh sequence rather than
         // restarting it, which would read as a dependent-invalidating change.
-        previousRevision: cachedLeaguesRevision(queryClient, searched),
-        publish: (data) => publishManagerLeagues(queryClient, searched, data),
+        previousRevision: cachedLeaguesRevision(queryClient, searched, season),
+        // The season goes to the writer as well as to the request: what a new
+        // revision makes stale is *this* season's rosters, membership, ranks,
+        // values and valuation, and invalidating another season's would retire
+        // an answer nothing has changed.
+        publish: (data) =>
+          publishManagerLeagues(queryClient, searched, data, season),
       }),
-    [searched, queryClient],
+    [searched, season, queryClient],
   );
 
   const query = useQuery({

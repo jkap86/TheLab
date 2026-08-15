@@ -2,9 +2,20 @@ import type { SyncProgress } from "../types";
 
 export function LoadingState({
   searched,
+  season,
   progress,
 }: {
   searched: string;
+  /**
+   * The season being loaded.
+   *
+   * Named because this screen is what a step back through the header's season
+   * stepper lands on when that season has never been synced for this manager: a
+   * full foreground fan-out, on the same screen a first visit gets. Without it
+   * the two are indistinguishable, and a reader who has just pressed `‹` has no
+   * confirmation the press did anything.
+   */
+  season: string;
   progress: SyncProgress | null;
 }) {
   const pct =
@@ -22,7 +33,7 @@ export function LoadingState({
       className="flex min-h-[50vh] flex-col items-center justify-center gap-5 text-center"
     >
       <p className="text-lg text-foreground/70">
-        Loading leagues for{" "}
+        Loading <span className="tabular-nums">{season}</span> leagues for{" "}
         <span className="font-semibold text-foreground">{searched}</span>…
       </p>
       <div

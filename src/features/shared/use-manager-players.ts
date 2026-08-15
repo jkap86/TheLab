@@ -28,8 +28,17 @@ export function useManagerPlayers(
   leagues: ManagerLeague[] | null,
   /** Off until a subject filter needs it — see {@link useManagerResource}. */
   enabled = true,
+  /**
+   * Which season's rosters, or `undefined` for the app's current one — the
+   * shared spelling, which is what keeps the manager tool and the lineup checker
+   * on one entry. See {@link seasonParam}.
+   */
+  season?: string,
 ): ManagerPlayersState {
-  const queryKey = useMemo(() => managerQueryKeys.players(searched), [searched]);
+  const queryKey = useMemo(
+    () => managerQueryKeys.players(searched, season),
+    [searched, season],
+  );
   return useManagerResource<ManagerPlayersPayload>(
     queryKey,
     searched,
@@ -39,5 +48,7 @@ export function useManagerPlayers(
     "Failed to load rosters",
     MANAGER_STALE_TIMES.players,
     enabled,
+    null,
+    season,
   );
 }

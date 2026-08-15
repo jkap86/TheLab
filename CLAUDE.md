@@ -4047,6 +4047,81 @@ stops holding, a comment saying it does would not have caught it.
     well now, which is what makes the rule easy to break by accident — the next
     part added to this plate has to ask which of the two it is before it picks a
     material.
+- **The season corner steps, and it is the one control this plate may carry —
+  because a season is the page's *population* rather than a filter of it.** The
+  four moves above end with every corner a fact and every control on the rail
+  below, and that rule is about *filters*: the league rules say what a league is,
+  the subjects say who is in it, and both narrow leagues the page already holds.
+  Stepping the season re-keys the leagues stream itself and every read hanging
+  off it — rosters, membership, ranks, KTC, ADP valuation — which is the standing
+  the ADP drawer already gives the same word ("the season is the board's
+  population; the window is a cut inside it"). So the corner that has always
+  *named* the season is where choosing it belongs, and it is not the filter seat
+  this card spent a while regretting. Eight things hold it up:
+  - **The well stays the readout and the two steps are raised keys riding in
+    it**, which keeps the grammar rather than bending it: `.lab-well`'s own note
+    already describes that arrangement ("used for the bar's current-page chip
+    **and as the trough a raised part sits in**"), and it is `.lab-slider` one
+    scale down — recessed because it is read, raised because it is grabbed. What
+    would have broken the rule is a tab-shaped well you press.
+  - **A ladder, so a stepper** — the trades board's circle and the lineup
+    checker's week, arrived at a third time from the same argument: what is being
+    chosen is a position on a line, so `‹` and `›` are the two presses the
+    question has. No pips (a year is its own pip strip) and no menu (a list of a
+    decade of years is a list where every entry but two is a place nobody is
+    going). `stepSeason` owns both bounds and answers null, so a key with nowhere
+    to go is drawn inert rather than silently re-selecting the season showing;
+    the ceiling is the app's own season (a league year Sleeper has not rolled
+    over to holds no leagues for anybody) and the floor is
+    `FIRST_SLEEPER_SEASON`. It **fails closed** on anything that isn't a
+    four-digit year, because Sleeper answers an unknown season with an empty
+    league list — which reads as "this manager has none" and is the one wrong
+    answer here that looks like a working one.
+  - **The keys clear the plate's chamfer by construction.** `.lab-notch-all`
+    takes a 9px diagonal off this exact corner and `clip-path` clips a whole
+    subtree, so the tab's own `pl-3.5` starting them 14px in is load-bearing: any
+    further left and a lit face is sliced, leaving a part with no thickness,
+    which is the one thing a pressable part must never be.
+  - **The plate is one height for both spellings.** The keys are 22px against the
+    bare digits' 20, so the body's top inset is a constant `pt-6` rather than a
+    branch on whether a page draws a stepper — a card that is two heights
+    depending on its props is the layout shift the reserved caveat lane and the
+    empty record rail already exist to refuse.
+  - **`seasonParam` is what keeps three tools on one cache entry.** The routes
+    default an absent `?season` to `getActiveSeason()` and `managerQueryKeys`
+    files it under `"default"`, so the current season has two spellings that mean
+    one thing and key differently — and the pick tracker and the lineup checker
+    read the leagues stream with no season at all. A manager tool that always
+    named its season would file the identical answer under a second key and a
+    reader crossing between the tools would pay for the account twice: the same
+    drift the lower-casing of `searched` exists to stop, one segment along. So
+    the current season sends nothing and a *past* season, which is a genuinely
+    different selection, gets its own entries.
+  - **The whole page moves together or it lies.** The season is resolved once, in
+    `useFilteredLeagues`, and threaded into the stream, the two shares reads, the
+    ranks, the KTC values and the ADP valuation — plus `publishManagerLeagues`,
+    so a new revision invalidates *that* season's dependents. A league list from
+    one season beside rosters from another is the failure with no error and no
+    wrong-looking number, only wrong rows.
+  - **It is a fourth provider, keyed per manager**, beside the league filters,
+    the subjects and the ADP board — not a field on `LeagueFilters`, which is the
+    type the trades board runs over leagues it has no account for and where a
+    manager's viewing season means nothing. The ceiling comes from the layout's
+    single `await getActiveSeason()`, handed to this store and the board's alike
+    so the two cannot disagree.
+  - **`SubjectView.seasonRead`, not `season`, and the rename is the point.** The
+    lineup checker's view already carries the season its *payload* came back
+    with, for display; this is the season its *requests* ask for. Different type
+    (`string | null` against `string | undefined`), different meaning, so
+    different names — sharing one would have made the collision a matter of which
+    file you were reading.
+
+  What it costs, stated rather than discovered: stepping to a season this
+  manager has never been synced for is a cold foreground fan-out, so the page
+  shows the ordinary cold-load screen — which now names the season, since
+  otherwise a press that starts a minute of syncing looks like a press that did
+  nothing. The stepper is not drawn on that screen: it belongs to the plate, and
+  a second spelling of it standing alone would be one control with two shapes.
 - **The plate's record readout is where the filter bar used to be.** The two rows
   of segment buttons are behind a modal (`LeagueFiltersModal`, which is that
   panel's other host) whose trigger has

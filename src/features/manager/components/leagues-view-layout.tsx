@@ -18,7 +18,11 @@ import {
 import { AdpTrigger } from "@/features/shared/ui/adp-trigger";
 import { useLatchedDisclosure } from "@/features/shared/use-latched-disclosure";
 
-import { useAdpControls, useSubjectFilters } from "../filters-context";
+import {
+  useAdpControls,
+  useManagerSeason,
+  useSubjectFilters,
+} from "../filters-context";
 import type { FilteredLeagues } from "../hooks/use-filtered-leagues";
 import { aggregateRecord } from "../record";
 import { subjectSummary } from "../subjects";
@@ -130,6 +134,16 @@ export function LeaguesViewLayout({
     scope: boardScope,
   } = useAdpControls();
   const { subjects } = useSubjectFilters();
+  // The header's season stepper. `activeSeason` is the ladder's ceiling — the
+  // app's own season, resolved on the server by the manager layout — where
+  // `selectedSeason` is only read by the cold-load screen: everywhere else the
+  // season shown is the one the *payload* came back with, so the tab can never
+  // name a season the list beneath it isn't from.
+  const {
+    season: selectedSeason,
+    activeSeason,
+    setSeason,
+  } = useManagerSeason();
   const {
     open: boardOpen,
     mounted: everOpened,
@@ -188,7 +202,17 @@ export function LeaguesViewLayout({
         {error ? (
           <ErrorCard message={error} />
         ) : (
-          <LoadingState searched={searched} progress={progress} />
+          // The season names itself here because stepping back to one this
+          // manager has never been synced for is a cold, foreground sync — the
+          // same screen a first visit gets, and the one moment a reader needs
+          // telling *which* season they are waiting on. The stepper itself is
+          // not drawn on this screen: it belongs to the plate, and a second
+          // spelling of it standing alone would be one control with two shapes.
+          <LoadingState
+            searched={searched}
+            season={selectedSeason}
+            progress={progress}
+          />
         )}
       </PageShell>
     );
@@ -201,7 +225,11 @@ export function LeaguesViewLayout({
     <PageShell width="wide">
       <ManagerHeader
         user={user}
+        // The payload's season, never the selection: they agree today, and
+        // saying so here is what stops a cached previous season being shown
+        // under a tab naming the one still loading.
         season={season}
+        seasonControl={{ latest: activeSeason, onChange: setSeason }}
         refreshing={refreshing}
         progress={progress}
         summary={summary}

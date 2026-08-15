@@ -29,10 +29,16 @@ export function useManagerLeaguemates(
   leagues: ManagerLeague[] | null,
   /** Off until a subject filter needs it — see {@link useManagerResource}. */
   enabled = true,
+  /**
+   * Which season's membership, or `undefined` for the app's current one — the
+   * shared spelling, which is what keeps the manager tool and the lineup checker
+   * on one entry. See {@link seasonParam}.
+   */
+  season?: string,
 ): ManagerLeaguematesState {
   const queryKey = useMemo(
-    () => managerQueryKeys.leaguemates(searched),
-    [searched],
+    () => managerQueryKeys.leaguemates(searched, season),
+    [searched, season],
   );
   return useManagerResource<ManagerLeaguematesPayload>(
     queryKey,
@@ -43,5 +49,7 @@ export function useManagerLeaguemates(
     "Failed to load leaguemates",
     MANAGER_STALE_TIMES.leaguemates,
     enabled,
+    null,
+    season,
   );
 }

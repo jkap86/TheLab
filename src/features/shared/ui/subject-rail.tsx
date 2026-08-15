@@ -261,8 +261,25 @@ export function SubjectRail({
   // Both halves are fetched whenever the panel is up: the search is one field
   // over both kinds, so opening it with only the rosters loaded would silently
   // answer half the question. The sheet asks for the rosters under the same key.
-  const rosters = useManagerPlayers(view.searched, view.userId, leagues, open);
-  const members = useManagerLeaguemates(view.searched, view.userId, leagues, open);
+  // `view.seasonRead` rather than nothing: the leagues these narrow are whichever
+  // season the page is reading, so a rail counting subjects over the current
+  // season's rosters while the list under it is a past one is the wrong answer
+  // wearing a settled count. Undefined on both callers in the ordinary case, so
+  // the entries stay the shared ones — see {@link SubjectView.season}.
+  const rosters = useManagerPlayers(
+    view.searched,
+    view.userId,
+    leagues,
+    open,
+    view.seasonRead,
+  );
+  const members = useManagerLeaguemates(
+    view.searched,
+    view.userId,
+    leagues,
+    open,
+    view.seasonRead,
+  );
 
   const options = useMemo(
     () =>

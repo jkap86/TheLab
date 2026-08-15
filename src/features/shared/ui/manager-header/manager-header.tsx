@@ -118,6 +118,7 @@ const BODY_PADDING = "pb-5 sm:pb-6";
 export function ManagerHeader({
   user,
   season,
+  seasonControl,
   refreshing,
   progress,
   summary,
@@ -183,7 +184,7 @@ export function ManagerHeader({
               className="absolute inset-y-0 left-0 z-[2] w-1 bg-gradient-to-b from-active to-active/30 shadow-[0_0_16px_rgba(0,255,229,0.4)]"
             />
 
-            <SeasonTab season={season} />
+            <SeasonTab season={season} control={seasonControl} />
             <StatTab stat={stat} />
 
             <ManagerSummary
