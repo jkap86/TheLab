@@ -1,3 +1,4 @@
+import { draftCapital } from "../nfl-draft/capital.ts";
 import { COMPS_FIELDS } from "./fields.ts";
 
 import type { CompsBasis } from "./filters.ts";
@@ -58,6 +59,25 @@ export type CompsAdpInput = ReadonlyMap<
 export type CompsKtcHistoryInput = Record<
   string,
   { peak: number | null; trend: number | null }
+>;
+
+/**
+ * NFL draft picks per player id — `getNflDraftPicks`'s own map, handed straight
+ * through.
+ *
+ * **A missing key is unknown; a present entry with a null `overall` is
+ * undrafted.** That distinction is the map's whole contract and the reason this
+ * arrives as a `Map` rather than as a nullable number per player: a number
+ * cannot carry it, and flattening it here would lose it for every reader
+ * downstream. `draftCapital` is the one place it becomes a value.
+ *
+ * Time-invariant, like the birth date beside it: where a player was drafted is
+ * the same fact in every season of his career, so unlike the KTC and ADP inputs
+ * it needs no anchor and a historical row is exact rather than as-of.
+ */
+export type CompsDraftInput = ReadonlyMap<
+  string,
+  { season: string; round: number | null; slot: number | null; overall: number | null }
 >;
 
 /** The production fields read straight off a line — the derived ones aren't. */
@@ -144,6 +164,7 @@ export function assemblePoolRows({
   ktc,
   ktcHistory,
   adp,
+  draft,
   season,
 }: {
   statLines: readonly CompsStatLineInput[];
@@ -151,6 +172,13 @@ export function assemblePoolRows({
   ktc: CompsKtcInput;
   ktcHistory: CompsKtcHistoryInput;
   adp: CompsAdpInput;
+  /**
+   * Optional so a row assembled without it is still a legitimate row — it
+   * simply answers null for draft capital, which is what an unknown pick means
+   * anyway. That keeps every existing assembly test valid and makes the field
+   * degrade the way the market fields do when their source is cold.
+   */
+  draft?: CompsDraftInput;
   season: string;
 }): CompsPoolRow[] {
   // One accumulator per player: games, production and point totals in a
@@ -339,6 +367,14 @@ export function assemblePoolRows({
     values.ktc_trend_sf = history?.trend ?? null;
     values.adp_dynasty = marketAdp?.dynasty?.adp ?? null;
     values.adp_redraft = marketAdp?.redraft?.adp ?? null;
+    // Three answers folded to two by one call: a drafted player gets his pick's
+    // capital, an undrafted one the shared notch past the last pick, and a
+    // player with no record at all gets null — which excludes him from any
+    // comparison weighting this, rather than filing him with the undrafted.
+    const draftPick = draft?.get(player_id) ?? null;
+    values.draft_capital = draftCapital(
+      draftPick === null ? null : { playerId: player_id, ...draftPick },
+    );
 
     rows.push({
       player_id,
@@ -349,6 +385,11 @@ export function assemblePoolRows({
       name: profile?.name ?? player_id,
       position: profile?.position ?? null,
       team: profile?.team ?? null,
+      // The pick itself rides beside the capital, the way `position` and `team`
+      // ride beside the values: it is what the reader actually wants printed —
+      // "1.05", "UDFA" — where the capital is what the distance is measured in.
+      // Null here is unknown; a record with a null `overall` is undrafted.
+      draft: draftPick,
       games: entry.games,
       values,
       rates,

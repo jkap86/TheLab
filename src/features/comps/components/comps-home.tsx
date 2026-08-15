@@ -16,6 +16,7 @@ import {
   weightsFor,
   windowsFor,
 } from "../prefs";
+import { draftSummary } from "../season-line";
 import { useCompsPrefs } from "../use-comps-prefs";
 import { FieldEditor } from "./field-editor";
 import { PlayerPicker } from "./player-picker";
@@ -88,6 +89,13 @@ export function CompsHome() {
 
   const comps = useComps(query);
   const updating = comps.stale || weightsPending || (comps.loading && !!comps.data);
+  // Guarded on the answer describing the subject on screen: `keepPreviousData`
+  // means a stale payload can still be the previous player's, and a draft
+  // position under the wrong name is worse than none for a beat.
+  const subjectDraft =
+    comps.data && comps.data.subject.player_id === subject?.player_id
+      ? draftSummary(comps.data.subject)
+      : null;
 
   const pickSubject = (player: CompsPlayerOptionPayload) => {
     setSubject(player);
@@ -123,6 +131,14 @@ export function CompsHome() {
             </span>
             <span className="text-xs text-foreground/40">
               {subject.position}
+              {/* Read off the answer rather than the picker: `/api/comps/players`
+                  is a name list and knows nothing about the draft, where the
+                  comps payload's own subject row carries it. So it appears once
+                  a comparison has run, which is also the only time it means
+                  anything beside the comps that wear the same label. */}
+              {subjectDraft && (
+                <span title={subjectDraft.full}> · {subjectDraft.short}</span>
+              )}
               {subject.team && <> · Current: {subject.team}</>}
             </span>
 

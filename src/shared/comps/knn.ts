@@ -39,6 +39,22 @@ export type CompsPoolRow = {
   position: string | null;
   /** The player's *current* team — `players` stores no historical team. */
   team: string | null;
+  /**
+   * Where the player went in the NFL draft, or null where this app has no
+   * record of it. A record with a null `overall` means he went *undrafted*,
+   * which is a different answer — see `nfl-draft/types.ts`.
+   *
+   * Row metadata rather than a value, exactly like `position` and `team`: the
+   * comparable form of this fact is `values.draft_capital`, and printing a
+   * pick number is what this is for. Unlike those two it is time-invariant, so
+   * a historical row carries the right pick rather than today's.
+   */
+  draft: {
+    season: string;
+    round: number | null;
+    slot: number | null;
+    overall: number | null;
+  } | null;
   /** Games played: the count of stored weekly lines, `playerPpg`'s own rule. */
   games: number;
   values: Record<string, number | null>;

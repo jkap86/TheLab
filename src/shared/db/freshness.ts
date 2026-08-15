@@ -5,7 +5,7 @@ import { pool } from "./pool";
  * unparameterised (Postgres can't parameterise an identifier), so the set is
  * closed rather than taking an arbitrary string.
  */
-type CachedTable = "players" | "ktc_values";
+type CachedTable = "players" | "ktc_values" | "nfl_draft_picks";
 
 /**
  * Whether a cache table was refreshed within `ttlMs`, judged by the newest

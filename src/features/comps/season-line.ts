@@ -1,6 +1,7 @@
 // Relative pure→pure import, the usual test-runner spelling.
 import { COMPS_FIELDS } from "../../shared/comps/fields.ts";
 import { compsDimensionLabel } from "../../shared/comps/windows.ts";
+import { draftPickLabel } from "../../shared/nfl-draft/capital.ts";
 
 import type { CompsBasis } from "../../shared/comps/filters.ts";
 import type {
@@ -127,3 +128,51 @@ export function pointsSummary(
 
 const nonzero = (value: number | null): boolean =>
   value !== null && value !== 0;
+
+/**
+ * How a row's NFL draft position reads — `Drafted 1.05`, or `Undrafted`.
+ *
+ * Three answers folded into two renderings and one absence, which is the whole
+ * of what this function is for:
+ *
+ * - **Drafted** — the pick, spoken the way picks are spoken (`1.05`), with the
+ *   class and the long form on the hover where they cost no width.
+ * - **Undrafted** — said out loud, because on a comps row it is a *finding*
+ *   rather than a gap: a reader looking at an undrafted breakout is looking at
+ *   the thing that makes the comp interesting.
+ * - **Unknown** — null, drawn as nothing at all. Never "Undrafted", which is
+ *   the one wrong answer here that would read as a working one; the app has no
+ *   draft record for a chunk of the archive seasons, and labelling those
+ *   players undrafted would invent a fact about every one of them.
+ *
+ * The class is not folded into the short form on purpose: the row already
+ * carries a season (the *stat* season), and two four-digit years a few pixels
+ * apart meaning different things is worse than one on a hover.
+ */
+export function draftSummary(
+  row: CompsSeasonRowPayload,
+): { short: string; full: string } | null {
+  const draft = row.draft;
+  if (!draft) return null;
+
+  const label = draftPickLabel({ playerId: row.player_id, ...draft });
+  if (label === null) return null;
+
+  if (draft.overall === null) {
+    return {
+      short: "Undrafted",
+      full: `Went undrafted in ${draft.season}`,
+    };
+  }
+
+  const place =
+    draft.round !== null && draft.slot !== null
+      ? `Round ${draft.round}, pick ${draft.slot}`
+      : draft.round !== null
+        ? `Round ${draft.round}`
+        : `Pick ${draft.overall}`;
+  return {
+    short: `Drafted ${label}`,
+    full: `${place} (#${draft.overall} overall) of the ${draft.season} NFL draft`,
+  };
+}

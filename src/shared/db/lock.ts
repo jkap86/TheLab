@@ -24,6 +24,8 @@ export const LOCK_KEYS = {
   tradeStats: [8675309, 6],
   /** Weekly actual stat lines sync (`shared/stats/sync.ts`). */
   playerStats: [8675309, 7],
+  /** NFL draft crosswalk refresh (`shared/nfl-draft/sync.ts`). */
+  nflDraft: [8675309, 8],
 } as const satisfies Record<string, AdvisoryLockKey>;
 
 /**

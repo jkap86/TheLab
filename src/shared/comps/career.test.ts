@@ -16,6 +16,7 @@ const poolRow = (
   name: player_id,
   position: "WR",
   team: null,
+  draft: null,
   games,
   values: { rec_yd: 1000 },
   points: { ppr, half_ppr: ppr * 0.9, std: ppr * 0.8 },

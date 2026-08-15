@@ -52,6 +52,8 @@ export const BACKGROUND_JOB_VARS = {
   projections: "PROJECTIONS_SYNC",
   /** Weekly actual stat lines. */
   stats: "STATS_SYNC",
+  /** The NFL draft crosswalk — where players were taken in the real draft. */
+  nflDraft: "NFL_DRAFT_SYNC",
 } as const satisfies Record<string, string>;
 
 export type BackgroundJob = keyof typeof BACKGROUND_JOB_VARS;

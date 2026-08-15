@@ -301,6 +301,30 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     perGame: false,
     defaultWeights: { QB: 60, RB: 60, WR: 60, TE: 60 },
   },
+  // Where the player went in the *NFL* draft, as draft capital rather than as
+  // a pick number — `shared/nfl-draft/capital.ts` holds the curve and the
+  // argument for it. In short: a pick number is an ordinal, so a distance over
+  // it would call 1-vs-20 and 200-vs-219 the same gap, which is false in the
+  // only sense a reader means. On the curve, two first-rounders are close, two
+  // Day 3 picks are close, and a 1st against a 5th is far.
+  //
+  // Undrafted is a *value* here and not a gap: every undrafted player stands on
+  // one notch just past the last pick, so they cluster and "compare this
+  // undrafted breakout to other undrafted breakouts" is answerable. Null is
+  // reserved for a player this app has no draft record for at all.
+  //
+  // Never defaulted, on the nullable rule above and with a second reason of its
+  // own: the crosswalk behind it thins out in the archive seasons, so a default
+  // would quietly drop the deepest end of the pool out of every first board —
+  // exactly where the comps are most interesting. Weighting it is a press the
+  // editor makes visible, and the exclusion count says what it cost.
+  {
+    key: "draft_capital",
+    label: "Draft capital",
+    family: "profile",
+    perGame: false,
+    defaultWeights: {},
+  },
   // Career-to-date production entering the season, derived from the pool's own
   // prior seasons at read time (`withCareerValues`) — strictly *before* this
   // one, the market anchor's own semantics, so a season can't be compared on

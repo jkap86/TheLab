@@ -1,5 +1,6 @@
 import { getDraftAdpForPlayers, ADP_FILTER_DEFAULTS } from "@/shared/manager";
 import { getKtcSfHistoryAsOf, getKtcValuesAsOf } from "@/shared/ktc";
+import { getNflDraftPicks } from "@/shared/nfl-draft";
 import { getPlayerProfiles } from "@/shared/players";
 import { listSeasonStatLines, listStoredSeasons } from "@/shared/stats";
 import { deepFreeze, TtlPromiseCache } from "@/shared/util";
@@ -72,11 +73,15 @@ async function loadSeasonPool(season: string): Promise<readonly CompsPoolRow[]> 
     ...ADP_FILTER_DEFAULTS,
   };
 
-  const [profiles, ktc, ktcHistory, adp] = await Promise.all([
+  // The draft read takes no anchor, unlike the two market reads beside it:
+  // where a player was drafted is the same fact in every season of his career,
+  // so it is exact for a historical row rather than as-of.
+  const [profiles, ktc, ktcHistory, adp, draft] = await Promise.all([
     getPlayerProfiles(ids),
     getKtcValuesAsOf(anchor),
     getKtcSfHistoryAsOf(anchor),
     getDraftAdpForPlayers(adpFilters, ids),
+    getNflDraftPicks(ids),
   ]);
 
   return deepFreeze(
@@ -86,6 +91,7 @@ async function loadSeasonPool(season: string): Promise<readonly CompsPoolRow[]> 
       ktc: ktc.values,
       ktcHistory,
       adp: adp.values,
+      draft,
       season,
     }),
   );

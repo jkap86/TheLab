@@ -12,8 +12,10 @@
  * career fields did not — they are derived at read time (`withCareerValues`),
  * so cached rows never carry them.
  * 4: the vocabulary-gated air-yards fields joined `values`.
+ * 5: NFL draft capital joined `values`, and the pick itself joined the row as
+ * metadata beside `position`/`team`.
  */
-export const COMPS_POOL_VERSION = 4;
+export const COMPS_POOL_VERSION = 5;
 
 /**
  * How long an assembled season pool is worth reusing, and how many are kept.
