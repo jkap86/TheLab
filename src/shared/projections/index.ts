@@ -13,6 +13,7 @@ export {
   listPlayerWeekStats,
   listLineupWeekStats,
   getProjectedStatKeys,
+  clearProjectionMetaCaches,
 } from "./queries";
 export type { LineupWeekStats, RankedProjection } from "./queries";
 export { aggregateWeeklyStats } from "./aggregate";

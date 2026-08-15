@@ -3,6 +3,8 @@ import { describe, test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { withQueryClient } from "../query-test-support.ts";
+
 import {
   CardLedge,
   LeagueCard,
@@ -39,7 +41,7 @@ import {
 
 function card(over: Partial<Parameters<typeof LeagueCard>[0]> = {}): string {
   return renderToStaticMarkup(
-    createElement(LeagueCard, {
+    withQueryClient(createElement(LeagueCard, {
       leagueId: "L1",
       name: "The Lab Dynasty",
       status: "in_season",
@@ -55,7 +57,7 @@ function card(over: Partial<Parameters<typeof LeagueCard>[0]> = {}): string {
       // about is the markup.
       onToggle: () => {},
       ...over,
-    }),
+    })),
   );
 }
 

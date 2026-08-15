@@ -84,6 +84,40 @@ export const MANAGER_RANKS_CACHE = {
 } as const;
 
 /**
+ * How long one league's **core** detail is worth reusing, and how many leagues
+ * are kept.
+ *
+ * **Three minutes, against the browser's five** — the house rule that a layer's
+ * TTL is shorter than the one it stands in front of, so a client entry going
+ * stale costs a request this answers from memory rather than four queries. It is
+ * also comfortably shorter than the crawler's fastest tier (fifteen minutes),
+ * which is what makes staleness bounded by something already true of the data
+ * rather than by this cache.
+ *
+ * What it protects is not one reader — the browser cache does that — but the
+ * case the browser cannot reach: a second tab, a second reader, a reload, a
+ * process that has just restarted, and (new here) the **three enrichment routes
+ * beside it**, each of which needs the same league, rosters and settings to do
+ * its own work. Splitting one payload into four requests would otherwise have
+ * multiplied that read by four; cached, the split costs one.
+ *
+ * An entry is a dozen rosters, their members and their picks — tens of
+ * kilobytes — so 256 leagues is a handful of megabytes and far more than the
+ * working set of a single process inside three minutes.
+ *
+ * **It is invalidated on write as well as by time**, which the other two caches
+ * here have no need of: this is the one read a *reader* can force a refresh of
+ * (the lineup checker's sync key), and a panel that re-read a three-minute-old
+ * roster straight after Sleeper confirmed the change would make that key look
+ * broken. See `invalidateLeagueDetail`.
+ */
+export const LEAGUE_DETAIL_CACHE = {
+  name: "league-detail",
+  ttlMs: 3 * 60 * 1000,
+  max: 256,
+} as const;
+
+/**
  * Which ranks a request wants — the one option that changes the *work* rather
  * than only the answer.
  *

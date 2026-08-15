@@ -133,38 +133,66 @@ test("leagueQueryKeys", async (t) => {
   await t.test("two leagues are two entries under one prefix", () => {
     // The panel mounts on expand and clears on change, so a key shared between
     // two leagues would show one league's rosters under the other's name.
-    assert.notEqual(
-      hash(leagueQueryKeys.detail("123", BOARD)),
-      hash(leagueQueryKeys.detail("124", BOARD)),
-    );
-    assert.deepEqual(leagueQueryKeys.detail("123", BOARD).slice(0, 1), [
-      ...leagueQueryKeys.all,
-    ]);
+    assert.notEqual(hash(leagueQueryKeys.core("123")), hash(leagueQueryKeys.core("124")));
+    assert.deepEqual(leagueQueryKeys.core("123").slice(0, 1), [...leagueQueryKeys.all]);
   });
 
-  await t.test("two boards of one league are two entries", () => {
-    // The rosters don't depend on the board, but the two value columns do and
-    // they arrive on the same payload — so a narrowed drawer served from the
-    // previous board's entry would show the old prices against the new board.
+  await t.test("the core depends on neither the board nor the week", () => {
+    // The whole point of the split: re-tuning the ADP drawer or stepping a week
+    // must not re-fetch a dozen rosters, their managers, their picks and several
+    // hundred player names to move two columns. There is only one core key per
+    // league, so neither press can reach it — which is what makes this assertion
+    // about the *shape* rather than about two values.
+    assert.deepEqual(leagueQueryKeys.core("123"), ["league", "123", "core"]);
+  });
+
+  await t.test("two boards of one league are two value entries", () => {
+    // The value columns are the one thing the board moves, so they are the one
+    // entry it keys.
     assert.notEqual(
-      hash(leagueQueryKeys.detail("123", BOARD)),
-      hash(leagueQueryKeys.detail("123", `${BOARD}&rounds_min=12`)),
+      hash(leagueQueryKeys.values("123", BOARD)),
+      hash(leagueQueryKeys.values("123", `${BOARD}&rounds_min=12`)),
     );
     // …and one board written two ways is still one entry.
     assert.equal(
-      hash(leagueQueryKeys.detail("123", "steepness=4&board_season=2026")),
-      hash(leagueQueryKeys.detail("123", "board_season=2026&steepness=4")),
+      hash(leagueQueryKeys.values("123", "steepness=4&board_season=2026")),
+      hash(leagueQueryKeys.values("123", "board_season=2026&steepness=4")),
     );
   });
 
-  await t.test("every board hangs under its own league's prefix", () => {
-    // What lets the hook tell "another board of this league" (keep the rows on
-    // screen) from "another league" (clear them) — it compares this prefix.
+  await t.test("two weeks of one league are two week entries, and nothing else moves", () => {
+    assert.notEqual(hash(leagueQueryKeys.week("123", 4)), hash(leagueQueryKeys.week("123", 5)));
+    // The outlook is a fact about the league, so stepping a week cannot reach it.
+    assert.deepEqual(leagueQueryKeys.outlook("123"), ["league", "123", "outlook"]);
+  });
+
+  await t.test("the four are four entries, never one", () => {
+    // Two of them colliding would put a board's prices under an outlook's key —
+    // the failure the segment names exist to make impossible.
+    const keys = [
+      leagueQueryKeys.core("123"),
+      leagueQueryKeys.values("123", BOARD),
+      leagueQueryKeys.outlook("123"),
+      leagueQueryKeys.week("123", 4),
+    ].map(hash);
+    assert.equal(new Set(keys).size, keys.length);
+  });
+
+  await t.test("every entry hangs under its own league's prefix", () => {
+    // What lets a hook tell "another board of this league" (keep the rows on
+    // screen) from "another league" (clear them) — it compares this prefix. It
+    // is also what one invalidation of a refreshed league reaches.
     const prefix = leagueQueryKeys.league("123");
-    const one = leagueQueryKeys.detail("123", BOARD);
-    assert.deepEqual(one.slice(0, prefix.length), [...prefix]);
+    for (const key of [
+      leagueQueryKeys.core("123"),
+      leagueQueryKeys.values("123", BOARD),
+      leagueQueryKeys.outlook("123"),
+      leagueQueryKeys.week("123", 4),
+    ]) {
+      assert.deepEqual(key.slice(0, prefix.length), [...prefix]);
+    }
     assert.notDeepEqual(
-      leagueQueryKeys.detail("124", BOARD).slice(0, prefix.length),
+      leagueQueryKeys.core("124").slice(0, prefix.length),
       [...prefix],
     );
   });
@@ -172,7 +200,7 @@ test("leagueQueryKeys", async (t) => {
   await t.test("it is not manager-scoped, since a league belongs to all its members", () => {
     // Two managers expanding the same league read one answer; filing it under
     // the searched name would fetch the same standings once per reader.
-    assert.ok(!hash(leagueQueryKeys.detail("123", BOARD)).includes(managerQueryKeys.all[0]));
+    assert.ok(!hash(leagueQueryKeys.core("123")).includes(managerQueryKeys.all[0]));
   });
 });
 

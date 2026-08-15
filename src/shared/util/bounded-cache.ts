@@ -91,6 +91,11 @@ export class BoundedCache<V> {
     return { hits, misses };
   }
 
+  /** Drop one key, for a caller that knows it has just been rewritten. */
+  delete(key: string): void {
+    this.entries.delete(key);
+  }
+
   /** For tests and for a sync that knows it has invalidated everything. */
   clear(): void {
     this.entries.clear();

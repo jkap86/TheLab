@@ -30,25 +30,41 @@ export const leagueQueryKeys = {
   league: (leagueId: string) => [...leagueQueryKeys.all, leagueId] as const,
 
   /**
-   * One board of it, read as one week.
+   * The **structural** half: the league, its rosters and standings, its members
+   * and picks, and the names its player ids resolve to.
    *
-   * The rosters and standings depend on neither — only the value columns read
-   * the board and only the week columns read the week — but all of it arrives on
-   * one payload, so both have to reach the key or a narrowed drawer would be
-   * served the previous board's prices and a stepped week the previous week's
-   * projections.
-   *
-   * `week` is `null` for a panel opened on a season, which is the leagues list
-   * and the trades board; spelling it out as a segment rather than dropping it
-   * is the `managerQueryKeys` habit — a dropped segment makes two different
-   * questions collide on one entry.
+   * **It depends on neither the ADP board nor the week, and that is the whole
+   * point of it being its own entry.** There used to be one key carrying both,
+   * because there was one payload carrying both — so narrowing the drawer or
+   * stepping a week re-fetched a dozen rosters and several hundred player names
+   * to move two columns. Split, a board change invalidates {@link values} alone
+   * and a week change {@link week} alone, and the panel's rows never flicker
+   * because they were never re-asked for.
    */
-  detail: (leagueId: string, board: string, week: number | null = null) =>
-    [
-      ...leagueQueryKeys.league(leagueId),
-      normalizeAdpQuery(board),
-      week ?? "season",
-    ] as const,
+  core: (leagueId: string) => [...leagueQueryKeys.league(leagueId), "core"] as const,
+
+  /**
+   * Its two value columns, on one ADP board.
+   *
+   * The board is normalised the way the drawer's own board key is, so two
+   * spellings of one population are one entry rather than two round trips.
+   */
+  values: (leagueId: string, board: string) =>
+    [...leagueQueryKeys.league(leagueId), "values", normalizeAdpQuery(board)] as const,
+
+  /** Its rest-of-season lineups — a fact about the league and nothing else. */
+  outlook: (leagueId: string) =>
+    [...leagueQueryKeys.league(leagueId), "outlook"] as const,
+
+  /**
+   * One week of it, for the lineup checker.
+   *
+   * A panel opened on a season never makes this request at all, which is the
+   * honest spelling of the `week === null` case the old single key had to carry
+   * as a `"season"` segment.
+   */
+  week: (leagueId: string, week: number) =>
+    [...leagueQueryKeys.league(leagueId), "week", week] as const,
 };
 
 /**
@@ -64,5 +80,12 @@ export const leagueQueryKeys = {
  * It travels with the key rather than staying in that table because that table is
  * "how long the *manager area's* answers are worth reusing", and this answer
  * stopped being one of them when a second tool started opening the same panel.
+ *
+ * **One number for all four entries**, which is a claim rather than an
+ * omission: the enrichments are computed *from* the core read, so a window in
+ * which the rosters are worth reusing is exactly the window in which a lineup
+ * solved over them is. Giving the outlook a longer TTL than the rosters it was
+ * solved from is how a panel comes to show last week's lineup beside this
+ * week's roster.
  */
 export const LEAGUE_DETAIL_STALE_TIME = 5 * 60 * 1000;

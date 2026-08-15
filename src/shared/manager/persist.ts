@@ -5,6 +5,7 @@ import type { SleeperLeague } from "@/shared/sleeper";
 
 import { dedupeBy } from "./dedupe";
 import type { LeagueGraph } from "./graph";
+import { invalidateLeagueDetail } from "./league-detail-read";
 import { dedupeMatchups } from "./matchups";
 
 /**
@@ -327,9 +328,25 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
   });
 }
 
-/** Persist one league graph in its own transaction (atomic per league). */
-export function persistLeagueGraph(g: LeagueGraph): Promise<void> {
-  return withTransaction((client) => writeLeagueGraph(client, g));
+/**
+ * Persist one league graph in its own transaction (atomic per league).
+ *
+ * The core-detail cache is dropped **after** the commit rather than before it,
+ * which is the only ordering that ends staleness rather than moving it: a read
+ * that starts between an early invalidation and the commit would cache the rows
+ * this write is replacing, for a full TTL. Forgetting afterwards leaves at worst
+ * a reader that was already mid-request holding the old answer, and the next one
+ * recomputing.
+ *
+ * It only reaches *this* process — every cache here is per process — which is
+ * what the TTL bounds. What it buys is the interactive path being exact: a
+ * reader pressing the lineup checker's sync key and the refresh they triggered
+ * are on the same web process, so the panel's refetch sees Sleeper's answer
+ * rather than a three-minute-old roster.
+ */
+export async function persistLeagueGraph(g: LeagueGraph): Promise<void> {
+  await withTransaction((client) => writeLeagueGraph(client, g));
+  invalidateLeagueDetail([g.league.league_id]);
 }
 
 /**

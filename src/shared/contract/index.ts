@@ -218,57 +218,83 @@ export type LeagueWeekViewPayload = {
  */
 export type TeamGamePayload = TeamGame;
 
-/** `GET /api/league/[leagueId]` — standings and rosters for one league. */
-export type LeagueDetailPayload = Omit<LeagueDetail, "teams"> & {
+/**
+ * `GET|POST /api/league/[leagueId]` — the **core** of one league: its settings,
+ * every roster and its standings, the managers, the draft picks each team owns,
+ * and the names those player ids resolve to.
+ *
+ * **What is not on it is the point.** It used to carry the KTC/ADP prices, the
+ * rest-of-season outlook and — where a week was asked for — that week's
+ * projections and points per game, on one payload built behind one
+ * `Promise.all`; so a panel that only ever needed rosters and standings to draw
+ * itself waited on the slowest of four reads, of which the cheap one was the
+ * only one it could not do without. The three enrichments are their own routes
+ * now ({@link LeagueValuesPayload}, {@link LeagueOutlookPayload},
+ * {@link LeagueWeekPayload}) and fill into the rendered panel as they land.
+ *
+ * The split is by *what blocks the first paint*, not by subject: everything here
+ * is structural and stable, everything elsewhere is a number computed on top of
+ * it. That is also what makes the four keyed apart on the client — a reader
+ * changing the ADP board must not re-fetch a roster, and stepping a week must
+ * not re-fetch a price.
+ */
+export type LeagueCorePayload = Omit<LeagueDetail, "teams"> & {
   teams: LeagueTeamPayload[];
   /** Player ids → resolved name/position/team, for rendering rosters. */
   players: Record<string, PlayerSummary>;
-  /**
-   * Per-player KTC and ADP values on this league's board, for the roster panel's
-   * selectable value columns. Always present — an empty set of maps where nothing
-   * on these rosters is priced — so the client needn't guard its shape.
-   */
-  values: LeagueRosterValues;
-  /**
-   * Every roster's best starting lineup for the rest of the season, ranked on
-   * each player's projected points aggregated over `outlook.weeks` and scored
-   * with *this* league's `scoring_settings` — so the same player is worth
-   * different totals in two leagues, which is the point.
-   *
-   * One lineup per team rather than one per week: `optimal` answers "who belongs
-   * in your starting slots from here", and `current`/`points_left`/`start`/`sit`
-   * diff that against what the roster is starting today.
-   *
-   * `weekly_optimal_points` is the team total for the same horizon and is a
-   * different number: it re-sets the lineup every week, so it covers byes and
-   * alternating starts, and is the one to show as "what this team projects to
-   * score" rather than either lineup's total. `weekly_split` is that same total
-   * attributed player by player — how much of each one's projection lands in a
-   * starting slot and how much of it never leaves the bench — so it is keyed by
-   * player id but scoped to a team, since being stuck behind someone is.
-   * `weekly_bench_points` is the team-level sum of those bench halves: the depth a
-   * roster is carrying without playing, which is why it sits beside the projected
-   * total in the standings rather than being folded into it.
-   *
-   * The horizon is the weeks actually stored, which the sync keeps a short window
-   * of — read `outlook.weeks` rather than assuming it runs to week 18, and say
-   * how far ahead the numbers reach wherever they surface.
-   *
-   * null when the league can't be projected: no slots or scoring settings on
-   * file, or no weeks left on the schedule.
-   */
-  outlook: LeagueOutlook | null;
-  /**
-   * The same league read as one week, when the caller asked for one — see
-   * {@link LeagueWeekViewPayload}.
-   *
-   * Absent rather than null when no `?week=` was sent, which is the honest
-   * spelling of "not asked for": null is what a *failed* week read answers with,
-   * and a panel needs to tell "these columns have no data" from "these columns
-   * were never requested".
-   */
-  week_view?: LeagueWeekViewPayload | null;
 };
+
+/**
+ * `GET|POST /api/league/[leagueId]/values` — per-player KTC and ADP values on
+ * this league's board, for the roster panel's selectable value columns.
+ *
+ * Its own route because it is the one enrichment that depends on the **ADP
+ * drawer**: the board a reader narrows re-prices these two columns and nothing
+ * else on the panel, so it is the only one of the four whose key carries the
+ * board. It answers a POST for the reason `/api/adp` does — a rule set resolves
+ * to more league ids than a request line can carry.
+ */
+export type LeagueValuesPayload = LeagueRosterValues;
+
+/**
+ * `GET /api/league/[leagueId]/outlook` — every roster's best starting lineup for
+ * the rest of the season, ranked on each player's projected points aggregated
+ * over `outlook.weeks` and scored with *this* league's `scoring_settings` — so
+ * the same player is worth different totals in two leagues, which is the point.
+ *
+ * One lineup per team rather than one per week: `optimal` answers "who belongs
+ * in your starting slots from here", and `current`/`points_left`/`start`/`sit`
+ * diff that against what the roster is starting today.
+ *
+ * `weekly_optimal_points` is the team total for the same horizon and is a
+ * different number: it re-sets the lineup every week, so it covers byes and
+ * alternating starts, and is the one to show as "what this team projects to
+ * score" rather than either lineup's total. `weekly_split` is that same total
+ * attributed player by player — how much of each one's projection lands in a
+ * starting slot and how much of it never leaves the bench — so it is keyed by
+ * player id but scoped to a team, since being stuck behind someone is.
+ * `weekly_bench_points` is the team-level sum of those bench halves: the depth a
+ * roster is carrying without playing, which is why it sits beside the projected
+ * total in the standings rather than being folded into it.
+ *
+ * The horizon is the weeks actually stored, which the sync keeps a short window
+ * of — read `outlook.weeks` rather than assuming it runs to week 18, and say
+ * how far ahead the numbers reach wherever they surface.
+ *
+ * null when the league can't be projected: no slots or scoring settings on
+ * file, or no weeks left on the schedule.
+ */
+export type LeagueOutlookPayload = LeagueOutlook | null;
+
+/**
+ * `GET /api/league/[leagueId]/week?week=N` — the same league read as one week.
+ *
+ * null where the week could not be read, which is the reading the metrics
+ * already take: the columns draw an em dash and say why. There is no "not asked
+ * for" spelling any more — asking is a request of its own now, so a panel opened
+ * on a season simply never makes it.
+ */
+export type LeagueWeekPayload = LeagueWeekViewPayload | null;
 
 /**
  * `POST /api/league/[leagueId]/sync` — what an on-demand refresh of one league

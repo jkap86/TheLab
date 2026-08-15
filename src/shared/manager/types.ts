@@ -198,5 +198,17 @@ export type LeagueDetail = {
    * since a starters list with nothing to swap has to say why.
    */
   best_ball: boolean;
+  /**
+   * Sleeper's `settings.type` as `LEAGUE_TYPE_SQL` reads it — 2 for dynasty,
+   * 1 for keeper, 0 (and anything unparseable) for redraft.
+   *
+   * It was always read to build the dynasty pick grid and then dropped; it is
+   * carried out now because the *values* read needs exactly this fact to know
+   * which of the two ADP markets this league plays in, and it used to buy it
+   * with a second query against `leagues` for the league it had already read
+   * (`getLeagueAdpBoards([leagueId])`). One read answers both — see
+   * {@link adpBoardTypeOf}.
+   */
+  league_type: number;
   teams: LeagueTeam[];
 };

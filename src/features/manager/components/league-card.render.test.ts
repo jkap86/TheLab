@@ -3,6 +3,8 @@ import { describe, test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { withQueryClient } from "../query-test-support";
+
 import type { LeagueRankSet, ManagerLeague } from "../types";
 import { LeagueCard } from "./league-card";
 
@@ -52,7 +54,7 @@ const RANKS: LeagueRankSet = {
 
 function card(over: Partial<Parameters<typeof LeagueCard>[0]> = {}): string {
   return renderToStaticMarkup(
-    createElement(LeagueCard, {
+    withQueryClient(createElement(LeagueCard, {
       league,
       ranks: null,
       weeks: [],
@@ -63,7 +65,7 @@ function card(over: Partial<Parameters<typeof LeagueCard>[0]> = {}): string {
       expanded: false,
       onToggle: () => {},
       ...over,
-    }),
+    })),
   );
 }
 

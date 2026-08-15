@@ -173,6 +173,46 @@ describe("TtlPromiseCache", () => {
     assert.deepEqual(cache.peek("e"), { n: 5 });
   });
 
+  test("forget drops one key and leaves the rest", async () => {
+    const { cache, compute, calls } = counted();
+
+    await cache.read("a", compute);
+    await cache.read("b", compute);
+    assert.equal(calls(), 2);
+
+    // What a write behind the cache does — the league core is invalidated by the
+    // sync that rewrote it, not only by its TTL.
+    cache.forget("a");
+    await cache.read("a", compute);
+    await cache.read("b", compute);
+
+    assert.equal(calls(), 3, "only the forgotten key recomputed");
+  });
+
+  test("a compute in flight when a key is forgotten does not store its answer", async () => {
+    const stale = deferred<{ n: number }>();
+    const fresh = deferred<{ n: number }>();
+    const cache = new TtlPromiseCache<{ n: number }>({
+      max: 8,
+      ttlMs: 60_000,
+      name: "test",
+    });
+
+    // A read that started *before* the write lands after it. Left in the pending
+    // map it would store rows the invalidation exists to end — the staleness
+    // arriving a moment after the call that was meant to end it.
+    const before = cache.read("a", () => stale.promise);
+    cache.forget("a");
+    const after = cache.read("a", () => fresh.promise);
+
+    fresh.release({ n: 2 });
+    assert.deepEqual(await after, { n: 2 });
+    stale.release({ n: 1 });
+    // The caller that asked first still gets an answer; it is simply not kept.
+    assert.deepEqual(await before, { n: 1 });
+    assert.deepEqual(cache.peek("a"), { n: 2 });
+  });
+
   test("clear drops both halves, and a compute in flight cannot un-coalesce the next", async () => {
     const first = deferred<{ n: number }>();
     const second = deferred<{ n: number }>();
