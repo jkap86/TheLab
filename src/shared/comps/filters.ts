@@ -147,6 +147,26 @@ function parseFields(
         error: "weights= or windows= without fields= names nothing.",
       };
     }
+    // **Present-but-empty is not absent, and conflating the two is how the UI
+    // and the server came to disagree about what was being compared.** A
+    // caller that never mentions `fields=` has said nothing about the board and
+    // gets the position's defaults; one that spells `fields=` and names nothing
+    // has said "compare on these", where "these" is empty — which is an invalid
+    // configuration, never an invitation to substitute the defaults behind the
+    // reader's back. The client can only reach this by removing every field,
+    // and the editor refuses to let it (see `field-editor.tsx`); this is the
+    // second lock, so the mismatch cannot come back through a bookmark or a
+    // hand-built URL either.
+    if (
+      params.has("fields") ||
+      params.has("weights") ||
+      params.has("windows")
+    ) {
+      return {
+        ok: false,
+        error: "fields= names no comparison field — nothing to compare on.",
+      };
+    }
     return { ok: true, value: null };
   }
 

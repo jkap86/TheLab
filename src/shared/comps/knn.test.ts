@@ -223,3 +223,118 @@ describe("runCompsKnn — the pipeline", () => {
     assert.deepEqual(out.fieldStats, [{ key: "x", mean: null, stdev: null }]);
   });
 });
+
+/**
+ * The invariant a zero-variance field has to hold, which is stronger than "not
+ * NaN" and is what the earlier arithmetic broke: a field carrying no
+ * comparative information must not be in the distance *at all*, denominator
+ * included. Its weight left in the total divided a real gap by weight nothing
+ * paid, so adding a constant dimension left the ranking alone and made every
+ * similarity score better — a number that looks like a result and is an
+ * artefact of the normalization.
+ */
+describe("runCompsKnn — a constant field is not in the comparison", () => {
+  const spread = [
+    row({ player_id: "a", values: { y: 1, k: 5, k2: -3 } }),
+    row({ player_id: "b", values: { y: 2, k: 5, k2: -3 } }),
+    row({ player_id: "c", values: { y: 3, k: 5, k2: -3 } }),
+  ];
+  const subject = row({ player_id: "s", values: { y: 3, k: 5, k2: -3 } });
+
+  const readings = (fields: CompsFieldSpec[]) =>
+    run(subject, spread, { fields }).results.map((result) => [
+      result.row.player_id,
+      result.distance,
+      result.similarity,
+    ]);
+
+  test("adding an equally weighted constant changes nothing at all", () => {
+    // The regression in its own numbers. y over {1,2,3} is mean 2, σ = √(2/3),
+    // so candidate `a` sits 2 z-units from the subject: d = 2/√(2/3) ≈ 2.4495.
+    // With `k` in the denominator and not the numerator that became √(1/2) of
+    // it — the same order, uniformly flattered.
+    const alone = readings([field("y", 100)]);
+    assert.deepEqual(readings([field("y", 100), field("k", 100)]), alone);
+  });
+
+  test("nor does a lighter one, a heavier one, or several", () => {
+    const alone = readings([field("y", 100)]);
+    assert.deepEqual(readings([field("y", 100), field("k", 20)]), alone);
+    assert.deepEqual(
+      readings([field("k2", 100), field("y", 100), field("k", 60)]),
+      alone,
+    );
+  });
+
+  test("a constant field is still reported, with its σ of 0", () => {
+    // Out of the arithmetic is not out of the payload: the reader asked for the
+    // dimension, and `pool_stdev: 0` is where they see why it separated nobody.
+    const out = run(subject, spread, {
+      fields: [field("y", 100), field("k", 100)],
+    });
+    assert.deepEqual(
+      out.fieldStats.map((stats) => [stats.key, stats.stdev]),
+      [
+        ["y", Math.sqrt(2 / 3)],
+        ["k", 0],
+      ],
+    );
+    // And it excludes nobody — every candidate answers it.
+    assert.equal(out.candidatesEligible, 3);
+    assert.deepEqual(out.excludedMissing, {});
+  });
+
+  test("every field constant: distance 0 for all, never NaN or Infinity", () => {
+    const out = run(subject, spread, {
+      fields: [field("k", 100), field("k2", 40)],
+    });
+    assert.equal(out.results.length, 3);
+    for (const result of out.results) {
+      assert.ok(Number.isFinite(result.distance), "finite, so neither NaN nor ∞");
+      assert.equal(result.distance, 0);
+      assert.equal(result.similarity, 100);
+    }
+    // Indistinguishable on what was asked, so the deterministic tiebreak orders
+    // them rather than whatever the sort happened to do.
+    assert.deepEqual(
+      out.results.map((result) => result.row.player_id),
+      ["a", "b", "c"],
+    );
+  });
+
+  test("a field the subject cannot answer leaves the denominator too", () => {
+    // The same arithmetic from the other side. Resolution normally drops these,
+    // so this guards a caller that skipped it: `z` varies across the
+    // candidates, so it is not a constant field — it is simply one the subject
+    // has no value for, and its weight must not divide the field that did
+    // participate.
+    const varied = [
+      row({ player_id: "a", values: { y: 1, z: 10 } }),
+      row({ player_id: "b", values: { y: 2, z: 40 } }),
+      row({ player_id: "c", values: { y: 3, z: 90 } }),
+    ];
+    const blind = row({ player_id: "s", values: { y: 3 } });
+    const alone = run(blind, varied, { fields: [field("y", 100)] });
+    const withMissing = run(blind, varied, {
+      fields: [field("y", 100), field("z", 100)],
+    });
+
+    assert.deepEqual(
+      withMissing.results.map((result) => [result.row.player_id, result.distance]),
+      alone.results.map((result) => [result.row.player_id, result.distance]),
+    );
+    for (const result of withMissing.results) {
+      assert.ok(Number.isFinite(result.distance));
+    }
+  });
+
+  test("a subject answering nothing is distance 0, not NaN", () => {
+    const blind = row({ player_id: "s", values: {} });
+    const out = run(blind, spread, { fields: [field("y", 100)] });
+    assert.equal(out.results.length, 3);
+    for (const result of out.results) {
+      assert.equal(result.distance, 0);
+      assert.ok(Number.isFinite(result.similarity));
+    }
+  });
+});

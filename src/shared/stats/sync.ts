@@ -11,6 +11,11 @@ import { getActiveSeason } from "@/shared/season";
 import { fetchWeekStats, getNflState } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
+import {
+  ARCHIVE_EMPTY_CONFIRMATIONS,
+  ARCHIVE_EMPTY_RETRY_MS,
+  archiveStampFreshSql,
+} from "./archive-clock";
 import { toStatRows } from "./parse";
 import type { StatRow } from "./parse";
 import { validateWeekStats } from "./validate";
@@ -54,13 +59,13 @@ export const STATS_SETTLED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
  *
  * **The floor is a runaway stop, not a claim about what Sleeper carries.** How
  * deep the source actually goes is discovered by fetching: an archive week is
- * fetched exactly once (see the null TTL below), so a season the feed doesn't
- * have answers eighteen empty weeks, each stamped and never asked about again,
- * and — storing no rows — never appears in `listStoredSeasons` or anywhere
- * downstream. The oldest season on the comps board is therefore exactly the
- * oldest one the source has, and a dead season's whole lifetime cost is one
- * pass of probes. 2000 sits below any plausible NFL stats feed, so the stop
- * never truncates real data.
+ * fetched at most {@link ARCHIVE_EMPTY_CONFIRMATIONS} times (see `./archive-clock`),
+ * so a season the feed doesn't have answers eighteen empty weeks, each retired
+ * once a second probe agrees, and — storing no rows — never appears in
+ * `listStoredSeasons` or anywhere downstream. The oldest season on the comps
+ * board is therefore exactly the oldest one the source has, and a dead season's
+ * whole lifetime cost is two passes of probes rather than one. 2000 sits below
+ * any plausible NFL stats feed, so the stop never truncates real data.
  */
 export const STATS_ARCHIVE_FLOOR_SEASON = "2000";
 
@@ -145,9 +150,12 @@ export type StatsSyncSummary = {
  * stale weeks first, crowd out weeks that do have something to store.
  * `stat_week_syncs` stamps the attempt.
  *
- * A null `ttlMs` means **once, ever**: a week stamped at any time is fresh
- * forever — the archive's clock, where a years-old week's numbers never move
- * again and a season the feed doesn't carry must cost its probes exactly once.
+ * A null `ttlMs` means the **archive clock**: a week that stored rows is fresh
+ * forever — a years-old week's numbers never move again, and a season the feed
+ * doesn't carry must cost its probes a fixed number of times rather than one
+ * per tick. What it is *not* is "one probe whatever came back": an empty answer
+ * is observed rather than believed, so it takes two of them a day apart to
+ * retire a week. That rule and this fragment are `./archive-clock`, together.
  * A failed or refused fetch still stamps nothing, so those retry on either
  * clock.
  */
@@ -161,10 +169,13 @@ async function staleTargets(
     targets.map((t) => t.season),
     targets.map((t) => t.week),
   ];
-  let stampIsFresh = "TRUE";
+  let stampIsFresh: string;
   if (ttlMs !== null) {
     params.push(msInterval(ttlMs));
     stampIsFresh = `s.synced_at > now() - $3::interval`;
+  } else {
+    params.push(ARCHIVE_EMPTY_CONFIRMATIONS, msInterval(ARCHIVE_EMPTY_RETRY_MS));
+    stampIsFresh = archiveStampFreshSql("$3", "$4");
   }
 
   const { rows } = await pool.query<{ season: string; week: number }>(
@@ -196,13 +207,31 @@ async function storedWeekCount(season: string, week: number): Promise<number> {
   return Number(rows[0].count);
 }
 
-/** Stamp a week as fetched, empty or not — the marker {@link staleTargets} reads. */
-function markWeekSynced(season: string, week: number): Promise<unknown> {
+/**
+ * Stamp a week as fetched, empty or not — the marker {@link staleTargets} reads.
+ *
+ * `empty` is what the archive clock counts. An empty answer *increments* the
+ * observation count and a non-empty one resets it to 0, so a week that stored
+ * rows is retired as a stored week however many empties preceded it, and a week
+ * that keeps answering empty retires on the second one rather than the first.
+ * The count is clamped at the confirmation threshold: past it nothing changes,
+ * and a `SMALLINT` that only ever grows would eventually be a different bug.
+ */
+function markWeekSynced(
+  season: string,
+  week: number,
+  options: { empty: boolean },
+): Promise<unknown> {
   return pool.query(
-    `INSERT INTO stat_week_syncs (season, week, synced_at)
-     VALUES ($1, $2, now())
-     ON CONFLICT (season, week) DO UPDATE SET synced_at = now()`,
-    [season, week],
+    `INSERT INTO stat_week_syncs (season, week, synced_at, empty_observations)
+     VALUES ($1, $2, now(), $3)
+     ON CONFLICT (season, week) DO UPDATE SET
+       synced_at = now(),
+       empty_observations = CASE
+         WHEN $3 = 0 THEN 0
+         ELSE least(stat_week_syncs.empty_observations + 1, $4::int)
+       END`,
+    [season, week, options.empty ? 1 : 0, ARCHIVE_EMPTY_CONFIRMATIONS],
   );
 }
 
@@ -250,10 +279,10 @@ function writeWeek(
  * whole of the season before it, and every finished season behind that down to
  * {@link STATS_ARCHIVE_FLOOR_SEASON}, on three clocks: the week being played
  * and the one still being corrected are refreshed hourly, the settled and
- * previous-season weeks monthly, and an archive week exactly **once, ever** —
- * the slow tiers sharing one per-run cap (see {@link SETTLED_WEEKS_PER_TICK}),
- * settled first, so the backfill trickles and last season fills before the
- * deep ones do.
+ * previous-season weeks monthly, and an archive week **once if the fetch stored
+ * anything, twice if it answered empty** (`./archive-clock`) — the slow tiers
+ * sharing one per-run cap (see {@link SETTLED_WEEKS_PER_TICK}), settled first,
+ * so the backfill trickles and last season fills before the deep ones do.
  *
  * **The previous season is not an optional extra.** A points-per-game average is
  * counted over the weeks *before* the one on screen, so in week 1 there is
@@ -354,9 +383,10 @@ export async function syncStats(
 
     const liveDue = force ? live : await staleTargets(live, ttlMs);
     const settledStale = await staleTargets(settled, settledTtlMs);
-    // Null TTL: an archive week is fetched once, ever — stored or empty, its
-    // stamp retires it, which is both what "populated once" means and what
-    // makes probing past the feed's real floor affordable.
+    // The archive clock: a week that stored rows is retired at once, and one
+    // that answered empty is retired only when a second probe a day later
+    // agrees. That is what makes probing past the feed's real floor affordable
+    // without letting one bad minute upstream lose a real historical week.
     const archiveStale = await staleTargets(archive, null);
     // One cap over both slow tiers: the trickle is about the burst on Sleeper,
     // and two caps would be twice the burst under another name.
@@ -388,7 +418,11 @@ export async function syncStats(
           // this is a normal state rather than an error. Still a successful
           // fetch: stamp it so the week waits out its TTL instead of being
           // refetched every tick for as long as the season is ahead of us.
-          await markWeekSynced(s, week);
+          //
+          // Stamped as *empty*, which is what stops the archive clock treating
+          // one blip upstream as proof the feed has no such week — see
+          // `./archive-clock`.
+          await markWeekSynced(s, week, { empty: true });
           empty.push({ season: s, week });
           continue;
         }
@@ -413,7 +447,7 @@ export async function syncStats(
         }
 
         const removed = await writeWeek(s, week, validation.rows);
-        await markWeekSynced(s, week);
+        await markWeekSynced(s, week, { empty: false });
         synced.push({ season: s, week, rows: validation.rows.length, removed });
       } catch (error) {
         failed.push({ season: s, week });

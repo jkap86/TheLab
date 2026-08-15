@@ -1,3 +1,7 @@
+// Relative with the extension, the pure→pure spelling: this module is tested
+// under Node's runner, and `@/shared/util` would drag the whole barrel in.
+import { deepFreeze } from "../util/deep-freeze.ts";
+
 import type { CompsPoolRow } from "./knn.ts";
 
 /**
@@ -34,11 +38,70 @@ export const PREV_SEASONS_WINDOW = 3;
 const round2 = (value: number): number => Math.round(value * 100) / 100;
 
 /**
+ * The last corpus enriched, and what it came out as.
+ *
+ * **Keyed on the identity of the season pools, which is exactly the corpus's
+ * own lifecycle and nothing else.** `getCompsPool` hands every caller the same
+ * frozen array for the length of its TTL, so while nothing has been rebuilt the
+ * identities are stable and this hits; the moment one season is rebuilt — a new
+ * archive season lands, a TTL expires — that season's `rows` is a new array,
+ * the check fails and the pass runs again. There is no second TTL to keep in
+ * step with the first and no key to get wrong, which is what makes a cache over
+ * a *derived* value safe here: the invalidation is the underlying cache's.
+ *
+ * One entry, so memory is bounded by the corpus itself rather than by how many
+ * distinct requests have been served — this pass depends on nothing a request
+ * carries, which is what the single slot is asserting.
+ */
+let lastEnriched: {
+  pools: readonly CompsSeasonPool[];
+  enriched: CompsSeasonPool[];
+} | null = null;
+
+/** Whether two corpora are the same objects, season for season. */
+function sameCorpus(
+  a: readonly CompsSeasonPool[],
+  b: readonly CompsSeasonPool[],
+): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every(
+    (pool, i) => pool.season === b[i].season && pool.rows === b[i].rows,
+  );
+}
+
+/**
  * The pools with `career_ppg` and `prev3_ppg` written onto every row's
  * `values`. Pure and non-mutating — the inputs are the frozen cached pools, so
  * every enriched row is a fresh object.
+ *
+ * **The answer is memoized against the corpus it was derived from, because it
+ * is a fact about that corpus and not about the request.** It is one O(corpus)
+ * pass — a map per player, then a fresh row and a fresh `values` object for
+ * every player-season on file — and it used to run on *every* `/api/comps`
+ * request, so a reader nudging a weight notch paid for the whole historical
+ * archive to be rebuilt in JavaScript while the expensive season pools
+ * underneath it sat cached and untouched. The result is frozen for the reason
+ * every shared answer here is: within one corpus every caller now holds the
+ * same objects, and an in-place edit by one would be editing what every later
+ * reader gets. Freezing is cheap because the pools it is derived from are
+ * already frozen, and `deepFreeze` skips a frozen node — so what is actually
+ * walked is the new rows and their new `values`, which are the only mutable
+ * surfaces this creates.
  */
 export function withCareerValues(
+  pools: readonly CompsSeasonPool[],
+): CompsSeasonPool[] {
+  if (lastEnriched !== null && sameCorpus(lastEnriched.pools, pools)) {
+    return lastEnriched.enriched;
+  }
+  const enriched = deriveCareerValues(pools);
+  lastEnriched = { pools, enriched: deepFreeze(enriched) };
+  return lastEnriched.enriched;
+}
+
+/** The pass itself, with no memo in front of it — what the tests drive. */
+export function deriveCareerValues(
   pools: readonly CompsSeasonPool[],
 ): CompsSeasonPool[] {
   // Per player, every stored season's games and PPR total, keyed by year.

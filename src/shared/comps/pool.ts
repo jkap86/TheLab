@@ -8,6 +8,7 @@ import { deepFreeze, TtlPromiseCache } from "@/shared/util";
 import { assemblePoolRows } from "./assemble";
 import { COMPS_POOL_CACHE, compsPoolCacheKey } from "./read-cache";
 import { compsSeasonAnchor } from "./resolve";
+import { collectSeasonPools } from "./season-pools";
 
 import type { AdpFilters } from "@/shared/manager";
 import type { CompsPoolRow } from "./knn";
@@ -110,16 +111,12 @@ export function getCompsPool(season: string): Promise<readonly CompsPoolRow[]> {
 /**
  * Every stored season's pool, newest season first — the whole comp corpus.
  * Assembled per season so a season already cached costs nothing when another
- * misses.
+ * misses, and at most `COMPS_SEASON_BUILD_CONCURRENCY` builds at once so a cold
+ * process doesn't start the whole archive's fan-out in one breath. The walk
+ * itself is `collectSeasonPools`, pure and tested.
  */
 export async function getCompsPools(): Promise<
   { season: string; rows: readonly CompsPoolRow[] }[]
 > {
-  const seasons = await getCompsSeasons();
-  return Promise.all(
-    seasons.map(async (season) => ({
-      season,
-      rows: await getCompsPool(season),
-    })),
-  );
+  return collectSeasonPools(await getCompsSeasons(), getCompsPool);
 }

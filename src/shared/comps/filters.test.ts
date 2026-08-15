@@ -159,6 +159,41 @@ describe("parseCompsFilters", () => {
     assert.match(fail("player_id=1&fields=rec,rec_yd&weights=0,0"), /0/);
   });
 
+  test("an absent fields= is the defaults; a present-but-empty one is not", () => {
+    // The distinction this whole branch exists for. A caller that never
+    // mentions the board gets the position's defaults; one that spells
+    // `fields=` and names nothing has described an empty comparison, which is
+    // invalid — answering it with the defaults is the editor saying nothing is
+    // being compared while the server computes the ordinary board.
+    assert.equal(ok("player_id=1").fields, null);
+    assert.match(fail("player_id=1&fields="), /nothing to compare/);
+    assert.match(fail("player_id=1&fields=&weights="), /nothing to compare/);
+    // The client's own spelling of a board with every field removed.
+    const emptied = new URLSearchParams();
+    emptied.set("player_id", "1");
+    emptied.set("fields", "");
+    emptied.set("weights", "");
+    assert.ok(!parseCompsFilters(emptied).ok);
+  });
+
+  test("a whitespace or comma-only fields= is empty too, never defaults", () => {
+    // `rawList` trims and drops blanks, so these reach the same place as
+    // `fields=` — and must be refused there rather than falling through.
+    assert.match(fail("player_id=1&fields=%20"), /nothing to compare/);
+    assert.match(fail("player_id=1&fields=,,"), /nothing to compare/);
+  });
+
+  test("all-zero weights refuse rather than resolving to the default board", () => {
+    // Two spellings of "nothing is being compared", and neither may become the
+    // position's defaults: one names fields and switches them all off, the
+    // other names none at all.
+    assert.match(fail("player_id=1&fields=rec&weights=0"), /0/);
+    assert.match(
+      fail("player_id=1&fields=rec,rec_yd,age&weights=0,0,0"),
+      /0/,
+    );
+  });
+
   test("k and min_games are bounded with defaults", () => {
     assert.equal(ok("player_id=1&k=50").k, 50);
     assert.match(fail("player_id=1&k=51"), /k/);

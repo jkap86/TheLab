@@ -87,15 +87,15 @@ export function CompsHome() {
     });
   }, [subject, season, prefs.basis, settledBoardKey]);
 
-  const comps = useComps(query);
+  // The subject is passed so a held payload can never be a *different*
+  // player's: `keepPreviousData` holds the board through a re-key, which is what
+  // makes a weight or window edit flicker-free and what would otherwise put the
+  // previous player's comps under the new player's name. See `comps-state.ts`.
+  const comps = useComps(query, subject?.player_id ?? null);
   const updating = comps.stale || weightsPending || (comps.loading && !!comps.data);
-  // Guarded on the answer describing the subject on screen: `keepPreviousData`
-  // means a stale payload can still be the previous player's, and a draft
-  // position under the wrong name is worse than none for a beat.
-  const subjectDraft =
-    comps.data && comps.data.subject.player_id === subject?.player_id
-      ? draftSummary(comps.data.subject)
-      : null;
+  // No subject guard needed: what `comps.data` holds already describes the
+  // player on screen, so the draft line cannot be filed under the wrong name.
+  const subjectDraft = comps.data ? draftSummary(comps.data.subject) : null;
 
   const pickSubject = (player: CompsPlayerOptionPayload) => {
     setSubject(player);
