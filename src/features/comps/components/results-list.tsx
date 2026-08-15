@@ -5,7 +5,7 @@ import { useState } from "react";
 import { PositionBadge } from "@/features/shared";
 
 import { compsDimensionLabel } from "../../../shared/comps/windows";
-import { pointsSummary, seasonCompareRows } from "../season-line";
+import { draftSummary, pointsSummary, seasonCompareRows } from "../season-line";
 
 import type { CompsPayload, CompsResultRowPayload } from "../types";
 
@@ -94,6 +94,7 @@ function ResultRow({
 }) {
   const samePlayer = row.player_id === payload.subject.player_id;
   const points = pointsSummary(row, payload.basis);
+  const draft = draftSummary(row);
   return (
     <li className="rounded-xl border border-foreground/10 bg-foreground/[0.02]">
       <button
@@ -128,6 +129,15 @@ function ResultRow({
               <>
                 {" · "}
                 <span className="text-foreground/60">{points}</span>
+              </>
+            )}
+            {/* Where he was taken — a career fact, so it sits with the season
+                rather than with the outcome. Absent entirely when this app has
+                no draft record, never rendered as "Undrafted". */}
+            {draft && (
+              <>
+                {" · "}
+                <span title={draft.full}>{draft.short}</span>
               </>
             )}
             {row.team && <> · Current: {row.team}</>}

@@ -24,6 +24,7 @@ const row = (
   name: "p",
   position: "WR",
   team: null,
+  draft: null,
   games: 17,
   values: {},
   points: { ppr: 0, half_ppr: 0, std: 0 },

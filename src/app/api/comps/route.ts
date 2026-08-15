@@ -202,6 +202,7 @@ function rowPayload(
     name: row.name,
     position: row.position,
     team: row.team,
+    draft: row.draft,
     games: row.games,
     values,
     line,

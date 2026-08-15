@@ -117,6 +117,55 @@ describe("assemblePoolRows", () => {
     assert.equal(unknown?.values.age, null);
   });
 
+  /**
+   * The three-way distinction the draft field rests on, asserted where it is
+   * actually folded into a number. Drafted and undrafted are both *values* and
+   * must differ; unknown is null and must not collapse onto either — a player
+   * the crosswalk has never heard of is not an undrafted one.
+   */
+  test("draft capital: drafted, undrafted and unknown are three answers", () => {
+    const rows = assemble({
+      statLines: [
+        line("1", { rec: 1 }),
+        line("2", { rec: 1 }),
+        line("3", { rec: 1 }),
+      ],
+      draft: new Map([
+        ["1", { season: "2020", round: 1, slot: 1, overall: 1 }],
+        ["2", { season: "2017", round: null, slot: null, overall: null }],
+      ]),
+    });
+    const at = (id: string) => rows.find((r) => r.player_id === id)!;
+
+    const first = at("1").values.draft_capital;
+    const udfa = at("2").values.draft_capital;
+
+    assert.ok(typeof first === "number" && first > 0);
+    assert.ok(typeof udfa === "number" && udfa > 0);
+    assert.ok(first > udfa, "a 1.01 outranks an undrafted player");
+    assert.equal(at("3").values.draft_capital, null, "unknown is null");
+  });
+
+  test("the pick itself rides the row, so a comp can print it", () => {
+    const rows = assemble({
+      statLines: [line("1", { rec: 1 }), line("2", { rec: 1 })],
+      draft: new Map([["1", { season: "2020", round: 1, slot: 5, overall: 5 }]]),
+    });
+    assert.deepEqual(rows.find((r) => r.player_id === "1")?.draft, {
+      season: "2020",
+      round: 1,
+      slot: 5,
+      overall: 5,
+    });
+    assert.equal(rows.find((r) => r.player_id === "2")?.draft, null);
+  });
+
+  test("no draft input at all degrades to unknown rather than throwing", () => {
+    const rows = assemble({ statLines: [line("1", { rec: 1 })] });
+    assert.equal(rows[0].values.draft_capital, null);
+    assert.equal(rows[0].draft, null);
+  });
+
   test("market values join by id and absence is null, never zero", () => {
     const rows = assemble({
       statLines: [line("1", { rec: 1 }), line("2", { rec: 1 })],

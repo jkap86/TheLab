@@ -17,6 +17,7 @@ const subject = (values: CompsPoolRow["values"], games = 17): CompsPoolRow => ({
   name: "Subject",
   position: "WR",
   team: null,
+  draft: null,
   games,
   values,
   points: { ppr: 0, half_ppr: 0, std: 0 },

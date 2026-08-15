@@ -1486,6 +1486,30 @@ export type CompsSeasonRowPayload = {
   name: string;
   position: string | null;
   team: string | null;
+  /**
+   * Where the player went in the NFL draft, or null where this app has no
+   * record. **A record whose `overall` is null means he went undrafted**, which
+   * is a different answer from the absent one and is why this is an object
+   * rather than a nullable number — see `nfl-draft/types.ts`.
+   *
+   * It sits beside `position` and `team` because it is the same kind of thing:
+   * row metadata the client prints, not a dimension. The *comparable* form is
+   * `values.draft_capital`, which is only present when the reader weighted it —
+   * this is present either way, since "1.05" is worth showing on a comp whether
+   * or not it was compared on.
+   *
+   * Unlike `team`, it is historically correct: a draft position is the same
+   * fact in every season of a career.
+   */
+  draft: {
+    /** The draft class. */
+    season: string;
+    round: number | null;
+    /** The pick within the round; null where the source carries only a round. */
+    slot: number | null;
+    /** Overall pick, or null for an undrafted player. */
+    overall: number | null;
+  } | null;
   games: number;
   values: Record<string, number | null>;
   line: Record<string, number | null>;

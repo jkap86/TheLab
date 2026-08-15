@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { pointsSummary, seasonCompareRows } from "./season-line.ts";
+import { draftSummary, pointsSummary, seasonCompareRows } from "./season-line.ts";
 
 import type { CompsFieldSpecPayload, CompsSeasonRowPayload } from "./types";
 
@@ -13,6 +13,7 @@ const rowPayload = (
   name: "Someone",
   position: "WR",
   team: null,
+  draft: null,
   games: 17,
   values: {},
   line: {},
@@ -171,5 +172,62 @@ describe("seasonCompareRows with windows", () => {
     assert.equal(windowed.weight, 100);
     assert.equal(windowed.subject, 78);
     assert.equal(windowed.comp, 81);
+  });
+});
+
+describe("draftSummary", () => {
+  const withDraft = (
+    draft: CompsSeasonRowPayload["draft"],
+  ): CompsSeasonRowPayload => rowPayload({ draft });
+
+  test("a placed pick reads as the pick, with the long form on the hover", () => {
+    const summary = draftSummary(
+      withDraft({ season: "2020", round: 1, slot: 5, overall: 5 }),
+    );
+    assert.equal(summary?.short, "Drafted 1.05");
+    assert.match(summary?.full ?? "", /Round 1, pick 5/);
+    assert.match(summary?.full ?? "", /2020/);
+  });
+
+  /**
+   * On a comps row an undrafted player is a *finding*, not a gap — a reader
+   * looking at an undrafted breakout is looking at the thing that makes the
+   * comp interesting — so it is said out loud.
+   */
+  test("undrafted is stated, and names its class on the hover", () => {
+    const summary = draftSummary(
+      withDraft({ season: "2017", round: null, slot: null, overall: null }),
+    );
+    assert.equal(summary?.short, "Undrafted");
+    assert.match(summary?.full ?? "", /undrafted in 2017/);
+  });
+
+  /**
+   * The one wrong answer here that would read as a working one. This app has no
+   * draft record for part of the archive, and labelling those players undrafted
+   * would invent a fact about every one of them.
+   */
+  test("no record draws nothing, and never reads as undrafted", () => {
+    assert.equal(draftSummary(withDraft(null)), null);
+  });
+
+  test("a round with no slot names the round rather than inventing one", () => {
+    const summary = draftSummary(
+      withDraft({ season: "2013", round: 3, slot: null, overall: 80 }),
+    );
+    assert.equal(summary?.short, "Drafted Rd 3");
+    assert.match(summary?.full ?? "", /Round 3 \(#80 overall\)/);
+  });
+
+  /**
+   * The row already carries a season — the *stat* season — so the draft class
+   * stays on the hover. Two four-digit years a few pixels apart meaning
+   * different things is worse than one of them being a hover away.
+   */
+  test("the short form carries no year, since the row already shows one", () => {
+    const summary = draftSummary(
+      withDraft({ season: "2020", round: 1, slot: 5, overall: 5 }),
+    );
+    assert.doesNotMatch(summary?.short ?? "", /20\d\d/);
   });
 });
