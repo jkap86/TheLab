@@ -8,9 +8,10 @@
  * and not a Python process, and `scripts/nfl-draft-picks.py` for the same read
  * done through the library).
  *
- * The split is this package's usual one: `parse`, `capital` and `validate` are
- * pure and tested — they hold every rule about what a scraped row *means* — and
- * `client`, `queries`, `sync` and `scheduler` are the thin I/O around them.
+ * The split is this package's usual one: `parse`, `capital`, `validate` and
+ * `refresh-tick` are pure and tested — they hold every rule about what a scraped
+ * row *means* and what a scheduled run asks for — and `client`, `queries`,
+ * `sync` and `scheduler` are the thin I/O around them.
  */
 
 export { fetchNflDraftPicks, NFL_DRAFT_IDS_URL } from "./client";

@@ -50,6 +50,13 @@ export function buildCompsQuery(selection: CompsSelection): string {
 
   const fields = explicitFields(selection);
   if (fields !== null) {
+    // An empty list spells as an empty `fields=`, which the parser refuses.
+    // That is deliberate: the alternative is omitting the parameter, which the
+    // server reads as "no board was named" and answers with the position's
+    // defaults — the UI saying nothing is being compared while the numbers
+    // under it are the ordinary comparison. A visible refusal beats a silent
+    // substitution, and the editor keeps the state unreachable in the first
+    // place by refusing to remove the last field.
     params.set("fields", fields.map((f) => f.key).join(","));
     params.set("weights", fields.map((f) => f.weight).join(","));
     // Omitted where every field reads its own season, which is what the server

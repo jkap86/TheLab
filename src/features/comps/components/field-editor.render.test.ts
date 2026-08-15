@@ -80,3 +80,43 @@ describe("FieldEditor · the ladder", () => {
     assert.ok(html.includes("+ Targets</button>"), "and every field is addable");
   });
 });
+
+describe("FieldEditor · the last field cannot be removed", () => {
+  /** The remove key of a row, which is the `<button` after its label. */
+  const removeKey = (html: string, label: string): string => {
+    const row = rowFor(html, label);
+    assert.ok(row, `${label} row`);
+    const key = row.split("<button").at(-1);
+    assert.ok(key, `${label} remove key`);
+    return key;
+  };
+
+  test("a board of several fields removes any of them", () => {
+    const html = render({ rec_tgt: 100, rec_yd: 80, age: 60 });
+    for (const label of ["Targets", "Receiving yards", "Age"]) {
+      const key = removeKey(html, label);
+      assert.ok(!key.includes("disabled"), `${label} is removable`);
+      assert.ok(key.includes("Remove"), `${label} says so`);
+    }
+  });
+
+  test("a board of one field draws its remove key dead", () => {
+    // An empty board is not a comparison, and the wire has no spelling for one
+    // that isn't also "I named no board" — which the server answers with the
+    // position's defaults. The editor is the first of the two locks.
+    const key = removeKey(render({ rec_tgt: 100 }), "Targets");
+    assert.ok(key.includes("disabled"), "the last field's key is disabled");
+    assert.ok(
+      key.includes("cannot be removed"),
+      "and says why rather than only dimming",
+    );
+  });
+
+  test("removing down to one is what re-arms the rule, not a fixed field", () => {
+    // Whichever field is left last is the one that locks — the rule is about
+    // the board's length, never about which field it happens to hold.
+    const key = removeKey(render({ age: 60 }), "Age");
+    assert.ok(key.includes("disabled"));
+    assert.ok(!removeKey(render({ age: 60, rec: 40 }), "Age").includes("disabled"));
+  });
+});

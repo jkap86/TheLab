@@ -212,22 +212,64 @@ export function runCompsKnn({
     return { key: field.key, mean, stdev: Math.sqrt(variance / n) };
   });
 
-  // Step 6. A zero-variance field contributes 0 — every candidate is the same
-  // there, so it separates nobody — rather than NaN. The subject is
-  // transformed with the candidates' statistics.
-  const totalWeight = fields.reduce((sum, field) => sum + field.weight, 0);
+  // Step 6.
+  //
+  // **Only a field that can actually separate two candidates is in the
+  // distance — numerator *and* denominator.** A field whose eligible
+  // population holds one value has σ = 0, so every z-gap on it is 0 and it
+  // contributes nothing to the numerator (dividing by σ would be NaN, which is
+  // why it was already skipped there). Leaving its weight in the denominator
+  // was the bug: it divided a real gap by weight nothing had paid, so adding a
+  // dimension carrying *zero comparative information* improved every
+  // similarity score. Measured on one useful field, an equally weighted
+  // constant beside it took a candidate from d ≈ 1.2247 to d ≈ 0.8660 — the
+  // ranking unmoved and every number flattering. A field the subject cannot
+  // answer is dropped on the same terms and for the same arithmetic.
+  //
+  // The participating set is a property of the field statistics and the
+  // subject, never of the candidate being scored, so it is resolved once: every
+  // candidate is scored over the same dimensions and against the same total.
+  const participating: {
+    index: number;
+    weight: number;
+    mean: number;
+    stdev: number;
+    subjectValue: number;
+  }[] = [];
+  for (const [f, field] of fields.entries()) {
+    const { mean, stdev } = fieldStats[f];
+    if (mean === null || stdev === null || stdev === 0) continue;
+    // Resolution dropped subject-missing fields, so this only guards a caller
+    // that skipped resolve; dropping beats NaN either way.
+    const subjectValue = fieldValue(subject, field, basis);
+    if (subjectValue === null) continue;
+    participating.push({
+      index: f,
+      weight: field.weight,
+      mean,
+      stdev,
+      subjectValue,
+    });
+  }
+
+  const totalWeight = participating.reduce(
+    (sum, entry) => sum + entry.weight,
+    0,
+  );
+
   const scored = eligible.map(({ row, values }) => {
     let weighted = 0;
-    for (const [f, field] of fields.entries()) {
-      const { mean, stdev } = fieldStats[f];
-      if (mean === null || stdev === null || stdev === 0) continue;
-      const subjectValue = fieldValue(subject, field, basis);
-      // Resolution dropped subject-missing fields, so this only guards a
-      // caller that skipped resolve; contributing 0 beats NaN either way.
-      if (subjectValue === null) continue;
-      const gap = (values[f] - mean) / stdev - (subjectValue - mean) / stdev;
-      weighted += field.weight * gap * gap;
+    for (const { index, weight, mean, stdev, subjectValue } of participating) {
+      const gap = (values[index] - mean) / stdev - (subjectValue - mean) / stdev;
+      weighted += weight * gap * gap;
     }
+    // No dimension separates anybody — every requested field is constant across
+    // the population, or the subject answers none of them. Every candidate is
+    // then genuinely indistinguishable *on what was asked*, so they all sit at
+    // distance 0 and the deterministic tiebreak below orders them. This is the
+    // answer the code already gave (an all-skipped numerator over a non-zero
+    // total is 0 too); what it must never be is NaN or Infinity, and the
+    // payload's own `pool_stdev` of 0 is where a reader sees why.
     const distance = totalWeight > 0 ? Math.sqrt(weighted / totalWeight) : 0;
     return { row, distance, similarity: similarityScore(distance) };
   });

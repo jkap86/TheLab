@@ -269,6 +269,18 @@ function inWindow(window: CompsWindow, year: number, anchor: number): boolean {
  *
  * A request naming no window at all is the common case and costs nothing: the
  * pools come straight back and not one row is rebuilt.
+ *
+ * **A windowed request does pay the corpus-wide pass on every request, and that
+ * is deliberately not cached.** `withCareerValues` memoizes its own pass against
+ * the corpus's identity because it takes no other input; this one varies with
+ * the *dimension set* and the basis, so a cache would need an entry per
+ * combination — and each entry is a full enriched copy of every player-season on
+ * file, which is tens of megabytes. A bounded cache would therefore multiply the
+ * process's resident corpus by its own size to save a pass that only runs for
+ * readers who moved a window, and an unbounded one is a leak with a slow fuse.
+ * If this ever needs to be cheaper, the shape to reach for is materializing the
+ * *dimensions* alone — one `Map<dimensionKey, (number | null)[]>` per season,
+ * keyed off the same corpus identity — rather than rebuilding every row.
  */
 export function withWindowValues(
   pools: readonly CompsSeasonPool[],

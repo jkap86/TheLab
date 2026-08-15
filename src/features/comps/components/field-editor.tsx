@@ -127,9 +127,13 @@ export function FieldEditor({
             The comparison · heaviest first
           </h3>
           {rows.length === 0 ? (
+            // Unreachable from the ladder — the last row's remove key is dead —
+            // but a board stored by an older build, or hand-edited, can still
+            // arrive empty. It says so and states the consequence, because an
+            // empty board is a refusal on the wire rather than a comparison.
             <p className="px-1 pb-1 text-xs text-foreground/45">
-              Nothing is being compared. Add a field below, or reset to the{" "}
-              {position} board.
+              Nothing is being compared, so no comps can be found. Add a field
+              below, or reset to the {position} board.
             </p>
           ) : (
             <ul className="space-y-1.5">
@@ -138,6 +142,15 @@ export function FieldEditor({
                   key={row.field.key}
                   row={row}
                   window={windows[row.field.key] ?? DEFAULT_COMPS_WINDOW}
+                  // **The last field on the board cannot be removed.** An
+                  // empty board is not a comparison, and the server has no
+                  // spelling for one that isn't also the spelling for "I named
+                  // no board" — so removing the final field either produced a
+                  // 400 or, before the parser learned the difference, the
+                  // position's default comparison under a panel saying nothing
+                  // was being compared. One field always stays; Reset is the
+                  // way back to the catalogue's board.
+                  removable={rows.length > 1}
                   onWeight={onWeight}
                   onWindow={onWindow}
                 />
@@ -213,11 +226,14 @@ function MixStrip({ rows }: { rows: readonly LadderRow[] }) {
 function LadderRowItem({
   row,
   window,
+  removable,
   onWeight,
   onWindow,
 }: {
   row: LadderRow;
   window: CompsWindowKey;
+  /** False on the last row: a comparison always keeps one dimension. */
+  removable: boolean;
   onWeight: (key: string, weight: number) => void;
   onWindow: (key: string, window: CompsWindowKey) => void;
 }) {
@@ -245,12 +261,28 @@ function LadderRowItem({
         <span aria-hidden className="hidden w-[8.5rem] shrink-0 @lg:block" />
       )}
 
+      {/* Disabled rather than hidden on the last row: a key that vanishes as a
+          board shrinks reads as the row changing shape, where a dead key that
+          says why reads as the rule it is. */}
       <button
         type="button"
         onClick={() => onWeight(field.key, 0)}
-        aria-label={`Remove ${field.label} from the comparison`}
-        title="Remove from the comparison"
-        className="shrink-0 rounded px-1 text-xs leading-none text-foreground/30 transition-colors hover:text-foreground/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active"
+        disabled={!removable}
+        aria-label={
+          removable
+            ? `Remove ${field.label} from the comparison`
+            : `${field.label} is the only field being compared and cannot be removed`
+        }
+        title={
+          removable
+            ? "Remove from the comparison"
+            : "The comparison needs at least one field"
+        }
+        className={`shrink-0 rounded px-1 text-xs leading-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active ${
+          removable
+            ? "text-foreground/30 hover:text-foreground/80"
+            : "cursor-not-allowed text-foreground/10"
+        }`}
       >
         ✕
       </button>

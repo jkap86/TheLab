@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { parseCompsFilters } from "../../shared/comps/filters.ts";
 import { buildCompsQuery } from "./build-query.ts";
 import { defaultWeightBoard } from "./prefs.ts";
 
@@ -49,6 +50,44 @@ describe("buildCompsQuery", () => {
     assert.equal(fields.length, values.length);
     assert.ok(!fields.includes("rec"));
     assert.equal(values[fields.indexOf("ktc_sf")], "40");
+  });
+
+  test("an all-zero board spells an explicit empty fields=, never no fields=", () => {
+    // The whole point: omitting the parameter is how "I named no board" is
+    // spelled, and the server answers that with the position's defaults. A
+    // board the reader emptied is a *different* statement and has to reach the
+    // wire as one — which the parser then refuses, rather than quietly running
+    // the ordinary comparison under a panel saying nothing is being compared.
+    const zeroed = Object.fromEntries(
+      Object.keys(defaultWeightBoard("WR")).map((key) => [key, 0]),
+    );
+    const params = new URLSearchParams(buildCompsQuery(selection({ weights: zeroed })));
+    assert.ok(params.has("fields"), "fields= travels");
+    assert.equal(params.get("fields"), "");
+    assert.equal(params.get("weights"), "");
+
+    // And it is refused rather than defaulted, end to end.
+    const parsed = parseCompsFilters(params);
+    assert.ok(!parsed.ok, "an emptied board is not a request the server honours");
+  });
+
+  test("a board with one field left still travels as that one field", () => {
+    // The state the editor holds the reader at: removing down to the last field
+    // is a legitimate, explicit, single-dimension comparison.
+    const one = {
+      ...Object.fromEntries(
+        Object.keys(defaultWeightBoard("WR")).map((key) => [key, 0]),
+      ),
+      rec_tgt: 100,
+    };
+    const params = new URLSearchParams(buildCompsQuery(selection({ weights: one })));
+    assert.equal(params.get("fields"), "rec_tgt");
+    assert.equal(params.get("weights"), "100");
+    const parsed = parseCompsFilters(params);
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.filters.fields, [
+      { key: "rec_tgt", weight: 100, window: "season" },
+    ]);
   });
 
   test("the same board for another position is not the defaults", () => {

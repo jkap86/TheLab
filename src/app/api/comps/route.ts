@@ -66,8 +66,10 @@ export async function GET(request: Request) {
   try {
     // The career fields are corpus-relative (season N reads seasons < N), so
     // they are derived over the whole set here rather than stored on the
-    // per-season cached pools — one pure pass per request, and a deepening
-    // archive re-answers them without waiting out anyone's TTL.
+    // per-season cached pools — a deepening archive re-answers them without
+    // waiting out anyone's TTL. The pass is memoized against the corpus's own
+    // identity inside `withCareerValues`, so retuning a weight re-runs the KNN
+    // and not the enrichment of every player-season on file.
     const pools = withCareerValues(await getCompsPools());
 
     const subjectSeasons = pools
