@@ -69,6 +69,7 @@ export async function GET(
         rosterPositions: detail.roster_positions,
         scoringSettings: detail.scoring_settings,
         bestBall: detail.best_ball,
+        medianMatch: detail.median_match,
       }).catch((error) => {
         console.error(`[league] week ${asked} failed for ${leagueId}:`, error);
         return null;
@@ -129,6 +130,9 @@ function serializeWeekView(view: LeagueWeekView | null): LeagueWeekPayload {
 
   return {
     week: view.week,
+    // Already the payload's own shape, and null passes straight through: a
+    // league that plays no median has no bar rather than a bar of nothing.
+    median: view.median,
     ppg_source: {
       season: view.ppg_source.season,
       weeks: view.ppg_source.weeks.length,

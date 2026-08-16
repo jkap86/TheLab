@@ -1,7 +1,12 @@
 import type { LeagueTeam } from "@/shared/manager";
 import { getPreviousLeagueScores, listRosterWeekPoints } from "@/shared/manager";
 import type { RosterWeekPoints } from "@/shared/manager";
-import { getWeekLineups, listLineupWeekStats, scoreStatLine } from "@/shared/projections";
+import {
+  getWeekLineups,
+  listLineupWeekStats,
+  medianLineups,
+  scoreStatLine,
+} from "@/shared/projections";
 import { getWeekGames } from "@/shared/schedule";
 import type { TeamGame } from "@/shared/schedule";
 
@@ -87,6 +92,25 @@ export type TeamWeekProjection = {
   kickoff_order: { slot: string; player_id: string | null }[] | null;
 };
 
+/**
+ * The bar every team in a median league is measured against, in both readings.
+ *
+ * **Two numbers rather than one, because the panel prints one and the verdict is
+ * counted on the other.** A roster heading shows the best lineup available with
+ * what is currently set on its hover — comparing two *best* lineups is the
+ * like-for-like reading of "who wins this week" — so a median printed beside two
+ * such headings has to be the median of the same reading, or the three numbers
+ * on screen are not comparable. The lineup checker's mark is counted on
+ * `current` against `current`, which is what these lineups do if nothing is
+ * touched, and that half is on the hover here exactly as each team's is.
+ */
+export type WeekMedian = {
+  /** The middle of the best lineups available — what the headings beside it show. */
+  optimal: number;
+  /** The middle of the lineups actually set — what the week comes to untouched. */
+  current: number;
+};
+
 /** What one league's week looks like: a projection and a form line, per subject. */
 export type LeagueWeekView = {
   week: number;
@@ -97,6 +121,17 @@ export type LeagueWeekView = {
   ppg: Map<string, Ppg>;
   /** Roster id → that team's best and current lineup for the week. */
   team_projection: Map<number, TeamWeekProjection>;
+  /**
+   * The week's median, or null where there is none to have — which is most
+   * leagues, since most do not carry Sleeper's `league_average_match`.
+   *
+   * It costs nothing to compute here and could not be computed anywhere
+   * cheaper: this read already solves *every* team in the league, so the middle
+   * of them is a fold over `team_projection` rather than a second solve. That is
+   * the one asymmetry with the lineup checker's own read worth knowing — there,
+   * a median is what makes a league expensive; here, it is free.
+   */
+  median: WeekMedian | null;
   /** Roster id → that team's points per game over the same window. */
   team_ppg: Map<number, Ppg>;
   /**
@@ -133,6 +168,7 @@ export async function getLeagueWeekView({
   rosterPositions,
   scoringSettings,
   bestBall,
+  medianMatch,
 }: {
   leagueId: string;
   season: string;
@@ -142,6 +178,13 @@ export async function getLeagueWeekView({
   scoringSettings: Record<string, number> | null;
   /** Whether Sleeper seats this league's lineup itself — see `compareLineup`. */
   bestBall: boolean;
+  /**
+   * Whether the league plays every team against the week's median. It decides
+   * only whether the fold below *runs*: a league without the setting has no
+   * median to beat, and printing the middle of its teams anyway would invent a
+   * bar its own scoring never applies.
+   */
+  medianMatch: boolean;
 }): Promise<LeagueWeekView> {
   const playerIds = [
     ...new Set(teams.flatMap((team) => team.players ?? []).filter((id) => id && id !== "0")),
@@ -173,6 +216,10 @@ export async function getLeagueWeekView({
     projection,
     ppg: ppgRead.ppg,
     team_projection: lineups,
+    // Free here and nowhere else: this read already solves every team, so the
+    // middle of them is a fold rather than a second solve — see the field's own
+    // note. The rule is `medianLineups`', not this file's.
+    median: medianMatch ? medianLineups([...lineups.values()]) : null,
     team_ppg: teamPpgByRoster,
     games,
   };

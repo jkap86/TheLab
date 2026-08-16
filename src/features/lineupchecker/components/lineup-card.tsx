@@ -8,6 +8,8 @@ import { MetricColumns } from "@/features/shared/ui/metric-column";
 
 import { LINEUP_METRICS } from "../lineup-metrics";
 import { matchupState, opponentLabel } from "../opponent";
+import { projectedOutcomes } from "../projected-result";
+import type { ProjectedResult } from "../projected-result";
 import type { LeagueMatchup } from "../types";
 
 /**
@@ -22,11 +24,13 @@ import type { LeagueMatchup } from "../types";
  * than a line of a table. The two lists read as one instrument now, which is what
  * a reader crossing between the two tools experiences.
  *
- * **What it puts on the trailing plate is the opponent, where the leagues list
- * puts the record**, and that is the whole of the difference between the two
- * cards. The record is what a season-long list is about; who you are playing is
- * what a week's list is about. Both are one fact in one housing, opposite the
- * name.
+ * **What it puts on the trailing plate is the opponent and how the week is going
+ * against them, where the leagues list puts the record**, and that is the whole
+ * of the difference between the two cards. The record is what a season-long list
+ * is about; who you are playing and whether you are beating them is what a
+ * week's list is about. A league playing Sleeper's median takes two results out
+ * of a week rather than one, so the plate carries two marks there — see
+ * {@link ProjectedMarks}.
  *
  * **The panel opens on this manager's own roster.** `focusRosterId` is the one
  * thing this card knows that the leagues list doesn't: a reader arrives at a
@@ -118,6 +122,12 @@ export function LineupCard({
  * the standings' own rule. This list spans a manager's whole portfolio, so the
  * same opponent turns up in several leagues, and a team name is a nickname
  * someone picked for one of them and changes at will.
+ *
+ * **The verdict rides the trailing end of the plate, after whichever of those
+ * five things the ledge is saying** — see {@link ProjectedMarks}. It is drawn on
+ * the "nothing" states too, and that is not an oversight: a league playing
+ * Sleeper's median gives its manager a result against the field whether or not
+ * anybody was scheduled to play them, so a bye there is a bye *and* a game.
  */
 function OpponentLedge({
   week,
@@ -127,6 +137,10 @@ function OpponentLedge({
   matchup: LeagueMatchup | undefined;
 }) {
   const state = matchupState(week, matchup);
+  // Off the matchup rather than the state, because the two answer different
+  // questions: `matchupState` says who is being played, and this says how the
+  // week is going — which a median league answers on a bye.
+  const results = projectedOutcomes(matchup);
 
   if (state.kind === "opponent") {
     const label = opponentLabel(state.opponent);
@@ -149,6 +163,7 @@ function OpponentLedge({
           <span className="sr-only">Playing </span>
           {label}
         </span>
+        <ProjectedMarks results={results} opponent={label} />
       </CardLedge>
     );
   }
@@ -170,6 +185,92 @@ function OpponentLedge({
       <span className="lab-readout min-w-0 truncate rounded px-1.5 py-px text-[0.6875rem] font-semibold uppercase leading-4 tracking-[0.06em] text-foreground/45">
         {note}
       </span>
+      <ProjectedMarks results={results} opponent={null} />
     </CardLedge>
+  );
+}
+
+/** What each mark says, on the hover and to a screen reader. */
+const OUTCOME_WORD = { W: "winning", L: "losing", T: "tied" } as const;
+
+/**
+ * How the tone reads. The accent is a win, because a lit part is what this app
+ * says for *on* everywhere else and a verdict is exactly the thing on this row
+ * worth finding at a glance down a hundred cards. A loss is dim rather than
+ * amber: amber is the needs-attention tone and it is already spent, one column
+ * over, on the shortfall — which is the number here a reader can actually act
+ * on. A projected loss against a lineup that is already the best available is
+ * not something to do, and two alarms on one row is neither of them.
+ */
+const OUTCOME_TONE = {
+  W: "text-active",
+  L: "text-foreground/40",
+  T: "text-foreground/70",
+} as const;
+
+/**
+ * How this league's week is projected to come out — one mark against the
+ * scheduled opponent, and a second against the league median where the league
+ * plays one.
+ *
+ * **Two marks rather than one, and never one mark holding both letters.** A
+ * median league's week is two games rather than one game with a footnote: the
+ * plate above the list counts them apart (see {@link projectedRecord}), and the
+ * pair has to read the same way — `W L` as two housings is a win and a loss,
+ * where `W L` inside one is a two-character reading of something nobody can
+ * name. It is also what lets each carry its own tone, which is the whole of how
+ * the pair is scanned.
+ *
+ * **Which is which is the seat, not a label.** There is no room on this plate to
+ * write *opponent* and *median*, so the order is the answer — the head-to-head
+ * always leads, exactly as it sits beside the opponent it is a result against —
+ * and the hover and the `sr-only` carry the sentence for the two readings that
+ * have no seat to read.
+ *
+ * **`shrink-0` and a fixed width per mark.** The plate does not shrink and its
+ * contents have to fit the cap (see {@link CardLedge}), so the part that gives
+ * is the opponent's name, which truncates — a verdict that truncated would be a
+ * `W` and an `L` reading identically. The width is fixed rather than intrinsic
+ * so the marks line up down the list where a card carries two and its neighbour
+ * one.
+ */
+function ProjectedMarks({
+  results,
+  opponent,
+}: {
+  results: readonly ProjectedResult[];
+  /** The opponent's name for the hover, or null where the ledge names none. */
+  opponent: string | null;
+}) {
+  if (results.length === 0) return null;
+
+  return (
+    // A group rather than marks loose in the ledge: `gap-1` between the two is
+    // tighter than the plate's own `gap-2`, so a pair reads as one verdict in
+    // two parts rather than as two more things on the edge.
+    <span className="flex shrink-0 items-center gap-1">
+      {results.map(({ against, outcome }) => {
+        const bar =
+          against === "median"
+            ? "the league median"
+            : (opponent ?? "this week's opponent");
+        const label = `Projected ${OUTCOME_WORD[outcome]} against ${bar}`;
+        return (
+          <span
+            key={against}
+            title={label}
+            // `py-px` and `leading-4` are the note's own, so a bye's readout
+            // and a median mark beside it are one height rather than two
+            // housings on one plate — see {@link OpponentLedge}. The width is
+            // a box rather than the note's padding, since what has to line up
+            // down the list is the letter and not its inset.
+            className={`lab-readout w-[1.125rem] rounded py-px text-center text-[0.6875rem] font-semibold leading-4 ${OUTCOME_TONE[outcome]}`}
+          >
+            <span className="sr-only">{label}</span>
+            <span aria-hidden="true">{outcome}</span>
+          </span>
+        );
+      })}
+    </span>
   );
 }

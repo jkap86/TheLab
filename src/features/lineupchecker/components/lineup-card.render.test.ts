@@ -48,6 +48,7 @@ const matchup = (over: Partial<LeagueMatchup> = {}): LeagueMatchup => ({
   opponent: null,
   projection: null,
   opponent_projection: null,
+  median_projection: null,
   ...over,
 });
 
@@ -118,6 +119,91 @@ describe("the opponent ledge", () => {
     // Where the leagues list's record ledge draws nothing rather than an empty
     // housing: here "nothing" is itself the answer the card exists to give.
     assert.equal(render(3, undefined).split("lab-nameplate").length - 1, 2);
+  });
+});
+
+/** A week projecting `current`, against the bars given. */
+const projected = (
+  current: number,
+  bars: { opponent?: number | null; median?: number | null },
+): LeagueMatchup =>
+  matchup({
+    opponent: {
+      roster_id: 7,
+      user_id: "42",
+      display_name: "jkap86",
+      team_name: null,
+      avatar_url: null,
+    },
+    projection: { optimal: current, current, points_left: 0, kickoff_moves: null },
+    opponent_projection: bars.opponent ?? null,
+    median_projection: bars.median ?? null,
+  });
+
+/** The letters on the ledge's readouts, in the order they are drawn. */
+const marks = (html: string) =>
+  [...html.matchAll(/aria-hidden="true">([WLT])</g)].map((m) => m[1]);
+
+describe("the projected verdict", () => {
+  test("an ordinary league prints one mark, after the opponent's name", () => {
+    const html = render(3, projected(120, { opponent: 100 }));
+
+    assert.deepEqual(marks(html), ["W"]);
+    // After the name, which is the seat that says what it is a result against.
+    assert.ok(html.indexOf("jkap86") < html.indexOf('aria-hidden="true">W<'));
+  });
+
+  test("a median league prints two, the head-to-head first", () => {
+    // Nothing on the plate is written to explain the pair, so the order is what
+    // says which mark is which — and both readings travel for the hover.
+    const html = render(3, projected(110, { opponent: 100, median: 120 }));
+
+    assert.deepEqual(marks(html), ["W", "L"]);
+    assert.match(html, /Projected winning against jkap86/);
+    assert.match(html, /Projected losing against the league median/);
+  });
+
+  test("a win is lit and a loss is not", () => {
+    // The accent is what this app says for *on*, and it is free on this card:
+    // amber is spent one column over on the shortfall, which is the number here
+    // a reader can act on. Read off each mark's own class rather than by
+    // position, so a tone landing on the wrong letter cannot pass.
+    const html = render(3, projected(110, { opponent: 100, median: 120 }));
+    const tones = [
+      ...html.matchAll(
+        /class="([^"]*lab-readout[^"]*)"><span class="sr-only">[^<]*<\/span><span aria-hidden="true">([WLT])</g,
+      ),
+    ].map(([, cls, mark]) => [mark, cls] as const);
+
+    assert.equal(tones.length, 2);
+    assert.match(tones[0][1], /text-active/);
+    assert.equal(tones[0][0], "W");
+    assert.match(tones[1][1], /text-foreground\/40/);
+    assert.equal(tones[1][0], "L");
+  });
+
+  test("a bye in a median league still prints the field's result", () => {
+    // The mark is read off the matchup rather than off `matchupState`: an
+    // odd-sized median league byes somebody every week and they still have the
+    // field to beat, so the plate says `Bye` and `W` at once.
+    const html = render(
+      3,
+      matchup({
+        projection: { optimal: 130, current: 130, points_left: 0, kickoff_moves: null },
+        median_projection: 120,
+      }),
+    );
+
+    assert.match(html, />Bye</);
+    assert.deepEqual(marks(html), ["W"]);
+  });
+
+  test("nothing to project prints no mark, rather than a blank housing", () => {
+    // A league with no slots or scoring on file, and a week the crawler has not
+    // reached. An em dash here would report a result that does not exist.
+    assert.deepEqual(marks(render(3, projected(120, {}))), []);
+    assert.deepEqual(marks(render(3, matchup({ opponent_projection: 100 }))), []);
+    assert.deepEqual(marks(render(3, undefined)), []);
   });
 });
 

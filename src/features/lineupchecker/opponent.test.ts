@@ -56,6 +56,7 @@ const matchup = (
   opponent,
   projection: null,
   opponent_projection: null,
+  median_projection: null,
 });
 
 describe("matchupState", () => {

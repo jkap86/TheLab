@@ -27,7 +27,13 @@ const metric = (key: string) => {
 };
 
 const ctx = (projection: MatchupProjection | null): LineupMetricContext => ({
-  matchup: { roster_id: 1, opponent: null, projection, opponent_projection: null },
+  matchup: {
+    roster_id: 1,
+    opponent: null,
+    projection,
+    opponent_projection: null,
+    median_projection: null,
+  },
 });
 
 /** A projection with the kickoff count defaulted, for the tests it is beside the point of. */

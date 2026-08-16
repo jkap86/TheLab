@@ -1169,6 +1169,32 @@ contract, which is why `/api/user/[username]/matchups` hands it the two rosters
 in each game and not the league, turning a hundred-league account's ~1,200 solves
 into ~200.
 
+**One league in that route is handed over whole, and it is the exception that
+shows what the narrowing was actually resting on.** A league playing Sleeper's
+`league_average_match` scores every team against the week's *median* as well as
+against their opponent, so its manager takes two results out of the week — and a
+median is the middle of the whole field, which no pair of rosters can answer. So
+`median_match` (a guarded read off the settings blob, `BEST_BALL_SQL`'s own
+spelling) decides per league whether the two rosters or all twelve go to the
+solve, and `medianScore` folds the answer. The narrowing above was never "solve
+two"; it was **solve exactly the teams this payload speaks for**, and on a median
+league that is every team. The cost is per league carrying the setting rather
+than across the account, and a league with the setting but nobody in a game this
+week is still skipped, because a median nothing compares against is a solve
+nobody reads.
+
+Three things follow, and each is a rule the client half keeps:
+`medianScore` **averages the two middle scores** on an even population — take
+either middle instead and a twelve-team league hands out seven wins and five
+losses in perpetuity, which is a bug nothing on screen would show. A median
+league is **one league and two games**, so `projectedRecord` counts `games` and
+`leagues` apart rather than assigning one from the other, and it sums through the
+same `projectedOutcomes` the card's marks are drawn from — a plate counting for
+itself could disagree with the rows under it without either number looking wrong.
+And a **bye is still a game** there: an odd-sized median league byes somebody
+every week and that manager still has the field to beat, which is why the ledge
+reads its marks off the matchup rather than off `matchupState`.
+
 **It does not go through `readBatchInputs`, and the reason is the one decision
 this entry point makes for itself: a played game is kept, not dropped.** The
 horizon reads filter `game_date >= TODAY_ET` because those points cannot be
@@ -3725,6 +3751,23 @@ stops holding, a comment saying it does would not have caught it.
   facts. Collapsing them into an absent plate would tell a reader their league
   has no game when what it has is no data.
 
+  **The plate's trailing end is the verdict, and a median league carries two of
+  them.** One mark per projected result — `W`, `L` or `T` in a `.lab-readout`
+  cut, after the opponent's name (or after whichever of the three kinds of
+  nothing the plate is saying, since a median league's bye is still a game). Four
+  decisions in it. **Two housings and never one holding both letters**: a median
+  week is two games rather than one game with a footnote, so `W L` has to read as
+  a win and a loss — which is also what lets each carry its own tone. **Which is
+  which is the seat**, since there is no room on this plate to write *opponent*
+  and *median*; the head-to-head always leads, and the hover and the `sr-only`
+  carry the sentence for the two readings that have no seat to read. **A win is
+  the accent and a loss is dim, never amber** — amber is the needs-attention tone
+  and it is already spent one column over on the shortfall, which is the number
+  here a reader can act on, and two alarms on one row is neither of them. And the
+  marks are **`shrink-0` with a fixed width**: the plate is capped rather than
+  shrinkable (see `CardLedge`), so what gives is the opponent's name, and a
+  verdict that truncated would be a `W` and an `L` reading identically.
+
   **The one thing that aggregation changes on the card is which instrument the
   readout wears, and that is a prop rather than something the readout works
   out.** The countdown takes the slot on a claim about the *record* beside it:
@@ -5191,6 +5234,46 @@ stops holding, a comment saying it does would not have caught it.
     seat's own `ml-auto` is what holds both ends whichever is drawn, and the
     tablist takes `shrink-0` now that it shares a row — the note beside the key
     is the part written to give way.
+
+    **There are three occupants now and still two ends**, which is the one thing
+    to know before adding a fourth: `WeekMedianBar` shares the *leading* end with
+    the strip, wrapped in a flex group rather than passed as a third loose child,
+    because `justify-between` distributes free space between all its children —
+    three loose items put the median somewhere in the middle of the band instead
+    of beside whatever leads it. So the band is two slots however many parts are
+    in it.
+  - **The median is a fact about the week and belongs to neither half**, which is
+    why it sits on the band rather than in a roster heading: it is the middle of
+    the *whole field*, so seating it on one side would say it was that side's,
+    and either side can be over or under it. It is drawn only where the league
+    plays one — `median` is null on the week payload for every league without
+    Sleeper's `league_average_match`, and *nothing* is drawn there rather than an
+    em dash, since an em dash reports a hole in a number and a league whose
+    scoring never applies a median has no number to be missing. It is free here
+    and only here: this read already solves every team, so the middle of them is
+    a fold over `team_projection` (`medianLineups`) where the lineup checker's
+    route has to widen its solve to get one.
+  - **It states the bar and never the verdict, and it prints the headings'
+    reading.** The two headings under it carry each team's own number in the same
+    units, so which side of the bar a team falls on is a comparison the reader is
+    already making a few pixels away — a `W` beside it would restate two numbers
+    both on screen, which is the restatement this panel keeps having to relearn
+    (the team plate that named the lit standings row, the prose that named the
+    two lists under it). The mark belongs where the numbers are *not* on screen,
+    which is the lineup checker's row. That is also why the figure is the
+    **optimal** median with `current` on the hover: `RosterHeading`'s own
+    arrangement, and a median taken over a different reading from the numbers
+    beside it would be three figures on one band that cannot be compared.
+    `medianLineups` folds both because neither derives from the other — a median
+    is not linear, so the middle of the best lineups is not the middle of the set
+    ones plus anything, and the two can sit on different teams.
+  - **`median_match` is the one field of `LeagueDetail` the core payload does not
+    carry**, and the omission is `league_type`'s rule read backwards: a fact
+    crosses when something on the client needs it. This one decides whether the
+    week read folds a median at all, and what a reader sees is the median itself,
+    which rides on the week payload where null already says "no bar to beat".
+    Sending the flag as well would be a second way to ask one question, on the
+    response every open of this panel pays for.
   - **It names nothing itself.** Every label, ranking and value name in
     `league-settings.ts` comes from `league-filters` — `SETTING_KEYS`,
     `COMMON_SCORING_KEYS`, `settingKeyLabel`, `scoringKeyLabel`,

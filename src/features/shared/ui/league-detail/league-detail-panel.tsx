@@ -49,6 +49,7 @@ import { Standings } from "./standings";
 import { LeagueSyncKey } from "./sync-key";
 import { managerLabel } from "./team-label";
 import type { LeagueDetailResult, LeagueTeamView, TeamOutlook } from "./types";
+import { WeekMedianBar } from "./week-median";
 
 /**
  * The dialog both of this panel's tables aim their columns from, loaded the
@@ -458,7 +459,18 @@ function Panel({
           neither is. */}
       {(tabbed || syncable) && (
         <PanelHead>
-          {tabbed && <PanelTabs tab={tab} onTab={setTab} baseId={baseId} />}
+          {/* One leading group rather than two loose children: the band is
+              `justify-between` with the trailing seat holding the far end, and
+              three loose items would distribute the free space between all
+              three — putting the median somewhere in the middle of the band
+              rather than beside whatever leads it. A median only exists on a
+              week panel, so it can share the leading end with the strip (a bye
+              in a median league, which draws both) or hold it alone (a
+              head-to-head, which has no strip). */}
+          <div className="flex min-w-0 items-center gap-2">
+            {tabbed && <PanelTabs tab={tab} onTab={setTab} baseId={baseId} />}
+            <WeekMedianBar weekView={weekView} />
+          </div>
           {syncable && <LeagueSyncKey leagueId={data.league_id} />}
         </PanelHead>
       )}
