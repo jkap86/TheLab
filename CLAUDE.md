@@ -954,9 +954,9 @@ writes the vocabulary the server parses (the auction exclusion, the
 `start_after`/`start_before` dates, the two league-id lists), so a value added on
 one side and not the other fails as an ignored parameter rather than a type
 error. The league type left that vocabulary entirely: every `/api/adp` answer now
-carries the redraft and dynasty boards side by side and the display chooses, so
-there is no `league_type` parameter for the two ends to disagree on — see the
-drawer's board keys below for the shape of that.
+carries the redraft and dynasty boards side by side and the display draws both,
+so there is no `league_type` parameter for the two ends to disagree on — see the
+drawer's two board columns below for the shape of that.
 
 **The board's league filters left it too, and in the other direction.** Scoring,
 superflex, best ball and size were four parameters the client wrote and the
@@ -3176,7 +3176,8 @@ stops holding, a comment saying it does would not have caught it.
       channel's functions rather than being handed measurements, and why
       deleting it costs nothing that argument was protecting.
     - **The presets went because the counter *is* them.** "Last 30 days" is `30`
-      in the day lens, "All of 2026" is that lens left empty, and a historical
+      in the day lens (and the board opens on `14`, see below), "All of 2026" is
+      that lens left empty, and a historical
       cut is the date lens — so each of the three has exactly one way in now,
       and any edit that removes one removes the only one. Two chips survive
       inside the panel because neither is a fixed window: `Today` re-opens the
@@ -3230,7 +3231,7 @@ stops holding, a comment saying it does would not have caught it.
     filter — it *writes* filters, from a league the reader recognises by name —
     and the trades board passes it no leagues at all.
   - **The league type is not one of those filters — every fetch answers both
-    markets, and two board keys over the list choose what is drawn.** A dynasty
+    markets, and the list draws both of them.** A dynasty
     startup and a redraft price different games, which is exactly why the type
     chip used to be the most consequential filter here; it is now the split the
     answer itself carries. `/api/adp` averages every player twice — a redraft
@@ -3238,11 +3239,15 @@ stops holding, a comment saying it does would not have caught it.
     withheld, where leaving it in neither bucket would put its drafts in the
     total and in no column, the Complete-status failure) and a dynasty one —
     with `min_picks` gated per board, so a rookie is a real number on one and an
-    honest em dash on the other. The keys sit in the board's sticky header with
-    the columns they toggle, each carrying its own board's draft count (the
-    population a reader needs before trusting a column), and the last lit one
-    refuses to go out: `boards` is a three-value union (`toggleAdpBoard`), so a
-    blank board is unrepresentable rather than guarded against. The display
+    honest em dash on the other. **Two keys in the sticky header used to choose
+    between them and don't now**: a control whose only use is to take away one
+    of two columns the board is already showing side by side is a control that
+    can only make the answer smaller, and the draft counts they carried on their
+    faces (the population a reader needs before trusting a column) are on the
+    ADP headings' own hover, against the column they describe. `boards` is
+    still a three-value union — a blank board stays unrepresentable rather than
+    guarded against — and what writes a single board is seeding from a league,
+    which picks the market that league is in. The display
     re-sorts for what it shows (`adpBoardRows`) because the fetch's order is
     fair to both markets and therefore right for neither column alone — one
     board keeps only what it can average and sorts on it; both keep every row,
@@ -3252,7 +3257,7 @@ stops holding, a comment saying it does would not have caught it.
     ADP (its share moves to the ADP cells' hover) and seat the two value
     columns only from `@md` up — the panel is its own `@container`, so that
     measures the drawer, not the viewport. **A third pair sits past those, and
-    it is the one pair the board keys do not touch**: KTC's superflex and 1QB
+    it is the one pair the boards selection does not touch**: KTC's superflex and 1QB
     prices, `SF` and `1QB`, seated from `@lg` and drawn whichever markets are
     lit. KTC publishes *dynasty* values and nothing else, so the same two
     numbers stand beside a redraft average as beside a dynasty one — a second
@@ -3276,10 +3281,10 @@ stops holding, a comment saying it does would not have caught it.
     **The last place it survived as a *population* question was the shared
     panel's own Type row, and this caller drops it** (`omit` on
     `LeagueFiltersPanel`, threaded to `SegmentTrough`). It was a second control
-    over the axis the board keys already own, and the two disagree in a way that
-    looks like a bug rather than a selection: narrow to dynasty leagues with the
-    redraft column up and the answer is an empty column with nothing on screen
-    saying which control emptied it. Nothing about `LeagueFilters` changes — the
+    over the axis `boards` already owns, and the two disagree in a way that
+    looks like a bug rather than a selection: narrow to dynasty leagues with a
+    board seeded to redraft and the answer is an empty column with nothing on
+    screen saying which control emptied it. Nothing about `LeagueFilters` changes — the
     field stays, the manager tabs and the trades board keep the row, and this
     board simply never writes it (its controls open on
     `DEFAULT_LEAGUE_FILTERS`, and `seedFromLeague` already wrote a league's type
@@ -3443,10 +3448,32 @@ stops holding, a comment saying it does would not have caught it.
   drawer leads with a row of season segments (`seasonOptions`, taken from the
   density rows so a season nobody has crawled isn't offered, with the current one
   and the selected one always present) and the range narrows within whichever is
-  chosen. Three things follow that are easy to undo by treating the two as peers:
-  - **Changing season drops the window.** The same dates against a different
-    season are a window that mostly isn't there, and an empty board is a worse
-    answer than the new season whole.
+  chosen. Four things follow that are easy to undo by treating the two as peers:
+  - **The window is the second filter the board opens *narrowed*, and it is
+    narrowed to a fortnight** (`DEFAULT_ADP_RANGE`, `DEFAULT_ADP_LOOKBACK_DAYS`).
+    It has been both of the other answers — twelve months, then the whole season
+    once the season did that job properly — and what neither can do is keep the
+    board *current*: a season's drafts run May to September and pool a rookie
+    market, a startup market and every re-draft between them, so an August reader
+    averaging all of them is reading months of consensus the market has moved
+    past. Three things hold it up, and each is the `rounds` bucket's own rule read
+    again. It is spelled as a **`lookback`, never as stored dates**, or every
+    reader's default board is a snapshot of whenever their tab last resolved it.
+    **`adpNarrowingCount` and the Window bay compare against the default rather
+    than against "is it bounded"** (`isDefaultAdpRange`) — read the old way, the
+    board nobody has touched would light the trigger's bars for everybody, which
+    is the one thing that count must never do. And the **cost is stated rather
+    than discovered**: a narrow window is a smaller sample, so a fortnight in
+    which little was crawled is thin and `min_picks` answers more rows as em
+    dashes than a season-wide board did. It reaches every read priced off this
+    store — the cards' team value, the trades board's ADP column, the rookie
+    ladder — because that is what one store means, not a side effect of it.
+  - **Changing season drops the window, and drops it to the *whole season*
+    rather than to that default.** The same dates against a different season are
+    a window that mostly isn't there, and an empty board is a worse answer than
+    the new season whole — which is exactly what resetting a relative fortnight
+    onto a season that ended a year ago would produce, so `withSeason` writes
+    `UNBOUNDED_ADP_RANGE` and the default is deliberately not reused there.
   - **A relative window only means something on a board that can contain
     today**, and with the preset chips gone that is a fact the *counter* carries
     rather than a list to filter. There used to be an `adpRangePresets` deciding

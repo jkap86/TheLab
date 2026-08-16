@@ -4,7 +4,12 @@ import { describe, test } from "node:test";
 import type { ManagerLeague } from "@/shared/manager";
 import type { AdpBoardStats } from "@/shared/manager";
 
-import { DEFAULT_ADP_ROUNDS, defaultAdpControls, seedFromLeague } from "../../adp-controls.ts";
+import {
+  DEFAULT_ADP_RANGE,
+  DEFAULT_ADP_ROUNDS,
+  defaultAdpControls,
+  seedFromLeague,
+} from "../../adp-controls.ts";
 import { ROUNDS_SEGMENT } from "./adp-drawer.constants.ts";
 import {
   adpCellTitle,
@@ -13,7 +18,6 @@ import {
   takenShare,
   takenTitle,
   valueTitle,
-  withBoardToggle,
   withLeagueFilters,
   withSeason,
   withSeededLeague,
@@ -72,8 +76,11 @@ describe("the control writes", () => {
     const next = withSeason(narrowed, "2024");
     assert.equal(next.season, "2024");
     // A date range is a cut *inside* a season, so the same dates against
-    // another one are a window that mostly isn't there.
+    // another one are a window that mostly isn't there. It lands on the whole
+    // season and *not* on `DEFAULT_ADP_RANGE`, which is a relative fortnight —
+    // exactly the window a season that ended a year ago does not contain.
     assert.deepEqual(next.range, { preset: "all", from: null, to: null });
+    assert.notDeepEqual(next.range, DEFAULT_ADP_RANGE);
   });
 
   test("a season change touches nothing else", () => {
@@ -82,25 +89,6 @@ describe("the control writes", () => {
     assert.deepEqual(next.leagueRules, rules);
     assert.equal(next.rounds, controls.rounds);
     assert.equal(next.boards, controls.boards);
-  });
-
-  test("the board toggle keeps the last lit board on", () => {
-    assert.equal(withBoardToggle(controls, "redraft").boards, "dynasty");
-    assert.equal(withBoardToggle(controls, "dynasty").boards, "redraft");
-    const sole = { ...controls, boards: "dynasty" as const };
-    assert.equal(withBoardToggle(sole, "redraft").boards, "both");
-    // Pressing the only lit key is a no-op rather than a blank list.
-    assert.equal(withBoardToggle(sole, "dynasty").boards, "dynasty");
-  });
-
-  test("a board toggle narrows nothing else", () => {
-    const rules = {
-      ...controls.leagueRules,
-      settings: [{ key: "teams", op: "eq" as const, value: 12 }],
-    };
-    const next = withBoardToggle({ ...controls, leagueRules: rules }, "redraft");
-    assert.deepEqual(next.leagueRules, rules);
-    assert.equal(next.season, controls.season);
   });
 
   test("the Leagues bay lands both of its halves in one object", () => {

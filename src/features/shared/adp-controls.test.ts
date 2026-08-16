@@ -4,6 +4,8 @@ import { describe, test } from "node:test";
 import {
   ADP_PEAK,
   ADP_RANGE_PRESETS,
+  DEFAULT_ADP_LOOKBACK_DAYS,
+  DEFAULT_ADP_RANGE,
   DEFAULT_ADP_ROUNDS,
   DEFAULT_ADP_STEEPNESS,
   adpBoardRead,
@@ -15,9 +17,9 @@ import {
   defaultAdpControls,
   deriveScoring,
   previewAdpPool,
+  isDefaultAdpRange,
   previewAdpValue,
   rookieOrderingBoard,
-  shownAdpBoards,
   startupPricingBoard,
   steepnessSummary,
   seasonOptions,
@@ -26,7 +28,6 @@ import {
   rangeSummary,
   seedFromLeague,
   todayIso,
-  toggleAdpBoard,
   type AdpControls,
   type AdpRange,
 } from "./adp-controls.ts";
@@ -87,15 +88,27 @@ const withRules = (over: Partial<LeagueFilters>): AdpControls => ({
 });
 
 describe("adpBoardRead", () => {
-  test("the default board sends one whole season of startups, snake+linear, and nothing else", () => {
-    // The rounds bound is the one filter the board opens *with*: pooling rookie
-    // drafts into a startup average prices every rookie off two different games.
+  test("the default board sends this season's last fortnight of startups, snake+linear, and nothing else", () => {
+    // Two bounds the board opens *with*. The rounds one, because pooling rookie
+    // drafts into a startup average prices every rookie off two different games;
+    // and the window, because a season pools months of consensus the market has
+    // since moved past. Both are one press from being widened.
     assert.deepEqual(boardParams(defaultAdpControls(SEASON)), {
       limit: "1000",
       season: "2026",
       draft_type: "snake,linear",
       rounds_min: "12",
+      start_after: "2026-07-17",
     });
+  });
+
+  test("the default window is relative, so it rolls forward with the calendar", () => {
+    // Spelled as a lookback rather than as stored dates: a frozen default would
+    // make every reader's board a snapshot of whenever their tab resolved it.
+    assert.equal(DEFAULT_ADP_RANGE.preset, "lookback");
+    assert.equal(DEFAULT_ADP_RANGE.days, DEFAULT_ADP_LOOKBACK_DAYS);
+    const later = adpBoardRead(defaultAdpControls(SEASON), ALL_LEAGUES, "2026-08-14");
+    assert.equal(params(later.search).start_after, "2026-07-31");
   });
 
   test("an unnarrowed board is a GET with no body", () => {
@@ -488,11 +501,14 @@ describe("adpValueRead", () => {
   const valueParams = (controls: AdpControls, scope: LeagueScope = ALL_LEAGUES) =>
     params(value(controls, scope).search);
 
-  test("the default board is the curve, the season and the startup bound", () => {
+  test("the default board is the curve, the season, the startup bound and the window", () => {
+    // The window reaches the cards too: a price read off a board the drawer is
+    // not showing is the two-answers-to-one-question this read exists to close.
     assert.deepEqual(valueParams(defaultAdpControls(SEASON)), {
       steepness: String(DEFAULT_ADP_STEEPNESS),
       board_season: "2026",
       rounds_min: "12",
+      start_after: "2026-07-17",
     });
   });
 
@@ -1060,19 +1076,25 @@ describe("adpNarrowingCount", () => {
     );
   });
 
-  test("a bounded window counts, an unbounded one doesn't", () => {
+  test("the window counts against its default, not against 'unbounded'", () => {
     const base = defaultAdpControls(SEASON);
-    // A custom range with neither end set narrows nothing — the same reading
-    // `isUnboundedRange` gives it, so the diamond stays dark for a window that
-    // is "custom" in name only.
     const range = (range: AdpRange) => adpNarrowingCount({ ...base, range }, SEASON);
-    assert.equal(range({ preset: "custom", from: null, to: null }), 0);
+    // The board opens on a fortnight, so that is the window everybody else is
+    // reading and it must leave the trigger dark — read as "is it bounded", the
+    // default board would have lit the bars for every reader on every page.
+    assert.equal(range(DEFAULT_ADP_RANGE), 0);
+    assert.equal(
+      range({ preset: "lookback", from: null, to: null, days: DEFAULT_ADP_LOOKBACK_DAYS }),
+      0,
+    );
+    // Widening is a departure from it even though it narrows less, exactly as
+    // the rounds bucket reads `all`.
+    assert.equal(range({ preset: "all", from: null, to: null }), 1);
+    assert.equal(range({ preset: "custom", from: null, to: null }), 1);
     assert.equal(range({ preset: "30d", from: null, to: null }), 1);
     assert.equal(range({ preset: "custom", from: "2026-05-01", to: null }), 1);
-    // The counter's general case counts like the named presets it sits beside;
-    // its days-less spelling bounds nothing and must not light the trigger.
     assert.equal(range({ preset: "lookback", from: null, to: null, days: 45 }), 1);
-    assert.equal(range({ preset: "lookback", from: null, to: null }), 0);
+    assert.equal(range({ preset: "lookback", from: null, to: null }), 1);
   });
 
   test("the rounds bucket counts against its default, not against 'all'", () => {
@@ -1112,25 +1134,24 @@ describe("adpNarrowingCount", () => {
   });
 });
 
-describe("shownAdpBoards / toggleAdpBoard", () => {
-  test("each selection lights the boards it names", () => {
-    assert.deepEqual(shownAdpBoards("both"), { redraft: true, dynasty: true });
-    assert.deepEqual(shownAdpBoards("redraft"), { redraft: true, dynasty: false });
-    assert.deepEqual(shownAdpBoards("dynasty"), { redraft: false, dynasty: true });
+describe("isDefaultAdpRange", () => {
+  test("the default spelling, and only that spelling", () => {
+    assert.equal(isDefaultAdpRange(DEFAULT_ADP_RANGE), true);
+    assert.equal(isDefaultAdpRange({ preset: "all", from: null, to: null }), false);
+    assert.equal(
+      isDefaultAdpRange({ preset: "lookback", from: null, to: null, days: 15 }),
+      false,
+    );
   });
 
-  test("toggling flips one board's visibility", () => {
-    assert.equal(toggleAdpBoard("both", "redraft"), "dynasty");
-    assert.equal(toggleAdpBoard("both", "dynasty"), "redraft");
-    assert.equal(toggleAdpBoard("redraft", "dynasty"), "both");
-    assert.equal(toggleAdpBoard("dynasty", "redraft"), "both");
-  });
-
-  test("the last lit board can't be turned off", () => {
-    // A blank list is unrepresentable, so pressing the only lit key is a no-op
-    // rather than a guard every caller has to remember.
-    assert.equal(toggleAdpBoard("redraft", "redraft"), "redraft");
-    assert.equal(toggleAdpBoard("dynasty", "dynasty"), "dynasty");
+  test("a frozen window that agrees today is still a departure", () => {
+    // The comparison is the stored spelling rather than the dates two ranges
+    // resolve to: a `custom` window a reader set to the last fortnight means
+    // something else tomorrow, where the default rolls with the calendar.
+    assert.equal(
+      isDefaultAdpRange({ preset: "custom", from: "2026-07-17", to: null }),
+      false,
+    );
   });
 });
 

@@ -3,14 +3,13 @@ import type { AdpBoardStats, AdpBoardType, ManagerLeague } from "@/shared/manage
 import {
   type AdpControls,
   type AdpShownBoards,
-  DEFAULT_ADP_RANGE,
   DEFAULT_ADP_ROUNDS,
+  UNBOUNDED_ADP_RANGE,
   boardLabel,
-  isUnboundedRange,
+  isDefaultAdpRange,
   previewAdpPool,
   seedFromLeague,
   steepnessSummary,
-  toggleAdpBoard,
 } from "../../adp-controls.ts";
 import type { AdpPickRow, AdpPickStats } from "../../adp-picks.ts";
 import { activeFilterCount } from "../../league-filters/summaries.ts";
@@ -211,9 +210,14 @@ export function soleBoardOf(shown: AdpShownBoards): AdpBoardType {
  * A date range is a cut *inside* a season, so the same dates against a different
  * one are a window that mostly isn't there — and silently returning an empty
  * board is worse than starting the new season whole.
+ *
+ * It resets to the *unbounded* window rather than to `DEFAULT_ADP_RANGE`, and
+ * that difference is the whole of the rule above: the default is a relative
+ * fortnight, which is exactly the window a season that ended a year ago does not
+ * contain. Whole season, whichever season was picked.
  */
 export function withSeason(controls: AdpControls, season: string): AdpControls {
-  return { ...controls, season, range: DEFAULT_ADP_RANGE };
+  return { ...controls, season, range: UNBOUNDED_ADP_RANGE };
 }
 
 /**
@@ -235,17 +239,6 @@ export function withLeagueFilters(
   rounds: AdpControls["rounds"],
 ): AdpControls {
   return { ...controls, leagueRules, rounds };
-}
-
-/**
- * Flip one board's columns. The rule that the last lit board cannot be turned
- * off lives in `toggleAdpBoard`, which is where it is tested.
- */
-export function withBoardToggle(
-  controls: AdpControls,
-  board: AdpBoardType,
-): AdpControls {
-  return { ...controls, boards: toggleAdpBoard(controls.boards, board) };
 }
 
 /**
@@ -293,7 +286,7 @@ export function adpBayStates(controls: AdpControls): AdpBayState[] {
       id: "window",
       label: "Window",
       value: boardLabel(controls.range, controls.season),
-      narrowed: !isUnboundedRange(controls.range),
+      narrowed: !isDefaultAdpRange(controls.range),
     },
     {
       id: "curve",

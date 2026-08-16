@@ -94,6 +94,13 @@ export type AdpControls = {
    * the fetch always averages the redraft and dynasty markets side by side, and
    * this only says which columns are drawn. `adpQueryString` never reads it and
    * `adpNarrowingCount` never counts it, the same standing `steepness` has.
+   *
+   * **Nothing on the board sets it directly any more.** It was two keys in the
+   * board's sticky head, which offered a reader a choice between two markets
+   * they were being shown side by side anyway — a control whose only use was to
+   * take a column away. What writes it now is {@link seedFromLeague}: matching a
+   * league shows the market that league is actually in, which is the one time
+   * the answer is not "both".
    */
   boards: AdpShownBoards;
   /**
@@ -196,28 +203,6 @@ export type AdpRangePreset = "30d" | "90d" | "12m" | "all" | "custom" | "lookbac
  * a selection that will eventually show one.
  */
 export type AdpShownBoards = "both" | AdpBoardType;
-
-/** Whether each board is displayed under a given selection. */
-export function shownAdpBoards(
-  shown: AdpShownBoards,
-): Record<AdpBoardType, boolean> {
-  return { redraft: shown !== "dynasty", dynasty: shown !== "redraft" };
-}
-
-/**
- * Flip one board's visibility. Turning off the only board showing is a no-op
- * rather than an empty list, which is what the union above makes structural —
- * the caller needs no guard, pressing the last lit key simply does nothing.
- */
-export function toggleAdpBoard(
-  shown: AdpShownBoards,
-  board: AdpBoardType,
-): AdpShownBoards {
-  const other: AdpBoardType = board === "redraft" ? "dynasty" : "redraft";
-  if (shown === "both") return other;
-  if (shown === other) return "both";
-  return shown;
-}
 
 /** Total sample behind a row, both boards pooled — the sort's tiebreaker. */
 const totalPicks = (player: AdpPlayerPayload): number =>
@@ -326,16 +311,45 @@ export function seasonOptions(
   return [...kept, "all"];
 }
 
+/** How far back the board reaches when the drawer hasn't been touched. */
+export const DEFAULT_ADP_LOOKBACK_DAYS = 14;
+
 /**
- * The board's window when the drawer hasn't been touched: the whole season.
+ * The board's window when the drawer hasn't been touched: the last two weeks.
  *
- * It used to be twelve months, chosen to be wide enough that a quiet stretch of
- * crawling still returned drafts and narrow enough to keep last year out. With
- * the season doing that second job properly, a window on top of it would only
- * cut the season short — so the default narrows nothing and the season is the
- * whole answer.
+ * It has been both of the other two answers. Twelve months was chosen to be wide
+ * enough that a quiet stretch of crawling still returned drafts and narrow
+ * enough to keep last year out; the whole season replaced it once the season
+ * itself did that second job properly. What the season cannot do is keep a
+ * board *current* — a season's drafts run from May to September and pool a
+ * rookie market, a startup market and every re-draft in between, so an August
+ * reader averaging all of them is reading months of consensus that has since
+ * moved. Two weeks is the window a reader means by "what is the market doing",
+ * and the counter is one press from widening it.
+ *
+ * It is spelled as a `lookback` rather than as a `custom` pair because it has to
+ * roll forward with the calendar: a stored date would make every reader's
+ * default board a snapshot of whenever their tab last resolved it.
+ *
+ * The cost is stated rather than discovered: a narrow window is a smaller
+ * sample, so a board that has crawled little in a fortnight is thin, and
+ * `min_picks` answers more rows as em dashes than a season-wide board did.
  */
-export const DEFAULT_ADP_RANGE: AdpRange = { preset: "all", from: null, to: null };
+export const DEFAULT_ADP_RANGE: AdpRange = {
+  preset: "lookback",
+  from: null,
+  to: null,
+  days: DEFAULT_ADP_LOOKBACK_DAYS,
+};
+
+/**
+ * The window that bounds neither end — every draft in whatever season is chosen.
+ *
+ * It stopped being the default and did not stop being needed: it is what a
+ * season change resets to ({@link withSeason}), because a relative window
+ * against a season that ended a year ago is an empty board.
+ */
+export const UNBOUNDED_ADP_RANGE: AdpRange = { preset: "all", from: null, to: null };
 
 /**
  * The curve applied when the ADP drawer hasn't been touched. It *is* the curve
@@ -561,6 +575,24 @@ export function rangeLabel(range: AdpRange): string {
   return "All time";
 }
 
+/**
+ * The window the board opens on — which is what "narrowed" is measured against
+ * now that the default bounds one end.
+ *
+ * It compares the *stored spelling* rather than the dates two ranges resolve to,
+ * which is the same reading `rounds` gets: a `custom` window a reader set to the
+ * last fourteen days is a frozen window that will mean something else tomorrow,
+ * so it is a departure from the default even on the day it agrees with it.
+ */
+export function isDefaultAdpRange(range: AdpRange): boolean {
+  return (
+    range.preset === DEFAULT_ADP_RANGE.preset &&
+    (range.days ?? null) === DEFAULT_ADP_LOOKBACK_DAYS &&
+    range.from === null &&
+    range.to === null
+  );
+}
+
 /** A range that bounds neither end — every draft in whatever season is chosen. */
 export function isUnboundedRange(range: AdpRange): boolean {
   return (
@@ -602,11 +634,15 @@ export function boardLabel(range: AdpRange, season: string): string {
  * same shape `activeFilterCount` hands the league filters' own trigger.
  *
  * Every field is compared against **the default**, never against "unnarrowed" —
- * which is the same thing for five of them and not for `rounds`, whose default is
- * startups rather than every draft ({@link DEFAULT_ADP_ROUNDS}). A board nobody
- * has touched must count zero, or the bars light for every reader on every page
- * and stop meaning "yours differs from theirs"; the season has always been read
- * this way, which is the precedent.
+ * which is the same thing for four of them and not for `rounds`, whose default
+ * is startups rather than every draft ({@link DEFAULT_ADP_ROUNDS}), nor for the
+ * `range`, whose default is the last fortnight rather than the whole season
+ * ({@link DEFAULT_ADP_RANGE}). A board nobody has touched must count zero, or
+ * the bars light for every reader on every page and stop meaning "yours differs
+ * from theirs"; the season has always been read this way, which is the
+ * precedent. The window followed `rounds` onto it the day the default stopped
+ * bounding nothing — read as "is it bounded", the default board would have lit
+ * the trigger for everybody.
  *
  * Two judgement calls in what it counts. The **season** counts, though it is the
  * board's population rather than one of its filters: a reader looking at 2024
@@ -624,7 +660,7 @@ export function adpNarrowingCount(
 ): number {
   const narrowing = [
     controls.season !== defaultSeason,
-    !isUnboundedRange(controls.range),
+    !isDefaultAdpRange(controls.range),
     controls.rounds !== DEFAULT_ADP_ROUNDS,
   ];
   // Every league rule counts as one, the same arithmetic `activeFilterCount`

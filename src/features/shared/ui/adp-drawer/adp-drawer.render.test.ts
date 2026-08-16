@@ -306,8 +306,9 @@ describe("what is on screen", () => {
       assert.ok(html.includes(label), `expected a ${label} key on the rail`);
     }
     // Each key's value, in the board's own words — `adpBayStates`' job, and the
-    // reason it is pure and tested beside this.
-    assert.match(html, /All of 2026/);
+    // reason it is pure and tested beside this. The window is the fortnight the
+    // board opens on, named rather than left to be inferred from a season.
+    assert.match(html, /2026 · Last 14 days/);
     assert.match(html, /% of the 1\.01/);
     // Every key shut, and therefore every bay's contents absent.
     assert.equal((html.match(/aria-expanded="false"/g) ?? []).length, 3);
@@ -330,8 +331,9 @@ describe("what is on screen", () => {
 
   test("no preset chip states a window the lenses already state", () => {
     // "Last 30 days" is `30` in the day lens and "All of 2026" is that lens left
-    // empty, so a chip row beside an open counter is two controls for one
-    // selection. What survives inside the panel is the keys that are *not* fixed
+    // empty (which the board no longer opens on — the default is a fortnight, so
+    // the lens opens carrying 14), so a chip row beside an open counter is two
+    // controls for one selection. What survives inside the panel is the keys that are *not* fixed
     // windows — `Today`, which re-opens the end, and the ◆ draft key, which pins
     // a date that moves every April (drawn only when the strip's domain holds a
     // draft, which this fixture's single May month does not; `lookback.test.ts`
@@ -345,7 +347,7 @@ describe("what is on screen", () => {
     // The board's own name is stated once, by the Window key. Opening that bay
     // adds the counter's caption, which is the same label a second time and is
     // why the key and the caption have to keep agreeing: both read `boardLabel`.
-    assert.equal((html.match(/All of 2026/g) ?? []).length, 1);
+    assert.equal((html.match(/2026 · Last 14 days/g) ?? []).length, 1);
   });
 
   test("every control keeps an accessible name", () => {
@@ -882,14 +884,12 @@ describe("the columns sort", () => {
     const presses: AdpSortColumn[] = [];
     const tree = AdpBoardHeader({
       both: true,
-      shown: { redraft: true, dynasty: true },
       soleBoard: "redraft",
       soleDrafts: 900,
       redraftDrafts: 900,
       dynastyDrafts: 304,
       rules: DEFAULT_LEAGUE_FILTERS,
       sort: DEFAULT_ADP_SORT,
-      onToggleBoard: () => {},
       onSort: (column) => presses.push(column),
     });
     const headings = elements(tree).filter(
@@ -924,14 +924,12 @@ describe("the columns sort", () => {
       const presses: AdpSortColumn[] = [];
       const tree = AdpBoardHeader({
         both: false,
-        shown: { redraft: boards === "redraft", dynasty: boards === "dynasty" },
         soleBoard: boards,
         soleDrafts: 900,
         redraftDrafts: 900,
         dynastyDrafts: 304,
         rules: DEFAULT_LEAGUE_FILTERS,
         sort: DEFAULT_ADP_SORT,
-        onToggleBoard: () => {},
         onSort: (column) => presses.push(column),
       });
       const headings = elements(tree).filter((el) => el.props.column !== undefined);
@@ -1133,27 +1131,30 @@ describe("what the controls do", () => {
     press(panel, "onReset")();
   });
 
-  test("a board key toggles that market, and the last one lit stays lit", () => {
-    const toggles: string[] = [];
+  test("the board's head holds no keys of its own — every control in it sorts", () => {
+    // The two market keys are gone: they offered to take away one of two
+    // columns the board draws side by side anyway, and the draft counts they
+    // carried are on the ADP headings' hover, against the column they describe.
     const tree = AdpBoardHeader({
-      both: false,
-      shown: { redraft: true, dynasty: false },
+      both: true,
       soleBoard: "redraft",
       soleDrafts: 900,
       redraftDrafts: 900,
       dynastyDrafts: 304,
       rules: DEFAULT_LEAGUE_FILTERS,
       sort: DEFAULT_ADP_SORT,
-      onToggleBoard: (board) => toggles.push(board),
       onSort: () => {},
     });
-    const keys = elements(tree).filter((el) => typeof el.props.onToggle === "function");
-    assert.equal(keys.length, 2);
-    for (const key of keys) press(key, "onToggle")(key.props.board);
-    assert.deepEqual(toggles, ["redraft", "dynasty"]);
-    // Which of those presses changes anything is `toggleAdpBoard`'s rule, and
-    // `withBoardToggle`'s test above is where it is checked.
-    assert.deepEqual(keys.map((k) => k.props.on), [true, false]);
+    const pressable = elements(tree).filter(
+      (el) => typeof el.props.onToggle === "function" || typeof el.props.onClick === "function",
+    );
+    assert.deepEqual(pressable, []);
+
+    const html = drawer();
+    assert.equal(/>Boards</.test(html), false);
+    // The counts survive the keys, on the heading whose column they describe.
+    assert.match(html, /title="[^"]*304 drafts in dynasty leagues"/);
+    assert.match(html, /title="[^"]*900 drafts in redraft and keeper leagues"/);
   });
 
   test("a season key drops the window with the season", () => {
