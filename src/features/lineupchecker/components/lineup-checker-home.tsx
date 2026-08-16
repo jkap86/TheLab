@@ -297,7 +297,7 @@ export function LineupCheckerHome() {
         // one: each card's name rides out of its top edge on a plate that hangs
         // into the card's own padding, so at a smaller gap the plate sits almost
         // exactly between two cards and can be read as belonging to either.
-        <ul className="flex w-full flex-col gap-[18px]">
+        <ul className="flex w-full flex-col gap-[1.125rem]">
           {rows.map((league) => (
             <LineupCard
               key={league.league_id}

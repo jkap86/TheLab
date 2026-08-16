@@ -41,7 +41,7 @@ import {
   ADP_BOARD_INITIAL_RECT,
   ADP_DRAWER_ENTER_MS,
   ADP_DRAWER_EXIT_MS,
-  ADP_ROW_HEIGHT,
+  adpRowHeight,
   ADP_ROW_OVERSCAN,
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
@@ -600,7 +600,7 @@ describe("the board is windowed", () => {
     // A screenful of `ADP_BOARD_INITIAL_RECT` plus one overscan at each end,
     // which is nowhere near a thousand — the bound is what matters, not the
     // exact count.
-    const ceiling = Math.ceil(ADP_BOARD_INITIAL_RECT.height / ADP_ROW_HEIGHT) + 2 * ADP_ROW_OVERSCAN + 2;
+    const ceiling = Math.ceil(ADP_BOARD_INITIAL_RECT.height / adpRowHeight()) + 2 * ADP_ROW_OVERSCAN + 2;
     assert.ok(rows.length <= ceiling, `${rows.length} rows mounted, expected at most ${ceiling}`);
     // And the count does not grow with the board: ten times the rows, the same
     // windowful.
@@ -610,18 +610,18 @@ describe("the board is windowed", () => {
   test("the spacer is as tall as the whole list, so the scrollbar tells the truth", () => {
     const html = drawer({ board: bigBoard(1000) });
     const spacer = html.match(/<ul[^>]*style="height:(\d+)px"/)?.[1];
-    assert.equal(Number(spacer), 1000 * ADP_ROW_HEIGHT);
+    assert.equal(Number(spacer), 1000 * adpRowHeight());
   });
 
   test("a row is exactly the height the offsets are multiples of", () => {
-    // `ADP_ROW_HEIGHT` is written onto the element rather than estimated from
+    // `adpRowHeight()` is written onto the element rather than estimated from
     // it, which is what makes fixed-size windowing safe: an estimate a pixel out
     // is a screen of drift a thousand rows down.
     const rows = mounted(drawer({ board: bigBoard(200) }));
     assert.ok(rows.length > 1);
     for (const row of rows) {
-      assert.equal(row.height, ADP_ROW_HEIGHT);
-      assert.equal(row.offset, (row.rank - 1) * ADP_ROW_HEIGHT);
+      assert.equal(row.height, adpRowHeight());
+      assert.equal(row.offset, (row.rank - 1) * adpRowHeight());
     }
   });
 
@@ -634,7 +634,7 @@ describe("the board is windowed", () => {
     assert.ok(rows.length < 400);
     for (const row of rows) {
       assert.equal(row.size, 400);
-      assert.equal(row.rank, row.offset / ADP_ROW_HEIGHT + 1);
+      assert.equal(row.rank, row.offset / adpRowHeight() + 1);
     }
     assert.equal(rows[0].rank, 1);
     assert.equal(rows[rows.length - 1].rank, rows.length);

@@ -80,7 +80,7 @@ export function SeasonBand({
         than restating the key, since a line beside a control must not repeat
         what the control already says.
       */}
-      <p className="min-w-0 flex-1 text-[11.5px] text-foreground/40">
+      <p className="min-w-0 flex-1 text-[0.71875rem] text-foreground/40">
         {draft.season === ALL
           ? "Every season on file. Everything below narrows across all of them."
           : `Everything below narrows within ${draft.season}.`}

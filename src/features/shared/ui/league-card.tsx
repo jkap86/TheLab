@@ -593,9 +593,18 @@ const PANEL_MS = 280;
  * content starts at 21px and ends 17px off the trailing edge), and a heading a
  * hair off the number under it reads as a misaligned table. A slab spends 6px of
  * that trailing gutter on its wall and none of it on a border, so its face gives
- * 6px back — 21px and 11px, arriving at the same two edges. The plate is a
- * bordered box like the glass it replaced, so it keeps the spelling the rail was
- * written against.
+ * 6px back — arriving at the same two edges. The plate is a bordered box like
+ * the glass it replaced, so it keeps the spelling the rail was written against.
+ *
+ * **Both terms of that sum are here rather than its answer, and that is what
+ * `--app-font-scale` costs this file.** At a scale of 1 the sums are the 21px
+ * and 11px this used to spell out; they are written as `calc()` because only one
+ * half of each moves. The rail's `pl-5`/`px-4` are rem and grow with the type
+ * they head, while the border it draws them against is 1px and the wall the slab
+ * spends is 6px — material, constant at any scale, per the note on that
+ * variable. Collapsed back to a literal, the head lands where the rail was at
+ * one size only, and the misalignment this whole comment is about returns
+ * everywhere else.
  *
  * That arithmetic is also what keeps the columns from stepping sideways when a
  * card opens: below `sm` they divide the head's own width, so the two insets
@@ -615,9 +624,9 @@ export const REST = {
   /** The wall — 6px down and right, chamfered on both layers with the face. */
   wall: "lab-slab lab-notch-lg",
   face: "lab-slab-face lab-notch-lg",
-  head: "pl-[21px] pr-[11px]",
+  head: "pl-[calc(1.25rem+1px)] pr-[calc(1rem+1px-6px)]",
   /** 14px inside the face, which is 20px inside the card the wall belongs to. */
-  edge: "right-5",
+  edge: "right-[calc(0.875rem+6px)]",
 } as const;
 
 export const OPEN = {
@@ -637,7 +646,7 @@ export const OPEN = {
   face: "lab-plate group rounded-xl border border-active/25",
   head: "pl-5 pr-4",
   /** The same 14px, against a bordered box that runs the card's full width. */
-  edge: "right-[15px]",
+  edge: "right-[calc(0.875rem+1px)]",
 } as const;
 
 /**

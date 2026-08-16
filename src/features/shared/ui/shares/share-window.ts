@@ -6,10 +6,14 @@
  * windowed list is arithmetic before it is markup — how tall a row is assumed to
  * be, how many are held either side of the fold, and *what identifies one* — and
  * none of that is reachable from a component this codebase has no DOM to mount.
- * Pure and with no runtime imports, so `tsx --test` can drive a real
+ * Pure and with no runtime imports of its own, so `tsx --test` can drive a real
  * `Virtualizer` against the same options the component builds and assert the
- * window it produces rather than a retyped copy of the rules.
+ * window it produces rather than a retyped copy of the rules. The one import is
+ * `font-scale`, which imports nothing itself and answers 1 with no document — so
+ * the constants below are still the numbers the tests read.
  */
+
+import { scaledPx } from "../../font-scale.ts";
 
 /**
  * The air between two cards, in px — the `gap-4` the unwindowed list wears.
@@ -97,13 +101,21 @@ export function shareWindowOptions<T>(
 ): ShareWindowOptions {
   return {
     count: rows.length,
-    estimateSize: () => SHARE_ROW_ESTIMATE,
+    // Both lengths were measured at a 16px root and are scaled to whatever
+    // `--app-font-scale` makes it. The gap is the half that has to be: it is the
+    // virtualizer's own option standing in for the plain list's `gap-4`, which
+    // is `rem` and grows — so left at 16 the two spellings of this list would
+    // stop laying out identically, which is the claim {@link SHARE_ROW_GAP}
+    // makes. The estimate only ever moves the scrollbar (every mounted row is
+    // measured), but an estimate 12% short of every row is a scrollbar that
+    // visibly settles as the reader scrolls.
+    estimateSize: () => scaledPx(SHARE_ROW_ESTIMATE),
     getItemKey: (index) => {
       const row = rows[index];
       return row ? rowKey(row) : `#${index}`;
     },
     overscan: SHARE_ROW_OVERSCAN,
-    gap: SHARE_ROW_GAP,
+    gap: scaledPx(SHARE_ROW_GAP),
     initialRect: SHARE_LIST_INITIAL_RECT,
   };
 }

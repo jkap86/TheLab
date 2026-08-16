@@ -3,6 +3,7 @@ import type { AdpPlayerPayload } from "@/shared/contract";
 import type { KtcValue } from "@/shared/ktc";
 
 import { DEFAULT_ADP_ROUNDS } from "../../adp-controls";
+import { scaledPx } from "../../font-scale.ts";
 
 /**
  * The board's grids, written out whole so Tailwind can see them, and shared by
@@ -111,8 +112,19 @@ export const BOARD_ROW_CLASS = (both: boolean) =>
  * so a constant that merely *estimated* the height would drift a pixel per row
  * — a thousand rows deep, a whole screen of it. Written on the element, the
  * constant is true by construction and the two cannot disagree.
+ *
+ * **Which is exactly why it cannot stay a literal 33 under `--app-font-scale`.**
+ * Every term of that arithmetic is `rem` — the line box, the padding — and only
+ * the 1px border is not, so the row the browser lays out grows with the type
+ * while a hardcoded number does not: at a scale of 1.125 the content is ~36px in
+ * a 33px box, which is a clipped board *and* the per-row drift this constant
+ * exists to prevent. So the 32 rem-derived pixels are scaled and the border is
+ * added after, and it is a getter rather than a value because the scale is read
+ * off the document and there is nothing to read at module-evaluation time on the
+ * server. Both readers — the row's own `style` and the virtualizer's
+ * `estimateSize` — call it, so they still cannot disagree.
  */
-export const ADP_ROW_HEIGHT = 33;
+export const adpRowHeight = (): number => scaledPx(32) + 1;
 
 /**
  * How many rows are mounted either side of the visible window.

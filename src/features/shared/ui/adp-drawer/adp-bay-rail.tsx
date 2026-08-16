@@ -167,7 +167,7 @@ function BayKey({
  */
 function Spark({ bars }: { bars: number[] }) {
   return (
-    <span aria-hidden className="flex h-[9px] shrink-0 items-end gap-px">
+    <span aria-hidden className="flex h-[0.5625rem] shrink-0 items-end gap-px">
       {bars.map((height, i) => (
         <span
           // The bars are a shape, not a list of things — position is the whole

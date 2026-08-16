@@ -7,7 +7,7 @@ import { previewAdpValue } from "../../adp-controls";
 import type { LeagueFilters } from "../../league-filters";
 import { PositionBadge } from "../position-badge";
 import { AdpCell, KtcCell, ValueCell } from "./adp-board-cells";
-import { BOARD_ROW_CLASS, ADP_ROW_HEIGHT } from "./adp-drawer.constants.ts";
+import { BOARD_ROW_CLASS, adpRowHeight } from "./adp-drawer.constants.ts";
 import { adpCellTitle, ktcTitle, takenShare } from "./adp-drawer.utils.ts";
 
 /**
@@ -26,7 +26,7 @@ import { adpCellTitle, ktcTitle, takenShare } from "./adp-drawer.utils.ts";
  * the list rebuilds every windowed row's props on each scroll notification, and
  * a fresh `style` object would fail the shallow comparison for the two dozen
  * rows of which at most one has actually moved. The height is written on rather
- * than left to the content for the reason {@link ADP_ROW_HEIGHT} documents: the
+ * than left to the content for the reason {@link adpRowHeight} documents: the
  * offsets are multiples of that constant, so the element has to be exactly it.
  */
 export const AdpBoardRow = memo(function AdpBoardRow({
@@ -76,7 +76,7 @@ export const AdpBoardRow = memo(function AdpBoardRow({
       className={BOARD_ROW_CLASS(both)}
       // Positioned by transform rather than `top`, so scrolling past a row
       // doesn't dirty layout for the rows that didn't move.
-      style={{ height: ADP_ROW_HEIGHT, transform: `translateY(${offset}px)` }}
+      style={{ height: adpRowHeight(), transform: `translateY(${offset}px)` }}
     >
       <span className="text-right text-xs tabular-nums text-foreground/35">
         {rank}

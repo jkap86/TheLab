@@ -77,7 +77,7 @@ export function WeekStepper({
         />
         <span
           aria-live="polite"
-          className="lab-engraved min-w-0 flex-1 truncate text-center font-display text-[10px] font-semibold uppercase tracking-[0.06em] text-foreground/90 tabular-nums"
+          className="lab-engraved min-w-0 flex-1 truncate text-center font-display text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-foreground/90 tabular-nums"
         >
           {week === null ? "Week —" : `Week ${week}`}
         </span>
@@ -135,7 +135,7 @@ function StepKey({
         if (to === null) return;
         onChange(to);
       }}
-      className={`grid h-[22px] w-[20px] flex-none place-items-center rounded-md text-[12px] leading-none ${
+      className={`grid h-[1.375rem] w-[1.25rem] flex-none place-items-center rounded-md text-[0.75rem] leading-none ${
         dead
           ? "cursor-not-allowed text-foreground/25"
           : "lab-chip lab-chip-sm text-foreground/75"

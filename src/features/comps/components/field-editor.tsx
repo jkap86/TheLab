@@ -94,7 +94,7 @@ export function FieldEditor({
     // nameplate straddling the plate's top edge still sits inside the box the
     // page lays out — the trade card's rule for a part rising out of an edge.
     <div className="relative pt-3 @container">
-      <h2 className="lab-nameplate absolute left-4 top-0 z-10 rounded-md px-3 py-1 font-display text-[10px] uppercase tracking-[0.2em] text-foreground">
+      <h2 className="lab-nameplate absolute left-4 top-0 z-10 rounded-md px-3 py-1 font-display text-[0.625rem] uppercase tracking-[0.2em] text-foreground">
         Comparison weights
       </h2>
 
@@ -112,7 +112,7 @@ export function FieldEditor({
             type="button"
             onClick={onReset}
             disabled={!customized}
-            className={`lab-chip lab-chip-sm ml-auto rounded-full px-3 py-1 font-display text-[10px] uppercase tracking-[0.15em] ${
+            className={`lab-chip lab-chip-sm ml-auto rounded-full px-3 py-1 font-display text-[0.625rem] uppercase tracking-[0.15em] ${
               customized ? "text-foreground/80" : "text-foreground/25"
             }`}
           >
@@ -123,7 +123,7 @@ export function FieldEditor({
         <MixStrip rows={rows} />
 
         <div className="lab-trough mt-3 rounded-xl px-2.5 pb-2.5 pt-2 @2xl:px-3">
-          <h3 className="lab-engraved-faint mb-2 px-1 font-display text-[10px] uppercase tracking-[0.18em] text-foreground/45">
+          <h3 className="lab-engraved-faint mb-2 px-1 font-display text-[0.625rem] uppercase tracking-[0.18em] text-foreground/45">
             The comparison · heaviest first
           </h3>
           {rows.length === 0 ? (
@@ -186,7 +186,7 @@ function Bezel({
           <span className="font-display text-xs tabular-nums text-foreground/85">
             {gauge.value}
           </span>
-          <span className="text-[8px] uppercase tracking-[0.16em] text-foreground/35">
+          <span className="text-[0.5rem] uppercase tracking-[0.16em] text-foreground/35">
             {gauge.caption}
           </span>
         </span>
@@ -246,7 +246,7 @@ function LadderRowItem({
 
       <Notches field={field} tier={tier} onWeight={onWeight} />
 
-      <span className="w-9 shrink-0 text-right font-display text-[10px] tabular-nums text-foreground/45">
+      <span className="w-9 shrink-0 text-right font-display text-[0.625rem] tabular-nums text-foreground/45">
         {Math.round(share * 100)}%
       </span>
 
@@ -387,7 +387,7 @@ function WindowSelect({
       </select>
       <span
         aria-hidden
-        className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-foreground/40"
+        className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[0.5rem] text-foreground/40"
       >
         ▾
       </span>
@@ -416,7 +416,7 @@ function Bin({
     <div className="mt-3 grid items-start gap-3 @2xl:grid-cols-3">
       {families.map((family) => (
         <section key={family} className="lab-trough rounded-xl px-2.5 pb-2.5 pt-2 @2xl:px-3">
-          <h3 className="lab-engraved-faint mb-2 px-1 font-display text-[10px] uppercase tracking-[0.18em] text-foreground/45">
+          <h3 className="lab-engraved-faint mb-2 px-1 font-display text-[0.625rem] uppercase tracking-[0.18em] text-foreground/45">
             {FAMILY_LABELS[family]}
           </h3>
           <ul className="flex flex-wrap gap-1.5">
@@ -427,14 +427,14 @@ function Bin({
                   <button
                     type="button"
                     onClick={() => onAdd(field.key)}
-                    className="lab-chip lab-chip-sm rounded-full px-2.5 py-1 text-[11px] text-foreground/70 hover:text-foreground"
+                    className="lab-chip lab-chip-sm rounded-full px-2.5 py-1 text-[0.6875rem] text-foreground/70 hover:text-foreground"
                   >
                     + {field.label}
                   </button>
                 </li>
               ))}
           </ul>
-          <p className="mt-2 px-1 text-[11px] leading-4 text-foreground/40">
+          <p className="mt-2 px-1 text-[0.6875rem] leading-4 text-foreground/40">
             {FAMILY_NOTES[family]}
           </p>
         </section>

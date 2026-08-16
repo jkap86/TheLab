@@ -70,10 +70,10 @@ export const IOS_NO_ZOOM_PX = 16;
  * field with a fixed width), which is most of them: nothing about the layout
  * moves, the glyphs are simply bigger.
  */
-export const mobileInputText = "text-[16px] leading-5";
+export const mobileInputText = "text-[1rem] leading-5";
 
 /** {@link mobileInputText} for a `<select>`, which zooms on the same rule. */
-export const mobileSelectText = "text-[16px] leading-5";
+export const mobileSelectText = "text-[1rem] leading-5";
 
 /**
  * A field that has to give something back for the type — the floor plus the

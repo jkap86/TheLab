@@ -161,7 +161,7 @@ function AssetLabel({
         <Bullet style={style} />
         {player?.name ?? asset.id}
         {detail && (
-          <span className={`ml-1.5 whitespace-nowrap text-[11px] ${style.meta}`}>
+          <span className={`ml-1.5 whitespace-nowrap text-[0.6875rem] ${style.meta}`}>
             {detail}
           </span>
         )}
@@ -183,7 +183,7 @@ function AssetLabel({
         <Bullet style={style} />
         {pickLabel(pick, slot)}
         {origin !== null && (
-          <span className={`ml-1.5 text-[11px] ${style.meta}`}>
+          <span className={`ml-1.5 text-[0.6875rem] ${style.meta}`}>
             from {pickOwnerLabel(pick, lookups.managers)}
           </span>
         )}

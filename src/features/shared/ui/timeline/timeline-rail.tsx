@@ -74,11 +74,11 @@ export function TimelineRail({
           {/* The trade card's own instant grammar: the primary reading in a cut
               and the secondary engraved beside it, so the rail reads as the same
               instrument as the card the reader pressed to get here. */}
-          <span className="lab-readout shrink-0 rounded px-1.5 py-px text-[11.5px] font-semibold leading-4 tabular-nums text-foreground/85">
+          <span className="lab-readout shrink-0 rounded px-1.5 py-px text-[0.71875rem] font-semibold leading-4 tabular-nums text-foreground/85">
             {atNow ? "Now" : formatInstantDate(stop.at)}
           </span>
           {!atNow && stop.at !== null && (
-            <span className="lab-engraved shrink-0 text-[10.5px] font-semibold leading-4 tabular-nums text-foreground/70">
+            <span className="lab-engraved shrink-0 text-[0.65625rem] font-semibold leading-4 tabular-nums text-foreground/70">
               {formatInstantTime(stop.at)}
             </span>
           )}
@@ -90,7 +90,7 @@ export function TimelineRail({
               that must not be the one to give. `basis-full` before `sm:basis-auto`
               rather than `sm:flex-1` alone, since Tailwind emits `basis-auto`
               after `flex-1` and the pair would resolve back to a shared line. */}
-          <span className="min-w-0 flex-1 basis-full truncate text-[11px] text-foreground/45 sm:basis-auto">
+          <span className="min-w-0 flex-1 basis-full truncate text-[0.6875rem] text-foreground/45 sm:basis-auto">
             {stopSummary(stop, origin, players)}
           </span>
         </p>
@@ -199,7 +199,7 @@ function EndKey({
       title={title}
       aria-pressed={on}
       onClick={onClick}
-      className={`lab-chip lab-chip-sm rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+      className={`lab-chip lab-chip-sm rounded-full px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide transition-colors ${
         on ? "lab-chip-on text-foreground/85" : "text-foreground/50 hover:text-active"
       }`}
     >

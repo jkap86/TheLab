@@ -68,7 +68,7 @@ export function ColumnHeading({
           nothing at all to say it was one. */}
       <span
         aria-hidden="true"
-        className="text-[8px] leading-none text-foreground/25 transition-colors group-hover/pick:text-foreground/60"
+        className="text-[0.5rem] leading-none text-foreground/25 transition-colors group-hover/pick:text-foreground/60"
       >
         ▾
       </span>

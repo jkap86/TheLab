@@ -79,7 +79,7 @@ function CornerTab({
 }) {
   return (
     <span
-      className={`lab-well absolute top-0 z-[3] inline-flex gap-1.5 text-[10px] leading-none ${
+      className={`lab-well absolute top-0 z-[3] inline-flex gap-1.5 text-[0.625rem] leading-none ${
         align === "center" ? "items-center" : "items-baseline"
       } ${padding} ${
         side === "left"
@@ -173,7 +173,7 @@ function SeasonDigits({ season, live }: { season: string; live?: boolean }) {
   return (
     <span
       aria-live={live ? "polite" : undefined}
-      className="font-mono text-[12px] font-bold leading-none tabular-nums text-active drop-shadow-[0_0_12px_rgba(0,255,229,0.35)]"
+      className="font-mono text-[0.75rem] font-bold leading-none tabular-nums text-active drop-shadow-[0_0_12px_rgba(0,255,229,0.35)]"
     >
       {season}
     </span>
@@ -211,7 +211,7 @@ function StepKey({
         if (to === null) return;
         onChange(to);
       }}
-      className={`grid h-[22px] w-[18px] flex-none place-items-center rounded-md text-[12px] leading-none ${
+      className={`grid h-[1.375rem] w-[1.125rem] flex-none place-items-center rounded-md text-[0.75rem] leading-none ${
         dead
           ? "cursor-not-allowed text-foreground/25"
           : "lab-chip lab-chip-sm text-foreground/75"
@@ -234,7 +234,7 @@ export function StatTab({ stat }: { stat: HeaderStat }) {
       <span className="font-bold uppercase tracking-[0.12em] text-foreground/40">
         {stat.label}
       </span>
-      <span className="font-mono text-[12px] font-bold leading-none tabular-nums text-foreground/85">
+      <span className="font-mono text-[0.75rem] font-bold leading-none tabular-nums text-foreground/85">
         {stat.value}
       </span>
       {stat.sub && <span className="text-foreground/35">{stat.sub}</span>}

@@ -138,11 +138,11 @@ export function TimelineView({
           <button
             type="button"
             onClick={() => setOpened(true)}
-            className="lab-chip lab-chip-sm rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/55 transition-colors hover:text-active"
+            className="lab-chip lab-chip-sm rounded-full px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-foreground/55 transition-colors hover:text-active"
           >
             History
           </button>
-          <span className="min-w-0 truncate text-[11px] text-foreground/45">
+          <span className="min-w-0 truncate text-[0.6875rem] text-foreground/45">
             rewind this league through its stored moves
           </span>
         </TimelineSeat>
@@ -150,13 +150,13 @@ export function TimelineView({
 
       {opened && loading && (
         <TimelineSeat>
-          <span className="text-[11px] text-foreground/45">Reading history…</span>
+          <span className="text-[0.6875rem] text-foreground/45">Reading history…</span>
         </TimelineSeat>
       )}
 
       {opened && !loading && moves === 0 && (
         <TimelineSeat>
-          <span className="text-[11px] text-foreground/45">
+          <span className="text-[0.6875rem] text-foreground/45">
             No stored moves to rewind through.
           </span>
         </TimelineSeat>

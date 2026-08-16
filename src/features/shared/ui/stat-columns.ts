@@ -29,17 +29,33 @@
  * breakpoints rather than two.
  *
  * **The width is what the two ends share; the inset is not.** A heading's label
- * sits in a milled slot with an inset of its own, so a heading spends its 10px as
- * 6px of cell and 4px of channel where a cell spends all 10 at once — the text
- * still starts at the same x, which is the whole of what has to hold. That is why
+ * sits in a milled slot with an inset of its own, so a heading spends its inset as
+ * cell-plus-channel where a cell spends the same total in one go — the text still
+ * starts at the same x, which is the whole of what has to hold. That is why
  * {@link COLUMN_WIDTH} is split out and the padding is added per end: a shared box
  * that also owned the inset would have to be overridden by the rail, which is the
  * drift writing the geometry once was meant to prevent.
+ *
+ * **That total is 4px below `sm` and 10px from it, and the narrow one is a
+ * measurement rather than a taste.** From `sm` the column is a fixed 96px and the
+ * inset costs the row nothing; below it the four columns divide a line whose width
+ * is *the phone's*, which is the one length in the app `--app-font-scale` cannot
+ * scale — so raising the type takes width out of the columns from both ends at
+ * once, the card's own insets growing while the numbers do. Measured in Chromium
+ * against the compiled stylesheet, a 360px viewport had **no slack at all** at a
+ * scale of 1 — every arm measured exactly its own column, to the pixel — so the
+ * phone is where a global type increase lands first and hardest. Trimming the
+ * inset to 4px is one half of buying that back and the number arms' own step
+ * down below `sm` (see `StatBody`) is the
+ * other; together they clear every arm at 360, 375 and 390. It is the padding
+ * that gives and not the `divide-x` between the columns, per the league panel's
+ * own rule: an inset holds content off an edge nothing is written on, where that
+ * line is the only thing separating one number from the next.
  */
 export const COLUMN_WIDTH = "min-w-0 flex-1 sm:w-24 sm:flex-none sm:shrink-0";
 
 /** {@link COLUMN_WIDTH} plus the inset a *cell* spends in one go. */
-export const COLUMN_BOX = `${COLUMN_WIDTH} px-2.5`;
+export const COLUMN_BOX = `${COLUMN_WIDTH} px-1 sm:px-2.5`;
 
 /**
  * The box the four columns sit in — full width below `sm` where they divide a

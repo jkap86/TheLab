@@ -21,7 +21,7 @@ export function WinPctGauge({ pct }: { pct: number | null }) {
   const circumference = 2 * Math.PI * 44;
 
   return (
-    <div className="relative grid h-[56px] w-[56px] flex-none place-items-center sm:h-[66px] sm:w-[66px]">
+    <div className="relative grid h-[3.5rem] w-[3.5rem] flex-none place-items-center sm:h-[4.125rem] sm:w-[4.125rem]">
       <svg viewBox="0 0 100 100" className="absolute inset-0 -rotate-90">
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
@@ -54,13 +54,13 @@ export function WinPctGauge({ pct }: { pct: number | null }) {
       </svg>
       <div className="flex flex-col items-center gap-0.5">
         <span
-          className={`font-mono text-[15px] font-semibold leading-none tabular-nums tracking-tight sm:text-lg ${
+          className={`font-mono text-[0.9375rem] font-semibold leading-none tabular-nums tracking-tight sm:text-lg ${
             pct === null ? "text-foreground/35" : ""
           }`}
         >
           {formatWinPct(pct)}
         </span>
-        <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-foreground/40 sm:text-[9px]">
+        <span className="text-[0.5rem] font-bold uppercase tracking-[0.14em] text-foreground/40 sm:text-[0.5625rem]">
           Win pct
         </span>
       </div>

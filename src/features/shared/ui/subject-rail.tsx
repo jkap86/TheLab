@@ -462,7 +462,7 @@ export function SubjectRail({
                 It sits *after* the key rather than opening the row, which is
                 what makes it true: it captions the group it introduces, and the
                 group before it has a key naming itself. */}
-            <span className="hidden shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/55 sm:inline">
+            <span className="hidden shrink-0 font-mono text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-foreground/55 sm:inline">
               Who&apos;s in it
             </span>
 
@@ -520,7 +520,7 @@ export function SubjectRail({
               // "dialog" promised a modal that never arrives. The key beside it
               // *does* open one, and keeps the attribute.
               aria-controls={open ? panelId : undefined}
-              className="lab-channel flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[10px] font-semibold text-foreground/70 transition-colors hover:text-active"
+              className="lab-channel flex shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-[3px] text-[0.625rem] font-semibold text-foreground/70 transition-colors hover:text-active"
             >
               <SearchIcon />
               {count > 0 ? "Add" : "Player or leaguemate"}
@@ -557,7 +557,7 @@ export function SubjectRail({
                   numerator is the thing the plate keeps having to relearn. */}
               <span
                 role="status"
-                className={`shrink-0 pl-1 font-mono text-[10px] tabular-nums ${
+                className={`shrink-0 pl-1 font-mono text-[0.625rem] tabular-nums ${
                   view.subjectsLoading ? "text-foreground/25" : "text-foreground/55"
                 }`}
               >
@@ -591,7 +591,7 @@ export function SubjectRail({
                 type="button"
                 onClick={() => openSheet("player")}
                 aria-haspopup="dialog"
-                className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[10px] font-semibold text-foreground/75 transition-colors hover:text-foreground"
+                className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[0.625rem] font-semibold text-foreground/75 transition-colors hover:text-foreground"
               >
                 <SharesIcon />
                 {count > 0 ? "Players" : "Player shares"}
@@ -601,7 +601,7 @@ export function SubjectRail({
                 type="button"
                 onClick={() => openSheet("leaguemate")}
                 aria-haspopup="dialog"
-                className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[10px] font-semibold text-foreground/75 transition-colors hover:text-foreground"
+                className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[0.625rem] font-semibold text-foreground/75 transition-colors hover:text-foreground"
               >
                 <MatesIcon />
                 {count > 0 ? "Leaguemates" : "Leaguemate shares"}
@@ -804,16 +804,16 @@ function SubjectPanel({
       </div>
 
       {error && !loading && (
-        <p className="shrink-0 px-2 py-1 text-[11px] text-amber-300">{error}</p>
+        <p className="shrink-0 px-2 py-1 text-[0.6875rem] text-amber-300">{error}</p>
       )}
 
       <div className="flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain">
         {loading ? (
-          <p className="px-2 py-2 text-[12px] text-foreground/40">
+          <p className="px-2 py-2 text-[0.75rem] text-foreground/40">
             Reading rosters…
           </p>
         ) : results.length === 0 ? (
-          <p className="px-2 py-2 text-[12px] text-foreground/40">
+          <p className="px-2 py-2 text-[0.75rem] text-foreground/40">
             {query.trim()
               ? "Nobody by that name in these leagues."
               : "No rosters or members cached for these leagues yet."}
@@ -860,7 +860,7 @@ function ResultGroup({
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="px-1 pt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40">
+      <span className="px-1 pt-1 font-mono text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-foreground/40">
         {label}
       </span>
       {options.map((option) => {
@@ -872,7 +872,7 @@ function ResultGroup({
             type="button"
             aria-pressed={on}
             onClick={() => onToggle(option.subject)}
-            className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] font-semibold ${
+            className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[0.8125rem] font-semibold ${
               on
                 ? "lab-chip lab-chip-sm lab-chip-on"
                 : "lab-chip lab-chip-sm text-foreground/75 hover:text-foreground"
@@ -886,7 +886,7 @@ function ResultGroup({
             <span className="min-w-0 flex-1 truncate">{option.name}</span>
             {option.note && (
               <span
-                className={`shrink-0 text-[11px] font-medium ${
+                className={`shrink-0 text-[0.6875rem] font-medium ${
                   on ? "text-[#052029]/55" : "text-foreground/40"
                 }`}
               >
@@ -895,7 +895,7 @@ function ResultGroup({
             )}
             <span
               title="Leagues holding this"
-              className={`shrink-0 font-mono text-[10px] tabular-nums ${
+              className={`shrink-0 font-mono text-[0.625rem] tabular-nums ${
                 on ? "text-[#052029]/60" : "text-foreground/35"
               }`}
             >

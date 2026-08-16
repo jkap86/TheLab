@@ -132,11 +132,11 @@ export function TradeInstantLedge({
   const time = formatTradeTime(completedAt);
   return (
     <CardLedge>
-      <span className="lab-readout shrink-0 rounded px-1.5 py-px text-[11.5px] font-semibold leading-4 tabular-nums text-foreground/85">
+      <span className="lab-readout shrink-0 rounded px-1.5 py-px text-[0.71875rem] font-semibold leading-4 tabular-nums text-foreground/85">
         {formatTradeDate(completedAt)}
       </span>
       {time && (
-        <span className="lab-engraved shrink-0 text-[10.5px] font-semibold leading-4 tabular-nums text-foreground/70">
+        <span className="lab-engraved shrink-0 text-[0.65625rem] font-semibold leading-4 tabular-nums text-foreground/70">
           {time}
         </span>
       )}

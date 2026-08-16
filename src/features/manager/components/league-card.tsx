@@ -199,14 +199,14 @@ function RecordLedge({
   return (
     <CardLedge>
       {record && (
-        <span className="lab-readout rounded px-1.5 py-px text-[12.5px] font-semibold leading-4 tabular-nums text-foreground/85">
+        <span className="lab-readout rounded px-1.5 py-px text-[0.78125rem] font-semibold leading-4 tabular-nums text-foreground/85">
           {formatRecord(record)}
         </span>
       )}
       {standing && (
         <span
           title={`#${standing.rank} of ${standing.of} by record`}
-          className="lab-engraved shrink-0 text-[11px] font-semibold leading-4 tabular-nums text-foreground/80"
+          className="lab-engraved shrink-0 text-[0.6875rem] font-semibold leading-4 tabular-nums text-foreground/80"
         >
           {ordinal(standing.rank)}
           {/* The denominator the ordinal is out of. Dropped from the plate

@@ -91,7 +91,7 @@ export const SPEC_BEZEL =
  * part that already has two, and nothing inside the housing is built like a part
  * for the same reason nothing inside the card is built like a card.
  */
-export const SPEC_BAY = "flex min-w-0 flex-col gap-px px-[5px] pb-[3px] pt-0.5";
+export const SPEC_BAY = "flex min-w-0 flex-col gap-px px-[0.3125rem] pb-[3px] pt-0.5";
 
 /**
  * The cut parting one gauge from the one before it — the card's own milled seam
@@ -121,7 +121,7 @@ export const SPEC_SEAM =
  * would stop lining up.
  */
 export const SPEC_CAPTION =
-  "lab-engraved-faint text-center font-display text-[6px] font-bold uppercase leading-[8px] tracking-[0.2em] text-foreground/35";
+  "lab-engraved-faint text-center font-display text-[0.375rem] font-bold uppercase leading-[0.5rem] tracking-[0.2em] text-foreground/35";
 
 /**
  * The value, in a window sunk into the bezel's floor.
@@ -131,7 +131,7 @@ export const SPEC_CAPTION =
  * these have to fit a phone. The glass and the lit lower lip are `.lab-gauge`.
  */
 export const SPEC_GAUGE =
-  "lab-gauge rounded-[3px] px-[7px] text-center font-display text-[9.5px] font-bold uppercase leading-[14px] tracking-[0.04em] tabular-nums whitespace-nowrap";
+  "lab-gauge rounded-[3px] px-[0.4375rem] text-center font-display text-[0.59375rem] font-bold uppercase leading-[0.875rem] tracking-[0.04em] tabular-nums whitespace-nowrap";
 
 /**
  * How brightly a value is drawn, per {@link LeagueSpec.tone}.

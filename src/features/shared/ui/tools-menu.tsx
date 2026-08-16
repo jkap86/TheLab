@@ -87,9 +87,9 @@ export function ToolsMenu() {
         // glyph, the label and the chevron are one line under any layout — the
         // failure worth ruling out is them stacking into a keycap three rows
         // tall, which the bar has no height for and cannot clip.
-        className="lab-key lab-key-active lab-key-press lab-notch inline-flex h-[37px] transition-[filter] duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/70"
+        className="lab-key lab-key-active lab-key-press lab-notch inline-flex h-[2.3125rem] transition-[filter] duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/70"
       >
-        <span className="lab-face lab-face-active lab-notch flex h-[34px] items-center justify-center gap-2 whitespace-nowrap px-3 font-display text-[11px] font-extrabold uppercase tracking-[0.1em]">
+        <span className="lab-face lab-face-active lab-notch flex h-[2.125rem] items-center justify-center gap-2 whitespace-nowrap px-3 font-display text-[0.6875rem] font-extrabold uppercase tracking-[0.1em]">
           <GridGlyph />
           <span className="hidden sm:inline">Tools</span>
           <Chevron open={open} />
@@ -115,7 +115,7 @@ export function ToolsMenu() {
             >
               {TOOL_GROUPS.map((group) => (
                 <div key={group} className="mb-1 last:mb-0">
-                  <p className="flex items-center gap-2.5 px-2 pb-1.5 pt-2 font-display text-[9.5px] font-bold uppercase tracking-[0.26em] text-foreground/35">
+                  <p className="flex items-center gap-2.5 px-2 pb-1.5 pt-2 font-display text-[0.59375rem] font-bold uppercase tracking-[0.26em] text-foreground/35">
                     {group}
                     <span
                       aria-hidden
@@ -141,7 +141,7 @@ export function ToolsMenu() {
                                 its own shadow. Lit cyan when it's the row you
                                 are standing on. */}
                             <span
-                              className={`lab-notch flex h-[34px] w-[34px] flex-none items-center justify-center transition-colors ${
+                              className={`lab-notch flex h-[2.125rem] w-[2.125rem] flex-none items-center justify-center transition-colors ${
                                 active
                                   ? "bg-[linear-gradient(160deg,#a8fff4,#00d9c3)] text-[#052029] shadow-[inset_0_1.5px_0_rgba(255,255,255,0.85),0_2px_5px_-1px_rgba(0,0,0,0.7)]"
                                   : "bg-[linear-gradient(160deg,#2b4b61,#10222f)] text-foreground/55 shadow-[inset_0_1.5px_0_rgba(255,255,255,0.3),inset_0_-3px_6px_rgba(0,0,0,0.6),0_2px_4px_-1px_rgba(0,0,0,0.8)] group-hover:text-active"
@@ -151,13 +151,13 @@ export function ToolsMenu() {
                             </span>
                             <span className="min-w-0">
                               <span
-                                className={`block font-display text-[13px] font-bold tracking-tight ${
+                                className={`block font-display text-[0.8125rem] font-bold tracking-tight ${
                                   active ? "text-active" : "text-foreground/90"
                                 }`}
                               >
                                 {tool.text}
                               </span>
-                              <span className="mt-0.5 block text-[11.5px] leading-snug text-foreground/45">
+                              <span className="mt-0.5 block text-[0.71875rem] leading-snug text-foreground/45">
                                 {tool.description}
                               </span>
                             </span>
@@ -211,7 +211,7 @@ function AccountRow({
           <Link
             href="/tools"
             onClick={onNavigate}
-            className="lab-notch flex-none bg-active/10 px-2.5 py-1.5 font-display text-[9.5px] font-bold uppercase tracking-[0.14em] text-active shadow-[inset_0_0_0_1px_rgba(0,255,229,0.35)] transition-colors hover:bg-active/20"
+            className="lab-notch flex-none bg-active/10 px-2.5 py-1.5 font-display text-[0.59375rem] font-bold uppercase tracking-[0.14em] text-active shadow-[inset_0_0_0_1px_rgba(0,255,229,0.35)] transition-colors hover:bg-active/20"
           >
             Change
           </Link>
@@ -224,7 +224,7 @@ function AccountRow({
           <Link
             href="/tools"
             onClick={onNavigate}
-            className="lab-notch flex-none bg-active/12 px-2.5 py-1.5 font-display text-[9.5px] font-bold uppercase tracking-[0.14em] text-active shadow-[inset_0_0_0_1px_rgba(0,255,229,0.45)] transition-colors hover:bg-active/22"
+            className="lab-notch flex-none bg-active/12 px-2.5 py-1.5 font-display text-[0.59375rem] font-bold uppercase tracking-[0.14em] text-active shadow-[inset_0_0_0_1px_rgba(0,255,229,0.45)] transition-colors hover:bg-active/22"
           >
             Connect
           </Link>

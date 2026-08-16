@@ -59,7 +59,7 @@ export function TradeValueTag({
       title={cell.title}
       className="flex shrink-0 items-baseline gap-1 tabular-nums"
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground/35">
+      <span className="text-[0.625rem] font-semibold uppercase tracking-wide text-foreground/35">
         {metric.label}
       </span>
       {text ? (
@@ -136,11 +136,11 @@ export function TradeValuePicker({
         aria-controls={open ? menuId : undefined}
         className="lab-chip inline-flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm font-semibold text-foreground/85"
       >
-        <span className="text-[11px] uppercase tracking-wide text-foreground/45">
+        <span className="text-[0.6875rem] uppercase tracking-wide text-foreground/45">
           Value
         </span>
         {active.label}
-        <span aria-hidden="true" className="text-[8px] leading-none">
+        <span aria-hidden="true" className="text-[0.5rem] leading-none">
           ▾
         </span>
       </button>

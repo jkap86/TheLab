@@ -191,7 +191,7 @@ describe("the league specs", () => {
     // The head's two lines each carry its inset, so a card drawing one line wears
     // it once — which is a probe for the *box* rather than for the bezel inside
     // it, since an empty line is exactly what costs the padding.
-    assert.equal(html.split("pl-[21px] pr-[11px]").length - 1, 1);
+    assert.equal(html.split("pl-[calc(1.25rem+1px)] pr-[calc(1rem+1px-6px)]").length - 1, 1);
   });
 
   test("an unsynced lineup drops the lineup gauges rather than reading them as zero", () => {

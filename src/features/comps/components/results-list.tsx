@@ -116,7 +116,7 @@ function ResultRow({
               {row.season}
             </span>
             {samePlayer && (
-              <span className="shrink-0 rounded-full bg-active/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-active/80">
+              <span className="shrink-0 rounded-full bg-active/10 px-2 py-0.5 text-[0.625rem] uppercase tracking-wider text-active/80">
                 same player
               </span>
             )}
@@ -158,7 +158,7 @@ function ResultRow({
               legible inside the full line. */}
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wider text-foreground/35">
+              <tr className="text-left text-[0.625rem] uppercase tracking-wider text-foreground/35">
                 <th className="py-1 pr-2 font-medium">
                   {payload.basis === "per_game" ? "Per game" : "Season"}
                 </th>
@@ -186,7 +186,7 @@ function ResultRow({
                     )}
                     {line.weight !== null && (
                       <span
-                        className="ml-1 text-[10px] text-active/60"
+                        className="ml-1 text-[0.625rem] text-active/60"
                         title={`Weighted ${line.weight} in this comparison`}
                       >
                         w{line.weight}
@@ -206,7 +206,7 @@ function ResultRow({
               ))}
             </tbody>
           </table>
-          <p className="mt-2 text-[11px] text-foreground/35">
+          <p className="mt-2 text-[0.6875rem] text-foreground/35">
             Distance {row.distance} · similarity is 100·e
             <sup>−distance</sup>, a fixed score rather than a percentage.
             Fantasy points are Sleeper&apos;s generic scorings, not any

@@ -473,7 +473,7 @@ describe("the two tracks", () => {
 
 describe("what a line names", () => {
   test("a take line carries the player's position and team", () => {
-    assert.match(card(), /Christian McCaffrey<span class="ml-1\.5 whitespace-nowrap text-\[11px\] text-foreground\/45">RB · SF/);
+    assert.match(card(), /Christian McCaffrey<span class="ml-1\.5 whitespace-nowrap text-\[0.6875rem\] text-foreground\/45">RB · SF/);
   });
 
   test("a give line names the player and nothing else", () => {

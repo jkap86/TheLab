@@ -199,7 +199,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
           the plate sat almost exactly between two cards and could be read as
           belonging to either; at 18 there is visibly more ground above it than
           below. Check that before moving it. */}
-      <ul className="flex w-full flex-col gap-[18px]">
+      <ul className="flex w-full flex-col gap-[1.125rem]">
         {view.filtered.map((league) => (
           <LeagueCard
             key={league.league_id}

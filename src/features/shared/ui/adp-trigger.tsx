@@ -72,14 +72,14 @@ export function AdpTrigger({
               draftCount === 1 ? "" : "s"
             }`
       }
-      className={`lab-billet lab-notch-all inline-flex h-[38px] flex-none pb-[6px] pr-[6px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/70 ${
+      className={`lab-billet lab-notch-all inline-flex h-[2.375rem] flex-none pb-[6px] pr-[6px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/70 ${
         narrowed > 0 ? "lab-billet-lit" : ""
       }`}
     >
-      <span className="lab-billet-face lab-notch-all flex h-[32px] items-center gap-[9px] whitespace-nowrap pr-3 font-display text-[11px] font-extrabold uppercase tracking-[0.13em] text-foreground/90">
+      <span className="lab-billet-face lab-notch-all flex h-[2rem] items-center gap-[0.5625rem] whitespace-nowrap pr-3 font-display text-[0.6875rem] font-extrabold uppercase tracking-[0.13em] text-foreground/90">
         {/* The rail is flush to the block's leading edge — no inset — because it
             is the *side* of the part catching the light, not a stripe on it. */}
-        <span aria-hidden className="lab-billet-rail w-[6px] flex-none self-stretch" />
+        <span aria-hidden className="lab-billet-rail w-[0.375rem] flex-none self-stretch" />
         <span
           aria-hidden
           className="lab-channel flex flex-none items-end gap-[2px] rounded-[2px] px-1 py-[3px]"

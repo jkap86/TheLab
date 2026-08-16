@@ -11,7 +11,7 @@ import { AdpBoardRow } from "./adp-board-row";
 import { AdpPickBoardRow } from "./adp-pick-row";
 import {
   ADP_BOARD_INITIAL_RECT,
-  ADP_ROW_HEIGHT,
+  adpRowHeight,
   ADP_ROW_OVERSCAN,
 } from "./adp-drawer.constants.ts";
 
@@ -116,9 +116,9 @@ export function AdpBoardRows({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     // Fixed, never measured — a row cannot be another height (see
-    // `ADP_ROW_HEIGHT`), so measuring would buy nothing and cost a
+    // `adpRowHeight`), so measuring would buy nothing and cost a
     // `getBoundingClientRect` per row per pass.
-    estimateSize: () => ADP_ROW_HEIGHT,
+    estimateSize: () => adpRowHeight(),
     // Keyed by the row's subject rather than the index, so nothing the
     // virtualizer holds about a row survives a filter change that reshuffles
     // the board. A pick's key is prefixed, so it cannot collide with the player

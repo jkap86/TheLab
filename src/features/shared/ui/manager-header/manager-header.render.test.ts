@@ -154,12 +154,16 @@ describe("what the corners and the body owe the wall", () => {
   test("the trailing inset pays for the wall", () => {
     const html = plate();
 
-    // 21px from the leading edge and 17px from the trailing one is what the
-    // bordered box gave (20+1 and 16+1). The trailing 6px is wall now, so the
+    // The leading and trailing edges are where the bordered box put them
+    // (`pl-5`+border and `px-4`+border). The trailing 6px is wall now, so the
     // padding gives it back — otherwise the part is 20px in on one side and
     // 26px in on the other, which reads as not square.
-    assert.match(html, /pl-\[21px\] pr-\[11px\]/);
-    assert.match(html, /sm:pl-\[25px\] sm:pr-\[15px\]/);
+    //
+    // Both terms of each sum stay in the `calc`, per `--app-font-scale`: the rem
+    // half scales with the type and the border and wall are material. A literal
+    // here squares the plate at one scale and at no other.
+    assert.ok(html.includes("pl-[calc(1.25rem+1px)] pr-[calc(1rem+1px-6px)]"));
+    assert.ok(html.includes("sm:pl-[calc(1.5rem+1px)] sm:pr-[calc(1.25rem+1px-6px)]"));
   });
 });
 
@@ -358,9 +362,11 @@ describe("the season corner", () => {
 
   test("the stepper spends its padding on the keys, not on the tab", () => {
     // 22px of key defines the tab's height, which is within 2px of the plain
-    // tab's 20 — near enough that the two corners still read as one scale.
+    // tab's 20 — near enough that the two corners still read as one scale. It is
+    // a box cut around a glyph, so it is spelled in rem and both stay within
+    // that 2px of each other at any `--app-font-scale`.
     assert.match(stepped(), /py-0 pr-1/);
-    assert.match(stepped(), /h-\[22px\] w-\[18px\]/);
+    assert.match(stepped(), /h-\[1\.375rem\] w-\[1\.125rem\]/);
   });
 });
 

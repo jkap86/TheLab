@@ -94,7 +94,7 @@ export function FilterRail<T extends string>({
               type="button"
               aria-pressed={isSelected}
               onClick={() => onPick(option.value)}
-              className={`inline-flex items-baseline gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${
+              className={`inline-flex items-baseline gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[0.71875rem] font-semibold ${
                 isSelected
                   ? "lab-chip lab-chip-sm lab-chip-on"
                   : "lab-chip lab-chip-sm text-foreground/70 hover:text-foreground"
@@ -103,7 +103,7 @@ export function FilterRail<T extends string>({
               {option.label}
               {counts && (
                 <span
-                  className={`font-mono text-[10px] tabular-nums ${
+                  className={`font-mono text-[0.625rem] tabular-nums ${
                     isSelected ? "text-[#052029]/60" : "text-foreground/40"
                   }`}
                 >

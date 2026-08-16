@@ -34,7 +34,7 @@ export function PageHeading({
   return (
     <header className={className}>
       {eyebrow && (
-        <p className="font-display text-[11px] font-medium uppercase tracking-[0.34em] text-active/85">
+        <p className="font-display text-[0.6875rem] font-medium uppercase tracking-[0.34em] text-active/85">
           {eyebrow}
         </p>
       )}

@@ -137,14 +137,14 @@ function OpponentLedge({
             the exact confusion the record ledge avoids by being digits. */}
         <span
           aria-hidden="true"
-          className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground/40"
+          className="shrink-0 text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-foreground/40"
         >
           vs
         </span>
         <Avatar url={state.opponent.avatar_url} name={label} size="sm" />
         <span
           title={state.opponent.team_name ?? undefined}
-          className="min-w-0 truncate text-[12.5px] font-semibold leading-4 text-foreground/85"
+          className="min-w-0 truncate text-[0.78125rem] font-semibold leading-4 text-foreground/85"
         >
           <span className="sr-only">Playing </span>
           {label}
@@ -167,7 +167,7 @@ function OpponentLedge({
           share has to give — and a readout hanging past its own housing is what
           the cap exists to prevent. None of the three reaches the cap at 390px;
           this is what happens if one ever does. */}
-      <span className="lab-readout min-w-0 truncate rounded px-1.5 py-px text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-foreground/45">
+      <span className="lab-readout min-w-0 truncate rounded px-1.5 py-px text-[0.6875rem] font-semibold uppercase leading-4 tracking-[0.06em] text-foreground/45">
         {note}
       </span>
     </CardLedge>

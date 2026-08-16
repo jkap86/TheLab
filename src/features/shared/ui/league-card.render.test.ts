@@ -242,9 +242,18 @@ describe("where the stat columns land", () => {
    * and ends 17px off the trailing edge. A heading a hair off the number under it
    * reads as a misaligned table, and no type can carry that agreement — which is
    * what these are for.
+   *
+   * **Each of those two edges is a sum of a rem term and a px one, and keeping
+   * them apart is the whole of what these assertions now check.** The rail's own
+   * `pl-5`/`px-4` are rem, so they scale with `--app-font-scale`; the border it
+   * draws them against and the wall a slab spends are material and constant.
+   * Collapsed to the literal 21 and 17 they used to be, a card's head lands on
+   * the rail at a scale of 1 and nowhere else.
    */
-  const RAIL_LEFT = 21;
-  const RAIL_RIGHT = 17;
+  /** The rail's leading pad, in rem — Tailwind's `pl-5`. */
+  const RAIL_LEFT_REM = 1.25;
+  /** Its trailing pad — `px-4`. */
+  const RAIL_RIGHT_REM = 1;
   /** What `.lab-slab` spends on its wall, out of that trailing gutter. */
   const WALL = 6;
   /** What a bordered box spends on each of its own, which the plate is. */
@@ -252,13 +261,18 @@ describe("where the stat columns land", () => {
 
   test("a resting card gives its wall back out of the head's own inset", () => {
     const html = card();
-    assert.equal(REST.head, `pl-[${RAIL_LEFT}px] pr-[${RAIL_RIGHT - WALL}px]`);
-    assert.match(html, new RegExp(`pl-\\[${RAIL_LEFT}px\\] pr-\\[${RAIL_RIGHT - WALL}px\\]`));
+    const head =
+      `pl-[calc(${RAIL_LEFT_REM}rem+${BORDER}px)] ` +
+      `pr-[calc(${RAIL_RIGHT_REM}rem+${BORDER}px-${WALL}px)]`;
+    assert.equal(REST.head, head);
+    assert.ok(html.includes(head));
   });
 
   test("an open card arrives at the same two edges through its border", () => {
     // Which is what keeps the columns from stepping sideways as a card opens.
-    assert.equal(OPEN.head, `pl-${(RAIL_LEFT - BORDER) / 4} pr-${(RAIL_RIGHT - BORDER) / 4}`);
+    // The rem halves land as Tailwind's own scale steps, which is what the rail
+    // itself is written in — the border supplies the px term for free.
+    assert.equal(OPEN.head, `pl-${(RAIL_LEFT_REM * 16) / 4} pr-${(RAIL_RIGHT_REM * 16) / 4}`);
     assert.match(OPEN.face, /border /);
   });
 
@@ -266,7 +280,11 @@ describe("where the stat columns land", () => {
     // Below `sm` the columns divide the head's own width rather than taking a
     // fixed one, so landing the trailing edge in the same place is not enough on
     // its own.
-    assert.equal(RAIL_LEFT + (RAIL_RIGHT - WALL) + WALL, RAIL_LEFT + RAIL_RIGHT);
+    // Written in px at a scale of 1, since what has to hold is that the two
+    // spellings sum alike — and both halves scale together whatever that is.
+    const railLeft = RAIL_LEFT_REM * 16 + BORDER;
+    const railRight = RAIL_RIGHT_REM * 16 + BORDER;
+    assert.equal(railLeft + (railRight - WALL) + WALL, railLeft + railRight);
   });
 
   /**
@@ -276,18 +294,23 @@ describe("where the stat columns land", () => {
    * gutter is the slab's wall, and 1px in when the card is open and the face is a
    * bordered box at full width. One number would put the ledge in two places.
    */
-  const PLATE_INSET = 14; // what the nameplate holds off the leading edge
+  /**
+   * What the nameplate holds off the leading edge, in rem — it is an inset
+   * around type, so it scales, and only the term it is added to differs between
+   * the two states.
+   */
+  const PLATE_INSET_REM = 0.875;
 
   test("the ledge sits the nameplate's own inset off the face, in both states", () => {
-    assert.equal(REST.edge, `right-${(PLATE_INSET + WALL) / 4}`);
-    assert.equal(OPEN.edge, `right-[${PLATE_INSET + BORDER}px]`);
+    assert.equal(REST.edge, `right-[calc(${PLATE_INSET_REM}rem+${WALL}px)]`);
+    assert.equal(OPEN.edge, `right-[calc(${PLATE_INSET_REM}rem+${BORDER}px)]`);
   });
 
   test("the leading edge needs no such pair", () => {
     // A slab's padding is bottom and trailing only, so the card's left edge is
     // the face's left edge in both states — which is why the row's `left-3.5` is
     // written once rather than carried by REST/OPEN.
-    assert.match(card(), new RegExp(`left-${PLATE_INSET / 4} top-0`));
+    assert.match(card(), new RegExp(`left-${(PLATE_INSET_REM * 16) / 4} top-0`));
   });
 });
 

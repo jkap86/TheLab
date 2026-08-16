@@ -73,7 +73,7 @@ export function ToolCardContent({
       {/* The accent rule: a short cyan hairline that extends full-width on hover. */}
       <span
         aria-hidden
-        className="relative z-10 mt-3 block h-px max-w-[92px] bg-gradient-to-r from-active/60 to-transparent transition-[max-width] duration-500 ease-out group-hover:max-w-full"
+        className="relative z-10 mt-3 block h-px max-w-[5.75rem] bg-gradient-to-r from-active/60 to-transparent transition-[max-width] duration-500 ease-out group-hover:max-w-full"
       />
 
       <p className="relative z-10 mt-4 text-sm text-foreground/60">{description}</p>

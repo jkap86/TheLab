@@ -48,7 +48,7 @@ export function PicktrackerHome() {
 
       {user && (
         <section className="mb-8">
-          <h2 className="mb-3 font-display text-[11px] font-medium uppercase tracking-[0.28em] text-active/80">
+          <h2 className="mb-3 font-display text-[0.6875rem] font-medium uppercase tracking-[0.28em] text-active/80">
             Your leagues
             <span className="ml-2 normal-case tracking-normal text-foreground/45">
               @{user.username}
@@ -69,7 +69,7 @@ export function PicktrackerHome() {
       )}
 
       <section>
-        <h2 className="mb-3 font-display text-[11px] font-medium uppercase tracking-[0.28em] text-foreground/45">
+        <h2 className="mb-3 font-display text-[0.6875rem] font-medium uppercase tracking-[0.28em] text-foreground/45">
           {user ? "Or track by league ID" : "Track by league ID"}
         </h2>
         <PicktrackerSearch />

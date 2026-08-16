@@ -95,7 +95,7 @@ export function AdpBay({
       <span
         aria-hidden
         style={{ left: TONGUE[bay] }}
-        className="absolute -top-[5px] h-[9px] w-[9px] -translate-x-1/2 rotate-45 rounded-[1px] border-l border-t border-active/25 bg-[#1b3040]"
+        className="absolute -top-[5px] h-[0.5625rem] w-[0.5625rem] -translate-x-1/2 rotate-45 rounded-[1px] border-l border-t border-active/25 bg-[#1b3040]"
       />
       {children}
     </div>

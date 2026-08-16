@@ -258,7 +258,7 @@ export function LookbackPanel({
             }
           >
             <span
-              className={`lab-readout lab-lens block h-[46px] w-[64px] rounded-lg transition-shadow @md:w-[92px] ${
+              className={`lab-readout lab-lens block h-[2.875rem] w-[4rem] rounded-lg transition-shadow @md:w-[5.75rem] ${
                 editing ? "lab-readout-live" : ""
               }`}
             >
@@ -319,7 +319,7 @@ export function LookbackPanel({
             </PanelKey>
           }
         >
-          <span className="lab-readout lab-lens flex h-[46px] items-center rounded-lg px-0.5">
+          <span className="lab-readout lab-lens flex h-[2.875rem] items-center rounded-lg px-0.5">
             <input
               type="date"
               min={domain.from}
@@ -364,7 +364,7 @@ export function LookbackPanel({
       {/* The density, standing in a milled slot. A readout, not a control: the
           window's edges are ticked over it and the draft keeps its hairline,
           but nothing here catches a drag — the flag is the one press. */}
-      <div className="lab-channel relative h-[54px] rounded-md">
+      <div className="lab-channel relative h-[3.375rem] rounded-md">
         {bars.map((bar) => {
           if (bar.drafts === 0) return null;
           const { left: barLeft, width } = monthExtent(bar.month, domain);
@@ -423,7 +423,7 @@ export function LookbackPanel({
               aria-label={`Start the window at the ${anchor.label}`}
               onClick={() => onChange(sinceDraftRange(anchor.date, view))}
               style={{ left: `${fractionOf(domain, anchor.date) * 100}%` }}
-              className={`absolute -top-[5px] h-[10px] w-[10px] -translate-x-1/2 rotate-45 rounded-[2px] bg-fuchsia-400 shadow-[0_0_8px_rgba(232,121,249,0.8),inset_0_1px_0_rgba(255,255,255,0.5)] transition-shadow hover:shadow-[0_0_13px_rgba(232,121,249,1),inset_0_1px_0_rgba(255,255,255,0.6)] focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-300 ${
+              className={`absolute -top-[5px] h-[0.625rem] w-[0.625rem] -translate-x-1/2 rotate-45 rounded-[2px] bg-fuchsia-400 shadow-[0_0_8px_rgba(232,121,249,0.8),inset_0_1px_0_rgba(255,255,255,0.5)] transition-shadow hover:shadow-[0_0_13px_rgba(232,121,249,1),inset_0_1px_0_rgba(255,255,255,0.6)] focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-300 ${
                 onDraft ? "outline outline-1 outline-offset-[3px] outline-fuchsia-400/70" : ""
               }`}
             />
@@ -486,7 +486,7 @@ function StepKey({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="lab-chip mt-[8px] grid h-[30px] w-[30px] place-items-center rounded-lg text-[0.95rem] font-semibold text-foreground/75 transition-colors hover:text-foreground"
+      className="lab-chip mt-[0.5rem] grid h-[1.875rem] w-[1.875rem] place-items-center rounded-lg text-[0.95rem] font-semibold text-foreground/75 transition-colors hover:text-foreground"
     >
       {children}
     </button>

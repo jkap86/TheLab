@@ -63,7 +63,7 @@ export function TimelineRosters({
 
   if (!selected) {
     return (
-      <p className="px-3 pb-3 pt-1 text-[11px] text-foreground/35 @lg:px-5 @lg:pb-5">
+      <p className="px-3 pb-3 pt-1 text-[0.6875rem] text-foreground/35 @lg:px-5 @lg:pb-5">
         No rosters stored for this league yet.
       </p>
     );
@@ -191,7 +191,7 @@ function TimelineTeamRow({
         }`}
       >
         <span
-          className={`absolute left-0 top-0 inline-flex h-[17px] min-w-[26px] items-center justify-center rounded-br-md rounded-tl-md px-[5px] font-mono text-[9px] font-bold leading-none tracking-[0.04em] ${
+          className={`absolute left-0 top-0 inline-flex h-[1.0625rem] min-w-[1.625rem] items-center justify-center rounded-br-md rounded-tl-md px-[0.3125rem] font-mono text-[0.5625rem] font-bold leading-none tracking-[0.04em] ${
             active ? "lab-tab-on text-foreground/90" : "lab-tab text-foreground/60"
           }`}
         >
@@ -200,7 +200,7 @@ function TimelineTeamRow({
 
         {/* Indented past the tab's overhang, which it gives up on this line
             alone — the standings row's own construction. */}
-        <span className="flex min-w-0 items-center gap-1 pl-[22px] @lg:gap-2">
+        <span className="flex min-w-0 items-center gap-1 pl-[1.375rem] @lg:gap-2">
           <Avatar url={manager?.avatar_url ?? null} name={name} size="sm" />
           <span
             className={`min-w-0 truncate text-[0.8125rem] font-medium @lg:text-[0.9375rem] @2xl:text-base ${
@@ -377,14 +377,14 @@ function PlayerLine({
           reaching past the box's leading edge is clipped rather than overhanging.
           The panel learned that one the hard way. */}
       <span
-        className={`lab-tab lab-tab-pos absolute left-0 top-[2px] inline-flex h-[17px] min-w-[26px] items-center justify-center rounded-[5px] px-1 font-mono text-[9px] font-bold uppercase leading-none tracking-[0.04em] @3xl:static @3xl:top-auto @3xl:w-full ${tone}`}
+        className={`lab-tab lab-tab-pos absolute left-0 top-[2px] inline-flex h-[1.0625rem] min-w-[1.625rem] items-center justify-center rounded-[5px] px-1 font-mono text-[0.5625rem] font-bold uppercase leading-none tracking-[0.04em] @3xl:static @3xl:top-auto @3xl:w-full ${tone}`}
       >
         {position}
       </span>
 
       <span
         title={player.name}
-        className="flex min-w-0 items-baseline gap-1.5 pl-[34px] text-[0.8125rem] text-foreground/85 @3xl:pl-0 @4xl:text-sm"
+        className="flex min-w-0 items-baseline gap-1.5 pl-[2.125rem] text-[0.8125rem] text-foreground/85 @3xl:pl-0 @4xl:text-sm"
       >
         {/* Contracted below `@lg` and whole above it, the panel's own treatment
             and its arithmetic: at this width the name track is roughly where real

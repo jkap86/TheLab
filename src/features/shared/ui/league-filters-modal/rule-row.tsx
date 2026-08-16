@@ -228,7 +228,7 @@ export function RuleRow({
                   : { ...rule, op: "eq", value: sentinel.value },
               )
             }
-            className={`shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold ${
+            className={`shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-[0.6875rem] font-semibold ${
               onSentinel
                 ? "lab-chip lab-chip-sm lab-chip-on"
                 : "lab-chip lab-chip-sm text-foreground/55 hover:text-foreground"
@@ -240,7 +240,7 @@ export function RuleRow({
 
         <span
           title="Leagues matching this rule on its own"
-          className="w-6 shrink-0 text-center font-mono text-[10px] tabular-nums text-foreground/35"
+          className="w-6 shrink-0 text-center font-mono text-[0.625rem] tabular-nums text-foreground/35"
         >
           {count}
         </span>

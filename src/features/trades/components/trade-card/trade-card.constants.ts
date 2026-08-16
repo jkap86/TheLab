@@ -67,7 +67,7 @@ export const ASSET_TONES: Record<AssetTone, AssetToneStyle> = {
   in: {
     sign: "+",
     track: "flex min-w-0 flex-col gap-y-1.5",
-    row: "text-[13px]",
+    row: "text-[0.8125rem]",
     name: "text-foreground/85",
     meta: "text-foreground/45",
     bullet: "text-active/50",
@@ -116,7 +116,7 @@ export const ASSET_NAME = "min-w-0 break-words";
  * into what it sits on (see `ASSET_TONES`).
  */
 export const ASSET_VALUE =
-  "shrink-0 font-display text-[10px] font-medium tracking-[0.02em] tabular-nums";
+  "shrink-0 font-display text-[0.625rem] font-medium tracking-[0.02em] tabular-nums";
 
 /**
  * The sign's box: a hair over its own width, so names in both tracks start at

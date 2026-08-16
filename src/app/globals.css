@@ -74,7 +74,36 @@
   --edge: #05121d;
   --edge-active: #00776b;
 
-  font-size: 16px;
+  /* **The app's one type-size lever, and the reason it can be one line.**
+     Everything sized in `rem` resolves against this: Tailwind's named sizes
+     (`text-xs` … `text-4xl`), its whole spacing scale (`--spacing` is
+     `0.25rem`, so `p-4`, `gap-3` and `h-8` are all rem underneath), the
+     arbitrary `text-[0.7rem]`s, *and* the measured tracks cut to hold them —
+     `roster-layout`'s `2.875rem`/`3.25rem`/`3.5rem` columns, `COLUMN_WIDTH`'s
+     `sm:w-24`, `standings`' own template. Raising this scales the type and the
+     boxes cut for it in lockstep, which is the only way to make text bigger in
+     this app without re-taking every measurement in `roster-layout.ts` and
+     `standings.tsx` — each of which is cut for a specific string at a specific
+     size and clips into bad data if the string outgrows it.
+
+     **What deliberately does *not* scale is material.** A 1px bevel, a 6px
+     side wall (`--bar-edge-h`), the 7px/9px `clip-path` chamfers and every
+     shadow and blur radius below stay in px, because a specular edge is one
+     pixel whatever the box is — the rule `.lab-ledge`'s own note already
+     states. So a part gets bigger and its machining does not, which is what
+     keeps the chrome reading the same at any scale.
+
+     That leaves one class of value needing `calc()` rather than a straight
+     conversion: an inset measured as *content edge minus wall* — a slab head's
+     `pl-[calc(1.25rem+1px)] pr-[calc(1rem-5px)]`, which is the heading rail's
+     `border border-transparent px-4 pl-5` with the 6px wall taken back out.
+     Those keep their px terms inside the `calc` on purpose.
+
+     The scale is a plain multiplier so the base stays legible; `100%` rather
+     than a hard `16px` is what respects a reader who has raised their
+     browser's default font size, which the old literal silently overrode. */
+  --app-font-scale: 1.125;
+  font-size: calc(100% * var(--app-font-scale));
 }
 
 body {

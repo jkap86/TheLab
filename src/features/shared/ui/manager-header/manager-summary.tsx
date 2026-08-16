@@ -61,10 +61,12 @@ export function ManagerSummary({
     // original reading.
     //
     // The insets are the slab's wall arithmetic, for the reason `statePadding`
-    // spells out: 21px from the leading edge and 17px from the trailing one is
-    // what the bordered box gave, and the trailing 6px is now wall.
+    // spells out: the leading and trailing edges are where the bordered box put
+    // them, and the trailing 6px is now wall. Both terms stay in the `calc` for
+    // the reason `league-card`'s `REST.head` gives: the rem half scales with
+    // `--app-font-scale` and the 1px border and 6px wall do not.
     <div
-      className={`relative z-[1] flex items-center gap-3 pl-[21px] pr-[11px] pt-6 sm:gap-4 sm:pl-[25px] sm:pr-[15px] ${padding}`}
+      className={`relative z-[1] flex items-center gap-3 pl-[calc(1.25rem+1px)] pr-[calc(1rem+1px-6px)] pt-6 sm:gap-4 sm:pl-[calc(1.5rem+1px)] sm:pr-[calc(1.25rem+1px-6px)] ${padding}`}
     >
       <Avatar url={user.avatar_url} name={name} size="lg" />
 
@@ -120,7 +122,7 @@ function RecordLine({
   leagueCount: number;
 }) {
   return (
-    <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px] leading-snug">
+    <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[0.8125rem] leading-snug">
       {record.leagues === 0 ? (
         <span className="text-foreground/55">No records in these leagues</span>
       ) : (
@@ -159,7 +161,7 @@ function RecordBar({ record }: { record: OverallRecord }) {
     // Capped rather than full-bleed: on a wide card the same three numbers
     // stretched a metre across the plate, which reads as a progress bar for
     // something rather than a proportion between two counts.
-    <div aria-hidden="true" className="mt-1.5 flex h-1 max-w-[420px] gap-0.5">
+    <div aria-hidden="true" className="mt-1.5 flex h-1 max-w-[26.25rem] gap-0.5">
       {record.games === 0 ? (
         <span className="block flex-1 rounded-sm bg-foreground/[0.07]" />
       ) : (

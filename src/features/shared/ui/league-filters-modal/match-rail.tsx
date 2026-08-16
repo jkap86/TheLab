@@ -138,7 +138,7 @@ function ActiveChip({
   onRemove: () => void;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-active/25 bg-active/10 py-0.5 pl-2 pr-1 font-mono text-[11px] text-foreground/85">
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-active/25 bg-active/10 py-0.5 pl-2 pr-1 font-mono text-[0.6875rem] text-foreground/85">
       {entry.label}
       <button
         type="button"
