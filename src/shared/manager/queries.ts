@@ -141,6 +141,29 @@ const CHOPPED_LEAGUE_TYPE = 3;
 const CHOPPED_LEAGUE_SQL = `(${LEAGUE_TYPE_SQL} = ${CHOPPED_LEAGUE_TYPE})`;
 
 /**
+ * Whether the league plays every team against the week's median score as well as
+ * against its scheduled opponent — Sleeper's `league_average_match`.
+ *
+ * A second result per week, so a league carrying it is one league and two games:
+ * the lineup checker's ledge prints both marks and its plate counts both. It is
+ * read here rather than derived on the client because nothing the client holds
+ * can answer it — the median is the *whole league's* scores for the week, which
+ * is a solve per team rather than the two in the matchup, and only a read that
+ * knows the setting can decide to pay for it.
+ *
+ * Guarded, cast and defaulted exactly as {@link BEST_BALL_SQL} is, for the
+ * reason that fragment gives: Sleeper omits what a league doesn't set, so absent
+ * or unparseable is *off* — the answer that costs nothing and claims nothing,
+ * where reading it as on would put a median result on every league in the app.
+ *
+ * Interpolated, so a call site must alias `leagues` as `l`. Parenthesised as a
+ * whole because it ends in a comparison.
+ */
+const MEDIAN_MATCH_SQL = `
+  (CASE WHEN l.settings->>'league_average_match' ~ '^[0-9]+$'
+        THEN (l.settings->>'league_average_match')::int ELSE 0 END = 1)`;
+
+/**
  * True where the manager fielded a team in the league — holds a roster now, or
  * was chopped out of a league whose whole point is chopping people out.
  *
@@ -580,11 +603,13 @@ export async function getManagerLeagueRosters(
     roster_positions: string[] | null;
     scoring_settings: Record<string, number> | null;
     best_ball: boolean;
+    median_match: boolean;
   }>(
     // Best ball through the same guarded fragment `/api/adp` filters on, so the
     // lineup solve and the board can't disagree about which leagues are one.
     `SELECT l.league_id, l.roster_positions, l.scoring_settings,
-            ${BEST_BALL_SQL} AS best_ball
+            ${BEST_BALL_SQL} AS best_ball,
+            ${MEDIAN_MATCH_SQL} AS median_match
        FROM leagues l
        JOIN league_users lu
          ON lu.league_id = l.league_id AND lu.user_id = $1
@@ -602,6 +627,7 @@ export async function getManagerLeagueRosters(
         roster_positions: l.roster_positions,
         scoring_settings: l.scoring_settings,
         best_ball: l.best_ball,
+        median_match: l.median_match,
         teams: [],
       },
     ]),

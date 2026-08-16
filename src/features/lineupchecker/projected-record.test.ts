@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { projectedRecord } from "./projected-record.ts";
+import { projectedOutcomes } from "./projected-result.ts";
 import type { LeagueMatchupPayload } from "./types.ts";
 
 const league = (league_id: string) => ({ league_id });
@@ -19,6 +20,7 @@ const matchup = (
   },
   projection: { optimal: 120, current: 110, points_left: 10, kickoff_moves: null },
   opponent_projection: 100,
+  median_projection: null,
   ...over,
 });
 
@@ -123,6 +125,77 @@ describe("projectedRecord", () => {
       b: game(100, 100),
     });
     assert.equal(record.pct, 0.75);
+  });
+
+  test("a median league is one league and two games", () => {
+    // Sleeper's `league_average_match` plays every team against the week's
+    // middle as well as against their opponent, so the week holds two results.
+    // `games` and `leagues` stop agreeing here, which is why they are counted
+    // apart rather than one being assigned from the other.
+    const record = projectedRecord([league("a")], {
+      a: matchup({
+        projection: { optimal: 110, current: 110, points_left: 0, kickoff_moves: null },
+        opponent_projection: 100,
+        median_projection: 120,
+      }),
+    });
+
+    assert.deepEqual(
+      { wins: record.wins, losses: record.losses, ties: record.ties },
+      { wins: 1, losses: 1, ties: 0 },
+    );
+    assert.equal(record.games, 2);
+    assert.equal(record.leagues, 1);
+    assert.equal(record.pct, 0.5);
+  });
+
+  test("a bye in a median league still counts the field", () => {
+    const record = projectedRecord([league("a")], {
+      a: matchup({
+        opponent: null,
+        projection: { optimal: 130, current: 130, points_left: 0, kickoff_moves: null },
+        opponent_projection: null,
+        median_projection: 120,
+      }),
+    });
+
+    assert.equal(record.wins, 1);
+    assert.equal(record.games, 1);
+    assert.equal(record.leagues, 1);
+  });
+
+  test("the plate sums exactly the marks the cards print", () => {
+    // The agreement the shared `projectedOutcomes` exists to keep: a list
+    // showing `W L`, `W` and `L L` is 2-3, and a plate that counted for itself
+    // could disagree with the rows under it without either number looking
+    // wrong.
+    const matchups = {
+      a: matchup({
+        projection: { optimal: 110, current: 110, points_left: 0, kickoff_moves: null },
+        opponent_projection: 100,
+        median_projection: 120,
+      }),
+      b: game(120, 100),
+      c: matchup({
+        projection: { optimal: 80, current: 80, points_left: 0, kickoff_moves: null },
+        opponent_projection: 100,
+        median_projection: 90,
+      }),
+    };
+    const rows = [league("a"), league("b"), league("c")];
+
+    const marks = rows.flatMap((row) =>
+      projectedOutcomes(matchups[row.league_id as keyof typeof matchups]).map(
+        (r) => r.outcome,
+      ),
+    );
+    const record = projectedRecord(rows, matchups);
+
+    assert.deepEqual(marks, ["W", "L", "W", "L", "L"]);
+    assert.equal(record.wins, marks.filter((m) => m === "W").length);
+    assert.equal(record.losses, marks.filter((m) => m === "L").length);
+    assert.equal(record.games, marks.length);
+    assert.equal(record.leagues, 3);
   });
 
   test("counts over the leagues given, not over every matchup sent", () => {

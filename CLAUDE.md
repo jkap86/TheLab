@@ -1169,6 +1169,32 @@ contract, which is why `/api/user/[username]/matchups` hands it the two rosters
 in each game and not the league, turning a hundred-league account's ~1,200 solves
 into ~200.
 
+**One league in that route is handed over whole, and it is the exception that
+shows what the narrowing was actually resting on.** A league playing Sleeper's
+`league_average_match` scores every team against the week's *median* as well as
+against their opponent, so its manager takes two results out of the week — and a
+median is the middle of the whole field, which no pair of rosters can answer. So
+`median_match` (a guarded read off the settings blob, `BEST_BALL_SQL`'s own
+spelling) decides per league whether the two rosters or all twelve go to the
+solve, and `medianScore` folds the answer. The narrowing above was never "solve
+two"; it was **solve exactly the teams this payload speaks for**, and on a median
+league that is every team. The cost is per league carrying the setting rather
+than across the account, and a league with the setting but nobody in a game this
+week is still skipped, because a median nothing compares against is a solve
+nobody reads.
+
+Three things follow, and each is a rule the client half keeps:
+`medianScore` **averages the two middle scores** on an even population — take
+either middle instead and a twelve-team league hands out seven wins and five
+losses in perpetuity, which is a bug nothing on screen would show. A median
+league is **one league and two games**, so `projectedRecord` counts `games` and
+`leagues` apart rather than assigning one from the other, and it sums through the
+same `projectedOutcomes` the card's marks are drawn from — a plate counting for
+itself could disagree with the rows under it without either number looking wrong.
+And a **bye is still a game** there: an odd-sized median league byes somebody
+every week and that manager still has the field to beat, which is why the ledge
+reads its marks off the matchup rather than off `matchupState`.
+
 **It does not go through `readBatchInputs`, and the reason is the one decision
 this entry point makes for itself: a played game is kept, not dropped.** The
 horizon reads filter `game_date >= TODAY_ET` because those points cannot be
@@ -3697,6 +3723,23 @@ stops holding, a comment saying it does would not have caught it.
   not reached, a season with nothing stored ahead of today — are three different
   facts. Collapsing them into an absent plate would tell a reader their league
   has no game when what it has is no data.
+
+  **The plate's trailing end is the verdict, and a median league carries two of
+  them.** One mark per projected result — `W`, `L` or `T` in a `.lab-readout`
+  cut, after the opponent's name (or after whichever of the three kinds of
+  nothing the plate is saying, since a median league's bye is still a game). Four
+  decisions in it. **Two housings and never one holding both letters**: a median
+  week is two games rather than one game with a footnote, so `W L` has to read as
+  a win and a loss — which is also what lets each carry its own tone. **Which is
+  which is the seat**, since there is no room on this plate to write *opponent*
+  and *median*; the head-to-head always leads, and the hover and the `sr-only`
+  carry the sentence for the two readings that have no seat to read. **A win is
+  the accent and a loss is dim, never amber** — amber is the needs-attention tone
+  and it is already spent one column over on the shortfall, which is the number
+  here a reader can act on, and two alarms on one row is neither of them. And the
+  marks are **`shrink-0` with a fixed width**: the plate is capped rather than
+  shrinkable (see `CardLedge`), so what gives is the opponent's name, and a
+  verdict that truncated would be a `W` and an `L` reading identically.
 
   **The one thing that aggregation changes on the card is which instrument the
   readout wears, and that is a prop rather than something the readout works

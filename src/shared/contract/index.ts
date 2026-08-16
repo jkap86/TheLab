@@ -1017,6 +1017,26 @@ export type LeagueMatchupPayload = {
    * is.
    */
   opponent_projection: number | null;
+  /**
+   * The middle of what *every* team in the league projects this week, for the
+   * leagues that play each team against it as well as against their opponent —
+   * Sleeper's `league_average_match`. Null everywhere else, which is most
+   * leagues.
+   *
+   * A second result rather than a second opinion: a median league's week is two
+   * games, so a card prints two marks and the plate above the list counts both.
+   *
+   * It is their *current* lineups on both sides of the comparison, exactly as
+   * {@link LeagueMatchupPayload.opponent_projection} is — the question is "am I
+   * beating the field as things stand", and a median of everyone's best lineups
+   * would be a bar nobody in the league is actually clearing.
+   *
+   * Null is "no median to beat" and never a zero, the rule every projected
+   * number here keeps: a league without the setting, a league the week can't be
+   * projected for, and a league with fewer than two teams stored all answer the
+   * same way, because none of them gives a reader a bar they can act on.
+   */
+  median_projection: number | null;
 };
 
 /**

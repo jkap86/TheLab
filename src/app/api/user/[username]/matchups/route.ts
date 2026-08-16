@@ -12,6 +12,7 @@ import {
   getWeekLineups,
   kickoffMoves,
   LAST_REGULAR_WEEK,
+  medianScore,
 } from "@/shared/projections";
 import type { LeagueTeamsInput, WeekLineups } from "@/shared/projections";
 import { integer } from "@/shared/query";
@@ -85,6 +86,7 @@ export async function GET(
     ]);
 
     const lineups = await weekLineups({ season, week, username, rows, leagues });
+    const medians = leagueMedians(leagues, lineups);
 
     const matchups: Record<string, LeagueMatchupPayload> = {};
     for (const row of rows) {
@@ -121,6 +123,10 @@ export async function GET(
         // The opponent's *current* lineup — see the payload's own note on why it
         // is never their best one.
         opponent_projection: opponent ? opponent.current_points : null,
+        // Absent for every league without the setting, which is the same `null`
+        // a median league whose week can't be projected answers with: neither
+        // gives a reader a bar to clear.
+        median_projection: medians.get(row.league_id) ?? null,
       };
     }
 
@@ -133,13 +139,60 @@ export async function GET(
 }
 
 /**
- * The week's lineups for the two rosters in each matchup.
+ * The middle of every team's week, for the leagues that play against it.
  *
- * **Two rosters per league, not twelve.** `getWeekLineups` solves everything it
- * is handed, and the only teams this payload can say anything about are the ones
- * in a game — so a hundred-league account solves ~200 lineups rather than
- * ~1,200. The pairing is what decides that, which is why this runs after the
- * matchups read rather than beside it.
+ * **Only a median league is in the map at all**, so a lookup miss is the honest
+ * `null` for every other league rather than a number nothing on that card would
+ * be entitled to print. The population is the league's *whole* team list and not
+ * the rosters in this manager's game, which is the reason
+ * {@link weekLineups} hands those leagues over whole — a middle taken over two
+ * of twelve scores is the mean of two arbitrary teams wearing a median's name.
+ *
+ * A league the solve could not answer for drops out here rather than being
+ * folded over what came back: `getWeekLineups` answers all of a projectable
+ * league's teams or none of them, so a partial map is not a case to average
+ * across — and {@link medianScore} refuses fewer than two either way.
+ */
+function leagueMedians(
+  leagues: readonly LeagueRosterSet[],
+  lineups: WeekLineups,
+): Map<string, number> {
+  const medians = new Map<string, number>();
+  for (const league of leagues) {
+    if (!league.median_match) continue;
+    const byRoster = lineups.teams.get(league.league_id);
+    if (!byRoster) continue;
+
+    // Their current lineups, the same half of the comparison the opponent's
+    // number is read from — see the payload's note on why it is never their
+    // best one.
+    const median = medianScore(
+      [...byRoster.values()].map((team) => team.current_points),
+    );
+    if (median !== null) medians.set(league.league_id, median);
+  }
+  return medians;
+}
+
+/**
+ * The week's lineups for the rosters this payload can say something about.
+ *
+ * **Two rosters per league, not twelve — except where the league plays a
+ * median.** `getWeekLineups` solves everything it is handed, and for an ordinary
+ * league the only teams this payload speaks for are the ones in a game, so a
+ * hundred-league account solves ~200 lineups rather than ~1,200. The pairing is
+ * what decides that, which is why this runs after the matchups read rather than
+ * beside it.
+ *
+ * A median league is the one case where that narrowing cannot hold: the bar to
+ * clear is the middle of *every* team's week, so there is no smaller set of
+ * rosters that answers it and the league goes over whole. The cost is paid per
+ * league that carries the setting rather than across the account — most leagues
+ * don't, and the ones that do were never going to be answerable any other way.
+ *
+ * A league with the setting but nobody in a game this week is still skipped, for
+ * the reason every league is: a median nothing on the payload compares against
+ * is a solve nobody reads.
  *
  * **A failure here costs the projections and not the page.** The pairings are
  * what the lineup checker's list is built on and they are already in hand; the
@@ -174,7 +227,11 @@ async function weekLineups({
   const input: LeagueTeamsInput[] = leagues.flatMap((league) => {
     const rosters = playing.get(league.league_id);
     if (!rosters) return [];
-    const teams = league.teams.filter((team) => rosters.has(team.roster_id));
+    // The whole league where a median has to be taken over it, the two in the
+    // game everywhere else — see this function's own note.
+    const teams = league.median_match
+      ? league.teams
+      : league.teams.filter((team) => rosters.has(team.roster_id));
     return teams.length === 0
       ? []
       : [
