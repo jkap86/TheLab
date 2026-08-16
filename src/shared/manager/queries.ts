@@ -772,14 +772,17 @@ export async function getLeagueDetail(
     settings: Record<string, unknown> | null;
     league_type: number;
     best_ball: boolean;
+    median_match: boolean;
     previous_league_id: string | null;
   }>(
     // Both the type and the format are read through the same guarded fragments
     // `/api/adp` groups and filters leagues by, so "is this a dynasty league"
-    // and "is this best ball" have one answer across the app.
+    // and "is this best ball" have one answer across the app. The median is the
+    // third of them, through the fragment the lineup checker's own read uses.
     `SELECT league_id, name, season, status, roster_positions, scoring_settings,
             settings,
             ${LEAGUE_TYPE_SQL} AS league_type, ${BEST_BALL_SQL} AS best_ball,
+            ${MEDIAN_MATCH_SQL} AS median_match,
             previous_league_id
        FROM leagues l WHERE league_id = $1`,
     [leagueId],
@@ -882,6 +885,7 @@ export async function getLeagueDetail(
     scoring_settings: l.scoring_settings,
     settings: l.settings,
     best_ball: l.best_ball,
+    median_match: l.median_match,
     // Already selected for the pick grid above, and carried out rather than
     // dropped: it is what the values read needs to pick an ADP market, and
     // buying it there cost a second query for a league already in hand.

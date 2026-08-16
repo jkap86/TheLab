@@ -209,6 +209,16 @@ export type LeagueDetail = {
    */
   best_ball: boolean;
   /**
+   * Whether the league plays every team against the week's median as well as
+   * against its opponent — see {@link LeagueRosterSet.median_match}.
+   *
+   * Read through the same fragment for the reason `best_ball` is read through
+   * one: the lineup checker's row prints a mark against this bar and the panel
+   * that row opens prints the bar itself, so a league counted as a median league
+   * in one and not the other is a difference no type can catch.
+   */
+  median_match: boolean;
+  /**
    * Sleeper's `settings.type` as `LEAGUE_TYPE_SQL` reads it — 2 for dynasty,
    * 1 for keeper, 0 (and anything unparseable) for redraft.
    *

@@ -38,3 +38,35 @@ export function medianScore(scores: readonly number[]): number | null {
     ? (sorted[middle - 1] + sorted[middle]) / 2
     : sorted[Math.floor(middle)];
 }
+
+/**
+ * The middle of a solved week in both readings — the best lineups available, and
+ * the ones actually set.
+ *
+ * Both, because the two answer different questions and each has a reader. The
+ * league panel prints `optimal`, since the roster headings beside it show each
+ * team's best lineup and a bar in different units from the numbers it sits over
+ * cannot be compared; the lineup checker's mark is counted on `current`, which
+ * is what the week comes to if nothing is touched. Folding one and deriving the
+ * other is not available — a median is not linear, so the middle of the best
+ * lineups is not the middle of the set ones plus anything.
+ *
+ * **The two are taken independently and can name different teams**, which is
+ * correct rather than a rounding artefact: the team sitting at the middle of the
+ * league by best lineup need not be the one sitting there by what it has set.
+ *
+ * Null where {@link medianScore} refuses either half, which is the same
+ * condition for both — fewer than two teams — so a week that has one reading has
+ * both, and a caller never has to draw half a bar.
+ *
+ * Generic in the team so this module still imports nothing: the week view's own
+ * `TeamWeekProjection` satisfies it, and so does a plain object in a test.
+ */
+export function medianLineups<T extends { optimal: number; current: number }>(
+  teams: readonly T[],
+): { optimal: number; current: number } | null {
+  const optimal = medianScore(teams.map((team) => team.optimal));
+  const current = medianScore(teams.map((team) => team.current));
+
+  return optimal === null || current === null ? null : { optimal, current };
+}

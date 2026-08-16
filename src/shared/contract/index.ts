@@ -187,6 +187,19 @@ export type LeagueWeekViewPayload = {
   ppg: Record<string, PpgPayload>;
   /** Roster id → that team's best and current lineup for the week. */
   team_projection: Record<string, TeamWeekProjectionPayload>;
+  /**
+   * The bar every team is measured against in a league that plays Sleeper's
+   * `league_average_match`, and null in every league that does not — which is
+   * most of them, and is why the panel draws this only where it exists rather
+   * than printing an em dash for a bar the league's own scoring never applies.
+   *
+   * Two readings, for the reason a roster heading carries two: `optimal` is the
+   * middle of the best lineups available and is what a panel of best lineups can
+   * be read against, `current` is the middle of the lineups actually set and is
+   * what the week comes to untouched — the half the lineup checker's own mark is
+   * counted on.
+   */
+  median: { optimal: number; current: number } | null;
   /** Roster id → that team's points per game over the same window. */
   team_ppg: Record<string, PpgPayload>;
   /**
@@ -238,7 +251,18 @@ export type TeamGamePayload = TeamGame;
  * changing the ADP board must not re-fetch a roster, and stepping a week must
  * not re-fetch a price.
  */
-export type LeagueCorePayload = Omit<LeagueDetail, "teams"> & {
+export type LeagueCorePayload = Omit<
+  LeagueDetail,
+  // `median_match` is the one field of that read the client is not sent, and it
+  // is left off for the reason `league_type` was carried *on*: a fact crosses
+  // when something over here needs it. This one decides whether the week read
+  // folds a median at all, and what a reader sees is the median itself — which
+  // rides on `LeagueWeekViewPayload`, where null already says "no bar to beat"
+  // for every league without the setting. Sending the flag as well would be a
+  // second way to ask one question, on the response every open of this panel
+  // pays for.
+  "teams" | "median_match"
+> & {
   teams: LeagueTeamPayload[];
   /** Player ids → resolved name/position/team, for rendering rosters. */
   players: Record<string, PlayerSummary>;

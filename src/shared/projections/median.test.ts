@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { medianScore } from "./median.ts";
+import { medianLineups, medianScore } from "./median.ts";
 
 describe("medianScore", () => {
   test("an even population averages the two middle scores", () => {
@@ -49,5 +49,56 @@ describe("medianScore", () => {
     // The trap in a bare `.sort()`: 9 sorts after 100 as a string, which puts
     // the middle in the wrong place on any league scoring into three digits.
     assert.equal(medianScore([9, 100, 120, 9]), 54.5);
+  });
+});
+
+describe("medianLineups", () => {
+  const team = (optimal: number, current: number) => ({ optimal, current });
+
+  test("folds both readings of the same week", () => {
+    assert.deepEqual(
+      medianLineups([
+        team(130, 120),
+        team(120, 118),
+        team(110, 100),
+        team(100, 90),
+      ]),
+      { optimal: 115, current: 109 },
+    );
+  });
+
+  test("the two are taken independently and may name different teams", () => {
+    // Correct rather than an artefact: the team in the middle of the league by
+    // best lineup need not be the one in the middle by what it has set. Here
+    // the optimal middle is the second team's 120 and the current middle is the
+    // *third* team's 105 — so ranking on one reading would report the other
+    // one's number off the wrong roster.
+    assert.deepEqual(
+      medianLineups([team(200, 100), team(120, 190), team(110, 105)]),
+      { optimal: 120, current: 105 },
+    );
+  });
+
+  test("one reading is never derived from the other", () => {
+    // A median is not linear, so `optimal` cannot be reached by adding anything
+    // league-wide to `current`. The three gaps here are 0, 40 and 0 — their own
+    // median is 0 — while the two medians are 40 apart. Whichever the caller
+    // needs has to be folded, not adjusted.
+    const teams = [team(100, 100), team(140, 100), team(160, 160)];
+
+    assert.deepEqual(medianLineups(teams), { optimal: 140, current: 100 });
+    assert.equal(medianScore(teams.map((t) => t.optimal - t.current)), 0);
+  });
+
+  test("fewer than two teams has no median, in either reading", () => {
+    assert.equal(medianLineups([team(120, 110)]), null);
+    assert.equal(medianLineups([]), null);
+  });
+
+  test("a week that has one reading has both", () => {
+    // The refusal is the same condition for each half — fewer than two teams —
+    // so a caller never has to draw half a bar.
+    const median = medianLineups([team(120, 110), team(100, 90)]);
+    assert.ok(median !== null && median.optimal !== null && median.current !== null);
   });
 });
