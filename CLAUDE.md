@@ -232,6 +232,24 @@ back would take the cache with it). Nothing is stored on the device.
   `refreshing`/`progress`, since no further message is coming; and the bail-out
   cancels the reader, since `cancel` on an errored stream rejects with that same
   error.
+- **A read is enabled by what is on screen, and "on screen" means the *columns*.**
+  Splitting a payload stops a panel *waiting*; only `enabled` stops it *asking*.
+  `leagueDetailNeeds` answers for League Details as `managerDataRequirements`
+  does for the leagues list, off the same per-metric `reads` declaration in both
+  catalogues — required, so a new metric can't forget, and **declared rather than
+  inferred from `group`**, since what a bay is *called* has no business deciding
+  whether a request is made. Four rules: **`values` is column-driven and nothing
+  else**; **`week` is the panel's subject, not a column** (a week panel always
+  asks, a season panel has no week to ask about however its slots are aimed);
+  **`outlook` is both** — structural on a season panel, whose starters *are*
+  `optimal` and whose standings rank on `weekly_optimal_points`, and column-driven
+  on a week panel, where the week payload supplies all of that; and **an open
+  columns editor widens it**, because a bay of em-dash previews is a picker that
+  can't be read. **Derive the needs above the loaded panel, never inside it** — a
+  selection read off `localStorage` needs no fetch, so deriving it under a
+  component that renders on the core is how a split becomes a waterfall. A
+  disabled query keeps its entry, so a column switched off and on inside the stale
+  time costs nothing.
 
 The fetchers and keys are pure modules with relative `.ts` imports, so the
 cache's behaviour is tested by driving `QueryObserver`s directly — the assertions
@@ -752,6 +770,20 @@ comparator reads**, since a five-armed ordering written twice is two orderings.
     `app/api/read-failure.ts`). A 500 says stop asking, and asking again is
     exactly right when the database merely had no room. Applied at **every** route
     that catches a read, not just the ones seen to be slow.
+  - **A read that is only a bonus still fails as a failure.** Deciding an
+    enrichment is non-fatal is a decision about what the *client* does with it,
+    never a licence to answer `200 null` — `…/week` and `…/outlook` caught their
+    reads and sent one, so a database timeout arrived as a successful answer
+    holding nothing: the query client's retry never ran (no failure to retry),
+    the empty answer was cached as a good one for the whole stale time, and no
+    layer could tell it from a league that genuinely has nothing to project. Go
+    through `readResponse` (`app/api/read-response.ts`), which is
+    `withReadTiming` + `readFailureResponse` and nothing else. **A null body is
+    reserved for the domain saying "nothing"**, and a route whose loader cannot
+    return null has no null on the wire at all — `LeagueWeekPayload` is not
+    nullable because `getLeagueWeekView` isn't. The graceful half stays where it
+    always belonged: the enrichments are separate queries, so only the core's
+    error is the panel's error.
 
 ## Testing
 
