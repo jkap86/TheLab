@@ -14,6 +14,7 @@ import { errorMessage } from "@/shared/util";
 
 import type { AdpRead } from "./adp-controls";
 import { fetchJson, fetchScoped } from "./api";
+import type { LeagueDetailNeeds } from "./league-detail-needs";
 import { LEAGUE_DETAIL_STALE_TIME, leagueQueryKeys } from "./league-query";
 
 /**
@@ -71,6 +72,24 @@ import { LEAGUE_DETAIL_STALE_TIME, leagueQueryKeys } from "./league-query";
  * `week` reads the same league as one Sunday, which the lineup checker asks for
  * and the leagues list and trades board do not: null means "as a season", and
  * the request is simply not made.
+ *
+ * **Three of the four are asked for only where something on screen reads them.**
+ * Splitting the payload stopped the panel *waiting* on all four; it did not stop
+ * it *asking*. `values` and `outlook` fired on every open regardless of where the
+ * two tables' columns were pointed, so a lineup checker opened on one Sunday ran
+ * a season-long lineup solve per team it never drew and priced a board it never
+ * showed, and both of those competed with the week read that was the whole point
+ * of opening it. {@link leagueDetailNeeds} is the rule; it is derived from the
+ * *columns*, so a slot re-aimed at KTC fetches on the press and a slot aimed away
+ * from it re-enables against the same key later — which inside
+ * {@link LEAGUE_DETAIL_STALE_TIME} is a cache hit rather than a second request.
+ *
+ * **The needs are computed above the panel, not inside it**, and that placement
+ * is the anti-waterfall rule: the column selections come off `localStorage` and
+ * depend on nothing that has to be fetched, so every read this hook is going to
+ * make is enabled in the same render the core one is. Deriving them under the
+ * loaded panel would have made the enrichments wait for the core they are
+ * supposed to run beside.
  */
 
 /**
@@ -167,10 +186,24 @@ export function prefetchLeagueCore(client: QueryClient, leagueId: string): void 
   });
 }
 
-/** `…/values` — the two value columns, on the drawer's board. */
-export function useLeagueValues(leagueId: string, board: AdpRead) {
+/**
+ * `…/values` — the two value columns, on the drawer's board.
+ *
+ * **`enabled` is what "no column is showing a price" looks like from here.** The
+ * route prices every rostered player against a crawled ADP board and a KTC
+ * scrape, and none of it reaches the screen unless a KTC/ADP column is selected
+ * or the columns editor is previewing one. A disabled query still hands back
+ * whatever is cached under the same key, so a column switched off and on again
+ * inside the stale time costs nothing — see {@link leagueDetailNeeds}.
+ */
+export function useLeagueValues(
+  leagueId: string,
+  board: AdpRead,
+  { enabled = true }: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: leagueQueryKeys.values(leagueId, board.key),
+    enabled,
     queryFn: ({ signal }) =>
       fetchScoped<LeagueValuesPayload>(
         `/api/league/${encodeURIComponent(leagueId)}/values`,
@@ -189,10 +222,22 @@ export function useLeagueValues(leagueId: string, board: AdpRead) {
   });
 }
 
-/** `…/outlook` — the rest-of-season lineups. */
-export function useLeagueOutlook(leagueId: string) {
+/**
+ * `…/outlook` — the rest-of-season lineups.
+ *
+ * **Structural on a season panel and column-driven on a week one**, which is the
+ * asymmetry {@link leagueDetailNeeds} spells out: a season panel lists `optimal`
+ * as its starters and ranks its standings on `weekly_optimal_points`, where a
+ * week panel reads every one of those off the week payload instead and only wants
+ * this where a rest-of-season column is actually aimed at it.
+ */
+export function useLeagueOutlook(
+  leagueId: string,
+  { enabled = true }: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: leagueQueryKeys.outlook(leagueId),
+    enabled,
     queryFn: ({ signal }) =>
       fetchJson<LeagueOutlookPayload>(
         `/api/league/${encodeURIComponent(leagueId)}/outlook`,
@@ -209,8 +254,18 @@ export function useLeagueOutlook(leagueId: string) {
  * A null week disables the query outright rather than sending a placeholder: a
  * season panel is not asking this question, and a disabled query is how that is
  * spelled.
+ *
+ * That gate stays the hook's own rather than moving out to the caller's
+ * `enabled`, because it is about the *URL* and not about demand: there is no week
+ * to put in the request line. The caller's flag narrows further and cannot widen
+ * it — which is what keeps a `week_proj` column aimed at a season panel from
+ * asking for a week that does not exist.
  */
-export function useLeagueWeek(leagueId: string, week: number | null) {
+export function useLeagueWeek(
+  leagueId: string,
+  week: number | null,
+  { enabled = true }: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: leagueQueryKeys.week(leagueId, week ?? 0),
     queryFn: ({ signal }) =>
@@ -219,7 +274,7 @@ export function useLeagueWeek(leagueId: string, week: number | null) {
         "Failed to read this week",
         signal,
       ),
-    enabled: week !== null,
+    enabled: enabled && week !== null,
     staleTime: LEAGUE_DETAIL_STALE_TIME,
     // Stepping a week keeps the previous week's numbers on screen while the next
     // land, for the reason the values read does — the rows they annotate have not
@@ -246,17 +301,35 @@ function sameLeague(leagueId: string, key: unknown): boolean {
  * The four reads as one snapshot — what the panel renders from.
  *
  * The composition is deliberately trivial: it reads whichever have answered and
- * hands the rest their empty forms. Nothing waits on anything.
+ * hands the rest their empty forms. Nothing waits on anything — the three
+ * enrichments the current view needs are enabled in the same render as the core,
+ * so they run beside it rather than after it.
+ *
+ * **An enrichment nobody asked for is indistinguishable here from one that has
+ * not landed**, which is why nothing below this needed changing: every consumer
+ * already draws an em dash for an absent outlook and an empty board for absent
+ * prices, since that is what an in-flight — or failed — read has always looked
+ * like.
  */
 export function useLeagueDetail(
   leagueId: string,
   board: AdpRead,
-  week: number | null = null,
+  week: number | null,
+  /**
+   * Which of the three enrichments the current view reads — {@link
+   * leagueDetailNeeds} over the panel's two column selections, widened by
+   * whichever of its columns editors has been opened.
+   *
+   * Required rather than defaulted to "all three": a default that fetches
+   * everything is the behaviour this replaced, and it would come back silently
+   * the first time a caller forgot the argument.
+   */
+  needs: LeagueDetailNeeds,
 ): LeagueDetailState {
   const core = useLeagueCore(leagueId);
-  const values = useLeagueValues(leagueId, board);
-  const outlook = useLeagueOutlook(leagueId);
-  const weekView = useLeagueWeek(leagueId, week);
+  const values = useLeagueValues(leagueId, board, { enabled: needs.values });
+  const outlook = useLeagueOutlook(leagueId, { enabled: needs.outlook });
+  const weekView = useLeagueWeek(leagueId, week, { enabled: needs.week });
 
   const data = useMemo(() => {
     if (!core.data) return null;

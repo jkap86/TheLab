@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 
 import { fetchJson, fetchScoped } from "./api.ts";
+import { leagueDetailNeeds } from "./league-detail-needs.ts";
 import { LEAGUE_DETAIL_STALE_TIME, leagueQueryKeys } from "./league-query.ts";
 import { createQueryClient } from "./query-client.ts";
 import {
@@ -16,6 +17,14 @@ import {
   installFetchMock,
   jsonResponse,
 } from "./query-test-support.ts";
+import {
+  DEFAULT_PLAYER_COLUMNS,
+  DEFAULT_WEEK_PLAYER_COLUMNS,
+} from "./roster-metrics.ts";
+import {
+  DEFAULT_TEAM_COLUMNS,
+  DEFAULT_WEEK_TEAM_COLUMNS,
+} from "./standings-metrics.ts";
 import { timelineQueryKeys, TIMELINE_STALE_TIME } from "./timeline-query.ts";
 
 /**
@@ -29,7 +38,9 @@ import { timelineQueryKeys, TIMELINE_STALE_TIME } from "./timeline-query.ts";
  *
  * The options below mirror the hooks in `use-league-detail.ts` — the keys, the
  * fetchers and the stale times are the real ones, so a key that stopped
- * separating the board from the rosters fails here.
+ * separating the board from the rosters fails here. What is *not* mirrored is
+ * which of them are enabled: that comes from {@link leagueDetailNeeds} itself,
+ * so the derivation these assertions are about is the one the panel runs.
  */
 
 /** Mount a consumer of a query — a panel, or a card prefetching ahead of one. */
@@ -62,7 +73,7 @@ const coreOptions = (leagueId: string) => ({
   staleTime: LEAGUE_DETAIL_STALE_TIME,
 });
 
-const valuesOptions = (leagueId: string, read = BOARD) => ({
+const valuesOptions = (leagueId: string, read = BOARD, enabled = true) => ({
   queryKey: leagueQueryKeys.values(leagueId, read.key),
   queryFn: () =>
     fetchScoped<{ ktc: Record<string, number> }>(
@@ -70,27 +81,31 @@ const valuesOptions = (leagueId: string, read = BOARD) => ({
       read,
       "Failed to price this league",
     ),
+  enabled,
   staleTime: LEAGUE_DETAIL_STALE_TIME,
 });
 
-const outlookOptions = (leagueId: string) => ({
+const outlookOptions = (leagueId: string, enabled = true) => ({
   queryKey: leagueQueryKeys.outlook(leagueId),
   queryFn: () =>
     fetchJson<{ weeks: number[] } | null>(
       `/api/league/${leagueId}/outlook`,
       "Failed to project this league",
     ),
+  enabled,
   staleTime: LEAGUE_DETAIL_STALE_TIME,
 });
 
-const weekOptions = (leagueId: string, week: number | null) => ({
+const weekOptions = (leagueId: string, week: number | null, enabled = true) => ({
   queryKey: leagueQueryKeys.week(leagueId, week ?? 0),
   queryFn: () =>
     fetchJson<{ week: number } | null>(
       `/api/league/${leagueId}/week?week=${week}`,
       "Failed to read this week",
     ),
-  enabled: week !== null,
+  // The hook's own `week !== null` guard is about the *URL* — there is no week to
+  // put in the request line — and the caller's flag narrows it further.
+  enabled: enabled && week !== null,
   staleTime: LEAGUE_DETAIL_STALE_TIME,
 });
 
@@ -106,12 +121,43 @@ const timelineOptions = (leagueId: string | null) => ({
   staleTime: TIMELINE_STALE_TIME,
 });
 
-/** Open a whole season panel: the core, and the two enrichments beside it. */
-function openPanel(client: QueryClient, leagueId: string, read = BOARD) {
+/**
+ * One open of the panel: all four observers, enabled exactly as the hooks enable
+ * them.
+ *
+ * The disabled ones are *mounted* rather than skipped, because that is what the
+ * panel does — a hook is called on every render whatever its `enabled` says, and
+ * a query that is mounted-but-off is the one that keeps its cache entry and can
+ * be switched back on without a round trip. Skipping them here would model a
+ * different thing and would hide exactly the reuse these tests are about.
+ */
+function openPanel(
+  client: QueryClient,
+  leagueId: string,
+  {
+    week = null,
+    teamColumns = DEFAULT_TEAM_COLUMNS,
+    playerColumns = DEFAULT_PLAYER_COLUMNS,
+    read = BOARD,
+    previewing = false,
+  }: {
+    week?: number | null;
+    teamColumns?: readonly string[];
+    playerColumns?: readonly string[];
+    read?: ReturnType<typeof board>;
+    /** Whether a columns editor has been opened — see `LeagueDetailPanel`. */
+    previewing?: boolean;
+  } = {},
+) {
+  const columnNeeds = leagueDetailNeeds({ week, teamColumns, playerColumns });
+  const needs = previewing
+    ? { ...columnNeeds, values: true, outlook: true }
+    : columnNeeds;
   return [
     mount(client, coreOptions(leagueId)),
-    mount(client, valuesOptions(leagueId, read)),
-    mount(client, outlookOptions(leagueId)),
+    mount(client, valuesOptions(leagueId, read, needs.values)),
+    mount(client, outlookOptions(leagueId, needs.outlook)),
+    mount(client, weekOptions(leagueId, week, needs.week)),
   ];
 }
 
@@ -123,11 +169,14 @@ test("opening a league", async (t) => {
     openPanel(client, "123");
     await flush();
 
-    // Four routes, three requests on a season panel — the week is not asked for
-    // at all, which is what "not requested" is spelled as now.
-    assert.equal(mock.countOf("/api/league/123"), 3);
-    assert.equal(mock.countOf("/values"), 1);
+    // Four routes, two requests on a season panel opened at its defaults: the
+    // week is not asked for at all, and neither is the KTC/ADP board that no
+    // column on either table is pointed at. The outlook is, and structurally
+    // rather than because a column names it — the roster halves list `optimal`
+    // as their starters and the standings ranks on `weekly_optimal_points`.
+    assert.equal(mock.countOf("/api/league/123"), 2);
     assert.equal(mock.countOf("/outlook"), 1);
+    assert.equal(mock.countOf("/values"), 0);
     assert.equal(mock.countOf("/week"), 0);
     mock.restore();
   });
@@ -169,14 +218,167 @@ test("opening a league", async (t) => {
 
     const open = openPanel(client, "123");
     await flush();
-    assert.equal(mock.calls.length, 3);
+    assert.equal(mock.calls.length, 2);
 
     // The panel mounts on expand and unmounts on collapse, so this is what
     // closing a card and opening it again actually does.
     for (const q of open) q.unmount();
     openPanel(client, "123");
     await flush();
-    assert.equal(mock.calls.length, 3);
+    assert.equal(mock.calls.length, 2);
+    mock.restore();
+  });
+});
+
+/**
+ * Which of the three enrichments a view actually asks for.
+ *
+ * The split made the panel render on the core; it did not stop it *asking* for
+ * the other three, so a lineup checker opened on one Sunday ran a season-long
+ * lineup solve per team and priced a KTC/ADP board it drew nothing from — both
+ * competing with the week read it was opened for. {@link leagueDetailNeeds} is
+ * the rule and this is it reaching `fetch`.
+ */
+test("what the current columns cost", async (t) => {
+  await t.test("a week panel asks for the week alone", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ url }));
+
+    openPanel(client, "123", {
+      week: 4,
+      teamColumns: DEFAULT_WEEK_TEAM_COLUMNS,
+      playerColumns: DEFAULT_WEEK_PLAYER_COLUMNS,
+    });
+    await flush();
+
+    assert.equal(mock.countOf("/week?week=4"), 1);
+    assert.equal(mock.countOf("/outlook"), 0);
+    assert.equal(mock.countOf("/values"), 0);
+    mock.restore();
+  });
+
+  await t.test("aiming a slot at KTC is what prices the league", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ url }));
+
+    openPanel(client, "123", { teamColumns: ["ktc", "bench"] });
+    await flush();
+
+    assert.equal(mock.countOf("/values"), 1);
+    mock.restore();
+  });
+
+  await t.test("a roster slot aimed at ADP prices it too", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ url }));
+
+    // Either catalogue can turn the read on: the two tables share one payload.
+    openPanel(client, "123", { playerColumns: ["start", "adp"] });
+    await flush();
+
+    assert.equal(mock.countOf("/values"), 1);
+    mock.restore();
+  });
+
+  await t.test("a week panel aimed at a season column asks for both", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ url }));
+
+    // The catalogue is one catalogue, so a rest-of-season metric can be aimed at
+    // a week panel — and then it has to be answered.
+    openPanel(client, "123", {
+      week: 4,
+      teamColumns: ["proj"],
+      playerColumns: DEFAULT_WEEK_PLAYER_COLUMNS,
+    });
+    await flush();
+
+    assert.equal(mock.countOf("/outlook"), 1);
+    assert.equal(mock.countOf("/week?week=4"), 1);
+    assert.equal(mock.countOf("/values"), 0);
+    mock.restore();
+  });
+
+  await t.test("a season panel never asks for a week it doesn't have", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ url }));
+
+    // A `week_proj` column aimed at a season panel: there is no week to put in
+    // the request line, which is what its cell says in words.
+    openPanel(client, "123", {
+      teamColumns: ["week_proj", "bench"],
+      playerColumns: ["week_proj", "bench"],
+    });
+    await flush();
+
+    assert.equal(mock.countOf("/week"), 0);
+    mock.restore();
+  });
+
+  await t.test("switching a column off and on again costs one request", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ url }));
+
+    const priced = openPanel(client, "123", { teamColumns: ["ktc", "bench"] });
+    await flush();
+    assert.equal(mock.countOf("/values"), 1);
+    for (const q of priced) q.unmount();
+
+    // Aimed away: the query is disabled, and a disabled query keeps its entry.
+    const off = openPanel(client, "123", { teamColumns: ["proj", "bench"] });
+    await flush();
+    assert.equal(mock.countOf("/values"), 1);
+    for (const q of off) q.unmount();
+
+    // Back on inside the stale time — re-enabled against the same key, answered
+    // from what is already in the cache rather than re-fetched.
+    openPanel(client, "123", { teamColumns: ["ktc", "bench"] });
+    await flush();
+    assert.equal(mock.countOf("/values"), 1);
+    mock.restore();
+  });
+
+  await t.test("opening the columns editor fills its previews in", async () => {
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) => jsonResponse({ url }));
+
+    // The dialog previews every metric in the catalogue against this panel's own
+    // subject, so a reader looking at the list is looking at what KTC would say.
+    // The week is deliberately not widened: a season panel has none to preview.
+    openPanel(client, "123", { previewing: true });
+    await flush();
+
+    assert.equal(mock.countOf("/values"), 1);
+    assert.equal(mock.countOf("/outlook"), 1);
+    assert.equal(mock.countOf("/week"), 0);
+    mock.restore();
+  });
+
+  await t.test("the enrichments run beside the core, never behind it", async () => {
+    const client = createTestQueryClient();
+    // A core read that never answers: anything asked for while it is outstanding
+    // was asked for in parallel with it. The needs come off the stored columns,
+    // which need no fetch, so nothing here can become a waterfall.
+    const mock = installFetchMock((url) =>
+      /\/api\/league\/123$/.test(url)
+        ? new Promise<Response>(() => {})
+        : jsonResponse({ url }),
+    );
+
+    openPanel(client, "123", {
+      week: 4,
+      teamColumns: ["proj"],
+      playerColumns: ["ktc"],
+    });
+    await flush();
+
+    assert.equal(
+      mock.calls.filter((url) => /\/api\/league\/123$/.test(url)).length,
+      1,
+    );
+    assert.equal(mock.countOf("/outlook"), 1);
+    assert.equal(mock.countOf("/values"), 1);
+    assert.equal(mock.countOf("/week?week=4"), 1);
     mock.restore();
   });
 });
@@ -186,12 +388,15 @@ test("changing the ADP board", async (t) => {
     const client = createTestQueryClient();
     const mock = installFetchMock((url) => jsonResponse({ url }));
 
-    openPanel(client, "123");
+    // A panel that is actually pricing something, since a board change is only a
+    // change to a panel with a value column on it.
+    const priced = { teamColumns: ["ktc", "bench"] };
+    openPanel(client, "123", priced);
     await flush();
     mock.calls.length = 0;
 
     // The drawer narrows: only the two value columns are about to move.
-    mount(client, valuesOptions("123", NARROWED));
+    openPanel(client, "123", { ...priced, read: NARROWED });
     await flush();
 
     assert.equal(mock.countOf("/values"), 1);
@@ -224,12 +429,15 @@ test("changing the week", async (t) => {
     const client = createTestQueryClient();
     const mock = installFetchMock((url) => jsonResponse({ url }));
 
-    openPanel(client, "123");
-    mount(client, weekOptions("123", 4));
+    const stepped = {
+      teamColumns: DEFAULT_WEEK_TEAM_COLUMNS,
+      playerColumns: DEFAULT_WEEK_PLAYER_COLUMNS,
+    };
+    openPanel(client, "123", { ...stepped, week: 4 });
     await flush();
     mock.calls.length = 0;
 
-    mount(client, weekOptions("123", 5));
+    openPanel(client, "123", { ...stepped, week: 5 });
     await flush();
 
     assert.equal(mock.countOf("/week?week=5"), 1);
