@@ -64,6 +64,7 @@ function row(
     dynasty: market === "dynasty" ? board : null,
     // The ladder is built from ADP alone — KTC is asked only what *waiting*
     // costs, which `ktcPicks` carries separately.
+    auction: { redraft: null, dynasty: null },
     ktc: null,
   };
 }

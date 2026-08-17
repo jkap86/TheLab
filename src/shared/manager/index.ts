@@ -133,9 +133,21 @@ export type {
   AdpResult,
   AdpRow,
   DraftDensityMonth,
+  DraftTypeScope,
   PlayerAdp,
   PlayerBoardAdp,
 } from "./adp";
+export {
+  AUCTION_AMOUNT_SQL,
+  AUCTION_BUDGET_SQL,
+  EMPTY_AUCTION_BOARDS,
+  getDraftAuctionSpend,
+} from "./adp-auction";
+export type {
+  AdpAuctionBoards,
+  AdpAuctionStats,
+  AuctionSpendResult,
+} from "./adp-auction";
 export {
   ADP_PEAK,
   ADP_VALUE_PARAMS,

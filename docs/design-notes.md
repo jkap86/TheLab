@@ -2212,7 +2212,40 @@ part before redesigning it.
 
   `draft_type` is a constant now (`snake,linear`)
   for the reason it always defaulted that way: an auction's `pick_no` is
-  nomination order, so its "ADP" is not one. The board is fetched by
+  nomination order, so its "ADP" is not one.
+
+  - **The auctions come back as a column rather than as a draft type, and the
+    column is single-board only.** What an auction publishes that a snake draft
+    cannot is a *price* — the winning bid over the room's budget — so it is a
+    second reading of the same players rather than a fourth setting of
+    `draft_type`; `shared/manager/adp-auction` reads it over the same leagues,
+    season and window with that one filter overridden, and the wire carries its
+    own `redraft_auctions`/`dynasty_auctions` because quoting the board's draft
+    count beside it would name a sample the share was never taken over.
+
+    Where it *sits* is arithmetic rather than taste, and the arithmetic is why
+    it is not simply two more columns. The both-boards row is already nine tracks
+    at the 36rem panel with the name down to 128px, and a per-market share needs
+    one column per market — so with both boards up the reading moves to each ADP
+    cell's hover, exactly as the Taken share does, and the column exists only
+    where a single market is lit. That leaves it 2.25rem (the position column's
+    width: `Bid ▲` measures 33.6px in a 36px track, and the widest cell, `100%`,
+    is 28.8px) seated from `@md`. A tier lower would put it on a 390px phone,
+    where the single-board name is already 98px and 52px of column and gap takes
+    it to 46 — no name at all. At the full-width panel with every column up the
+    name has **143px**, above the 128 the both-boards state already lives at; the
+    band it costs is 513–530px, where the KTC pair has just arrived, which is the
+    non-monotonicity a tier that adds a column always buys.
+
+    Two smaller consequences follow the house rules rather than the board. The
+    share is written to four characters — integer at or above 10%, one decimal
+    below — because a tenth of a percent on a 58% player is noise while a whole
+    percent on a $1 flier is zero, and because that is what the track holds. And
+    a *pick* row draws an em dash with a hover saying why, the same call the
+    Taken column makes one cell to its left: what an auction sells is players, so
+    the column does not apply rather than having no data.
+
+  The board is fetched by
   the layout and gated on `open`, so a tab nobody opened it on costs no request;
   on the Players tab that means the same board is fetched twice while the drawer is
   up, which is a bounded cost paid only while someone is looking at both.

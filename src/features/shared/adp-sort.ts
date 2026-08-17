@@ -59,6 +59,7 @@ export type AdpSortColumn =
   | "adp_redraft"
   | "adp_dynasty"
   | "taken"
+  | "auction"
   | "value_redraft"
   | "value_dynasty"
   | "ktc_sf"
@@ -96,6 +97,7 @@ const NATURAL_DIRECTION: Record<AdpSortColumn, AdpSortDirection> = {
   adp_redraft: "asc",
   adp_dynasty: "asc",
   taken: "desc",
+  auction: "desc",
   value_redraft: "desc",
   value_dynasty: "desc",
   ktc_sf: "desc",
@@ -116,11 +118,20 @@ export function nextAdpSort(current: AdpSort, column: AdpSortColumn): AdpSort {
 /**
  * The columns a given board mode actually draws.
  *
- * Two of them are mode-specific, and both would otherwise leave a sort pointing
- * at a column that is not on screen: `taken` exists only in single-board mode
- * (both boards trade it for the second ADP column), and each board's own ADP and
- * Value columns exist only where that board is lit. The KTC pair is in every
- * mode — it is a fact about the player rather than about either market.
+ * Three of them are mode-specific, and each would otherwise leave a sort pointing
+ * at a column that is not on screen: `taken` and `auction` exist only in
+ * single-board mode (both boards trade the first for the second ADP column, and
+ * there is no width for two of the second), and each board's own ADP and Value
+ * columns exist only where that board is lit. The KTC pair is in every mode — it
+ * is a fact about the player rather than about either market.
+ *
+ * **A column hidden by a container tier is still a column of this mode**, which
+ * is the one thing not to "fix" here: `auction` is seated from `@md` and the KTC
+ * pair from `@lg`, so on a narrow panel a reader can hold a sort on a column they
+ * cannot see. That is the same state a KTC sort has always been able to reach by
+ * resizing, and it is right — the ordering stays the one they chose, and widening
+ * the panel shows them the column it is on. What {@link resolveAdpSort} guards is
+ * a column that has no *data* on screen, not one the width has folded away.
  */
 export function adpSortColumns(
   both: boolean,
@@ -136,7 +147,7 @@ export function adpSortColumns(
       "value_dynasty",
     ];
   }
-  return [...shared, `adp_${soleBoard}`, "taken", `value_${soleBoard}`];
+  return [...shared, `adp_${soleBoard}`, "taken", "auction", `value_${soleBoard}`];
 }
 
 /**
@@ -214,7 +225,10 @@ function sortKey(
         return pick.dynasty?.adp ?? null;
       // A pick was taken in none of these drafts — it was never on the board —
       // so it has no share to sort on, which is the same em dash the cell draws.
+      // The auction column is the same answer for the same reason: what an
+      // auction sells is players, so a rookie pick was never a lot in one.
       case "taken":
+      case "auction":
         return null;
       case "value_redraft":
         return value(pick.redraft?.adp, pick.redraft?.discount);
@@ -244,6 +258,12 @@ function sortKey(
     // count threaded through to be right.
     case "taken":
       return player[ctx.soleBoard]?.picks ?? null;
+    // The share the cell draws, not the sample behind it: unlike Taken, the
+    // denominator here is *per player* — a row bought in two auctions and one
+    // bought in fifty are averaging different things — so the two orderings are
+    // genuinely different and only the displayed one is the column's question.
+    case "auction":
+      return player.auction[ctx.soleBoard]?.share ?? null;
     case "value_redraft":
       return value(player.redraft?.adp);
     case "value_dynasty":

@@ -3,6 +3,7 @@ import type { AdpBoardType } from "@/shared/manager";
 import type { LeagueFilters } from "../../league-filters";
 import type { AdpSort, AdpSortColumn } from "../../adp-sort";
 import {
+  AUCTION_COLUMN_SEAT,
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
   BOARD_NAMES,
@@ -10,6 +11,7 @@ import {
 } from "./adp-drawer.constants.ts";
 import {
   KTC_BOARD_NAMES,
+  auctionTitle,
   boardTitle,
   ktcTitle,
   sortHeadingLabel,
@@ -51,6 +53,7 @@ export function AdpBoardHeader({
   both,
   soleBoard,
   soleDrafts,
+  soleAuctions,
   redraftDrafts,
   dynastyDrafts,
   rules,
@@ -61,6 +64,12 @@ export function AdpBoardHeader({
   both: boolean;
   soleBoard: AdpBoardType;
   soleDrafts: number | null;
+  /**
+   * The auctions behind the Bid column — a *different* count from `soleDrafts`,
+   * because it is a different population: the same leagues and window, over the
+   * one draft type the board never averages.
+   */
+  soleAuctions: number | null;
   redraftDrafts: number | null;
   dynastyDrafts: number | null;
   /** The board's league rules — the value headings' premise reads its size. */
@@ -152,6 +161,15 @@ export function AdpBoardHeader({
               a number nobody can name. */}
           {heading("taken", "Taken", "Share of drafts taken in", {
             title: takenTitle(soleBoard),
+          })}
+          {/* `Bid` rather than `$` or `Auction`: the first is a glyph a reader
+              has to guess the denominator of, the third does not fit a 36px
+              track, and the second is what the column is a reading of. What it
+              is a share *of* — and that these are drafts the ADP beside it is
+              never averaged over — is the hover's job. */}
+          {heading("auction", "Bid", "Average auction bid, as a share of budget", {
+            title: auctionTitle(soleBoard, soleAuctions),
+            className: AUCTION_COLUMN_SEAT,
           })}
           {heading(`value_${soleBoard}`, "Value", "Draft capital", {
             title: valueTitle(rules),

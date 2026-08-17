@@ -1,5 +1,8 @@
 import { ADP_PEAK } from "../../adp-controls";
-import { KTC_COLUMN_SEAT } from "./adp-drawer.constants.ts";
+import {
+  AUCTION_COLUMN_SEAT,
+  KTC_COLUMN_SEAT,
+} from "./adp-drawer.constants.ts";
 
 /**
  * The numeric cells every row of the board draws, whatever the row is.
@@ -68,6 +71,52 @@ export function ValueCell({
         className="absolute inset-x-0 -bottom-0.5 h-px bg-active/45"
         style={{ transform: `scaleX(${value / ADP_PEAK})`, transformOrigin: "right" }}
       />
+    </span>
+  );
+}
+
+/**
+ * What this row cost at auction, as a share of the room's budget.
+ *
+ * **Plain `foreground` and no rail, the same restraint the KTC cell keeps.** The
+ * accent on this board means "the value curve", and this column does not move
+ * under the slider — it is a price the market actually paid rather than a
+ * reading of one.
+ *
+ * `label` arrives already formatted ({@link auctionShare}), because what varies
+ * is only how many digits the number deserves and that decision belongs
+ * somewhere testable. Null is an em dash on the usual terms and is the common
+ * case rather than an edge: auctions are a small slice of the crawled corpus, so
+ * most rows on most boards have no share to report — which is a different claim
+ * from having gone cheap.
+ */
+export function AuctionCell({
+  label,
+  title,
+}: {
+  /** The share as it is written, or null for a row with no reading. */
+  label: string | null;
+  title?: string;
+}) {
+  if (label === null) {
+    // The title rides on the em dash too, unlike the other cells here: a *pick*
+    // row's blank is a column that does not apply rather than a gap in the data,
+    // and that difference is only sayable on the dash itself.
+    return (
+      <span
+        className={`${AUCTION_COLUMN_SEAT} text-right text-xs text-foreground/25`}
+        title={title}
+      >
+        —
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`${AUCTION_COLUMN_SEAT} text-right text-xs tabular-nums text-foreground/60`}
+      title={title}
+    >
+      {label}
     </span>
   );
 }

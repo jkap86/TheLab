@@ -1176,6 +1176,7 @@ describe("adpBoardRows", () => {
         ? null
         : { adp: dynasty, min_pick: 1, max_pick: 30, picks, stdev: 2 },
     // Nothing here reads a KTC price: these tests are about the ADP ordering.
+    auction: { redraft: null, dynasty: null },
     ktc: null,
   });
 

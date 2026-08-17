@@ -693,6 +693,13 @@ Filtering *on* those blobs takes two habits:
   where the expression is printed out once per aggregate. A subquery in `FROM`
   is not affected (`countMatchedDrafts` evaluates it once per draft either way);
   it is the single-reference CTE that inlines.
+  The auction read stacks *two* of them for the same reason, and the second is
+  the one worth naming because it is not a fact about a draft:
+  `matched_auctions` carries the board flag and the room's budget (a fact about
+  a draft, the case above), and `buys` carries one row per auction pick with its
+  bid already divided into a share — a fact about a *pick*, and therefore the
+  cheaper CTE to inline and the more expensive one to have inlined, since eight
+  aggregates stand on it. Both are referenced once, so both would inline.
   **The covering indexes beside it are a *consequence* of that fix, not an
   independent one** (`draft_picks_adp_board_idx`, `…_player_idx`): on their own
   they make the board *slower* — 2,280ms to 2,900ms — because they move the

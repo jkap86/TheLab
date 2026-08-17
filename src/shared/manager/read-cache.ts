@@ -149,6 +149,31 @@ export const ADP_PLAYER_BOARD_CACHE = {
 } as const;
 
 /**
+ * How long one page's worth of **auction spend** is worth reusing.
+ *
+ * It stands behind `ADP_STALE_TIMES.board`, exactly as the paged board it rides
+ * on the same response as does, and it is the same thirty minutes for the same
+ * two reasons: the crawler underneath moves a board by a handful of drafts among
+ * thousands, and a client entry going stale at fifteen minutes has to land
+ * inside a live entry here or the layer absorbs none of the revalidations it
+ * exists for. Matching the paged board rather than picking a number of its own
+ * is deliberate — the two are read on the *same request*, so a shorter TTL here
+ * would make every board revalidation a guaranteed miss on half its payload
+ * while hitting on the other half, which is the asymmetry
+ * `cache-layering.test.ts` exists to keep out.
+ *
+ * The bound is smaller than the paged board's because an entry is: it is a page
+ * of ids and four numbers per board, no names and no rows, and it is keyed on
+ * the *page* (limit and offset are in the key by way of the ids), so the working
+ * set is the handful of boards being scrolled rather than one entry per reader.
+ */
+export const ADP_AUCTION_CACHE = {
+  name: "adp-auction",
+  ttlMs: 30 * 60 * 1000,
+  max: 32,
+} as const;
+
+/**
  * How long a manager's ranks are worth reusing, and how many managers are kept.
  *
  * **Fifteen minutes, against the browser's five** (`MANAGER_STALE_TIMES.ranks`).

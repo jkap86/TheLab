@@ -6,9 +6,10 @@ import { previewAdpValue } from "../../adp-controls";
 import type { LeagueFilters } from "../../league-filters";
 import type { AdpPickRow as AdpPick, AdpPickStats } from "../../adp-picks";
 import { ordinal } from "../../format";
-import { AdpCell, KtcCell, ValueCell } from "./adp-board-cells";
+import { AdpCell, AuctionCell, KtcCell, ValueCell } from "./adp-board-cells";
 import { BOARD_ROW_CLASS, adpRowHeight } from "./adp-drawer.constants.ts";
 import {
+  PICK_AUCTION_TITLE,
   PICK_TAKEN_TITLE,
   ktcPickTitle,
   pickCellTitle,
@@ -112,6 +113,7 @@ export const AdpPickBoardRow = memo(function AdpPickBoardRow({
           >
             —
           </span>
+          <AuctionCell label={null} title={PICK_AUCTION_TITLE} />
           <ValueCell
             value={value(sole)}
             title={sole ? pickValueTitle(rules, pick, sole) : undefined}

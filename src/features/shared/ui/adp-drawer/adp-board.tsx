@@ -175,12 +175,25 @@ export function AdpBoard({
     // heading is pressed, so this fires on the press and on nothing else.
   }, [identity, activeSort]);
 
-  const { redraft_drafts, dynasty_drafts, player_count } = board.data ?? {
+  const {
+    redraft_drafts,
+    dynasty_drafts,
+    redraft_auctions,
+    dynasty_auctions,
+    player_count,
+  } = board.data ?? {
     redraft_drafts: null,
     dynasty_drafts: null,
+    redraft_auctions: null,
+    dynasty_auctions: null,
     player_count: null,
   };
   const soleDrafts = soleBoard === "dynasty" ? dynasty_drafts : redraft_drafts;
+  // Read off the same board and deliberately not off the same field: the Bid
+  // column averages the draft type this board never does, so its denominator is
+  // its own count and quoting `soleDrafts` there would state a sample the number
+  // was not taken over.
+  const soleAuctions = soleBoard === "dynasty" ? dynasty_auctions : redraft_auctions;
 
   return (
     // `min-h-0` is the load-bearing one — see the note above.
@@ -207,6 +220,7 @@ export function AdpBoard({
             both={both}
             soleBoard={soleBoard}
             soleDrafts={soleDrafts}
+            soleAuctions={soleAuctions}
             redraftDrafts={redraft_drafts}
             dynastyDrafts={dynasty_drafts}
             rules={controls.leagueRules}
@@ -237,6 +251,7 @@ export function AdpBoard({
                 both={both}
                 soleBoard={soleBoard}
                 soleDrafts={soleDrafts}
+                soleAuctions={soleAuctions}
                 redraftDrafts={redraft_drafts}
                 dynastyDrafts={dynasty_drafts}
                 rules={controls.leagueRules}
