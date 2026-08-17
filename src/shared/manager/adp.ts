@@ -4,7 +4,11 @@ import { TtlPromiseCache, deepFreeze } from "@/shared/util";
 
 import { adpComputeAdmission } from "./adp-admission";
 import type { AdpFilters } from "./adp-filters";
-import { ADP_BOARD_CACHE, adpBoardCacheKey } from "./read-cache";
+import {
+  ADP_BOARD_CACHE,
+  ADP_PLAYER_BOARD_CACHE,
+  adpBoardCacheKey,
+} from "./read-cache";
 
 /**
  * Average draft position over the drafts this app has crawled.
@@ -472,43 +476,29 @@ export type PlayerBoardAdpResult = DraftCounts & {
 };
 
 /**
- * How long a priced board is worth reusing, and how many are kept.
+ * One priced board per process, and the reads still running.
  *
- * The TTL follows the rule the other in-process caches here follow — shorter
- * than the sync writing behind it, so a stale read costs a query rather than a
- * wrong answer. What writes behind this one is the league crawler, whose fastest
- * tier is 15 minutes, and whose effect on any one board is a handful of new
- * drafts among thousands.
- *
- * The bound is in *boards*, and each is a map of up to ~1,100 players, so this
- * is the one cache here whose entries are large enough to be worth counting:
- * ~64 of them is a few megabytes at worst. A manager's page reads four (one per
- * distinct scoring/superflex group), so it holds a dozen-odd readers, and the
- * eviction is recency — a reader who has stopped scrolling loses their board to
- * one who hasn't.
+ * The TTL and the bound are {@link ADP_PLAYER_BOARD_CACHE}, beside the paged
+ * board's own policy rather than here — they are two cuts of one population,
+ * both stand behind a browser stale time, and a pair of numbers only one of the
+ * two could be tested against is how they came to disagree.
  *
  * It is a {@link TtlPromiseCache} rather than a plain `BoundedCache` for the one
  * thing the plain one deliberately does not do: **a cold key with several
- * readers on it computes once.** Same key, same TTL, same bound as before — what
- * is added is that two readers of one manager, or one reader whose page prices
- * six boards at once, no longer race each other through the same aggregate while
- * each holds a pool connection. That is the same argument the board cache above
- * rests on, and leaving the two halves of one read on different terms is the
- * kind of asymmetry that reads as an oversight.
+ * readers on it computes once.** Two readers of one manager, or one reader whose
+ * page prices six boards at once, no longer race each other through the same
+ * aggregate while each holds a pool connection. That is the same argument the
+ * board cache above rests on, and leaving the two halves of one read on
+ * different terms is the kind of asymmetry that reads as an oversight.
  *
  * The answer is **not** frozen, unlike the paged board's: it carries a `Map`,
  * and `Object.freeze` on a `Map` is a guarantee that cannot be kept (`set` goes
  * on working), so a freeze here would be reassurance rather than a bound. The
  * three callers read it and nothing else.
  */
-const BOARD_TTL_MS = 10 * 60 * 1000;
-const BOARD_CACHE_MAX = 64;
-
-const boardCache = new TtlPromiseCache<PlayerBoardAdpResult>({
-  name: "adp-players",
-  ttlMs: BOARD_TTL_MS,
-  max: BOARD_CACHE_MAX,
-});
+const boardCache = new TtlPromiseCache<PlayerBoardAdpResult>(
+  ADP_PLAYER_BOARD_CACHE,
+);
 
 /**
  * ADP for a specific set of players over the drafts matching `filters`, keyed by
@@ -529,7 +519,10 @@ const boardCache = new TtlPromiseCache<PlayerBoardAdpResult>({
  * to the one just read, and every notch was a second of aggregate over 1.9M
  * picks. The same holds for a reload, a second tab, and the 15-minute boundary
  * where the browser's own entry goes stale: none of those change the population,
- * and the population is all this reads.
+ * and the population is all this reads. That last case is the one the TTL had to
+ * be lengthened to actually cover — at ten minutes this entry expired *before*
+ * the browser's, so the revalidation it exists to absorb was the one request
+ * guaranteed to miss it. See {@link ADP_PLAYER_BOARD_CACHE}.
  *
  * **The key is the statement, not a signature of the filters.** {@link
  * boardSignature} exists for grouping leagues onto shared fetches and names the

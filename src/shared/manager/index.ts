@@ -89,7 +89,11 @@ export type {
 } from "./types";
 export { orderByProjectedPoints, projectedRank, rankOf, standingScore } from "./rank";
 export type { LeagueRank, ProjectedRank } from "./rank";
-export { readManagerRanks } from "./ranks-read";
+export {
+  clearManagerRanksCache,
+  invalidateManagerRanks,
+  readManagerRanks,
+} from "./ranks-read";
 export {
   clearLeagueDetailCache,
   invalidateLeagueDetail,

@@ -138,11 +138,15 @@ That third one is not expensive the way the others are; it is there because
 the same rosters, slots and scoring first, so uncached, splitting one payload
 into four would have introduced the tax a split is meant to avoid.
 
-- **`LEAGUE_DETAIL_CACHE` is the one cache invalidated on *write* as well as by
-  time.** `persistLeagueGraph` forgets the league *after* its transaction
-  commits — after rather than before, since a read starting between an early
-  invalidation and the commit would cache exactly the rows the write is
-  replacing.
+- **Two of them are invalidated on *write* as well as by time, and it is the same
+  write.** `persistLeagueGraph` forgets the league's core detail *and* the ranks
+  of every manager holding a roster in it — both *after* its transaction commits,
+  since a read starting between an early invalidation and the commit would cache
+  exactly the rows the write is replacing. Ranks are read off those rosters, so a
+  leagues sync that retires the browser's ranks entry (`leaguesRevision`) and
+  then serves a payload computed before it ran is the client doing the right
+  thing and being handed the number it was replacing. The ADP boards have no such
+  path: no reader can ask for a draft to be crawled.
 
 `TtlPromiseCache` (`shared/util`) is `BoundedCache` plus an **in-flight map**, so
 ten callers arriving on a cold key run one computation. Six rules:
@@ -167,10 +171,31 @@ ten callers arriving on a cold key run one computation. Six rules:
   TTL holds the same object and an in-place sort would edit what every later
   reader gets. The exception is the per-player board, which carries a `Map`:
   `Object.freeze` on one is a guarantee that cannot be kept.
-- **Each TTL is shorter than the layer it stands in front of**, and each process
-  holding its own is *correct* rather than merely acceptable — Postgres stays the
-  source of truth. Nothing here wants Redis; it would put a network hop on the
-  hot path.
+- **Each TTL is *longer* than the browser stale time in front of it**, by half
+  again at the very least. The two layers are not symmetrical: a browser entry
+  going stale discards nothing, it schedules a *revalidation* — so `staleTime` is
+  really "when this app's server is next asked", and this is the layer that
+  should answer. Set the other way round (which all three were, while every
+  comment claimed this rule) the first revalidation after a client entry goes
+  stale is a guaranteed miss, and the cache built to absorb revalidations expires
+  just in time to miss every one. A gap of merely more than zero is not enough,
+  since nothing lines the two clocks up: a request arriving uniformly inside an
+  entry's life finds `(ttl − stale) / ttl` of it left.
+  `features/shared/cache-layering.test.ts` asserts the ordering across the seam
+  (`shared/` cannot import `features/`, so neither side can assert it alone);
+  each side's own test carries its ceiling.
+- **Pick the ceiling from what writes underneath, not from one rule for
+  everything** — the crawler's fastest tier for a league's detail, the
+  projections sync's for ranks, and for an ADP board an average over ~1.5M picks
+  that a handful of new drafts cannot move.
+- **A longer TTL is only affordable where an explicit action invalidates**, and
+  the invalidation is what to add first. `persistLeagueGraph` drops the league's
+  core detail *and* the ranks of every manager rostered in it, so the paths a
+  reader can press — the panel's sync key, their own leagues sync — are exact in
+  the process serving them and the clock answers only for background writes.
+- Each process holding its own is *correct* rather than merely acceptable —
+  Postgres stays the source of truth. Nothing here wants Redis; it would put a
+  network hop on the hot path.
 
 **The ranks read is split at the work, not at the route.** Its expensive half is
 the projections; the cheap half comes off rosters it already fetched, and the

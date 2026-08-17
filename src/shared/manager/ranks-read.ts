@@ -52,6 +52,48 @@ const NO_PROJECTIONS: WeeklyTeamPoints = {
 const ranksCache = new TtlPromiseCache<ManagerRanksPayload>(MANAGER_RANKS_CACHE);
 
 /**
+ * Forget one manager's ranks in a season, because a league they are rostered in
+ * has just been rewritten.
+ *
+ * **This is what the TTL cannot get right, and the reason it may be as long as
+ * it is.** The browser retires this entry the moment a manager's leagues sync
+ * reports it changed something — `publishManagerLeagues` invalidates
+ * `dependentManagerQueryKeys`, ranks among them — and the refetch that follows
+ * is, without this, answered from a payload computed *before* the sync ran. That
+ * is the client doing exactly the right thing and being handed the number it was
+ * trying to replace: a standing that stays wrong for the rest of the window, on
+ * a page the reader has just watched refresh.
+ *
+ * Called from `persistLeagueGraph`, beside {@link invalidateLeagueDetail} and
+ * for the same reasons: at the *write* rather than at a route, so all three
+ * paths that rewrite a graph are covered (a manager's own sync, the on-demand
+ * league refresh, and the crawler when it runs in this process), and after the
+ * commit, so a read starting mid-write cannot cache the rows being replaced.
+ *
+ * Both option variants go, because `?projections=0` is a different key over the
+ * same rosters — the cheap answer is as wrong about a standing as the full one.
+ *
+ * It reaches this process only, which is the bound every cache here has. What
+ * that leaves to the clock is the crawler's writes from the worker dyno; what it
+ * makes exact is every path a reader can press.
+ */
+export function invalidateManagerRanks(
+  userIds: readonly string[],
+  season: string,
+): void {
+  for (const userId of userIds) {
+    for (const projections of [true, false]) {
+      ranksCache.forget(managerRanksCacheKey(userId, season, { projections }));
+    }
+  }
+}
+
+/** For tests: drop everything. */
+export function clearManagerRanksCache(): void {
+  ranksCache.clear();
+}
+
+/**
  * The ranks payload for one manager and season, cached and coalesced.
  *
  * `options.projections` decides whether the weekly solves run at all — see

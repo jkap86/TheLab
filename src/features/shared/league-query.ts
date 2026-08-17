@@ -73,9 +73,23 @@ export const leagueQueryKeys = {
  * Five minutes, the value it held in the manager area's own `STALE_TIMES` table
  * and for the same reason: the panel mounts on expand and unmounts on collapse,
  * so a league opened, closed and opened again should cost one request rather than
- * three. Shorter than the server's own TTLs on purpose — a stale client read
- * costs a request the server answers from its cache, where a stale server read
- * costs a fetch to somebody else.
+ * three.
+ *
+ * **Shorter than the server's own TTL on purpose, and the ordering is the whole
+ * design of the pair.** When this lapses React Query revalidates — one cheap
+ * request, with the rows it already holds still on screen — and the point is for
+ * that request to land in `LEAGUE_DETAIL_CACHE`, which holds the same answer in
+ * the server's memory for eight minutes. So a stale read here costs a request
+ * answered from memory, where a stale read *there* costs four queries. The two
+ * were once the other way round (three minutes behind this five), which made
+ * every revalidation a guaranteed miss on the layer built to absorb it; the
+ * ordering is asserted in `cache-layering.test.ts` rather than left to these
+ * comments.
+ *
+ * Neither number is what keeps a *press* honest. `useLeagueRefresh` invalidates
+ * this key on the way back from a sync, and the server drops its own entry when
+ * the graph is written — see `persistLeagueGraph` — so a reader who asks for a
+ * refresh sees Sleeper's answer whatever either clock says.
  *
  * It travels with the key rather than staying in that table because that table is
  * "how long the *manager area's* answers are worth reusing", and this answer

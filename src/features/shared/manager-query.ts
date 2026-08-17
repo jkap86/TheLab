@@ -150,9 +150,22 @@ export function dependentManagerQueryKeys(
  * changes here. What was missing is one layer out: the three manager tabs are
  * three routes, so switching between them unmounted every hook and re-asked the
  * browser's questions from scratch. These are how long the *browser* reuses an
- * answer it already has, and they are deliberately shorter than the server's own
- * TTLs — a stale client read costs a request the server answers from its cache,
- * where a stale server read costs a fetch to somebody else.
+ * answer it already has.
+ *
+ * **Each is shorter than the server-side layer standing behind it**, where there
+ * is one: `ranks` against `MANAGER_RANKS_CACHE` (fifteen minutes) and `adpValue`
+ * against `ADP_PLAYER_BOARD_CACHE` (thirty). That ordering is the point of
+ * having both — when one of these lapses React Query revalidates, and a
+ * revalidation should cost a request the server answers out of memory rather
+ * than the thousands of lineup solves or the second of aggregate underneath it.
+ * `ranks` was once *equal* to its server TTL, which is the arrangement that
+ * wastes the layer most reliably: nothing lines the two clocks up, so the
+ * revalidation arrives just after the entry it wanted expired. See
+ * `cache-layering.test.ts`.
+ *
+ * `players`, `leaguemates` and `ktc` have no in-memory layer behind them — they
+ * are single Postgres reads of what a sync already wrote, so Postgres *is* the
+ * layer and these numbers answer only to how fast the rows move.
  *
  * They are set per query rather than as one global default because the resources
  * move at genuinely different speeds — the same rule the background loops follow
@@ -171,11 +184,21 @@ export const MANAGER_STALE_TIMES = {
   players: 10 * 60 * 1000,
   /** Who they share leagues with — membership changes at the season's pace. */
   leaguemates: 10 * 60 * 1000,
-  /** Projected ranks: a projections slice can move hourly, so the shortest. */
+  /**
+   * Projected ranks: a projections slice can move hourly, so the shortest — and
+   * a third of `MANAGER_RANKS_CACHE`, so the revalidation it schedules is
+   * answered from the server's memory rather than by re-solving every lineup.
+   * A leagues sync that rewrote these rosters retires this entry outright (see
+   * {@link dependentManagerQueryKeys}), and the server drops its own at the same
+   * write, so neither number decides what a refresh shows.
+   */
   ranks: 5 * 60 * 1000,
   /** KTC values: the scrape behind them refreshes on the order of a day. */
   ktc: 15 * 60 * 1000,
-  /** ADP valuation, per curve — the crawled board behind it moves slowly. */
+  /**
+   * ADP valuation, per curve — the crawled board behind it moves slowly, and
+   * half of `ADP_PLAYER_BOARD_CACHE`, which is where a revalidation lands.
+   */
   adpValue: 15 * 60 * 1000,
   // The league detail's TTL left with the panel that reads it, to
   // `league-query.ts`, on the same terms as kickoff's below: this table is "how
