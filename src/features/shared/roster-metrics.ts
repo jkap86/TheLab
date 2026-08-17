@@ -1,4 +1,5 @@
 import { formatPoints, formatValue, weekCount } from "./format.ts";
+import type { LeagueDataset } from "./league-detail-needs.ts";
 import type { ColumnPreset, Metric } from "./metric-cell.ts";
 import type { PlayerOutlook, PlayerSplit } from "@/shared/projections";
 
@@ -89,10 +90,18 @@ export type PlayerMetricCell = {
  *
  * A {@link Metric} at this catalogue's grain, narrowed to the cell shape it
  * returns — see {@link TeamMetric}, which is the same construction for the same
- * two reasons, `Omit` included.
+ * two reasons, `Omit` included, and carries the same required {@link reads}.
  */
 export type PlayerMetric = Omit<Metric<PlayerMetricContext>, "cell"> & {
   cell: (ctx: PlayerMetricContext) => PlayerMetricCell;
+  /**
+   * Which of the panel's three enrichment reads this cell needs to say anything
+   * — see {@link leagueDetailNeeds}, which is what turns these into requests.
+   *
+   * Declared per metric rather than inferred from {@link Metric.group}, and
+   * required: a metric added here cannot forget to say what it costs.
+   */
+  reads: readonly LeagueDataset[];
 };
 
 /** Whether a projection covers fewer weeks than the horizon by more than a bye. */
@@ -113,6 +122,7 @@ export const PLAYER_METRICS: PlayerMetric[] = [
     key: "week_proj",
     group: "Week",
     label: "Wk Proj",
+    reads: ["week"],
     cell: ({ week, weekProjection }) => {
       if (week === null) {
         return {
@@ -141,6 +151,7 @@ export const PLAYER_METRICS: PlayerMetric[] = [
     key: "start",
     group: "Projection",
     label: "Start",
+    reads: ["outlook"],
     cell: ({ outlook, split, horizon }) => {
       if (!outlook) return { kind: "value", text: null, title: "No projection" };
       // A projected player with no split was never a lineup candidate this
@@ -162,6 +173,7 @@ export const PLAYER_METRICS: PlayerMetric[] = [
     key: "bench",
     group: "Projection",
     label: "Bench",
+    reads: ["outlook"],
     cell: ({ outlook, split }) => {
       if (!outlook) return { kind: "value", text: null, title: "No projection" };
       const points = split?.bench_points ?? 0;
@@ -183,6 +195,7 @@ export const PLAYER_METRICS: PlayerMetric[] = [
     key: "proj",
     group: "Projection",
     label: "Proj",
+    reads: ["outlook"],
     cell: ({ outlook, horizon }) => {
       if (!outlook) return { kind: "value", text: null, title: "No projection" };
       return {
@@ -197,6 +210,7 @@ export const PLAYER_METRICS: PlayerMetric[] = [
     key: "ktc",
     group: "Value",
     label: "KTC",
+    reads: ["values"],
     cell: ({ ktc, superflex }) => {
       if (ktc === null) {
         return { kind: "value", text: null, title: "not priced on KeepTradeCut" };
@@ -214,6 +228,7 @@ export const PLAYER_METRICS: PlayerMetric[] = [
     key: "adp",
     group: "Value",
     label: "ADP",
+    reads: ["values"],
     cell: ({ adp, adpPosition, superflex, draftCount }) => {
       if (adp === null) {
         return { kind: "value", text: null, title: "no ADP on the matching board" };

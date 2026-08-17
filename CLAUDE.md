@@ -232,6 +232,24 @@ back would take the cache with it). Nothing is stored on the device.
   `refreshing`/`progress`, since no further message is coming; and the bail-out
   cancels the reader, since `cancel` on an errored stream rejects with that same
   error.
+- **A read is enabled by what is on screen, and "on screen" means the *columns*.**
+  Splitting a payload stops a panel *waiting*; only `enabled` stops it *asking*.
+  `leagueDetailNeeds` answers for League Details as `managerDataRequirements`
+  does for the leagues list, off the same per-metric `reads` declaration in both
+  catalogues — required, so a new metric can't forget, and **declared rather than
+  inferred from `group`**, since what a bay is *called* has no business deciding
+  whether a request is made. Four rules: **`values` is column-driven and nothing
+  else**; **`week` is the panel's subject, not a column** (a week panel always
+  asks, a season panel has no week to ask about however its slots are aimed);
+  **`outlook` is both** — structural on a season panel, whose starters *are*
+  `optimal` and whose standings rank on `weekly_optimal_points`, and column-driven
+  on a week panel, where the week payload supplies all of that; and **an open
+  columns editor widens it**, because a bay of em-dash previews is a picker that
+  can't be read. **Derive the needs above the loaded panel, never inside it** — a
+  selection read off `localStorage` needs no fetch, so deriving it under a
+  component that renders on the core is how a split becomes a waterfall. A
+  disabled query keeps its entry, so a column switched off and on inside the stale
+  time costs nothing.
 
 The fetchers and keys are pure modules with relative `.ts` imports, so the
 cache's behaviour is tested by driving `QueryObserver`s directly — the assertions
