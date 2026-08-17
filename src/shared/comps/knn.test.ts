@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { fieldValue, runCompsKnn, similarityScore } from "./knn.ts";
+import {
+  fieldValue,
+  normalizationScale,
+  runCompsKnn,
+  similarityScore,
+} from "./knn.ts";
 
 import type { CompsFieldSpec, CompsPoolRow } from "./knn.ts";
 
@@ -225,15 +230,18 @@ describe("runCompsKnn — the pipeline", () => {
 });
 
 /**
- * The invariant a zero-variance field has to hold, which is stronger than "not
- * NaN" and is what the earlier arithmetic broke: a field carrying no
- * comparative information must not be in the distance *at all*, denominator
- * included. Its weight left in the total divided a real gap by weight nothing
- * paid, so adding a constant dimension left the ranking alone and made every
- * similarity score better — a number that looks like a result and is an
- * artefact of the normalization.
+ * The invariant a zero-variance field has to hold *where the subject shares the
+ * constant*, which is stronger than "not NaN" and is what the earlier
+ * arithmetic broke: a field carrying no comparative information must not be in
+ * the distance *at all*, denominator included. Its weight left in the total
+ * divided a real gap by weight nothing paid, so adding a constant dimension
+ * left the ranking alone and made every similarity score better — a number that
+ * looks like a result and is an artefact of the normalization.
+ *
+ * Every subject below sits **on** the constant, which is the whole of that
+ * case. A subject sitting off it is the opposite reading and has its own block.
  */
-describe("runCompsKnn — a constant field is not in the comparison", () => {
+describe("runCompsKnn — a constant field the subject matches is not in the comparison", () => {
   const spread = [
     row({ player_id: "a", values: { y: 1, k: 5, k2: -3 } }),
     row({ player_id: "b", values: { y: 2, k: 5, k2: -3 } }),
@@ -336,5 +344,270 @@ describe("runCompsKnn — a constant field is not in the comparison", () => {
       assert.equal(result.distance, 0);
       assert.ok(Number.isFinite(result.similarity));
     }
+  });
+});
+
+/**
+ * The other reading of σ = 0, which the block above used to swallow: a
+ * population holding one value the subject does **not** hold. Nobody matches
+ * the subject on the dimension, so dropping it reported the exact opposite —
+ * every candidate a perfect match on the one field the reader asked about.
+ *
+ * The scale is `max(|subject|, |constant|)`, making the gap the relative
+ * difference, so the numbers below are closed forms rather than fixtures.
+ */
+describe("runCompsKnn — a constant field the subject does not match", () => {
+  /** y over {1,2,3}: mean 2, σ = √(2/3). k constant at 5 for every candidate. */
+  const spread = [
+    row({ player_id: "a", values: { y: 1, k: 5 } }),
+    row({ player_id: "b", values: { y: 2, k: 5 } }),
+    row({ player_id: "c", values: { y: 3, k: 5 } }),
+  ];
+
+  test("A — zero variance and the subject matches: no penalty at all", () => {
+    // subject 5 against {5, 5, 5}. The dimension separates nobody from anybody
+    // including the subject, so it costs nothing and everyone is a perfect
+    // match on what was asked.
+    const subject = row({ player_id: "s", values: { k: 5 } });
+    const out = run(subject, spread, { fields: [field("k", 100)] });
+
+    assert.equal(out.results.length, 3);
+    for (const result of out.results) {
+      assert.equal(result.distance, 0);
+      assert.equal(result.similarity, 100);
+    }
+    assert.equal(out.fieldStats[0].stdev, 0);
+  });
+
+  test("B — zero variance and the subject differs: never similarity 100", () => {
+    // subject 10 against {5, 5, 5}, the only requested field. The regression:
+    // σ = 0 dropped the dimension, so d = 0 and every candidate came back at
+    // 100 while matching the subject nowhere.
+    //
+    // Now scale = max(10, 5) = 10 and the gap is (5 − 10)/10 = −0.5, so
+    // d = √(100·0.25 / 100) = 0.5 for every candidate.
+    const subject = row({ player_id: "s", values: { k: 10 } });
+    const out = run(subject, spread, { fields: [field("k", 100)] });
+
+    assert.equal(out.results.length, 3);
+    for (const result of out.results) {
+      assert.equal(result.distance, 0.5);
+      assert.equal(result.similarity, similarityScore(0.5));
+      assert.notEqual(result.similarity, 100);
+      assert.ok(Number.isFinite(result.distance));
+    }
+    // 61, not 100 — the number the bug produced is pinned so a revert is loud.
+    assert.equal(out.results[0].similarity, 61);
+    // The reported statistics are the population's own and unchanged: σ really
+    // is 0, and the fallback is a property of the distance, not of the pool.
+    assert.deepEqual(out.fieldStats, [{ key: "k", mean: 5, stdev: 0 }]);
+  });
+
+  test("B — the mismatch is the relative difference, and is bounded by 2", () => {
+    // A gap with no σ behind it must not be able to out-shout one that measured
+    // its own scale, so the fallback is bounded rather than an invented z.
+    const pairs: [number, number][] = [
+      [10, 5], // subject above the constant
+      [1, 5], // and below it
+      [0, 5], // the subject at zero
+      [5, 0], // the constant at zero
+      [-5, 5], // opposite signs — the bound, exactly 2
+      [1e6, 5], // and an enormous ratio, which does not exceed it
+    ];
+    for (const [subjectValue, constant] of pairs) {
+      const out = run(
+        row({ player_id: "s", values: { k: subjectValue } }),
+        [
+          row({ player_id: "a", values: { k: constant } }),
+          row({ player_id: "b", values: { k: constant } }),
+        ],
+        { fields: [field("k", 100)] },
+      );
+      const expected =
+        Math.abs(constant - subjectValue) /
+        Math.max(Math.abs(subjectValue), Math.abs(constant));
+      for (const result of out.results) {
+        assert.ok(
+          Math.abs(result.distance - expected) < 1e-12,
+          `${subjectValue} vs ${constant}: ${result.distance} ≠ ${expected}`,
+        );
+        assert.ok(result.distance <= 2, "bounded, so no runaway z-score");
+        assert.ok(result.similarity < 100);
+      }
+    }
+  });
+
+  test("C — beside a varying field it costs everyone the same, and reorders nobody", () => {
+    // y varies and the subject matches candidate `c` on it exactly; k is
+    // constant at 5 against a subject at 10. Both weighted 100.
+    //   c: √((100·0 + 100·0.25) / 200) = √0.125
+    //   b: y-gap −1/√(2/3), so √((100·1.5 + 100·0.25) / 200) = √0.875
+    //   a: y-gap −2/√(2/3), so √((100·6 + 100·0.25) / 200) = √3.125
+    const subject = row({ player_id: "s", values: { y: 3, k: 10 } });
+    const out = run(subject, spread, {
+      fields: [field("y", 100), field("k", 100)],
+    });
+
+    assert.deepEqual(
+      out.results.map((result) => result.row.player_id),
+      ["c", "b", "a"],
+    );
+    const distances = out.results.map((result) => result.distance);
+    for (const [i, expected] of [
+      Math.sqrt(0.125),
+      Math.sqrt(0.875),
+      Math.sqrt(3.125),
+    ].entries()) {
+      assert.ok(Math.abs(distances[i] - expected) < 1e-12, `${distances[i]}`);
+    }
+
+    // The point of the fix, on the candidate the varying field called perfect:
+    // `c` matched the subject on everything the population could measure and
+    // still differs from it on the field it could not.
+    assert.ok(out.results[0].distance > 0);
+    assert.notEqual(out.results[0].similarity, 100);
+
+    // The ordering is the varying field's, untouched: the mismatch is identical
+    // for every candidate, so it moves how well anybody matches and never who
+    // matches best.
+    const alone = run(subject, spread, { fields: [field("y", 100)] });
+    assert.deepEqual(
+      out.results.map((result) => result.row.player_id),
+      alone.results.map((result) => result.row.player_id),
+    );
+  });
+
+  test("D — the configured weight of the mismatch is respected", () => {
+    // Same board, varying `y` pinned at 100, and `k`'s weight swept. For the
+    // candidate matching on y the whole distance is the mismatch:
+    //   d = √(w · 0.25 / (100 + w))
+    const subject = row({ player_id: "s", values: { y: 3, k: 10 } });
+    const matched = (weight: number) => {
+      const out = run(subject, spread, {
+        fields: [field("y", 100), field("k", weight)],
+      });
+      assert.equal(out.results[0].row.player_id, "c");
+      return out.results[0].distance;
+    };
+
+    for (const weight of [20, 100, 300]) {
+      const expected = Math.sqrt((weight * 0.25) / (100 + weight));
+      assert.ok(
+        Math.abs(matched(weight) - expected) < 1e-12,
+        `weight ${weight}: ${matched(weight)} ≠ ${expected}`,
+      );
+    }
+    // Monotone in the weight, which is what "respected" has to mean on screen:
+    // weighting the field the subject differs on more costs the board more.
+    assert.ok(matched(20) < matched(100));
+    assert.ok(matched(100) < matched(300));
+
+    // And the weight is in the denominator as well as the numerator — the
+    // dimension participates fully rather than being bolted onto the distance,
+    // so the metric stays the weighted RMS its similarity map is scaled for.
+    assert.ok(matched(300) < 0.5, "an RMS over both fields, not a sum");
+  });
+
+  test("E — normal fields keep their exact rankings and distances", () => {
+    // The existing arithmetic, re-pinned: a board with real spread on every
+    // field is untouched by this change. Candidates on x {10, 20} → σ 5, on y
+    // {1, 3} → σ 1; subject (20, 3); a's z-gaps are 2 and 2.
+    const subject = row({ player_id: "s", values: { x: 20, y: 3 } });
+    const out = run(
+      subject,
+      [
+        row({ player_id: "a", values: { x: 10, y: 1 } }),
+        row({ player_id: "b", values: { x: 20, y: 3 } }),
+      ],
+      { fields: [field("x", 100), field("y", 25)] },
+    );
+    assert.deepEqual(
+      out.results.map((result) => [result.row.player_id, result.distance]),
+      [
+        ["b", 0],
+        ["a", 2],
+      ],
+    );
+
+    // And a larger ordered board keeps its order exactly: y = 0…7 against a
+    // subject at 3, so the distance is |i − 3| z-units and each pair either
+    // side of the subject ties — broken by player id, the season being equal.
+    const graded = run(
+      row({ player_id: "s", values: { y: 3 } }),
+      Array.from({ length: 8 }, (_, i) =>
+        row({ player_id: `c${i}`, values: { y: i } }),
+      ),
+      { fields: [field("y", 100)] },
+    );
+    assert.deepEqual(
+      graded.results.map((result) => result.row.player_id),
+      ["c3", "c2", "c4", "c1", "c5", "c0", "c6", "c7"],
+    );
+  });
+
+  test("a population constant to within float noise is a constant population", () => {
+    // Three identical 0.1s have a σ of 1.4e-17 rather than 0 — the mean is
+    // 0.30000000000000004/3. An exact `=== 0` test calls that spread and
+    // divides a real gap by it: the subject lands 7e15 σ out and every
+    // candidate scores 0, which is the divide-by-zero wearing a finite number.
+    const noisy = [
+      row({ player_id: "a", values: { y: 1, k: 0.1 } }),
+      row({ player_id: "b", values: { y: 2, k: 0.1 } }),
+      row({ player_id: "c", values: { y: 3, k: 0.1 } }),
+    ];
+    assert.notEqual(
+      run(row({ player_id: "s", values: { k: 0.1 } }), noisy, {
+        fields: [field("k", 100)],
+      }).fieldStats[0].stdev,
+      0,
+    );
+
+    // Subject off the constant: the relative difference, not 7e15.
+    const differs = run(row({ player_id: "s", values: { k: 0.2 } }), noisy, {
+      fields: [field("k", 100)],
+    });
+    for (const result of differs.results) {
+      assert.ok(Math.abs(result.distance - 0.5) < 1e-12, `${result.distance}`);
+      assert.equal(result.similarity, 61);
+    }
+
+    // Subject on it: dropped, denominator included, exactly as an exactly
+    // constant field is — so a noisy constant cannot flatter a real dimension
+    // either.
+    const subject = row({ player_id: "s", values: { y: 3, k: 0.1 } });
+    const reading = (fields: CompsFieldSpec[]) =>
+      run(subject, noisy, { fields }).results.map((result) => [
+        result.row.player_id,
+        result.distance,
+      ]);
+    assert.deepEqual(
+      reading([field("y", 100), field("k", 100)]),
+      reading([field("y", 100)]),
+    );
+  });
+});
+
+describe("normalizationScale", () => {
+  test("a population with spread is scaled by its own σ", () => {
+    assert.equal(normalizationScale(2, 0.8, 5), 0.8);
+    assert.equal(normalizationScale(2, 0.8, 2), 0.8);
+    // Even a subject far outside it — the σ is measured, so it is used.
+    assert.equal(normalizationScale(2, 0.8, 1e6), 0.8);
+  });
+
+  test("a constant population the subject sits on has no scale and no say", () => {
+    assert.equal(normalizationScale(5, 0, 5), null);
+    assert.equal(normalizationScale(0, 0, 0), null);
+    assert.equal(normalizationScale(-3, 0, -3), null);
+    // Within float noise of it is sitting on it.
+    assert.equal(normalizationScale(0.1, 1.4e-17, 0.1), null);
+  });
+
+  test("a constant population the subject sits off is scaled by the larger magnitude", () => {
+    assert.equal(normalizationScale(5, 0, 10), 10);
+    assert.equal(normalizationScale(5, 0, 1), 5);
+    assert.equal(normalizationScale(0, 0, 3), 3);
+    assert.equal(normalizationScale(5, 0, 0), 5);
+    assert.equal(normalizationScale(5, 0, -5), 5);
   });
 });
