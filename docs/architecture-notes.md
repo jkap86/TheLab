@@ -414,11 +414,94 @@ Four rules hold it up, and each replaced a specific failure:
   body is *errored* and `cancel` on an errored stream rejects with that same
   error — swallowed there rather than surfacing as an unhandled rejection.
 
+- **A read is enabled by what is on screen, and on these two lists "on screen"
+  means the columns.** Splitting one payload into four routes stopped the League
+  Details panel *waiting* on all four; it did not stop it *asking* for them, and
+  the two facts look identical in a network waterfall diagram only until you
+  notice that the week read a lineup checker was opened *for* is queueing behind
+  a season-long lineup solve nothing on that panel draws. Opening the lineup
+  checker fired `./week`, `./outlook` and `./values` every time; opening a season
+  panel at its defaults fired `./values` against a board neither table was
+  pointed at. This is `managerDataRequirements` one grain down — the leagues
+  list had already learned it, where a board of four projection columns was
+  paying for a KTC valuation and an ADP pricing it drew nothing from — and
+  `leagueDetailNeeds` is the same answer over the same mechanism: each metric in
+  both catalogues declares what it `reads`, required so a metric added later
+  cannot forget, and declared rather than inferred from its display `group`,
+  because what a bay is *called* has no business deciding whether a request is
+  made.
+
+  What is worth knowing is that the three reads are **not** the same kind of
+  thing, and treating them uniformly would have been wrong in two different
+  directions. `values` is column-driven and nothing else: no part of the panel's
+  structure reads a price, and even the footnote naming the board is drawn only
+  while a KTC or ADP column is selected. `week` is not column-driven at all — it
+  is the panel's *subject*, so a panel that has one always asks (the lineup each
+  half lists, the start/sit marks, the kickoff on every row and the median bar in
+  the head are all that payload) and a panel that hasn't has nothing to ask for,
+  which is why a `week_proj` column aimed at a season panel makes no request and
+  says so in words. `outlook` is both, and that asymmetry is the whole judgement:
+  on a season panel it is structural in exactly the way the week payload is on a
+  week one — the roster halves list `optimal` as their starters, the bench under
+  it is ordered on the season's projected points, the standings rows are ranked
+  by `weekly_optimal_points` — so it is required there whatever the columns say,
+  and on a week panel every one of those readings comes off the week instead and
+  it falls back to being column-driven.
+
+  Two details carry it. **The needs are derived above the loaded panel**, not
+  inside it: `Panel` renders only once the core has landed, so deriving them
+  there would have put every enrichment *behind* the read it is supposed to run
+  beside — a split turned back into the waterfall it replaced, and one that would
+  have looked fine in review. The selections come off `localStorage` and need no
+  fetch, so there is nothing to wait for. And **an open columns editor widens the
+  needs**, on the leagues list's own precedent: the dialog previews every metric
+  in the catalogue against the panel's subject, and a bay of em dashes is a
+  picker nobody can read. It follows the editor's `mounted` latch rather than
+  whether it is open, so a preview that filled in never empties again — and by
+  then the reads are cached anyway.
+
+  **What a disabled query does *not* do is forget.** React Query keeps the entry,
+  so a column aimed away and back inside `LEAGUE_DETAIL_STALE_TIME` re-enables
+  against the same key and is answered from the cache. That is what makes the
+  gating safe to have: the cost of being wrong about a column is one request the
+  reader's press would have made anyway, not a round trip per press.
+
+  **Two things a week panel used to draw off the outlook it happened to fetch go
+  with it, and they are worth writing down rather than discovering.** The
+  under-the-tables caveat about a league whose scoring Sleeper doesn't fully
+  project reads `unprojected_scoring`, and the "these slots left out" line over a
+  roster reads `unknown_slots` — both fields of the outlook payload, and neither
+  is on the week one. The caveat is the one that matters, because it fires on
+  nearly every league (almost all of them start a team defence and weight events
+  Sleeper doesn't project), so the lineup checker loses it. It is not a *wrong*
+  answer — an absent outlook is the state that payload failing has always
+  produced, and every consumer already draws it correctly — but it is less than
+  the panel said before. Restoring it is a contract change and not a client one:
+  `unprojected_scoring` is a fact about a league's scoring against a week's
+  projection vocabulary, so it could ride on `LeagueWeekViewPayload` and be read
+  from whichever of the two landed. That is the fix if the caveat is wanted back;
+  computing it on the core read is not, since the core is what the first paint
+  waits for. The bye-week arrangement loses a little too — with no outlook the
+  standings falls back to the order the server sent, which is the same degradation
+  a failed projections read has always produced.
+
+  There is one on the season panel as well: `hasNumbers` gates a table's value
+  columns off when nothing could fill them, and it reads the *board* as one of its
+  three sources. A league that cannot be projected at all (no scoring on file, or
+  a season with no weeks left) opened with projection columns used to draw two
+  headed columns of em dashes on the strength of a KTC board it was not showing,
+  and now draws no columns. That is the gate's own stated intent — "so a
+  `start / bench` label doesn't promise a breakdown that isn't there" — arriving
+  where it was previously defeated by data fetched for a column nobody had
+  selected.
+
 The fetchers and the keys are pure modules with relative `.ts` imports, so the
 cache's behaviour is tested by driving `QueryObserver`s directly
-(`query-cache.test.ts`) — the assertions are request *counts*, which is what the
-work was for. `query-test-support.ts` is the `fetch` mock and the test client;
-it is not a `.test.ts` because the runner globs those.
+(`query-cache.test.ts`, `league-cache.test.ts`) — the assertions are request
+*counts*, which is what the work was for, and the enablement ones drive the real
+`leagueDetailNeeds` rather than a mirror of it, so the derivation under test is
+the one the panel runs. `query-test-support.ts` is the `fetch` mock and the test
+client; it is not a `.test.ts` because the runner globs those.
 
 ## Database
 
@@ -950,6 +1033,55 @@ about how it is laid out. Each replaced something that read as fine and wasn't.
     when the database merely had no room. It is applied at **every** route that
     catches a read rather than at the ones that were seen to be slow — a rule
     held by two routes of fourteen reports the twelfth as a bug in itself.
+  - **A read that is only a bonus still fails as a failure**, which is the half
+    of that rule the League Details split got wrong for as long as it existed.
+    `…/week` and `…/outlook` each caught their read and returned `null`, which
+    the route sent with a 200, on reasoning that is *correct*: these are two
+    columns on top of a panel whose point is the rosters, so a read that cannot
+    answer should cost the columns and not the league. What was wrong was the
+    spelling. A 200 says the request worked, and three things follow from that
+    which nobody chose. The query client's retry never runs, because there is no
+    failure to retry — the one retry the app configures is spent on failures, so
+    the read least worth giving up on was the one never asked again. The `null`
+    is cached as a *successful* answer for `LEAGUE_DETAIL_STALE_TIME`, so a
+    database busy for one second costs the panel its lineups for five minutes,
+    and closing the card and reopening it inside that window serves the failure
+    back without asking anyone. And nothing at any layer can tell it from a
+    league that genuinely cannot be projected, because on the wire it is the
+    same byte.
+
+    The failure was invisible in exactly the way the `start_time` one was: every
+    layer degraded politely, the em dash it produced is the em dash the real
+    empty case produces, and the tests passed throughout because they construct
+    payloads rather than failures. **A fallback that fires on a failure and looks
+    like the success case is indistinguishable from working.**
+
+    So the rule is the one the em dash already implied and the wire did not
+    carry. A **null body means the domain answered "nothing"** — for `…/outlook`,
+    a league with no slots on file, no scoring settings to score with, or no
+    weeks left on the schedule, which is a fact about the league and stays a 200.
+    An **operational failure is a failure status**, through `readResponse`
+    (`app/api/read-response.ts`), which is `withReadTiming` +
+    `readFailureResponse` and no policy of its own — the point is to have one
+    place the next enrichment route falls into rather than a second copy of the
+    decision. And **a route whose loader cannot return null has no null on the
+    wire at all**: `getLeagueWeekView` is `Promise<LeagueWeekView>`, so every
+    null `…/week` ever sent was a caught exception, and `LeagueWeekPayload`
+    stopped being nullable so there is nowhere for one to re-enter. The
+    serialiser takes the view rather than `view | null` for the same reason —
+    that null branch *was* the seam.
+
+    The graceful half is untouched, and it never lived in the route: the
+    enrichments are separate queries, so `useLeagueDetail` reads whichever have
+    answered and only the core's error is the panel's error. What changed is that
+    the query underneath now knows it failed. `read-response.test.ts` asserts the
+    response for each outcome (a value, a legitimate null, each of the four busy
+    spellings, a broken read, a non-`Error` throw, a synchronous throw);
+    `league-routes.test.ts` asserts that the two routes still go through it,
+    since a route that quietly went back to catching its own read would pass
+    every other test in the repo; and `league-cache.test.ts` asserts the client
+    end — a failed enrichment is an errored query with no data, a `200 null` is a
+    success, the retry runs on the first and not the second.
 
 ## Testing
 

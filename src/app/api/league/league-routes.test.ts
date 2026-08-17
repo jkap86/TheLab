@@ -127,6 +127,63 @@ describe("the league → ADP-board lookup", () => {
   });
 });
 
+describe("an enrichment that fails says so", () => {
+  /**
+   * The rule the source is the only place to assert.
+   *
+   * `…/week` and `…/outlook` each caught their read and returned `null`, which
+   * the route then sent with a 200 — so a database timeout arrived at the browser
+   * as a successful answer holding nothing, indistinguishable from a league that
+   * genuinely has no outlook, never retried, and cached as an answer for the
+   * entry's whole stale time. What the response *is* in each case is asserted for
+   * real in `read-response.test.ts`; what cannot be asserted there is that these
+   * two files still go through it, because a route that quietly went back to
+   * catching its own read would pass every other test in the repo.
+   */
+  for (const name of ["outlook", "week"] as const) {
+    test(`${name} routes its failures through the shared helper`, () => {
+      assert.ok(calls(ROUTES[name], "readResponse"), `${name} route bypasses readResponse`);
+    });
+
+    test(`${name} does not turn a failure back into a body`, () => {
+      // The swallow's exact shape: a `.catch` in the route file whose handler
+      // hands back a null for the response to carry. Neither file has any
+      // business catching its own read now — the helper does it — so the tell
+      // is asserted rather than the wording of any one spelling of it.
+      assert.equal(
+        /\.catch\(/.test(ROUTES[name]),
+        false,
+        `${name} route catches its own read`,
+      );
+      // A statement, not the word: `calls` already exists because every name
+      // here also appears in prose, and these files' doc comments now argue
+      // about exactly this.
+      assert.equal(
+        /\breturn null\s*;/.test(ROUTES[name]),
+        false,
+        `${name} route can still answer null from its own code`,
+      );
+    });
+  }
+
+  test("the helper answers a failure with the read-failure response", () => {
+    // The other end of it: `readResponse` is only worth routing through because
+    // it defers to the one policy that tells a busy database (503, retry) from a
+    // broken read (500). A copy of that decision inside it would be the parallel
+    // implementation this is meant to prevent.
+    const helper = read("../read-response.ts");
+    assert.ok(calls(helper, "readFailureResponse"));
+    assert.equal(/\breturn null\s*;/.test(helper), false);
+  });
+
+  test("the week route's serialiser has no null branch left", () => {
+    // `getLeagueWeekView` is `Promise<LeagueWeekView>`, so a null-taking
+    // serialiser was the seam a caught exception came back through. Typed to the
+    // view alone, there is nowhere for one to re-enter.
+    assert.match(ROUTES.week, /function serializeWeekView\(view: LeagueWeekView\)/);
+  });
+});
+
 describe("the four routes share one league read", () => {
   test("every one of them resolves through the cached helper", () => {
     // A split that ran `getLeagueDetail` four times would have traded blocking

@@ -8,6 +8,7 @@ import type { PlayerSummary } from "@/shared/players";
 import { adpValueRead } from "../../adp-controls";
 import { useAdpControls } from "../../adp-controls-context";
 import { shortPlayerName } from "../../format";
+import { leagueDetailNeeds } from "../../league-detail-needs.ts";
 import { pickLabel } from "../../pick-value";
 import { groupRosterByPosition } from "../../roster-groups";
 import type { RosterPlayer } from "../../roster-groups";
@@ -130,20 +131,6 @@ export function TimelineRosters({
     () => adpValueRead(controls, scope, today),
     [controls, scope, today],
   );
-  const { data: values } = useLeagueValues(leagueId, boardRead);
-  const board: TimelineBoard = useMemo(
-    () =>
-      values
-        ? {
-            ktc: values.ktc,
-            adp: values.adp,
-            adp_position: values.adp_position,
-            superflex: values.superflex,
-            draftCount: values.adp_draft_count,
-          }
-        : NO_TIMELINE_BOARD,
-    [values],
-  );
 
   // The panel's own selections, under the panel's own keys — which is what makes
   // this "the columns the current view shows" by construction rather than by a
@@ -165,6 +152,34 @@ export function TimelineRosters({
 
   const teamEditor = useColumnsEditor();
   const rosterEditor = useColumnsEditor();
+
+  // Read only where a column is showing a price, the rule the panel this shares
+  // its key with keeps — and here it is the *whole* rule rather than one third of
+  // it, because {@link REWINDABLE_METRICS} is `ktc`/`adp` and nothing else: every
+  // other column draws its "not at this moment" em dash whatever was fetched. So
+  // a rail scrubbed with the default projection columns on screen prices nothing,
+  // and an editor opened over it prices everything, on the same latch and for the
+  // same reason as the panel's.
+  const needsValues =
+    leagueDetailNeeds({ week: null, teamColumns, playerColumns }).values ||
+    teamEditor.mounted ||
+    rosterEditor.mounted;
+  const { data: values } = useLeagueValues(leagueId, boardRead, {
+    enabled: needsValues,
+  });
+  const board: TimelineBoard = useMemo(
+    () =>
+      values
+        ? {
+            ktc: values.ktc,
+            adp: values.adp,
+            adp_position: values.adp_position,
+            superflex: values.superflex,
+            draftCount: values.adp_draft_count,
+          }
+        : NO_TIMELINE_BOARD,
+    [values],
+  );
   // A roster the league doesn't hold falls back to the head of the list, the
   // panel's own reading of a `focusRosterId` naming a team that has since been
   // replaced — and the same fallback covers the first render, before anything has

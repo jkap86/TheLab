@@ -7,7 +7,7 @@ import { getLeagueWeekView } from "@/shared/stats";
 import type { LeagueWeekView } from "@/shared/stats";
 
 import { resolveLeagueRequest } from "../league-request";
-import { withReadTiming } from "../../../read-timing";
+import { readResponse } from "../../../read-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +20,8 @@ export const dynamic = "force-dynamic";
  * absent `?week=` on the core payload and is now expressed by simply not making
  * this request. That is a better spelling of the same rule: "not asked for" and
  * "asked for and unanswerable" were two states one optional field had to carry,
- * and they are a missing request and a null body now.
+ * and they are a missing request and a failure status now — two states nothing
+ * has to reconstruct, which is what the second half of this note is about.
  *
  * It is the most expensive of the three enrichments — ~420–520ms against the
  * core's ~53ms on a seeded corpus — and it is the one whose panel a reader is
@@ -28,9 +29,16 @@ export const dynamic = "force-dynamic";
  * most here. Keyed on the week alone (never the board), so stepping a week
  * re-runs this and nothing else, and re-tuning the ADP drawer never re-runs it.
  *
- * **A failure is a null body and a 200**, the judgement the read has always had:
- * these are two columns on top of a panel whose point is the rosters, so a week
- * that can't be read costs the columns rather than the league.
+ * **A failure costs the columns rather than the league, and it is still a
+ * failure.** That first half is the judgement this read has always had — these
+ * are two columns on top of a panel whose point is the rosters — and it is held
+ * up on the *client*, where the week is a query of its own and only the core's
+ * error is the panel's error. What it is not is a reason to answer `200 null`:
+ * {@link getLeagueWeekView} returns `Promise<LeagueWeekView>`, so there is no
+ * such thing as a week with nothing to say, and a null body here could only ever
+ * have meant "this read threw". Dressed as a success it was cached as one for
+ * the entry's whole stale time and never retried — see {@link readResponse},
+ * which is where the two failure statuses are chosen.
  */
 export async function GET(
   request: Request,
@@ -57,27 +65,28 @@ export async function GET(
   // checked, and a cast would be the same fact asserted rather than proved.
   const asked = week.value;
 
-  const view = await withReadTiming(
-    "league.week",
-    `league=${leagueId} week=${asked}`,
-    () =>
-      getLeagueWeekView({
-        leagueId,
-        season: detail.season,
-        week: asked,
-        teams: detail.teams,
-        rosterPositions: detail.roster_positions,
-        scoringSettings: detail.scoring_settings,
-        bestBall: detail.best_ball,
-        medianMatch: detail.median_match,
-      }).catch((error) => {
-        console.error(`[league] week ${asked} failed for ${leagueId}:`, error);
-        return null;
-      }),
-  );
-
-  const payload: LeagueWeekPayload = serializeWeekView(view);
-  return NextResponse.json(payload);
+  return readResponse({
+    label: "league.week",
+    subject: `league=${leagueId} week=${asked}`,
+    failure: "Failed to read this week",
+    // Serialised *inside* the read, so the `Map` conversion is covered by the
+    // same failure branch the query is: a payload this route could not build is
+    // no more of an answer than one it could not fetch. The contract type is
+    // annotated here rather than on the call, on the value that crosses.
+    read: async (): Promise<LeagueWeekPayload> =>
+      serializeWeekView(
+        await getLeagueWeekView({
+          leagueId,
+          season: detail.season,
+          week: asked,
+          teams: detail.teams,
+          rosterPositions: detail.roster_positions,
+          scoringSettings: detail.scoring_settings,
+          bestBall: detail.best_ball,
+          medianMatch: detail.median_match,
+        }),
+      ),
+  });
 }
 
 /**
@@ -92,10 +101,12 @@ export async function GET(
  * `ppg_source.weeks` crosses as a **count** rather than the list: what a reader
  * needs is how much the average is out of, and each row already carries its own
  * `games` for the case that actually varies (a player who missed two of them).
+ *
+ * It takes the view rather than `view | null`, which is the compiler's half of
+ * the rule above: there is no week this route answers with nothing, so a null
+ * branch here would be a place for a failure to become a body again.
  */
-function serializeWeekView(view: LeagueWeekView | null): LeagueWeekPayload {
-  if (!view) return null;
-
+function serializeWeekView(view: LeagueWeekView): LeagueWeekPayload {
   const projection: Record<string, number> = {};
   for (const [id, points] of view.projection) projection[id] = points;
 
