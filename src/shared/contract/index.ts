@@ -164,9 +164,12 @@ export type TeamWeekProjectionPayload = {
  * that panel shows is a rest-of-season shape, which is the right question when a
  * reader arrives at a league and the wrong one when they arrive at a *lineup*.
  *
- * Null where the week's read failed. The rosters are the point of that route and
- * this is a pair of columns on top of them, so a failure here costs the columns
- * and not the panel — the call `outlook` already makes beside it.
+ * **There is no null on this wire.** It used to be the shape a failed read came
+ * back as, on the reasoning that the rosters are the point of that panel and this
+ * is a pair of columns on top of them — which is still the judgement, and is the
+ * *client's* to make now that the week is a request of its own. What the route
+ * sends is what happened: the week, or a failure status. See
+ * {@link LeagueWeekPayload}.
  */
 export type LeagueWeekViewPayload = {
   week: number;
@@ -305,20 +308,29 @@ export type LeagueValuesPayload = LeagueRosterValues;
  * of — read `outlook.weeks` rather than assuming it runs to week 18, and say
  * how far ahead the numbers reach wherever they surface.
  *
- * null when the league can't be projected: no slots or scoring settings on
- * file, or no weeks left on the schedule.
+ * **null when the league can't be projected** — no slots or scoring settings on
+ * file, or no weeks left on the schedule — and *only* then. It is a fact about
+ * the league, so it crosses as a 200 and the columns draw an em dash on it. A
+ * read that failed used to arrive as the same null, which made a database with
+ * no room indistinguishable from a league with nothing to project and cached it
+ * as a successful answer for the entry's whole stale time; that is a 503 or a
+ * 500 now (`app/api/read-response.ts`), and this null means what it says.
  */
 export type LeagueOutlookPayload = LeagueOutlook | null;
 
 /**
  * `GET /api/league/[leagueId]/week?week=N` — the same league read as one week.
  *
- * null where the week could not be read, which is the reading the metrics
- * already take: the columns draw an em dash and say why. There is no "not asked
- * for" spelling any more — asking is a request of its own now, so a panel opened
- * on a season simply never makes it.
+ * **Not nullable, which is the one thing worth saying about it.** There is no
+ * "not asked for" spelling any more — asking is a request of its own, so a panel
+ * opened on a season simply never makes it — and there is no "could not be read"
+ * spelling either: `getLeagueWeekView` is `Promise<LeagueWeekView>`, so every
+ * null this route ever sent was a caught exception wearing a 200. The columns
+ * still draw an em dash when they have nothing, but that is now the *client*
+ * holding a failed or unlanded query, which it can tell apart from an answer;
+ * the wire carries the week or a failure status (`app/api/read-response.ts`).
  */
-export type LeagueWeekPayload = LeagueWeekViewPayload | null;
+export type LeagueWeekPayload = LeagueWeekViewPayload;
 
 /**
  * `POST /api/league/[leagueId]/sync` — what an on-demand refresh of one league
