@@ -32,7 +32,17 @@ import type { TeamOutlook } from "@/shared/projections";
 
 /** What a team metric reads from: one team's standings row, outlook and board totals. */
 export type TeamMetricContext = {
-  team: LeagueTeamPayload;
+  /**
+   * The team's standings row, or **null where there is no row to read**.
+   *
+   * Null is not "loading": it is a caller that has a roster without a standings
+   * line behind it, which is what a rewind hands over — the timeline knows who
+   * held which players at a past moment and nothing about a record or a
+   * points-for that only exists for today. The one metric that reads this says
+   * so rather than printing a zero, on the terms every other absence here is
+   * spelled: an em dash and a hover, never a number attributed to nobody.
+   */
+  team: LeagueTeamPayload | null;
   /** This team's rest-of-season outlook, or null/undefined when none was projected. */
   outlook: TeamOutlook | null | undefined;
   /** This team's KTC total on the league's board, or null when nothing is priced. */
@@ -122,6 +132,19 @@ const noProjection: TeamMetricCell = {
   kind: "value",
   text: null,
   title: "No projection",
+};
+
+/**
+ * The em-dash cell a standings-row metric returns for a roster with no such row.
+ *
+ * Distinct from {@link noProjection} because the two are different absences: one
+ * is a league nothing could be projected for, the other a roster read at a moment
+ * that has no standings behind it at all.
+ */
+const noStandingsRow: TeamMetricCell = {
+  kind: "value",
+  text: null,
+  title: "No standings row to read this from",
 };
 
 /**
@@ -217,11 +240,14 @@ export const TEAM_METRICS: TeamMetric[] = [
     key: "pf",
     group: "Record",
     label: "PF",
-    cell: ({ team }) => ({
-      kind: "value",
-      text: formatPoints(team.fpts),
-      title: `${formatPoints(team.fpts)} points for`,
-    }),
+    cell: ({ team }) =>
+      team
+        ? {
+            kind: "value",
+            text: formatPoints(team.fpts),
+            title: `${formatPoints(team.fpts)} points for`,
+          }
+        : noStandingsRow,
   },
   {
     key: "ktc",

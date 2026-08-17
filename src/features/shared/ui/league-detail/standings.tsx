@@ -302,7 +302,7 @@ const WEEK_METRIC_KEYS = new Set(["week_proj"]);
  * only how many of the tracks there are, so a tier moved for one has to move for
  * the other.
  */
-const COLUMN_GRID: Record<number, string> = {
+export const COLUMN_GRID: Record<number, string> = {
   1:
     "grid-cols-[minmax(0,1fr)_2.625rem] " +
     "@sm:grid-cols-[minmax(0,1fr)_2.75rem] " +
@@ -316,10 +316,10 @@ const COLUMN_GRID: Record<number, string> = {
 };
 
 /** A league with nothing to put in a value column: the name and nothing else. */
-const NO_COLUMN_GRID = "grid-cols-[minmax(0,1fr)]";
+export const NO_COLUMN_GRID = "grid-cols-[minmax(0,1fr)]";
 
 /** How far the name reaches on its own line — every track of its own template. */
-const NAME_SPAN: Record<number, string> = { 1: "col-span-2", 2: "col-span-3" };
+export const NAME_SPAN: Record<number, string> = { 1: "col-span-2", 2: "col-span-3" };
 
 function StandingsRow({
   team,

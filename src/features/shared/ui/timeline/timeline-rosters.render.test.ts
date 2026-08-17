@@ -5,6 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { PlayerSummary } from "@/shared/players";
 
+import { AdpControlsProvider } from "../../adp-controls-context.tsx";
+import { withQueryClient } from "../../query-test-support.ts";
 import type { TimelineRoster } from "../../timeline.ts";
 import { TimelineRosters, type TimelineManager } from "./timeline-rosters.tsx";
 
@@ -49,16 +51,37 @@ const rosters: TimelineRoster[] = [
   { roster_id: 3, user_id: "u3", players: [], picks: [], dealt: false },
 ];
 
+/**
+ * The two providers this half reads through, which are the panel's own.
+ *
+ * It prices its rosters on the ADP drawer's board and reads the panel's stored
+ * column selection, so it needs a query client and an `AdpControlsProvider` the
+ * way the panel does. `renderToStaticMarkup` runs no effects, so neither issues
+ * a request here — what they supply is the context, not an answer, which is why
+ * every column below reads as an unpriced em dash.
+ */
 function view(selectedId: number | null, over: TimelineRoster[] = rosters): string {
+  // The children go positionally, which is the same call at runtime — the cast
+  // is what lets it be written that way, since `createElement` insists a
+  // required `children` prop be in the props object. `timeline-view`'s own test
+  // spells it the same way for the same reason.
+  const provider = { season: "2026" } as Parameters<typeof AdpControlsProvider>[0];
   return renderToStaticMarkup(
-    createElement(TimelineRosters, {
-      rosters: over,
-      players,
-      managers,
-      selectedId,
-      onSelect: () => {},
-      caveat: "Every roster as it stood on Apr 12, 2026.",
-    }),
+    withQueryClient(
+      createElement(
+        AdpControlsProvider,
+        provider,
+        createElement(TimelineRosters, {
+          leagueId: "L1",
+          rosters: over,
+          players,
+          managers,
+          selectedId,
+          onSelect: () => {},
+          caveat: "Every roster as it stood on Apr 12, 2026.",
+        }),
+      ),
+    ),
   );
 }
 
@@ -149,5 +172,50 @@ describe("the historical half's rows", () => {
     assert.match(html, /2027 1st<\/span>/);
     // Roster 3's, acquired: named by whoever holds that roster now.
     assert.match(html, /from ThePhotonicBoom/);
+  });
+});
+
+/**
+ * The panel's stat columns, read at a past moment.
+ *
+ * The selection is the panel's own — same stored keys — so with nothing written
+ * these are the two tables' defaults, every one of which is a projection or a
+ * record. That is the case worth pinning: the columns are *drawn* rather than
+ * dropped, they say why they are empty, and the note under the halves points at
+ * the two that can answer.
+ */
+describe("the historical half's columns", () => {
+  test("both halves head the columns the panel is showing", () => {
+    const html = view(1);
+    // The standings' defaults and the roster's, each over its own half.
+    assert.match(html, />Proj</);
+    assert.match(html, />Start</);
+    // Two catalogues, one label — the standings' Bench and the roster's.
+    assert.equal(html.match(/>Bench</g)?.length, 2);
+  });
+
+  test("a heading is the control that aims the column, not a label", () => {
+    // The panel's own rule: a heading opens the columns editor armed on its
+    // slot, so it has to be a button rather than a caption.
+    const html = view(1);
+    assert.match(html, /<button[^>]*aria-haspopup="dialog"[^>]*>/);
+  });
+
+  test("a metric the moment cannot answer is an em dash that says why", () => {
+    const html = view(1);
+    assert.match(html, /title="Proj is a fact about the league today — press Now to read it"/);
+    assert.match(html, /title="Start is a fact about the league today — press Now to read it"/);
+  });
+
+  test("the note names those columns and points at the two that rewind", () => {
+    const html = view(1);
+    assert.match(html, /read the league as it stands today/);
+    assert.match(html, /aim a column at KTC or ADP/);
+  });
+
+  test("a league with no rosters draws no columns and no note", () => {
+    const html = view(1, []);
+    assert.doesNotMatch(html, /aim a column at KTC or ADP/);
+    assert.doesNotMatch(html, /aria-haspopup="dialog"/);
   });
 });
