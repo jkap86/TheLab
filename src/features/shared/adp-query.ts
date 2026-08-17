@@ -48,7 +48,16 @@ export const boardQueryKeys = {
   leagues: (season: string) => [...boardQueryKeys.all, "leagues", season] as const,
 };
 
-/** How long the board, its density strip and its league list are worth reusing. */
+/**
+ * How long the board, its density strip and its league list are worth reusing.
+ *
+ * The board's fifteen minutes sits deliberately *under* the server's own
+ * `ADP_BOARD_CACHE` (thirty), so the revalidation this schedules lands on an
+ * entry the server still holds rather than on a second of aggregate over ~1.5M
+ * picks. It used to sit *over* it, at fifteen against ten, which made that
+ * revalidation the one request certain to miss. See `shared/manager/read-cache`
+ * for the layering, and `cache-layering.test.ts` for the assertion.
+ */
 export const ADP_STALE_TIMES = {
   /** The board itself: an average over thousands of crawled drafts. */
   board: 15 * 60 * 1000,

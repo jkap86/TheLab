@@ -191,7 +191,7 @@ event loop rather than two queries a database can interleave).
 
 **There are three of them now, and the third is there for a second reason worth
 naming: one open makes four requests.** A league's *core* detail —
-`readLeagueDetail`, `LEAGUE_DETAIL_CACHE`, three minutes, 256 leagues — is not
+`readLeagueDetail`, `LEAGUE_DETAIL_CACHE`, eight minutes, 256 leagues — is not
 expensive the way those two are (a handful of small queries), and it is read by
 all four of the League Details routes, since the values, the outlook and the week
 each need the same rosters, slots and scoring before they can compute anything.
@@ -200,12 +200,16 @@ read into four, which is the tax a split is supposed to avoid paying rather than
 introduce. It is also the read a reader re-issues most: the panel mounts on
 expand and unmounts on collapse, over a list of a hundred leagues opened
 casually.
-**It is the one cache here invalidated on *write* as well as by time.**
-`persistLeagueGraph` forgets the league after its transaction commits, which is
-what makes the lineup checker's sync key honest — a reader told Sleeper has
-confirmed their change must not be shown a three-minute-old roster. After rather
-than before, since a read starting between an early invalidation and the commit
-would cache exactly the rows the write is replacing.
+**It is invalidated on *write* as well as by time, and so are the ranks beside
+it.** `persistLeagueGraph` forgets both after its transaction commits — the
+league's own detail, which is what makes the lineup checker's sync key honest (a
+reader told Sleeper has confirmed their change must not be shown the roster from
+before it), and the ranks of every manager holding a roster in that league, which
+are read off exactly those rows. After rather than before, since a read starting
+between an early invalidation and the commit would cache exactly the rows the
+write is replacing. What that buys is not only correctness on the press: it is
+what lets both TTLs be set for the *background* writes they are genuinely stale
+about, instead of kept short in the hope of covering an interactive one.
 
 `TtlPromiseCache` (`shared/util`) is that layer, and it is `BoundedCache` plus
 the one thing that class deliberately refuses: an **in-flight map**, so ten
@@ -240,12 +244,58 @@ against a pool connection. Six rules hold it up:
   The exception is the per-player board, which carries a `Map`: `Object.freeze`
   on one is a guarantee that cannot be kept, so it is left alone rather than
   given reassurance.
-- **Each TTL is shorter than the layer it stands in front of** — the board's ten
-  minutes against the browser's fifteen, the ranks' five matching
-  `MANAGER_STALE_TIMES.ranks` — and each process holding its own is *correct*
-  rather than merely acceptable: Postgres stays the source of truth, so a second
-  instance costs one extra computation of an answer that was about to expire.
-  Nothing here wants Redis; it would put a network hop on the hot path.
+- **Each TTL is *longer* than the browser stale time it stands behind** — and it
+  is worth knowing that this read the other way round for a long time, in the
+  numbers *and* in the comments justifying them: the board's ten minutes against
+  the browser's fifteen, the ranks' five exactly matching
+  `MANAGER_STALE_TIMES.ranks`, the league detail's three against the panel's
+  five. Each carried a sentence about "a layer's TTL is shorter than the one it
+  stands in front of", which is true of the *client* (its stale read costs a
+  request this answers from memory) and backwards when applied here.
+
+  The asymmetry is what the sentence lost. A browser entry going stale does not
+  discard anything — React Query revalidates, keeping the rows on screen — so
+  `staleTime` is not "how long the data is good for", it is **when this app's own
+  server is next asked**. The whole job of this layer is to be what that request
+  lands on. Shorter, it expires just before the revalidation it exists to absorb,
+  so the one request guaranteed to miss is the one the cache was built for; the
+  hit rate that remains is whatever a second reader happens to contribute.
+
+  A gap of merely more than zero does not fix it either, which is why the floor
+  is a **ratio**. Nothing lines the two clocks up: the client entry is stamped
+  when its request resolved, this one when the computation started, and a request
+  arriving uniformly inside an entry's life finds `(ttl − stale) / ttl` of it
+  left. At equal TTLs — where the ranks sat — that is zero, and the boundary miss
+  is not a risk but the normal case. The layers now sit at 1.6× (league detail,
+  8m/5m), 2× (both ADP boards, 30m/15m) and 3× (ranks, 15m/5m), each chosen from
+  what writes underneath rather than from one rule: the crawler's fastest tier
+  bounds a league's detail, the projections sync's hourly slices bound the ranks,
+  and an ADP board is an average over ~1.5M picks that a handful of newly crawled
+  drafts cannot visibly move.
+
+  **What made the longer numbers affordable is invalidation, not tolerance for
+  staleness.** `persistLeagueGraph` already dropped the league's core detail; it
+  now drops the ranks of every manager rostered in that league too, which closes
+  the gap that made the ranks TTL feel like it had to be short. The browser
+  retires its ranks entry the moment a leagues sync reports a new revision
+  (`leaguesRevision` → `dependentManagerQueryKeys`), and without the server half
+  that refetch was answered from a payload computed *before* the sync — the
+  client doing exactly the right thing and being handed back the number it was
+  trying to replace. Both invalidations reach one process, so the clock still
+  answers for the crawler writing from the worker dyno; every path a reader can
+  *press* is exact.
+
+  The seam is asserted in `features/shared/cache-layering.test.ts`, and it has to
+  live there: `shared/` may never import `features/`, so the two constants are
+  two modules apart with no compiler link, and their relationship is the one
+  thing neither file can state about itself. Each side's own test keeps its
+  ceiling, because "not excessively stale" is a claim about what writes
+  underneath and not about the layer in front.
+
+  Each process holding its own is *correct* rather than merely acceptable:
+  Postgres stays the source of truth, so a second instance costs one extra
+  computation of an answer that was about to expire. Nothing here wants Redis; it
+  would put a network hop on the hot path.
 
 **And the ranks read is split at the work, not at the route.** Its expensive half
 is the projections; its cheap half (the standing, the points rank) comes straight
@@ -300,7 +350,10 @@ Four rules hold it up, and each replaced a specific failure:
   and a KTC scrape refreshed daily is fifteen. They are all shorter than the
   server's TTLs on purpose: a stale client read costs a request the server
   answers from its cache, where a stale server read costs a fetch to somebody
-  else.
+  else. That sentence was written here before it was true of the numbers —
+  ranks matched their server TTL exactly and both ADP boards outlived theirs —
+  which is why the ordering is now asserted across the seam in
+  `features/shared/cache-layering.test.ts` rather than asserted in prose.
 - **A refetch follows a revision, never an array identity.** The five manager
   sub-resources read what the leagues sync writes, and they used to re-fetch on
   the identity of the leagues array — five requests per rebuild of a list that
