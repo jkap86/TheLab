@@ -117,6 +117,12 @@ export const LINEUP_METRICS: LineupMetric[] = [
      * panel marks rows with), so this cell and those marks cannot disagree;
      * the moves themselves are one press away, on the panel.
      *
+     * **Games inside an hour of each other count as one kickoff**
+     * (`KICKOFF_BUFFER_MS`), which is what keeps this column worth reading:
+     * the 4:05 and 4:25 windows would otherwise light half the list with
+     * moves buying twenty minutes of a flex nobody would spend a press on,
+     * and a verdict that fires on everything is a verdict nobody checks.
+     *
      * Three readings, the `vs optimal` column's own grammar:
      *
      * - **`2 to move` in amber where seats should trade.** It is a verdict
@@ -149,7 +155,7 @@ export const LINEUP_METRICS: LineupMetric[] = [
           kind: "value",
           text: "in order",
           title:
-            "Every starter is already seated for kickoff — strict slots lock first, the flexes stay open longest",
+            "Every starter is already seated for kickoff — strict slots lock first, the flexes stay open longest. Games within an hour of each other count as one kickoff",
         };
       }
       return {
