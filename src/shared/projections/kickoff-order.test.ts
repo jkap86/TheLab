@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { kickoffMoves, orderLineupByKickoff } from "./kickoff-order.ts";
+import {
+  KICKOFF_BUFFER_MS,
+  kickoffMoves,
+  kickoffRanks,
+  orderLineupByKickoff,
+} from "./kickoff-order.ts";
 import type { KickoffPlayer, KickoffSeat } from "./kickoff-order.ts";
 
 /**
@@ -17,6 +22,10 @@ const THU = 1789086000000;
 const SUN_EARLY = 1789318800000;
 const SUN_LATE = SUN_EARLY + 3.25 * 3600 * 1000;
 const MON = SUN_EARLY + 30 * 3600 * 1000;
+
+// The 4:25 ET games, twenty minutes after the 4:05s — one decision, two
+// instants, and the pair the buffer exists for.
+const SUN_LATER = SUN_LATE + 20 * 60 * 1000;
 
 const p = (
   player_id: string,
@@ -70,6 +79,91 @@ describe("orderLineupByKickoff", () => {
     const lineup = [seat("FLEX", "rb1"), seat("RB", "rb2")];
 
     assert.deepEqual(orderLineupByKickoff({ lineup, players }), lineup);
+  });
+
+  test("kickoffs inside the buffer move nobody", () => {
+    // 4:05 and 4:25: the flex would be freed twenty minutes earlier, which is
+    // no news anyone could act on, so the seats stay as they are.
+    const players = [p("rb_405", "RB", SUN_LATE), p("rb_425", "RB", SUN_LATER)];
+    const lineup = [seat("RB", "rb_425"), seat("FLEX", "rb_405")];
+
+    assert.deepEqual(orderLineupByKickoff({ lineup, players }), lineup);
+  });
+
+  test("a whole lineup inside one buffer is already in order", () => {
+    const players = [
+      p("rb_a", "RB", SUN_LATE + 15 * 60 * 1000),
+      p("rb_b", "RB", SUN_LATE),
+      p("rb_c", "RB", SUN_LATER),
+    ];
+    const lineup = [
+      seat("RB", "rb_a"),
+      seat("FLEX", "rb_b"),
+      seat("SUPER_FLEX", "rb_c"),
+    ];
+
+    assert.deepEqual(orderLineupByKickoff({ lineup, players }), lineup);
+    assert.deepEqual(kickoffMoves(lineup, orderLineupByKickoff({ lineup, players })), []);
+  });
+
+  test("the buffer narrows what moves, it does not switch the ordering off", () => {
+    // The 4:05/4:25 pair is one rank between them, so only the Monday game is
+    // meaningfully later — it takes the flex and the pair keeps its seats.
+    const players = [
+      p("rb_405", "RB", SUN_LATE),
+      p("rb_425", "RB", SUN_LATER),
+      p("rb_mon", "RB", MON),
+    ];
+    const lineup = [
+      seat("RB", "rb_405"),
+      seat("FLEX", "rb_mon"),
+      seat("WRRB_FLEX", "rb_425"),
+    ];
+
+    assert.deepEqual(ids(orderLineupByKickoff({ lineup, players })), [
+      "rb_405",
+      "rb_mon",
+      "rb_425",
+    ]);
+  });
+
+  test("a gap of exactly the buffer is a real gap", () => {
+    // The boundary is inclusive — an hour apart is the shortest separation the
+    // ordering is willing to act on, and it acts on it.
+    const players = [
+      p("rb_late", "RB", SUN_EARLY + KICKOFF_BUFFER_MS),
+      p("rb_early", "RB", SUN_EARLY),
+    ];
+    const lineup = [seat("RB", "rb_late"), seat("FLEX", "rb_early")];
+
+    assert.deepEqual(ids(orderLineupByKickoff({ lineup, players })), [
+      "rb_early",
+      "rb_late",
+    ]);
+  });
+
+  test("a starter inside the buffer is not dragged along by one outside it", () => {
+    // Buckets are measured from the instant that opened them, so the pair a
+    // minute inside the buffer never chains onto the game an hour past it.
+    const players = [
+      p("rb_a", "RB", SUN_EARLY),
+      p("rb_b", "RB", SUN_EARLY + KICKOFF_BUFFER_MS - 60_000),
+      p("rb_c", "RB", SUN_EARLY + 2 * KICKOFF_BUFFER_MS),
+    ];
+    const lineup = [
+      seat("RB", "rb_c"),
+      seat("FLEX", "rb_a"),
+      seat("WRRB_FLEX", "rb_b"),
+    ];
+
+    // `rb_a`/`rb_b` share a rank, so only `rb_c` is meaningfully later and it
+    // takes the broadest seat. Chained buckets would have made all three one
+    // rank and moved nobody, which is the answer this pins against.
+    assert.deepEqual(ids(orderLineupByKickoff({ lineup, players })), [
+      "rb_a",
+      "rb_c",
+      "rb_b",
+    ]);
   });
 
   test("two seats of the same slot are never reshuffled", () => {
@@ -244,6 +338,56 @@ describe("orderLineupByKickoff", () => {
   });
 });
 
+describe("kickoffRanks", () => {
+  test("ranks separated instants in order from zero", () => {
+    assert.deepEqual(
+      [...kickoffRanks([MON, THU, SUN_EARLY])],
+      [
+        [THU, 0],
+        [SUN_EARLY, 1],
+        [MON, 2],
+      ],
+    );
+  });
+
+  test("instants inside the buffer share a rank", () => {
+    const ranks = kickoffRanks([SUN_LATE, SUN_LATER]);
+    assert.equal(ranks.get(SUN_LATE), ranks.get(SUN_LATER));
+  });
+
+  test("the buffer is a floor on the gap, not a ceiling", () => {
+    // Exactly an hour separates; a millisecond under does not.
+    const ranks = kickoffRanks([
+      SUN_EARLY,
+      SUN_EARLY + KICKOFF_BUFFER_MS - 1,
+      SUN_EARLY + KICKOFF_BUFFER_MS,
+    ]);
+    assert.equal(ranks.get(SUN_EARLY + KICKOFF_BUFFER_MS - 1), 0);
+    assert.equal(ranks.get(SUN_EARLY + KICKOFF_BUFFER_MS), 1);
+  });
+
+  test("a bucket is measured from its anchor, so it never chains", () => {
+    // Every neighbouring gap here is under the buffer, and a chained rule would
+    // fold a five-hour afternoon into one rank — the whole ordering, off.
+    const ranks = kickoffRanks(
+      Array.from({ length: 6 }, (_, i) => SUN_EARLY + i * 50 * 60 * 1000),
+    );
+    assert.deepEqual([...ranks.values()], [0, 0, 1, 1, 2, 2]);
+  });
+
+  test("duplicates and arrival order make no difference", () => {
+    const instants = [MON, SUN_LATER, THU, SUN_LATE];
+    assert.deepEqual(
+      [...kickoffRanks([...instants, ...instants])].sort((a, b) => a[0] - b[0]),
+      [...kickoffRanks([...instants].reverse())].sort((a, b) => a[0] - b[0]),
+    );
+  });
+
+  test("nothing to rank is an empty answer", () => {
+    assert.deepEqual([...kickoffRanks([])], []);
+  });
+});
+
 describe("kickoffMoves", () => {
   test("names each moved player with the seat he leaves and the one he takes", () => {
     const players = [p("rb_late", "RB", MON), p("rb_early", "RB", THU)];
@@ -291,7 +435,10 @@ describe("orderLineupByKickoff vs brute force", () => {
     };
     const SLOTS = Object.keys(ALLOWED);
     const POSITIONS = ["QB", "RB", "WR", "TE"];
-    const KICKOFFS = [THU, SUN_EARLY, SUN_LATE, MON];
+    // `SUN_LATER` is twenty minutes after `SUN_LATE`, so a good share of these
+    // lineups carry a pair the buffer has to fold — the case that would
+    // otherwise only ever be exercised by the hand-written tests above.
+    const KICKOFFS = [THU, SUN_EARLY, SUN_LATE, SUN_LATER, MON];
 
     // Seeded so a failure is reproducible; Math.random would report a
     // different counterexample every run.
@@ -317,9 +464,12 @@ describe("orderLineupByKickoff vs brute force", () => {
       });
       const lineup = slots.map((slot, i) => seat(slot, players[i].player_id));
 
-      const ranks = [...new Set(players.map((x) => x.kickoff as number))]
-        .sort((a, b) => a - b)
-        .reduce((m, at, i) => m.set(at, i), new Map<number, number>());
+      // The ranks come from the module, which is deliberate: what is being
+      // cross-checked here is the *assignment* — that the Hungarian solve finds
+      // the same optimum as enumerating every legal seating — and reimplementing
+      // the buckets would only test that two copies of them agree. The bucketing
+      // itself is pinned directly, above.
+      const ranks = kickoffRanks(players.map((x) => x.kickoff as number));
       const score = (order: number[]): [number, number] => {
         let primary = 0;
         let stays = 0;

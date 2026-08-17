@@ -340,6 +340,19 @@ collisions stay visible.
   whether or not it returned anything; a *failed* fetch stamps nothing and
   retries. **When "nothing came back" is a legitimate answer, freshness is a fact
   about the sync and belongs in its own table.**
+- **Staying eager and holding the head of the queue are the same fact, so a
+  capped pass orders on the *attempt*.** Not stamping is what keeps a failed or
+  refused week retryable — and an unstamped week sorts first in an
+  ascending-by-week queue on every tick thereafter, so two of them are the whole
+  of `HORIZON_WEEKS_PER_TICK` and the rest of the season is never *attempted*.
+  `projection_week_syncs.attempt_at` is stamped **before** the fetch and read
+  **only** by the ordering (`projections/horizon-queue`, pure and tested);
+  `synced_at` is stamped only on success and is still the only thing the TTL
+  reads. Untried outranks tried, then longest-since-tried, then week number — so
+  a cold horizon still walks in week order and the change is invisible until
+  something fails. **Any tier with a per-tick cap wants this**; the crawler's
+  `sync_attempt_at` tiebreaker is the same rule, and `stats`' settled/archive cap
+  is the next place to apply it.
 - The same trap's second instance: a league Sleeper has deleted answers
   200-with-null forever, so its `updated_at` never advances and it occupies a
   slot in every refresh rotation. `leagues.gone_at` marks it and the crawler

@@ -605,6 +605,59 @@ nothing and retries next tick, which is the one case that should stay eager. The
 general shape: when "nothing came back" is a legitimate answer, freshness is a
 fact about the sync and belongs in its own table, not inferred from the data.
 
+**That fix named the starvation and closed half of it.** The clause it turns on —
+"because the horizon budget takes the earliest stale weeks first" — is a property
+of the *ordering*, not of the empty-week case, so it survived the fix intact for
+every other reason a week can go unstamped. A fetch that fails, and a payload the
+completeness gate refuses, both stamp nothing *on purpose*: that is what keeps
+them retryable. And an unstamped week is stale again next tick, and the tick
+after, and sorts ahead of everything behind it every time. Two of them are the
+entire `HORIZON_WEEKS_PER_TICK`, so weeks 5 through 18 are never *attempted* —
+not deferred, not slow, never asked for — and the backfill stops at whatever week
+it had reached and stays there for the rest of the season.
+
+Nothing about it reads as a stall, which is why it is worth writing down. The
+near window keeps refreshing on its own clock. The log keeps naming the same two
+weeks as failed, which looks like two broken weeks rather than a broken pass.
+`deferred` keeps reporting a count, which is the telemetry that was added to make
+exactly this visible and which reports the same number forever without that being
+wrong. And every rest-of-season figure downstream quietly describes a two-week
+horizon — `getRemainingWeeks` reports what is stored, so the number is honest
+about its own population and says nothing about the population being wrong.
+
+So freshness and rotation become two columns, which is the `manager_syncs`
+`synced_at`/`attempt_at` split and the crawler's `sync_attempt_at` tiebreaker
+arriving at the same table for the third time. `attempt_at` is stamped **before**
+the fetch (the `refreshLeague` rule — a fetch that throws or times out has to
+rotate too, and the only stamp guaranteed to have happened by then is one written
+first) and is read **only** by the `ORDER BY`. `synced_at` is stamped only on
+success and remains the only thing the TTL gate compares, so a failed week is
+still due immediately; it also had to become nullable, since an attempt-only row
+left under the old `NOT NULL DEFAULT now()` would have stamped a week fresh for
+its whole TTL on the strength of having failed — the loudest possible version of
+the bug being closed.
+
+The ordering is untried first, then longest-since-tried, then week number, and
+each tier earns its place. Untried-first is what makes a **cold** horizon walk in
+plain week order, since every week is null-attempt and the tiebreaker is all
+there is — the change is invisible until something fails, which is when it should
+be. Longest-since-tried is what brings a failing week back around once the untried
+ones are exhausted, so rotating never becomes dropping. The week-number
+tiebreaker is not decoration: every week a pass stamps is stamped inside the same
+tick, so ties are the normal case and without it the order within a pass is
+whatever the plan happened to emit. `projections/horizon-queue` owns the rule as a
+pure comparator and as the SQL fragment, a matched pair with no compiler link
+between them, and its test pins the two against each other and against the
+migration that adds the column.
+
+The per-tick cap moved with it, from two to four. The cap bounds the *burst*, not
+the daily volume — a week is refetched at most once a day whatever the cap is —
+so what it actually buys is how long a cold horizon spends describing a shorter
+season than the one it covers, and at four a full sixteen-week fill is an hour
+rather than two. It is still a trickle, and it is still only a trickle because
+the queue now rotates: a cap over a queue with a permanent head is not a rate
+limit, it is a stop.
+
 The same trap has a second instance worth recognising, because it does not look
 like a freshness bug at all. A league Sleeper has deleted answers 200-with-null
 forever, so its `updated_at` never advances and it occupies a slot in every
@@ -803,7 +856,10 @@ injury designation changes them, and the rest of the season at a day because it
 doesn't. One gate for both would have to choose between a stale lineup and 90MB an
 hour. Where the slow tier is also large, cap how many slices a tick will fetch
 (`HORIZON_WEEKS_PER_TICK`) and report what the cap deferred — a skipped slice that
-reads as "fresh" is how a backfill silently stops advancing.
+reads as "fresh" is how a backfill silently stops advancing. Reporting it is not
+enough on its own, though: a cap is only a rate limit if the queue under it
+rotates, and what stops it rotating is a slice that can never stamp. See the
+`projection_week_syncs` entry under **Database** for the `attempt_at` half.
 
 The league crawler is the third instance of that rule, varying on time instead of
 slice: every league moves at the same speed *at once*, and what changes is the
@@ -1807,3 +1863,27 @@ stops holding, a comment saying it does would not have caught it.
   looks wrong and diffs against a sane current lineup as pointless moves. So the
   answer is canonicalised: better player to the stricter slot, and among equally
   strict slots to the earlier one.
+- **The kickoff re-seat ranks its instants in hour buckets, not by the clock**
+  (`KICKOFF_BUFFER_MS`, `projections/kickoff-order`). What a broader seat buys
+  is the *time* it stays open, and the pivots it is being held for — a late
+  scratch, a surprise inactive, a beat writer at warm-ups — break in the hours
+  before a game, so a flex freed twenty minutes earlier frees no decision. The
+  NFL's Sunday late window is exactly that: 4:05 and 4:25 ET are two kickoffs
+  and one decision, and reading the instants straight lit the lineup checker's
+  Kickoff column with `2 to move` on lineups nobody would have moved — a
+  verdict column that fires on everything is one nobody checks.
+
+  **A bucket is measured from the instant that opened it, never from the one
+  before it**, which is the whole subtlety and the one thing not to "simplify".
+  Chaining on the gap to the previous instant is transitive, so a week of games
+  fifty minutes apart collapses to one rank however many hours it spans, and
+  the buffer silently switches the entire ordering off. The anchor bounds every
+  bucket at one buffer wide; what that costs is the pair straddling a boundary
+  — 55 minutes apart, one rank each, so still a move — which is the honest side
+  to fail on (one move too many at a boundary, rather than the feature quietly
+  ceasing to work) and does not arise on a real schedule, where the windows sit
+  hours apart and the pairs this exists for are minutes apart inside one.
+
+  It bounds what the ordering *asks for* and nothing it knows: the instants are
+  untouched and the game lock (`projections/locks`) still settles a seat to the
+  minute, so nothing here can name a move Sleeper would refuse.
