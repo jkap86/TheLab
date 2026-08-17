@@ -897,6 +897,55 @@ about how it is laid out. Each replaced something that read as fine and wasn't.
     when the database merely had no room. It is applied at **every** route that
     catches a read rather than at the ones that were seen to be slow — a rule
     held by two routes of fourteen reports the twelfth as a bug in itself.
+  - **A read that is only a bonus still fails as a failure**, which is the half
+    of that rule the League Details split got wrong for as long as it existed.
+    `…/week` and `…/outlook` each caught their read and returned `null`, which
+    the route sent with a 200, on reasoning that is *correct*: these are two
+    columns on top of a panel whose point is the rosters, so a read that cannot
+    answer should cost the columns and not the league. What was wrong was the
+    spelling. A 200 says the request worked, and three things follow from that
+    which nobody chose. The query client's retry never runs, because there is no
+    failure to retry — the one retry the app configures is spent on failures, so
+    the read least worth giving up on was the one never asked again. The `null`
+    is cached as a *successful* answer for `LEAGUE_DETAIL_STALE_TIME`, so a
+    database busy for one second costs the panel its lineups for five minutes,
+    and closing the card and reopening it inside that window serves the failure
+    back without asking anyone. And nothing at any layer can tell it from a
+    league that genuinely cannot be projected, because on the wire it is the
+    same byte.
+
+    The failure was invisible in exactly the way the `start_time` one was: every
+    layer degraded politely, the em dash it produced is the em dash the real
+    empty case produces, and the tests passed throughout because they construct
+    payloads rather than failures. **A fallback that fires on a failure and looks
+    like the success case is indistinguishable from working.**
+
+    So the rule is the one the em dash already implied and the wire did not
+    carry. A **null body means the domain answered "nothing"** — for `…/outlook`,
+    a league with no slots on file, no scoring settings to score with, or no
+    weeks left on the schedule, which is a fact about the league and stays a 200.
+    An **operational failure is a failure status**, through `readResponse`
+    (`app/api/read-response.ts`), which is `withReadTiming` +
+    `readFailureResponse` and no policy of its own — the point is to have one
+    place the next enrichment route falls into rather than a second copy of the
+    decision. And **a route whose loader cannot return null has no null on the
+    wire at all**: `getLeagueWeekView` is `Promise<LeagueWeekView>`, so every
+    null `…/week` ever sent was a caught exception, and `LeagueWeekPayload`
+    stopped being nullable so there is nowhere for one to re-enter. The
+    serialiser takes the view rather than `view | null` for the same reason —
+    that null branch *was* the seam.
+
+    The graceful half is untouched, and it never lived in the route: the
+    enrichments are separate queries, so `useLeagueDetail` reads whichever have
+    answered and only the core's error is the panel's error. What changed is that
+    the query underneath now knows it failed. `read-response.test.ts` asserts the
+    response for each outcome (a value, a legitimate null, each of the four busy
+    spellings, a broken read, a non-`Error` throw, a synchronous throw);
+    `league-routes.test.ts` asserts that the two routes still go through it,
+    since a route that quietly went back to catching its own read would pass
+    every other test in the repo; and `league-cache.test.ts` asserts the client
+    end — a failed enrichment is an errored query with no data, a `200 null` is a
+    success, the retry runs on the first and not the second.
 
 ## Testing
 
