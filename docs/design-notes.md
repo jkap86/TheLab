@@ -150,6 +150,61 @@ part before redesigning it.
   what makes that safe is `useId` for its gradient and clip ids, so two loaders
   on one page can't collide over a hardcoded `id`. Reach for `"use client"`
   when there's state or a handler, not because a component draws.
+- **A combobox is one control with one focus, and the popup is scenery.** The
+  comps picker was built the other way round and the shape is worth recognising,
+  because every symptom of it is invisible on screen: each suggestion was a
+  `role="option"` `<li>` with a real `<button>` inside, selecting on
+  `pointerdown`. That is two interaction models over one control, and they
+  disagreed everywhere they met. Twelve suggestions were twelve tab stops between
+  the search box and the rest of the page, so Tab no longer left the picker.
+  Enter on one of those buttons fires a `click`, which nothing was listening for,
+  so the keyboard could reach a suggestion and then not select it. And the moment
+  focus moved to a button the field's `aria-activedescendant` stopped meaning
+  anything at all — that attribute only speaks for a *field that holds focus*, so
+  a screen reader was being told about an active option by an element that had
+  none. None of it fails a type check, none of it fails a render, and a reader
+  with a mouse never meets any of it.
+
+  What replaced it is the ARIA pattern taken literally: the field is the only
+  focusable part, the options are plain `<li>`s, and `shared/combobox.ts` owns
+  the keyboard — pure, so what a press means is tested rather than described.
+  Three of its decisions are choices rather than transcription. **An arrow on a
+  shut popup opens it and moves nothing**, because advancing as well skips the
+  suggestion already highlighted, which is the one most readers want. **Home, End
+  and Space are left alone** — a combobox is a text field first, and claiming the
+  listbox pattern's keys would leave the reader unable to edit their own query.
+  And **Tab closes without committing**: picking here re-keys the whole page
+  against a new subject, so a reader tabbing past a search box they were done
+  with would arrive somewhere they never asked to be. Escape and a press
+  elsewhere are dismissals; Tab is one too, not a shortcut.
+
+  **The pointer half is one line, and it is the line that makes an option a plain
+  `<li>` possible.** Focus leaving the field closes the popup, which is what
+  makes Tab behave — but a mouse press on a suggestion *also* moves focus, so the
+  list would unmount under the click that was about to select. The popup
+  therefore swallows the default of `mousedown`, and focus never leaves. It is
+  also strictly better than the `pointerdown` it replaces: `pointerdown` fires
+  before a gesture is known to be a tap, so a finger dragging to scroll the list
+  selected whatever it started on, where the compatibility `mousedown` is
+  synthesised only for a real tap. The outside-press close stays beside the blur
+  rather than being replaced by it, because a tap on inert page furniture does
+  not reliably blur a field on iOS — pointer and focus are two halves of one
+  rule, not two copies of it.
+
+  The ids moved for a quieter reason. They were positional (`…-option-3`), so
+  every keystroke made the same id a different player — an assistive technology
+  caching by id is told the fourth row was renamed rather than that the list was
+  replaced. They are keyed by `player_id` now, and both ends of the pair are
+  built by the same function, because `aria-activedescendant` is a string that
+  has to match an `id` with nothing in the type system relating the two.
+
+  **`LeaguePicker` on `/picktracker` is the same control and has not been
+  changed.** It never had the nested button — its options are already plain
+  `<li>`s — so it is missing the smaller half of this: it does not close on Tab,
+  its first ArrowDown from a shut popup skips a league, Enter after Escape picks
+  out of an invisible list, and its option ids are positional. Moving it onto
+  `shared/combobox` is the obvious next edit and is why that module is in
+  `features/shared` rather than in `features/comps`.
 - **The tools page's account section resolves in place; the other two searches
   navigate.** `ManagerSearch` and `PicktrackerSearch` hand what you typed to a
   route and let the destination resolve it, so a typo is only discovered as a
