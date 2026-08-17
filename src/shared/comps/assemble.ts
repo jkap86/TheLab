@@ -158,29 +158,42 @@ const stat = (
 const finite = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
+/**
+ * The datasets that ride *onto* an assembled row rather than being read off its
+ * stat lines — each one an expensive query of its own, each loaded only where
+ * the board being run weighs a field that names it (`enrichment.ts`).
+ *
+ * **Every one is optional, and absent means unknown rather than zero** — the
+ * market family's own rule, which is exactly what makes a base pool a
+ * legitimate pool: it answers null for the fields nobody weighted, which is the
+ * same thing it would answer for a player those sources have never heard of.
+ */
+export type CompsEnrichmentInputs = {
+  ktc?: CompsKtcInput;
+  ktcHistory?: CompsKtcHistoryInput;
+  adp?: CompsAdpInput;
+  draft?: CompsDraftInput;
+};
+
+/**
+ * A season's weekly lines into pool rows.
+ *
+ * The datasets are accepted here as well as by {@link applyCompsEnrichment} —
+ * one call for a caller that has them in hand — but the read does not use that
+ * form: it assembles the base rows once, caches them, and merges whichever
+ * datasets a board actually asked for on top. Handed none, this is exactly that
+ * base row.
+ */
 export function assemblePoolRows({
   statLines,
   profiles,
-  ktc,
-  ktcHistory,
-  adp,
-  draft,
   season,
+  ...enrichment
 }: {
   statLines: readonly CompsStatLineInput[];
   profiles: Record<string, CompsProfileInput>;
-  ktc: CompsKtcInput;
-  ktcHistory: CompsKtcHistoryInput;
-  adp: CompsAdpInput;
-  /**
-   * Optional so a row assembled without it is still a legitimate row — it
-   * simply answers null for draft capital, which is what an unknown pick means
-   * anyway. That keeps every existing assembly test valid and makes the field
-   * degrade the way the market fields do when their source is cold.
-   */
-  draft?: CompsDraftInput;
   season: string;
-}): CompsPoolRow[] {
+} & CompsEnrichmentInputs): CompsPoolRow[] {
   // One accumulator per player: games, production and point totals in a
   // single pass. The share numerators are tracked apart from the totals —
   // they sum only the team-attributed lines, so numerator and denominator
@@ -302,9 +315,6 @@ export function assemblePoolRows({
   const rows: CompsPoolRow[] = [];
   for (const [player_id, entry] of byPlayer) {
     const profile = profiles[player_id];
-    const marketKtc = ktc[player_id];
-    const history = ktcHistory[player_id];
-    const marketAdp = adp.get(player_id);
 
     // Every derived rate's own numerator and denominator, scaled so the value
     // is exactly `n / d` whatever the unit — a percentage carries the ×100 in
@@ -361,20 +371,12 @@ export function assemblePoolRows({
       answers("tgt_per_snap"),
     );
     values.age = ageAtSeasonStart(profile?.birth_date ?? null, season);
-    values.ktc_sf = marketKtc?.sf ?? null;
-    values.ktc_oneqb = marketKtc?.oneqb ?? null;
-    values.ktc_peak_sf = history?.peak ?? null;
-    values.ktc_trend_sf = history?.trend ?? null;
-    values.adp_dynasty = marketAdp?.dynasty?.adp ?? null;
-    values.adp_redraft = marketAdp?.redraft?.adp ?? null;
-    // Three answers folded to two by one call: a drafted player gets his pick's
-    // capital, an undrafted one the shared notch past the last pick, and a
-    // player with no record at all gets null — which excludes him from any
-    // comparison weighting this, rather than filing him with the undrafted.
-    const draftPick = draft?.get(player_id) ?? null;
-    values.draft_capital = draftCapital(
-      draftPick === null ? null : { playerId: player_id, ...draftPick },
-    );
+    // The enrichment-fed fields are written as unknown here and filled in by
+    // `applyCompsEnrichment` for whichever datasets were actually loaded, so a
+    // base row and an enriched one are the same shape — a reader can't tell "not
+    // loaded" from "this source has never heard of him", which is the honest
+    // reading either way and the one the market family already had.
+    for (const key of ENRICHED_KEYS) values[key] = null;
 
     rows.push({
       player_id,
@@ -385,11 +387,13 @@ export function assemblePoolRows({
       name: profile?.name ?? player_id,
       position: profile?.position ?? null,
       team: profile?.team ?? null,
-      // The pick itself rides beside the capital, the way `position` and `team`
-      // ride beside the values: it is what the reader actually wants printed —
+      // The pick rides beside the capital, the way `position` and `team` ride
+      // beside the values: it is what the reader actually wants printed —
       // "1.05", "UDFA" — where the capital is what the distance is measured in.
-      // Null here is unknown; a record with a null `overall` is undrafted.
-      draft: draftPick,
+      // Unknown until the draft dataset is merged on, since it is that dataset's
+      // to answer; null there means no record, where a record with a null
+      // `overall` means undrafted.
+      draft: null,
       games: entry.games,
       values,
       rates,
@@ -400,7 +404,74 @@ export function assemblePoolRows({
       },
     });
   }
-  return rows;
+  return applyCompsEnrichment(rows, enrichment);
+}
+
+/**
+ * The fields no stat line answers — every one fed by a dataset the catalogue
+ * names, derived from `reads` rather than listed so a new market field is
+ * covered the moment it declares where it comes from.
+ */
+const ENRICHED_KEYS: readonly string[] = COMPS_FIELDS.filter(
+  (field) => field.reads.length > 0,
+).map((field) => field.key);
+
+/**
+ * The rows with the loaded datasets written onto them — the composition half of
+ * the pool, kept pure so what each dataset contributes is a tested fact rather
+ * than a read of `pool.ts`.
+ *
+ * **Only the datasets present are written.** A dataset absent leaves its fields
+ * exactly as they were, which is null on a base row: nothing here can turn "not
+ * loaded" into a zero, and nothing can overwrite a loaded value with an unknown
+ * one by being called twice with different halves.
+ *
+ * Non-mutating, because the rows it is handed are the frozen cached base pool:
+ * every enriched row is a fresh object with a fresh `values`, and the immutable
+ * parts (points, rates) are shared rather than copied. Given nothing to write it
+ * hands the same array straight back — an identity the memoized passes above it
+ * (`withCareerValues`) read as "the corpus has not changed".
+ */
+export function applyCompsEnrichment(
+  rows: readonly CompsPoolRow[],
+  { ktc, ktcHistory, adp, draft }: CompsEnrichmentInputs,
+): CompsPoolRow[] {
+  // The same array, not a copy: the identity is what the memoized passes above
+  // this read as "the corpus has not changed". The cast is only the readonly
+  // parameter being handed back out.
+  if (!ktc && !ktcHistory && !adp && !draft) return rows as CompsPoolRow[];
+
+  return rows.map((row) => {
+    const values = { ...row.values };
+    if (ktc) {
+      const priced = ktc[row.player_id];
+      values.ktc_sf = priced?.sf ?? null;
+      values.ktc_oneqb = priced?.oneqb ?? null;
+    }
+    if (ktcHistory) {
+      const history = ktcHistory[row.player_id];
+      values.ktc_peak_sf = history?.peak ?? null;
+      values.ktc_trend_sf = history?.trend ?? null;
+    }
+    if (adp) {
+      const board = adp.get(row.player_id);
+      values.adp_dynasty = board?.dynasty?.adp ?? null;
+      values.adp_redraft = board?.redraft?.adp ?? null;
+    }
+    let pick = row.draft;
+    if (draft) {
+      pick = draft.get(row.player_id) ?? null;
+      // Three answers folded to two by one call: a drafted player gets his
+      // pick's capital, an undrafted one the shared notch past the last pick,
+      // and a player with no record at all gets null — which excludes him from
+      // any comparison weighting this, rather than filing him with the
+      // undrafted.
+      values.draft_capital = draftCapital(
+        pick === null ? null : { playerId: row.player_id, ...pick },
+      );
+    }
+    return { ...row, draft: pick, values };
+  });
 }
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;

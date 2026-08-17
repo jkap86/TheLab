@@ -3,10 +3,13 @@ import { NextResponse } from "next/server";
 import {
   compsField,
   compsWantedFields,
+  enrichCompsPools,
   fieldValue,
+  getCompsDisplayDraft,
   getCompsPools,
   parseCompsDimensionKey,
   parseCompsFilters,
+  requiredCompsEnrichments,
   resolveCompsFields,
   resolveSubjectPosition,
   resolveSubjectSeason,
@@ -25,6 +28,7 @@ import type {
 } from "@/shared/contract";
 import type {
   CompsBasis,
+  CompsDraftInput,
   CompsFieldSpec,
   CompsPoolRow,
   CompsRefusal,
@@ -64,15 +68,19 @@ export async function GET(request: Request) {
   const filters = parsed.filters;
 
   try {
-    // The career fields are corpus-relative (season N reads seasons < N), so
-    // they are derived over the whole set here rather than stored on the
-    // per-season cached pools — a deepening archive re-answers them without
-    // waiting out anyone's TTL. The pass is memoized against the corpus's own
-    // identity inside `withCareerValues`, so retuning a weight re-runs the KNN
-    // and not the enrichment of every player-season on file.
-    const pools = withCareerValues(await getCompsPools());
+    // The corpus every board shares: a season's stat lines and the profiles
+    // behind them, with the career fields derived over the whole set. The
+    // career fields are corpus-relative (season N reads seasons < N), so they
+    // are derived here rather than stored on the per-season cached pools — a
+    // deepening archive re-answers them without waiting out anyone's TTL. The
+    // pass is memoized against the corpus's own identity inside
+    // `withCareerValues`, so retuning a weight re-runs the KNN and not the
+    // enrichment of every player-season on file — which is also why the market
+    // datasets are merged on *after* it rather than before: one corpus in that
+    // memo's single slot, whatever board is being run.
+    const base = withCareerValues(await getCompsPools());
 
-    const subjectSeasons = pools
+    const subjectSeasons = base
       .filter((pool) =>
         pool.rows.some((row) => row.player_id === filters.player_id),
       )
@@ -94,14 +102,23 @@ export async function GET(request: Request) {
         .find((pool) => pool.season === season.season)!
         .rows.find((row) => row.player_id === filters.player_id)!;
 
-    const position = resolveSubjectPosition(subjectRow(pools).position);
+    const position = resolveSubjectPosition(subjectRow(base).position);
     if (!position.ok) return refusalResponse(position);
+
+    // **The board is resolved before anything expensive is read, because the
+    // board is what says which reads are worth making.** Its fields are the
+    // subject position's defaults unless the caller named some, so the subject
+    // has to be found first — which the corpus above answers, being what every
+    // board reads anyway. Every market field defaults to weight 0, so a first
+    // board needs no dataset at all and this hands back the same arrays.
+    const wanted = compsWantedFields(filters.fields, position.position);
+    const needs = requiredCompsEnrichments(wanted);
+    const pools = await enrichCompsPools(base, needs);
 
     // Which windows were asked for has to be known before the subject can be
     // asked whether it answers them, so the dimensions are materialized onto
     // every row first — one more pure pass, and none at all for a request that
     // named no window, which is every default board.
-    const wanted = compsWantedFields(filters.fields, position.position);
     const windowed = withWindowValues(pools, wanted, filters.basis);
     const subject = subjectRow(windowed);
 
@@ -124,8 +141,19 @@ export async function GET(request: Request) {
       positions,
     });
 
+    // Where each printed player went in the NFL draft — a label on a dozen
+    // rows, which is a different question from the `draft_capital` *field*'s.
+    // A board weighing that field has the crosswalk on every row of the corpus
+    // already; one that doesn't reads it for the rows it is about to send,
+    // rather than making every default board pay for the whole corpus's picks
+    // to print eleven of them.
+    const printed = [subject, ...knn.results.map((result) => result.row)];
+    const draft = needs.draft
+      ? null
+      : await getCompsDisplayDraft(printed.map((row) => row.player_id));
+
     const payload: CompsPayload = {
-      subject: rowPayload(subject, fields.fields, filters.basis),
+      subject: rowPayload(subject, fields.fields, filters.basis, draft),
       basis: filters.basis,
       fields: fields.fields.map((spec, i) => {
         const { field, window } = parseCompsDimensionKey(spec.key);
@@ -153,7 +181,7 @@ export async function GET(request: Request) {
       candidates_eligible: knn.candidatesEligible,
       excluded_missing: knn.excludedMissing,
       results: knn.results.map((result) => ({
-        ...rowPayload(result.row, fields.fields, filters.basis),
+        ...rowPayload(result.row, fields.fields, filters.basis, draft),
         distance: Math.round(result.distance * 10000) / 10000,
         similarity: result.similarity,
       })),
@@ -184,11 +212,17 @@ function refusalResponse(refusal: CompsRefusal) {
  * A pool row down to what the client draws: the weighted fields, each resolved
  * under the basis — byte-for-byte the numbers the distance used — and beside
  * them the whole season line, which is what "how did that season go" reads.
+ *
+ * `draft` is the display read, or null where the row already carries its pick
+ * because the board weighed draft capital. Absent from the map is unknown,
+ * which is the same null the row would have answered — the client draws nothing
+ * for it and never the word "Undrafted", which is a different fact entirely.
  */
 function rowPayload(
   row: CompsPoolRow,
   fields: readonly CompsFieldSpec[],
   basis: CompsBasis,
+  draft: CompsDraftInput | null,
 ): CompsSeasonRowPayload {
   const values: Record<string, number | null> = {};
   for (const field of fields) {
@@ -204,7 +238,7 @@ function rowPayload(
     name: row.name,
     position: row.position,
     team: row.team,
-    draft: row.draft,
+    draft: draft === null ? row.draft : (draft.get(row.player_id) ?? null),
     games: row.games,
     values,
     line,

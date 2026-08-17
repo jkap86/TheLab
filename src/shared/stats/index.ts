@@ -7,10 +7,15 @@ export type { Ppg, StatLine } from "./ppg";
 export {
   listPlayerStatLines,
   listSeasonStatLines,
+  listStoredPlayerSeasons,
   listStoredSeasons,
   listStoredStatWeeks,
 } from "./queries";
-export type { PlayerStatWeek, SeasonStatLine } from "./queries";
+export type {
+  PlayerStatWeek,
+  SeasonStatLine,
+  StoredPlayerSeason,
+} from "./queries";
 export { startStatsScheduler, STATS_INTERVAL_MS } from "./scheduler";
 export {
   syncStats,

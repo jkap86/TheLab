@@ -1,14 +1,30 @@
-export { assemblePoolRows, ageAtSeasonStart, seasonLine } from "./assemble";
+export {
+  applyCompsEnrichment,
+  assemblePoolRows,
+  ageAtSeasonStart,
+  seasonLine,
+} from "./assemble";
 export type {
   CompsAdpInput,
+  CompsDraftInput,
+  CompsEnrichmentInputs,
   CompsKtcHistoryInput,
   CompsKtcInput,
   CompsProfileInput,
   CompsStatLineInput,
 } from "./assemble";
+export {
+  anyCompsEnrichment,
+  compsEnrichmentKey,
+  listCompsEnrichments,
+  NO_COMPS_ENRICHMENTS,
+  requiredCompsEnrichments,
+} from "./enrichment";
+export type { CompsEnrichmentNeeds } from "./enrichment";
 export { withCareerValues, PREV_SEASONS_WINDOW } from "./career";
 export type { CompsSeasonPool } from "./career";
 export {
+  COMPS_ENRICHMENTS,
   COMPS_FIELDS,
   COMPS_POSITIONS,
   compsField,
@@ -16,7 +32,12 @@ export {
   defaultWeightsFor,
   isCompsPosition,
 } from "./fields";
-export type { CompsField, CompsFieldFamily, CompsPosition } from "./fields";
+export type {
+  CompsEnrichment,
+  CompsField,
+  CompsFieldFamily,
+  CompsPosition,
+} from "./fields";
 export {
   parseCompsFilters,
   COMPS_K_DEFAULT,
@@ -32,10 +53,23 @@ export type {
   CompsPoolRow,
   CompsResult,
 } from "./knn";
-export { getCompsPool, getCompsPools, getCompsSeasons } from "./pool";
+export { foldCompsPlayerIndex } from "./player-index";
+export type { CompsPlayerOption, CompsPlayerSeasonRow } from "./player-index";
 export {
+  enrichCompsPools,
+  getCompsDisplayDraft,
+  getCompsPlayerIndex,
+  getCompsPool,
+  getCompsPools,
+  getCompsSeasons,
+} from "./pool";
+export { compsReadAdmission, compsReadConcurrency } from "./read-admission";
+export {
+  COMPS_ENRICHMENT_CACHE,
+  COMPS_PLAYER_INDEX_CACHE,
   COMPS_POOL_CACHE,
   COMPS_POOL_VERSION,
+  compsEnrichmentCacheKey,
   compsPoolCacheKey,
 } from "./read-cache";
 export {

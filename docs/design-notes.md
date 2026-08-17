@@ -150,6 +150,28 @@ part before redesigning it.
   what makes that safe is `useId` for its gradient and clip ids, so two loaders
   on one page can't collide over a hardcoded `id`. Reach for `"use client"`
   when there's state or a handler, not because a component draws.
+- **A debounce is a promise about one subject, and the comps board is where that
+  promise broke.** Weight edits are held for a quarter second before they re-key
+  the query, which is right for what it was written for: a drag across a slider
+  is one request, and the rows on screen still describe the player whose name is
+  above them, dimmed under "Updating…". Boards are per position, though — a
+  receiver's fields are not a quarterback's — so the subject and the board move
+  together on a press while only the board is debounced. Picking a quarterback
+  while a customized receiver board was settling therefore built, and sent, a
+  request pairing the new subject with the old position's weights. It is not a
+  flicker: the answer is a real comparison of that quarterback on a receiver's
+  criteria, and it lands in its own cache entry under its own key, so a reader
+  returning to that combination is served it again.
+
+  The instinct is to make the effect that adopts the new board fire sooner. That
+  is the same bug with a shorter fuse — any state an effect catches up to can be
+  a frame behind the state that changed. So what the request is built from is
+  **derived** instead (`comps/board-settle.ts`): settled board where it belongs to
+  the position on screen, live board the moment it doesn't. A derivation computed
+  during render cannot lag its own inputs. The settled state still moves, on a
+  tick rather than a timer, because it is the baseline the *next* edit within the
+  new position is debounced against — and nothing a request is built from is
+  waiting on it.
 - **A combobox is one control with one focus, and the popup is scenery.** The
   comps picker was built the other way round and the shape is worth recognising,
   because every symptom of it is invisible on screen: each suggestion was a

@@ -130,19 +130,56 @@ export function isCustomized(
   );
 }
 
-/** Write one position's board; every other position's entry is untouched. */
+/**
+ * Whether a board is the position's defaults, field for field.
+ *
+ * An absent key is 0, which is `weightsFor`'s own reading on the way out — so a
+ * board that names only the fields it turned on compares equal to one that
+ * spells every field's zero, because those are the same board.
+ *
+ * **An exact comparison, not a tolerant one**, and that is a fact about the
+ * numbers rather than an oversight: every writer of a weight produces an
+ * integer (`weightForTier` rounds, the query parser refuses a non-integer, and
+ * the codec below drops one), so there is no arithmetic anywhere in the path
+ * that could leave a stored 60 a billionth away from the catalogue's 60. A
+ * tolerance here would be pretending otherwise, and would quietly call two
+ * genuinely different weights the same one if that ever stopped being true.
+ */
+export function weightsAreDefaults(
+  weights: Record<string, number>,
+  position: CompsPosition,
+): boolean {
+  const defaults = defaultWeightBoard(position);
+  return COMPS_FIELDS.every(
+    (field) => (weights[field.key] ?? 0) === defaults[field.key],
+  );
+}
+
+/**
+ * Write one position's board, **keeping nothing that is already the default** —
+ * the rule `setPositionWindows` keeps below, and it was asymmetric between the
+ * two halves until this: a window put back where it started left nothing
+ * behind, where a weight put back where it started left a board that happened
+ * to equal the defaults and an entry that made `isCustomized` say yes forever.
+ * What the reader sees for that is a lit "Customize comparison" key over a board
+ * they have restored, and a Reset that does nothing they can see.
+ *
+ * Every other position's entry is untouched, which is the *other* asymmetry
+ * this file is about — a board tuned for receivers must not follow the reader
+ * onto a quarterback.
+ */
 export function setPositionWeights(
   prefs: CompsPrefs,
   position: CompsPosition,
   weights: Record<string, number>,
 ): CompsPrefs {
-  return {
-    ...prefs,
-    weightsByPosition: {
-      ...prefs.weightsByPosition,
-      [position]: weights,
-    },
-  };
+  const weightsByPosition = { ...prefs.weightsByPosition };
+  if (weightsAreDefaults(weights, position)) {
+    delete weightsByPosition[position];
+  } else {
+    weightsByPosition[position] = weights;
+  }
+  return { ...prefs, weightsByPosition };
 }
 
 /**
@@ -221,7 +258,7 @@ export function parseCompsPrefs(raw: string | null): CompsPrefs {
   if (typeof record.weightsByPosition === "object" && record.weightsByPosition !== null) {
     for (const [position, board] of Object.entries(record.weightsByPosition)) {
       if (!isCompsPosition(position)) continue;
-      const cleaned = cleanBoard(board);
+      const cleaned = cleanBoard(board, position);
       if (cleaned !== null) weightsByPosition[position] = cleaned;
     }
   }
@@ -238,8 +275,20 @@ export function parseCompsPrefs(raw: string | null): CompsPrefs {
   return { basis, weightsByPosition, windowsByPosition };
 }
 
-/** One stored board: known keys with integer 0–100 weights, or nothing. */
-function cleanBoard(board: unknown): Record<string, number> | null {
+/**
+ * One stored board: known keys with integer 0–100 weights, or nothing.
+ *
+ * **A board that is the position's defaults reads as nothing**, the rule
+ * `cleanWindows` keeps for its own half — absent *is* the default, and one
+ * spelling of it is what keeps `isCustomized` honest. It matters on the way in
+ * as well as on the way out because a blob written by a build that stored
+ * default weights is still in readers' browsers, and a board is not customized
+ * on the strength of which build wrote it.
+ */
+function cleanBoard(
+  board: unknown,
+  position: CompsPosition,
+): Record<string, number> | null {
   if (typeof board !== "object" || board === null) return null;
   const entries = board as Record<string, unknown>;
   const cleaned: Record<string, number> = {};
@@ -256,7 +305,8 @@ function cleanBoard(board: unknown): Record<string, number> | null {
       cleaned[field.key] = weight;
     }
   }
-  return Object.keys(cleaned).length > 0 ? cleaned : null;
+  if (Object.keys(cleaned).length === 0) return null;
+  return weightsAreDefaults(cleaned, position) ? null : cleaned;
 }
 
 /**

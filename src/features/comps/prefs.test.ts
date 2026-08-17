@@ -106,6 +106,86 @@ describe("weightsFor / per-position boards", () => {
     assert.deepEqual(windowsFor(reset, "WR").rec_tgt, "season");
   });
 
+  test("a weight put back where it started leaves nothing behind", () => {
+    // The asymmetry this closes: a window restored to its default was dropped
+    // from the stored prefs, where a weight restored to its default was kept —
+    // so a reader who moved a slider and moved it back had a board that was the
+    // catalogue's in every number and "customized" in the only place the UI
+    // looks. What they saw for it was a lit Customize key over an untouched
+    // board and a Reset that changed nothing.
+    const defaults = defaultWeightBoard("WR");
+    const moved = setPositionWeights(DEFAULT_COMPS_PREFS, "WR", {
+      ...defaults,
+      rec_tgt: 20,
+    });
+    assert.equal(isCustomized(moved, "WR"), true);
+
+    const restored = setPositionWeights(moved, "WR", { ...defaults });
+    assert.equal(isCustomized(restored, "WR"), false);
+    assert.equal("WR" in restored.weightsByPosition, false);
+    assert.deepEqual(weightsFor(restored, "WR"), defaults);
+  });
+
+  test("a board naming only its live fields is the same board as one spelling every zero", () => {
+    // `weightsFor` reads an absent key as 0 on the way out, so the two spell one
+    // board — and the comparison has to agree, or which of them was written
+    // decides whether the reader is "customized".
+    const sparse = Object.fromEntries(
+      Object.entries(defaultWeightBoard("TE")).filter(([, weight]) => weight > 0),
+    );
+    const prefs = setPositionWeights(DEFAULT_COMPS_PREFS, "TE", sparse);
+    assert.equal(isCustomized(prefs, "TE"), false);
+  });
+
+  test("restoring one weight while another is moved stays customized", () => {
+    // The bound on the rule: normalization is about the *board*, not about the
+    // last press, so putting one slider back does not throw away the rest.
+    const defaults = defaultWeightBoard("WR");
+    const two = setPositionWeights(DEFAULT_COMPS_PREFS, "WR", {
+      ...defaults,
+      rec_tgt: 20,
+      ktc_sf: 60,
+    });
+    const one = setPositionWeights(two, "WR", { ...defaults, ktc_sf: 60 });
+    assert.equal(isCustomized(one, "WR"), true);
+    assert.equal(weightsFor(one, "WR").ktc_sf, 60);
+    assert.equal(weightsFor(one, "WR").rec_tgt, defaults.rec_tgt);
+  });
+
+  test("a default board restored by hand still carries its windows", () => {
+    // The two halves are independent: weights back at the defaults with a
+    // window still moved is a customized board, and dropping the weights entry
+    // must not take the windows with it. Only Reset clears both.
+    const defaults = defaultWeightBoard("WR");
+    const prefs = setPositionWindows(
+      setPositionWeights(DEFAULT_COMPS_PREFS, "WR", {
+        ...defaults,
+        rec_tgt: 20,
+      }),
+      "WR",
+      { rec_tgt: "prev3" },
+    );
+    const restored = setPositionWeights(prefs, "WR", { ...defaults });
+    assert.equal("WR" in restored.weightsByPosition, false);
+    assert.equal(isCustomized(restored, "WR"), true);
+    assert.equal(windowsFor(restored, "WR").rec_tgt, "prev3");
+  });
+
+  test("a stored board that is the defaults reads as untouched", () => {
+    // The same normalization on the way in, because a blob written by a build
+    // that stored default weights is still in readers' browsers — and a board
+    // is not customized on the strength of which build wrote it.
+    const raw = JSON.stringify({
+      v: COMPS_PREFS_VERSION,
+      basis: "per_game",
+      weightsByPosition: { WR: defaultWeightBoard("WR") },
+      windowsByPosition: {},
+    });
+    const prefs = parseCompsPrefs(raw);
+    assert.equal(isCustomized(prefs, "WR"), false);
+    assert.deepEqual(weightsFor(prefs, "WR"), defaultWeightBoard("WR"));
+  });
+
   test("market fields default to 0 on every position's opening board", () => {
     for (const position of ["QB", "RB", "WR", "TE"] as const) {
       const board = defaultWeightBoard(position);

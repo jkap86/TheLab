@@ -5,6 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { ErrorCard } from "@/features/shared/ui/panel-message";
 import { FlaskLoader, PageHeading } from "@/features/shared";
 
+import {
+  boardSettleDelay,
+  boardSettlePending,
+  effectiveBoardKey,
+} from "../board-settle";
 import { buildCompsQuery } from "../build-query";
 import { useComps } from "../hooks/use-comps";
 import { useCompsPlayers } from "../hooks/use-comps-players";
@@ -24,6 +29,7 @@ import { ResultsList } from "./results-list";
 
 import { compsDimensionLabel } from "../../../shared/comps/windows";
 
+import type { CompsBoardTarget } from "../board-settle";
 import type { CompsBasis } from "../../../shared/comps/filters";
 import type { CompsWindowKey } from "../../../shared/comps/windows";
 import type { CompsPlayerOptionPayload } from "../types";
@@ -36,6 +42,8 @@ import type { CompsPlayerOptionPayload } from "../types";
  * Weight edits are debounced (~250ms) before they reach the query key, and
  * while the rows on screen belong to an older selection they dim under an
  * "Updating…" note — held rows must never read as answering the new weights.
+ * **A change of subject position is not one of those edits** and skips the
+ * debounce entirely (`board-settle.ts`), since a board belongs to a position.
  */
 export function CompsHome() {
   const players = useCompsPlayers();
@@ -61,17 +69,23 @@ export function CompsHome() {
   // drag across a slider is one request, not one per notch — and the windows
   // ride in the same string, since a window change is exactly as expensive a
   // re-fetch as a weight change and settling them apart would fire two.
+  //
+  // **The debounce is per position, and a position change skips it** — see
+  // `board-settle.ts`: held across one, it would build a request pairing the
+  // new subject with the previous position's board.
   const customized = position !== null && isCustomized(prefs, position);
   const boardKey =
     customized && weights && windows
       ? JSON.stringify({ weights, windows })
       : "";
-  const settledBoardKey = useDebouncedValue(boardKey, 250);
-  const weightsPending = settledBoardKey !== boardKey;
+  const board = useMemo(() => ({ position, boardKey }), [position, boardKey]);
+  const settledBoard = useSettledBoard(board);
+  const settledBoardKey = effectiveBoardKey(settledBoard, board);
+  const weightsPending = boardSettlePending(settledBoard, board);
 
   const query = useMemo(() => {
     if (!subject) return null;
-    const board = settledBoardKey
+    const settled = settledBoardKey
       ? (JSON.parse(settledBoardKey) as {
           weights: Record<string, number>;
           windows: Record<string, CompsWindowKey>;
@@ -82,8 +96,8 @@ export function CompsHome() {
       season,
       basis: prefs.basis,
       position: subject.position,
-      weights: board?.weights ?? null,
-      windows: board?.windows,
+      weights: settled?.weights ?? null,
+      windows: settled?.windows,
     });
   }, [subject, season, prefs.basis, settledBoardKey]);
 
@@ -249,13 +263,27 @@ function fieldSummary(labels: string[]): string {
   return rest > 0 ? `${head.join(", ")} + ${rest} more` : head.join(", ");
 }
 
-/** The value as of `ms` ago — a trailing debounce over any value. */
-function useDebouncedValue<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
+/**
+ * The board the last settled edit belongs to — what `effectiveBoardKey` reads
+ * against, trailing the controls by `COMPS_BOARD_SETTLE_MS` for an edit within
+ * one position and by a tick for a change of position.
+ *
+ * The decision is `board-settle.ts`'s; what is left here is the timer.
+ * **Nothing a request is built from waits on this**, which is why a tick is
+ * fine for the position change: the effective key is *derived* during render,
+ * so it is the new position's board from the first render after the press, and
+ * this state catching up afterwards only moves the baseline the next edit is
+ * debounced against. A value derived during render cannot be a frame behind the
+ * state it is derived from, where a piece of state an effect catches up always
+ * can — which is the beat the wrong pairing used to happen in.
+ */
+function useSettledBoard(target: CompsBoardTarget): CompsBoardTarget {
+  const [settled, setSettled] = useState(target);
   useEffect(() => {
-    if (Object.is(value, debounced)) return;
-    const timer = setTimeout(() => setDebounced(value), ms);
+    const delay = boardSettleDelay(settled, target);
+    if (delay === null) return;
+    const timer = setTimeout(() => setSettled(target), delay);
     return () => clearTimeout(timer);
-  }, [value, ms, debounced]);
-  return debounced;
+  }, [settled, target]);
+  return settled;
 }

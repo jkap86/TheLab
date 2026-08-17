@@ -107,6 +107,29 @@ export async function listSeasonStatLines({
   return rows;
 }
 
+/** One player and one season he has a stored stat line in. */
+export type StoredPlayerSeason = { player_id: string; season: string };
+
+/**
+ * Every `(player, season)` pair with a stat line stored — who the comps picker
+ * can offer, and which seasons each of them can be asked about.
+ *
+ * The cheapest read that answers the picker's question, and it exists so that
+ * question stops being answered by *assembling* the corpus: the list needs an
+ * id and a season, where a pool row needs a season's worth of weekly lines
+ * folded into totals and four market datasets joined onto the result. It is one
+ * `DISTINCT` over the table's own key columns.
+ *
+ * Unordered on purpose — the caller sorts (seasons newest first, players by
+ * name), so paying for a sort here would be paying for it twice.
+ */
+export async function listStoredPlayerSeasons(): Promise<StoredPlayerSeason[]> {
+  const { rows } = await pool.query<StoredPlayerSeason>(
+    `SELECT DISTINCT player_id, season FROM player_week_stats`,
+  );
+  return rows;
+}
+
 /**
  * Every season with any stat line stored, newest first.
  *
