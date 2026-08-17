@@ -57,6 +57,9 @@ const player = (
   rookie: false,
   redraft: stats(50),
   dynasty: stats(50),
+  // The crawled auctions bought nobody by default: they are a small slice of
+  // the corpus, so both boards null is the ordinary row rather than a case.
+  auction: { redraft: null, dynasty: null },
   // KTC has no opinion by default: it prices ~500 dynasty skill players, so an
   // absent price is the board's ordinary state rather than a special case.
   ktc: null,

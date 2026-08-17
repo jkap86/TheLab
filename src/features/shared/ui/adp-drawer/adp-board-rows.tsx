@@ -44,6 +44,7 @@ export function AdpBoardRows({
   both,
   soleBoard,
   soleDrafts,
+  soleAuctions,
   redraftDrafts,
   dynastyDrafts,
   rules,
@@ -63,6 +64,8 @@ export function AdpBoardRows({
   both: boolean;
   soleBoard: AdpBoardType;
   soleDrafts: number | null;
+  /** The auctions the Bid column's shares are averaged over — its own count. */
+  soleAuctions: number | null;
   redraftDrafts: number | null;
   dynastyDrafts: number | null;
   /** The board's league rules, threaded to the rows' value cells. */
@@ -157,6 +160,7 @@ export function AdpBoardRows({
             player={row.player}
             {...seat}
             soleDrafts={soleDrafts}
+            soleAuctions={soleAuctions}
             redraftDrafts={redraftDrafts}
             dynastyDrafts={dynastyDrafts}
           />

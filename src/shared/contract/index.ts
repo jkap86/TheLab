@@ -1,4 +1,5 @@
 import type {
+  AdpAuctionBoards,
   AdpBoardStats,
   AdpBoardType,
   AdpFilters,
@@ -1312,6 +1313,24 @@ export type AdpPlayerPayload = {
   /** His average over the dynasty board's drafts. */
   dynasty: AdpBoardStats | null;
   /**
+   * What he *cost* in the crawled auctions, as a share of the budget those rooms
+   * were spending — per league-type board, the same split the two averages take.
+   *
+   * **A different market from the two above, and the same slice of the corpus.**
+   * The auctions it averages are cut by every one of `filters` except
+   * `draft_types`, which it cannot honour and stay meaningful: the board is never
+   * averaged over auctions — a `pick_no` there is nomination order rather than a
+   * draft slot — so a share that inherited that list would be null for every
+   * reader on every board. Everything else applies, so a row's ADP and its share
+   * describe the same leagues, season and window.
+   *
+   * Null per board on the `min_picks` gate, the same control and the same
+   * meaning as the averages: one buy is not an average, and it is a different
+   * answer from cheap. The field itself is always present — both halves null is
+   * a player the crawled auctions never bought.
+   */
+  auction: AdpAuctionBoards;
+  /**
    * What KeepTradeCut prices him at, on both of the boards KTC publishes —
    * superflex and 1QB.
    *
@@ -1354,6 +1373,23 @@ export type AdpPayload = {
   /** How `draft_count` splits into the two boards; the halves sum to it. */
   redraft_drafts: number;
   dynasty_drafts: number;
+  /**
+   * The auctions behind {@link AdpPlayerPayload.auction}, per board — the
+   * denominator its cells' hover states.
+   *
+   * **Not a part of `draft_count` and never summed into it.** These are the
+   * drafts the board deliberately does not average, counted over the same
+   * leagues, season and window; adding them to a total that describes the ADP
+   * population would make the two halves of `redraft_drafts` stop meaning
+   * anything.
+   *
+   * Counted whether or not their budget could be read, which is the one thing
+   * that makes a broken read visible: a corpus with no auctions in it answers 0
+   * here, where a build of Sleeper that stopped sending `settings.budget` answers
+   * the real count beside a column of em dashes.
+   */
+  redraft_auctions: number;
+  dynasty_auctions: number;
   /** Players in the full filtered set; 0 when the requested page is past its end. */
   player_count: number;
   players: AdpPlayerPayload[];

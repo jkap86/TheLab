@@ -43,11 +43,13 @@ import {
   ADP_DRAWER_EXIT_MS,
   adpRowHeight,
   ADP_ROW_OVERSCAN,
+  AUCTION_COLUMN_SEAT,
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
   KTC_COLUMN_SEAT,
 } from "./adp-drawer.constants.ts";
 import {
+  PICK_AUCTION_TITLE,
   PICK_TAKEN_TITLE,
   ktcTitle,
   withLeagueFilters,
@@ -149,6 +151,9 @@ const player = (id: string, over: Partial<AdpPlayerPayload> = {}): AdpPlayerPayl
   rookie: false,
   redraft: { picks: 12, adp: Number(id) + 0.5, min_pick: 1, max_pick: 30, stdev: 2.25 },
   dynasty: { picks: 7, adp: Number(id) + 1.25, min_pick: 2, max_pick: 40, stdev: 3.5 },
+  // The crawled auctions bought nobody by default: they are a small slice of
+  // the corpus, so both boards null is the ordinary row rather than a case.
+  auction: { redraft: null, dynasty: null },
   // Unpriced unless a case asks: KTC carries ~500 players, so an em dash in
   // those columns is the common row rather than the exception.
   ktc: null,
@@ -160,6 +165,10 @@ const payload = (over: Partial<AdpPayload> = {}): AdpPayload => ({
   draft_count: 1204,
   redraft_drafts: 900,
   dynasty_drafts: 304,
+  // Its own population, not a slice of `draft_count` — the auctions the board
+  // never averages, over the same leagues and window.
+  redraft_auctions: 48,
+  dynasty_auctions: 11,
   player_count: 5000,
   players: [player("1"), player("2"), player("3")],
   // No pick rows unless a case asks for them: the rookies are what a ladder is
@@ -698,6 +707,19 @@ describe("picks on the board", () => {
       ...over,
     });
 
+  test("a pick row draws no bid, and the em dash says why", () => {
+    // Not a gap in the data and not a cheap pick: what an auction sells is
+    // players, so the column does not apply to this row at all. The hover is the
+    // only place that difference can be stated, which is why the dash carries
+    // one — the same call the Taken column makes one cell to its left.
+    const html = drawer({
+      controls: { ...defaultAdpControls("2026"), boards: "dynasty" },
+      board: withPicks(),
+    });
+    assert.ok(html.includes(PICK_AUCTION_TITLE), "expected the pick's bid hover");
+    assert.ok(html.includes(PICK_TAKEN_TITLE));
+  });
+
   test("the class is numbered slot by slot and the seasons past it by round", () => {
     const html = drawer({ board: withPicks() });
     assert.match(html, /2026 1\.01/);
@@ -782,6 +804,70 @@ describe("the column configurations", () => {
     }
   });
 
+  test("the Bid column is a single-board column, like Taken", () => {
+    // Two markets would want two of these and the row has no width for them —
+    // with both boards up the share is on each ADP cell's hover instead.
+    for (const boards of ["redraft", "dynasty"] as const) {
+      const html = drawer({ controls: { ...defaultAdpControls("2026"), boards } });
+      assert.match(html, />Bid</, `${boards}: expected a Bid heading`);
+    }
+    assert.doesNotMatch(drawer(), />Bid</);
+  });
+
+  test("the Bid heading and its cells cross their tier together", () => {
+    // A heading seated a tier apart from the column under it is a label over the
+    // wrong numbers — invisible in review and obvious on screen. One heading
+    // plus one cell on each of the three player rows.
+    const html = drawer({
+      controls: { ...defaultAdpControls("2026"), boards: "redraft" },
+    });
+    const seated = (html.match(new RegExp(AUCTION_COLUMN_SEAT, "g")) ?? []).length;
+    assert.equal(seated, 1 + 3);
+  });
+
+  test("a bid is a share, and a player no auction bought an em dash", () => {
+    const html = drawer({
+      controls: { ...defaultAdpControls("2026"), boards: "redraft" },
+      board: loaded({
+        players: [
+          player("1", {
+            auction: {
+              redraft: { buys: 9, share: 58.4, min_share: 40, max_share: 71, stdev: 8.2 },
+              dynasty: null,
+            },
+          }),
+          // The ordinary row: auctions are a small slice of the crawled corpus.
+          player("2"),
+          // A dollar flier still reads as a share rather than rounding to zero.
+          player("3", {
+            auction: {
+              redraft: { buys: 4, share: 0.5, min_share: 0.5, max_share: 0.5, stdev: 0 },
+              dynasty: null,
+            },
+          }),
+        ],
+      }),
+    });
+    const drawn = [
+      ...html.matchAll(
+        new RegExp(`${AUCTION_COLUMN_SEAT} text-right text-xs tabular-nums[^>]*>([^<]+)<`, "g"),
+      ),
+    ];
+    assert.deepEqual(drawn.map((m) => m[1]), ["58%", "0.5%"]);
+    // The one that is left is the em dash, and it is never a 0%.
+    assert.doesNotMatch(html, />0%</);
+  });
+
+  test("the heading states the auctions it averaged, which are not the board's drafts", () => {
+    const html = drawer({
+      controls: { ...defaultAdpControls("2026"), boards: "redraft" },
+    });
+    // 48 auctions against the board's 900 redraft drafts — two populations, and
+    // a hover quoting the wrong one would name a sample the share was not taken
+    // over.
+    assert.match(html, /48 crawled redraft auctions/);
+  });
+
   test("the collapsible columns are seated behind the panel's own container queries", () => {
     // `@md` and `@lg`, which measure the drawer rather than the viewport — the
     // panel is narrower than the screen everywhere a laptop is involved.
@@ -829,7 +915,14 @@ describe("the column configurations", () => {
     // `>0<` matches the rolling draft counter's digit strip, which is why the
     // "never a zero" rule has to be asserted against the cells that could
     // wrongly render one.
-    const priced = [...html.matchAll(/tabular-nums text-foreground\/60"[^>]*>([^<]+)</g)];
+    // Anchored on the KTC seat, not on the type treatment alone: the auction
+    // cell wears the same weight and tone deliberately (neither moves under the
+    // curve), so a probe for the tone would read whichever came first.
+    const priced = [
+      ...html.matchAll(
+        new RegExp(`${KTC_COLUMN_SEAT} [^"]*tabular-nums text-foreground/60"[^>]*>([^<]+)<`, "g"),
+      ),
+    ];
     assert.deepEqual(priced.map((m) => m[1]), ["9,412", "8,770", "6,000"]);
     // Three unpriced cells — both of player 2's, and player 3's 1QB — each an
     // em dash and never a zero.
@@ -886,6 +979,7 @@ describe("the columns sort", () => {
       both: true,
       soleBoard: "redraft",
       soleDrafts: 900,
+      soleAuctions: 48,
       redraftDrafts: 900,
       dynastyDrafts: 304,
       rules: DEFAULT_LEAGUE_FILTERS,
@@ -926,6 +1020,7 @@ describe("the columns sort", () => {
         both: false,
         soleBoard: boards,
         soleDrafts: 900,
+      soleAuctions: 48,
         redraftDrafts: 900,
         dynastyDrafts: 304,
         rules: DEFAULT_LEAGUE_FILTERS,
@@ -1139,6 +1234,7 @@ describe("what the controls do", () => {
       both: true,
       soleBoard: "redraft",
       soleDrafts: 900,
+      soleAuctions: 48,
       redraftDrafts: 900,
       dynastyDrafts: 304,
       rules: DEFAULT_LEAGUE_FILTERS,

@@ -1606,6 +1606,27 @@ These recur everywhere and are the rules most often broken by accident:
 - **A draft's `pick_no` is not always a draft position.** In auction drafts it is
   nomination order, which is why `/api/adp` excludes them by default — and why an
   auction's `draft_order` is not a pick order either.
+- **What an auction *does* answer is the price, and it is a second population
+  rather than a second column of the first.** `metadata.amount` on a pick over
+  `settings.budget` on its draft is a share of what a manager had to spend —
+  cardinal where an ADP is ordinal, and the only number on the board that says
+  whether the 1.01 is a nose ahead of the 1.02 or twice the price of him.
+  `shared/manager/adp-auction` reads it, and four rules hold it up. **It inherits
+  every filter but `draft_types`** — the same leagues, season, window and round
+  bounds, so a row's ADP and its bid describe one slice of the corpus, but the
+  board is *always* read `snake,linear`, so honouring that list would leave every
+  share null for every reader: a fallback that fires always, indistinguishable
+  from a corpus with no auctions in it. That override is `DraftTypeScope`, one
+  named argument on the shared `draftSelection`, never a second copy of it.
+  **Neither guarded cast takes a default**, unlike every other one here: a share
+  is a fraction of a *specific* budget, so assuming the common 200 silently
+  reprices every player in a room that played for 100, and an unreadable bid is
+  left out of the average rather than counted as free. **It is split per board**,
+  since a dynasty startup auction and a redraft auction are two markets. And
+  **the auction counts on the wire are of matched auctions, not priceable ones**
+  — that is what keeps a Sleeper build that stopped sending `budget`
+  distinguishable from a corpus holding no auctions, which is the one failure
+  this read cannot otherwise tell from working.
 - **When a draft *ended* is only knowable from `last_picked`.** It rides at the
   top level of Sleeper's draft object (not inside `metadata` or `settings`), and
   `draft_picks` carries no timestamp of its own. **On a draft still running it is

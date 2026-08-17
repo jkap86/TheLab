@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import { COMPS_POOL_CACHE } from "../../shared/comps/read-cache.ts";
 import {
+  ADP_AUCTION_CACHE,
   ADP_BOARD_CACHE,
   ADP_PLAYER_BOARD_CACHE,
   LEAGUE_DETAIL_CACHE,
@@ -88,6 +89,14 @@ const LAYERS = [
     client: ADP_STALE_TIMES.board,
     server: ADP_BOARD_CACHE.ttlMs,
     cost: "~500-600ms of aggregate over ~1.5M picks, plus a count statement",
+  },
+  {
+    // Half of one response, so the ordering matters twice over: a shorter TTL
+    // here would miss on every board revalidation the entry beside it hits on.
+    what: "one page's auction spend, which rides on the paged board's response",
+    client: ADP_STALE_TIMES.board,
+    server: ADP_AUCTION_CACHE.ttlMs,
+    cost: "an aggregate over every auction pick of the page's players",
   },
   {
     what: "a priced ADP board, as the manager's valuation reads it",
