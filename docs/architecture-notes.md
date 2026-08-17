@@ -605,6 +605,59 @@ nothing and retries next tick, which is the one case that should stay eager. The
 general shape: when "nothing came back" is a legitimate answer, freshness is a
 fact about the sync and belongs in its own table, not inferred from the data.
 
+**That fix named the starvation and closed half of it.** The clause it turns on —
+"because the horizon budget takes the earliest stale weeks first" — is a property
+of the *ordering*, not of the empty-week case, so it survived the fix intact for
+every other reason a week can go unstamped. A fetch that fails, and a payload the
+completeness gate refuses, both stamp nothing *on purpose*: that is what keeps
+them retryable. And an unstamped week is stale again next tick, and the tick
+after, and sorts ahead of everything behind it every time. Two of them are the
+entire `HORIZON_WEEKS_PER_TICK`, so weeks 5 through 18 are never *attempted* —
+not deferred, not slow, never asked for — and the backfill stops at whatever week
+it had reached and stays there for the rest of the season.
+
+Nothing about it reads as a stall, which is why it is worth writing down. The
+near window keeps refreshing on its own clock. The log keeps naming the same two
+weeks as failed, which looks like two broken weeks rather than a broken pass.
+`deferred` keeps reporting a count, which is the telemetry that was added to make
+exactly this visible and which reports the same number forever without that being
+wrong. And every rest-of-season figure downstream quietly describes a two-week
+horizon — `getRemainingWeeks` reports what is stored, so the number is honest
+about its own population and says nothing about the population being wrong.
+
+So freshness and rotation become two columns, which is the `manager_syncs`
+`synced_at`/`attempt_at` split and the crawler's `sync_attempt_at` tiebreaker
+arriving at the same table for the third time. `attempt_at` is stamped **before**
+the fetch (the `refreshLeague` rule — a fetch that throws or times out has to
+rotate too, and the only stamp guaranteed to have happened by then is one written
+first) and is read **only** by the `ORDER BY`. `synced_at` is stamped only on
+success and remains the only thing the TTL gate compares, so a failed week is
+still due immediately; it also had to become nullable, since an attempt-only row
+left under the old `NOT NULL DEFAULT now()` would have stamped a week fresh for
+its whole TTL on the strength of having failed — the loudest possible version of
+the bug being closed.
+
+The ordering is untried first, then longest-since-tried, then week number, and
+each tier earns its place. Untried-first is what makes a **cold** horizon walk in
+plain week order, since every week is null-attempt and the tiebreaker is all
+there is — the change is invisible until something fails, which is when it should
+be. Longest-since-tried is what brings a failing week back around once the untried
+ones are exhausted, so rotating never becomes dropping. The week-number
+tiebreaker is not decoration: every week a pass stamps is stamped inside the same
+tick, so ties are the normal case and without it the order within a pass is
+whatever the plan happened to emit. `projections/horizon-queue` owns the rule as a
+pure comparator and as the SQL fragment, a matched pair with no compiler link
+between them, and its test pins the two against each other and against the
+migration that adds the column.
+
+The per-tick cap moved with it, from two to four. The cap bounds the *burst*, not
+the daily volume — a week is refetched at most once a day whatever the cap is —
+so what it actually buys is how long a cold horizon spends describing a shorter
+season than the one it covers, and at four a full sixteen-week fill is an hour
+rather than two. It is still a trickle, and it is still only a trickle because
+the queue now rotates: a cap over a queue with a permanent head is not a rate
+limit, it is a stop.
+
 The same trap has a second instance worth recognising, because it does not look
 like a freshness bug at all. A league Sleeper has deleted answers 200-with-null
 forever, so its `updated_at` never advances and it occupies a slot in every
@@ -796,7 +849,10 @@ injury designation changes them, and the rest of the season at a day because it
 doesn't. One gate for both would have to choose between a stale lineup and 90MB an
 hour. Where the slow tier is also large, cap how many slices a tick will fetch
 (`HORIZON_WEEKS_PER_TICK`) and report what the cap deferred — a skipped slice that
-reads as "fresh" is how a backfill silently stops advancing.
+reads as "fresh" is how a backfill silently stops advancing. Reporting it is not
+enough on its own, though: a cap is only a rate limit if the queue under it
+rotates, and what stops it rotating is a slice that can never stamp. See the
+`projection_week_syncs` entry under **Database** for the `attempt_at` half.
 
 The league crawler is the third instance of that rule, varying on time instead of
 slice: every league moves at the same speed *at once*, and what changes is the
