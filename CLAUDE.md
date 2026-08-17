@@ -3984,6 +3984,52 @@ stops holding, a comment saying it does would not have caught it.
   moves nothing under it — and "nothing stored" is a *word* rather than the
   nothing it used to draw, since a control that vanishes on press is worse than
   one that says what it found.
+- **A rewound league draws the panel's stat columns, and *which of them can
+  answer* is decided per metric rather than by dropping the columns.** The past
+  body used to draw no numbers at all, on the sound reasoning that ranks,
+  records, points for and projections are facts about the league *today* and
+  would be attributing them to a team that no longer exists. That reasoning is
+  intact; what was wrong was the conclusion. A reader who has aimed both tables
+  at KTC and then scrubs back is asking what that roster was worth, and dropping
+  their selection made them press `Now`, read the number, and press back — the
+  same errand the ADP drawer's own two-answers-to-one-question rules keep
+  closing. `features/shared/timeline-columns.ts` is the rule, pure and tested,
+  and five things hold it up:
+  - **What a rewind knows is the roster's *composition*, so exactly one question
+    survives: what are these players worth.** A board price prices an *asset*, so
+    summing today's KTC or ADP over the players somebody held then is a real
+    number and the one a rewind is usually opened for — it is how a trade is
+    judged after the fact. `REWINDABLE_METRICS` is that set, one set read at both
+    grains, since a team's column is the sum of the player column beside it.
+  - **A key is not rewindable until it is named there**, which is the direction
+    the default has to fail in: a metric added to either catalogue that quietly
+    read today's numbers under a past date is invisible on screen, where an em
+    dash is not.
+  - **The refusal is gated *before* the catalogue's own null path, and that is
+    not belt and braces.** `proj` with no outlook already says "No projection",
+    which is true of a league nothing could be projected for and misleading about
+    a moment that cannot have one. So the hover here says to press `Now`, which
+    is the thing a reader can act on. `TeamMetricContext.team` went nullable for
+    the same reason one layer down — there is no standings row at a past moment,
+    and `pf` says so itself rather than being handed a fabricated one.
+  - **The selection is the panel's own, under the panel's own stored keys**, so
+    "the columns the current view shows" holds by construction rather than by a
+    prop somebody has to keep threaded — and aiming a column here aims it there,
+    since both write one entry. The headings open the same `ColumnsEditor` the
+    panel does, which is what keeps the app's rule that a heading is the only way
+    to aim a column: a reader whose columns are all blank at this moment is one
+    press from two that answer.
+  - **The blanks are explained once, under both halves, and only where there are
+    any** (`timelineColumnNote`) — the `N of M` rule again, since a line saying
+    every column is fine would be a permanent band on the plate. It names the
+    columns rather than counting them, because "Proj and Bench" is what a reader
+    can act on where "2 columns" is not.
+
+  What it costs, stated rather than discovered: the two tables' *defaults* are a
+  projection and a record apiece, so a reader who has never aimed a column sees
+  four em dashes and the note. That is the honest answer — this app stores no
+  price history and no past standings — and the note is what turns it into a
+  next step.
 - **An open league card is one screen: pulled to the top, capped there, and
   scrolling inside itself** (in two places — see the bullet after this one). The
   panel is several hundred rows in a deep dynasty

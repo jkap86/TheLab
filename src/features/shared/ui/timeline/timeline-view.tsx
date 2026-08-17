@@ -172,10 +172,16 @@ export function TimelineView({
         />
       )}
 
-      {stop.back === 0 ? (
+      {/* The league the past half prices its rosters against. It comes off the
+          payload rather than from either host, since the sheet's rail is
+          anchored on a *trade* and only the timeline knows which league that
+          trade was in — and a stop past `now` cannot be reached before the
+          payload lands, so the fallback is unreachable rather than a state. */}
+      {stop.back === 0 || !data?.timeline ? (
         children
       ) : (
         <TimelineRosters
+          leagueId={data.timeline.league_id}
           rosters={rosters}
           players={data?.players ?? EMPTY_PLAYERS}
           managers={data?.managers ?? EMPTY_MANAGERS}
