@@ -55,7 +55,12 @@ export {
 } from "./optimal";
 export type { RosterPlayer, LineupSlot, LineupComparison } from "./optimal";
 export { medianLineups, medianScore } from "./median";
-export { orderLineupByKickoff, kickoffMoves } from "./kickoff-order";
+export {
+  orderLineupByKickoff,
+  kickoffMoves,
+  kickoffRanks,
+  KICKOFF_BUFFER_MS,
+} from "./kickoff-order";
 export type { KickoffSeat, KickoffPlayer, KickoffMove } from "./kickoff-order";
 export {
   SLOT_POSITIONS,

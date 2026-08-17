@@ -148,6 +148,9 @@ export type TeamWeekProjectionPayload = {
    * same function the matchups route counts {@link MatchupProjectionPayload.kickoff_moves}
    * with, so the card's count and the panel's marks cannot disagree.
    *
+   * "Earlier" carries an hour's buffer (`KICKOFF_BUFFER_MS`), so starters
+   * kicking off inside one window of each other are seated as they stand.
+   *
    * Null is "no answer", never "already ordered": a best-ball league (Sleeper
    * seats that lineup after the games), or a week the schedule supplies no
    * kickoff instants for. Already ordered is this array equal to `lineup`.
@@ -1021,6 +1024,10 @@ export type MatchupProjectionPayload = {
    * are one rule. Zero is a real answer — the lineup already locks
    * strict-seats-first — where null is no answer at all: a best-ball league,
    * or a week the schedule supplies no kickoff instants for.
+   *
+   * Kickoffs within an hour of each other count as one (`KICKOFF_BUFFER_MS`),
+   * so the Sunday 4:05 and 4:25 windows never generate a move on their own —
+   * a seat freed twenty minutes earlier frees no decision.
    */
   kickoff_moves: number | null;
 };
