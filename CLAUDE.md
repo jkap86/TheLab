@@ -770,6 +770,20 @@ comparator reads**, since a five-armed ordering written twice is two orderings.
     `app/api/read-failure.ts`). A 500 says stop asking, and asking again is
     exactly right when the database merely had no room. Applied at **every** route
     that catches a read, not just the ones seen to be slow.
+  - **A read that is only a bonus still fails as a failure.** Deciding an
+    enrichment is non-fatal is a decision about what the *client* does with it,
+    never a licence to answer `200 null` — `…/week` and `…/outlook` caught their
+    reads and sent one, so a database timeout arrived as a successful answer
+    holding nothing: the query client's retry never ran (no failure to retry),
+    the empty answer was cached as a good one for the whole stale time, and no
+    layer could tell it from a league that genuinely has nothing to project. Go
+    through `readResponse` (`app/api/read-response.ts`), which is
+    `withReadTiming` + `readFailureResponse` and nothing else. **A null body is
+    reserved for the domain saying "nothing"**, and a route whose loader cannot
+    return null has no null on the wire at all — `LeagueWeekPayload` is not
+    nullable because `getLeagueWeekView` isn't. The graceful half stays where it
+    always belonged: the enrichments are separate queries, so only the core's
+    error is the panel's error.
 
 ## Testing
 

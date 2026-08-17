@@ -10,6 +10,7 @@ import {
 import { fetchJson, fetchScoped } from "./api.ts";
 import { leagueDetailNeeds } from "./league-detail-needs.ts";
 import { LEAGUE_DETAIL_STALE_TIME, leagueQueryKeys } from "./league-query.ts";
+import { createQueryClient } from "./query-client.ts";
 import {
   createTestQueryClient,
   flush,
@@ -502,6 +503,100 @@ test("an enrichment that fails", async (t) => {
     assert.deepEqual(core.observer.getCurrentResult().data, { league_id: "123" });
     assert.equal(core.observer.getCurrentResult().status, "success");
     assert.equal(outlook.observer.getCurrentResult().status, "success");
+    mock.restore();
+  });
+
+  await t.test("is a failed query, not a successful empty one", async () => {
+    // The distinction the routes used to erase. `…/outlook` answered a broken
+    // read with `200 null`, which lands here as `status: "success"` holding
+    // null — the same result a league with no slots, no scoring settings or no
+    // weeks left legitimately produces. Nothing below this line could tell them
+    // apart, so a database busy for a second read as a league with nothing to
+    // project until the entry went stale.
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url) =>
+      url.includes("/outlook")
+        ? jsonResponse({ error: "The database is busy right now." }, 503)
+        : jsonResponse({ league_id: "123" }),
+    );
+
+    const outlook = mount(client, outlookOptions("123"));
+    await flush();
+
+    const result = outlook.observer.getCurrentResult();
+    assert.equal(result.status, "error");
+    // Nothing was cached as an answer: the panel draws its em dash off an
+    // *absent* value, which is a different thing from a null it was told to
+    // trust.
+    assert.equal(result.data, undefined);
+    mock.restore();
+  });
+
+  await t.test("a league with nothing to project is still a success", async () => {
+    // The other half, and the reason the fix is not "make every null an error":
+    // `…/outlook` genuinely answers null for a league it cannot project, and
+    // that is a 200 the client should keep, cache and never retry.
+    const client = createTestQueryClient();
+    const mock = installFetchMock(() => jsonResponse(null));
+
+    const outlook = mount(client, outlookOptions("123"));
+    await flush();
+
+    const result = outlook.observer.getCurrentResult();
+    assert.equal(result.status, "success");
+    assert.equal(result.data, null);
+    mock.restore();
+  });
+
+  await t.test("the configured retry runs on a failure and not on a null", async () => {
+    // What the `200 null` cost that is invisible from the outside: the client's
+    // one retry is spent on *failures*, so a transient 503 dressed as a success
+    // was never asked again — the panel simply stayed empty. Driven on the app's
+    // own retry setting rather than the tests' `retry: false`, since the setting
+    // is the thing being asserted.
+    const client = createQueryClient({
+      defaultOptions: { queries: { retry: 1, retryDelay: 0, gcTime: Infinity } },
+    });
+    const mock = installFetchMock((url) =>
+      url.includes("/outlook")
+        ? jsonResponse({ error: "The database is busy right now." }, 503)
+        : jsonResponse({ week: 5 }),
+    );
+
+    mount(client, outlookOptions("123"));
+    mount(client, weekOptions("124", 5));
+    await flush(50);
+
+    assert.equal(mock.countOf("/api/league/123/outlook"), 2);
+    // A 200 is an answer, and answers are not retried.
+    assert.equal(mock.countOf("/api/league/124/week"), 1);
+    mock.restore();
+  });
+
+  await t.test("a failure is not held as fresh the way an answer is", async () => {
+    // The last consequence of the old shape, and the one with the longest tail:
+    // a successful null sat in the cache for `LEAGUE_DETAIL_STALE_TIME`, so
+    // closing the card and opening it again inside five minutes served the
+    // failure back without asking anyone. A real failure has nothing to serve.
+    const client = createTestQueryClient();
+    const mock = installFetchMock((url, call) =>
+      call === 0
+        ? jsonResponse({ error: "The database is busy right now." }, 503)
+        : jsonResponse({ weeks: [5, 6], url }),
+    );
+
+    const first = mount(client, outlookOptions("123"));
+    await flush();
+    assert.equal(first.observer.getCurrentResult().status, "error");
+    first.unmount();
+
+    // The panel mounts on expand and unmounts on collapse — this is the reader
+    // closing the card and opening it again, well inside the stale time.
+    const second = mount(client, outlookOptions("123"));
+    await flush();
+
+    assert.equal(mock.countOf("/outlook"), 2);
+    assert.equal(second.observer.getCurrentResult().status, "success");
     mock.restore();
   });
 });

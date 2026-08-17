@@ -8,6 +8,7 @@ import type {
   LeagueOutlookPayload,
   LeagueValuesPayload,
   LeagueWeekPayload,
+  LeagueWeekViewPayload,
 } from "@/shared/contract";
 import { errorMessage } from "@/shared/util";
 
@@ -45,6 +46,18 @@ import { LEAGUE_DETAIL_STALE_TIME, leagueQueryKeys } from "./league-query";
  * failure costs the lineups; neither touches the rosters, because they are not
  * on the same response any more. Only the core's error is the panel's error.
  *
+ * **And each fails as a failure.** That is a claim about the routes rather than
+ * about these hooks — `…/week` and `…/outlook` used to catch a broken read and
+ * answer `200 null`, which arrived here as a *successful* query holding nothing.
+ * Nothing below could tell it from a league that genuinely has no outlook, the
+ * client's one retry never ran (there was no failure to retry), and the empty
+ * answer sat in the cache for `LEAGUE_DETAIL_STALE_TIME` — so a database busy
+ * for a second cost the panel its lineups for five minutes. They send a 503 or a
+ * 500 now (`app/api/read-response.ts`), so the query errors, retries once, and
+ * caches nothing; a legitimate null (a league with no slots, no scoring or no
+ * weeks left) is still a 200 and still a success. What the components see is
+ * unchanged either way — `?? null` below is what makes an em dash of both.
+ *
  * **The keys separate what genuinely varies.** Re-tuning the ADP board
  * re-fetches `values` and nothing else; stepping a week re-fetches `week` and
  * nothing else. Before this both were segments of one key, so either press
@@ -79,14 +92,24 @@ import { LEAGUE_DETAIL_STALE_TIME, leagueQueryKeys } from "./league-query";
  * supposed to run beside.
  */
 
-/** The panel's data, assembled from whichever of the four have answered. */
+/**
+ * The panel's data, assembled from whichever of the four have answered.
+ *
+ * **The nulls here are the client's, not the wire's**, which is the distinction
+ * the routes stopped blurring: an enrichment that is still in flight, was never
+ * asked for, or *failed* all read as "nothing to draw yet" to a component, and
+ * that collapse is right — the columns draw an em dash either way. What must not
+ * collapse is the layer underneath, where a failed request has to stay a failed
+ * request so the retry runs and nothing caches it as an answer. So the query
+ * keeps its own status and this is a projection of it.
+ */
 export type LeagueDetailResult = LeagueCorePayload & {
   /** Empty maps until the values read lands — the columns draw em dashes. */
   values: LeagueValuesPayload;
-  /** Null until the outlook lands, and null again if it failed. */
+  /** Null until the outlook lands, if it failed, or if the league has none. */
   outlook: LeagueOutlookPayload;
-  /** Null on a season panel, and until a week panel's week lands. */
-  week_view: LeagueWeekPayload;
+  /** Null on a season panel, until a week panel's week lands, and if it failed. */
+  week_view: LeagueWeekViewPayload | null;
 };
 
 export type LeagueDetailState = {
