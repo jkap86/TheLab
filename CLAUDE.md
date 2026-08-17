@@ -1090,6 +1090,27 @@ that does nothing.
 - **A modal that refocuses itself must not depend on its callers' callbacks.** An
   open effect holding `onClose` in its deps re-runs on every keystroke and takes
   focus off whatever is in use. Put the callback in a ref.
+- **A combobox has exactly one focusable part, and it is the field.** The
+  suggestions are `<li role="option">` named through `aria-activedescendant`
+  (`features/shared/combobox.ts` — the keyboard, and *both ends* of the id pair,
+  since that reference is a string match with no compiler link behind it). **A
+  focusable descendant inside a `role="option"` is the bug to recognise**: it is
+  a tab stop per suggestion, and Enter on it fires a `click` where a popup
+  listening for `pointerdown` selects nothing at all. Four rules hold the rest
+  up. **`aria-expanded` and `aria-controls` follow what is *rendered***, not what
+  the reader last intended — a field permanently naming an unmounted listbox is a
+  broken relationship rather than a closed one, so "not dismissed" and "has
+  something to show" are two facts and only their conjunction is a popup.
+  **Selection is a `click` on the option, and the popup swallows the default of
+  `mousedown` to make that possible** — without it the field blurs, the list
+  unmounts, and the click lands on nothing; acting on `pointerdown` instead is
+  what makes a touch drag to scroll select whatever it started on, since the
+  compatibility `mousedown` is only synthesised for a real tap. **Tab is the one
+  press a combobox must not consume**, and a focus leaving the field is what
+  closes the popup — a pointer going down outside closes it too, since a tap on
+  inert page furniture does not reliably blur a field on iOS. And **Home, End and
+  Space stay the text field's**, or the reader cannot edit what they are
+  searching for.
 - **A render-body latch is the bug to recognise.** `if (open && !everOpened)
   setEverOpened(true)` in a render body is legal, so nothing catches it — and it
   re-runs the whole subtree synchronously before React commits, in the frame
