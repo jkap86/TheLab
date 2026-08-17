@@ -197,6 +197,37 @@ ten callers arriving on a cold key run one computation. Six rules:
   Postgres stays the source of truth. Nothing here wants Redis; it would put a
   network hop on the hot path.
 
+**A cached read that joins several datasets is cached per dataset and gated per
+field.** A comps season pool is that season's stat lines and profiles, one entry
+every board shares; KTC, KTC history, ADP and the NFL draft each take an entry of
+their own per season and are loaded only where the board being run weighs a field
+whose catalogue entry `reads` them (`comps/enrichment.ts`, the `Metric.reads`
+rule one layer down). Every market field defaults to weight 0, so the *typical*
+request was paying for four aggregates per stored season and reading none of
+them. Four rules hold it up. The gate reads the **effective** board — defaults
+resolved against the subject's position, zero weights already dropped — never the
+catalogue, so a field existing is not a dataset being fetched. The **merged**
+corpus is deliberately *not* cached: it is a fresh row per player-season per
+combination of datasets, and it would hand `withCareerValues`'s single memo slot a
+different corpus per board, so the merge runs per request and **after** that pass
+(the two commute — career values are arithmetic over games and points). **What a
+payload prints is a different question from what a field compares**: the comps
+route reads the draft crosswalk for the dozen rows it is about to send, where
+`draft_capital` is a dimension over every player-season on file. And the datasets
+are grouped by **source** rather than by field — dynasty and redraft ADP are one
+name because they come off one query.
+
+**A tool whose fan-out is seasons × datasets needs an admission of its own.**
+`compsReadAdmission` bounds this process's comps reads at `databaseBudget().fanout`
+— a share of the pool, `MANAGER_SYNC_LIMIT`'s own derivation — because neither
+factor is a constant and the per-walk bound beside it
+(`COMPS_SEASON_BUILD_CONCURRENCY`) is per request rather than per process. Two
+rules: a slot wraps **one** `pool.query`-shaped call and nothing else (a loader
+resolves the ids it needs *before* admitting, or a full limiter is a queue waiting
+on itself), and a read that carries its own limiter is **not** wrapped again —
+`getDraftAdpForPlayers` takes `adpComputeAdmission`, and nesting the two holds a
+comps slot across a wait for an ADP slot.
+
 **The ranks read is split at the work, not at the route.** Its expensive half is
 the projections; the cheap half comes off rosters it already fetched, and the
 record ledge needs the standing whatever the stat columns say. So
@@ -1116,6 +1147,25 @@ that does nothing.
   spending a second slot on a metric already on screen. **`reset` is what makes
   the persistence safe to have** — it clears the key rather than writing today's
   defaults into it, since what a table opens with is the catalogue's to change.
+- **A default put back by hand is not a customization, on either half of a
+  stored preference.** `setPositionWeights` drops the entry when the board equals
+  the position's defaults, exactly as `setPositionWindows` already did for its
+  half — normalized on the way in as well as out, since a blob written by an
+  older build is still in readers' browsers and a board is not customized on the
+  strength of which build wrote it. The tell that it is missing: a lit "customize"
+  key over an untouched board, and a Reset that does nothing visible.
+- **A debounce is per subject, and a change of subject skips it.** Debouncing an
+  edit is right — a drag across a slider is one request, and the rows on screen
+  still answer the player named above them. It is wrong across a change of
+  *subject*, where the state that identifies the subject moves on the press and
+  the debounced state lags it: comps boards are per position, so picking a
+  quarterback mid-edit built a request pairing the new subject with the previous
+  position's weights, and the answer landed in its own cache entry under its own
+  key rather than merely flickering. The fix is a **derivation**
+  (`comps/board-settle.ts`): what the request is built from is computed during
+  render from the settled board *and* the current position, so it cannot be a
+  frame behind; the settled state catching up afterwards only moves the baseline
+  the next edit is measured against.
 - **A list-wide selection is named once above the list, never on every card**, at
   *every* width — a heading rail on a laptop and per-card labels on a phone is
   one list being two products either side of a breakpoint. What legitimately

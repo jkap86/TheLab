@@ -33,6 +33,27 @@ export type CompsPosition = (typeof COMPS_POSITIONS)[number];
 
 export type CompsFieldFamily = "production" | "profile" | "market";
 
+/**
+ * The datasets a field can need *beyond* the season's own stat lines and the
+ * player profiles every board reads — one name per expensive read the pool
+ * would otherwise make for everybody.
+ *
+ * Each is a separate read against a table this module doesn't own, and each is
+ * loaded only where a field carrying its name has a positive weight
+ * (`requiredCompsEnrichments`). They are grouped by *source* rather than by
+ * field, which is why dynasty and redraft ADP are one name: both come off the
+ * single `getDraftAdpForPlayers` answer, so splitting them would name two
+ * enrichments over one query.
+ */
+export const COMPS_ENRICHMENTS = [
+  "ktc",
+  "ktc_history",
+  "adp",
+  "draft",
+] as const;
+
+export type CompsEnrichment = (typeof COMPS_ENRICHMENTS)[number];
+
 export type CompsField = {
   /** The wire spelling — what `fields=` names and result payloads key on. */
   key: string;
@@ -87,6 +108,21 @@ export type CompsField = {
    */
   perGame: boolean;
   /**
+   * Which enrichment datasets this field's value comes out of — the
+   * `Metric.reads` rule applied to the comparison catalogue, and here for the
+   * same reason: **a board nobody has aimed at an expensive dataset must not
+   * pay for it.** Empty for everything answered by the season's stat lines and
+   * the player profiles, which is every default board.
+   *
+   * **Required, so a new field cannot forget**, and **declared rather than
+   * inferred from `family`** — what a bay is called has no business deciding
+   * whether a query is made, and the market family already spans three
+   * different sources. `enrichment.test.ts` pins the agreement from the other
+   * end: a field naming no dataset must answer with none of them loaded, and a
+   * field naming one must go null without it.
+   */
+  reads: readonly CompsEnrichment[];
+  /**
    * Default weight per position, 0–100. A position absent here defaults the
    * field to 0 — which is why every market field's map is empty: a defaulted
    * market field would silently exclude every unpriced player from everyone's
@@ -105,6 +141,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "pass_att",
     perGame: true,
+    reads: [],
     defaultWeights: { QB: 80 },
   },
   {
@@ -113,6 +150,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "pass_cmp",
     perGame: true,
+    reads: [],
     defaultWeights: { QB: 40 },
   },
   {
@@ -121,6 +159,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "pass_yd",
     perGame: true,
+    reads: [],
     defaultWeights: { QB: 100 },
   },
   {
@@ -129,6 +168,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "pass_td",
     perGame: true,
+    reads: [],
     defaultWeights: { QB: 80 },
   },
   {
@@ -137,6 +177,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "pass_int",
     perGame: true,
+    reads: [],
     defaultWeights: { QB: 40 },
   },
   {
@@ -146,6 +187,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     statKey: "pass_air_yd",
     gated: true,
     perGame: true,
+    reads: [],
     defaultWeights: {},
   },
   {
@@ -154,6 +196,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rush_att",
     perGame: true,
+    reads: [],
     defaultWeights: { RB: 100 },
   },
   {
@@ -162,6 +205,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rush_yd",
     perGame: true,
+    reads: [],
     // A quarterback's rushing profile is part of what kind of quarterback he
     // is — the one field whose default varies by position rather than merely
     // applying to several.
@@ -173,6 +217,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rush_td",
     perGame: true,
+    reads: [],
     defaultWeights: { RB: 60 },
   },
   {
@@ -181,6 +226,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     derived: true,
     perGame: false,
+    reads: [],
     defaultWeights: {},
   },
   {
@@ -189,6 +235,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rec_tgt",
     perGame: true,
+    reads: [],
     defaultWeights: { WR: 100, TE: 100, RB: 60 },
   },
   {
@@ -197,6 +244,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rec",
     perGame: true,
+    reads: [],
     defaultWeights: { WR: 80, TE: 80, RB: 60 },
   },
   {
@@ -205,6 +253,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rec_yd",
     perGame: true,
+    reads: [],
     defaultWeights: { WR: 100, TE: 100, RB: 40 },
   },
   {
@@ -213,6 +262,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rec_td",
     perGame: true,
+    reads: [],
     defaultWeights: { WR: 60, TE: 60 },
   },
   // Air yards, gated on the season's vocabulary — the one production key in
@@ -227,6 +277,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     statKey: "rec_air_yd",
     gated: true,
     perGame: true,
+    reads: [],
     defaultWeights: {},
   },
   // Snaps, gated on the same terms as air yards — `stats/parse.ts` promises
@@ -241,6 +292,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     statKey: "off_snp",
     gated: true,
     perGame: true,
+    reads: [],
     defaultWeights: {},
   },
   // The two usage shares — the player's count over his team's count in the
@@ -253,6 +305,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     derived: true,
     perGame: false,
+    reads: [],
     defaultWeights: {},
   },
   // Snap share — the player's offensive snaps over his team's, read off each
@@ -267,6 +320,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     derived: true,
     requires: ["off_snp", "tm_off_snp"],
     perGame: false,
+    reads: [],
     defaultWeights: {},
   },
   // Targets per snap — how often being on the field turned into a look, which
@@ -280,6 +334,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     derived: true,
     requires: ["off_snp"],
     perGame: false,
+    reads: [],
     defaultWeights: {},
   },
   {
@@ -288,6 +343,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "fum_lost",
     perGame: true,
+    reads: [],
     // Available, never defaulted: a count this small is mostly noise at season
     // grain, and a default that adds noise to every first board earns nothing.
     defaultWeights: {},
@@ -299,6 +355,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "Age",
     family: "profile",
     perGame: false,
+    reads: [],
     defaultWeights: { QB: 60, RB: 60, WR: 60, TE: 60 },
   },
   // Where the player went in the *NFL* draft, as draft capital rather than as
@@ -323,6 +380,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "Draft capital",
     family: "profile",
     perGame: false,
+    reads: ["draft"],
     defaultWeights: {},
   },
   // Career-to-date production entering the season, derived from the pool's own
@@ -336,6 +394,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "Career PPR/g",
     family: "profile",
     perGame: false,
+    reads: [],
     defaultWeights: {},
   },
   {
@@ -343,6 +402,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "Prev 3 seasons PPR/g",
     family: "profile",
     perGame: false,
+    reads: [],
     defaultWeights: {},
   },
 
@@ -354,6 +414,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "KTC (Superflex)",
     family: "market",
     perGame: false,
+    reads: ["ktc"],
     defaultWeights: {},
   },
   {
@@ -361,6 +422,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "KTC (1QB)",
     family: "market",
     perGame: false,
+    reads: ["ktc"],
     defaultWeights: {},
   },
   // KTC's history read at the same anchor: the career-high superflex value on
@@ -372,6 +434,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "KTC peak (SF)",
     family: "market",
     perGame: false,
+    reads: ["ktc_history"],
     defaultWeights: {},
   },
   {
@@ -379,6 +442,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "KTC 90-day trend (SF)",
     family: "market",
     perGame: false,
+    reads: ["ktc_history"],
     defaultWeights: {},
   },
   {
@@ -386,6 +450,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "ADP (Dynasty)",
     family: "market",
     perGame: false,
+    reads: ["adp"],
     defaultWeights: {},
   },
   {
@@ -393,6 +458,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "ADP (Redraft)",
     family: "market",
     perGame: false,
+    reads: ["adp"],
     defaultWeights: {},
   },
 ];

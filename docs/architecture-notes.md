@@ -297,6 +297,57 @@ against a pool connection. Six rules hold it up:
   computation of an answer that was about to expire. Nothing here wants Redis; it
   would put a network hop on the hot path.
 
+**A cached answer joining several datasets should be cached per dataset, and the
+comps pool is the case that made the argument.** Its entry per season used to
+hold everything a comparison could weigh: the season's stat lines and the player
+profiles behind them, plus a KTC snapshot, a KTC history aggregate, an ADP
+average and the NFL draft crosswalk. Six reads per season, and
+`collectSeasonPools` builds four seasons at once, so a cold process answering one
+request opened more concurrent statements than the pool has connections.
+
+What made that indefensible rather than merely expensive is *who was paying*.
+Every market field defaults to weight 0 — deliberately, because a defaulted
+market field silently excludes every unpriced player from everyone's first result
+set — so the typical request, the one a reader makes by picking a player and
+pressing nothing, fetched four aggregates per stored season and read none of
+them. The picker's own list was worse: `/api/comps/players` folded the same
+pools to print a name, a position and a team, none of which come from any of it.
+
+The split follows the shape of the question. The pool is now the two reads every
+board makes; each dataset is its own entry per season; and the catalogue says
+which fields come out of which (`CompsField.reads`, required so a new field
+cannot forget, and declared rather than inferred from `family` — the market
+family spans three different queries and the one profile field that costs a query
+is not in it). `requiredCompsEnrichments` reads the **effective** board, so a
+field existing in the catalogue is not a dataset being fetched and a field
+switched off does not drag one in behind it.
+
+Two decisions inside that are worth keeping. **The merged corpus is not cached**,
+which looks like the obvious next step and isn't: it is a fresh row and a fresh
+`values` object for every player-season on file, per combination of datasets in
+use, to save a `map` over rows already in memory — and it would give
+`withCareerValues`'s single memo slot a different corpus per board, so two
+readers on different boards would take turns rebuilding the career pass over the
+whole archive. So the merge runs per request and *after* that pass, which is safe
+because the two commute: career values are arithmetic over games and points, and
+no market dataset touches either. It is the same trade `withWindowValues` already
+makes, for the same reason. **And what a payload prints is a different question
+from what a field compares**: a comps row shows where each player went in the
+draft, which is metadata on a dozen rows, where `draft_capital` is a dimension
+over the whole corpus. Reading the second to print the first is what put the
+draft crosswalk on every default board; the route now reads the picks of the rows
+it is about to send.
+
+The bound underneath all of it is `compsReadAdmission`, at
+`databaseBudget().fanout`. The per-walk constant beside it
+(`COMPS_SEASON_BUILD_CONCURRENCY`) bounds one cold corpus and cannot bound two
+readers, which is the arithmetic `sleeper/limiter` already made once: local
+bounds do not add up. A slot wraps one query-shaped call and nothing else — the
+ADP and draft loaders resolve the season's ids *before* admitting, since awaiting
+another admitted read from inside a slot is, with every slot taken, a queue
+waiting on itself — and `getDraftAdpForPlayers` is left unwrapped because it
+carries `adpComputeAdmission` of its own.
+
 **And the ranks read is split at the work, not at the route.** Its expensive half
 is the projections; its cheap half (the standing, the points rank) comes straight
 off rosters it has already fetched, and the record ledge on every card needs the

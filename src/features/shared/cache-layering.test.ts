@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { COMPS_POOL_CACHE } from "../../shared/comps/read-cache.ts";
+import {
+  COMPS_PLAYER_INDEX_CACHE,
+  COMPS_POOL_CACHE,
+} from "../../shared/comps/read-cache.ts";
 import {
   ADP_BOARD_CACHE,
   ADP_PLAYER_BOARD_CACHE,
@@ -112,6 +115,12 @@ const LAYERS = [
     client: COMPS_STALE_TIMES.result,
     server: COMPS_POOL_CACHE.ttlMs,
     cost: "an assembled pool per stored season, every season per request",
+  },
+  {
+    what: "the comps picker's list",
+    client: COMPS_STALE_TIMES.players,
+    server: COMPS_PLAYER_INDEX_CACHE.ttlMs,
+    cost: "a DISTINCT over every stored stat line, plus the profiles behind it",
   },
 ] as const;
 

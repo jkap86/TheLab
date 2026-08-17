@@ -16,6 +16,7 @@ import type {
 import type {
   CompsBasis,
   CompsFieldFamily,
+  CompsPlayerOption,
   CompsPosition,
   CompsWindowKey,
 } from "@/shared/comps";
@@ -1643,16 +1644,16 @@ export type CompsPayload = {
   results: CompsResultRowPayload[];
 };
 
-/** One pickable subject: a supported-position player with stored stats. */
-export type CompsPlayerOptionPayload = {
-  player_id: string;
-  name: string;
-  position: CompsPosition;
-  /** Current team, as on every comps row. */
-  team: string | null;
-  /** The seasons this player has stored stats in, newest first. */
-  seasons: string[];
-};
+/**
+ * One pickable subject: a supported-position player with stored stats.
+ *
+ * The domain type, aliased rather than restated — this shape is decided by the
+ * fold that builds it (`foldCompsPlayerIndex`), and a second declaration of it
+ * here would be exactly the drift this module exists to stop: the compiler
+ * cannot see two structurally identical types disagreeing about what a field
+ * means.
+ */
+export type CompsPlayerOptionPayload = CompsPlayerOption;
 
 /** `GET /api/comps/players` — the picker list, supported positions only. */
 export type CompsPlayersPayload = {
