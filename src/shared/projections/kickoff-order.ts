@@ -23,6 +23,15 @@
  * arrangement keeping the most players in their current seats wins, so equal
  * kickoffs and equal-breadth seats never generate gratuitous moves.
  *
+ * **The rank is bucketed at an hour ({@link kickoffRanks}), not read off the
+ * instants.** What a broader seat buys is the *time* it stays open, so two
+ * kickoffs twenty minutes apart are one seat's worth of flexibility, and asking
+ * a manager to trade seats over them is a press that buys nothing. The NFL's
+ * Sunday late window is exactly this case — 4:05 and 4:25 ET are two kickoffs
+ * and one decision — and it is the common one, so without the buffer the column
+ * read `2 to move` on lineups nobody would have moved, which is how a verdict
+ * column stops being read at all.
+ *
  * Pure and free of runtime imports for the usual two reasons: Node's test
  * runner resolves only relative `.ts` imports, and client code may deep-import
  * a pure module without dragging `pg` into the bundle. Eligibility and slot
@@ -31,6 +40,54 @@
  */
 
 import { breadth, eligible } from "./optimal.ts";
+
+/**
+ * How far apart two kickoffs have to be before moving a seat between them is
+ * worth a manager's press.
+ *
+ * An hour, which is a judgement about *news* rather than about the schedule: the
+ * pivots a held flex is being held for — a late scratch, a surprise inactive,
+ * a beat writer at warm-ups — break in the couple of hours before a game, so a
+ * seat freed twenty minutes earlier frees nothing anyone could act on. It is a
+ * bound on what the ordering will *ask for*, never on what it knows: the
+ * instants themselves are untouched, and the lock (`./locks`) still settles a
+ * seat to the minute.
+ */
+export const KICKOFF_BUFFER_MS = 60 * 60 * 1000;
+
+/**
+ * Kickoff instant → its rank in the week, with instants inside
+ * {@link KICKOFF_BUFFER_MS} of each other sharing one rank. Duplicates and the
+ * order the instants arrive in make no difference to the answer.
+ *
+ * **A bucket is measured from the instant that opened it, not from the one
+ * before it**, and that is the whole subtlety. Chaining — a new bucket whenever
+ * the *gap* to the previous instant clears the buffer — is transitive, so a week
+ * of games fifty minutes apart collapses to a single rank however many hours it
+ * spans, and the buffer would silently switch the whole ordering off. Measuring
+ * from the anchor bounds every bucket at one buffer wide, which costs the pair
+ * straddling a boundary (55 minutes apart, one rank each): they are separated by
+ * *less* than the buffer and still generate a move. That is the honest trade —
+ * the failure is one move too many at a boundary rather than the feature
+ * quietly ceasing to work — and it is invisible on a real schedule, where the
+ * NFL's windows sit hours apart and the pairs this exists for (4:05 and 4:25)
+ * are minutes apart inside one of them.
+ */
+export function kickoffRanks(instants: readonly number[]): Map<number, number> {
+  const ranks = new Map<number, number>();
+
+  let anchor: number | null = null;
+  let rank = -1;
+  for (const at of [...new Set(instants)].sort((a, b) => a - b)) {
+    if (anchor === null || at - anchor >= KICKOFF_BUFFER_MS) {
+      anchor = at;
+      rank += 1;
+    }
+    ranks.set(at, rank);
+  }
+
+  return ranks;
+}
 
 /** One seat of a lineup: the slot, and who is in it (null for an empty seat). */
 export type KickoffSeat = { slot: string; player_id: string | null };
@@ -52,7 +109,10 @@ export type KickoffPlayer = {
 /**
  * Re-seat a starting lineup so it locks strict-seats-first: the same seats in
  * the same order, the same starters, with earlier kickoffs moved into stricter
- * slots and later ones into broader slots wherever eligibility allows.
+ * slots and later ones into broader slots wherever eligibility allows — where
+ * "earlier" is by {@link KICKOFF_BUFFER_MS}, so a lineup whose starters all play
+ * inside one hour of each other is already in order however their instants
+ * differ.
  *
  * The set of starters is never changed — a player only ever moves to another
  * seat — and a seat is *held* exactly as it stands (its player out of the
@@ -99,10 +159,11 @@ export function orderLineupByKickoff({
 
   const pool = movable.map((i) => byId.get(lineup[i].player_id as string) as KickoffPlayer);
 
-  // Ranks rather than instants: two players sharing a kickoff share a rank, so
-  // they are truly interchangeable and the stay bonus keeps both where they are.
-  const instants = [...new Set(pool.map((p) => p.kickoff as number))].sort((a, b) => a - b);
-  const rankOf = new Map(instants.map((at, rank) => [at, rank]));
+  // Ranks rather than instants: two players kicking off within the buffer share
+  // a rank, so they are interchangeable to the objective and the stay bonus
+  // keeps both where they are. A whole lineup landing in one bucket leaves the
+  // primary term constant, and the same bonus holds every seat.
+  const rankOf = kickoffRanks(pool.map((p) => p.kickoff as number));
 
   // The stay bonus is a strict tie-break: at most n are collectable, so scaling
   // the primary term by n + 1 keeps one unit of kickoff order worth more than

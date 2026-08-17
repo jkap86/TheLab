@@ -1800,3 +1800,27 @@ stops holding, a comment saying it does would not have caught it.
   looks wrong and diffs against a sane current lineup as pointless moves. So the
   answer is canonicalised: better player to the stricter slot, and among equally
   strict slots to the earlier one.
+- **The kickoff re-seat ranks its instants in hour buckets, not by the clock**
+  (`KICKOFF_BUFFER_MS`, `projections/kickoff-order`). What a broader seat buys
+  is the *time* it stays open, and the pivots it is being held for — a late
+  scratch, a surprise inactive, a beat writer at warm-ups — break in the hours
+  before a game, so a flex freed twenty minutes earlier frees no decision. The
+  NFL's Sunday late window is exactly that: 4:05 and 4:25 ET are two kickoffs
+  and one decision, and reading the instants straight lit the lineup checker's
+  Kickoff column with `2 to move` on lineups nobody would have moved — a
+  verdict column that fires on everything is one nobody checks.
+
+  **A bucket is measured from the instant that opened it, never from the one
+  before it**, which is the whole subtlety and the one thing not to "simplify".
+  Chaining on the gap to the previous instant is transitive, so a week of games
+  fifty minutes apart collapses to one rank however many hours it spans, and
+  the buffer silently switches the entire ordering off. The anchor bounds every
+  bucket at one buffer wide; what that costs is the pair straddling a boundary
+  — 55 minutes apart, one rank each, so still a move — which is the honest side
+  to fail on (one move too many at a boundary, rather than the feature quietly
+  ceasing to work) and does not arise on a real schedule, where the windows sit
+  hours apart and the pairs this exists for are minutes apart inside one.
+
+  It bounds what the ordering *asks for* and nothing it knows: the instants are
+  untouched and the game lock (`projections/locks`) still settles a seat to the
+  minute, so nothing here can name a move Sleeper would refuse.
