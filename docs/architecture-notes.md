@@ -338,15 +338,69 @@ over the whole corpus. Reading the second to print the first is what put the
 draft crosswalk on every default board; the route now reads the picks of the rows
 it is about to send.
 
-The bound underneath all of it is `compsReadAdmission`, at
+The bound underneath all of it is the process's heavy-read admission, at
 `databaseBudget().fanout`. The per-walk constant beside it
 (`COMPS_SEASON_BUILD_CONCURRENCY`) bounds one cold corpus and cannot bound two
 readers, which is the arithmetic `sleeper/limiter` already made once: local
 bounds do not add up. A slot wraps one query-shaped call and nothing else — the
 ADP and draft loaders resolve the season's ids *before* admitting, since awaiting
 another admitted read from inside a slot is, with every slot taken, a queue
-waiting on itself — and `getDraftAdpForPlayers` is left unwrapped because it
-carries `adpComputeAdmission` of its own.
+waiting on itself.
+
+**And that arithmetic caught the app a second time, between the two limiters
+rather than inside either.** Comps took a third of the pool and ADP took a third
+of the pool, each cap defensible, neither aware of the other — so a cold custom
+board weighing KTC, ADP and draft capital held three comps reads *and* started
+three ADP computations: six of ten connections spent by one reader, both bounds
+intact, and the league panel, the trades board and the crawler queueing on
+`pool.connect()` behind a tool nobody else was using. Two caps that each hold are
+not a bound on the thing the pool feels, which is the *total*.
+
+So there is one budget (`shared/db/heavy-admission`) and the two names are views
+onto the same object: `compsReadAdmission === adpComputeAdmission`. Three things
+make that safe rather than merely tidier. **The nesting rule hardens instead of
+relaxing** — with one limiter, wrapping `getDraftAdpForPlayers` inside a comps
+slot is not two limiters stacked but the *same* limiter acquired twice, which at
+the limit is a queue waiting on itself; so comps still resolves its ids, releases
+its slot and only then asks ADP. **The backstop is enforced rather than written
+down**: `run` carries the held slot in an `AsyncLocalStorage`, so a future caller
+that does nest is passed through on the slot it already holds — served at its
+outer concurrency rather than wedged, silently, under exactly the load the budget
+exists for. And **the tests assert the total, not each subsystem**: the
+arrangement this replaced passes every per-subsystem assertion there is, so
+`heavy-admission.test.ts` starts comps reads and ADP boards together and asserts
+what is in flight across both. The two variables the budget absorbed
+(`COMPS_READ_LIMIT`, `ADP_COMPUTE_LIMIT`) still configure it, tightest first,
+because each was somebody asking for less heavy work at once.
+
+**A cache whose keys age at different speeds needs a TTL per key, and the cost of
+one clock was a cliff rather than a staleness.** Comps walks every stored season
+on every request, so the working set *is* the archive — ~27 seasons, two reads
+each before any dataset, reaching back to `STATS_ARCHIVE_FLOOR_SEASON` (2000). On
+one fifteen-minute clock the whole corpus was rebuilt four times an hour to
+re-learn numbers that for 2008 have not moved in seventeen years; and because the
+entries are populated in one walk they expired in one instant, so the bill went
+to a single unlucky reader. `BoundedCache.set` therefore takes an optional
+`ttlMs` and `getCompsSeasonTtlMs` chooses it: fifteen minutes for the current
+season (still the floor the browser's five-minute stale time needs), six hours
+for last season, a day for the archive, plus a deterministic spread of up to a
+quarter of the tier keyed on the entry — so a season's pool and its four datasets
+do not come back together, and no jitter makes a test a coin toss. A day rather
+than forever, because the app really does correct history: an archive week that
+answered empty is re-probed, a refused payload is retried. Where the stats sync
+and the reader share a process, `onStatsSeasonWritten` → `forgetCompsSeason`
+makes such a correction visible on the next request; the day is the backstop for
+a deployment where they don't, which is the trade every per-process cache here
+already makes.
+
+**And a cache bound should state its invariant rather than fit today's numbers.**
+The enrichment cache held 128 entries against a working set of seasons × dataset
+families — 27 × 4 = 108, comfortable, and 33 × 4 = 132 six years from now, at
+which point a corpus every request walks end to end would evict and recompute
+continuously with nothing failing. It is `COMPS_MAX_SEASONS *
+COMPS_ENRICHMENTS.length` now, so a fifth family or a deeper archive moves the
+bound with it, and the test drives a full corpus through both caches rather than
+asserting the arithmetic twice.
 
 **And the ranks read is split at the work, not at the route.** Its expensive half
 is the projections; its cheap half (the standing, the points rank) comes straight

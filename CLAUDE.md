@@ -217,16 +217,41 @@ route reads the draft crosswalk for the dozen rows it is about to send, where
 are grouped by **source** rather than by field — dynasty and redraft ADP are one
 name because they come off one query.
 
-**A tool whose fan-out is seasons × datasets needs an admission of its own.**
-`compsReadAdmission` bounds this process's comps reads at `databaseBudget().fanout`
-— a share of the pool, `MANAGER_SYNC_LIMIT`'s own derivation — because neither
-factor is a constant and the per-walk bound beside it
-(`COMPS_SEASON_BUILD_CONCURRENCY`) is per request rather than per process. Two
-rules: a slot wraps **one** `pool.query`-shaped call and nothing else (a loader
-resolves the ids it needs *before* admitting, or a full limiter is a queue waiting
-on itself), and a read that carries its own limiter is **not** wrapped again —
-`getDraftAdpForPlayers` takes `adpComputeAdmission`, and nesting the two holds a
-comps slot across a wait for an ADP slot.
+**A tool whose fan-out is seasons × datasets needs an admission of its own, and
+there is exactly one for every expensive analytical read on the dyno.**
+`shared/db/heavy-admission` bounds them at `databaseBudget().fanout` — a share of
+the pool, `MANAGER_SYNC_LIMIT`'s own derivation — because neither factor is a
+constant and the per-walk bound beside it (`COMPS_SEASON_BUILD_CONCURRENCY`) is
+per request rather than per process. **`compsReadAdmission` and
+`adpComputeAdmission` are that one object under two names**, because two
+independent thirds of the pool are two thirds of the pool: a cold comps board
+weighing ADP held three comps reads *and* started three ADP computations, both
+caps intact and every other route queueing on `pool.connect()`. Four rules. A slot
+wraps **one** `pool.query`-shaped call and nothing else (a loader resolves the ids
+it needs *before* admitting, or a full limiter is a queue waiting on itself). A
+read that admits for itself is **not** wrapped again — `getDraftAdpForPlayers`
+takes this same budget, so wrapping it is one limiter acquired twice, which at the
+limit is a deadlock rather than a slow page. That is enforced as well as written
+down: `run` carries the held slot in an `AsyncLocalStorage`, so a caller that does
+nest is passed through on the slot it already holds. And the **total** is what a
+test asserts — the arrangement this replaced passes every per-subsystem assertion
+there is. `DB_HEAVY_READ_LIMIT` configures it; `COMPS_READ_LIMIT` and
+`ADP_COMPUTE_LIMIT` are still honoured as aliases, tightest first.
+
+**A cache whose keys age at different speeds takes a TTL per key.**
+`BoundedCache.set`/`TtlPromiseCache.read` accept one; `getCompsSeasonTtlMs`
+chooses it per season, since comps walks the whole archive on every request and
+one fifteen-minute clock rebuilt seasons that have not moved in seventeen years —
+four times an hour, all at once, on whichever reader arrived first. Live season
+fifteen minutes (the floor the browser's stale time needs), last season six hours,
+older a day, plus a **deterministic** spread of up to a quarter of the tier keyed
+on the *entry* — random jitter makes the test a coin toss, and a season's pool and
+its datasets must not expire together. **A day rather than forever**, because
+history really is corrected here; `onStatsSeasonWritten` → `forgetCompsSeason`
+makes a correction visible at once where the sync and the reader share a process,
+and the day is the backstop where they don't. **A cache bound states its
+invariant**: the enrichment cache is `COMPS_MAX_SEASONS × COMPS_ENRICHMENTS.length`,
+not a number that happens to fit this year's corpus.
 
 **The ranks read is split at the work, not at the route.** Its expensive half is
 the projections; the cheap half comes off rosters it already fetched, and the

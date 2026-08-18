@@ -28,6 +28,17 @@
  * `shared/trades/cache` re-exports it under the name its own consumers, their
  * tests among them, already read it by.
  *
+ * **A TTL per entry, where the entry knows better than the cache.** The
+ * constructor's `ttlMs` is the policy for everything stored without an opinion,
+ * and stays the common case. What it cannot express is a cache whose keys age
+ * at different speeds: the comps corpus holds one entry per NFL season, and the
+ * current season's stat lines move weekly while 2008's have not moved in
+ * seventeen years — on one clock, either the live season goes stale or the
+ * whole archive is rebuilt every quarter of an hour. So `set` takes an optional
+ * `ttlMs`, applied to that entry alone. Nothing else changes: expiry is still
+ * checked on read, eviction is still LRU-ish over one map, and a caller that
+ * passes nothing gets exactly what it got before.
+ *
  * Note what it deliberately does *not* do: nothing here dedupes concurrent
  * misses, so two requests arriving together on a cold key both compute. That is
  * the right trade for a value this cheap to recompute and this awkward to key a
@@ -61,9 +72,20 @@ export class BoundedCache<V> {
     return hit.value;
   }
 
-  set(key: string, value: V): void {
+  /**
+   * Store `value` under `key`, for `options.ttlMs` if the caller has an opinion
+   * about this entry and the cache's own TTL otherwise.
+   *
+   * The lifetime is fixed at insertion rather than extended by reads, which is
+   * deliberate: these caches stand in front of tables background syncs replace,
+   * so an entry read every second must still go back to Postgres on the clock
+   * its data moves on — a sliding expiry would let a popular key answer from a
+   * snapshot indefinitely.
+   */
+  set(key: string, value: V, options?: { ttlMs?: number }): void {
+    const ttlMs = options?.ttlMs ?? this.ttlMs;
     this.entries.delete(key);
-    this.entries.set(key, { value, expires: Date.now() + this.ttlMs });
+    this.entries.set(key, { value, expires: Date.now() + ttlMs });
     // A `while` rather than an `if`: `max` can be lowered between writes, and a
     // single-step trim would then never converge.
     while (this.entries.size > this.max) {

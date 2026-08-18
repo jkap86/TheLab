@@ -57,6 +57,7 @@ export { foldCompsPlayerIndex } from "./player-index";
 export type { CompsPlayerOption, CompsPlayerSeasonRow } from "./player-index";
 export {
   enrichCompsPools,
+  forgetCompsSeason,
   getCompsDisplayDraft,
   getCompsPlayerIndex,
   getCompsPool,
@@ -66,11 +67,16 @@ export {
 export { compsReadAdmission, compsReadConcurrency } from "./read-admission";
 export {
   COMPS_ENRICHMENT_CACHE,
+  COMPS_MAX_SEASONS,
   COMPS_PLAYER_INDEX_CACHE,
   COMPS_POOL_CACHE,
   COMPS_POOL_VERSION,
+  COMPS_RECENT_SEASONS,
+  COMPS_SEASON_TTL_MS,
+  COMPS_SEASON_TTL_STAGGER_SHARE,
   compsEnrichmentCacheKey,
   compsPoolCacheKey,
+  getCompsSeasonTtlMs,
 } from "./read-cache";
 export {
   compsSeasonAnchor,

@@ -16,6 +16,7 @@ import {
   ARCHIVE_EMPTY_RETRY_MS,
   archiveStampFreshSql,
 } from "./archive-clock";
+import { notifyStatsSeasonWritten } from "./mutation";
 import { toStatRows } from "./parse";
 import type { StatRow } from "./parse";
 import { validateWeekStats } from "./validate";
@@ -448,6 +449,12 @@ export async function syncStats(
 
         const removed = await writeWeek(s, week, validation.rows);
         await markWeekSynced(s, week, { empty: false });
+        // Announced *after* the write, the `persistLeagueGraph` rule: a reader
+        // invalidating before the rows land would cache exactly what is being
+        // replaced. Anything holding something derived from this season — the
+        // comps corpus, whose historical entries are held for a day — drops it
+        // here rather than waiting out a clock this season just disproved.
+        notifyStatsSeasonWritten(s);
         synced.push({ season: s, week, rows: validation.rows.length, removed });
       } catch (error) {
         failed.push({ season: s, week });

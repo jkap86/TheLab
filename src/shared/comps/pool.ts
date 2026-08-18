@@ -2,14 +2,17 @@ import { getDraftAdpForPlayers, ADP_FILTER_DEFAULTS } from "@/shared/manager";
 import { getKtcSfHistoryAsOf, getKtcValuesAsOf } from "@/shared/ktc";
 import { getNflDraftPicks } from "@/shared/nfl-draft";
 import { getPlayerProfiles } from "@/shared/players";
+import { getActiveSeason } from "@/shared/season";
 import {
   listSeasonStatLines,
   listStoredPlayerSeasons,
   listStoredSeasons,
+  onStatsSeasonWritten,
 } from "@/shared/stats";
 import { deepFreeze, TtlPromiseCache } from "@/shared/util";
 
 import { applyCompsEnrichment, assemblePoolRows } from "./assemble";
+import { COMPS_ENRICHMENTS } from "./fields";
 import { anyCompsEnrichment, listCompsEnrichments } from "./enrichment";
 import { foldCompsPlayerIndex } from "./player-index";
 import { compsReadAdmission } from "./read-admission";
@@ -19,6 +22,7 @@ import {
   COMPS_POOL_CACHE,
   compsEnrichmentCacheKey,
   compsPoolCacheKey,
+  getCompsSeasonTtlMs,
 } from "./read-cache";
 import { compsSeasonAnchor } from "./resolve";
 import { collectSeasonPools } from "./season-pools";
@@ -150,9 +154,40 @@ async function loadSeasonPool(season: string): Promise<readonly CompsPoolRow[]> 
   return deepFreeze(assemblePoolRows({ statLines, profiles, season }));
 }
 
-/** One season's pool, from the cache or one shared computation. */
-export function getCompsPool(season: string): Promise<readonly CompsPoolRow[]> {
-  return poolCache.read(compsPoolCacheKey(season), () => loadSeasonPool(season));
+/**
+ * How long this season's entries are worth holding — its age against the
+ * season the app is operating in, per {@link getCompsSeasonTtlMs}.
+ *
+ * `getActiveSeason` is asked rather than derived from the calendar because
+ * *which season the app is in* is exactly what it answers, and it answers from
+ * a process-local cache without waiting on Sleeper once warm (it serves a stale
+ * value and refreshes behind the request, and never throws). A cold process
+ * pays for it once, against reads that are about to run several statements
+ * anyway.
+ *
+ * **It decides a cache lifetime and never an answer**, which is what keeps it
+ * inside the rule that an explicitly requested season must not be resolved
+ * here: a board for 2024 reads 2024's rows whatever this returns, and the worst
+ * a wrong answer buys is an entry held for fifteen minutes instead of a day.
+ */
+async function seasonTtlMs(season: string, staggerKey: string): Promise<number> {
+  return getCompsSeasonTtlMs(season, await getActiveSeason(), staggerKey);
+}
+
+/**
+ * One season's pool, from the cache or one shared computation.
+ *
+ * The entry's lifetime is the *season's*, not the cache's: 2008's stat lines
+ * have not moved in seventeen years and were being rebuilt four times an hour
+ * along with the rest of the corpus. See {@link getCompsSeasonTtlMs}.
+ */
+export async function getCompsPool(
+  season: string,
+): Promise<readonly CompsPoolRow[]> {
+  const key = compsPoolCacheKey(season);
+  return poolCache.read(key, () => loadSeasonPool(season), {
+    ttlMs: await seasonTtlMs(season, key),
+  });
 }
 
 /** The ids a season's dataset reads are narrowed to — its pool's own. */
@@ -221,14 +256,23 @@ const LOADERS: Record<
   draft: loadDraft,
 };
 
-/** One dataset for one season, from the cache or one shared computation. */
-function getCompsEnrichment(
+/**
+ * One dataset for one season, from the cache or one shared computation.
+ *
+ * On the season's own clock like the pool it decorates, and for the same
+ * reason: every market read here is taken *as of* the season's anchor
+ * ({@link anchorFor}), so a past season's KTC snapshot and ADP average are as
+ * fixed as its stat lines. The stagger is keyed on the dataset's own cache key,
+ * so a season's four entries don't expire in one instant with its pool.
+ */
+async function getCompsEnrichment(
   enrichment: CompsEnrichment,
   season: string,
 ): Promise<CompsEnrichmentValue> {
-  return enrichmentCache.read(compsEnrichmentCacheKey(enrichment, season), () =>
-    LOADERS[enrichment](season),
-  );
+  const key = compsEnrichmentCacheKey(enrichment, season);
+  return enrichmentCache.read(key, () => LOADERS[enrichment](season), {
+    ttlMs: await seasonTtlMs(season, key),
+  });
 }
 
 /** The datasets `needs` asks for, loaded together and keyed for assembly. */
@@ -357,3 +401,37 @@ export function getCompsDisplayDraft(
     compsReadAdmission.run(() => getNflDraftPicks(ids)),
   );
 }
+
+/**
+ * Drop everything cached for one season — its pool and each of its datasets.
+ *
+ * **The signal is the stats sync's, not a timer's.** A finished season's
+ * entries are held for a day (`getCompsSeasonTtlMs`), which is right for a
+ * season whose numbers don't move and wrong for the moment they do: an archive
+ * week re-probed with rows, a payload the completeness gate refused and the
+ * next tick accepted, a backfill reaching a season for the first time. So the
+ * writer announces (`onStatsSeasonWritten`) and this forgets, which makes a
+ * correction visible on the next request instead of a TTL later.
+ *
+ * `forget` rather than `clear`: both halves of each entry go, so a computation
+ * that started before the write still answers the callers waiting on it and
+ * simply does not store what it read.
+ *
+ * The seasons list goes too, because a season's *first* stat line is what makes
+ * it appear at all. The player index deliberately does not — it is one entry on
+ * its own 45-minute clock holding names, where the cost of dropping it on every
+ * archive tick is two reads for a picker list that is not wrong in the meantime.
+ */
+export function forgetCompsSeason(season: string): void {
+  poolCache.forget(compsPoolCacheKey(season));
+  for (const enrichment of COMPS_ENRICHMENTS) {
+    enrichmentCache.forget(compsEnrichmentCacheKey(enrichment, season));
+  }
+  seasonsCache.forget("seasons");
+}
+
+// Registered at module load, and idempotent by function identity so dev's
+// module reloading cannot stack listeners. In a deployment where the sync runs
+// on a worker this process never hears it, which is what the season TTLs are
+// the backstop for — see `./read-cache`.
+onStatsSeasonWritten(forgetCompsSeason);

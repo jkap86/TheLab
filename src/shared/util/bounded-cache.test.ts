@@ -36,6 +36,50 @@ describe("BoundedCache", () => {
     assert.equal(cache.size, 0, "and is dropped rather than left to accumulate");
   });
 
+  test("an entry may carry its own TTL", () => {
+    // The comps corpus's case: one cache, one entry per NFL season, and the
+    // current season's rows move weekly while 2008's have not moved in
+    // seventeen years. On one clock either the live season goes stale or the
+    // whole archive is rebuilt every quarter of an hour.
+    const cache = new BoundedCache<number>(10, -1);
+    cache.set("expired-by-default", 1);
+    cache.set("long-lived", 2, { ttlMs: 60_000 });
+
+    assert.equal(cache.get("expired-by-default"), undefined);
+    assert.equal(cache.get("long-lived"), 2);
+  });
+
+  test("a per-entry TTL expires on its own clock", () => {
+    const cache = new BoundedCache<number>(10, 60_000);
+    cache.set("short", 1, { ttlMs: -1 });
+    cache.set("default", 2);
+
+    assert.equal(cache.get("short"), undefined, "its own TTL wins, not the cache's");
+    assert.equal(cache.get("default"), 2, "the cache's own TTL is untouched");
+    assert.equal(cache.size, 1, "and the expired one is dropped, not accumulated");
+  });
+
+  test("an omitted TTL is exactly the cache's own", () => {
+    // The common case must be untouched: every existing caller passes nothing.
+    const cache = new BoundedCache<number>(10, 60_000);
+    cache.set("a", 1, {});
+    cache.set("b", 2, { ttlMs: undefined });
+    cache.set("c", 3);
+    assert.deepEqual([cache.get("a"), cache.get("b"), cache.get("c")], [1, 2, 3]);
+  });
+
+  test("a long-lived entry is still evicted by the bound", () => {
+    // The TTL says when an entry stops being *true*; `max` says how many the
+    // process may hold. A per-entry TTL must not buy an exemption from the
+    // second, or a cache of immutable seasons is an unbounded map again.
+    const cache = new BoundedCache<number>(2, 60_000);
+    cache.set("a", 1, { ttlMs: 24 * 60 * 60 * 1000 });
+    cache.set("b", 2, { ttlMs: 24 * 60 * 60 * 1000 });
+    cache.set("c", 3, { ttlMs: 24 * 60 * 60 * 1000 });
+    assert.equal(cache.get("a"), undefined, "the oldest still goes");
+    assert.equal(cache.size, 2);
+  });
+
   test("partition splits hits from misses", () => {
     const cache = new BoundedCache<number>(10, 60_000);
     cache.set("a", 1);

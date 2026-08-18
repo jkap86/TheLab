@@ -213,6 +213,45 @@ describe("TtlPromiseCache", () => {
     assert.deepEqual(cache.peek("a"), { n: 2 });
   });
 
+  test("a read may store its answer on the entry's own TTL", async () => {
+    // The comps corpus's case: one cache holding a season per key, where the
+    // live season moves weekly and a 2008 season does not move at all.
+    const cache = new TtlPromiseCache<{ n: number }>({
+      max: 8,
+      ttlMs: -1,
+      name: "test",
+    });
+
+    await cache.read("live", async () => ({ n: 1 }));
+    await cache.read("archive", async () => ({ n: 2 }), { ttlMs: 60_000 });
+
+    assert.equal(cache.peek("live"), undefined, "the cache's own TTL applied");
+    assert.deepEqual(cache.peek("archive"), { n: 2 }, "the entry's own did too");
+  });
+
+  test("a per-entry TTL does not disturb coalescing or retries", async () => {
+    const { promise, release } = deferred<{ n: number }>();
+    let calls = 0;
+    const cache = new TtlPromiseCache<{ n: number }>({
+      max: 8,
+      ttlMs: 60_000,
+      name: "test",
+    });
+    const compute = () => {
+      calls += 1;
+      return promise;
+    };
+
+    const readers = Array.from({ length: 5 }, () =>
+      cache.read("a", compute, { ttlMs: 24 * 60 * 60 * 1000 }),
+    );
+    assert.equal(calls, 1, "still one computation for five callers");
+
+    release({ n: 3 });
+    for (const reader of readers) assert.deepEqual(await reader, { n: 3 });
+    assert.equal(cache.inFlight, 0);
+  });
+
   test("clear drops both halves, and a compute in flight cannot un-coalesce the next", async () => {
     const first = deferred<{ n: number }>();
     const second = deferred<{ n: number }>();

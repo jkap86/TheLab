@@ -156,6 +156,57 @@ describe("the read admission", () => {
   });
 });
 
+describe("what a season's entries are held for", () => {
+  test("both season caches store on the season's own clock", () => {
+    // One fifteen-minute clock over a corpus every request walks end to end was
+    // ~54 reads four times an hour to re-learn seasons that do not move. The
+    // policy is `getCompsSeasonTtlMs`; what is pinned here is that both caches
+    // actually pass it, since falling back to the cache's own TTL is silent —
+    // the reads still answer, merely four times as often as they need to.
+    for (const cache of ["poolCache", "enrichmentCache"]) {
+      const from = POOL.indexOf(`${cache}.read(`);
+      assert.notEqual(from, -1, `${cache}.read( not found — was it renamed?`);
+      const call = POOL.slice(from, from + 400);
+      assert.match(
+        call,
+        /ttlMs:\s*await seasonTtlMs\(/,
+        `${cache} stores on the cache's own TTL rather than the season's`,
+      );
+    }
+  });
+
+  test("the stagger is keyed on the entry, not on the season", () => {
+    // Otherwise a season's pool and its four datasets expire in one instant,
+    // which is the cliff the tiers exist to remove wearing a smaller hat.
+    assert.match(POOL, /seasonTtlMs\(season, key\)/);
+  });
+});
+
+describe("a season that changes is dropped rather than waited out", () => {
+  test("the stats sync's announcement is what invalidates", () => {
+    // A finished season is held for a day, which is right until the day it is
+    // corrected: an archive week re-probed with rows, a refused payload the
+    // next tick accepts, a backfill reaching a season for the first time.
+    assert.ok(calls(POOL, "onStatsSeasonWritten"));
+    assert.match(POOL, /onStatsSeasonWritten\(forgetCompsSeason\)/);
+  });
+
+  test("it forgets the season's pool and every one of its datasets", () => {
+    // A pool dropped without its datasets is a corrected season decorated with
+    // the market maps built against the ids it used to have.
+    const forget = body(POOL, "forgetCompsSeason");
+    assert.ok(forget.includes("poolCache.forget"));
+    assert.ok(forget.includes("enrichmentCache.forget"));
+    assert.ok(
+      forget.includes("COMPS_ENRICHMENTS"),
+      "the datasets must be walked from the catalogue, not listed here",
+    );
+    // And the seasons list, since a season's *first* stat line is what makes it
+    // appear at all.
+    assert.ok(forget.includes("seasonsCache.forget"));
+  });
+});
+
 describe("the picker's list", () => {
   test("is not the comps corpus", () => {
     // This is the regression that made opening the picker assemble every stored

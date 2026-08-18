@@ -93,8 +93,19 @@ export class TtlPromiseCache<V extends object> {
   /**
    * The cached value for `key`, computing it at most once across every caller
    * that asks while it is being computed.
+   *
+   * `options.ttlMs` overrides the cache's own TTL **for the entry this call
+   * stores**, for a cache whose keys age at different speeds — see
+   * `BoundedCache.set`. It is read only on the computing caller's path, which
+   * is the honest reading: a caller that coalesces onto a computation already
+   * running is asking for that value, and the entry's lifetime is a fact about
+   * the value rather than about who happened to ask for it first.
    */
-  read(key: string, compute: () => Promise<V>): Promise<V> {
+  read(
+    key: string,
+    compute: () => Promise<V>,
+    options?: { ttlMs?: number },
+  ): Promise<V> {
     const hit = this.resolved.get(key);
     if (hit !== undefined) {
       this.onOutcome("hit", key);
@@ -112,7 +123,7 @@ export class TtlPromiseCache<V extends object> {
     // rejection of *this* promise — the one the bookkeeping below is attached to.
     const promise = (async () => compute())().then(
       (value) => {
-        if (this.settle(key, promise)) this.resolved.set(key, value);
+        if (this.settle(key, promise)) this.resolved.set(key, value, options);
         return value;
       },
       (error: unknown) => {
