@@ -140,9 +140,131 @@ describe("the sync announces it", () => {
     assert.ok(notify > write, "the announcement must follow the write");
   });
 
+  test("and before the bookkeeping, which can fail on its own", () => {
+    // `writeWeek` has committed by the time it resolves (`withTransaction`
+    // returns after `COMMIT`), so from that line onwards the stored data has
+    // *changed* and everything derived from it is invalid — whatever happens
+    // next. `markWeekSynced` is a second statement on a second connection: with
+    // the announcement behind it, a pool timeout there left corrected rows in
+    // Postgres and a comps corpus holding the season for up to a day, with
+    // nothing able to tell it otherwise.
+    const write = source.indexOf("await writeWeek(");
+    const notify = source.indexOf("notifyStatsSeasonWritten(");
+    const stamp = source.indexOf("await markWeekSynced(s, week, { empty: false })");
+    assert.ok(stamp !== -1, "the success stamp is not there — was it renamed?");
+    assert.ok(write < notify && notify < stamp, "writeWeek → notify → stamp");
+  });
+
   test("a refused or empty payload announces nothing", () => {
     // Neither wrote a row, so neither has anything to invalidate — and an
     // announcement there would drop a good cache entry every archive tick.
     assert.equal(source.split("notifyStatsSeasonWritten(").length - 1, 1);
+  });
+});
+
+/**
+ * The ordering as behaviour rather than as source, driven through the shape
+ * `sync.ts` has: commit, announce, stamp — where any of the three can throw.
+ *
+ * Source order is what the tests above pin; this pins what the order *buys*,
+ * which is the thing a future refactor would take away without changing a line
+ * these regexes read.
+ */
+describe("the ordering, driven", () => {
+  /** `sync.ts`'s per-week body, with each step injectable. */
+  async function syncWeek(steps: {
+    writeWeek: () => Promise<number>;
+    markWeekSynced: () => Promise<unknown>;
+    season: string;
+  }): Promise<{ ok: boolean; removed?: number }> {
+    try {
+      const removed = await steps.writeWeek();
+      notifyStatsSeasonWritten(steps.season);
+      await steps.markWeekSynced();
+      return { ok: true, removed };
+    } catch {
+      // What `sync.ts` does: the week joins `failed` and is retried next tick.
+      return { ok: false };
+    }
+  }
+
+  test("a committed write announces before the stamp is attempted", async () => {
+    const order: string[] = [];
+    onStatsSeasonWritten(() => order.push("notify"));
+
+    const result = await syncWeek({
+      season: "2019",
+      writeWeek: async () => {
+        order.push("write");
+        return 0;
+      },
+      markWeekSynced: async () => order.push("stamp"),
+    });
+
+    assert.deepEqual(order, ["write", "notify", "stamp"]);
+    assert.equal(result.ok, true);
+  });
+
+  test("a failed stamp still leaves the caches invalidated", async () => {
+    // The whole point: the rows changed, so the derived caches are wrong, and
+    // whether the *bookkeeping* landed has nothing to do with it. The week is
+    // reported as failed and retried — that is the stamp's job — but no reader
+    // is left serving numbers Postgres no longer holds.
+    const heard: string[] = [];
+    onStatsSeasonWritten((season) => heard.push(season));
+
+    const result = await syncWeek({
+      season: "2019",
+      writeWeek: async () => 3,
+      markWeekSynced: async () => {
+        throw new Error("timeout acquiring a connection");
+      },
+    });
+
+    assert.equal(result.ok, false, "the run still reports the week as failed");
+    assert.deepEqual(heard, ["2019"], "and the invalidation already happened");
+  });
+
+  test("a write that fails announces nothing", async () => {
+    // Nothing committed, so nothing derived from it is stale — and an
+    // announcement here would drop a good entry on every upstream blip.
+    const heard: string[] = [];
+    onStatsSeasonWritten((season) => heard.push(season));
+
+    const result = await syncWeek({
+      season: "2019",
+      writeWeek: async () => {
+        throw new Error("deadlock detected");
+      },
+      markWeekSynced: async () => {
+        assert.fail("the stamp must not run after a failed write");
+      },
+    });
+
+    assert.equal(result.ok, false);
+    assert.deepEqual(heard, []);
+  });
+
+  test("one announcement per successful write, not one per listener call", async () => {
+    const heard: string[] = [];
+    onStatsSeasonWritten((season) => heard.push(season));
+
+    for (const week of [1, 2]) {
+      await syncWeek({
+        season: "2019",
+        writeWeek: async () => week,
+        markWeekSynced: async () => undefined,
+      });
+    }
+    // A third week whose write fails adds nothing.
+    await syncWeek({
+      season: "2019",
+      writeWeek: async () => {
+        throw new Error("nope");
+      },
+      markWeekSynced: async () => undefined,
+    });
+
+    assert.deepEqual(heard, ["2019", "2019"]);
   });
 });

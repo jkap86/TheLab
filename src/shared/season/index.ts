@@ -44,6 +44,28 @@ export function getActiveSeason(): Promise<string> {
   return resolver.resolve();
 }
 
+/**
+ * The season this process already knows, or `undefined` — **without touching
+ * Sleeper**: `NFL_SEASON_OVERRIDE`, else whatever {@link getActiveSeason} last
+ * resolved. Never fetches, never returns a promise, never throws.
+ *
+ * For a caller whose *answer* does not depend on the season and whose
+ * *bookkeeping* does — `comps/read-cache`, deciding how long to hold a season's
+ * entry. Blocking such a read on Sleeper is the failure this exists to prevent:
+ * the rows are in Postgres, the reader is asking for them, and the only thing
+ * missing is a label for how long to keep a copy. `undefined` is a legitimate
+ * answer there (the caller falls back to its shortest, most conservative
+ * policy), where it never is for {@link getActiveSeason}.
+ *
+ * **It is not a cheaper `getActiveSeason`.** A caller that needs *the* season —
+ * a route defaulting `?season`, a background tick choosing what to crawl — must
+ * still await that one, because `undefined` means "not yet resolved", not "no
+ * season".
+ */
+export function peekActiveSeason(): string | undefined {
+  return resolver.peekSeason();
+}
+
 /** Drop the cached season, forcing the next call to re-read Sleeper. */
 export function resetActiveSeason(): void {
   resolver.reset();

@@ -448,13 +448,26 @@ export async function syncStats(
         }
 
         const removed = await writeWeek(s, week, validation.rows);
-        await markWeekSynced(s, week, { empty: false });
-        // Announced *after* the write, the `persistLeagueGraph` rule: a reader
-        // invalidating before the rows land would cache exactly what is being
-        // replaced. Anything holding something derived from this season — the
-        // comps corpus, whose historical entries are held for a day — drops it
-        // here rather than waiting out a clock this season just disproved.
+        // Announced *after* the write and *before* the bookkeeping, which is
+        // two rules rather than one.
+        //
+        // After, the `persistLeagueGraph` rule: a reader invalidating before
+        // the rows land would cache exactly what is being replaced. `writeWeek`
+        // resolves only once its transaction has committed (`withTransaction`
+        // returns after `COMMIT`), so this line is reached with the new rows
+        // visible to every other connection.
+        //
+        // Before, because the invariant is *stored data changed, so everything
+        // derived from it is invalid* — and that is true from the commit
+        // onwards, whatever happens next. `markWeekSynced` is a second
+        // statement on a second connection and can fail on its own (a pool
+        // timeout, a dropped connection); with the announcement behind it, that
+        // failure left corrected rows in Postgres and a comps corpus holding
+        // the season for up to a day with nothing able to tell it otherwise.
+        // The week is retried on the next tick either way, since the stamp is
+        // what a retry reads.
         notifyStatsSeasonWritten(s);
+        await markWeekSynced(s, week, { empty: false });
         synced.push({ season: s, week, rows: validation.rows.length, removed });
       } catch (error) {
         failed.push({ season: s, week });

@@ -10,6 +10,7 @@ import { databaseBudget } from "./budget.ts";
 import {
   createHeavyReadAdmission,
   dbHeavyReadAdmission,
+  dbHeavyReadCeiling,
   dbHeavyReadConcurrency,
 } from "./heavy-admission.ts";
 
@@ -273,6 +274,35 @@ describe("no deadlock where comps asks for ADP", () => {
     assert.equal(admission.stats().active, 0, "and the slot came back");
   });
 
+  test("nesting three deep at a budget of one still terminates", async () => {
+    // The shape the re-entrancy exists for, taken to its limit: with one slot
+    // in the whole process, each inner call must ride the outer's rather than
+    // queue behind it. Every layer queueing is a deadlock, not a slow page.
+    const admission = createHeavyReadAdmission(1);
+    const seen: string[] = [];
+
+    const deep = admission.run(async () => {
+      seen.push("a");
+      return admission.run(async () => {
+        seen.push("b");
+        return admission.run(async () => {
+          seen.push("c");
+          return "done";
+        });
+      });
+    });
+
+    assert.equal(
+      await Promise.race([
+        deep,
+        new Promise((resolve) => setTimeout(() => resolve("deadlocked"), 50)),
+      ]),
+      "done",
+    );
+    assert.deepEqual(seen, ["a", "b", "c"]);
+    assert.equal(admission.stats().active, 0, "and the one slot came back");
+  });
+
   test("a nested read does not spend a second slot", async () => {
     // The other half of re-entrancy: passing through must not *double-count*
     // either, or one logical read holds two of the pool's connections' worth of
@@ -421,6 +451,12 @@ describe("the configured budget", () => {
       dbHeavyReadConcurrency({ DATABASE_POOL_MAX: "10", DB_HEAVY_READ_LIMIT: "7" }),
       7,
     );
+    // Below the derived default as readily as above it: the clamp is a
+    // ceiling, and an operator asking for *less* heavy work still gets it.
+    assert.equal(
+      dbHeavyReadConcurrency({ DATABASE_POOL_MAX: "10", DB_HEAVY_READ_LIMIT: "2" }),
+      2,
+    );
   });
 
   test("the two variables it replaced still configure it", () => {
@@ -441,16 +477,93 @@ describe("the configured budget", () => {
     // And the explicit name beats both, so there is one thing to set.
     assert.equal(
       dbHeavyReadConcurrency({
+        DB_HEAVY_READ_LIMIT: "6",
+        COMPS_READ_LIMIT: "5",
+        ADP_COMPUTE_LIMIT: "2",
+      }),
+      6,
+    );
+    // Winning the precedence is not the same as escaping the ceiling: an
+    // explicit 8 on the default pool is still clamped to 7.
+    assert.equal(
+      dbHeavyReadConcurrency({
         DB_HEAVY_READ_LIMIT: "8",
         COMPS_READ_LIMIT: "5",
         ADP_COMPUTE_LIMIT: "2",
       }),
-      8,
+      7,
     );
   });
 
+  test("configuration is a request, not a grant", () => {
+    // The hole this closes: `DB_HEAVY_READ_LIMIT=10` against a pool of ten let
+    // one cold comps board hold every connection the process has — the exact
+    // arrangement the shared budget exists to prevent, arrived at through the
+    // variable meant to prevent it, with nothing failing to say so.
+    const env = { DATABASE_POOL_MAX: "10", DB_HEAVY_READ_LIMIT: "10" };
+    assert.equal(dbHeavyReadConcurrency(env), dbHeavyReadCeiling(env));
+    assert.equal(dbHeavyReadConcurrency(env), 7, "the pool less a fan-out share");
+
+    // Absurd values are clamped rather than trusted or refused: the operator
+    // asked for "as much as possible", and this is what that is.
+    assert.equal(
+      dbHeavyReadConcurrency({ DATABASE_POOL_MAX: "10", DB_HEAVY_READ_LIMIT: "100" }),
+      7,
+    );
+    assert.equal(
+      dbHeavyReadConcurrency({
+        DATABASE_POOL_MAX: "10",
+        DB_HEAVY_READ_LIMIT: "1000000",
+      }),
+      7,
+    );
+  });
+
+  test("the ceiling leaves an ordinary request its full fan-out", () => {
+    // The invariant is the existing one reused rather than a second
+    // calculation competing with it: `databaseBudget().fanout` is what one
+    // foreground request may hold, so reserving exactly that leaves room for
+    // one to run at full width while the analytical budget is saturated.
+    for (const poolMax of ["2", "3", "4", "10", "12", "30", "100"]) {
+      const env = { DATABASE_POOL_MAX: poolMax };
+      const { poolMax: pool, fanout } = databaseBudget(env);
+      const ceiling = dbHeavyReadCeiling(env);
+
+      assert.ok(ceiling >= 1, `pool ${poolMax}: a zero-width admission queue`);
+      assert.ok(
+        ceiling <= pool - 1,
+        `pool ${poolMax}: heavy reads could take the whole pool`,
+      );
+      // Never below what the app picks for itself — a clamp arguing with its
+      // own default would be a ceiling nobody could raise or lower sensibly.
+      assert.ok(ceiling >= fanout, `pool ${poolMax}: the ceiling is under the default`);
+    }
+  });
+
+  test("the clamp holds however the limit was asked for", () => {
+    // The legacy aliases are the same knob under an older name, so a
+    // deployment that still sets one cannot buy what the new name refuses.
+    for (const name of ["DB_HEAVY_READ_LIMIT", "COMPS_READ_LIMIT", "ADP_COMPUTE_LIMIT"]) {
+      const env = { DATABASE_POOL_MAX: "10", [name]: "10" };
+      assert.equal(dbHeavyReadConcurrency(env), 7, name);
+    }
+  });
+
+  test("the derived default is never clamped away", () => {
+    // It *is* the reserved share, so on every pool the unconfigured process
+    // gets exactly `databaseBudget().fanout` — clamping it would be the app
+    // refusing the number it chose for itself.
+    for (const poolMax of ["2", "3", "4", "10", "30", "100"]) {
+      const env = { DATABASE_POOL_MAX: poolMax };
+      assert.equal(dbHeavyReadConcurrency(env), databaseBudget(env).fanout, poolMax);
+    }
+  });
+
   test("junk falls back rather than failing the boot", () => {
-    for (const value of ["", "  ", "three", "0", "-1", "2.5"]) {
+    // Every one of these would otherwise be a limiter that admits nobody, which
+    // is an outage rather than a bound — and a typo in a dashboard must not be
+    // why the comps tool stops answering.
+    for (const value of ["", "  ", "three", "0", "-1", "-4", "2.5", "NaN", "Infinity"]) {
       assert.equal(
         dbHeavyReadConcurrency({ DB_HEAVY_READ_LIMIT: value }),
         databaseBudget({}).fanout,
@@ -462,5 +575,162 @@ describe("the configured budget", () => {
         `a junk alias should not out-tighten a valid one`,
       );
     }
+  });
+
+  test("whatever it is configured to, it admits somebody", () => {
+    // A zero-width admission queue is the one failure worse than an unbounded
+    // one: every heavy read waits forever on a slot nothing can release.
+    for (const poolMax of ["2", "3", "10", "30"]) {
+      for (const limit of ["", "0", "-4", "junk", "1", "9999"]) {
+        const env = { DATABASE_POOL_MAX: poolMax, DB_HEAVY_READ_LIMIT: limit };
+        assert.ok(
+          dbHeavyReadConcurrency(env) >= 1,
+          `pool ${poolMax}, limit "${limit}" admits nobody`,
+        );
+      }
+    }
+  });
+});
+
+/**
+ * A context that outlives its permit.
+ *
+ * `AsyncLocalStorage` propagates to every async resource created under a
+ * callback, *including* ones that run after it returns. A detached descendant —
+ * a timer scheduled from inside an admitted read whose callback then resolves —
+ * therefore inherits the store while holding nothing, and against a permanent
+ * "already admitted" flag would walk straight past the limiter. That is the one
+ * way this abstraction could put more heavy reads in flight than the limit, and
+ * it would arrive through the mechanism added to prevent a deadlock.
+ *
+ * Nothing here detaches work from an admitted callback today. This is what
+ * keeps a caller that starts to from being a bound that silently isn't one.
+ */
+describe("a detached descendant cannot ride a released permit", () => {
+  /** A promise plus its resolver — a barrier, so nothing here waits on a clock. */
+  function deferred<T = void>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  }
+
+  test("it queues for a slot of its own, and gets one when the holder lets go", async () => {
+    const admission = createHeavyReadAdmission(1);
+    const holderRunning = deferred();
+    const holderMayFinish = deferred();
+    const scheduled = deferred();
+    const descendantRan = deferred<string>();
+    // A slot on an object rather than a resolved promise: `resolve(aPromise)`
+    // *adopts* it, so handing the descendant's own promise through a deferred
+    // would make this test wait on the thing it is about to assert is waiting.
+    const detached: { run: Promise<string> | null } = { run: null };
+
+    // 1. An admitted operation creates a descendant and returns. The
+    //    descendant is *scheduled* here and admitted later, from a context
+    //    that inherits the store this slot ran under.
+    await admission.run(async () => {
+      setTimeout(() => {
+        detached.run = admission.run(async () => {
+          descendantRan.resolve("ran");
+          return "ran";
+        });
+        scheduled.resolve();
+      }, 0);
+    });
+    // 2. Its permit is back: the outer callback settled, so the limiter's
+    //    `finally` has run and the token it left behind is inactive.
+    assert.equal(admission.stats().active, 0);
+
+    // 3. Somebody else takes the only slot, and holds it. Synchronously, so no
+    //    timer can fire between the assertion above and this line — which is
+    //    what makes the ordering deterministic rather than a race.
+    const holder = admission.run(async () => {
+      holderRunning.resolve();
+      await holderMayFinish.promise;
+      return "holder";
+    });
+    await holderRunning.promise;
+    assert.equal(admission.stats().active, 1);
+
+    // 4. The descendant now asks to run. It must *wait* — the store it
+    //    inherited names a permit that no longer exists.
+    await scheduled.promise;
+    const descendant = detached.run;
+    assert.ok(descendant, "the descendant never asked to run");
+    await flush();
+    assert.equal(
+      await Promise.race([
+        descendantRan.promise,
+        new Promise((resolve) => setImmediate(() => resolve("waited"))),
+      ]),
+      "waited",
+      "the detached descendant bypassed the limiter",
+    );
+    assert.equal(admission.stats().queued, 1, "it queued like any other caller");
+    assert.equal(admission.stats().active, 1, "and did not exceed the budget");
+
+    // 5. Once the holder lets go, it proceeds.
+    holderMayFinish.resolve();
+    assert.equal(await holder, "holder");
+    assert.equal(await descendant, "ran");
+    assert.equal(admission.stats().active, 0);
+  });
+
+  test("the budget still holds across a fleet of them", async () => {
+    // The counting version of the same claim: four detached descendants of
+    // four finished slots are four ordinary callers, so a budget of two admits
+    // two at a time — where an inherited flag would have let all four through
+    // at once, which is the number the pool feels.
+    const admission = createHeavyReadAdmission(2);
+    const work = fleet();
+    const detached: Array<Promise<{ n: number }>> = [];
+
+    await Promise.all(
+      Array.from({ length: 4 }, () =>
+        admission.run(async () => {
+          setImmediate(() => detached.push(admission.run(work.work)));
+        }),
+      ),
+    );
+    assert.equal(admission.stats().active, 0, "every permit went back");
+
+    await flush();
+    await new Promise((resolve) => setImmediate(resolve));
+    await flush();
+
+    assert.equal(detached.length, 4);
+    assert.equal(work.started(), 2, "only the budget is admitted");
+    for (let round = 0; round < 8; round += 1) {
+      work.releaseAll();
+      await flush();
+    }
+    await Promise.all(detached);
+    assert.equal(work.started(), 4, "and all of them still ran");
+    assert.ok(work.peak() <= 2, `peak ${work.peak()} exceeded the budget`);
+  });
+
+  test("a descendant created *and* run inside a live slot still rides it", async () => {
+    // The other side of the same line: deactivation is tied to the permit
+    // going back, not to the callback's stack. A timer whose parent is still
+    // holding its slot must pass through, or the nesting backstop is gone.
+    const admission = createHeavyReadAdmission(1);
+    let insideBoth = -1;
+
+    await admission.run(
+      () =>
+        new Promise<void>((resolve) => {
+          setTimeout(async () => {
+            await admission.run(async () => {
+              insideBoth = admission.stats().active;
+            });
+            resolve();
+          }, 0);
+        }),
+    );
+
+    assert.equal(insideBoth, 1, "the descendant took a second slot");
+    assert.equal(admission.stats().active, 0);
   });
 });

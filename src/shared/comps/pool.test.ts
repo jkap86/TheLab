@@ -169,10 +169,44 @@ describe("what a season's entries are held for", () => {
       const call = POOL.slice(from, from + 400);
       assert.match(
         call,
-        /ttlMs:\s*await seasonTtlMs\(/,
+        /ttlMs:\s*seasonTtlMs\(/,
         `${cache} stores on the cache's own TTL rather than the season's`,
       );
     }
+  });
+
+  test("the TTL is chosen without asking Sleeper anything", () => {
+    // The regression: `getActiveSeason()` resolved from inside the cache path
+    // meant a comps request could block on Sleeper — up to four attempts with
+    // backoff behind the shared axios instance — merely to decide how long to
+    // hold an entry whose data is already in Postgres. An outage upstream
+    // became an outage in the one tool that needs nothing from upstream.
+    //
+    // Pinned against the source because `pool.ts` opens a database pool and
+    // cannot be loaded in this runner; what the *policy* does with an unknown
+    // season is `read-cache.test.ts`'s, driven through the real resolver.
+    assert.equal(
+      calls(POOL, "getActiveSeason"),
+      false,
+      "the comps cache path resolves the active season through Sleeper",
+    );
+    assert.equal(
+      /import\s*\{[^}]*\bgetActiveSeason\b[^}]*\}\s*from/.test(POOL),
+      false,
+      "even importing it would put the fetch one edit away",
+    );
+    assert.ok(calls(POOL, "peekActiveSeason"), "the peek is what it reads");
+
+    // And synchronously, so there is nowhere left for an await to hide: a
+    // `seasonTtlMs` that returned a promise would be the same dependency
+    // moved rather than removed.
+    assert.match(
+      POOL,
+      /function seasonTtlMs\(season: string, staggerKey: string\): number \{/,
+      "seasonTtlMs must be synchronous",
+    );
+    const ttl = body(POOL, "seasonTtlMs");
+    assert.equal(ttl.includes("await"), false, "the TTL awaits something");
   });
 
   test("the stagger is keyed on the entry, not on the season", () => {
