@@ -170,12 +170,12 @@ export function TradeSearchPanel({
       </div>
 
       {error && !loading && (
-        <p className="shrink-0 px-2 py-1 text-[11px] text-amber-300">{error}</p>
+        <p className="shrink-0 px-2 py-1 text-[0.6875rem] text-amber-300">{error}</p>
       )}
 
       <div className="flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain">
         {loading ? (
-          <p className="px-2 py-2 text-[12px] text-foreground/40">
+          <p className="px-2 py-2 text-[0.75rem] text-foreground/40">
             Counting this season&rsquo;s trades…
           </p>
         ) : who ? (
@@ -235,7 +235,7 @@ export function TradeSearchPanel({
           mode to be about. */}
       {!who && graded && (
         <div className="mt-0.5 flex shrink-0 items-center gap-2 border-t border-foreground/10 px-1 pt-2">
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40">
+          <span className="font-mono text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-foreground/40">
             A side got
           </span>
           {(["all", "any"] as const).map((value) => (
@@ -244,7 +244,7 @@ export function TradeSearchPanel({
               type="button"
               aria-pressed={filters.match === value}
               onClick={() => onMatch(value)}
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+              className={`rounded-full px-2.5 py-0.5 text-[0.6875rem] font-bold ${
                 filters.match === value
                   ? "lab-chip lab-chip-sm lab-chip-on"
                   : "lab-chip lab-chip-sm text-foreground/60 hover:text-foreground"
@@ -308,7 +308,7 @@ function ResultGroup({
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="px-1 pt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40">
+      <span className="px-1 pt-1 font-mono text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-foreground/40">
         {label}
       </span>
       {shown.map((option) => {
@@ -319,7 +319,7 @@ function ResultGroup({
             type="button"
             aria-pressed={on}
             onClick={() => onPick(option)}
-            className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] font-semibold ${
+            className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[0.8125rem] font-semibold ${
               on
                 ? "lab-chip lab-chip-sm lab-chip-on"
                 : "lab-chip lab-chip-sm text-foreground/75 hover:text-foreground"
@@ -329,7 +329,7 @@ function ResultGroup({
             <span className="min-w-0 flex-1 truncate">{option.label}</span>
             {option.note && (
               <span
-                className={`shrink-0 text-[11px] font-medium ${
+                className={`shrink-0 text-[0.6875rem] font-medium ${
                   on ? "text-[#052029]/55" : "text-foreground/40"
                 }`}
               >
@@ -337,7 +337,7 @@ function ResultGroup({
               </span>
             )}
             <span
-              className={`shrink-0 font-mono text-[10px] tabular-nums ${
+              className={`shrink-0 font-mono text-[0.625rem] tabular-nums ${
                 on ? "text-[#052029]/60" : "text-foreground/35"
               }`}
             >
@@ -352,7 +352,7 @@ function ResultGroup({
       {hidden > 0 && (
         // Said rather than left to be discovered: a truncated list that doesn't
         // say so reads as a player simply not having been traded.
-        <p className="px-2 py-1 text-[11px] text-foreground/35">
+        <p className="px-2 py-1 text-[0.6875rem] text-foreground/35">
           {hidden.toLocaleString()} more — type to narrow
         </p>
       )}

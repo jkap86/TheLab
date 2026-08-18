@@ -66,11 +66,25 @@ export function SiteHeader() {
 
       {/* Match `PageShell`'s container so the wordmark lines up with the page
           content below it rather than floating at the viewport edge. */}
-      <div className="group/bar mx-auto flex h-[calc(var(--site-header-h)-var(--bar-edge-h))] w-full max-w-4xl items-center gap-2.5 px-4 sm:gap-3.5 sm:px-6">
+      <div className="group/bar mx-auto flex h-[calc(var(--site-header-h)-var(--bar-edge-h))] w-full max-w-4xl items-center gap-2 px-4 sm:gap-3.5 sm:px-6">
         <Wordmark />
         {current && (
           <>
-            <span aria-hidden className="flex-none text-foreground/25">
+            {/* It yields on exactly the terms the wordmark's text does, and to
+                exactly the same condition — a *filled* seat below `sm`. It is
+                the next thing after that text with nothing to say: a rule
+                between two parts that are already a mark and a well, worth ~20px
+                of a 354px row once its own flex gap goes with it. At
+                `--app-font-scale` 1.125 that is the difference between the chip
+                reading `Trades` and reading `Tra…`, measured at 360, 375 and 390
+                — a tool naming itself in three letters to keep a slash. Same
+                single `max-sm:` variant for the same reason: `hidden` against an
+                `sm:inline` collides, since Tailwind v4 emits the display
+                utilities alphabetically and `.inline` wins at every width. */}
+            <span
+              aria-hidden
+              className="flex-none text-foreground/25 max-sm:group-has-[[data-header-seat]:not(:empty)]/bar:hidden"
+            >
               /
             </span>
             <CurrentPage
@@ -117,8 +131,8 @@ function Wordmark() {
       {/* The key sizes itself off the face rather than the other way round: the
           face carries the 34px square and the wrapper shrink-wraps it, so no
           box here is a percentage of a box that is itself sizing to content. */}
-      <span className="lab-key lab-notch inline-flex h-[37px] transition-[filter] duration-300 group-hover:[filter:drop-shadow(0_4px_7px_rgba(0,0,0,0.7))_drop-shadow(0_0_14px_rgba(0,255,229,0.55))]">
-        <span className="lab-face lab-notch flex h-[34px] w-[34px] items-center justify-center shadow-[inset_0_1.5px_0_rgba(255,255,255,0.34),inset_0_0_14px_-6px_rgba(0,255,229,0.75)]">
+      <span className="lab-key lab-notch inline-flex h-[2.3125rem] transition-[filter] duration-300 group-hover:[filter:drop-shadow(0_4px_7px_rgba(0,0,0,0.7))_drop-shadow(0_0_14px_rgba(0,255,229,0.55))]">
+        <span className="lab-face lab-notch flex h-[2.125rem] w-[2.125rem] items-center justify-center shadow-[inset_0_1.5px_0_rgba(255,255,255,0.34),inset_0_0_14px_-6px_rgba(0,255,229,0.75)]">
           <FlaskGlyph />
         </span>
       </span>
@@ -135,7 +149,7 @@ function Wordmark() {
           because those two collide: Tailwind v4 emits the display utilities
           alphabetically, so `.inline` beats `.hidden` at every width. A single
           `max-sm:` variant has nothing to lose to. */}
-      <span className="bg-gradient-to-b from-foreground from-35% to-[#8feee6] bg-clip-text font-display text-[13px] font-bold uppercase tracking-[0.19em] text-transparent [filter:drop-shadow(0_1px_0_rgba(0,0,0,0.8))] max-sm:group-has-[[data-header-seat]:not(:empty)]/bar:hidden">
+      <span className="bg-gradient-to-b from-foreground from-35% to-[#8feee6] bg-clip-text font-display text-[0.8125rem] font-bold uppercase tracking-[0.19em] text-transparent [filter:drop-shadow(0_1px_0_rgba(0,0,0,0.8))] max-sm:group-has-[[data-header-seat]:not(:empty)]/bar:hidden">
         The Lab
       </span>
     </Link>
@@ -147,14 +161,27 @@ function Wordmark() {
  *
  * Deliberately not a link and not a button — it is the bar's one piece of pure
  * state. The well is what says so, against the raised trigger beside it.
+ *
+ * **Its label, its gap and its inset all step down below `sm`, and that is this
+ * part paying for `--app-font-scale` out of the one row that cannot grow.** With
+ * a seat filled, a 390px bar holds a mark, this chip, the seated control and the
+ * Tools key, and at a scale of 1 that came to exactly the row's width — the same
+ * no-slack-at-all finding the stat columns record one module over. Measured in
+ * Chromium at 1.125: with the narrow spellings *and* the separator yielding
+ * (see `SiteHeader`), `Trades` reads whole from 375px up. At 360 it is 4px short
+ * and truncates to `Trade…`, and 320 truncated before any of this existed — so
+ * the chip is doing the job the note above describes rather than failing at it,
+ * and the width it now does it at is two steps narrower than the width it used
+ * to. Trimming further costs the icon, which is what makes the well read as the
+ * tool rather than as a caption.
  */
 function CurrentPage({ text, icon }: { text: string; icon: React.ReactNode }) {
   return (
-    <span className="lab-well lab-notch flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-active">
-      <span className="flex-none [&>svg]:h-[17px] [&>svg]:w-[17px]">
+    <span className="lab-well lab-notch flex min-w-0 items-center gap-1.5 px-2 py-1.5 text-active sm:gap-2 sm:px-2.5">
+      <span className="flex-none [&>svg]:h-[1.0625rem] [&>svg]:w-[1.0625rem]">
         {icon}
       </span>
-      <span className="truncate font-display text-[12.5px] font-bold tracking-tight sm:text-[13px]">
+      <span className="truncate font-display text-[0.6875rem] font-bold tracking-tight sm:text-[0.8125rem]">
         {text}
       </span>
     </span>
@@ -168,7 +195,7 @@ function FlaskGlyph() {
       aria-hidden
       viewBox="0 0 24 24"
       fill="none"
-      className="h-[18px] w-[18px] text-active"
+      className="h-[1.125rem] w-[1.125rem] text-active"
     >
       <path
         d="M10 3h4M10.75 3v6.2L5.6 17.4A2.4 2.4 0 0 0 7.6 21h8.8a2.4 2.4 0 0 0 2-3.6L13.25 9.2V3"

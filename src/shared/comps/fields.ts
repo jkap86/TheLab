@@ -12,10 +12,13 @@
  * thirteen), not guessed from Sleeper's docs — a wrong key here is not an
  * error, it is a column of zeroes that quietly flattens every distance it is
  * weighted into. An *unverified* key may ship only behind `gated`, which turns
- * that failure into an honest absence — see the flag's doc. That is also why
- * there is no snap-count field in v1: `stats/parse.ts` says a played line
- * carries snap counts only "usually", and nothing in the repo pins the key's
- * spelling.
+ * that failure into an honest absence — see the flag's doc. **That is exactly
+ * how the snap fields ship**: `stats/parse.ts` says a played line carries snap
+ * counts only "usually" and nothing in the repo pins `off_snp`/`tm_off_snp`, so
+ * the three of them (snaps, snap share, targets per snap) are gated on the
+ * season's own vocabulary rather than trusted — if the keys are real they
+ * work, and if a season's feed never mentions them the fields are inert and
+ * say so instead of reporting that everybody played no snaps.
  */
 
 /**
@@ -30,6 +33,27 @@ export type CompsPosition = (typeof COMPS_POSITIONS)[number];
 
 export type CompsFieldFamily = "production" | "profile" | "market";
 
+/**
+ * The datasets a field can need *beyond* the season's own stat lines and the
+ * player profiles every board reads — one name per expensive read the pool
+ * would otherwise make for everybody.
+ *
+ * Each is a separate read against a table this module doesn't own, and each is
+ * loaded only where a field carrying its name has a positive weight
+ * (`requiredCompsEnrichments`). They are grouped by *source* rather than by
+ * field, which is why dynasty and redraft ADP are one name: both come off the
+ * single `getDraftAdpForPlayers` answer, so splitting them would name two
+ * enrichments over one query.
+ */
+export const COMPS_ENRICHMENTS = [
+  "ktc",
+  "ktc_history",
+  "adp",
+  "draft",
+] as const;
+
+export type CompsEnrichment = (typeof COMPS_ENRICHMENTS)[number];
+
 export type CompsField = {
   /** The wire spelling — what `fields=` names and result payloads key on. */
   key: string;
@@ -43,14 +67,27 @@ export type CompsField = {
    */
   statKey?: string;
   /**
-   * A production field computed at assembly from verified keys rather than
-   * read off a line — the two usage shares. A derived field is already a rate,
-   * so it carries no statKey, is never divided by games, and is *nullable*
-   * (null where the season's lines name no team, or the team keys aren't in
+   * A production field computed at assembly rather than read off a line — the
+   * usage shares and the two snap rates. A derived field is already a rate, so
+   * it carries no statKey, is never divided by games, and is *nullable* (null
+   * where the season's lines name no team, or the keys behind it aren't in
    * that season's feed) — which is why none is ever defaulted: weighting one
    * excludes the seasons that can't answer it, a press the reader makes.
+   *
+   * Assembly writes each one's numerator and denominator onto the row's
+   * `rates` beside the value, which is what lets a multi-season window pool the
+   * rate *exactly* rather than averaging seasons' rates into an approximation
+   * of it.
    */
   derived?: true;
+  /**
+   * The raw stat keys a derived field is computed from, where those keys are
+   * unverified — the `gated` rule for a field that reads no single line. The
+   * field answers only in a season whose feed demonstrably carries **every**
+   * key named here; elsewhere it is null for everyone, which is the honest
+   * absence rather than a rate over a denominator that was never published.
+   */
+  requires?: readonly string[];
   /**
    * A line-read production field whose key is *not* verified against stored
    * lines, gated on the season's own vocabulary: absent-is-zero applies only
@@ -71,6 +108,21 @@ export type CompsField = {
    */
   perGame: boolean;
   /**
+   * Which enrichment datasets this field's value comes out of — the
+   * `Metric.reads` rule applied to the comparison catalogue, and here for the
+   * same reason: **a board nobody has aimed at an expensive dataset must not
+   * pay for it.** Empty for everything answered by the season's stat lines and
+   * the player profiles, which is every default board.
+   *
+   * **Required, so a new field cannot forget**, and **declared rather than
+   * inferred from `family`** — what a bay is called has no business deciding
+   * whether a query is made, and the market family already spans three
+   * different sources. `enrichment.test.ts` pins the agreement from the other
+   * end: a field naming no dataset must answer with none of them loaded, and a
+   * field naming one must go null without it.
+   */
+  reads: readonly CompsEnrichment[];
+  /**
    * Default weight per position, 0–100. A position absent here defaults the
    * field to 0 — which is why every market field's map is empty: a defaulted
    * market field would silently exclude every unpriced player from everyone's
@@ -89,6 +141,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "pass_att",
     perGame: true,
+    reads: [],
     defaultWeights: { QB: 80 },
   },
   {
@@ -97,6 +150,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "pass_cmp",
     perGame: true,
+    reads: [],
     defaultWeights: { QB: 40 },
   },
   {
@@ -105,6 +159,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "pass_yd",
     perGame: true,
+    reads: [],
     defaultWeights: { QB: 100 },
   },
   {
@@ -113,6 +168,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "pass_td",
     perGame: true,
+    reads: [],
     defaultWeights: { QB: 80 },
   },
   {
@@ -121,6 +177,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "pass_int",
     perGame: true,
+    reads: [],
     defaultWeights: { QB: 40 },
   },
   {
@@ -130,6 +187,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     statKey: "pass_air_yd",
     gated: true,
     perGame: true,
+    reads: [],
     defaultWeights: {},
   },
   {
@@ -138,6 +196,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rush_att",
     perGame: true,
+    reads: [],
     defaultWeights: { RB: 100 },
   },
   {
@@ -146,6 +205,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rush_yd",
     perGame: true,
+    reads: [],
     // A quarterback's rushing profile is part of what kind of quarterback he
     // is — the one field whose default varies by position rather than merely
     // applying to several.
@@ -157,6 +217,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rush_td",
     perGame: true,
+    reads: [],
     defaultWeights: { RB: 60 },
   },
   {
@@ -165,6 +226,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     derived: true,
     perGame: false,
+    reads: [],
     defaultWeights: {},
   },
   {
@@ -173,6 +235,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rec_tgt",
     perGame: true,
+    reads: [],
     defaultWeights: { WR: 100, TE: 100, RB: 60 },
   },
   {
@@ -181,6 +244,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rec",
     perGame: true,
+    reads: [],
     defaultWeights: { WR: 80, TE: 80, RB: 60 },
   },
   {
@@ -189,6 +253,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rec_yd",
     perGame: true,
+    reads: [],
     defaultWeights: { WR: 100, TE: 100, RB: 40 },
   },
   {
@@ -197,6 +262,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "rec_td",
     perGame: true,
+    reads: [],
     defaultWeights: { WR: 60, TE: 60 },
   },
   // Air yards, gated on the season's vocabulary — the one production key in
@@ -211,6 +277,22 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     statKey: "rec_air_yd",
     gated: true,
     perGame: true,
+    reads: [],
+    defaultWeights: {},
+  },
+  // Snaps, gated on the same terms as air yards — `stats/parse.ts` promises
+  // only that a played line "usually" carries them. Weightable in its own
+  // right: how often a player was on the field is the usage number the counts
+  // below are all denominated by, and two players with the same targets on
+  // very different snap counts are not the same player.
+  {
+    key: "off_snp",
+    label: "Snaps",
+    family: "production",
+    statKey: "off_snp",
+    gated: true,
+    perGame: true,
+    reads: [],
     defaultWeights: {},
   },
   // The two usage shares — the player's count over his team's count in the
@@ -223,6 +305,36 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     derived: true,
     perGame: false,
+    reads: [],
+    defaultWeights: {},
+  },
+  // Snap share — the player's offensive snaps over his team's, read off each
+  // week's own line rather than aggregated from teammates, so it is exact for a
+  // traded player and needs nobody else's row to answer. The share every other
+  // usage number is read against: 20% of the targets on 90% of the snaps is a
+  // different player from the same targets on 45%.
+  {
+    key: "snap_pct",
+    label: "Snap share %",
+    family: "production",
+    derived: true,
+    requires: ["off_snp", "tm_off_snp"],
+    perGame: false,
+    reads: [],
+    defaultWeights: {},
+  },
+  // Targets per snap — how often being on the field turned into a look, which
+  // separates a route-runner from a blocker at identical snap counts. The
+  // numerator counts only the weeks the denominator can speak for, the rule the
+  // shares above already keep.
+  {
+    key: "tgt_per_snap",
+    label: "Targets / snap",
+    family: "production",
+    derived: true,
+    requires: ["off_snp"],
+    perGame: false,
+    reads: [],
     defaultWeights: {},
   },
   {
@@ -231,6 +343,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     family: "production",
     statKey: "fum_lost",
     perGame: true,
+    reads: [],
     // Available, never defaulted: a count this small is mostly noise at season
     // grain, and a default that adds noise to every first board earns nothing.
     defaultWeights: {},
@@ -242,7 +355,33 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "Age",
     family: "profile",
     perGame: false,
+    reads: [],
     defaultWeights: { QB: 60, RB: 60, WR: 60, TE: 60 },
+  },
+  // Where the player went in the *NFL* draft, as draft capital rather than as
+  // a pick number — `shared/nfl-draft/capital.ts` holds the curve and the
+  // argument for it. In short: a pick number is an ordinal, so a distance over
+  // it would call 1-vs-20 and 200-vs-219 the same gap, which is false in the
+  // only sense a reader means. On the curve, two first-rounders are close, two
+  // Day 3 picks are close, and a 1st against a 5th is far.
+  //
+  // Undrafted is a *value* here and not a gap: every undrafted player stands on
+  // one notch just past the last pick, so they cluster and "compare this
+  // undrafted breakout to other undrafted breakouts" is answerable. Null is
+  // reserved for a player this app has no draft record for at all.
+  //
+  // Never defaulted, on the nullable rule above and with a second reason of its
+  // own: the crosswalk behind it thins out in the archive seasons, so a default
+  // would quietly drop the deepest end of the pool out of every first board —
+  // exactly where the comps are most interesting. Weighting it is a press the
+  // editor makes visible, and the exclusion count says what it cost.
+  {
+    key: "draft_capital",
+    label: "Draft capital",
+    family: "profile",
+    perGame: false,
+    reads: ["draft"],
+    defaultWeights: {},
   },
   // Career-to-date production entering the season, derived from the pool's own
   // prior seasons at read time (`withCareerValues`) — strictly *before* this
@@ -255,6 +394,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "Career PPR/g",
     family: "profile",
     perGame: false,
+    reads: [],
     defaultWeights: {},
   },
   {
@@ -262,6 +402,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "Prev 3 seasons PPR/g",
     family: "profile",
     perGame: false,
+    reads: [],
     defaultWeights: {},
   },
 
@@ -273,6 +414,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "KTC (Superflex)",
     family: "market",
     perGame: false,
+    reads: ["ktc"],
     defaultWeights: {},
   },
   {
@@ -280,6 +422,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "KTC (1QB)",
     family: "market",
     perGame: false,
+    reads: ["ktc"],
     defaultWeights: {},
   },
   // KTC's history read at the same anchor: the career-high superflex value on
@@ -291,6 +434,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "KTC peak (SF)",
     family: "market",
     perGame: false,
+    reads: ["ktc_history"],
     defaultWeights: {},
   },
   {
@@ -298,6 +442,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "KTC 90-day trend (SF)",
     family: "market",
     perGame: false,
+    reads: ["ktc_history"],
     defaultWeights: {},
   },
   {
@@ -305,6 +450,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "ADP (Dynasty)",
     family: "market",
     perGame: false,
+    reads: ["adp"],
     defaultWeights: {},
   },
   {
@@ -312,6 +458,7 @@ export const COMPS_FIELDS: readonly CompsField[] = [
     label: "ADP (Redraft)",
     family: "market",
     perGame: false,
+    reads: ["adp"],
     defaultWeights: {},
   },
 ];
@@ -321,6 +468,23 @@ const byKey = new Map(COMPS_FIELDS.map((field) => [field.key, field]));
 /** The catalogue entry for a wire key, or undefined for a key it never held. */
 export function compsField(key: string): CompsField | undefined {
   return byKey.get(key);
+}
+
+/**
+ * Whether a field can be read over a window of seasons rather than the anchor
+ * season alone.
+ *
+ * **Derived from the family rather than flagged per field**, the
+ * `DEFENSIVE_SLOTS` rule, and the family is the honest test: a window pools its
+ * seasons additively, which is what a count or a usage rate *is* and what a
+ * price is not. Two seasons of targets pool into targets; two seasons of KTC
+ * pool into nothing anybody has a name for, and two ages into an absurdity. So
+ * the production family windows and the other two read the season they are
+ * anchored to — which is also where `career_ppg` and `ktc_peak_sf` already
+ * live, as named answers to the one cross-season question each family has.
+ */
+export function compsFieldTakesWindow(field: CompsField): boolean {
+  return field.family === "production";
 }
 
 /** Whether `position` is one this tool supports as a subject. */

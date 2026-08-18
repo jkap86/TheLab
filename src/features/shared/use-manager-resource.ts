@@ -76,11 +76,29 @@ export function useManagerResource<T>(
    * resources send none and are read as GETs, unchanged.
    */
   scoped?: { method: "GET" | "POST"; search: URLSearchParams; body: unknown } | null,
+  /**
+   * Which season's leagues this reads, or `undefined` for the app's current one
+   * — see {@link fetchManagerResource}, which is where the omission is argued.
+   *
+   * It has to travel with the read as well as in `queryKey`, and the two are the
+   * caller's to keep in step: a key naming a season the request doesn't would
+   * serve one season's rosters under another's, which is the failure that has no
+   * error and no wrong-looking number, only wrong rows.
+   */
+  season?: string,
 ): ManagerResourceState<T> {
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) =>
-      fetchManagerResource<T>(searched, path, fallbackError, signal, userId, scoped),
+      fetchManagerResource<T>(
+        searched,
+        path,
+        fallbackError,
+        signal,
+        userId,
+        scoped,
+        season,
+      ),
     enabled: enabled && userId !== null && (leagues?.length ?? 0) > 0,
     staleTime,
   });

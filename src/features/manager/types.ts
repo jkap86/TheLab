@@ -5,7 +5,7 @@ import type {
   KickoffPayload,
   LeagueAdpBoardValue,
   LeagueAdpEntry,
-  LeagueDetailPayload,
+  LeagueCorePayload,
   LeagueKtcEntry,
   LeagueKtcValue,
   LeaguematePayload,
@@ -77,8 +77,8 @@ export type KickoffResult = KickoffPayload;
 /** A team as sent to the client (manager avatar id resolved to a URL). */
 export type LeagueTeamView = LeagueTeamPayload;
 
-/** The `/api/league/[leagueId]` response consumed by the expanded league view. */
-export type LeagueDetailResult = LeagueDetailPayload;
+/** The `/api/league/[leagueId]` core response the expanded league view opens on. */
+export type LeagueCoreResult = LeagueCorePayload;
 
 /** A `result` message from the leagues stream. */
 export type LeaguesResult = LeaguesResultMessage;

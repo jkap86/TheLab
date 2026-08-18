@@ -173,6 +173,85 @@ describe("TtlPromiseCache", () => {
     assert.deepEqual(cache.peek("e"), { n: 5 });
   });
 
+  test("forget drops one key and leaves the rest", async () => {
+    const { cache, compute, calls } = counted();
+
+    await cache.read("a", compute);
+    await cache.read("b", compute);
+    assert.equal(calls(), 2);
+
+    // What a write behind the cache does — the league core is invalidated by the
+    // sync that rewrote it, not only by its TTL.
+    cache.forget("a");
+    await cache.read("a", compute);
+    await cache.read("b", compute);
+
+    assert.equal(calls(), 3, "only the forgotten key recomputed");
+  });
+
+  test("a compute in flight when a key is forgotten does not store its answer", async () => {
+    const stale = deferred<{ n: number }>();
+    const fresh = deferred<{ n: number }>();
+    const cache = new TtlPromiseCache<{ n: number }>({
+      max: 8,
+      ttlMs: 60_000,
+      name: "test",
+    });
+
+    // A read that started *before* the write lands after it. Left in the pending
+    // map it would store rows the invalidation exists to end — the staleness
+    // arriving a moment after the call that was meant to end it.
+    const before = cache.read("a", () => stale.promise);
+    cache.forget("a");
+    const after = cache.read("a", () => fresh.promise);
+
+    fresh.release({ n: 2 });
+    assert.deepEqual(await after, { n: 2 });
+    stale.release({ n: 1 });
+    // The caller that asked first still gets an answer; it is simply not kept.
+    assert.deepEqual(await before, { n: 1 });
+    assert.deepEqual(cache.peek("a"), { n: 2 });
+  });
+
+  test("a read may store its answer on the entry's own TTL", async () => {
+    // The comps corpus's case: one cache holding a season per key, where the
+    // live season moves weekly and a 2008 season does not move at all.
+    const cache = new TtlPromiseCache<{ n: number }>({
+      max: 8,
+      ttlMs: -1,
+      name: "test",
+    });
+
+    await cache.read("live", async () => ({ n: 1 }));
+    await cache.read("archive", async () => ({ n: 2 }), { ttlMs: 60_000 });
+
+    assert.equal(cache.peek("live"), undefined, "the cache's own TTL applied");
+    assert.deepEqual(cache.peek("archive"), { n: 2 }, "the entry's own did too");
+  });
+
+  test("a per-entry TTL does not disturb coalescing or retries", async () => {
+    const { promise, release } = deferred<{ n: number }>();
+    let calls = 0;
+    const cache = new TtlPromiseCache<{ n: number }>({
+      max: 8,
+      ttlMs: 60_000,
+      name: "test",
+    });
+    const compute = () => {
+      calls += 1;
+      return promise;
+    };
+
+    const readers = Array.from({ length: 5 }, () =>
+      cache.read("a", compute, { ttlMs: 24 * 60 * 60 * 1000 }),
+    );
+    assert.equal(calls, 1, "still one computation for five callers");
+
+    release({ n: 3 });
+    for (const reader of readers) assert.deepEqual(await reader, { n: 3 });
+    assert.equal(cache.inFlight, 0);
+  });
+
   test("clear drops both halves, and a compute in flight cannot un-coalesce the next", async () => {
     const first = deferred<{ n: number }>();
     const second = deferred<{ n: number }>();

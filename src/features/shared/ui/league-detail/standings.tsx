@@ -302,7 +302,7 @@ const WEEK_METRIC_KEYS = new Set(["week_proj"]);
  * only how many of the tracks there are, so a tier moved for one has to move for
  * the other.
  */
-const COLUMN_GRID: Record<number, string> = {
+export const COLUMN_GRID: Record<number, string> = {
   1:
     "grid-cols-[minmax(0,1fr)_2.625rem] " +
     "@sm:grid-cols-[minmax(0,1fr)_2.75rem] " +
@@ -316,10 +316,10 @@ const COLUMN_GRID: Record<number, string> = {
 };
 
 /** A league with nothing to put in a value column: the name and nothing else. */
-const NO_COLUMN_GRID = "grid-cols-[minmax(0,1fr)]";
+export const NO_COLUMN_GRID = "grid-cols-[minmax(0,1fr)]";
 
 /** How far the name reaches on its own line — every track of its own template. */
-const NAME_SPAN: Record<number, string> = { 1: "col-span-2", 2: "col-span-3" };
+export const NAME_SPAN: Record<number, string> = { 1: "col-span-2", 2: "col-span-3" };
 
 function StandingsRow({
   team,
@@ -399,7 +399,7 @@ function StandingsRow({
             `.lab-tab`. Square into the corner it sits in and rounded away from
             it, so it reads as part of the row's own edge. */}
         <span
-          className={`absolute left-0 top-0 inline-flex h-[17px] min-w-[26px] items-center justify-center rounded-br-md rounded-tl-md px-[5px] font-mono text-[9px] font-bold leading-none tracking-[0.04em] ${
+          className={`absolute left-0 top-0 inline-flex h-[1.0625rem] min-w-[1.625rem] items-center justify-center rounded-br-md rounded-tl-md px-[0.3125rem] font-mono text-[0.5625rem] font-bold leading-none tracking-[0.04em] ${
             active ? "lab-tab-on text-foreground/90" : "lab-tab text-foreground/60"
           }`}
         >
@@ -409,7 +409,7 @@ function StandingsRow({
         {/* Indented past the tab's overhang, which is the only thing the name
             gives up — and it gives it up on this line alone. */}
         <span
-          className={`${nameSpan} flex min-w-0 items-center gap-1 pl-[22px] @lg:gap-2`}
+          className={`${nameSpan} flex min-w-0 items-center gap-1 pl-[1.375rem] @lg:gap-2`}
         >
           <TeamAvatar team={team} label={manager} />
           {/* The manager is what this half is a list *of*, so it takes the

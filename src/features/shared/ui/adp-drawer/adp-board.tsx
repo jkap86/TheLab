@@ -8,7 +8,6 @@ import {
   type AdpControls,
   adpListIdentity,
   previewDraftTeams,
-  shownAdpBoards,
 } from "../../adp-controls";
 import { adpBoardEntries, adpPickRows, pickDiscountBoard } from "../../adp-picks";
 import {
@@ -30,7 +29,7 @@ import {
   AdpBoardNoRows,
 } from "./adp-board-empty-state";
 import { EMPTY_PICK_KTC, EMPTY_PLAYERS } from "./adp-drawer.constants.ts";
-import { soleBoardOf, withBoardToggle } from "./adp-drawer.utils.ts";
+import { soleBoardOf } from "./adp-drawer.utils.ts";
 
 /**
  * The list itself — the one part of the drawer that scrolls.
@@ -58,7 +57,6 @@ export function AdpBoard({
   classSeason,
   steepness,
   today,
-  onChange,
 }: {
   board: AdpState;
   controls: AdpControls;
@@ -86,7 +84,6 @@ export function AdpBoard({
    * window resolves to the dates the board was actually fetched with.
    */
   today: string;
-  onChange: (controls: AdpControls) => void;
 }) {
   const players = board.data?.players ?? EMPTY_PLAYERS;
   const pickKtc = board.data?.pick_ktc ?? EMPTY_PICK_KTC;
@@ -178,13 +175,25 @@ export function AdpBoard({
     // heading is pressed, so this fires on the press and on nothing else.
   }, [identity, activeSort]);
 
-  const { redraft_drafts, dynasty_drafts, player_count } = board.data ?? {
+  const {
+    redraft_drafts,
+    dynasty_drafts,
+    redraft_auctions,
+    dynasty_auctions,
+    player_count,
+  } = board.data ?? {
     redraft_drafts: null,
     dynasty_drafts: null,
+    redraft_auctions: null,
+    dynasty_auctions: null,
     player_count: null,
   };
-  const shown = shownAdpBoards(controls.boards);
   const soleDrafts = soleBoard === "dynasty" ? dynasty_drafts : redraft_drafts;
+  // Read off the same board and deliberately not off the same field: the Bid
+  // column averages the draft type this board never does, so its denominator is
+  // its own count and quoting `soleDrafts` there would state a sample the number
+  // was not taken over.
+  const soleAuctions = soleBoard === "dynasty" ? dynasty_auctions : redraft_auctions;
 
   return (
     // `min-h-0` is the load-bearing one — see the note above.
@@ -209,15 +218,14 @@ export function AdpBoard({
               rows down is what it is there to name. */}
           <AdpBoardHeader
             both={both}
-            shown={shown}
             soleBoard={soleBoard}
             soleDrafts={soleDrafts}
+            soleAuctions={soleAuctions}
             redraftDrafts={redraft_drafts}
             dynastyDrafts={dynasty_drafts}
             rules={controls.leagueRules}
             sort={activeSort}
             refreshing={board.stale}
-            onToggleBoard={(next) => onChange(withBoardToggle(controls, next))}
             onSort={handleSort}
           />
           {/* `keepPreviousData` holds these rows through a filter change, so
@@ -243,6 +251,7 @@ export function AdpBoard({
                 both={both}
                 soleBoard={soleBoard}
                 soleDrafts={soleDrafts}
+                soleAuctions={soleAuctions}
                 redraftDrafts={redraft_drafts}
                 dynastyDrafts={dynasty_drafts}
                 rules={controls.leagueRules}

@@ -102,9 +102,11 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   // projected ranks on for the same reason it turns the other two reads on.
   const ranks = useManagerRanks(searched, view.userId, leagues, {
     projections: needs.projections || editorOpened,
+    season: view.seasonRead,
   });
   const ktc = useManagerKtc(searched, view.userId, leagues, {
     enabled: needs.ktc || editorOpened,
+    season: view.seasonRead,
   });
   // The whole shared ADP drawer drives the team value, not just its curve: the
   // window, the kind of draft and the league rules all narrow the population
@@ -123,6 +125,10 @@ export function ManagerLeagues({ searched }: { searched: string }) {
   );
   const adp = useManagerAdpValue(searched, view.userId, leagues, adpBoard, {
     enabled: needs.adp || editorOpened,
+    // Which season's *rosters* are priced. The board's own season is inside
+    // `adpBoard` and stays the reader's: a 2024 roster read against this year's
+    // market is a question somebody can legitimately be asking.
+    season: view.seasonRead,
   });
 
   const total = view.data?.leagues.length ?? 0;
@@ -193,7 +199,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
           the plate sat almost exactly between two cards and could be read as
           belonging to either; at 18 there is visibly more ground above it than
           below. Check that before moving it. */}
-      <ul className="flex w-full flex-col gap-[18px]">
+      <ul className="flex w-full flex-col gap-[1.125rem]">
         {view.filtered.map((league) => (
           <LeagueCard
             key={league.league_id}

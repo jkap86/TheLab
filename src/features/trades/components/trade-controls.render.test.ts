@@ -77,7 +77,7 @@ function plate(over: Over = {}): string {
 
 /** How many pips the instrument drew, lit or not. */
 function pips(markup: string): number {
-  return (markup.match(/h-\[5px\] w-\[5px\]/g) ?? []).length;
+  return (markup.match(/h-\[0.3125rem\] w-\[0.3125rem\]/g) ?? []).length;
 }
 
 /** Whether a step key with this label is the inert spelling. */

@@ -3,6 +3,7 @@ import type { AdpPlayerPayload } from "@/shared/contract";
 import type { KtcValue } from "@/shared/ktc";
 
 import { DEFAULT_ADP_ROUNDS } from "../../adp-controls";
+import { scaledPx } from "../../font-scale.ts";
 
 /**
  * The board's grids, written out whole so Tailwind can see them, and shared by
@@ -65,11 +66,46 @@ import { DEFAULT_ADP_ROUNDS } from "../../adp-controls";
  * widen at every tier. One board on a 390px phone leaves the name 98px against
  * the 114 it had, which still holds `Ja'Marr Chase` (92.4px); both boards there
  * are 158px against 162.
+ *
+ * **The single-board template carries one more track than it used to**, seated at
+ * `@md`: the auction column, 2.25rem, between Taken and Value. Its own arithmetic
+ * — why that tier, why that width, and why the both-boards template is untouched
+ * — is on {@link AUCTION_COLUMN_SEAT}. The short version is that the densest
+ * single-board state is now nine columns, 400px of chrome and a **143px** name,
+ * which clears the 128px the both-boards state already lives at.
  */
 export const BOARD_COLUMNS_ONE =
-  "grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_3.25rem] @lg:grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_3.25rem_2.5rem_2.5rem]";
+  "grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_3.25rem] @md:grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_2.25rem_3.25rem] @lg:grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_2.25rem_3.25rem_2.5rem_2.5rem]";
 export const BOARD_COLUMNS_BOTH =
   "grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem] @md:grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_3.25rem_3.25rem] @lg:grid-cols-[1.75rem_1fr_2.25rem_3rem_3rem_3.25rem_3.25rem_2.5rem_2.5rem]";
+
+/**
+ * The seat the auction column wears, on its heading and on its cells alike.
+ *
+ * **`@md` rather than the KTC pair's `@lg`, and the arithmetic is the reason.**
+ * The column is 2.25rem — the position column's width, which is what `Bid ▲`
+ * measures at (three uppercase characters plus a caret is 33.6px against a 36px
+ * track, the same fit `Pos ▲` gets) and comfortably more than the widest cell,
+ * `100%` at 28.8px. Seated a tier lower it would arrive on a 390px phone, where
+ * the single-board row has 350px and the name is already down to 98px: 52px of
+ * column and gap takes that to 46, which is no name at all. At `@md` the panel is
+ * at least 448px and the KTC pair has not arrived yet, so the name has 112px
+ * there and 143px at the full 36rem panel with every column up — above the 128px
+ * the both-boards state already accepts.
+ *
+ * It is in **single-board mode only**, which is the Taken column's own rule and
+ * for the same reason: two more numeric columns is what the both-boards row has
+ * no width for, and a share of *which* market is not a question one column can
+ * answer. With both boards up the number moves to each ADP cell's hover, exactly
+ * as Taken's share does.
+ *
+ * The band this costs is 513–530px, where the KTC pair has just arrived and the
+ * name is briefly under 100px — the non-monotonicity a tier that adds a column
+ * always buys. `block` rather than `inline-block` for the reason
+ * {@link KTC_COLUMN_SEAT} spells out: Tailwind v4 emits the display utilities
+ * alphabetically, so `.hidden` beats `.block` and loses to every `.inline*`.
+ */
+export const AUCTION_COLUMN_SEAT = "hidden @md:block";
 
 /**
  * The seat a KTC column wears, on a heading and on a cell alike.
@@ -111,8 +147,19 @@ export const BOARD_ROW_CLASS = (both: boolean) =>
  * so a constant that merely *estimated* the height would drift a pixel per row
  * — a thousand rows deep, a whole screen of it. Written on the element, the
  * constant is true by construction and the two cannot disagree.
+ *
+ * **Which is exactly why it cannot stay a literal 33 under `--app-font-scale`.**
+ * Every term of that arithmetic is `rem` — the line box, the padding — and only
+ * the 1px border is not, so the row the browser lays out grows with the type
+ * while a hardcoded number does not: at a scale of 1.125 the content is ~36px in
+ * a 33px box, which is a clipped board *and* the per-row drift this constant
+ * exists to prevent. So the 32 rem-derived pixels are scaled and the border is
+ * added after, and it is a getter rather than a value because the scale is read
+ * off the document and there is nothing to read at module-evaluation time on the
+ * server. Both readers — the row's own `style` and the virtualizer's
+ * `estimateSize` — call it, so they still cannot disagree.
  */
-export const ADP_ROW_HEIGHT = 33;
+export const adpRowHeight = (): number => scaledPx(32) + 1;
 
 /**
  * How many rows are mounted either side of the visible window.

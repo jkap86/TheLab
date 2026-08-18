@@ -11,7 +11,10 @@ import { getActiveSeason } from "@/shared/season";
 import { fetchWeekProjections, getNflState } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
+import { HORIZON_ORDER_SQL, WEEK_ORDER_SQL } from "./horizon-queue";
+import type { WeekOrderSql } from "./horizon-queue";
 import { toProjectionRows } from "./parse";
+import { clearProjectionMetaCaches } from "./queries";
 import type { ProjectionRow } from "./parse";
 import { validateWeekProjections } from "./validate";
 import { horizonWeeks, targetWeeks } from "./weeks";
@@ -43,10 +46,18 @@ export const PROJECTIONS_HORIZON_TTL_MS = 24 * 60 * 60 * 1000;
  *
  * The same shape as the KTC history backfill and for the same reason: a tick that
  * pulls the whole rest of the season at once is a burst on Sleeper and a long
- * stretch of held advisory lock. At the 15-minute loop interval two a tick walks
- * all sixteen inside two hours, well within their day-long TTL.
+ * stretch of held advisory lock. At the 15-minute loop interval four a tick walks
+ * all sixteen inside an hour, comfortably within their day-long TTL — and the
+ * daily volume is unchanged either way, since the TTL is what decides how often a
+ * week is refetched at all. The cap is about the size of the burst, so what it
+ * buys is how long a *cold* horizon spends describing a shorter season than the
+ * one it is meant to cover. Sized against `SETTLED_WEEKS_PER_TICK`, which is six
+ * against a much larger backlog.
+ *
+ * A cap only trickles where the queue rotates: see `./horizon-queue` for what a
+ * week that never stamps used to do to it.
  */
-export const HORIZON_WEEKS_PER_TICK = 2;
+export const HORIZON_WEEKS_PER_TICK = 4;
 
 const COLUMNS = [
   "season", "week", "player_id", "company", "team", "opponent", "game_id",
@@ -103,31 +114,40 @@ export type ProjectionsSyncSummary = {
 /**
  * Which of `weeks` are stale, judged per week on the newest `updated_at` among
  * that week's rows — or, for a week with no rows, on when it was last fetched
- * (`projection_week_syncs`). Without the second gate an unpublished week is due
- * on every tick, refetched forever, and — because the horizon budget takes the
- * earliest stale weeks first — able to starve published weeks out of the cap.
+ * successfully (`projection_week_syncs.synced_at`). Without the second gate an
+ * unpublished week is due on every tick, refetched forever, and — because a
+ * capped pass takes the head of this list — able to starve published weeks out
+ * of the cap.
+ *
+ * `order` is the other half of that starvation and is chosen by the caller: a
+ * capped list rotates on `attempt_at` so a week that never succeeds cannot hold
+ * the head of it, an uncapped one stays in week order. Both spellings live in
+ * `./horizon-queue` beside the rule they encode. Neither reads `attempt_at` as
+ * freshness — a week that was tried and failed is still due, which is the whole
+ * point of stamping the two separately.
  */
 async function staleWeeks(
   season: string,
   weeks: number[],
   ttlMs: number,
+  order: WeekOrderSql,
 ): Promise<number[]> {
   const { rows } = await pool.query<{ week: number }>(
+    // Outer-joined rather than a second `NOT EXISTS`, because the ordering needs
+    // the stamp row itself and a week that has never been stamped has to survive
+    // the join to be ordered first.
     `SELECT w.week
        FROM unnest($1::int[]) AS w(week)
+       LEFT JOIN projection_week_syncs s
+              ON s.season = $2 AND s.week = w.week
       WHERE NOT EXISTS (
             SELECT 1
               FROM projections p
              WHERE p.season = $2
                AND p.week = w.week
                AND p.updated_at > now() - $3::interval)
-        AND NOT EXISTS (
-            SELECT 1
-              FROM projection_week_syncs s
-             WHERE s.season = $2
-               AND s.week = w.week
-               AND s.synced_at > now() - $3::interval)
-      ORDER BY w.week`,
+        AND (s.synced_at IS NULL OR s.synced_at <= now() - $3::interval)
+      ORDER BY ${order}`,
     [weeks, season, msInterval(ttlMs)],
   );
   return rows.map((r) => r.week);
@@ -146,12 +166,30 @@ async function storedWeekCount(season: string, week: number): Promise<number> {
   return Number(rows[0].count);
 }
 
-/** Stamp a week as fetched, empty or not — the marker `staleWeeks` reads. */
+/**
+ * Stamp a week as *tried*, before the fetch that may not come back.
+ *
+ * Ordering only — `synced_at` is left exactly as it was, so a week stamped here
+ * and nowhere else is still stale and still due. Stamped before rather than
+ * after, the `refreshLeague` rule: a fetch that throws, times out or is refused
+ * has to rotate too, and the only stamp guaranteed to have happened by then is
+ * one written first.
+ */
+function markWeekAttempted(season: string, week: number): Promise<unknown> {
+  return pool.query(
+    `INSERT INTO projection_week_syncs (season, week, attempt_at)
+     VALUES ($1, $2, now())
+     ON CONFLICT (season, week) DO UPDATE SET attempt_at = now()`,
+    [season, week],
+  );
+}
+
+/** Stamp a week as fetched, empty or not — the marker `staleWeeks` gates on. */
 function markWeekSynced(season: string, week: number): Promise<unknown> {
   return pool.query(
-    `INSERT INTO projection_week_syncs (season, week, synced_at)
-     VALUES ($1, $2, now())
-     ON CONFLICT (season, week) DO UPDATE SET synced_at = now()`,
+    `INSERT INTO projection_week_syncs (season, week, synced_at, attempt_at)
+     VALUES ($1, $2, now(), now())
+     ON CONFLICT (season, week) DO UPDATE SET synced_at = now(), attempt_at = now()`,
     [season, week],
   );
 }
@@ -262,9 +300,15 @@ export async function syncProjections(
     const far = explicitWeeks ? [] : horizonWeeks(state);
 
     // Two freshness gates, one per clock. The horizon's is capped, so what it
-    // leaves behind is stale-but-waiting rather than fresh.
-    const nearDue = force ? near : await staleWeeks(season, near, ttlMs);
-    const farStale = far.length ? await staleWeeks(season, far, horizonTtlMs) : [];
+    // leaves behind is stale-but-waiting rather than fresh — and capped is why
+    // it rotates on the last attempt rather than running in week order (see
+    // `./horizon-queue`).
+    const nearDue = force
+      ? near
+      : await staleWeeks(season, near, ttlMs, WEEK_ORDER_SQL);
+    const farStale = far.length
+      ? await staleWeeks(season, far, horizonTtlMs, HORIZON_ORDER_SQL)
+      : [];
     const farDue = farStale.slice(0, Math.max(0, horizonPerRun));
     const deferred = farStale.slice(farDue.length);
 
@@ -280,6 +324,13 @@ export async function syncProjections(
 
     for (const week of due) {
       try {
+        // Rotation, not freshness: this week has now had its turn whatever
+        // comes back, so a week that fails every time gives way to the ones
+        // behind it instead of consuming the cap on every tick forever. It
+        // stays stale — `synced_at` is untouched — so it is still retried, just
+        // no longer ahead of everything else.
+        await markWeekAttempted(season, week);
+
         const entries = await fetchWeekProjections(season, week);
         const rows = toProjectionRows(entries, season, week);
 
@@ -312,6 +363,11 @@ export async function syncProjections(
 
         const removed = await writeWeek(season, week, validation.rows);
         await markWeekSynced(season, week);
+        // The horizon and the stat-key vocabulary are derived from these rows
+        // and cached per season for minutes, so a week that has just landed —
+        // or one whose last game has just passed — is published now rather than
+        // waiting out a TTL behind the sync that produced it.
+        clearProjectionMetaCaches();
         synced.push({ week, rows: validation.rows.length, removed });
       } catch (error) {
         failed.push(week);

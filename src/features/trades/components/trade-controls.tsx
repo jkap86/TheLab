@@ -83,7 +83,7 @@ export function TradeIdentity({
         className="lab-billet-rail absolute inset-y-0 left-0 w-[3px]"
       />
 
-      <p className="font-display text-[15px] font-semibold tracking-[0.02em] text-foreground">
+      <p className="font-display text-[0.9375rem] font-semibold tracking-[0.02em] text-foreground">
         {TRADE_CIRCLES[circleIndex(filters.circle)].label}
       </p>
       <p id={CIRCLE_NOTE_ID} className="mt-1 text-xs text-foreground/50">
@@ -269,7 +269,7 @@ export function TradeControls({
  * with the 4px wall that says raised.
  */
 export const TRADE_RAIL_BOX =
-  "lab-plate sticky top-[var(--site-header-h)] z-30 mb-5 rounded-xl px-3 py-[6px]";
+  "lab-plate sticky top-[var(--site-header-h)] z-30 mb-5 rounded-xl px-3 py-[0.375rem]";
 
 /**
  * How far out to draw the circle: a readout with a step either side.
@@ -359,7 +359,7 @@ function CircleAperture({
           // The only thing a press changes, and the step keys' own labels
           // cannot say it — so it says itself.
           aria-live="polite"
-          className="lab-engraved min-w-0 flex-1 truncate font-display text-[11.5px] font-semibold uppercase tracking-[0.03em] text-foreground/90"
+          className="lab-engraved min-w-0 flex-1 truncate font-display text-[0.71875rem] font-semibold uppercase tracking-[0.03em] text-foreground/90"
         >
           {label}
         </span>
@@ -408,7 +408,7 @@ function StepKey({
         if (to === null) return;
         onChange(to);
       }}
-      className={`grid h-[30px] w-[26px] flex-none place-items-center rounded-lg text-[13px] leading-none ${
+      className={`grid h-[1.875rem] w-[1.625rem] flex-none place-items-center rounded-lg text-[0.8125rem] leading-none ${
         dead
           ? "cursor-not-allowed text-foreground/30"
           : "lab-chip lab-chip-sm text-foreground/75"
@@ -433,7 +433,7 @@ function Pips({ at }: { at: number }) {
       {TRADE_CIRCLES.map((option, index) => (
         <span
           key={option.value}
-          className={`block h-[5px] w-[5px] rounded-full ${
+          className={`block h-[0.3125rem] w-[0.3125rem] rounded-full ${
             index === at
               ? "bg-active shadow-[0_0_6px_rgba(0,255,229,0.85)]"
               : "bg-foreground/20"

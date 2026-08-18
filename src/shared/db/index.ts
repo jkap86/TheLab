@@ -15,6 +15,13 @@ export {
   DEFAULT_POOL_MAX,
 } from "./budget";
 export type { DatabaseBudget } from "./budget";
+export {
+  createHeavyReadAdmission,
+  dbHeavyReadAdmission,
+  dbHeavyReadConcurrency,
+  DB_HEAVY_READ_LEGACY_VARS,
+  DB_HEAVY_READ_LIMIT_VAR,
+} from "./heavy-admission";
 export { isDatabaseBusy } from "./timeout";
 export { jsonb } from "./json";
 export { msInterval } from "./interval";

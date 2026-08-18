@@ -15,4 +15,7 @@
  * keep.
  */
 export { ManagerHeader } from "./manager-header";
-export type { HeaderStat } from "./manager-header.types";
+export type {
+  HeaderSeasonControl,
+  HeaderStat,
+} from "./manager-header.types";

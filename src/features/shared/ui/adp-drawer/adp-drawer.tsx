@@ -402,7 +402,6 @@ export function AdpDrawer({
           classSeason={defaultSeason}
           steepness={steepness}
           today={today}
-          onChange={onChange}
         />
 
         <PinnedFooter

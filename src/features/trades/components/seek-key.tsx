@@ -34,7 +34,7 @@ import type { TradeSeek } from "../filters";
  * you are standing. Two things follow. The block is 34px rather than 40 — the
  * larger size was bought to keep a floating part off the first card's own instant
  * ledge, which is not a hazard it can meet seated in a row — and its plate hangs
- * `-bottom-[17px]`, measured against the *rail's* edge rather than the block's,
+ * `-bottom-[1.0625rem]`, measured against the *rail's* edge rather than the block's,
  * so it straddles the thing it names. Those two numbers are a pair: change the
  * block's height or the rail's padding and the plate no longer rides an edge.
  *
@@ -138,7 +138,7 @@ export function SeekKey({
           value === null ? "" : "lab-billet-lit"
         }`}
       >
-        <span className="lab-billet-face lab-notch-all grid h-[34px] w-[34px] place-items-center">
+        <span className="lab-billet-face lab-notch-all grid h-[2.125rem] w-[2.125rem] place-items-center">
           <CalendarGlyph seeking={value !== null} />
         </span>
       </button>
@@ -154,7 +154,7 @@ export function SeekKey({
           // the *rail's* bottom edge, which is the block's own 34px plus the
           // rail's padding beneath it — see the note above on why those numbers
           // are a pair.
-          className="lab-nameplate pointer-events-none absolute -bottom-[17px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[3px] px-[7px] pb-[2.5px] pt-[2px] font-display text-[9px] font-semibold uppercase tracking-[0.045em] text-foreground/90"
+          className="lab-nameplate pointer-events-none absolute -bottom-[1.0625rem] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[3px] px-[0.4375rem] pb-[2.5px] pt-[2px] font-display text-[0.5625rem] font-semibold uppercase tracking-[0.045em] text-foreground/90"
         >
           {plateLabel(value, today)}
         </span>
@@ -172,7 +172,7 @@ export function SeekKey({
         >
           <p
             id={labelId}
-            className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-foreground/40"
+            className="mb-2 text-[0.625rem] font-bold uppercase tracking-[0.16em] text-foreground/40"
           >
             Jump to
           </p>
@@ -198,7 +198,7 @@ export function SeekKey({
             // one that has to give that up for room.
             className={`w-full rounded-lg border border-foreground/10 bg-foreground/[0.04] px-2.5 ${compactInput} outline-none transition-colors focus:border-active/45`}
           />
-          <p className="mt-2 flex items-center gap-2 text-[10.5px] text-foreground/40">
+          <p className="mt-2 flex items-center gap-2 text-[0.65625rem] text-foreground/40">
             {value === null ? (
               "Everything older is below."
             ) : (
@@ -206,7 +206,7 @@ export function SeekKey({
                 <button
                   type="button"
                   onClick={() => travel(null)}
-                  className="lab-chip lab-chip-sm shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold text-foreground/75"
+                  className="lab-chip lab-chip-sm shrink-0 rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold text-foreground/75"
                 >
                   Today
                 </button>
@@ -277,7 +277,7 @@ function CalendarGlyph({ seeking }: { seeking: boolean }) {
       aria-hidden
       viewBox="0 0 20 20"
       fill="none"
-      className="h-[18px] w-[18px] text-foreground"
+      className="h-[1.125rem] w-[1.125rem] text-foreground"
     >
       <defs>
         <linearGradient id={frameId} x1="0" y1="0" x2="0" y2="1">

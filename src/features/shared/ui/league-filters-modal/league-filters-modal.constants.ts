@@ -19,7 +19,7 @@ import type { RulePreset } from "./league-filters-modal.types.ts";
  * three sizes as sections were added.
  */
 export const CAPTION =
-  "font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40";
+  "font-mono text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-foreground/40";
 
 /** The old superflex and IDP chips, as the rules they always were. */
 export const SLOT_PRESETS: RulePreset[] = [

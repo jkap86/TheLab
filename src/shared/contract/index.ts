@@ -1,4 +1,5 @@
 import type {
+  AdpAuctionBoards,
   AdpBoardStats,
   AdpBoardType,
   AdpFilters,
@@ -16,7 +17,9 @@ import type {
 import type {
   CompsBasis,
   CompsFieldFamily,
+  CompsPlayerOption,
   CompsPosition,
+  CompsWindowKey,
 } from "@/shared/comps";
 import type { KtcRosterValue, KtcValue } from "@/shared/ktc";
 import type { PlaceholderPick } from "@/shared/picktracker";
@@ -147,6 +150,9 @@ export type TeamWeekProjectionPayload = {
    * same function the matchups route counts {@link MatchupProjectionPayload.kickoff_moves}
    * with, so the card's count and the panel's marks cannot disagree.
    *
+   * "Earlier" carries an hour's buffer (`KICKOFF_BUFFER_MS`), so starters
+   * kicking off inside one window of each other are seated as they stand.
+   *
    * Null is "no answer", never "already ordered": a best-ball league (Sleeper
    * seats that lineup after the games), or a week the schedule supplies no
    * kickoff instants for. Already ordered is this array equal to `lineup`.
@@ -163,9 +169,12 @@ export type TeamWeekProjectionPayload = {
  * that panel shows is a rest-of-season shape, which is the right question when a
  * reader arrives at a league and the wrong one when they arrive at a *lineup*.
  *
- * Null where the week's read failed. The rosters are the point of that route and
- * this is a pair of columns on top of them, so a failure here costs the columns
- * and not the panel — the call `outlook` already makes beside it.
+ * **There is no null on this wire.** It used to be the shape a failed read came
+ * back as, on the reasoning that the rosters are the point of that panel and this
+ * is a pair of columns on top of them — which is still the judgement, and is the
+ * *client's* to make now that the week is a request of its own. What the route
+ * sends is what happened: the week, or a failure status. See
+ * {@link LeagueWeekPayload}.
  */
 export type LeagueWeekViewPayload = {
   week: number;
@@ -186,6 +195,19 @@ export type LeagueWeekViewPayload = {
   ppg: Record<string, PpgPayload>;
   /** Roster id → that team's best and current lineup for the week. */
   team_projection: Record<string, TeamWeekProjectionPayload>;
+  /**
+   * The bar every team is measured against in a league that plays Sleeper's
+   * `league_average_match`, and null in every league that does not — which is
+   * most of them, and is why the panel draws this only where it exists rather
+   * than printing an em dash for a bar the league's own scoring never applies.
+   *
+   * Two readings, for the reason a roster heading carries two: `optimal` is the
+   * middle of the best lineups available and is what a panel of best lineups can
+   * be read against, `current` is the middle of the lineups actually set and is
+   * what the week comes to untouched — the half the lineup checker's own mark is
+   * counted on.
+   */
+  median: { optimal: number; current: number } | null;
   /** Roster id → that team's points per game over the same window. */
   team_ppg: Record<string, PpgPayload>;
   /**
@@ -217,57 +239,103 @@ export type LeagueWeekViewPayload = {
  */
 export type TeamGamePayload = TeamGame;
 
-/** `GET /api/league/[leagueId]` — standings and rosters for one league. */
-export type LeagueDetailPayload = Omit<LeagueDetail, "teams"> & {
+/**
+ * `GET|POST /api/league/[leagueId]` — the **core** of one league: its settings,
+ * every roster and its standings, the managers, the draft picks each team owns,
+ * and the names those player ids resolve to.
+ *
+ * **What is not on it is the point.** It used to carry the KTC/ADP prices, the
+ * rest-of-season outlook and — where a week was asked for — that week's
+ * projections and points per game, on one payload built behind one
+ * `Promise.all`; so a panel that only ever needed rosters and standings to draw
+ * itself waited on the slowest of four reads, of which the cheap one was the
+ * only one it could not do without. The three enrichments are their own routes
+ * now ({@link LeagueValuesPayload}, {@link LeagueOutlookPayload},
+ * {@link LeagueWeekPayload}) and fill into the rendered panel as they land.
+ *
+ * The split is by *what blocks the first paint*, not by subject: everything here
+ * is structural and stable, everything elsewhere is a number computed on top of
+ * it. That is also what makes the four keyed apart on the client — a reader
+ * changing the ADP board must not re-fetch a roster, and stepping a week must
+ * not re-fetch a price.
+ */
+export type LeagueCorePayload = Omit<
+  LeagueDetail,
+  // `median_match` is the one field of that read the client is not sent, and it
+  // is left off for the reason `league_type` was carried *on*: a fact crosses
+  // when something over here needs it. This one decides whether the week read
+  // folds a median at all, and what a reader sees is the median itself — which
+  // rides on `LeagueWeekViewPayload`, where null already says "no bar to beat"
+  // for every league without the setting. Sending the flag as well would be a
+  // second way to ask one question, on the response every open of this panel
+  // pays for.
+  "teams" | "median_match"
+> & {
   teams: LeagueTeamPayload[];
   /** Player ids → resolved name/position/team, for rendering rosters. */
   players: Record<string, PlayerSummary>;
-  /**
-   * Per-player KTC and ADP values on this league's board, for the roster panel's
-   * selectable value columns. Always present — an empty set of maps where nothing
-   * on these rosters is priced — so the client needn't guard its shape.
-   */
-  values: LeagueRosterValues;
-  /**
-   * Every roster's best starting lineup for the rest of the season, ranked on
-   * each player's projected points aggregated over `outlook.weeks` and scored
-   * with *this* league's `scoring_settings` — so the same player is worth
-   * different totals in two leagues, which is the point.
-   *
-   * One lineup per team rather than one per week: `optimal` answers "who belongs
-   * in your starting slots from here", and `current`/`points_left`/`start`/`sit`
-   * diff that against what the roster is starting today.
-   *
-   * `weekly_optimal_points` is the team total for the same horizon and is a
-   * different number: it re-sets the lineup every week, so it covers byes and
-   * alternating starts, and is the one to show as "what this team projects to
-   * score" rather than either lineup's total. `weekly_split` is that same total
-   * attributed player by player — how much of each one's projection lands in a
-   * starting slot and how much of it never leaves the bench — so it is keyed by
-   * player id but scoped to a team, since being stuck behind someone is.
-   * `weekly_bench_points` is the team-level sum of those bench halves: the depth a
-   * roster is carrying without playing, which is why it sits beside the projected
-   * total in the standings rather than being folded into it.
-   *
-   * The horizon is the weeks actually stored, which the sync keeps a short window
-   * of — read `outlook.weeks` rather than assuming it runs to week 18, and say
-   * how far ahead the numbers reach wherever they surface.
-   *
-   * null when the league can't be projected: no slots or scoring settings on
-   * file, or no weeks left on the schedule.
-   */
-  outlook: LeagueOutlook | null;
-  /**
-   * The same league read as one week, when the caller asked for one — see
-   * {@link LeagueWeekViewPayload}.
-   *
-   * Absent rather than null when no `?week=` was sent, which is the honest
-   * spelling of "not asked for": null is what a *failed* week read answers with,
-   * and a panel needs to tell "these columns have no data" from "these columns
-   * were never requested".
-   */
-  week_view?: LeagueWeekViewPayload | null;
 };
+
+/**
+ * `GET|POST /api/league/[leagueId]/values` — per-player KTC and ADP values on
+ * this league's board, for the roster panel's selectable value columns.
+ *
+ * Its own route because it is the one enrichment that depends on the **ADP
+ * drawer**: the board a reader narrows re-prices these two columns and nothing
+ * else on the panel, so it is the only one of the four whose key carries the
+ * board. It answers a POST for the reason `/api/adp` does — a rule set resolves
+ * to more league ids than a request line can carry.
+ */
+export type LeagueValuesPayload = LeagueRosterValues;
+
+/**
+ * `GET /api/league/[leagueId]/outlook` — every roster's best starting lineup for
+ * the rest of the season, ranked on each player's projected points aggregated
+ * over `outlook.weeks` and scored with *this* league's `scoring_settings` — so
+ * the same player is worth different totals in two leagues, which is the point.
+ *
+ * One lineup per team rather than one per week: `optimal` answers "who belongs
+ * in your starting slots from here", and `current`/`points_left`/`start`/`sit`
+ * diff that against what the roster is starting today.
+ *
+ * `weekly_optimal_points` is the team total for the same horizon and is a
+ * different number: it re-sets the lineup every week, so it covers byes and
+ * alternating starts, and is the one to show as "what this team projects to
+ * score" rather than either lineup's total. `weekly_split` is that same total
+ * attributed player by player — how much of each one's projection lands in a
+ * starting slot and how much of it never leaves the bench — so it is keyed by
+ * player id but scoped to a team, since being stuck behind someone is.
+ * `weekly_bench_points` is the team-level sum of those bench halves: the depth a
+ * roster is carrying without playing, which is why it sits beside the projected
+ * total in the standings rather than being folded into it.
+ *
+ * The horizon is the weeks actually stored, which the sync keeps a short window
+ * of — read `outlook.weeks` rather than assuming it runs to week 18, and say
+ * how far ahead the numbers reach wherever they surface.
+ *
+ * **null when the league can't be projected** — no slots or scoring settings on
+ * file, or no weeks left on the schedule — and *only* then. It is a fact about
+ * the league, so it crosses as a 200 and the columns draw an em dash on it. A
+ * read that failed used to arrive as the same null, which made a database with
+ * no room indistinguishable from a league with nothing to project and cached it
+ * as a successful answer for the entry's whole stale time; that is a 503 or a
+ * 500 now (`app/api/read-response.ts`), and this null means what it says.
+ */
+export type LeagueOutlookPayload = LeagueOutlook | null;
+
+/**
+ * `GET /api/league/[leagueId]/week?week=N` — the same league read as one week.
+ *
+ * **Not nullable, which is the one thing worth saying about it.** There is no
+ * "not asked for" spelling any more — asking is a request of its own, so a panel
+ * opened on a season simply never makes it — and there is no "could not be read"
+ * spelling either: `getLeagueWeekView` is `Promise<LeagueWeekView>`, so every
+ * null this route ever sent was a caught exception wearing a 200. The columns
+ * still draw an em dash when they have nothing, but that is now the *client*
+ * holding a failed or unlanded query, which it can tell apart from an answer;
+ * the wire carries the week or a failure status (`app/api/read-response.ts`).
+ */
+export type LeagueWeekPayload = LeagueWeekViewPayload;
 
 /**
  * `POST /api/league/[leagueId]/sync` — what an on-demand refresh of one league
@@ -958,6 +1026,10 @@ export type MatchupProjectionPayload = {
    * are one rule. Zero is a real answer — the lineup already locks
    * strict-seats-first — where null is no answer at all: a best-ball league,
    * or a week the schedule supplies no kickoff instants for.
+   *
+   * Kickoffs within an hour of each other count as one (`KICKOFF_BUFFER_MS`),
+   * so the Sunday 4:05 and 4:25 windows never generate a move on their own —
+   * a seat freed twenty minutes earlier frees no decision.
    */
   kickoff_moves: number | null;
 };
@@ -990,6 +1062,26 @@ export type LeagueMatchupPayload = {
    * is.
    */
   opponent_projection: number | null;
+  /**
+   * The middle of what *every* team in the league projects this week, for the
+   * leagues that play each team against it as well as against their opponent —
+   * Sleeper's `league_average_match`. Null everywhere else, which is most
+   * leagues.
+   *
+   * A second result rather than a second opinion: a median league's week is two
+   * games, so a card prints two marks and the plate above the list counts both.
+   *
+   * It is their *current* lineups on both sides of the comparison, exactly as
+   * {@link LeagueMatchupPayload.opponent_projection} is — the question is "am I
+   * beating the field as things stand", and a median of everyone's best lineups
+   * would be a bar nobody in the league is actually clearing.
+   *
+   * Null is "no median to beat" and never a zero, the rule every projected
+   * number here keeps: a league without the setting, a league the week can't be
+   * projected for, and a league with fewer than two teams stored all answer the
+   * same way, because none of them gives a reader a bar they can act on.
+   */
+  median_projection: number | null;
 };
 
 /**
@@ -1222,6 +1314,24 @@ export type AdpPlayerPayload = {
   /** His average over the dynasty board's drafts. */
   dynasty: AdpBoardStats | null;
   /**
+   * What he *cost* in the crawled auctions, as a share of the budget those rooms
+   * were spending — per league-type board, the same split the two averages take.
+   *
+   * **A different market from the two above, and the same slice of the corpus.**
+   * The auctions it averages are cut by every one of `filters` except
+   * `draft_types`, which it cannot honour and stay meaningful: the board is never
+   * averaged over auctions — a `pick_no` there is nomination order rather than a
+   * draft slot — so a share that inherited that list would be null for every
+   * reader on every board. Everything else applies, so a row's ADP and its share
+   * describe the same leagues, season and window.
+   *
+   * Null per board on the `min_picks` gate, the same control and the same
+   * meaning as the averages: one buy is not an average, and it is a different
+   * answer from cheap. The field itself is always present — both halves null is
+   * a player the crawled auctions never bought.
+   */
+  auction: AdpAuctionBoards;
+  /**
    * What KeepTradeCut prices him at, on both of the boards KTC publishes —
    * superflex and 1QB.
    *
@@ -1264,6 +1374,23 @@ export type AdpPayload = {
   /** How `draft_count` splits into the two boards; the halves sum to it. */
   redraft_drafts: number;
   dynasty_drafts: number;
+  /**
+   * The auctions behind {@link AdpPlayerPayload.auction}, per board — the
+   * denominator its cells' hover states.
+   *
+   * **Not a part of `draft_count` and never summed into it.** These are the
+   * drafts the board deliberately does not average, counted over the same
+   * leagues, season and window; adding them to a total that describes the ADP
+   * population would make the two halves of `redraft_drafts` stop meaning
+   * anything.
+   *
+   * Counted whether or not their budget could be read, which is the one thing
+   * that makes a broken read visible: a corpus with no auctions in it answers 0
+   * here, where a build of Sleeper that stopped sending `settings.budget` answers
+   * the real count beside a column of em dashes.
+   */
+  redraft_auctions: number;
+  dynasty_auctions: number;
   /** Players in the full filtered set; 0 when the requested page is past its end. */
   player_count: number;
   players: AdpPlayerPayload[];
@@ -1428,14 +1555,29 @@ export type KickoffPayload = {
 };
 
 /**
- * One field of a comps comparison as the route ran it: the catalogue's
- * identity, the weight actually applied, and the field's mean/stdev **over the
- * comparison population** (`candidates_eligible`) — the population the z-scores
- * were taken against, which deliberately never includes the subject. Null
- * mean/stdev means no candidate was eligible.
+ * One *dimension* of a comps comparison as the route ran it: a catalogue field
+ * read over a window of seasons, the weight actually applied, and the
+ * mean/stdev **over the comparison population** (`candidates_eligible`) — the
+ * population the z-scores were taken against, which deliberately never includes
+ * the subject. Null mean/stdev means no candidate was eligible.
+ *
+ * `key` is the dimension — the field key for the default window and a
+ * composite for any other — and is what `values` and `excluded_missing` are
+ * keyed by, so one string identifies one column of the comparison wherever it
+ * appears. `field` and `window` are that key's halves, sent rather than left to
+ * be parsed: the client composes the on-screen name from the same catalogues
+ * the server resolved them against.
+ *
+ * `per_game` is the *catalogue's* flag — whether this field is a per-game
+ * quantity at all — and not whether the number was divided by something. Under
+ * a window it was divided by the window's games rather than the season's, which
+ * is a resolution detail the payload has no reason to carry and the label has
+ * every reason not to.
  */
 export type CompsFieldSpecPayload = {
   key: string;
+  field: string;
+  window: CompsWindowKey;
   label: string;
   family: CompsFieldFamily;
   weight: number;
@@ -1450,9 +1592,10 @@ export type CompsFieldSpecPayload = {
  * `team` is the player's **current** team — `players` stores no historical
  * team — so the client styles it uniformly as secondary ("Current: PHI") on
  * every row rather than guessing which rows are historical. `values` holds the
- * weighted fields only, already resolved under the request's basis (per-game
- * fields divided by `games`), so the number on screen is byte-for-byte the one
- * the distance was computed from.
+ * weighted dimensions only, keyed as `fields[].key` and already resolved under
+ * the request's basis (per-game fields divided by `games`, or by the window's
+ * own games where one was asked for), so the number on screen is byte-for-byte
+ * the one the distance was computed from.
  *
  * `line` is the whole season beside them — every production total plus
  * Sleeper's three generic fantasy-point totals (`pts_ppr`, `pts_half_ppr`,
@@ -1469,6 +1612,30 @@ export type CompsSeasonRowPayload = {
   name: string;
   position: string | null;
   team: string | null;
+  /**
+   * Where the player went in the NFL draft, or null where this app has no
+   * record. **A record whose `overall` is null means he went undrafted**, which
+   * is a different answer from the absent one and is why this is an object
+   * rather than a nullable number — see `nfl-draft/types.ts`.
+   *
+   * It sits beside `position` and `team` because it is the same kind of thing:
+   * row metadata the client prints, not a dimension. The *comparable* form is
+   * `values.draft_capital`, which is only present when the reader weighted it —
+   * this is present either way, since "1.05" is worth showing on a comp whether
+   * or not it was compared on.
+   *
+   * Unlike `team`, it is historically correct: a draft position is the same
+   * fact in every season of a career.
+   */
+  draft: {
+    /** The draft class. */
+    season: string;
+    round: number | null;
+    /** The pick within the round; null where the source carries only a round. */
+    slot: number | null;
+    /** Overall pick, or null for an undrafted player. */
+    overall: number | null;
+  } | null;
   games: number;
   values: Record<string, number | null>;
   line: Record<string, number | null>;
@@ -1494,8 +1661,9 @@ export type CompsResultRowPayload = CompsSeasonRowPayload & {
  * population. A candidate missing several weighted fields increments each
  * field's `excluded_missing` entry while removing one row, so those counts sum
  * to **at least** the difference between the two. `dropped_fields` names
- * requested fields the *subject* couldn't answer — dropped and reported rather
- * than a 400.
+ * requested *dimensions* (`fields[].key` spelling) the subject couldn't
+ * answer — dropped and reported rather than a 400, which is what a career
+ * window on a rookie subject produces.
  *
  * Market fields are anchored *entering* the subject's season (KTC's latest
  * snapshot at or before that season's Sept 1 — or today, mid-offseason — and
@@ -1519,16 +1687,16 @@ export type CompsPayload = {
   results: CompsResultRowPayload[];
 };
 
-/** One pickable subject: a supported-position player with stored stats. */
-export type CompsPlayerOptionPayload = {
-  player_id: string;
-  name: string;
-  position: CompsPosition;
-  /** Current team, as on every comps row. */
-  team: string | null;
-  /** The seasons this player has stored stats in, newest first. */
-  seasons: string[];
-};
+/**
+ * One pickable subject: a supported-position player with stored stats.
+ *
+ * The domain type, aliased rather than restated — this shape is decided by the
+ * fold that builds it (`foldCompsPlayerIndex`), and a second declaration of it
+ * here would be exactly the drift this module exists to stop: the compiler
+ * cannot see two structurally identical types disagreeing about what a field
+ * means.
+ */
+export type CompsPlayerOptionPayload = CompsPlayerOption;
 
 /** `GET /api/comps/players` — the picker list, supported positions only. */
 export type CompsPlayersPayload = {

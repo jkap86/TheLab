@@ -288,7 +288,7 @@ export function PlayerRow({
           label. */}
       {slotLabel ? (
         <span
-          className={`lab-tab lab-tab-pos absolute left-0 top-[2px] inline-flex h-[17px] min-w-[26px] items-center justify-center rounded-[5px] px-1 font-mono text-[9px] font-bold uppercase leading-none tracking-[0.04em] @3xl:static @3xl:top-auto @3xl:w-full ${tone}`}
+          className={`lab-tab lab-tab-pos absolute left-0 top-[2px] inline-flex h-[1.0625rem] min-w-[1.625rem] items-center justify-center rounded-[5px] px-1 font-mono text-[0.5625rem] font-bold uppercase leading-none tracking-[0.04em] @3xl:static @3xl:top-auto @3xl:w-full ${tone}`}
         >
           {slotLabel}
         </span>
@@ -311,7 +311,7 @@ export function PlayerRow({
         className={`${layout.nameSpan} flex min-w-0 items-baseline gap-1.5 text-[0.9375rem] @4xl:text-base ${
           // Clears the chip's overhang, and only while the chip is overhanging:
           // from `@3xl` it is a cell of the grid and pays for its own width.
-          slotLabel ? "pl-[34px] @3xl:pl-0" : ""
+          slotLabel ? "pl-[2.125rem] @3xl:pl-0" : ""
         } ${
           mark
             ? `${mark.name} font-semibold`

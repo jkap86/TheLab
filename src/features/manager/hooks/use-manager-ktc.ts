@@ -36,9 +36,15 @@ export function useManagerKtc(
    */
   userId: string | null,
   leagues: ManagerLeague[] | null,
-  { enabled = true }: { enabled?: boolean } = {},
+  {
+    enabled = true,
+    season,
+  }: { enabled?: boolean; season?: string } = {},
 ): ManagerKtcState {
-  const queryKey = useMemo(() => managerQueryKeys.ktc(searched), [searched]);
+  const queryKey = useMemo(
+    () => managerQueryKeys.ktc(searched, season),
+    [searched, season],
+  );
   return useManagerResource<ManagerKtcResult>(
     queryKey,
     searched,
@@ -48,5 +54,7 @@ export function useManagerKtc(
     "Failed to load values",
     STALE_TIMES.ktc,
     enabled,
+    null,
+    season,
   );
 }

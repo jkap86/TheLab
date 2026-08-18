@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 
 import type { AdpPayload, AdpPlayerPayload, ApiErrorPayload } from "@/shared/contract";
 import { getKtcPickBoard, getKtcValuesBySleeperId } from "@/shared/ktc";
-import { getDraftAdp, parseAdpFilters, usesDefaultSeason } from "@/shared/manager";
+import {
+  EMPTY_AUCTION_BOARDS,
+  getDraftAdp,
+  getDraftAuctionSpend,
+  parseAdpFilters,
+  usesDefaultSeason,
+} from "@/shared/manager";
 import { getPlayersByIds, getRookieClassIds } from "@/shared/players";
 import { getActiveSeason } from "@/shared/season";
 
@@ -49,6 +55,13 @@ export const dynamic = "force-dynamic";
  *
  * Result shaping: `min_picks` (drop players taken in fewer drafts than this,
  * applied per board), `limit`, `offset`.
+ *
+ * **Every response also carries what the matched players cost at auction**, per
+ * board, as a share of the room's budget (`AdpPlayerPayload.auction`, with
+ * `redraft_auctions`/`dynasty_auctions` as its denominators). It reads the same
+ * leagues, season and window as the averages and deliberately ignores
+ * `draft_type` — the board is never averaged over auctions, so a column honouring
+ * that filter would be empty for every caller. See `shared/manager/adp-auction`.
  *
  * `rounds_min`/`rounds_max` matter more than they look: a dynasty league's
  * 4-round rookie draft and its 25-round startup are both drafts, and pick 1 of
@@ -115,11 +128,22 @@ async function board(request: Request) {
     // keyed on `sleeper_id`, which the sync resolves by name — so the ~6% of
     // rostered players KTC doesn't carry, and every kicker and defence, are
     // simply absent from the map and read as an em dash rather than a zero.
-    const [players, rookies, pickKtc, ktc] = await Promise.all([
+    //
+    // The fifth is the auction column, and it is the one that reads a *different
+    // population* rather than decorating this one: the same leagues, season and
+    // window, over the draft type the board itself excludes. It is narrowed to
+    // this page's ids for the reason the KTC read is — what a player cost is a
+    // fact about a player — which is also what keeps it cheap enough to be a
+    // field on this response instead of a split of its own. It is not caught
+    // separately: a database that cannot answer it cannot answer the rest
+    // either, and an enrichment quietly sending an empty map would be a 200
+    // claiming the crawled auctions never bought anybody.
+    const [players, rookies, pickKtc, ktc, auction] = await Promise.all([
       getPlayersByIds(ids),
       getRookieClassIds(ids),
       getKtcPickBoard(),
       getKtcValuesBySleeperId(ids),
+      getDraftAuctionSpend(filters, ids),
     ]);
 
     const payload: AdpPayload = {
@@ -127,6 +151,8 @@ async function board(request: Request) {
       draft_count: result.draft_count,
       redraft_drafts: result.redraft_drafts,
       dynasty_drafts: result.dynasty_drafts,
+      redraft_auctions: auction.redraft_auctions,
+      dynasty_auctions: auction.dynasty_auctions,
       player_count: result.player_count,
       players: result.rows.map((row): AdpPlayerPayload => {
         const player = players[row.player_id];
@@ -138,6 +164,10 @@ async function board(request: Request) {
           rookie: rookies.has(row.player_id),
           redraft: row.redraft,
           dynasty: row.dynasty,
+          // Absent means no crawled auction bought him often enough to average
+          // — the shared empty rather than a fresh literal per row, since most
+          // of a page gets it.
+          auction: auction.values.get(row.player_id) ?? EMPTY_AUCTION_BOARDS,
           // Absent means KTC has never heard of him; present with two nulls
           // means KTC knows him and prices him nowhere. Both read as an em dash,
           // and neither is a zero — see `AdpPlayerPayload.ktc`.

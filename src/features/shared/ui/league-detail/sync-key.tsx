@@ -48,7 +48,7 @@ export function LeagueSyncKey({ leagueId }: { leagueId: string }) {
       {note && (
         <span
           aria-hidden="true"
-          className={`min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.08em] ${
+          className={`min-w-0 truncate text-[0.625rem] font-semibold uppercase tracking-[0.08em] ${
             note.tone === "attention" ? "text-amber-300/80" : "text-foreground/45"
           }`}
         >
@@ -70,7 +70,7 @@ export function LeagueSyncKey({ leagueId }: { leagueId: string }) {
             ? "Re-reading this league from Sleeper"
             : `Re-read this league from Sleeper${lastUpdatedNote(result)}`
         }
-        className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[10px] font-semibold text-foreground/75 transition-colors hover:text-foreground disabled:opacity-60"
+        className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[0.625rem] font-semibold text-foreground/75 transition-colors hover:text-foreground disabled:opacity-60"
       >
         <SyncIcon spinning={pending} />
         {pending ? "Syncing" : "Sync"}

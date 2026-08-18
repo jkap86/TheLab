@@ -364,7 +364,7 @@ function SideBay({
           onClick={() => onOpen({ side: index, kind: "who" })}
           aria-expanded={armed("who")}
           aria-controls={armed("who") ? panelId : undefined}
-          className={`flex min-w-0 items-center gap-2 rounded px-1 py-0.5 text-[13px] transition-colors ${
+          className={`flex min-w-0 items-center gap-2 rounded px-1 py-0.5 text-[0.8125rem] transition-colors ${
             manager
               ? "font-bold text-foreground hover:text-active"
               : "font-semibold text-active/70 hover:text-active"
@@ -396,7 +396,7 @@ function SideBay({
 
         {/* Printed rather than derived from the other bay, so each side states
             its own direction without depending on what its neighbour knows. */}
-        <span className="ml-auto shrink-0 font-mono text-[9.5px] font-bold uppercase tracking-[0.14em] text-foreground/45">
+        <span className="ml-auto shrink-0 font-mono text-[0.59375rem] font-bold uppercase tracking-[0.14em] text-foreground/45">
           got
         </span>
       </div>
@@ -433,7 +433,7 @@ function SideBay({
           onClick={() => onOpen({ side: index, kind: "assets" })}
           aria-expanded={armed("assets")}
           aria-controls={armed("assets") ? panelId : undefined}
-          className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold text-active/70 transition-colors hover:text-active"
+          className="shrink-0 rounded px-1.5 py-0.5 text-[0.6875rem] font-semibold text-active/70 transition-colors hover:text-active"
         >
           + add
         </button>
@@ -464,7 +464,7 @@ function AssetToken({
   onRemove: () => void;
 }) {
   return (
-    <span className="inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-md border border-active/30 bg-active/10 py-0.5 pl-1 pr-1 text-[11px] text-foreground/90">
+    <span className="inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-md border border-active/30 bg-active/10 py-0.5 pl-1 pr-1 text-[0.6875rem] text-foreground/90">
       {badge}
       <span className="max-w-[9rem] truncate">{label}</span>
       <button

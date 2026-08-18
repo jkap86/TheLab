@@ -55,7 +55,7 @@ export function KickoffCountdown({ msLeft }: { msLeft: number }) {
       // exactly right for a value that changes every second: named and readable
       // on demand, never announced on its own.
       role="timer"
-      className="grid h-[56px] w-fit flex-none content-center gap-1 sm:h-[66px] sm:gap-1.5"
+      className="grid h-[3.5rem] w-fit flex-none content-center gap-1 sm:h-[4.125rem] sm:gap-1.5"
       aria-label={`Kickoff in ${formatCountdown(msLeft)}`}
     >
       {/* The label as a rail: a lit tick, the words, then a hairline running out
@@ -63,7 +63,7 @@ export function KickoffCountdown({ msLeft }: { msLeft: number }) {
           floated; ruled across it, it reads as the instrument's own header. */}
       <span
         aria-hidden="true"
-        className="flex items-center gap-1.5 text-[8px] font-bold uppercase leading-none tracking-[0.16em] text-active/70 sm:text-[9px]"
+        className="flex items-center gap-1.5 text-[0.5rem] font-bold uppercase leading-none tracking-[0.16em] text-active/70 sm:text-[0.5625rem]"
       >
         <span className="h-2 w-[2px] flex-none rounded-full bg-active shadow-[0_0_8px_rgba(0,255,229,0.7)]" />
         Kickoff in
@@ -109,7 +109,7 @@ function CountdownCell({
       }`}
     >
       <span
-        className={`block min-w-[1.35em] font-mono text-[19px] font-bold leading-[1.02] tabular-nums tracking-tight sm:text-[26px] ${
+        className={`block min-w-[1.35em] font-mono text-[1.1875rem] font-bold leading-[1.02] tabular-nums tracking-tight sm:text-[1.625rem] ${
           live
             ? "text-active drop-shadow-[0_0_14px_rgba(0,255,229,0.55)]"
             : "text-foreground/90 drop-shadow-[0_1px_0_rgba(0,0,0,0.6)]"
@@ -118,7 +118,7 @@ function CountdownCell({
         {value}
       </span>
       <span
-        className={`mt-[1px] block text-[7px] font-bold uppercase leading-none tracking-[0.12em] ${
+        className={`mt-[1px] block text-[0.4375rem] font-bold uppercase leading-none tracking-[0.12em] ${
           live ? "text-active/55" : "text-foreground/30"
         }`}
       >

@@ -103,7 +103,7 @@ function SyncFlask({ progress }: { progress?: HeaderProgress | null }) {
           slot, and the count is absolute, so it costs the box nothing. */}
       <span
         aria-hidden="true"
-        className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] leading-none tracking-[0.04em] text-active/80"
+        className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[0.5625rem] leading-none tracking-[0.04em] text-active/80"
       >
         {refreshingSuffix(progress).trim()}
       </span>

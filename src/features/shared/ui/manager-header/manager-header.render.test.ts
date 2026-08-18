@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { FIRST_SLEEPER_SEASON } from "../../manager-season.ts";
 import { ManagerHeader } from "./manager-header.tsx";
 
 /**
@@ -140,15 +141,29 @@ describe("what the corners and the body owe the wall", () => {
     assert.match(plate(), /pb-5 sm:pb-6/);
   });
 
+  test("the top inset clears the taller of the two spellings of the season tab", () => {
+    // 24px, and one number at every width rather than the 22 it used to be
+    // below `sm`: the stepper spelling of the season tab is 22px of key against
+    // 20px of bare digits, and the plate must not be two heights for one card —
+    // so the *quiet* header is what this is asserted on, since that is the case
+    // a "tighten it back up" edit would regress.
+    assert.match(plate(), /pt-6 sm:gap-4/);
+    assert.doesNotMatch(plate(), /pt-\[22px\]/);
+  });
+
   test("the trailing inset pays for the wall", () => {
     const html = plate();
 
-    // 21px from the leading edge and 17px from the trailing one is what the
-    // bordered box gave (20+1 and 16+1). The trailing 6px is wall now, so the
+    // The leading and trailing edges are where the bordered box put them
+    // (`pl-5`+border and `px-4`+border). The trailing 6px is wall now, so the
     // padding gives it back — otherwise the part is 20px in on one side and
     // 26px in on the other, which reads as not square.
-    assert.match(html, /pl-\[21px\] pr-\[11px\]/);
-    assert.match(html, /sm:pl-\[25px\] sm:pr-\[15px\]/);
+    //
+    // Both terms of each sum stay in the `calc`, per `--app-font-scale`: the rem
+    // half scales with the type and the border and wall are material. A literal
+    // here squares the plate at one scale and at no other.
+    assert.ok(html.includes("pl-[calc(1.25rem+1px)] pr-[calc(1rem+1px-6px)]"));
+    assert.ok(html.includes("sm:pl-[calc(1.5rem+1px)] sm:pr-[calc(1.25rem+1px-6px)]"));
   });
 });
 
@@ -272,3 +287,95 @@ describe("a standing caveat", () => {
     assert.match(html, /lab-nameplate-warn/);
   });
 });
+
+/**
+ * The season corner, in both of its spellings.
+ *
+ * **Every assertion here is a rule with no compiler behind it and no wrong
+ * number on screen.** A step key that keeps its wall when it has nowhere to go
+ * is a part promising a press that does nothing; one drawn any further left is a
+ * lit face `clip-path` slices on the plate's 9px chamfer, which reads as a
+ * control with no thickness — the one thing a pressable part must never be; and
+ * a card that grew a stepper it was never given would be the lineup checker
+ * offering a choice of season for a week's lineups.
+ */
+describe("the season corner", () => {
+  /** The manager tabs' spelling: a readout with a step either side. */
+  const stepped = (over: { season?: string; latest?: string } = {}) =>
+    plate({
+      season: over.season ?? "2026",
+      seasonControl: { latest: over.latest ?? "2026", onChange: () => {} },
+    });
+
+  test("is a plain readout where the page offers no choice", () => {
+    // The lineup checker reads the season it is *in*, so there is nothing to
+    // choose. Absent the control this is byte-for-byte the tab it always was.
+    const html = plate();
+    assert.doesNotMatch(html, /Previous season/);
+    assert.doesNotMatch(html, /Next season/);
+    // And no live region: announcing a value nothing can change is a promise to
+    // report something that never happens.
+    assert.doesNotMatch(html, /aria-live="polite"[^>]*>2026/);
+  });
+
+  test("draws both steps, labelled by what they do", () => {
+    const html = stepped();
+    assert.match(html, /aria-label="Previous season"/);
+    assert.match(html, /aria-label="Next season"/);
+    // The keys say what they do, so the thing a press changes has to announce
+    // itself — otherwise the control is legible only to someone who can see it.
+    assert.match(html, /aria-live="polite"/);
+  });
+
+  test("a step with nowhere to go loses its wall, and stays reachable", () => {
+    const html = stepped({ season: "2026", latest: "2026" });
+    const forward = keyMarkup(html, "Next season");
+    const back = keyMarkup(html, "Previous season");
+
+    // Flat and unlit rather than merely dim: the app bar's rule at this size.
+    assert.doesNotMatch(forward, /lab-chip/);
+    assert.match(forward, /cursor-not-allowed/);
+    // `aria-disabled`, never `disabled` — the latter takes the key out of the
+    // tab order, and a reader who cannot reach it cannot discover why it's dead.
+    assert.match(forward, /aria-disabled="true"/);
+    assert.doesNotMatch(forward, /\sdisabled(=|\s|>)/);
+
+    // The live one is a raised key, and the thin wall rather than the full one:
+    // it sits inside a 22px well.
+    assert.match(back, /lab-chip lab-chip-sm/);
+    assert.doesNotMatch(back, /aria-disabled/);
+  });
+
+  test("the floor is Sleeper's first season, not a step below it", () => {
+    const html = stepped({ season: FIRST_SLEEPER_SEASON, latest: "2026" });
+    assert.match(keyMarkup(html, "Previous season"), /cursor-not-allowed/);
+    assert.match(keyMarkup(html, "Next season"), /lab-chip/);
+  });
+
+  test("the keys start past the chamfer the plate cuts out of this corner", () => {
+    // `.lab-notch-all` takes a 9px diagonal off the top-left, and `clip-path`
+    // clips a whole subtree. The tab's own `pl-3.5` starts its contents 14px in,
+    // which is what keeps the leading key's lit face whole. Trimming that inset
+    // is the edit this catches.
+    assert.match(stepped(), /rounded-br-lg pl-3\.5/);
+  });
+
+  test("the stepper spends its padding on the keys, not on the tab", () => {
+    // 22px of key defines the tab's height, which is within 2px of the plain
+    // tab's 20 — near enough that the two corners still read as one scale. It is
+    // a box cut around a glyph, so it is spelled in rem and both stay within
+    // that 2px of each other at any `--app-font-scale`.
+    assert.match(stepped(), /py-0 pr-1/);
+    assert.match(stepped(), /h-\[1\.375rem\] w-\[1\.125rem\]/);
+  });
+});
+
+/** One step key's own tag, so a class assertion can't match its neighbour's. */
+function keyMarkup(html: string, label: string): string {
+  const at = html.indexOf(`aria-label="${label}"`);
+  assert.notEqual(at, -1, `no key labelled ${label}`);
+  const start = html.lastIndexOf("<button", at);
+  const end = html.indexOf(">", at);
+  assert.ok(start !== -1 && end !== -1, `unbalanced markup around ${label}`);
+  return html.slice(start, end + 1);
+}

@@ -22,6 +22,24 @@ export type HeaderProgress = LeaguesProgressMessage;
 /** The leagues stream's own summary of a completed sync. */
 export type HeaderSyncSummary = LeaguesResultMessage["summary"];
 
+/**
+ * How the plate's season corner steps, where the page offers a choice.
+ *
+ * One object rather than two coupled optionals, so the control cannot be half
+ * configured: a handler with no ceiling would let a reader step into a league
+ * year Sleeper has not rolled over to, which comes back as an empty league list
+ * and reads as "this manager has none".
+ */
+export type HeaderSeasonControl = {
+  /**
+   * The newest season selectable — the app's own current one, resolved on the
+   * server and handed down (see the manager layout). The floor is
+   * {@link FIRST_SLEEPER_SEASON} and is the ladder's own business.
+   */
+  latest: string;
+  onChange: (season: string) => void;
+};
+
 /** A view's own headline count, shown as the plate's top-right corner tab. */
 export type HeaderStat = {
   label: string;
@@ -42,7 +60,25 @@ export type HeaderStat = {
  */
 export type ManagerHeaderProps = {
   user: UserInfo;
+  /**
+   * The season the card is about — **the one the data on screen came from**, not
+   * the one a reader has just asked for. The two are the same everywhere today
+   * (the leagues query is keyed on the selection and the page shows its cold
+   * load until it resolves), and stating it this way is what keeps a future
+   * `keepPreviousData` from quietly putting last season's leagues under this
+   * season's tab.
+   */
   season: string;
+  /**
+   * How to step that season, where the page offers a choice — the manager tabs,
+   * whose three routes share one selection through `ManagerSeasonProvider`.
+   *
+   * Optional because the lineup checker reads the season it is *in*: a week's
+   * lineups are this week's, so there is nothing there to choose and the corner
+   * stays the plain readout. See {@link SeasonTab} for why the choice belongs in
+   * that corner at all rather than on the filter rail below.
+   */
+  seasonControl?: HeaderSeasonControl;
   /**
    * The leagues stream's state, where the page is reading one. All four are
    * optional together: a page with no background refresh to report passes none,

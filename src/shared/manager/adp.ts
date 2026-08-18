@@ -1,10 +1,34 @@
 import { pool } from "@/shared/db";
-import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
 import { TtlPromiseCache, deepFreeze } from "@/shared/util";
 
 import { adpComputeAdmission } from "./adp-admission";
 import type { AdpFilters } from "./adp-filters";
-import { ADP_BOARD_CACHE, adpBoardCacheKey } from "./read-cache";
+import { draftSelection, matchedDraftsSql } from "./adp-selection";
+import {
+  ADP_BOARD_CACHE,
+  ADP_PLAYER_BOARD_CACHE,
+  adpBoardCacheKey,
+} from "./read-cache";
+
+/**
+ * The board's selection SQL is `./adp-selection`, and it is re-exported from
+ * here rather than moved out from under its callers.
+ *
+ * `LEAGUE_TYPE_SQL`, `DYNASTY_LEAGUE_TYPE` and `BEST_BALL_SQL` are read by
+ * `./queries` and by the two roster reads that have to solve a best-ball league,
+ * and every one of those call sites names *this* module — the place the board
+ * lives. Splitting the file for testability is not a reason to make them all
+ * import from a new path, and a barrel-shaped re-export keeps the seam invisible
+ * to everything but the tests it was made for.
+ */
+export {
+  BEST_BALL_SQL,
+  DYNASTY_BOARD_SQL,
+  DYNASTY_LEAGUE_TYPE,
+  LEAGUE_TYPE_SQL,
+  draftSelection,
+} from "./adp-selection";
+export type { DraftTypeScope } from "./adp-selection";
 
 /**
  * Average draft position over the drafts this app has crawled.
@@ -51,181 +75,6 @@ export type AdpResult = {
   player_count: number;
   rows: AdpRow[];
 };
-
-/**
- * Sleeper's settings blobs are loosely typed and its defaults are omitted
- * entirely, so every numeric read is regex-guarded before the cast: a league
- * with `"type": "abc"` must not fail the whole query. Missing reads fall back
- * the same way the client-side league filters do (absent type = redraft).
- */
-// Each fragment is parenthesised because callers append their own comparison.
-// Written against a league table aliased `l`. Exported to `./queries`'
-// `getLeagueTypes` so the code grouping leagues into ADP boards and the filter
-// narrowing `/api/adp` can't classify the same league differently.
-export const LEAGUE_TYPE_SQL = `
-  (CASE WHEN l.settings->>'type' ~ '^[0-9]+$'
-        THEN (l.settings->>'type')::int ELSE 0 END)`;
-
-/**
- * Sleeper's `settings.type` for a dynasty league (0 redraft, 1 keeper, 3 its
- * native guillotine). Exported because `getLeagueDetail` asks the same question
- * of a league it has already read, and the fragment below is written from this
- * constant so the SQL and the TypeScript reading cannot drift apart.
- */
-export const DYNASTY_LEAGUE_TYPE = 2;
-
-/**
- * Which of the two ADP boards a league's drafts count into: dynasty is
- * Sleeper's `settings.type` 2, and everything else — redraft and keeper — is
- * the redraft board. See `ADP_BOARDS` in `./adp-filters` for why keeper folds
- * into redraft rather than into a bucket of its own.
- */
-const DYNASTY_BOARD_SQL = `(${LEAGUE_TYPE_SQL} = ${DYNASTY_LEAGUE_TYPE})`;
-
-/**
- * Whether Sleeper seats this league's lineup for the manager.
- *
- * Exported for the two roster reads that have to *solve* such a league — where a
- * best-ball team's `starters` array is not what it is starting — for the reason
- * {@link LEAGUE_TYPE_SQL} is: the board's filter, the client's `isBestBall` and
- * the lineup solver all answer one question, and a league priced as best ball
- * here and solved as an ordinary one there is a difference no type can catch.
- * Absent or unparseable reads false, which is what Sleeper's omitted default
- * means and what the client's own predicate says.
- */
-export const BEST_BALL_SQL = `
-  (CASE WHEN l.settings->>'best_ball' ~ '^[0-9]+$'
-        THEN (l.settings->>'best_ball')::int ELSE 0 END = 1)`;
-
-const ROUNDS_SQL = `
-  (CASE WHEN d.settings->>'rounds' ~ '^[0-9]+$'
-        THEN (d.settings->>'rounds')::int END)`;
-
-/**
- * Superflex means the lineup starts more than one quarterback — the same
- * question `isSuperflexLineup` answers in TypeScript, asked of the stored
- * blob. Counting QB-eligible slots rather than testing for `SUPER_FLEX` by
- * name keeps the two classifiers agreeing: a two-QB league with no literal
- * `SUPER_FLEX` slot is priced against the superflex board by `adpBoardFor`,
- * so its draft has to be counted into that same population here, or it is
- * averaged with (and pollutes) the 1QB drafts. The slot names interpolated
- * below come from our own closed vocabulary in `projections/slots`, not from
- * user input.
- */
-const QB_SLOT_LIST = QB_ELIGIBLE_STARTING_SLOTS.map((s) => `'${s}'`).join(", ");
-const SUPERFLEX_SQL = `
-  (CASE WHEN jsonb_typeof(l.roster_positions) = 'array'
-        THEN (SELECT count(*)
-                FROM jsonb_array_elements_text(l.roster_positions) AS s(slot)
-               WHERE s.slot IN (${QB_SLOT_LIST})) > 1
-        ELSE false END)`;
-
-/**
- * Scoring format from the per-reception value: Sleeper stores the rule, not the
- * label. Anything unparseable (or absent, which is standard scoring) reads std.
- */
-const SCORING_SQL = `
-  (CASE
-     WHEN l.scoring_settings->>'rec' !~ '^-?[0-9]+(\\.[0-9]+)?$' THEN 'std'
-     WHEN (l.scoring_settings->>'rec')::numeric >= 1 THEN 'ppr'
-     WHEN (l.scoring_settings->>'rec')::numeric >= 0.5 THEN 'half_ppr'
-     ELSE 'std'
-   END)`;
-
-/**
- * A bare `YYYY-MM-DD` against `drafts.start_time`, which Sleeper gives as epoch
- * milliseconds. The date is read in ET — the zone the rest of this app dates
- * things in (`TODAY_ET` in the projections reads) — rather than in whatever zone
- * the Node process happens to run in, which is why the conversion is here and
- * not in the parser. `offsetDays` shifts the boundary, so an inclusive end bound
- * is midnight of the following day.
- */
-const startTimeMs = (placeholder: string, offsetDays = 0) =>
-  `(extract(epoch from ((${placeholder}::date + ${offsetDays})::timestamp
-     AT TIME ZONE 'America/New_York')) * 1000)`;
-
-/**
- * The `WHERE` for the draft/league side of the query, plus the parameters it
- * binds. Returned together because the fragment's `$n` placeholders are
- * positions in this exact array — the caller appends its own params after.
- */
-function draftSelection(filters: AdpFilters): { where: string; params: unknown[] } {
-  const params: unknown[] = [];
-  const bind = (value: unknown) => `$${params.push(value)}`;
-  const clauses: string[] = [];
-
-  if (filters.seasons) clauses.push(`d.season = ANY(${bind(filters.seasons)}::varchar[])`);
-
-  // A date bound drops drafts Sleeper never gave a `start_time` — they can't be
-  // placed in time at all, so there is no honest side of the boundary for them.
-  // An unbounded board still counts them, which is why "all time" can match more
-  // drafts than a range covering every date on file.
-  if (filters.start_after !== null) {
-    clauses.push(`d.start_time >= ${startTimeMs(bind(filters.start_after))}`);
-  }
-  if (filters.start_before !== null) {
-    // Exclusive against the next midnight, so the named end day is included whole.
-    clauses.push(`d.start_time < ${startTimeMs(bind(filters.start_before), 1)}`);
-  }
-  if (filters.draft_types.length > 0) {
-    clauses.push(`d.type = ANY(${bind(filters.draft_types)}::varchar[])`);
-  }
-  if (filters.draft_statuses.length > 0) {
-    clauses.push(`d.status = ANY(${bind(filters.draft_statuses)}::varchar[])`);
-  }
-  if (filters.rounds_min !== null) clauses.push(`${ROUNDS_SQL} >= ${bind(filters.rounds_min)}`);
-  if (filters.rounds_max !== null) clauses.push(`${ROUNDS_SQL} <= ${bind(filters.rounds_max)}`);
-
-  // The league rules' answer, in whichever of its two spellings was shorter on
-  // the wire (see `AdpFilters.league_ids`). An empty include list is left as an
-  // empty `ANY`, which matches nothing — the honest board for rules that matched
-  // no league, and the reason this is not guarded on `length`.
-  if (filters.league_ids) {
-    clauses.push(`l.league_id = ANY(${bind(filters.league_ids)}::varchar[])`);
-  }
-  if (filters.exclude_league_ids && filters.exclude_league_ids.length > 0) {
-    clauses.push(`l.league_id <> ALL(${bind(filters.exclude_league_ids)}::varchar[])`);
-  }
-  if (filters.scoring) clauses.push(`${SCORING_SQL} = ANY(${bind(filters.scoring)}::varchar[])`);
-  if (filters.best_ball !== null) clauses.push(`${BEST_BALL_SQL} = ${bind(filters.best_ball)}`);
-  if (filters.superflex !== null) clauses.push(`${SUPERFLEX_SQL} = ${bind(filters.superflex)}`);
-  if (filters.teams_min !== null) clauses.push(`l.total_rosters >= ${bind(filters.teams_min)}`);
-  if (filters.teams_max !== null) clauses.push(`l.total_rosters <= ${bind(filters.teams_max)}`);
-
-  return { where: clauses.length > 0 ? clauses.join("\n       AND ") : "true", params };
-}
-
-/**
- * The draft/league join every read matches over, carrying which board each
- * draft counts into. The `$n` placeholders in `where` are positions in the
- * params array `draftSelection` returned alongside it.
- *
- * **Both aggregate readers spell it `AS MATERIALIZED`, and that keyword is the
- * single largest thing separating this board from a statement timeout.**
- * Postgres 12+ inlines a CTE referenced once, which is normally what you want
- * and is exactly wrong here: `dynasty` is a JSONB extraction, a regex match and
- * a cast, and inlining pushes that expression into every `FILTER` of every
- * aggregate above it — ten of them on the board read. So a fact about a *draft*
- * (6,963 of them) was being recomputed once per pick per aggregate: ~11M jsonb
- * lookups and ~11M regex matches, none of which appear in the query as written.
- * Materialized, it is computed 6,963 times and each `FILTER` is a boolean test.
- * Measured over 1.5M picks in 8,000 leagues, the board read went 2,872ms →
- * 590ms at the query and ~2.2s → ~0.5s end to end; pricing one roster's board
- * went from 573/1,094/13,978ms across three runs to a flat ~400ms.
- *
- * The rule generalises past this query: **a CTE column derived from JSONB, and
- * read by an aggregate `FILTER` or a `CASE`, has to be materialized.** The cost
- * is invisible in the SQL and shows up only in a plan, where the expression is
- * written out once per aggregate.
- *
- * `countMatchedDrafts` needs no such thing — it reads the join as a plain
- * subquery and evaluates the expression once per draft either way.
- */
-const matchedDraftsSql = (where: string) => `
-    SELECT d.draft_id, ${DYNASTY_BOARD_SQL} AS dynasty
-      FROM drafts d
-      JOIN leagues l ON l.league_id = d.league_id
-     WHERE ${where}`;
 
 type DraftCounts = {
   draft_count: number;
@@ -472,43 +321,29 @@ export type PlayerBoardAdpResult = DraftCounts & {
 };
 
 /**
- * How long a priced board is worth reusing, and how many are kept.
+ * One priced board per process, and the reads still running.
  *
- * The TTL follows the rule the other in-process caches here follow — shorter
- * than the sync writing behind it, so a stale read costs a query rather than a
- * wrong answer. What writes behind this one is the league crawler, whose fastest
- * tier is 15 minutes, and whose effect on any one board is a handful of new
- * drafts among thousands.
- *
- * The bound is in *boards*, and each is a map of up to ~1,100 players, so this
- * is the one cache here whose entries are large enough to be worth counting:
- * ~64 of them is a few megabytes at worst. A manager's page reads four (one per
- * distinct scoring/superflex group), so it holds a dozen-odd readers, and the
- * eviction is recency — a reader who has stopped scrolling loses their board to
- * one who hasn't.
+ * The TTL and the bound are {@link ADP_PLAYER_BOARD_CACHE}, beside the paged
+ * board's own policy rather than here — they are two cuts of one population,
+ * both stand behind a browser stale time, and a pair of numbers only one of the
+ * two could be tested against is how they came to disagree.
  *
  * It is a {@link TtlPromiseCache} rather than a plain `BoundedCache` for the one
  * thing the plain one deliberately does not do: **a cold key with several
- * readers on it computes once.** Same key, same TTL, same bound as before — what
- * is added is that two readers of one manager, or one reader whose page prices
- * six boards at once, no longer race each other through the same aggregate while
- * each holds a pool connection. That is the same argument the board cache above
- * rests on, and leaving the two halves of one read on different terms is the
- * kind of asymmetry that reads as an oversight.
+ * readers on it computes once.** Two readers of one manager, or one reader whose
+ * page prices six boards at once, no longer race each other through the same
+ * aggregate while each holds a pool connection. That is the same argument the
+ * board cache above rests on, and leaving the two halves of one read on
+ * different terms is the kind of asymmetry that reads as an oversight.
  *
  * The answer is **not** frozen, unlike the paged board's: it carries a `Map`,
  * and `Object.freeze` on a `Map` is a guarantee that cannot be kept (`set` goes
  * on working), so a freeze here would be reassurance rather than a bound. The
  * three callers read it and nothing else.
  */
-const BOARD_TTL_MS = 10 * 60 * 1000;
-const BOARD_CACHE_MAX = 64;
-
-const boardCache = new TtlPromiseCache<PlayerBoardAdpResult>({
-  name: "adp-players",
-  ttlMs: BOARD_TTL_MS,
-  max: BOARD_CACHE_MAX,
-});
+const boardCache = new TtlPromiseCache<PlayerBoardAdpResult>(
+  ADP_PLAYER_BOARD_CACHE,
+);
 
 /**
  * ADP for a specific set of players over the drafts matching `filters`, keyed by
@@ -529,7 +364,10 @@ const boardCache = new TtlPromiseCache<PlayerBoardAdpResult>({
  * to the one just read, and every notch was a second of aggregate over 1.9M
  * picks. The same holds for a reload, a second tab, and the 15-minute boundary
  * where the browser's own entry goes stale: none of those change the population,
- * and the population is all this reads.
+ * and the population is all this reads. That last case is the one the TTL had to
+ * be lengthened to actually cover — at ten minutes this entry expired *before*
+ * the browser's, so the revalidation it exists to absorb was the one request
+ * guaranteed to miss it. See {@link ADP_PLAYER_BOARD_CACHE}.
  *
  * **The key is the statement, not a signature of the filters.** {@link
  * boardSignature} exists for grouping leagues onto shared fetches and names the

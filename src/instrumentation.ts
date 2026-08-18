@@ -85,4 +85,11 @@ export async function register(): Promise<void> {
   // average and reads last season instead.
   const { startStatsScheduler } = await import("@/shared/stats");
   startStatsScheduler();
+
+  // Where players were taken in the *NFL* draft — the one thing Sleeper's
+  // players map has never carried, and the Comps tool's draft-capital
+  // dimension. A once-a-year fact on a twelve-hour gate, so this is the
+  // cheapest of the five loops by a wide margin.
+  const { startNflDraftScheduler } = await import("@/shared/nfl-draft");
+  startNflDraftScheduler();
 }

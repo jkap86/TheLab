@@ -141,6 +141,29 @@ const CHOPPED_LEAGUE_TYPE = 3;
 const CHOPPED_LEAGUE_SQL = `(${LEAGUE_TYPE_SQL} = ${CHOPPED_LEAGUE_TYPE})`;
 
 /**
+ * Whether the league plays every team against the week's median score as well as
+ * against its scheduled opponent — Sleeper's `league_average_match`.
+ *
+ * A second result per week, so a league carrying it is one league and two games:
+ * the lineup checker's ledge prints both marks and its plate counts both. It is
+ * read here rather than derived on the client because nothing the client holds
+ * can answer it — the median is the *whole league's* scores for the week, which
+ * is a solve per team rather than the two in the matchup, and only a read that
+ * knows the setting can decide to pay for it.
+ *
+ * Guarded, cast and defaulted exactly as {@link BEST_BALL_SQL} is, for the
+ * reason that fragment gives: Sleeper omits what a league doesn't set, so absent
+ * or unparseable is *off* — the answer that costs nothing and claims nothing,
+ * where reading it as on would put a median result on every league in the app.
+ *
+ * Interpolated, so a call site must alias `leagues` as `l`. Parenthesised as a
+ * whole because it ends in a comparison.
+ */
+const MEDIAN_MATCH_SQL = `
+  (CASE WHEN l.settings->>'league_average_match' ~ '^[0-9]+$'
+        THEN (l.settings->>'league_average_match')::int ELSE 0 END = 1)`;
+
+/**
  * True where the manager fielded a team in the league — holds a roster now, or
  * was chopped out of a league whose whole point is chopping people out.
  *
@@ -580,11 +603,13 @@ export async function getManagerLeagueRosters(
     roster_positions: string[] | null;
     scoring_settings: Record<string, number> | null;
     best_ball: boolean;
+    median_match: boolean;
   }>(
     // Best ball through the same guarded fragment `/api/adp` filters on, so the
     // lineup solve and the board can't disagree about which leagues are one.
     `SELECT l.league_id, l.roster_positions, l.scoring_settings,
-            ${BEST_BALL_SQL} AS best_ball
+            ${BEST_BALL_SQL} AS best_ball,
+            ${MEDIAN_MATCH_SQL} AS median_match
        FROM leagues l
        JOIN league_users lu
          ON lu.league_id = l.league_id AND lu.user_id = $1
@@ -602,6 +627,7 @@ export async function getManagerLeagueRosters(
         roster_positions: l.roster_positions,
         scoring_settings: l.scoring_settings,
         best_ball: l.best_ball,
+        median_match: l.median_match,
         teams: [],
       },
     ]),
@@ -665,10 +691,27 @@ export async function getLeagueAdpBoards(
   );
 
   const byLeague = new Map<string, AdpBoardType>();
-  for (const r of rows) {
-    byLeague.set(r.league_id, r.type_code === 2 ? "dynasty" : "redraft");
-  }
+  for (const r of rows) byLeague.set(r.league_id, adpBoardTypeOf(r.type_code));
   return byLeague;
+}
+
+/**
+ * Which of the two ADP markets a `LEAGUE_TYPE_SQL` code reads — dynasty for
+ * Sleeper's `settings.type` 2, redraft for everything else, keeper included.
+ *
+ * One line, and it exists so that a caller who *already holds* the code does not
+ * have to re-read `leagues` to learn the same thing. {@link getLeagueDetail}
+ * carries it now ({@link LeagueDetail.league_type}), so the league panel's value
+ * columns resolve their board from the read they had already made rather than
+ * from a second query for one row — which is the same league answering the same
+ * question twice, a few milliseconds apart, over the same connection pool.
+ *
+ * Both readings go through here rather than one spelling the comparison out, for
+ * the reason `BEST_BALL_SQL` is shared: a board and a panel that disagree about
+ * whether a league is dynasty is a wrong number rather than an error.
+ */
+export function adpBoardTypeOf(typeCode: number): AdpBoardType {
+  return typeCode === DYNASTY_LEAGUE_TYPE ? "dynasty" : "redraft";
 }
 
 type TeamRow = {
@@ -729,14 +772,17 @@ export async function getLeagueDetail(
     settings: Record<string, unknown> | null;
     league_type: number;
     best_ball: boolean;
+    median_match: boolean;
     previous_league_id: string | null;
   }>(
     // Both the type and the format are read through the same guarded fragments
     // `/api/adp` groups and filters leagues by, so "is this a dynasty league"
-    // and "is this best ball" have one answer across the app.
+    // and "is this best ball" have one answer across the app. The median is the
+    // third of them, through the fragment the lineup checker's own read uses.
     `SELECT league_id, name, season, status, roster_positions, scoring_settings,
             settings,
             ${LEAGUE_TYPE_SQL} AS league_type, ${BEST_BALL_SQL} AS best_ball,
+            ${MEDIAN_MATCH_SQL} AS median_match,
             previous_league_id
        FROM leagues l WHERE league_id = $1`,
     [leagueId],
@@ -839,6 +885,11 @@ export async function getLeagueDetail(
     scoring_settings: l.scoring_settings,
     settings: l.settings,
     best_ball: l.best_ball,
+    median_match: l.median_match,
+    // Already selected for the pick grid above, and carried out rather than
+    // dropped: it is what the values read needs to pick an ADP market, and
+    // buying it there cost a second query for a league already in hand.
+    league_type: l.league_type,
     teams,
   };
 }

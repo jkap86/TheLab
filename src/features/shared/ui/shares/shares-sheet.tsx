@@ -371,7 +371,7 @@ export function SharesSheet<T extends ShareRow>({
             // row gives — announced when it moves rather than only when a reader
             // navigates back up to it.
             role="status"
-            className={`ml-auto shrink-0 font-mono text-[11px] tabular-nums sm:ml-0 ${
+            className={`ml-auto shrink-0 font-mono text-[0.6875rem] tabular-nums sm:ml-0 ${
               view.subjectsLoading ? "text-foreground/25" : "text-foreground/55"
             }`}
           >
@@ -441,7 +441,7 @@ export function SharesSheet<T extends ShareRow>({
                         onMatch={(match) => setSubjects({ ...subjects, match })}
                       />
                     )}
-                    <span className="ml-auto shrink-0 pr-1 font-mono text-[10px] tabular-nums text-foreground/55">
+                    <span className="ml-auto shrink-0 pr-1 font-mono text-[0.625rem] tabular-nums text-foreground/55">
                       {shown.length} {noun}
                       {shown.length === 1 ? "" : "s"}
                     </span>

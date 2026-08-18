@@ -1,14 +1,24 @@
 import { memo } from "react";
 
-import type { AdpBoardStats, AdpBoardType } from "@/shared/manager";
+import type {
+  AdpAuctionStats,
+  AdpBoardStats,
+  AdpBoardType,
+} from "@/shared/manager";
 import type { AdpPlayerPayload } from "@/shared/contract";
 
 import { previewAdpValue } from "../../adp-controls";
 import type { LeagueFilters } from "../../league-filters";
 import { PositionBadge } from "../position-badge";
-import { AdpCell, KtcCell, ValueCell } from "./adp-board-cells";
-import { BOARD_ROW_CLASS, ADP_ROW_HEIGHT } from "./adp-drawer.constants.ts";
-import { adpCellTitle, ktcTitle, takenShare } from "./adp-drawer.utils.ts";
+import { AdpCell, AuctionCell, KtcCell, ValueCell } from "./adp-board-cells";
+import { BOARD_ROW_CLASS, adpRowHeight } from "./adp-drawer.constants.ts";
+import {
+  adpCellTitle,
+  auctionCellTitle,
+  auctionShare,
+  ktcTitle,
+  takenShare,
+} from "./adp-drawer.utils.ts";
 
 /**
  * One player's row.
@@ -26,7 +36,7 @@ import { adpCellTitle, ktcTitle, takenShare } from "./adp-drawer.utils.ts";
  * the list rebuilds every windowed row's props on each scroll notification, and
  * a fresh `style` object would fail the shallow comparison for the two dozen
  * rows of which at most one has actually moved. The height is written on rather
- * than left to the content for the reason {@link ADP_ROW_HEIGHT} documents: the
+ * than left to the content for the reason {@link adpRowHeight} documents: the
  * offsets are multiples of that constant, so the element has to be exactly it.
  */
 export const AdpBoardRow = memo(function AdpBoardRow({
@@ -37,6 +47,7 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   both,
   soleBoard,
   soleDrafts,
+  soleAuctions,
   redraftDrafts,
   dynastyDrafts,
   rules,
@@ -55,6 +66,8 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   both: boolean;
   soleBoard: AdpBoardType;
   soleDrafts: number | null;
+  /** The auctions the Bid cell's share is averaged over — its own population. */
+  soleAuctions: number | null;
   redraftDrafts: number | null;
   dynastyDrafts: number | null;
   /** The board's league rules — what the value cell's pool is anchored to. */
@@ -65,6 +78,10 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   // (`adpBoardRows` filters on it); the local is what lets the cells below read
   // it without re-asserting that.
   const sole = player[soleBoard];
+  // The auction reading is *not* filtered on — a player the crawled auctions
+  // never bought is a normal row with an em dash in one column, not a row the
+  // board should drop.
+  const soleBid = player.auction[soleBoard];
 
   const value = (entry: AdpBoardStats | null) =>
     entry === null ? null : previewAdpValue(entry.adp, rules, steepness);
@@ -76,7 +93,7 @@ export const AdpBoardRow = memo(function AdpBoardRow({
       className={BOARD_ROW_CLASS(both)}
       // Positioned by transform rather than `top`, so scrolling past a row
       // doesn't dirty layout for the rows that didn't move.
-      style={{ height: ADP_ROW_HEIGHT, transform: `translateY(${offset}px)` }}
+      style={{ height: adpRowHeight(), transform: `translateY(${offset}px)` }}
     >
       <span className="text-right text-xs tabular-nums text-foreground/35">
         {rank}
@@ -90,25 +107,45 @@ export const AdpBoardRow = memo(function AdpBoardRow({
       <PositionBadge position={player.position} />
       {both ? (
         <>
+          {/* The auction share rides on these hovers with both boards up: there
+              is no width for two more numeric columns, so each market's ADP
+              cell states its own. */}
           <AdpCell
             adp={player.redraft?.adp ?? null}
-            title={playerAdpTitle(player.redraft, "redraft", redraftDrafts)}
+            title={playerAdpTitle(
+              player.redraft,
+              "redraft",
+              redraftDrafts,
+              player.auction.redraft,
+            )}
           />
           <AdpCell
             adp={player.dynasty?.adp ?? null}
-            title={playerAdpTitle(player.dynasty, "dynasty", dynastyDrafts)}
+            title={playerAdpTitle(
+              player.dynasty,
+              "dynasty",
+              dynastyDrafts,
+              player.auction.dynasty,
+            )}
           />
           <ValueCell value={value(player.redraft)} collapsible />
           <ValueCell value={value(player.dynasty)} collapsible />
         </>
       ) : (
         <>
-          <AdpCell adp={sole?.adp ?? null} title={playerAdpTitle(sole, soleBoard, soleDrafts)} />
+          <AdpCell
+            adp={sole?.adp ?? null}
+            title={playerAdpTitle(sole, soleBoard, soleDrafts, soleBid)}
+          />
           {/* Of the drafts on this board, not of every draft crawled — which is
               what makes it readable beside the ADP. */}
           <span className="text-right text-xs tabular-nums text-foreground/40">
             {takenShare(sole, soleDrafts)}
           </span>
+          <AuctionCell
+            label={auctionShare(soleBid)}
+            title={soleBid ? auctionCellTitle(soleBid, soleBoard, soleAuctions) : undefined}
+          />
           <ValueCell value={value(sole)} />
         </>
       )}
@@ -121,11 +158,18 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   );
 });
 
-/** The spread and the sample behind an average, or nothing where there is none. */
+/**
+ * The spread and the sample behind an average, or nothing where there is none.
+ *
+ * Gated on the *ADP* entry rather than on either half: with no average there is
+ * no cell to hover, so an auction reading alone has nowhere to be said here —
+ * the Bid column carries it instead.
+ */
 function playerAdpTitle(
   entry: AdpBoardStats | null,
   board: AdpBoardType,
   drafts: number | null,
+  auction: AdpAuctionStats | null,
 ): string | undefined {
-  return entry ? adpCellTitle(entry, board, drafts) : undefined;
+  return entry ? adpCellTitle(entry, board, drafts, auction) : undefined;
 }

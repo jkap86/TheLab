@@ -110,6 +110,13 @@ export function refreshSeqOf(revision: string | undefined): number {
 export type LeaguesStreamOptions = {
   searched: string;
   /**
+   * Which season to read, or `undefined` for the app's current one — which the
+   * route fills in from {@link getActiveSeason} and is the spelling every reader
+   * of this stream shares. Only the manager tool sends one, and only once its
+   * header's season stepper has been walked back; see {@link seasonParam}.
+   */
+  season?: string;
+  /**
    * `?refresh=1` — asks the server to sync even when its own cache is still
    * fresh. Honoured only for an internally authorized caller, so it is the
    * operator path and nothing else: from a browser it is ignored, which is why
@@ -135,6 +142,7 @@ export type LeaguesStreamOptions = {
  */
 export async function fetchManagerLeagues({
   searched,
+  season,
   refresh,
   signal,
   previousRevision,
@@ -160,7 +168,14 @@ export async function fetchManagerLeagues({
     publish?.(state.current);
   };
 
-  const url = `/api/user/${encodeURIComponent(searched)}/leagues${refresh ? "?refresh=1" : ""}`;
+  // Built rather than concatenated: there are two optional parameters now, and
+  // an omitted season has to stay omitted — the route defaults it, and a blank
+  // `?season=` is a 400 rather than a default.
+  const params = new URLSearchParams();
+  if (refresh) params.set("refresh", "1");
+  if (season) params.set("season", season);
+  const query = params.toString();
+  const url = `/api/user/${encodeURIComponent(searched)}/leagues${query ? `?${query}` : ""}`;
 
   // Held outside the `try` so the bail-out path can hand the connection back
   // rather than leaving a half-read body attached to it.

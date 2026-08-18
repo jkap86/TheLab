@@ -1,7 +1,49 @@
 import { pool } from "@/shared/db";
+import { TtlPromiseCache } from "@/shared/util";
 
 import type { PlayerWeekStats } from "./aggregate";
 import type { ProjectionScoring } from "./filters";
+
+/**
+ * The two reads here that are a fact about **a season** rather than about a
+ * league, a roster or a request.
+ *
+ * `getRemainingWeeks` is an aggregate over every projection row of a season, and
+ * `getProjectedStatKeys` is a `LATERAL jsonb_object_keys` over the same rows —
+ * and both answer identically for every league, every manager and every reader
+ * who asks inside the same day. They were being run once per League Details
+ * open, once per lineup-checker page and once per ranks computation, each time
+ * for the same handful of answers.
+ *
+ * **Five minutes**, which is what makes them safe to cache at all: both are
+ * derived from `TODAY_ET`, so the answer genuinely changes as a day rolls over
+ * and as the projections sync writes — five minutes bounds that against reads
+ * that are already served from a client cache with a longer window. The bound is
+ * in *seasons*, so eight is the working set several times over: a process is
+ * asked about this season, occasionally the last one, and nothing else.
+ *
+ * Deliberately **not** a cache of anything league- or roster-shaped. What is
+ * keyed here can only vary on the season and the week list, which is why the key
+ * is exactly those; caching the stat lines behind them would be caching a
+ * different answer per request under a key that could not say so.
+ */
+const SEASON_META_CACHE = { ttlMs: 5 * 60 * 1000, max: 8 } as const;
+
+const remainingWeeksCache = new TtlPromiseCache<{ weeks: number[] }>({
+  name: "remaining-weeks",
+  ...SEASON_META_CACHE,
+});
+
+const statKeysCache = new TtlPromiseCache<{ keys: string[] }>({
+  name: "projected-stat-keys",
+  ...SEASON_META_CACHE,
+});
+
+/** For tests, and for a sync that knows it has written new weeks. */
+export function clearProjectionMetaCaches(): void {
+  remainingWeeksCache.clear();
+  statKeysCache.clear();
+}
 
 /**
  * The newest week with stored projections for a season, or null when none are
@@ -45,16 +87,23 @@ const TODAY_ET = `(now() AT TIME ZONE 'America/New_York')::date`;
  * outlook, which reads as a plausible number rather than as a bug.
  */
 export async function getRemainingWeeks(season: string): Promise<number[]> {
-  const { rows } = await pool.query<{ week: number }>(
-    `SELECT week
-       FROM projections
-      WHERE season = $1
-      GROUP BY week
-     HAVING max(game_date) >= ${TODAY_ET}
-      ORDER BY week`,
-    [season],
-  );
-  return rows.map((r) => r.week);
+  // Cached per season — see {@link SEASON_META_CACHE}. The array is handed to
+  // every caller inside the window, so it must not be sorted or spliced in
+  // place; every consumer here reads it and none writes.
+  const { weeks } = await remainingWeeksCache.read(season, async () => ({
+    weeks: (
+      await pool.query<{ week: number }>(
+        `SELECT week
+           FROM projections
+          WHERE season = $1
+          GROUP BY week
+         HAVING max(game_date) >= ${TODAY_ET}
+          ORDER BY week`,
+        [season],
+      )
+    ).rows.map((r) => r.week),
+  }));
+  return weeks;
 }
 
 /**
@@ -202,14 +251,23 @@ export async function getProjectedStatKeys({
 }): Promise<string[]> {
   if (weeks.length === 0) return [];
 
-  const { rows } = await pool.query<{ key: string }>(
-    `SELECT DISTINCT k AS key
-       FROM projections,
-            LATERAL jsonb_object_keys(COALESCE(stats, '{}'::jsonb)) k
-      WHERE season = $1 AND week = ANY($2::int[])`,
-    [season, weeks],
-  );
-  return rows.map((r) => r.key);
+  // Keyed on the season *and* the weeks asked about, which is everything the
+  // answer varies on — and the weeks are sorted into the key rather than taken
+  // as given, since `= ANY(…)` is a set comparison and two orderings are one
+  // population.
+  const key = JSON.stringify([season, [...new Set(weeks)].sort((a, b) => a - b)]);
+  const { keys } = await statKeysCache.read(key, async () => ({
+    keys: (
+      await pool.query<{ key: string }>(
+        `SELECT DISTINCT k AS key
+           FROM projections,
+                LATERAL jsonb_object_keys(COALESCE(stats, '{}'::jsonb)) k
+          WHERE season = $1 AND week = ANY($2::int[])`,
+        [season, weeks],
+      )
+    ).rows.map((r) => r.key),
+  }));
+  return keys;
 }
 
 /** One row of a ranked week, scored by the caller's chosen format. */

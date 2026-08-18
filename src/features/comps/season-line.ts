@@ -1,5 +1,7 @@
 // Relative pure→pure import, the usual test-runner spelling.
 import { COMPS_FIELDS } from "../../shared/comps/fields.ts";
+import { compsDimensionLabel } from "../../shared/comps/windows.ts";
+import { draftPickLabel } from "../../shared/nfl-draft/capital.ts";
 
 import type { CompsBasis } from "../../shared/comps/filters.ts";
 import type {
@@ -45,6 +47,13 @@ export type SeasonCompareRow = {
  * comparison doesn't list receiving zeroes — **unless it was weighted**, in
  * which case it stays whatever it says: a field the reader asked to compare
  * on must never silently vanish from the explanation.
+ *
+ * A field weighted over a *window* is not the same row as that field on the
+ * line: the line is always the anchor season, and "targets over the last three
+ * years" is a different number that happens to share a name. So the line row
+ * stays unweighted where it stands and the window rides in beside the other
+ * extras, labelled with the stretch it covers — the two agreeing would be the
+ * lie, since only one of them is what the distance read.
  */
 export function seasonCompareRows(
   fields: readonly CompsFieldSpecPayload[],
@@ -83,13 +92,14 @@ export function seasonCompareRows(
     lineRow(key, label);
   }
 
-  // The weighted fields the line has no row for — age and the market values —
-  // read off `values`, where the route put exactly the weighted ones.
+  // The weighted dimensions the line has no row for — age, the market values,
+  // and every windowed field — read off `values`, where the route put exactly
+  // the weighted ones under these same keys.
   for (const field of fields) {
     if (field.key in subject.line || field.key in POINTS_LABELS) continue;
     rows.push({
       key: field.key,
-      label: field.label,
+      label: compsDimensionLabel(field.key),
       weight: field.weight,
       perGame: field.per_game && basis === "per_game",
       subject: subject.values[field.key] ?? null,
@@ -118,3 +128,51 @@ export function pointsSummary(
 
 const nonzero = (value: number | null): boolean =>
   value !== null && value !== 0;
+
+/**
+ * How a row's NFL draft position reads — `Drafted 1.05`, or `Undrafted`.
+ *
+ * Three answers folded into two renderings and one absence, which is the whole
+ * of what this function is for:
+ *
+ * - **Drafted** — the pick, spoken the way picks are spoken (`1.05`), with the
+ *   class and the long form on the hover where they cost no width.
+ * - **Undrafted** — said out loud, because on a comps row it is a *finding*
+ *   rather than a gap: a reader looking at an undrafted breakout is looking at
+ *   the thing that makes the comp interesting.
+ * - **Unknown** — null, drawn as nothing at all. Never "Undrafted", which is
+ *   the one wrong answer here that would read as a working one; the app has no
+ *   draft record for a chunk of the archive seasons, and labelling those
+ *   players undrafted would invent a fact about every one of them.
+ *
+ * The class is not folded into the short form on purpose: the row already
+ * carries a season (the *stat* season), and two four-digit years a few pixels
+ * apart meaning different things is worse than one on a hover.
+ */
+export function draftSummary(
+  row: CompsSeasonRowPayload,
+): { short: string; full: string } | null {
+  const draft = row.draft;
+  if (!draft) return null;
+
+  const label = draftPickLabel({ playerId: row.player_id, ...draft });
+  if (label === null) return null;
+
+  if (draft.overall === null) {
+    return {
+      short: "Undrafted",
+      full: `Went undrafted in ${draft.season}`,
+    };
+  }
+
+  const place =
+    draft.round !== null && draft.slot !== null
+      ? `Round ${draft.round}, pick ${draft.slot}`
+      : draft.round !== null
+        ? `Round ${draft.round}`
+        : `Pick ${draft.overall}`;
+  return {
+    short: `Drafted ${label}`,
+    full: `${place} (#${draft.overall} overall) of the ${draft.season} NFL draft`,
+  };
+}

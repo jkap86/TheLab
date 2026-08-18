@@ -81,7 +81,7 @@ export function TradeSideColumn({
           be back to drawing a box. */}
       <div className="mb-2 flex items-center gap-2">
         <Avatar url={manager?.avatar_url} name={name} />
-        <span className="min-w-0 truncate text-[13px] font-bold">{name}</span>
+        <span className="min-w-0 truncate text-[0.8125rem] font-bold">{name}</span>
         {/* In a readout, flush right — the same edge the per-line values below
             sit on, so the column reads as the lines summing to the figure above
             them. Recessed and not under a lens: a lens is glass with a cyan rim
@@ -95,7 +95,7 @@ export function TradeSideColumn({
       {isEmptyBundle(received) && !showGiven ? (
         // A side of a three-way can take nothing from the others; saying so is
         // clearer than a blank block that reads as a rendering gap.
-        <p className="text-[13px] text-foreground/40">Nothing</p>
+        <p className="text-[0.8125rem] text-foreground/40">Nothing</p>
       ) : (
         <div
           className={`grid gap-x-2 gap-y-2 ${showGiven ? ASSET_TRACKS_PAIRED : ""}`}

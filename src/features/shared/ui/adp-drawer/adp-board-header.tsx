@@ -3,6 +3,7 @@ import type { AdpBoardType } from "@/shared/manager";
 import type { LeagueFilters } from "../../league-filters";
 import type { AdpSort, AdpSortColumn } from "../../adp-sort";
 import {
+  AUCTION_COLUMN_SEAT,
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
   BOARD_NAMES,
@@ -10,29 +11,34 @@ import {
 } from "./adp-drawer.constants.ts";
 import {
   KTC_BOARD_NAMES,
+  auctionTitle,
   boardTitle,
   ktcTitle,
   sortHeadingLabel,
   takenTitle,
   valueTitle,
 } from "./adp-drawer.utils.ts";
-import { KeyChip } from "./key-chip";
 
 /** The heading row's own type treatment, shared by both column configurations. */
 const HEADING_ROW =
   "items-center gap-2 px-2 pb-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground/35";
 
 /**
- * The board's sticky head: which markets are drawn, what the columns under them
- * are, and — since every heading is a control now — what the list is ordered on.
+ * The board's sticky head: what the columns are, and — since every heading is a
+ * control now — what the list is ordered on.
  *
  * Sticky, because the board is the one part of the drawer that scrolls and a
  * column of bare numbers three hundred rows down says nothing. It paints the
  * panel's own ground rather than a translucent one — the rows have to pass
- * *behind* it, not through it. The board keys ride in it rather than in the
- * pinned block above: they choose what the *list* shows, so they sit with the
- * columns they toggle — and each carries its own board's draft count, which is
- * the population a reader needs to weigh a column at all.
+ * *behind* it, not through it.
+ *
+ * **It used to lead with two board keys and doesn't now.** They toggled the
+ * redraft and dynasty columns, which is a control offering to take away one of
+ * two markets the board is already showing side by side — and the draft counts
+ * they carried on their faces are on the ADP headings' own hover
+ * ({@link boardTitle}), where they sit against the column they describe. What
+ * still sets `boards` is seeding from a league, which picks the market that
+ * league is in; the single-board branch below is what draws that.
  *
  * **Every heading sorts, which is what turned this row from a caption into a
  * bank of controls.** Two consequences worth keeping. The columns are a step
@@ -45,21 +51,25 @@ const HEADING_ROW =
  */
 export function AdpBoardHeader({
   both,
-  shown,
   soleBoard,
   soleDrafts,
+  soleAuctions,
   redraftDrafts,
   dynastyDrafts,
   rules,
   sort,
   refreshing = false,
-  onToggleBoard,
   onSort,
 }: {
   both: boolean;
-  shown: Record<AdpBoardType, boolean>;
   soleBoard: AdpBoardType;
   soleDrafts: number | null;
+  /**
+   * The auctions behind the Bid column — a *different* count from `soleDrafts`,
+   * because it is a different population: the same leagues and window, over the
+   * one draft type the board never averages.
+   */
+  soleAuctions: number | null;
   redraftDrafts: number | null;
   dynastyDrafts: number | null;
   /** The board's league rules — the value headings' premise reads its size. */
@@ -76,7 +86,6 @@ export function AdpBoardHeader({
    * the scroll to — the dimmed rows say something is off, this says what.
    */
   refreshing?: boolean;
-  onToggleBoard: (board: AdpBoardType) => void;
   /** A heading was pressed; the reducer deciding what that means is `nextAdpSort`. */
   onSort: (column: AdpSortColumn) => void;
 }) {
@@ -100,34 +109,24 @@ export function AdpBoardHeader({
 
   return (
     <div className="sticky top-0 z-10 -mx-1 mb-1.5 bg-[rgb(12,23,33)] pt-0.5">
-      <div className="flex items-center gap-1.5 px-2 pb-1.5">
-        <span className="text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-foreground/40">
-          Boards
-        </span>
-        <BoardKey
-          board="redraft"
-          on={shown.redraft}
-          drafts={redraftDrafts}
-          onToggle={onToggleBoard}
-        />
-        <BoardKey
-          board="dynasty"
-          on={shown.dynasty}
-          drafts={dynastyDrafts}
-          onToggle={onToggleBoard}
-        />
-        {refreshing && (
-          // `role="status"` announces the refresh politely; the pulse is
-          // decoration and steps aside under reduced motion, where the words
-          // still carry the state.
+      {/* The status lane is drawn only while it has something to say, where the
+          board keys used to hold it open. That costs a small shift as a refresh
+          starts, and it is paid at the one moment it costs nothing: `stale` is
+          placeholder data, which only happens on a filter press, and a press is
+          already sending the list back to the top. */}
+      {refreshing && (
+        // `role="status"` announces the refresh politely; the pulse is
+        // decoration and steps aside under reduced motion, where the words
+        // still carry the state.
+        <div className="flex items-center px-2 pb-1.5">
           <span
             role="status"
             className="ml-auto text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-active/70 motion-safe:animate-pulse"
           >
             Updating…
           </span>
-        )}
-      </div>
+        </div>
+      )}
       {both ? (
         <div className={`grid ${BOARD_COLUMNS_BOTH} ${HEADING_ROW}`}>
           {heading("rank", "#", "Board order")}
@@ -162,6 +161,15 @@ export function AdpBoardHeader({
               a number nobody can name. */}
           {heading("taken", "Taken", "Share of drafts taken in", {
             title: takenTitle(soleBoard),
+          })}
+          {/* `Bid` rather than `$` or `Auction`: the first is a glyph a reader
+              has to guess the denominator of, the third does not fit a 36px
+              track, and the second is what the column is a reading of. What it
+              is a share *of* — and that these are drafts the ADP beside it is
+              never averaged over — is the hover's job. */}
+          {heading("auction", "Bid", "Average auction bid, as a share of budget", {
+            title: auctionTitle(soleBoard, soleAuctions),
+            className: AUCTION_COLUMN_SEAT,
           })}
           {heading(`value_${soleBoard}`, "Value", "Draft capital", {
             title: valueTitle(rules),
@@ -267,34 +275,5 @@ function SortHeading({
         </span>
       )}
     </button>
-  );
-}
-
-/**
- * One board's key: whether that market's columns are drawn, with its own draft
- * count on the face — different for the two boards by construction. Toggling the
- * only lit board off is a no-op (`toggleAdpBoard`), so the list can never go
- * blank.
- */
-function BoardKey({
-  board,
-  on,
-  drafts,
-  onToggle,
-}: {
-  board: AdpBoardType;
-  on: boolean;
-  drafts: number | null;
-  onToggle: (board: AdpBoardType) => void;
-}) {
-  return (
-    <KeyChip small on={on} onClick={() => onToggle(board)}>
-      {BOARD_NAMES[board]}
-      {drafts !== null && (
-        <span className="ml-1 text-[0.55rem] tabular-nums opacity-70">
-          {drafts.toLocaleString()}
-        </span>
-      )}
-    </KeyChip>
   );
 }

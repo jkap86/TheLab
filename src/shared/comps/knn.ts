@@ -24,6 +24,11 @@ import type { CompsBasis } from "./filters.ts";
  * every distance and re-scaling each field per chosen subject. Excluded, the
  * field scaling is a property of the comparison population alone, and the
  * payload's per-field mean/stdev honestly mean "the comparison population".
+ *
+ * The one place the subject's own value reaches a *scale* is the fallback for a
+ * population holding a single value, where step 5 has no σ to offer at all —
+ * `normalizationScale` documents why that is a relative difference rather than
+ * a σ, and why it is bounded.
  */
 
 /**
@@ -39,9 +44,35 @@ export type CompsPoolRow = {
   position: string | null;
   /** The player's *current* team — `players` stores no historical team. */
   team: string | null;
+  /**
+   * Where the player went in the NFL draft, or null where this app has no
+   * record of it. A record with a null `overall` means he went *undrafted*,
+   * which is a different answer — see `nfl-draft/types.ts`.
+   *
+   * Row metadata rather than a value, exactly like `position` and `team`: the
+   * comparable form of this fact is `values.draft_capital`, and printing a
+   * pick number is what this is for. Unlike those two it is time-invariant, so
+   * a historical row carries the right pick rather than today's.
+   */
+  draft: {
+    season: string;
+    round: number | null;
+    slot: number | null;
+    overall: number | null;
+  } | null;
   /** Games played: the count of stored weekly lines, `playerPpg`'s own rule. */
   games: number;
   values: Record<string, number | null>;
+  /**
+   * The numerator and denominator behind each derived rate on `values`, scaled
+   * so the value is exactly `n / d`. What they are for is *windows*: pooling
+   * three seasons of target share is Σtargets over Σteam-targets, and only the
+   * components can say that — a mean of three seasons' shares is a different
+   * number wearing the same label. Optional because a row assembled without
+   * them is still a legitimate row; it simply can't pool a rate, which reads as
+   * the window answering null rather than answering approximately.
+   */
+  rates?: Record<string, { n: number; d: number }>;
   /**
    * Season fantasy-point totals under Sleeper's three generic scorings — what
    * "how did that season go" is answered with. Display only, never a KNN
@@ -94,6 +125,12 @@ export type CompsKnnOutput = {
  * distance and the payload's display values go through, so they cannot
  * disagree. Null means the row doesn't answer this field: a market unknown, or
  * a per-game read of a season with no games to divide by.
+ *
+ * `key` is a *dimension* key, which for the default window is the catalogue's
+ * own and for any other is `windows.ts`'s composite. A windowed value was
+ * materialized already resolved under the basis — its divisor is the window's
+ * games, not this season's — so its spec carries `perGame: false` and this
+ * function is the same one either way rather than growing a branch.
  */
 export function fieldValue(
   row: CompsPoolRow,
@@ -115,6 +152,68 @@ export function fieldValue(
  */
 export function similarityScore(distance: number): number {
   return Math.round(100 * Math.exp(-distance));
+}
+
+/**
+ * A σ below this fraction of the population's own magnitude is floating-point
+ * noise rather than spread, and the same ratio decides whether the subject sits
+ * *on* a constant population. Both are the same question — is this difference
+ * real, or is it the last bits of a division? — so it is one number.
+ *
+ * An exact `=== 0` test is not that question. Three identical `0.1`s sum to
+ * 0.30000000000000004, so their σ comes out at 1.4e-17 rather than 0: a
+ * population as constant as any other, whose scale is pure noise, and dividing
+ * a real gap by it is the divide-by-zero this guards against wearing a finite
+ * number (a z-gap of 7e15, so every candidate scores 0). 1e-9 is orders of
+ * magnitude above that noise and orders below any spread a football stat can
+ * carry — no two seasons of targets, yards, age or market price differ by a
+ * billionth.
+ */
+const CONSTANT_POPULATION_RATIO = 1e-9;
+
+/**
+ * The scale a dimension's z-gaps are taken against, or null for a dimension
+ * that says nothing about this subject and so leaves the distance entirely —
+ * denominator included.
+ *
+ * Normally that scale is σ. What this exists for is a population holding one
+ * value, where σ is 0 and there is no z-scale to divide by. The two readings
+ * of that are opposite and were previously one:
+ *
+ *  - **The subject on that value** is the honest nothing. Every candidate
+ *    matches the subject and each other, so the dimension separates nobody and
+ *    is dropped — which is why its weight leaves the denominator too.
+ *  - **The subject off it** is a real mismatch σ cannot measure: every
+ *    candidate differs from the subject, by the same amount, on a field the
+ *    reader asked to compare on. Dropped, that read as a perfect match on the
+ *    dimension — a lone constant field returned similarity 100 for candidates
+ *    the subject matched nowhere.
+ *
+ * The fallback scale for that second case is the larger magnitude in play,
+ * `max(|subject|, |constant|)`, so the gap is the ordinary relative difference.
+ * Four properties are why it is that and not something bigger: it is
+ * scale-free (the same reading in yards as in hundreds of yards, exactly as a
+ * z-gap is), sign-aware, **continuous into the matching case** — a subject a
+ * hair off the constant is a hair of a gap rather than a cliff — and **bounded
+ * by 2**, which is the point rather than a side effect. A population with no
+ * spread offers no evidence about how many σ a gap is worth, so the dimension
+ * must not be able to out-shout one that measured its own scale; an arbitrary
+ * large z-score would do exactly that, and would make the ordering of the real
+ * dimensions an afterthought.
+ */
+export function normalizationScale(
+  mean: number,
+  stdev: number,
+  subjectValue: number,
+): number | null {
+  if (stdev > Math.abs(mean) * CONSTANT_POPULATION_RATIO) return stdev;
+  // Constant population: `mean` is that constant.
+  const scale = Math.max(Math.abs(subjectValue), Math.abs(mean));
+  if (scale === 0) return null; // Constant at 0, subject at 0 — one value.
+  if (Math.abs(subjectValue - mean) <= scale * CONSTANT_POPULATION_RATIO) {
+    return null;
+  }
+  return scale;
 }
 
 export function runCompsKnn({
@@ -180,22 +279,75 @@ export function runCompsKnn({
     return { key: field.key, mean, stdev: Math.sqrt(variance / n) };
   });
 
-  // Step 6. A zero-variance field contributes 0 — every candidate is the same
-  // there, so it separates nobody — rather than NaN. The subject is
-  // transformed with the candidates' statistics.
-  const totalWeight = fields.reduce((sum, field) => sum + field.weight, 0);
+  // Step 6.
+  //
+  // **Only a field that can say something about how this subject sits against
+  // the candidates is in the distance — numerator *and* denominator.** Two
+  // fields can't, and they leave on the same terms and for the same arithmetic:
+  // one the subject has no value for, and one whose population holds a single
+  // value the subject *also* holds. The latter contributes nothing to the
+  // numerator, so leaving its weight in the denominator was a bug: it divided a
+  // real gap by weight nothing had paid, so adding a dimension carrying zero
+  // comparative information improved every similarity score. Measured on one
+  // useful field, an equally weighted constant beside it took a candidate from
+  // d ≈ 1.2247 to d ≈ 0.8660 — the ranking unmoved and every number flattering.
+  //
+  // A population holding a single value the subject does **not** hold is not
+  // that case and had been folded into it: nobody matches the subject there, so
+  // dropping the dimension called every candidate a perfect match on it —
+  // similarity 100 across the board where the only requested field was one the
+  // subject answered differently from all of them. It participates, against the
+  // fallback scale `normalizationScale` documents. Its gap is the same for
+  // every candidate, so what it moves is how well anybody matches and never who
+  // matches best.
+  //
+  // The participating set is a property of the field statistics and the
+  // subject, never of the candidate being scored, so it is resolved once: every
+  // candidate is scored over the same dimensions and against the same total.
+  const participating: {
+    index: number;
+    weight: number;
+    mean: number;
+    scale: number;
+    subjectValue: number;
+  }[] = [];
+  for (const [f, field] of fields.entries()) {
+    const { mean, stdev } = fieldStats[f];
+    if (mean === null || stdev === null) continue;
+    // Resolution dropped subject-missing fields, so this only guards a caller
+    // that skipped resolve; dropping beats NaN either way.
+    const subjectValue = fieldValue(subject, field, basis);
+    if (subjectValue === null) continue;
+    const scale = normalizationScale(mean, stdev, subjectValue);
+    if (scale === null) continue;
+    participating.push({
+      index: f,
+      weight: field.weight,
+      mean,
+      scale,
+      subjectValue,
+    });
+  }
+
+  const totalWeight = participating.reduce(
+    (sum, entry) => sum + entry.weight,
+    0,
+  );
+
   const scored = eligible.map(({ row, values }) => {
     let weighted = 0;
-    for (const [f, field] of fields.entries()) {
-      const { mean, stdev } = fieldStats[f];
-      if (mean === null || stdev === null || stdev === 0) continue;
-      const subjectValue = fieldValue(subject, field, basis);
-      // Resolution dropped subject-missing fields, so this only guards a
-      // caller that skipped resolve; contributing 0 beats NaN either way.
-      if (subjectValue === null) continue;
-      const gap = (values[f] - mean) / stdev - (subjectValue - mean) / stdev;
-      weighted += field.weight * gap * gap;
+    for (const { index, weight, mean, scale, subjectValue } of participating) {
+      const gap = (values[index] - mean) / scale - (subjectValue - mean) / scale;
+      weighted += weight * gap * gap;
     }
+    // Nothing to compare on — every requested field is constant across the
+    // population *at the subject's own value*, or the subject answers none of
+    // them. Every candidate is then genuinely indistinguishable on what was
+    // asked, so they all sit at distance 0 and the deterministic tiebreak below
+    // orders them. This is the answer the code already gave (an all-skipped
+    // numerator over a non-zero total is 0 too); what it must never be is NaN
+    // or Infinity, and the payload's own `pool_stdev` of 0 is where a reader
+    // sees why.
     const distance = totalWeight > 0 ? Math.sqrt(weighted / totalWeight) : 0;
     return { row, distance, similarity: similarityScore(distance) };
   });

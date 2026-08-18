@@ -1,5 +1,11 @@
 export { getLeagueWeekView } from "./league-week";
 export type { LeagueWeekView, PpgSource, TeamWeekProjection } from "./league-week";
+export {
+  notifyStatsSeasonWritten,
+  onStatsSeasonWritten,
+  resetStatsSeasonListeners,
+} from "./mutation";
+export type { StatsSeasonListener } from "./mutation";
 export { hasStatLine, toStatRows } from "./parse";
 export type { StatRow } from "./parse";
 export { playerPpg, ppgWindow, teamPpg } from "./ppg";
@@ -7,10 +13,15 @@ export type { Ppg, StatLine } from "./ppg";
 export {
   listPlayerStatLines,
   listSeasonStatLines,
+  listStoredPlayerSeasons,
   listStoredSeasons,
   listStoredStatWeeks,
 } from "./queries";
-export type { PlayerStatWeek, SeasonStatLine } from "./queries";
+export type {
+  PlayerStatWeek,
+  SeasonStatLine,
+  StoredPlayerSeason,
+} from "./queries";
 export { startStatsScheduler, STATS_INTERVAL_MS } from "./scheduler";
 export {
   syncStats,

@@ -5,7 +5,9 @@ import type { SleeperLeague } from "@/shared/sleeper";
 
 import { dedupeBy } from "./dedupe";
 import type { LeagueGraph } from "./graph";
+import { invalidateLeagueDetail } from "./league-detail-read";
 import { dedupeMatchups } from "./matchups";
+import { invalidateManagerRanks } from "./ranks-read";
 
 /**
  * Store leagues Sleeper no longer serves, tombstoned on arrival.
@@ -327,9 +329,42 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
   });
 }
 
-/** Persist one league graph in its own transaction (atomic per league). */
-export function persistLeagueGraph(g: LeagueGraph): Promise<void> {
-  return withTransaction((client) => writeLeagueGraph(client, g));
+/**
+ * Persist one league graph in its own transaction (atomic per league).
+ *
+ * **Two in-process caches are dropped here, because two of them are answers
+ * about rows this write replaces**: the league's own core detail, and the ranks
+ * of every manager holding a roster in it — a standing, a points-for rank and
+ * two projected ranks, all read off the rosters that have just changed.
+ *
+ * Both are dropped **after** the commit rather than before it, which is the only
+ * ordering that ends staleness rather than moving it: a read that starts between
+ * an early invalidation and the commit would cache the rows this write is
+ * replacing, for a full TTL. Forgetting afterwards leaves at worst a reader that
+ * was already mid-request holding the old answer, and the next one recomputing.
+ *
+ * It only reaches *this* process — every cache here is per process — which is
+ * what the TTL bounds. What it buys is that every path a reader can **press** is
+ * exact rather than TTL-bounded: the lineup checker's sync key and the refresh
+ * it triggers are on the same web process, so the panel's refetch sees Sleeper's
+ * answer; and a manager's leagues sync runs in the process that will serve the
+ * ranks refetch its own revision bump just asked for. That is what lets both
+ * TTLs be set for the *background* writes they are actually stale about, rather
+ * than kept short in the hope of covering an interactive one.
+ *
+ * The ranks half is keyed on the graph's own season, which is the season those
+ * rosters belong to: a rewind to a past season reads different rosters entirely
+ * and is not made stale by this write.
+ */
+export async function persistLeagueGraph(g: LeagueGraph): Promise<void> {
+  await withTransaction((client) => writeLeagueGraph(client, g));
+  invalidateLeagueDetail([g.league.league_id]);
+  invalidateManagerRanks(
+    // A roster with no owner is an orphan Sleeper still lists; it names nobody
+    // whose ranks could be cached.
+    g.rosters.map((r) => r.owner_id).filter((id): id is string => Boolean(id)),
+    g.league.season,
+  );
 }
 
 /**

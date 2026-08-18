@@ -83,7 +83,7 @@ export function UserLookup({
 
   return (
     <section className="rounded-2xl border border-foreground/12 bg-foreground/[0.04] p-6 shadow-[0_24px_60px_-34px_rgba(0,0,0,0.7)] backdrop-blur-xl">
-      <h2 className="mb-4 font-display text-[11px] font-medium uppercase tracking-[0.28em] text-active/80">
+      <h2 className="mb-4 font-display text-[0.6875rem] font-medium uppercase tracking-[0.28em] text-active/80">
         Your Sleeper account
       </h2>
 

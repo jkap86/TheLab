@@ -106,6 +106,7 @@ const adp: Record<string, AdpPlayerPayload> = {
     redraft: { picks: 30, adp: 31, min_pick: 20, max_pick: 44, stdev: 5.5 },
     dynasty: { picks: 25, adp: 16, min_pick: 8, max_pick: 30, stdev: 4.4 },
     // The card's KTC column reads its own `ktc` map, never the board's row.
+    auction: { redraft: null, dynasty: null },
     ktc: null,
   },
   p2: {
@@ -116,6 +117,7 @@ const adp: Record<string, AdpPlayerPayload> = {
     rookie: false,
     redraft: { picks: 30, adp: 16, min_pick: 4, max_pick: 26, stdev: 3.3 },
     dynasty: { picks: 25, adp: 31, min_pick: 12, max_pick: 48, stdev: 6.6 },
+    auction: { redraft: null, dynasty: null },
     ktc: null,
   },
 };
@@ -473,7 +475,7 @@ describe("the two tracks", () => {
 
 describe("what a line names", () => {
   test("a take line carries the player's position and team", () => {
-    assert.match(card(), /Christian McCaffrey<span class="ml-1\.5 whitespace-nowrap text-\[11px\] text-foreground\/45">RB · SF/);
+    assert.match(card(), /Christian McCaffrey<span class="ml-1\.5 whitespace-nowrap text-\[0.6875rem\] text-foreground\/45">RB · SF/);
   });
 
   test("a give line names the player and nothing else", () => {

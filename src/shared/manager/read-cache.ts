@@ -26,6 +26,44 @@
  * spells its league scope out: a hash trades a silent collision for a shorter
  * key, and a collision here is one reader's board served to another with nothing
  * to say so.
+ *
+ * ## Which way round the TTLs go
+ *
+ * **Every TTL here is longer than the browser stale time in front of it**, and
+ * the three of them used to be the other way about — a rule stated in each of
+ * these comments, and inverted in each of the numbers under them. What the two
+ * layers do is not symmetrical, which is why the ordering is not a matter of
+ * taste:
+ *
+ * - **The browser entry** (`LEAGUE_DETAIL_STALE_TIME`, `ADP_STALE_TIMES`,
+ *   `MANAGER_STALE_TIMES`) answers *one device* with no request at all. When it
+ *   goes stale React Query revalidates — it re-asks, and shows what it holds
+ *   until the answer lands.
+ * - **This layer** is what that revalidation should land on. It answers from
+ *   memory, for every reader, every tab and every process-mate at once.
+ * - **Postgres** is underneath both, and is the source of truth. A miss here is
+ *   not a wrong answer, it is a second of aggregate over 1.9M picks, or four
+ *   queries, or a thousand lineup solves.
+ *
+ * Read that way the old ordering was exactly backwards: with a server TTL
+ * *shorter* than the client's, the first revalidation after a client entry goes
+ * stale is a guaranteed miss here, so the layer that exists to absorb
+ * revalidations was expiring just in time to miss every one of them. The rule
+ * this file now keeps is `client stale < server TTL`, with the gap wide enough
+ * to absorb the jitter between two readers rather than merely non-zero — a
+ * server TTL a minute over the client's would still miss most of the time, since
+ * a request arriving uniformly inside an entry's life finds `(ttl − stale) / ttl`
+ * of it left. `features/shared/cache-layering.test.ts` is where that ordering is
+ * asserted against the client's own constants; the ceilings below are asserted
+ * here, because "not excessively stale" is a claim about what writes underneath.
+ *
+ * **Staleness is bounded by a write, not only by a clock, wherever a reader can
+ * cause one.** `LEAGUE_DETAIL_CACHE` and `MANAGER_RANKS_CACHE` are both dropped
+ * when a league's graph is persisted (see `persistLeagueGraph`), so the paths a
+ * reader can *press* — the panel's sync key, a manager's own leagues sync — are
+ * exact in the process serving them rather than TTL-bounded. That is what makes
+ * these longer TTLs safe to hold: what they are stale about is a background
+ * write nobody asked for, on its own slower clock.
  */
 
 import { booleanFilter } from "../query/parse.ts";
@@ -35,14 +73,27 @@ import type { AdpFilters } from "./adp-filters.ts";
 /**
  * How long a full ADP board is worth reusing, and how many are kept.
  *
- * **Ten minutes, the same TTL as the per-player board next to it** — and for the
- * same reason, which is what writes underneath: the league crawler, whose
- * fastest tier is fifteen minutes and whose effect on any one board is a handful
- * of new drafts among thousands. It is deliberately *shorter* than the browser's
- * own `ADP_STALE_TIMES.board` (fifteen minutes), keeping the house rule that a
- * layer's TTL is shorter than the one it stands in front of: a stale client read
- * costs a request this answers from memory, where a stale read here would cost a
- * second of aggregate over ~1.5M picks.
+ * **Thirty minutes, the same TTL as the per-player board next to it** — and for
+ * the same two reasons.
+ *
+ * The first is what writes underneath: the league crawler, whose fastest tier is
+ * fifteen minutes and whose effect on any one board is a handful of new drafts
+ * among thousands. A board is an *average* over ~1.5M picks, so a half-hour-old
+ * one and a fresh one differ by nothing a reader could see — this is the read in
+ * the app where a longer TTL costs the least.
+ *
+ * The second is the browser in front of it. `ADP_STALE_TIMES.board` is fifteen
+ * minutes, so at the old ten this expired *before* the client entry it was
+ * standing behind: every revalidation the browser made was a guaranteed miss
+ * here, and the miss is a second of aggregate over ~1.5M picks plus a count
+ * statement. Twice the client's window is what makes the layer useful — a
+ * revalidation lands inside a live entry rather than just after one lapsed, and
+ * the drawer's other two reads (`density` and `leagues`, both thirty minutes in
+ * the browser) sit level with it rather than past it.
+ *
+ * Nothing invalidates this on write, which is the honest reason it may be the
+ * longest TTL here: no reader can ask for a draft to be crawled, so there is no
+ * press for a stale board to make look broken.
  *
  * The bound is in *boards*, and a board is the largest entry any cache in this
  * app holds — the drawer asks for `limit=1000`, so one entry is a thousand rows
@@ -56,31 +107,148 @@ import type { AdpFilters } from "./adp-filters.ts";
  */
 export const ADP_BOARD_CACHE = {
   name: "adp-board",
-  ttlMs: 10 * 60 * 1000,
+  ttlMs: 30 * 60 * 1000,
   max: 16,
+} as const;
+
+/**
+ * How long a *priced* board — ADP for a named set of players, both boards in one
+ * entry — is worth reusing, and how many are kept.
+ *
+ * It is policy in this module rather than a pair of constants beside the read
+ * for the reason the other three are: it stands behind a browser stale time, and
+ * an ordering nothing can see from either side is one that drifts. It was
+ * `BOARD_TTL_MS`/`BOARD_CACHE_MAX`, private to `./adp.ts`, so
+ * `cache-layering.test.ts` could not name it — which is how it came to be ten
+ * minutes behind a fifteen-minute client entry, the same inversion the paged
+ * board had.
+ *
+ * **Two different client stale times sit in front of this one**, which is what
+ * decides the number: `/api/user/[username]/adp-value` is
+ * `MANAGER_STALE_TIMES.adpValue` (fifteen minutes) and
+ * `/api/league/[leagueId]/values` is `LEAGUE_DETAIL_STALE_TIME` (five). The TTL
+ * has to clear the *longer* of them, or the valuation's revalidation misses
+ * while the panel's hits. Thirty covers both, and matches the paged board it
+ * shares a population and a crawler with.
+ *
+ * The steepness slider is the reason the entry earns its keep at all: the curve
+ * is applied by the caller *after* this returns, so every notch asks for a board
+ * that is byte-identical to the one just read. See `getDraftAdpForPlayers`.
+ *
+ * The bound is in *boards*, and each is a map of up to ~1,100 players, so this
+ * is the one cache here whose entries are large enough to be worth counting:
+ * ~64 of them is a few megabytes at worst. A manager's page reads four (one per
+ * distinct scoring/superflex group), so it holds a dozen-odd readers, and the
+ * eviction is recency — a reader who has stopped scrolling loses their board to
+ * one who hasn't.
+ */
+export const ADP_PLAYER_BOARD_CACHE = {
+  name: "adp-players",
+  ttlMs: 30 * 60 * 1000,
+  max: 64,
+} as const;
+
+/**
+ * How long one page's worth of **auction spend** is worth reusing.
+ *
+ * It stands behind `ADP_STALE_TIMES.board`, exactly as the paged board it rides
+ * on the same response as does, and it is the same thirty minutes for the same
+ * two reasons: the crawler underneath moves a board by a handful of drafts among
+ * thousands, and a client entry going stale at fifteen minutes has to land
+ * inside a live entry here or the layer absorbs none of the revalidations it
+ * exists for. Matching the paged board rather than picking a number of its own
+ * is deliberate — the two are read on the *same request*, so a shorter TTL here
+ * would make every board revalidation a guaranteed miss on half its payload
+ * while hitting on the other half, which is the asymmetry
+ * `cache-layering.test.ts` exists to keep out.
+ *
+ * The bound is smaller than the paged board's because an entry is: it is a page
+ * of ids and four numbers per board, no names and no rows, and it is keyed on
+ * the *page* (limit and offset are in the key by way of the ids), so the working
+ * set is the handful of boards being scrolled rather than one entry per reader.
+ */
+export const ADP_AUCTION_CACHE = {
+  name: "adp-auction",
+  ttlMs: 30 * 60 * 1000,
+  max: 32,
 } as const;
 
 /**
  * How long a manager's ranks are worth reusing, and how many managers are kept.
  *
- * **Five minutes, matching `MANAGER_STALE_TIMES.ranks`** — the browser's own
- * freshness for this route, and the shortest of the manager reads because the
- * projections behind it can move hourly. What that buys is the case the browser
- * cache cannot reach: a second reader, a second tab, a reload, and the boundary
- * where one browser's entry goes stale all land on a payload that costs a lineup
- * solve per team per remaining week across every league the manager plays in —
- * thousands of solves for a large account, none of which the previous reader's
- * cache entry can be shared with.
+ * **Fifteen minutes, against the browser's five** (`MANAGER_STALE_TIMES.ranks`).
+ * What it buys is the case the browser cache cannot reach: a second reader, a
+ * second tab, a reload, and the boundary where one browser's entry goes stale
+ * all land on a payload that costs a lineup solve per team per remaining week
+ * across every league the manager plays in — thousands of solves for a large
+ * account, none of which the previous reader's cache entry can be shared with.
+ *
+ * **The two used to be equal, which is the one relationship that reliably wastes
+ * the layer.** Nothing lines the clocks up: the client entry is stamped when its
+ * request *resolved* and this one when the computation *started*, so at equal
+ * TTLs the revalidation at five minutes arrives a beat after the entry it wanted
+ * expired — the miss is not a risk at the boundary, it is the normal case, and
+ * the read that pays for it is the most expensive in the app that is not a
+ * single statement (CPU on the web process, so two readers are two spells of a
+ * blocked event loop). Three times the client's window makes the layer hold
+ * across a revalidation with room for the jitter between two readers.
+ *
+ * **What bounds the staleness is a write rather than the clock.** Ranks are read
+ * off rosters and projections; the projections sync's fastest tier is an hour,
+ * so fifteen minutes is well inside it, and the roster half is invalidated
+ * exactly — `persistLeagueGraph` forgets the ranks of every manager rostered in
+ * a league it has just rewritten, so a reader whose leagues sync has *just* run
+ * recomputes rather than reading a payload from before it. See
+ * {@link invalidateManagerRanks}.
  *
  * An entry is small — one rank set per league, so a hundred-odd short objects —
  * so the bound is generous: sixty-four managers is a few megabytes and covers
- * every account a single process is likely to be asked about inside a
- * five-minute window.
+ * every account a single process is likely to be asked about inside the window.
  */
 export const MANAGER_RANKS_CACHE = {
   name: "manager-ranks",
-  ttlMs: 5 * 60 * 1000,
+  ttlMs: 15 * 60 * 1000,
   max: 64,
+} as const;
+
+/**
+ * How long one league's **core** detail is worth reusing, and how many leagues
+ * are kept.
+ *
+ * **Eight minutes, against the browser's five** (`LEAGUE_DETAIL_STALE_TIME`), so
+ * a client entry going stale costs a request this answers from memory rather
+ * than four queries. It was three, which is the same number the other way round:
+ * the panel's revalidation at five minutes could not hit an entry that expired
+ * at three, so every reader who kept a card open past their own stale time went
+ * to Postgres, and the second reader behind them went again.
+ *
+ * What it protects is not one reader — the browser cache does that — but the
+ * case the browser cannot reach: a second tab, a second reader, a reload, a
+ * process that has just restarted, and the **three enrichment routes beside
+ * it**, each of which needs the same league, rosters and settings to do its own
+ * work. Splitting one payload into four requests would otherwise have multiplied
+ * that read by four; cached, the split costs one.
+ *
+ * An entry is a dozen rosters, their members and their picks — tens of
+ * kilobytes — so 256 leagues is a handful of megabytes and far more than the
+ * working set of a single process inside eight minutes.
+ *
+ * **What keeps eight minutes honest is that this is invalidated on write.** It
+ * is the one read a *reader* can force a refresh of (the lineup checker's sync
+ * key), and a panel that re-read a stale roster straight after Sleeper confirmed
+ * the change would make that key look broken — so the TTL is not what that path
+ * rests on: `persistLeagueGraph` forgets the league after its transaction
+ * commits, in the process that served the press. What is left for the clock is
+ * the **crawler's** own writes, which land on the worker dyno and cannot reach
+ * this process's memory. Those are bounded by the crawl's fastest tier (fifteen
+ * minutes) plus this window; the ceiling is deliberately kept at that tier so
+ * this cache stays the smaller of the two terms rather than the dominant one.
+ * See `invalidateLeagueDetail`.
+ */
+export const LEAGUE_DETAIL_CACHE = {
+  name: "league-detail",
+  ttlMs: 8 * 60 * 1000,
+  max: 256,
 } as const;
 
 /**

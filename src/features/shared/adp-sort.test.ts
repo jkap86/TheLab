@@ -8,6 +8,7 @@ import type { AdpBoardEntry, AdpPickRow } from "./adp-picks.ts";
 import {
   type AdpSort,
   type AdpSortColumn,
+  type AdpSortContext,
   DEFAULT_ADP_SORT,
   adpSortColumns,
   isValueSort,
@@ -59,8 +60,20 @@ const player = (
   rookie: false,
   redraft: stats(50),
   dynasty: stats(50),
+  // The crawled auctions bought nobody by default: they are a small slice of
+  // the corpus, so both boards null is the ordinary row rather than a case.
+  auction: { redraft: null, dynasty: null },
   ktc: null,
   ...over,
+});
+
+/** One board's auction reading: a share of the room's budget, and its sample. */
+const bid = (share: number, buys = 5) => ({
+  buys,
+  share,
+  min_share: Math.max(0, share - 5),
+  max_share: share + 5,
+  stdev: 2,
 });
 
 const pickStats = (adp: number, discount = 1) => ({
@@ -95,8 +108,10 @@ const entries = (
       : { kind: "pick", key: row.key, pick: row },
   );
 
-const ctx = {
-  soleBoard: "redraft" as const,
+// Typed as the context rather than inferred, so a case can point the
+// single-board columns at the other market.
+const ctx: AdpSortContext = {
+  soleBoard: "redraft",
   rules: DEFAULT_LEAGUE_FILTERS,
   steepness: 2.75,
 };
@@ -109,7 +124,10 @@ const sortBy = (
   rows: readonly AdpBoardEntry[],
   column: AdpSortColumn,
   direction: "asc" | "desc",
-) => order(sortAdpEntries(rows, { column, direction }, ctx));
+  // The lit market, for the columns that read one — everything else takes the
+  // default so the cases that do not care stay two arguments long.
+  over: Partial<AdpSortContext> = {},
+) => order(sortAdpEntries(rows, { column, direction }, { ...ctx, ...over }));
 
 describe("the board's own order is a column", () => {
   const rows = entries([player("a"), player("b"), player("c")]);
@@ -201,6 +219,49 @@ describe("what each column reads", () => {
     const rows = entries([pick("1"), player("a", { redraft: stats(20, 5) })]);
     assert.deepEqual(sortBy(rows, "taken", "desc"), ["a", "2026 1.01"]);
     assert.deepEqual(sortBy(rows, "taken", "asc"), ["a", "2026 1.01"]);
+  });
+
+  test("Bid sorts the share the cell draws, not the sample behind it", () => {
+    // The opposite call from Taken, and deliberately: an auction share's
+    // denominator is the *room's* budget, so it is per row rather than one
+    // number for the whole column — sorting the sample would order the board by
+    // how often a player is auctioned, which is a different question.
+    const rows = entries([
+      player("dear", { auction: { redraft: bid(58, 2), dynasty: null } }),
+      player("cheap", { auction: { redraft: bid(4, 40), dynasty: null } }),
+    ]);
+    assert.deepEqual(sortBy(rows, "auction", "desc"), ["dear", "cheap"]);
+    assert.deepEqual(sortBy(rows, "auction", "asc"), ["cheap", "dear"]);
+  });
+
+  test("Bid reads the lit market, and the other market cannot reach it", () => {
+    const rows = entries([
+      player("a", { auction: { redraft: bid(10), dynasty: bid(90) } }),
+      player("b", { auction: { redraft: bid(90), dynasty: bid(10) } }),
+    ]);
+    assert.deepEqual(sortBy(rows, "auction", "desc", { soleBoard: "redraft" }), ["b", "a"]);
+    assert.deepEqual(sortBy(rows, "auction", "desc", { soleBoard: "dynasty" }), ["a", "b"]);
+  });
+
+  test("a row the crawled auctions never bought sinks either way", () => {
+    // An em dash is the common row here rather than the exception — auctions are
+    // a small slice of the corpus — so it must not float to the top of an
+    // ascending press.
+    const rows = entries([
+      player("none"),
+      player("some", { auction: { redraft: bid(12), dynasty: null } }),
+    ]);
+    assert.deepEqual(sortBy(rows, "auction", "asc"), ["some", "none"]);
+    assert.deepEqual(sortBy(rows, "auction", "desc"), ["some", "none"]);
+  });
+
+  test("a pick has no Bid either — what an auction sells is players", () => {
+    const rows = entries([
+      pick("1"),
+      player("a", { auction: { redraft: bid(20), dynasty: null } }),
+    ]);
+    assert.deepEqual(sortBy(rows, "auction", "desc"), ["a", "2026 1.01"]);
+    assert.deepEqual(sortBy(rows, "auction", "asc"), ["a", "2026 1.01"]);
   });
 
   test("the name column sorts a pick by its label and a player by his name", () => {
@@ -310,6 +371,14 @@ describe("a sort cannot outlive the column it names", () => {
   test("both boards draw no Taken column", () => {
     assert.ok(!adpSortColumns(true, "redraft").includes("taken"));
     assert.ok(adpSortColumns(false, "redraft").includes("taken"));
+  });
+
+  test("both boards draw no Bid column either", () => {
+    // For a different reason from Taken's, and worth stating: the share is per
+    // market, so two boards would want two of these columns and the row has no
+    // width for them. With both up it is on each ADP cell's hover instead.
+    assert.ok(!adpSortColumns(true, "redraft").includes("auction"));
+    assert.ok(adpSortColumns(false, "dynasty").includes("auction"));
   });
 
   test("a single board draws only its own market's columns", () => {

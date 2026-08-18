@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { AdpFilters } from "./adp-filters.ts";
-import { adpBoardCacheKey, managerRanksCacheKey } from "./read-cache.ts";
+import {
+  ADP_BOARD_CACHE,
+  ADP_PLAYER_BOARD_CACHE,
+  LEAGUE_DETAIL_CACHE,
+  MANAGER_RANKS_CACHE,
+  adpBoardCacheKey,
+  managerRanksCacheKey,
+} from "./read-cache.ts";
 
 /**
  * A cache key is wrong *silently*. Too narrow and one population's board is
@@ -151,5 +158,70 @@ describe("managerRanksCacheKey", () => {
       managerRanksCacheKey("12", "32026", full),
       managerRanksCacheKey("123", "2026", full),
     );
+  });
+});
+
+describe("the core League Details cache", () => {
+  test("is bounded, and generously enough to cover a session's leagues", () => {
+    // A hundred-league account browsed for a few minutes, several readers at a
+    // time — and an entry is a dozen rosters, their members and their picks, so
+    // the bound is in leagues rather than in bytes.
+    assert.ok(LEAGUE_DETAIL_CACHE.max >= 256);
+    assert.ok(Number.isFinite(LEAGUE_DETAIL_CACHE.max));
+  });
+
+  test("stays inside the crawler's fastest tier", () => {
+    // The ceiling, and the only staleness this TTL actually decides: an
+    // interactive refresh drops the entry outright (`persistLeagueGraph`), so
+    // what is left for the clock is the crawler writing from the worker dyno,
+    // which this process cannot be told about. Held at or under the crawl's
+    // fastest tier, this cache stays the smaller of the two terms in how old a
+    // panel can be rather than becoming the dominant one.
+    //
+    // The *floor* — that it outlives the browser entry in front of it — is in
+    // `features/shared/cache-layering.test.ts`, which can name both sides.
+    assert.ok(LEAGUE_DETAIL_CACHE.ttlMs <= 15 * 60 * 1000);
+  });
+});
+
+describe("the ADP caches", () => {
+  test("the paged board and the priced board expire together", () => {
+    // Two cuts of one population, refreshed by one crawler: a reader whose
+    // panel prices a roster off one and whose drawer pages the other should not
+    // see them disagree about which drafts are in the corpus.
+    assert.equal(ADP_BOARD_CACHE.ttlMs, ADP_PLAYER_BOARD_CACHE.ttlMs);
+  });
+
+  test("neither is stale beyond what a board can move in", () => {
+    // A board is an average over ~1.5M picks and the crawler adds a handful of
+    // drafts an hour, so a long TTL is cheap here — but "cheap" is not
+    // "unbounded", and an hour is where a number stops being defensible as
+    // *this* board rather than a snapshot of one.
+    assert.ok(ADP_BOARD_CACHE.ttlMs <= 60 * 60 * 1000);
+    assert.ok(ADP_PLAYER_BOARD_CACHE.ttlMs <= 60 * 60 * 1000);
+  });
+});
+
+describe("the manager ranks cache", () => {
+  test("stays inside the projections sync's fastest tier", () => {
+    // Ranks are read off rosters and projections. The roster half is dropped at
+    // the write (`persistLeagueGraph` → `invalidateManagerRanks`), so the clock
+    // answers for the projections half — whose near-week slices refresh hourly.
+    assert.ok(MANAGER_RANKS_CACHE.ttlMs <= 60 * 60 * 1000);
+  });
+});
+
+describe("every cache in this module", () => {
+  test("is four names", () => {
+    // They share one debug channel (`CACHE_DEBUG=on`), so a duplicated name
+    // would make two caches indistinguishable in the only place they are
+    // observable.
+    const names = [
+      ADP_BOARD_CACHE,
+      ADP_PLAYER_BOARD_CACHE,
+      MANAGER_RANKS_CACHE,
+      LEAGUE_DETAIL_CACHE,
+    ].map((c) => c.name);
+    assert.equal(new Set(names).size, names.length);
   });
 });

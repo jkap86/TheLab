@@ -70,7 +70,7 @@ export function RosterHeading({
       {opponent && (
         <span
           aria-hidden="true"
-          className="shrink-0 text-[9px] font-semibold uppercase tracking-[0.12em] text-foreground/40"
+          className="shrink-0 text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-foreground/40"
         >
           vs
         </span>
@@ -96,7 +96,7 @@ export function RosterHeading({
               ? ` · ${formatPoints(projection.points_left)} left on the bench`
               : "")
           }
-          className="lab-readout shrink-0 rounded px-1.5 py-px font-mono text-[11px] font-semibold leading-4 tabular-nums text-foreground/80"
+          className="lab-readout shrink-0 rounded px-1.5 py-px font-mono text-[0.6875rem] font-semibold leading-4 tabular-nums text-foreground/80"
         >
           {formatPoints(projection.optimal)}
         </span>

@@ -13,6 +13,7 @@ import { DEFENSIVE_SLOTS } from "@/shared/projections/slots";
 // this panel is deliberately absent from it in any case (see `./index.ts`).
 import { adpValueRead } from "../../adp-controls";
 import { useAdpControls } from "../../adp-controls-context";
+import { leagueDetailNeeds } from "../../league-detail-needs.ts";
 import { useTodayIso } from "../../use-today-iso.ts";
 import {
   DEFAULT_PLAYER_COLUMNS,
@@ -49,6 +50,7 @@ import { Standings } from "./standings";
 import { LeagueSyncKey } from "./sync-key";
 import { managerLabel } from "./team-label";
 import type { LeagueDetailResult, LeagueTeamView, TeamOutlook } from "./types";
+import { WeekMedianBar } from "./week-median";
 
 /**
  * The dialog both of this panel's tables aim their columns from, loaded the
@@ -73,6 +75,17 @@ const ColumnsEditor = dynamic(
  * A league's standings on the left and the selected team's roster on the right.
  * Loads its own data the first time it mounts, which is when whatever holds it
  * is opened.
+ *
+ * **It renders on the structural read and lets the rest fill in.** The rosters,
+ * the standings, the managers and the player names are one request; the KTC and
+ * ADP prices, the rest-of-season lineups and (on a week panel) that week's
+ * projections are three more, each landing on its own. So the loading state ends
+ * as soon as there is a league to draw, and the value columns sit at an em dash
+ * for the moment it takes their own read to answer rather than holding the whole
+ * panel behind the slowest of four. Nothing below this needed changing for that:
+ * every one of those components already drew an em dash for "no answer", which
+ * is exactly what a request still in flight looks like. See
+ * {@link useLeagueDetail}.
  *
  * **It is in `features/shared` because a second tool draws it**, which is the
  * mover's rule and not a filing preference: the leagues list expands a card into
@@ -189,7 +202,81 @@ export function LeagueDetailPanel({
     () => adpValueRead(controls, scope, today),
     [controls, scope, today],
   );
-  const { data, loading, error } = useLeagueDetail(leagueId, board, week);
+
+  // Each table's two value columns are slots the reader points at a metric — the
+  // standings at a team-level one, the roster at a player-level one. Stored on
+  // the device rather than held here, so the choice outlives this panel: it
+  // mounts on expand and unmounts on collapse, which used to reset both tables
+  // every time a different league was opened. One key per grain, not per league —
+  // what a column means is a fact about the catalogue, not about this league.
+  //
+  // A panel opened on a *week* keys its two selections apart from one opened on
+  // a season, and that is the grain rule rather than an exception to it: "this
+  // team over the rest of the year" and "this team on Sunday" are two questions,
+  // so a column aimed at one is not a column aimed at the other. Same catalogue
+  // either way — everything is pickable from either panel — and what differs is
+  // what each opens on and how many slots it has (one on a week, two on a
+  // season: `resolveColumns` takes the row's length from the defaults).
+  //
+  // **They are read here rather than in the loaded panel below, and that is what
+  // keeps the enrichments off a waterfall.** What they cost in requests is
+  // derived from them (see `needs`), and `Panel` renders only once the core has
+  // landed — so deriving it down there would have made every enrichment wait for
+  // the read it is supposed to run beside. Nothing about them needs fetching:
+  // `localStorage` answers on the first render after hydration.
+  const teamColumnState = usePersistedColumns(
+    week === null ? "standings" : "standings-week",
+    week === null ? DEFAULT_TEAM_COLUMNS : DEFAULT_WEEK_TEAM_COLUMNS,
+    TEAM_METRICS,
+  );
+  const rosterColumnState = usePersistedColumns(
+    week === null ? "roster" : "roster-week",
+    week === null ? DEFAULT_PLAYER_COLUMNS : DEFAULT_WEEK_PLAYER_COLUMNS,
+    PLAYER_METRICS,
+  );
+
+  // One editor per table, because they are two catalogues and two selections —
+  // a team's aggregate and a player's number are not choices from one list. Each
+  // holds which heading opened it, so a press lands on the column the reader
+  // meant rather than on a dialog they then have to aim. Hoisted with the
+  // selections they edit, and for a second reason of their own: `mounted`
+  // latches on the first press, which is the signal below that a reader is
+  // *looking at the catalogue* and wants its previews filled in.
+  const teamEditor = useColumnsEditor();
+  const rosterEditor = useColumnsEditor();
+
+  /**
+   * Which of the three enrichment reads anything on screen actually needs.
+   *
+   * Two of them used to fire on every open regardless of where the columns were
+   * pointed — see {@link leagueDetailNeeds}, which is the rule — so a lineup
+   * checker opened on one Sunday ran a season-long lineup solve per team and
+   * priced a KTC/ADP board, neither of which it drew, both competing with the
+   * week read it opened *for*.
+   *
+   * **An open columns editor widens it to both, and that is demand rather than
+   * an exception to it.** The dialog previews every metric in its catalogue
+   * against the panel's own subject, so a reader who has opened it is looking at
+   * what KTC and the rest-of-season split would say — a bay of em dashes is the
+   * one thing that would make the picker useless. It follows the editor's
+   * `mounted` latch rather than whether it is open, for the reason that latch
+   * exists: a preview that filled in and then emptied on close would be worse
+   * than one that never filled, and the reads are cached by then either way.
+   *
+   * The week is deliberately *not* widened. There is no week for a season panel
+   * to preview against, which is what the `week_proj` cell says in words.
+   */
+  const previewing = teamEditor.mounted || rosterEditor.mounted;
+  const needs = useMemo(() => {
+    const columns = leagueDetailNeeds({
+      week,
+      teamColumns: teamColumnState.columns,
+      playerColumns: rosterColumnState.columns,
+    });
+    return previewing ? { ...columns, values: true, outlook: true } : columns;
+  }, [week, teamColumnState.columns, rosterColumnState.columns, previewing]);
+
+  const { data, loading, error } = useLeagueDetail(leagueId, board, week, needs);
 
   // The query container is here rather than around the loaded panel alone, so
   // every state this can be in is measured against one width — including the
@@ -222,11 +309,20 @@ export function LeagueDetailPanel({
           focusRosterId={focusRosterId}
           opponentRosterId={opponentRosterId}
           week={week}
+          teamColumnState={teamColumnState}
+          rosterColumnState={rosterColumnState}
+          teamEditor={teamEditor}
+          rosterEditor={rosterEditor}
         />
       )}
     </div>
   );
 }
+
+/** One table's stored column selection, as {@link usePersistedColumns} hands it over. */
+type ColumnState = ReturnType<typeof usePersistedColumns>;
+/** One table's columns editor, as {@link useColumnsEditor} hands it over. */
+type EditorState = ReturnType<typeof useColumnsEditor>;
 
 /** The panel's inset around a state that isn't the panel. */
 function PanelState({ children }: { children: ReactNode }) {
@@ -238,11 +334,27 @@ function Panel({
   focusRosterId,
   opponentRosterId,
   week,
+  teamColumnState,
+  rosterColumnState,
+  teamEditor,
+  rosterEditor,
 }: {
   data: LeagueDetailResult;
   focusRosterId?: number;
   opponentRosterId?: number;
   week: number | null;
+  /**
+   * The two selections and the two editors, owned one level up.
+   *
+   * They belong to the panel rather than to its loaded body because what they
+   * cost in requests is derived from them, and this component renders only once
+   * the core read has landed — see {@link LeagueDetailPanel}. Threading them
+   * through is the price of not putting the enrichments behind the core.
+   */
+  teamColumnState: ColumnState;
+  rosterColumnState: ColumnState;
+  teamEditor: EditorState;
+  rosterEditor: EditorState;
 }) {
   // Projected-points order, not standings order — the table's own Proj column
   // is what the rows are ranked on, so the numbers descend down the page and
@@ -267,47 +379,32 @@ function Panel({
   // next time this re-renders. A caller opening the panel at a different team
   // remounts it (the sheet keys on the pair), which is free — the detail is a
   // cached query by then.
-  const [selectedId, setSelectedId] = useState<number>(
-    focusRosterId ?? teams[0].roster_id,
-  );
+  //
+  // **Null until something is actually chosen**, which the outlook arriving
+  // separately is what makes necessary. The head of `teams` is the projected
+  // leader once the outlook lands and the standings leader before it, so a
+  // selection *initialised* to `teams[0]` would pin whichever row happened to
+  // lead during the first render — the standings leader, always, since the
+  // projections are now a request behind. Read as a fallback instead, the panel
+  // opens on the standings leader and follows the ranking the moment it arrives,
+  // and any press pins the choice for good.
+  const [pickedId, setPickedId] = useState<number | null>(focusRosterId ?? null);
   // A roster the league doesn't hold — a trade whose participants have since been
   // replaced — falls back to the head of the list rather than to nothing.
-  const selected = teams.find((t) => t.roster_id === selectedId) ?? teams[0];
+  const selected = teams.find((t) => t.roster_id === pickedId) ?? teams[0];
 
-  // Each table's two value columns are slots the reader points at a metric — the
-  // standings at a team-level one, the roster at a player-level one. Stored on
-  // the device rather than held here, so the choice outlives this panel: it
-  // mounts on expand and unmounts on collapse, which used to reset both tables
-  // every time a different league was opened. One key per grain, not per league —
-  // what a column means is a fact about the catalogue, not about this league.
-  //
-  // A panel opened on a *week* keys its two selections apart from one opened on
-  // a season, and that is the grain rule rather than an exception to it: "this
-  // team over the rest of the year" and "this team on Sunday" are two questions,
-  // so a column aimed at one is not a column aimed at the other. Same catalogue
-  // either way — everything is pickable from either panel — and what differs is
-  // what each opens on and how many slots it has (one on a week, two on a
-  // season: `resolveColumns` takes the row's length from the defaults).
   const {
     columns: teamColumns,
     setColumn: setTeamColumn,
     setColumns: setTeamColumns,
     reset: resetTeamColumns,
-  } = usePersistedColumns(
-    week === null ? "standings" : "standings-week",
-    week === null ? DEFAULT_TEAM_COLUMNS : DEFAULT_WEEK_TEAM_COLUMNS,
-    TEAM_METRICS,
-  );
+  } = teamColumnState;
   const {
     columns: rosterColumns,
     setColumn: setRosterColumn,
     setColumns: setRosterColumns,
     reset: resetRosterColumns,
-  } = usePersistedColumns(
-    week === null ? "roster" : "roster-week",
-    week === null ? DEFAULT_PLAYER_COLUMNS : DEFAULT_WEEK_PLAYER_COLUMNS,
-    PLAYER_METRICS,
-  );
+  } = rosterColumnState;
 
   // Which reading is on screen: the league's standings and rosters, or its own
   // configuration. Local and not persisted, because the panel mounts when a card
@@ -319,13 +416,6 @@ function Panel({
   // cannot disagree — and unique per panel, since a leagues list can hold this
   // open beside a trade sheet's copy.
   const baseId = useId();
-
-  // One editor per table, because they are two catalogues and two selections —
-  // a team's aggregate and a player's number are not choices from one list. Each
-  // holds which heading opened it, so a press lands on the column the reader
-  // meant rather than on a dialog they then have to aim.
-  const teamEditor = useColumnsEditor();
-  const rosterEditor = useColumnsEditor();
 
   // What each editor previews a metric against: the team the panel is currently
   // about, and the first player of its roster as the list below draws it. Both
@@ -440,7 +530,18 @@ function Panel({
           neither is. */}
       {(tabbed || syncable) && (
         <PanelHead>
-          {tabbed && <PanelTabs tab={tab} onTab={setTab} baseId={baseId} />}
+          {/* One leading group rather than two loose children: the band is
+              `justify-between` with the trailing seat holding the far end, and
+              three loose items would distribute the free space between all
+              three — putting the median somewhere in the middle of the band
+              rather than beside whatever leads it. A median only exists on a
+              week panel, so it can share the leading end with the strip (a bye
+              in a median league, which draws both) or hold it alone (a
+              head-to-head, which has no strip). */}
+          <div className="flex min-w-0 items-center gap-2">
+            {tabbed && <PanelTabs tab={tab} onTab={setTab} baseId={baseId} />}
+            <WeekMedianBar weekView={weekView} />
+          </div>
           {syncable && <LeagueSyncKey leagueId={data.league_id} />}
         </PanelHead>
       )}
@@ -494,7 +595,7 @@ function Panel({
                   values={data.values}
                   weekView={weekView}
                   selectedId={selected.roster_id}
-                  onSelect={setSelectedId}
+                  onSelect={setPickedId}
                   columns={teamColumns}
                   onOpenColumn={teamEditor.open}
                 />
@@ -659,6 +760,15 @@ const real = (id: string) => Boolean(id) && id !== "0";
  * A league-level fact, so it is stated once under the panel rather than on each
  * team — and outside the halves' scroll boxes, so a caveat about the numbers
  * stays on screen with the numbers it is about.
+ *
+ * **It is a season-panel caveat now, and by construction rather than by choice.**
+ * `unprojected_scoring` rides on the outlook payload, which a week panel showing
+ * only week columns no longer asks for (see {@link leagueDetailNeeds}) — so this
+ * reads the absent-outlook path there, exactly as it does when that read fails.
+ * The caveat is as true of a week's projections as of a season's, so restoring it
+ * on the lineup checker means carrying the field on `LeagueWeekViewPayload` too,
+ * not re-enabling a lineup solve per team per remaining week to read one array
+ * off it.
  */
 function OutlookCaveat({ data }: { data: LeagueDetailResult }) {
   const missing = data.outlook?.unprojected_scoring.length ?? 0;

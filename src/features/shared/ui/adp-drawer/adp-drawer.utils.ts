@@ -1,16 +1,20 @@
-import type { AdpBoardStats, AdpBoardType, ManagerLeague } from "@/shared/manager";
+import type {
+  AdpAuctionStats,
+  AdpBoardStats,
+  AdpBoardType,
+  ManagerLeague,
+} from "@/shared/manager";
 
 import {
   type AdpControls,
   type AdpShownBoards,
-  DEFAULT_ADP_RANGE,
   DEFAULT_ADP_ROUNDS,
+  UNBOUNDED_ADP_RANGE,
   boardLabel,
-  isUnboundedRange,
+  isDefaultAdpRange,
   previewAdpPool,
   seedFromLeague,
   steepnessSummary,
-  toggleAdpBoard,
 } from "../../adp-controls.ts";
 import type { AdpPickRow, AdpPickStats } from "../../adp-picks.ts";
 import { activeFilterCount } from "../../league-filters/summaries.ts";
@@ -48,6 +52,75 @@ export function valueTitle(leagues: LeagueFilters): string {
 export function takenTitle(board: AdpBoardType): string {
   return `Share of the ${board} board’s drafts the player was taken in`;
 }
+
+/**
+ * The auction column's cell: an average share of the room's budget, written at
+ * the precision the number deserves.
+ *
+ * **The split at 10% is what keeps the track honest.** The column is 36px, which
+ * holds four characters — so `100%` and `9.9%` both fit and `100.0%` does not.
+ * That is the same bound the reading wants anyway: the bottom of a roster is a
+ * dollar of two hundred, and rounding 0.5% to a whole percent rounds it to zero,
+ * while a tenth of a percent on a 58% player is noise.
+ *
+ * An em dash where there is no reading, never a `0%` — a player the crawled
+ * auctions never bought is a gap in the sample, not a free player.
+ */
+export function auctionShare(stats: AdpAuctionStats | null): string | null {
+  if (!stats) return null;
+  return stats.share >= 10
+    ? `${Math.round(stats.share)}%`
+    : `${stats.share.toFixed(1)}%`;
+}
+
+/**
+ * The auction heading's hover: what the column is a share *of*, and over how
+ * many rooms.
+ *
+ * The heading is `Bid`, which says the market and not the unit — so this is the
+ * only place that can state the denominator twice over: a share of one manager's
+ * budget, averaged over the auctions on this board. It also names the one thing
+ * about the column a reader would otherwise have to infer, which is that these
+ * are *not* the drafts the ADP beside it is averaged over.
+ */
+export function auctionTitle(board: AdpBoardType, auctions: number | null): string {
+  const rooms =
+    auctions === null
+      ? `the crawled ${board} auctions`
+      : `${auctions.toLocaleString()} crawled ${board} auction${auctions === 1 ? "" : "s"}`;
+  return `Average winning bid as a share of the room’s budget, over ${rooms} matching these filters — a different population from the ADP beside it, which never includes auctions`;
+}
+
+/**
+ * One auction cell's hover: the spread behind the share, and the sample it was
+ * taken over — the same three facts {@link adpCellTitle} carries, for the same
+ * reason. A 58% average over two rooms that paid 20% and 96% is a number a
+ * reader should distrust, and the cell has four characters to say it in.
+ */
+export function auctionCellTitle(
+  stats: AdpAuctionStats,
+  board: AdpBoardType,
+  auctions: number | null,
+): string {
+  const of = auctions ? ` of ${auctions.toLocaleString()}` : "";
+  return `Bids ${pct(stats.min_share)}–${pct(stats.max_share)} · bought in ${stats.buys}${of} ${board} auction${
+    stats.buys === 1 ? "" : "s"
+  } · ±${stats.stdev.toFixed(1)}%`;
+}
+
+/** A share in a hover, where there is room for a decimal whatever its size. */
+const pct = (share: number): string => `${share.toFixed(1)}%`;
+
+/**
+ * The auction column for a pick: an em dash, always, and the hover says why.
+ *
+ * The same call the Taken column makes. A rookie pick is not a lot in these
+ * rooms — what an auction sells is players — so the cell has no reading rather
+ * than a missing one, and a bare em dash beside a real ADP would otherwise read
+ * as a gap in the data.
+ */
+export const PICK_AUCTION_TITLE =
+  "A rookie pick isn’t auctioned in these rooms — it stands on the rookie its rung took";
 
 /** Which of KTC's two boards a column reads. */
 export type KtcBoard = "sf" | "oneqb";
@@ -106,16 +179,27 @@ export function ktcPickTitle(label: string, exact: boolean): string {
  * One ADP cell's hover: the spread behind the average, and the sample it was
  * taken over. It carries what the Taken column says in single-board mode, so
  * nothing is lost when both boards are up and that column has stepped aside.
+ *
+ * **The auction share rides here on the same terms**, and for the same reason
+ * twice over: the column is absent with both boards up (there is no width for
+ * two more of them) and below `@md` (there is no width for one), so this is the
+ * only place the reading is stated at those sizes. It is appended rather than
+ * folded in, and only when there is one — a hover that always ended in a clause
+ * about auctions would be saying "no auction data" on nearly every row of a
+ * board where that is the normal case.
  */
 export function adpCellTitle(
   entry: AdpBoardStats,
   board: AdpBoardType,
   drafts: number | null,
+  /** This row's auction reading on the same board, where the crawl has one. */
+  auction: AdpAuctionStats | null = null,
 ): string {
   const taken = drafts ? ` of ${drafts.toLocaleString()}` : "";
+  const bid = auction ? ` · ${pct(auction.share)} of budget at auction` : "";
   return `Picks ${entry.min_pick}–${entry.max_pick} · taken in ${entry.picks}${taken} ${board} draft${
     entry.picks === 1 ? "" : "s"
-  } · ±${entry.stdev.toFixed(1)}`;
+  } · ±${entry.stdev.toFixed(1)}${bid}`;
 }
 
 /**
@@ -211,9 +295,14 @@ export function soleBoardOf(shown: AdpShownBoards): AdpBoardType {
  * A date range is a cut *inside* a season, so the same dates against a different
  * one are a window that mostly isn't there — and silently returning an empty
  * board is worse than starting the new season whole.
+ *
+ * It resets to the *unbounded* window rather than to `DEFAULT_ADP_RANGE`, and
+ * that difference is the whole of the rule above: the default is a relative
+ * fortnight, which is exactly the window a season that ended a year ago does not
+ * contain. Whole season, whichever season was picked.
  */
 export function withSeason(controls: AdpControls, season: string): AdpControls {
-  return { ...controls, season, range: DEFAULT_ADP_RANGE };
+  return { ...controls, season, range: UNBOUNDED_ADP_RANGE };
 }
 
 /**
@@ -235,17 +324,6 @@ export function withLeagueFilters(
   rounds: AdpControls["rounds"],
 ): AdpControls {
   return { ...controls, leagueRules, rounds };
-}
-
-/**
- * Flip one board's columns. The rule that the last lit board cannot be turned
- * off lives in `toggleAdpBoard`, which is where it is tested.
- */
-export function withBoardToggle(
-  controls: AdpControls,
-  board: AdpBoardType,
-): AdpControls {
-  return { ...controls, boards: toggleAdpBoard(controls.boards, board) };
 }
 
 /**
@@ -293,7 +371,7 @@ export function adpBayStates(controls: AdpControls): AdpBayState[] {
       id: "window",
       label: "Window",
       value: boardLabel(controls.range, controls.season),
-      narrowed: !isUnboundedRange(controls.range),
+      narrowed: !isDefaultAdpRange(controls.range),
     },
     {
       id: "curve",

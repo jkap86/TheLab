@@ -48,7 +48,7 @@ export function SyncCaveats({
       // `pointer-events-none` because a plate hanging off the card's edge sits
       // over the gap above the subject rail, and nothing here is pressable —
       // a press meant for the rail below must not land on a label.
-      className="pointer-events-none absolute -bottom-3 left-[21px] right-[21px] z-[5] flex flex-wrap items-center gap-1.5"
+      className="pointer-events-none absolute -bottom-3 left-[calc(1.25rem+1px)] right-[calc(1.25rem+1px)] z-[5] flex flex-wrap items-center gap-1.5"
     >
       {/* Some leagues could not be refreshed, so the list below is a mix of
           just-synced rows and rows as old as the last pass. Stated as the two
@@ -81,7 +81,7 @@ export function SyncCaveats({
  */
 function Caveat({ children }: { children: ReactNode }) {
   return (
-    <span className="lab-nameplate-warn rounded-[5px] px-2.5 py-[3px] text-[11px] font-semibold leading-tight text-amber-50">
+    <span className="lab-nameplate-warn rounded-[5px] px-2.5 py-[3px] text-[0.6875rem] font-semibold leading-tight text-amber-50">
       {children}
     </span>
   );

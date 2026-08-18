@@ -1,4 +1,5 @@
 import { formatPoints, formatValue } from "./format.ts";
+import type { LeagueDataset } from "./league-detail-needs.ts";
 import type { ColumnPreset, Metric } from "./metric-cell.ts";
 import type { LeagueTeamPayload } from "@/shared/contract";
 import type { TeamOutlook } from "@/shared/projections";
@@ -32,7 +33,17 @@ import type { TeamOutlook } from "@/shared/projections";
 
 /** What a team metric reads from: one team's standings row, outlook and board totals. */
 export type TeamMetricContext = {
-  team: LeagueTeamPayload;
+  /**
+   * The team's standings row, or **null where there is no row to read**.
+   *
+   * Null is not "loading": it is a caller that has a roster without a standings
+   * line behind it, which is what a rewind hands over — the timeline knows who
+   * held which players at a past moment and nothing about a record or a
+   * points-for that only exists for today. The one metric that reads this says
+   * so rather than printing a zero, on the terms every other absence here is
+   * spelled: an em dash and a hover, never a number attributed to nobody.
+   */
+  team: LeagueTeamPayload | null;
   /** This team's rest-of-season outlook, or null/undefined when none was projected. */
   outlook: TeamOutlook | null | undefined;
   /** This team's KTC total on the league's board, or null when nothing is priced. */
@@ -111,10 +122,21 @@ export type TeamMetricCell = { kind: "value"; text: string | null; title: string
  * right and silently loses the narrowing: `{cell: A} & {cell: B}` makes `cell` an
  * overload of the two, and a call resolves to the *first* — `Metric`'s, which
  * returns the union. The compiler then rejects `cell.text` in the very file this
- * type exists to keep simple.
+ * type exists to keep simple. `reads` is a new property rather than a narrowing,
+ * so it needs none of that.
  */
 export type TeamMetric = Omit<Metric<TeamMetricContext>, "cell"> & {
   cell: (ctx: TeamMetricContext) => TeamMetricCell;
+  /**
+   * Which of the panel's three enrichment reads this cell needs to say anything
+   * — see {@link leagueDetailNeeds}, which is what turns these into requests.
+   *
+   * Declared per metric rather than inferred from {@link Metric.group}, which
+   * happens to agree today and is a display caption: what a bay is *called* has
+   * no business deciding whether a request is made. Required, so a metric added
+   * here cannot forget to say what it costs.
+   */
+  reads: readonly LeagueDataset[];
 };
 
 /** The em-dash cell a projection-based metric returns when the league has no outlook. */
@@ -122,6 +144,19 @@ const noProjection: TeamMetricCell = {
   kind: "value",
   text: null,
   title: "No projection",
+};
+
+/**
+ * The em-dash cell a standings-row metric returns for a roster with no such row.
+ *
+ * Distinct from {@link noProjection} because the two are different absences: one
+ * is a league nothing could be projected for, the other a roster read at a moment
+ * that has no standings behind it at all.
+ */
+const noStandingsRow: TeamMetricCell = {
+  kind: "value",
+  text: null,
+  title: "No standings row to read this from",
 };
 
 /**
@@ -140,6 +175,7 @@ export const TEAM_METRICS: TeamMetric[] = [
     key: "week_proj",
     group: "Week",
     label: "Wk Proj",
+    reads: ["week"],
     cell: ({ week, weekProjection }) => {
       if (week === null) {
         return {
@@ -172,6 +208,7 @@ export const TEAM_METRICS: TeamMetric[] = [
     key: "proj",
     group: "Projection",
     label: "Proj",
+    reads: ["outlook"],
     cell: ({ outlook }) =>
       outlook
         ? {
@@ -187,6 +224,7 @@ export const TEAM_METRICS: TeamMetric[] = [
     key: "bench",
     group: "Projection",
     label: "Bench",
+    reads: ["outlook"],
     cell: ({ outlook }) =>
       outlook
         ? {
@@ -202,6 +240,7 @@ export const TEAM_METRICS: TeamMetric[] = [
     key: "optimal",
     group: "Projection",
     label: "Optimal",
+    reads: ["outlook"],
     cell: ({ outlook }) =>
       outlook
         ? {
@@ -217,16 +256,23 @@ export const TEAM_METRICS: TeamMetric[] = [
     key: "pf",
     group: "Record",
     label: "PF",
-    cell: ({ team }) => ({
-      kind: "value",
-      text: formatPoints(team.fpts),
-      title: `${formatPoints(team.fpts)} points for`,
-    }),
+    // The one team metric that is already on the core payload: the points a team
+    // has scored ride on its standings row, so this column costs no request.
+    reads: [],
+    cell: ({ team }) =>
+      team
+        ? {
+            kind: "value",
+            text: formatPoints(team.fpts),
+            title: `${formatPoints(team.fpts)} points for`,
+          }
+        : noStandingsRow,
   },
   {
     key: "ktc",
     group: "Value",
     label: "KTC",
+    reads: ["values"],
     cell: ({ ktcTotal, superflex }) =>
       ktcTotal === null
         ? {
@@ -246,6 +292,7 @@ export const TEAM_METRICS: TeamMetric[] = [
     key: "adp",
     group: "Value",
     label: "ADP",
+    reads: ["values"],
     cell: ({ adpTotal, superflex, draftCount }) =>
       adpTotal === null
         ? { kind: "value", text: null, title: "no ADP value on the matching board" }

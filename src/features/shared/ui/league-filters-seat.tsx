@@ -62,21 +62,21 @@ export const SEATS = {
   free: {
     key: "gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-sm",
     icon: "h-3.5 w-3.5",
-    badge: "px-1.5 py-0.5 text-[11px]",
+    badge: "px-1.5 py-0.5 text-[0.6875rem]",
   },
   bar: {
-    key: "gap-1.5 rounded-full py-1 pl-2.5 pr-3 text-[11px] leading-none",
+    key: "gap-1.5 rounded-full py-1 pl-2.5 pr-3 text-[0.6875rem] leading-none",
     icon: "h-3 w-3",
-    badge: "px-1 py-px text-[10px]",
+    badge: "px-1 py-px text-[0.625rem]",
   },
   rail: {
     // `lab-chip-sm` rides in the shape string because that is where the trigger
     // composes it — see the note above for why this seat is allowed the wall.
-    key: "lab-chip-sm gap-1.5 rounded-full px-2 py-[3px] text-[10px] leading-none",
+    key: "lab-chip-sm gap-1.5 rounded-full px-2 py-[3px] text-[0.625rem] leading-none",
     icon: "h-3 w-3",
     // A step under `bar`'s, since the key it sits on is a step under `bar`'s
     // too: a badge is read against the word beside it, not at a fixed size.
-    badge: "px-1 py-px text-[9px]",
+    badge: "px-1 py-px text-[0.5625rem]",
   },
 } as const;
 

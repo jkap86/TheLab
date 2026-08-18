@@ -256,13 +256,13 @@ export function ColumnsEditor<C>({
                           )}
                         </span>
                         <span
-                          className={`truncate text-[13px] font-bold ${
+                          className={`truncate text-[0.8125rem] font-bold ${
                             armed ? "text-active" : "text-foreground/85"
                           }`}
                         >
                           {metric?.label}
                         </span>
-                        <span className="font-mono text-[11px] tabular-nums text-foreground/40">
+                        <span className="font-mono text-[0.6875rem] tabular-nums text-foreground/40">
                           {(metric && preview(metric)) ?? "—"}
                         </span>
                       </button>
@@ -284,7 +284,7 @@ export function ColumnsEditor<C>({
                     className="lab-well flex flex-col gap-1.5 rounded-xl p-3"
                   >
                     <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-active/75">
+                      <span className="font-mono text-[0.625rem] font-bold uppercase tracking-[0.16em] text-active/75">
                         {group.label}
                       </span>
                       <span className="h-px flex-1 bg-foreground/10" />
@@ -314,7 +314,7 @@ export function ColumnsEditor<C>({
                           // wells above it.
                           aria-pressed={held}
                           onClick={() => onColumnChange(slot, metric.key)}
-                          className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors ${
+                          className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[0.8125rem] transition-colors ${
                             held
                               ? "bg-active/15 text-active"
                               : "text-foreground/75 hover:bg-foreground/10 hover:text-foreground"
@@ -333,7 +333,7 @@ export function ColumnsEditor<C>({
                             <>
                               <span
                                 aria-hidden="true"
-                                className="shrink-0 rounded-[4px] border border-foreground/15 px-1 font-mono text-[9px] leading-4 text-foreground/40"
+                                className="shrink-0 rounded-[4px] border border-foreground/15 px-1 font-mono text-[0.5625rem] leading-4 text-foreground/40"
                               >
                                 {elsewhere + 1}
                               </span>
@@ -347,7 +347,7 @@ export function ColumnsEditor<C>({
                             </>
                           )}
                           {value !== null && (
-                            <span className="shrink-0 font-mono text-[11px] tabular-nums text-foreground/40">
+                            <span className="shrink-0 font-mono text-[0.6875rem] tabular-nums text-foreground/40">
                               {value}
                             </span>
                           )}
@@ -422,7 +422,7 @@ export function ColumnsEditor<C>({
 
 /** The uppercase caption over every group and slot, as in the filters dialog. */
 const CAPTION =
-  "font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40";
+  "font-mono text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-foreground/40";
 
 /** The slot counts a table actually wears, for the header's sentence. */
 const SPELLED: Record<number, string> = { 1: "one", 2: "two", 3: "three", 4: "four" };

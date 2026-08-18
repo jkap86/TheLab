@@ -63,7 +63,7 @@ export function RuleBay({
   return (
     <section className="lab-well flex flex-col gap-3 rounded-xl p-3.5">
       <div className="flex items-center gap-2.5">
-        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-active/75">
+        <span className="font-mono text-[0.625rem] font-bold uppercase tracking-[0.16em] text-active/75">
           {label}
         </span>
         <span className="h-px flex-1 bg-foreground/10" />
@@ -101,7 +101,7 @@ export function RuleBay({
           // pressing it does. The visible word is inside the label, so the
           // spoken and written names still agree.
           aria-label={`Add ${label.toLowerCase()} rule`}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-active/35 bg-active/[0.06] py-1.5 text-[11px] font-bold uppercase tracking-wider text-active transition-colors hover:bg-active/15"
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-active/35 bg-active/[0.06] py-1.5 text-[0.6875rem] font-bold uppercase tracking-wider text-active transition-colors hover:bg-active/15"
         >
           <span aria-hidden="true" className="text-sm leading-none">
             +

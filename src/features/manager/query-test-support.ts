@@ -13,5 +13,6 @@ export {
   installFetchMock,
   jsonResponse,
   ndjsonResponse,
+  withQueryClient,
   type FetchMock,
 } from "../shared/query-test-support.ts";

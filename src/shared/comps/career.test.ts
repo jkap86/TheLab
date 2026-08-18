@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { withCareerValues } from "./career.ts";
+import { deriveCareerValues, withCareerValues } from "./career.ts";
 
 import type { CompsPoolRow } from "./knn.ts";
 
@@ -16,6 +16,7 @@ const poolRow = (
   name: player_id,
   position: "WR",
   team: null,
+  draft: null,
   games,
   values: { rec_yd: 1000 },
   points: { ppr, half_ppr: ppr * 0.9, std: ppr * 0.8 },
@@ -113,6 +114,80 @@ describe("withCareerValues", () => {
     assert.equal(
       input.find((p) => p.season === "2024")!.rows[0].values.career_ppg,
       undefined,
+    );
+  });
+});
+
+/**
+ * The pass is O(corpus) — a map per player, then a fresh row and a fresh
+ * `values` object for every player-season on file — and it ran on every
+ * `/api/comps` request, so nudging a weight notch rebuilt the whole historical
+ * archive in JavaScript while the expensive season pools underneath it sat
+ * cached and untouched.
+ *
+ * It is memoized against the corpus's own identity, which is the only key it
+ * can have: the answer depends on nothing a request carries, and
+ * `getCompsPool`'s frozen arrays are stable for exactly as long as the answer
+ * is valid. There is no second TTL to keep in step and one slot to hold.
+ */
+describe("withCareerValues — the corpus memo", () => {
+  const corpus = () =>
+    pools([poolRow("p", "2023", 10, 150), poolRow("p", "2024", 17, 400)]);
+
+  test("the same corpus comes back as the same object", () => {
+    const input = corpus();
+    const first = withCareerValues(input);
+    assert.equal(withCareerValues(input), first);
+    // And a fresh wrapper around the *same* season arrays hits too, which is
+    // the case that matters: `getCompsPools` builds a new outer array every
+    // call while the season rows stay the cached ones.
+    const rewrapped = input.map((pool) => ({ ...pool }));
+    assert.equal(withCareerValues(rewrapped), first);
+  });
+
+  test("a rebuilt season invalidates it — the pool cache is the lifecycle", () => {
+    const input = corpus();
+    const first = withCareerValues(input);
+    const rebuilt = input.map((pool) =>
+      pool.season === "2024" ? { season: pool.season, rows: [...pool.rows] } : pool,
+    );
+    const second = withCareerValues(rebuilt);
+    assert.notEqual(second, first, "a new rows array is a new corpus");
+    assert.equal(
+      rowFor(second, "p", "2024").values.career_ppg,
+      rowFor(first, "p", "2024").values.career_ppg,
+    );
+  });
+
+  test("a deepening archive re-answers rather than serving the old numbers", () => {
+    // The reason this is derived at read time at all: backfilling an older
+    // season changes every later season's career figure without any of those
+    // seasons' own data moving.
+    const shallow = withCareerValues(pools([poolRow("q", "2024", 10, 200)]));
+    assert.equal(rowFor(shallow, "q", "2024").values.career_ppg, null);
+
+    const deepened = withCareerValues(
+      pools([poolRow("q", "2023", 10, 100), poolRow("q", "2024", 10, 200)]),
+    );
+    assert.equal(rowFor(deepened, "q", "2024").values.career_ppg, 10);
+  });
+
+  test("a shared answer is frozen — every caller holds the same rows", () => {
+    const enriched = withCareerValues(corpus());
+    const row = rowFor(enriched, "p", "2024");
+    assert.ok(Object.isFrozen(enriched), "the corpus");
+    assert.ok(Object.isFrozen(row), "each row");
+    assert.ok(Object.isFrozen(row.values), "and the values it enriched");
+    assert.throws(() => {
+      (row.values as Record<string, number>).career_ppg = 999;
+    }, TypeError);
+  });
+
+  test("the memo changes no number — it is the same pass", () => {
+    const input = corpus();
+    assert.deepEqual(
+      withCareerValues(input).map((pool) => pool.rows.map((r) => r.values)),
+      deriveCareerValues(input).map((pool) => pool.rows.map((r) => r.values)),
     );
   });
 });

@@ -1,8 +1,18 @@
 // Relative pure→pure imports: this codec is tested under Node's runner.
-import { COMPS_FIELDS, defaultWeightsFor, isCompsPosition } from "../../shared/comps/fields.ts";
+import {
+  COMPS_FIELDS,
+  compsFieldTakesWindow,
+  defaultWeightsFor,
+  isCompsPosition,
+} from "../../shared/comps/fields.ts";
+import {
+  DEFAULT_COMPS_WINDOW,
+  isCompsWindow,
+} from "../../shared/comps/windows.ts";
 
 import type { CompsPosition } from "../../shared/comps/fields.ts";
 import type { CompsBasis } from "../../shared/comps/filters.ts";
+import type { CompsWindowKey } from "../../shared/comps/windows.ts";
 
 /**
  * What the comps tool remembers on the device, and the codec that keeps a
@@ -19,16 +29,34 @@ export type CompsPrefs = {
   basis: CompsBasis;
   /** Full weight boards, keyed by position; a position absent is untouched. */
   weightsByPosition: Partial<Record<CompsPosition, Record<string, number>>>;
+  /**
+   * Which seasons each field is read over, keyed by position and then by
+   * field. A field absent here is read over the subject's own season, which is
+   * the default — so this map holds only what the reader moved, and a board
+   * with no windows serializes to nothing at all.
+   */
+  windowsByPosition: Partial<
+    Record<CompsPosition, Record<string, CompsWindowKey>>
+  >;
 };
 
 export const COMPS_PREFS_KEY = "comps-prefs";
 
-/** Bump when the stored shape changes; an old version reads as defaults. */
+/**
+ * Bump when the stored shape changes; an old version reads as defaults.
+ *
+ * **Windows did not bump it**, deliberately: the addition is a second map
+ * beside the first rather than a change to it, so a blob written before they
+ * existed parses exactly as it did and reads as "every field over its own
+ * season" — which is what it meant. Bumping would have thrown away every
+ * reader's tuned board to add a field none of them had set.
+ */
 export const COMPS_PREFS_VERSION = 1;
 
 export const DEFAULT_COMPS_PREFS: CompsPrefs = {
   basis: "per_game",
   weightsByPosition: {},
+  windowsByPosition: {},
 };
 
 /**
@@ -68,33 +96,122 @@ export function weightsFor(
   return board;
 }
 
-/** Whether the reader has a stored board for this position. */
+/**
+ * The windows a position opens with: every catalogue field that takes one, at
+ * the reader's stored choice or the default. Same shape as the weight board and
+ * for the same reason — the editor draws one row per field and wants both
+ * halves of a row without asking whether either was ever written.
+ */
+export function windowsFor(
+  prefs: CompsPrefs,
+  position: CompsPosition,
+): Record<string, CompsWindowKey> {
+  const stored = prefs.windowsByPosition[position];
+  const board: Record<string, CompsWindowKey> = {};
+  for (const field of COMPS_FIELDS) {
+    if (!compsFieldTakesWindow(field)) continue;
+    const window = stored?.[field.key];
+    board[field.key] =
+      window !== undefined && isCompsWindow(window)
+        ? window
+        : DEFAULT_COMPS_WINDOW;
+  }
+  return board;
+}
+
+/** Whether the reader has a stored board for this position, either half. */
 export function isCustomized(
   prefs: CompsPrefs,
   position: CompsPosition,
 ): boolean {
-  return prefs.weightsByPosition[position] !== undefined;
+  return (
+    prefs.weightsByPosition[position] !== undefined ||
+    prefs.windowsByPosition[position] !== undefined
+  );
 }
 
-/** Write one position's board; every other position's entry is untouched. */
+/**
+ * Whether a board is the position's defaults, field for field.
+ *
+ * An absent key is 0, which is `weightsFor`'s own reading on the way out — so a
+ * board that names only the fields it turned on compares equal to one that
+ * spells every field's zero, because those are the same board.
+ *
+ * **An exact comparison, not a tolerant one**, and that is a fact about the
+ * numbers rather than an oversight: every writer of a weight produces an
+ * integer (`weightForTier` rounds, the query parser refuses a non-integer, and
+ * the codec below drops one), so there is no arithmetic anywhere in the path
+ * that could leave a stored 60 a billionth away from the catalogue's 60. A
+ * tolerance here would be pretending otherwise, and would quietly call two
+ * genuinely different weights the same one if that ever stopped being true.
+ */
+export function weightsAreDefaults(
+  weights: Record<string, number>,
+  position: CompsPosition,
+): boolean {
+  const defaults = defaultWeightBoard(position);
+  return COMPS_FIELDS.every(
+    (field) => (weights[field.key] ?? 0) === defaults[field.key],
+  );
+}
+
+/**
+ * Write one position's board, **keeping nothing that is already the default** —
+ * the rule `setPositionWindows` keeps below, and it was asymmetric between the
+ * two halves until this: a window put back where it started left nothing
+ * behind, where a weight put back where it started left a board that happened
+ * to equal the defaults and an entry that made `isCustomized` say yes forever.
+ * What the reader sees for that is a lit "Customize comparison" key over a board
+ * they have restored, and a Reset that does nothing they can see.
+ *
+ * Every other position's entry is untouched, which is the *other* asymmetry
+ * this file is about — a board tuned for receivers must not follow the reader
+ * onto a quarterback.
+ */
 export function setPositionWeights(
   prefs: CompsPrefs,
   position: CompsPosition,
   weights: Record<string, number>,
 ): CompsPrefs {
-  return {
-    ...prefs,
-    weightsByPosition: {
-      ...prefs.weightsByPosition,
-      [position]: weights,
-    },
-  };
+  const weightsByPosition = { ...prefs.weightsByPosition };
+  if (weightsAreDefaults(weights, position)) {
+    delete weightsByPosition[position];
+  } else {
+    weightsByPosition[position] = weights;
+  }
+  return { ...prefs, weightsByPosition };
 }
 
 /**
- * Reset one position by **clearing its entry, never by writing today's
- * defaults into it** — what a board opens with is the catalogue's to change,
- * the `resolveColumns.reset` rule.
+ * Write one position's windows, keeping only what differs from the default —
+ * so a reader who moves a window and puts it back leaves nothing behind, and a
+ * board whose windows are all default is *not* customized on that account.
+ * The same rule `buildCompsQuery` keeps one layer out, kept here so the two
+ * cannot disagree about what "untouched" means.
+ */
+export function setPositionWindows(
+  prefs: CompsPrefs,
+  position: CompsPosition,
+  windows: Record<string, CompsWindowKey>,
+): CompsPrefs {
+  const moved: Record<string, CompsWindowKey> = {};
+  for (const [key, window] of Object.entries(windows)) {
+    if (window !== DEFAULT_COMPS_WINDOW) moved[key] = window;
+  }
+  const windowsByPosition = { ...prefs.windowsByPosition };
+  if (Object.keys(moved).length === 0) {
+    delete windowsByPosition[position];
+  } else {
+    windowsByPosition[position] = moved;
+  }
+  return { ...prefs, windowsByPosition };
+}
+
+/**
+ * Reset one position by **clearing its entries, never by writing today's
+ * defaults into them** — what a board opens with is the catalogue's to change,
+ * the `resolveColumns.reset` rule. Both halves go: one Reset key on screen
+ * means one reset, not a board that keeps its windows after its weights.
  */
 export function resetPosition(
   prefs: CompsPrefs,
@@ -102,7 +219,9 @@ export function resetPosition(
 ): CompsPrefs {
   const weightsByPosition = { ...prefs.weightsByPosition };
   delete weightsByPosition[position];
-  return { ...prefs, weightsByPosition };
+  const windowsByPosition = { ...prefs.windowsByPosition };
+  delete windowsByPosition[position];
+  return { ...prefs, weightsByPosition, windowsByPosition };
 }
 
 export function serializeCompsPrefs(prefs: CompsPrefs): string {
@@ -139,16 +258,37 @@ export function parseCompsPrefs(raw: string | null): CompsPrefs {
   if (typeof record.weightsByPosition === "object" && record.weightsByPosition !== null) {
     for (const [position, board] of Object.entries(record.weightsByPosition)) {
       if (!isCompsPosition(position)) continue;
-      const cleaned = cleanBoard(board);
+      const cleaned = cleanBoard(board, position);
       if (cleaned !== null) weightsByPosition[position] = cleaned;
     }
   }
 
-  return { basis, weightsByPosition };
+  const windowsByPosition: CompsPrefs["windowsByPosition"] = {};
+  if (typeof record.windowsByPosition === "object" && record.windowsByPosition !== null) {
+    for (const [position, board] of Object.entries(record.windowsByPosition)) {
+      if (!isCompsPosition(position)) continue;
+      const cleaned = cleanWindows(board);
+      if (cleaned !== null) windowsByPosition[position] = cleaned;
+    }
+  }
+
+  return { basis, weightsByPosition, windowsByPosition };
 }
 
-/** One stored board: known keys with integer 0–100 weights, or nothing. */
-function cleanBoard(board: unknown): Record<string, number> | null {
+/**
+ * One stored board: known keys with integer 0–100 weights, or nothing.
+ *
+ * **A board that is the position's defaults reads as nothing**, the rule
+ * `cleanWindows` keeps for its own half — absent *is* the default, and one
+ * spelling of it is what keeps `isCustomized` honest. It matters on the way in
+ * as well as on the way out because a blob written by a build that stored
+ * default weights is still in readers' browsers, and a board is not customized
+ * on the strength of which build wrote it.
+ */
+function cleanBoard(
+  board: unknown,
+  position: CompsPosition,
+): Record<string, number> | null {
   if (typeof board !== "object" || board === null) return null;
   const entries = board as Record<string, unknown>;
   const cleaned: Record<string, number> = {};
@@ -163,6 +303,32 @@ function cleanBoard(board: unknown): Record<string, number> | null {
       weight <= 100
     ) {
       cleaned[field.key] = weight;
+    }
+  }
+  if (Object.keys(cleaned).length === 0) return null;
+  return weightsAreDefaults(cleaned, position) ? null : cleaned;
+}
+
+/**
+ * One stored window board: fields the catalogue still knows and still lets
+ * take a window, naming windows this build still has. A default written into
+ * the blob by an older client falls away here rather than being stored twice —
+ * absent *is* the default, and one spelling of it is what keeps `isCustomized`
+ * honest.
+ */
+function cleanWindows(board: unknown): Record<string, CompsWindowKey> | null {
+  if (typeof board !== "object" || board === null) return null;
+  const entries = board as Record<string, unknown>;
+  const cleaned: Record<string, CompsWindowKey> = {};
+  for (const field of COMPS_FIELDS) {
+    if (!compsFieldTakesWindow(field)) continue;
+    const window = entries[field.key];
+    if (
+      typeof window === "string" &&
+      isCompsWindow(window) &&
+      window !== DEFAULT_COMPS_WINDOW
+    ) {
+      cleaned[field.key] = window;
     }
   }
   return Object.keys(cleaned).length > 0 ? cleaned : null;

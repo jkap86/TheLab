@@ -1,26 +1,36 @@
 /**
- * How many *cold* ADP computations one process will run at once.
+ * How many *cold* ADP computations one process will run at once — which is now
+ * a *share of one budget* rather than a bound of its own.
  *
- * **The cache next door coalesces one key; this bounds the number of keys.**
- * {@link TtlPromiseCache} made ten readers of the default board one query, which
- * is the whole of the problem when everyone is looking at the same thing and
- * none of it when they aren't: a season here, a rookie-draft window there, a
- * league-rule set that resolved to a different id list, and the drawer's own
- * board beside a card's — every one of those is a legitimately distinct key, so
- * every one of them is a cold computation the cache has no reason to fold into
- * any other. Each is ~500-600ms of aggregate over ~1.5M picks holding a pool
- * connection for its duration, and there is no arithmetic that stops a handful
- * of readers on differently-narrowed boards from starting all of them at once.
+ * **The cache next door coalesces one key; the budget bounds the number of
+ * keys.** {@link TtlPromiseCache} made ten readers of the default board one
+ * query, which is the whole of the problem when everyone is looking at the same
+ * thing and none of it when they aren't: a season here, a rookie-draft window
+ * there, a league-rule set that resolved to a different id list, and the
+ * drawer's own board beside a card's — every one of those is a legitimately
+ * distinct key, so every one of them is a cold computation the cache has no
+ * reason to fold into any other. Each is ~500-600ms of aggregate over ~1.5M
+ * picks holding a pool connection for its duration, and there is no arithmetic
+ * that stops a handful of readers on differently-narrowed boards from starting
+ * all of them at once.
  *
  * **The pool is not that bound, which is the mistake this exists to prevent.**
  * Left to it, the first thing that runs out is connections, and it runs out for
  * *everyone* — by the time the ADP reads are queueing on `pool.connect()` the
  * league panel, the trades board and the manager tabs are queueing behind them
- * for connections they would each have held for a millisecond. A bound here
- * makes the eleventh cold board wait for the third one to finish instead, which
- * costs that reader latency and costs nobody else anything. It is the argument
- * `shared/manager/sync-admission` makes one grain up, applied to the other
- * expensive read on the same dyno.
+ * for connections they would each have held for a millisecond. A bound makes
+ * the eleventh cold board wait for the third one to finish instead, which costs
+ * that reader latency and costs nobody else anything.
+ *
+ * **And it is the *same* bound the comps corpus spends**, not an equal one
+ * beside it — `shared/db/heavy-admission` is the object, this is the ADP name
+ * for it. Two independent caps of a third of the pool are two thirds of the
+ * pool for one reader, which is what a cold custom comps board weighing ADP
+ * used to take: three comps reads and three ADP computations, both caps intact
+ * and the pool empty. Player Comps calls `getDraftAdpForPlayers` *outside* its
+ * own slots precisely so that this admission is the only one that read takes;
+ * see that module for the hierarchy and for why nesting the two would now be
+ * one limiter acquired twice.
  *
  * Four properties come from {@link createLimiter} rather than being restated
  * here, and each is why this reuses that primitive instead of adding a second
@@ -40,58 +50,49 @@
  * prevent.
  */
 
-import { createLimiter, type Limiter } from "../sleeper/limiter.ts";
+import { dbHeavyReadAdmission, dbHeavyReadConcurrency } from "../db/heavy-admission.ts";
+
+import type { Limiter } from "../sleeper/limiter.ts";
 
 /**
- * Cold ADP computations one process may run at once.
+ * Cold ADP computations one process may run at once, at the default pool size.
  *
  * Three, and the number is a claim about the *pool* rather than about the CPU:
  * a computation is two sequential statements, so three of them hold three of the
  * pool's ten connections at their peak and leave seven for every other route on
  * the dyno — the same third-of-the-pool share `databaseBudget().fanout` resolves
- * to at the default size, and the share `MANAGER_SYNC_LIMIT` already takes for
- * the other expensive thing this process does. It is a *ceiling*: on an idle
- * process the limiter is a counter increment and nothing else, so the common
- * case — one reader, or many readers of one board — is unchanged.
+ * to at the default size. It is a *ceiling*: on an idle process the limiter is a
+ * counter increment and nothing else, so the common case — one reader, or many
+ * readers of one board — is unchanged.
  *
- * Deliberately not `databaseBudget().fanout` itself, though it is the same
- * number today. That budget answers "how much of the pool may **one request**
- * fan out across", and `/api/user/[username]/adp-value` already spends it on
- * exactly that (its `collectWithConcurrency` over the boards a manager's leagues
- * price against). This answers a different question — how much of the pool
- * every request's ADP work may hold *between them* — and stacking one on the
- * other under one name is how a shared cap silently becomes a per-caller one.
- *
- * `ADP_COMPUTE_LIMIT` overrides it, the knob to reach for on a larger pool.
+ * It is now *derived* rather than typed, which is the one thing that changed
+ * here: the budget moves with `DATABASE_POOL_MAX`, so a deployment with more
+ * connections gets more analytical throughput without a second variable to set.
+ * This constant remains what that derivation answers on the default pool, and
+ * is what the tests pin the arithmetic against.
  */
 export const DEFAULT_ADP_COMPUTE_CONCURRENCY = 3;
 
-/** The configured limit, or the default for anything unreadable. */
+/**
+ * The configured limit, or the default for anything unreadable.
+ *
+ * `ADP_COMPUTE_LIMIT` still configures it, as an alias for
+ * `DB_HEAVY_READ_LIMIT` — a deployment that had tightened the ADP knob was
+ * asking for less heavy work at once, which is what the shared budget is.
+ */
 export function adpComputeConcurrency(
   env: Record<string, string | undefined> = process.env,
 ): number {
-  const parsed = Number(env.ADP_COMPUTE_LIMIT?.trim());
-  // Junk falls back rather than failing the boot, the budget module's own rule:
-  // a typo in a dashboard should not be why the ADP board stops answering.
-  return Number.isInteger(parsed) && parsed > 0
-    ? parsed
-    : DEFAULT_ADP_COMPUTE_CONCURRENCY;
+  return dbHeavyReadConcurrency(env);
 }
 
 /**
- * The process's ADP admission.
+ * The process's ADP admission: the shared heavy-read budget, under the ADP name.
  *
- * Cached on `globalThis` under a registered symbol for the reason the pg pool
- * and {@link sleeperLimiter} are: a route bundle carrying its own copy of this
- * module gets its own counter, and nothing in the process can tell — two copies
- * of a cap of three is a cap of six, which is most of the pool and is precisely
- * the failure the cap exists to prevent, arrived at by module duplication rather
- * than by traffic. Dev's module reloading is the other half of the same
- * argument.
+ * One object, so `adpComputeAdmission === compsReadAdmission`. ADP is still
+ * perfectly usable on its own — a route that only draws a board takes slots
+ * from a budget nothing else is spending — and a comps board that weighs ADP
+ * now competes with its own season reads for the same allowance instead of
+ * doubling it.
  */
-const ADMISSION_KEY = Symbol.for("thelab.adp.admission");
-const globalScope = globalThis as typeof globalThis & {
-  [ADMISSION_KEY]?: Limiter;
-};
-export const adpComputeAdmission: Limiter = (globalScope[ADMISSION_KEY] ??=
-  createLimiter(adpComputeConcurrency()));
+export const adpComputeAdmission: Limiter = dbHeavyReadAdmission;

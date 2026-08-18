@@ -4,7 +4,8 @@ import { useState } from "react";
 
 import { PositionBadge } from "@/features/shared";
 
-import { pointsSummary, seasonCompareRows } from "../season-line";
+import { compsDimensionLabel } from "../../../shared/comps/windows";
+import { draftSummary, pointsSummary, seasonCompareRows } from "../season-line";
 
 import type { CompsPayload, CompsResultRowPayload } from "../types";
 
@@ -42,8 +43,14 @@ export function ResultsList({
         {payload.dropped_fields.length > 0 && (
           <>
             {" "}
-            · not compared on {payload.dropped_fields.join(", ")} (no value for
-            the subject)
+            {/* Named, not keyed: a career window on a subject with no career
+                behind it lands here, and "rec_tgt@prev3" tells a reader
+                nothing about which of their choices went unanswered. */}
+            · not compared on{" "}
+            {payload.dropped_fields
+              .map((key) => compsDimensionLabel(key).toLowerCase())
+              .join(", ")}{" "}
+            (no value for the subject)
           </>
         )}
         {stale && <span className="ml-2 text-active/80">Updating…</span>}
@@ -87,6 +94,7 @@ function ResultRow({
 }) {
   const samePlayer = row.player_id === payload.subject.player_id;
   const points = pointsSummary(row, payload.basis);
+  const draft = draftSummary(row);
   return (
     <li className="rounded-xl border border-foreground/10 bg-foreground/[0.02]">
       <button
@@ -108,7 +116,7 @@ function ResultRow({
               {row.season}
             </span>
             {samePlayer && (
-              <span className="shrink-0 rounded-full bg-active/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-active/80">
+              <span className="shrink-0 rounded-full bg-active/10 px-2 py-0.5 text-[0.625rem] uppercase tracking-wider text-active/80">
                 same player
               </span>
             )}
@@ -121,6 +129,15 @@ function ResultRow({
               <>
                 {" · "}
                 <span className="text-foreground/60">{points}</span>
+              </>
+            )}
+            {/* Where he was taken — a career fact, so it sits with the season
+                rather than with the outcome. Absent entirely when this app has
+                no draft record, never rendered as "Undrafted". */}
+            {draft && (
+              <>
+                {" · "}
+                <span title={draft.full}>{draft.short}</span>
               </>
             )}
             {row.team && <> · Current: {row.team}</>}
@@ -141,7 +158,7 @@ function ResultRow({
               legible inside the full line. */}
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wider text-foreground/35">
+              <tr className="text-left text-[0.625rem] uppercase tracking-wider text-foreground/35">
                 <th className="py-1 pr-2 font-medium">
                   {payload.basis === "per_game" ? "Per game" : "Season"}
                 </th>
@@ -169,7 +186,7 @@ function ResultRow({
                     )}
                     {line.weight !== null && (
                       <span
-                        className="ml-1 text-[10px] text-active/60"
+                        className="ml-1 text-[0.625rem] text-active/60"
                         title={`Weighted ${line.weight} in this comparison`}
                       >
                         w{line.weight}
@@ -189,7 +206,7 @@ function ResultRow({
               ))}
             </tbody>
           </table>
-          <p className="mt-2 text-[11px] text-foreground/35">
+          <p className="mt-2 text-[0.6875rem] text-foreground/35">
             Distance {row.distance} · similarity is 100·e
             <sup>−distance</sup>, a fixed score rather than a percentage.
             Fantasy points are Sleeper&apos;s generic scorings, not any

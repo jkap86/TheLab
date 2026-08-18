@@ -59,6 +59,7 @@ export type { CrawlCandidate, CrawlClock, CrawlPriority } from "./crawl-priority
 export { startLeagueCrawler, LEAGUE_CRAWL_INTERVAL_MS } from "./scheduler";
 export {
   LEAGUE_COLUMNS_SQL,
+  adpBoardTypeOf,
   getAdpLeagues,
   toManagerLeague,
   getLeagueDetail,
@@ -88,7 +89,16 @@ export type {
 } from "./types";
 export { orderByProjectedPoints, projectedRank, rankOf, standingScore } from "./rank";
 export type { LeagueRank, ProjectedRank } from "./rank";
-export { readManagerRanks } from "./ranks-read";
+export {
+  clearManagerRanksCache,
+  invalidateManagerRanks,
+  readManagerRanks,
+} from "./ranks-read";
+export {
+  clearLeagueDetailCache,
+  invalidateLeagueDetail,
+  readLeagueDetail,
+} from "./league-detail-read";
 export { parseManagerRanksOptions } from "./read-cache";
 export type { ManagerRanksOptions } from "./read-cache";
 export {
@@ -123,9 +133,21 @@ export type {
   AdpResult,
   AdpRow,
   DraftDensityMonth,
+  DraftTypeScope,
   PlayerAdp,
   PlayerBoardAdp,
 } from "./adp";
+export {
+  AUCTION_AMOUNT_SQL,
+  AUCTION_BUDGET_SQL,
+  EMPTY_AUCTION_BOARDS,
+  getDraftAuctionSpend,
+} from "./adp-auction";
+export type {
+  AdpAuctionBoards,
+  AdpAuctionStats,
+  AuctionSpendResult,
+} from "./adp-auction";
 export {
   ADP_PEAK,
   ADP_VALUE_PARAMS,

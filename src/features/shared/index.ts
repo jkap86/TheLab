@@ -6,6 +6,11 @@ export { GC_TIME, createQueryClient } from "./query-client";
 export { useUserLeagues } from "./use-user-leagues";
 export type { UserLeaguesState } from "./use-user-leagues";
 export {
+  FIRST_SLEEPER_SEASON,
+  seasonParam,
+  stepSeason,
+} from "./manager-season";
+export {
   BEST_BALL_OPTIONS,
   COMMON_SCORING_KEYS,
   COMPARE_OPS,
@@ -54,6 +59,7 @@ export { firstKickoff, nflMarkers, nflMarkersIn } from "./nfl-calendar";
 export type { NflMarker, NflMarkerKind } from "./nfl-calendar";
 export {
   ADP_PEAK,
+  DEFAULT_ADP_LOOKBACK_DAYS,
   DEFAULT_ADP_ROUNDS,
   DEFAULT_ADP_STEEPNESS,
   DEFAULT_STEEPNESS,
@@ -63,6 +69,7 @@ export {
   adpValueRead,
   boardLabel,
   defaultAdpControls,
+  isDefaultAdpRange,
   isUnboundedRange,
   previewAdpPool,
   previewAdpValue,

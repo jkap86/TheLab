@@ -41,13 +41,15 @@ import {
   ADP_BOARD_INITIAL_RECT,
   ADP_DRAWER_ENTER_MS,
   ADP_DRAWER_EXIT_MS,
-  ADP_ROW_HEIGHT,
+  adpRowHeight,
   ADP_ROW_OVERSCAN,
+  AUCTION_COLUMN_SEAT,
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
   KTC_COLUMN_SEAT,
 } from "./adp-drawer.constants.ts";
 import {
+  PICK_AUCTION_TITLE,
   PICK_TAKEN_TITLE,
   ktcTitle,
   withLeagueFilters,
@@ -149,6 +151,9 @@ const player = (id: string, over: Partial<AdpPlayerPayload> = {}): AdpPlayerPayl
   rookie: false,
   redraft: { picks: 12, adp: Number(id) + 0.5, min_pick: 1, max_pick: 30, stdev: 2.25 },
   dynasty: { picks: 7, adp: Number(id) + 1.25, min_pick: 2, max_pick: 40, stdev: 3.5 },
+  // The crawled auctions bought nobody by default: they are a small slice of
+  // the corpus, so both boards null is the ordinary row rather than a case.
+  auction: { redraft: null, dynasty: null },
   // Unpriced unless a case asks: KTC carries ~500 players, so an em dash in
   // those columns is the common row rather than the exception.
   ktc: null,
@@ -160,6 +165,10 @@ const payload = (over: Partial<AdpPayload> = {}): AdpPayload => ({
   draft_count: 1204,
   redraft_drafts: 900,
   dynasty_drafts: 304,
+  // Its own population, not a slice of `draft_count` — the auctions the board
+  // never averages, over the same leagues and window.
+  redraft_auctions: 48,
+  dynasty_auctions: 11,
   player_count: 5000,
   players: [player("1"), player("2"), player("3")],
   // No pick rows unless a case asks for them: the rookies are what a ladder is
@@ -306,8 +315,9 @@ describe("what is on screen", () => {
       assert.ok(html.includes(label), `expected a ${label} key on the rail`);
     }
     // Each key's value, in the board's own words — `adpBayStates`' job, and the
-    // reason it is pure and tested beside this.
-    assert.match(html, /All of 2026/);
+    // reason it is pure and tested beside this. The window is the fortnight the
+    // board opens on, named rather than left to be inferred from a season.
+    assert.match(html, /2026 · Last 14 days/);
     assert.match(html, /% of the 1\.01/);
     // Every key shut, and therefore every bay's contents absent.
     assert.equal((html.match(/aria-expanded="false"/g) ?? []).length, 3);
@@ -330,8 +340,9 @@ describe("what is on screen", () => {
 
   test("no preset chip states a window the lenses already state", () => {
     // "Last 30 days" is `30` in the day lens and "All of 2026" is that lens left
-    // empty, so a chip row beside an open counter is two controls for one
-    // selection. What survives inside the panel is the keys that are *not* fixed
+    // empty (which the board no longer opens on — the default is a fortnight, so
+    // the lens opens carrying 14), so a chip row beside an open counter is two
+    // controls for one selection. What survives inside the panel is the keys that are *not* fixed
     // windows — `Today`, which re-opens the end, and the ◆ draft key, which pins
     // a date that moves every April (drawn only when the strip's domain holds a
     // draft, which this fixture's single May month does not; `lookback.test.ts`
@@ -345,7 +356,7 @@ describe("what is on screen", () => {
     // The board's own name is stated once, by the Window key. Opening that bay
     // adds the counter's caption, which is the same label a second time and is
     // why the key and the caption have to keep agreeing: both read `boardLabel`.
-    assert.equal((html.match(/All of 2026/g) ?? []).length, 1);
+    assert.equal((html.match(/2026 · Last 14 days/g) ?? []).length, 1);
   });
 
   test("every control keeps an accessible name", () => {
@@ -600,7 +611,7 @@ describe("the board is windowed", () => {
     // A screenful of `ADP_BOARD_INITIAL_RECT` plus one overscan at each end,
     // which is nowhere near a thousand — the bound is what matters, not the
     // exact count.
-    const ceiling = Math.ceil(ADP_BOARD_INITIAL_RECT.height / ADP_ROW_HEIGHT) + 2 * ADP_ROW_OVERSCAN + 2;
+    const ceiling = Math.ceil(ADP_BOARD_INITIAL_RECT.height / adpRowHeight()) + 2 * ADP_ROW_OVERSCAN + 2;
     assert.ok(rows.length <= ceiling, `${rows.length} rows mounted, expected at most ${ceiling}`);
     // And the count does not grow with the board: ten times the rows, the same
     // windowful.
@@ -610,18 +621,18 @@ describe("the board is windowed", () => {
   test("the spacer is as tall as the whole list, so the scrollbar tells the truth", () => {
     const html = drawer({ board: bigBoard(1000) });
     const spacer = html.match(/<ul[^>]*style="height:(\d+)px"/)?.[1];
-    assert.equal(Number(spacer), 1000 * ADP_ROW_HEIGHT);
+    assert.equal(Number(spacer), 1000 * adpRowHeight());
   });
 
   test("a row is exactly the height the offsets are multiples of", () => {
-    // `ADP_ROW_HEIGHT` is written onto the element rather than estimated from
+    // `adpRowHeight()` is written onto the element rather than estimated from
     // it, which is what makes fixed-size windowing safe: an estimate a pixel out
     // is a screen of drift a thousand rows down.
     const rows = mounted(drawer({ board: bigBoard(200) }));
     assert.ok(rows.length > 1);
     for (const row of rows) {
-      assert.equal(row.height, ADP_ROW_HEIGHT);
-      assert.equal(row.offset, (row.rank - 1) * ADP_ROW_HEIGHT);
+      assert.equal(row.height, adpRowHeight());
+      assert.equal(row.offset, (row.rank - 1) * adpRowHeight());
     }
   });
 
@@ -634,7 +645,7 @@ describe("the board is windowed", () => {
     assert.ok(rows.length < 400);
     for (const row of rows) {
       assert.equal(row.size, 400);
-      assert.equal(row.rank, row.offset / ADP_ROW_HEIGHT + 1);
+      assert.equal(row.rank, row.offset / adpRowHeight() + 1);
     }
     assert.equal(rows[0].rank, 1);
     assert.equal(rows[rows.length - 1].rank, rows.length);
@@ -695,6 +706,19 @@ describe("picks on the board", () => {
       },
       ...over,
     });
+
+  test("a pick row draws no bid, and the em dash says why", () => {
+    // Not a gap in the data and not a cheap pick: what an auction sells is
+    // players, so the column does not apply to this row at all. The hover is the
+    // only place that difference can be stated, which is why the dash carries
+    // one — the same call the Taken column makes one cell to its left.
+    const html = drawer({
+      controls: { ...defaultAdpControls("2026"), boards: "dynasty" },
+      board: withPicks(),
+    });
+    assert.ok(html.includes(PICK_AUCTION_TITLE), "expected the pick's bid hover");
+    assert.ok(html.includes(PICK_TAKEN_TITLE));
+  });
 
   test("the class is numbered slot by slot and the seasons past it by round", () => {
     const html = drawer({ board: withPicks() });
@@ -780,6 +804,70 @@ describe("the column configurations", () => {
     }
   });
 
+  test("the Bid column is a single-board column, like Taken", () => {
+    // Two markets would want two of these and the row has no width for them —
+    // with both boards up the share is on each ADP cell's hover instead.
+    for (const boards of ["redraft", "dynasty"] as const) {
+      const html = drawer({ controls: { ...defaultAdpControls("2026"), boards } });
+      assert.match(html, />Bid</, `${boards}: expected a Bid heading`);
+    }
+    assert.doesNotMatch(drawer(), />Bid</);
+  });
+
+  test("the Bid heading and its cells cross their tier together", () => {
+    // A heading seated a tier apart from the column under it is a label over the
+    // wrong numbers — invisible in review and obvious on screen. One heading
+    // plus one cell on each of the three player rows.
+    const html = drawer({
+      controls: { ...defaultAdpControls("2026"), boards: "redraft" },
+    });
+    const seated = (html.match(new RegExp(AUCTION_COLUMN_SEAT, "g")) ?? []).length;
+    assert.equal(seated, 1 + 3);
+  });
+
+  test("a bid is a share, and a player no auction bought an em dash", () => {
+    const html = drawer({
+      controls: { ...defaultAdpControls("2026"), boards: "redraft" },
+      board: loaded({
+        players: [
+          player("1", {
+            auction: {
+              redraft: { buys: 9, share: 58.4, min_share: 40, max_share: 71, stdev: 8.2 },
+              dynasty: null,
+            },
+          }),
+          // The ordinary row: auctions are a small slice of the crawled corpus.
+          player("2"),
+          // A dollar flier still reads as a share rather than rounding to zero.
+          player("3", {
+            auction: {
+              redraft: { buys: 4, share: 0.5, min_share: 0.5, max_share: 0.5, stdev: 0 },
+              dynasty: null,
+            },
+          }),
+        ],
+      }),
+    });
+    const drawn = [
+      ...html.matchAll(
+        new RegExp(`${AUCTION_COLUMN_SEAT} text-right text-xs tabular-nums[^>]*>([^<]+)<`, "g"),
+      ),
+    ];
+    assert.deepEqual(drawn.map((m) => m[1]), ["58%", "0.5%"]);
+    // The one that is left is the em dash, and it is never a 0%.
+    assert.doesNotMatch(html, />0%</);
+  });
+
+  test("the heading states the auctions it averaged, which are not the board's drafts", () => {
+    const html = drawer({
+      controls: { ...defaultAdpControls("2026"), boards: "redraft" },
+    });
+    // 48 auctions against the board's 900 redraft drafts — two populations, and
+    // a hover quoting the wrong one would name a sample the share was not taken
+    // over.
+    assert.match(html, /48 crawled redraft auctions/);
+  });
+
   test("the collapsible columns are seated behind the panel's own container queries", () => {
     // `@md` and `@lg`, which measure the drawer rather than the viewport — the
     // panel is narrower than the screen everywhere a laptop is involved.
@@ -827,7 +915,14 @@ describe("the column configurations", () => {
     // `>0<` matches the rolling draft counter's digit strip, which is why the
     // "never a zero" rule has to be asserted against the cells that could
     // wrongly render one.
-    const priced = [...html.matchAll(/tabular-nums text-foreground\/60"[^>]*>([^<]+)</g)];
+    // Anchored on the KTC seat, not on the type treatment alone: the auction
+    // cell wears the same weight and tone deliberately (neither moves under the
+    // curve), so a probe for the tone would read whichever came first.
+    const priced = [
+      ...html.matchAll(
+        new RegExp(`${KTC_COLUMN_SEAT} [^"]*tabular-nums text-foreground/60"[^>]*>([^<]+)<`, "g"),
+      ),
+    ];
     assert.deepEqual(priced.map((m) => m[1]), ["9,412", "8,770", "6,000"]);
     // Three unpriced cells — both of player 2's, and player 3's 1QB — each an
     // em dash and never a zero.
@@ -882,14 +977,13 @@ describe("the columns sort", () => {
     const presses: AdpSortColumn[] = [];
     const tree = AdpBoardHeader({
       both: true,
-      shown: { redraft: true, dynasty: true },
       soleBoard: "redraft",
       soleDrafts: 900,
+      soleAuctions: 48,
       redraftDrafts: 900,
       dynastyDrafts: 304,
       rules: DEFAULT_LEAGUE_FILTERS,
       sort: DEFAULT_ADP_SORT,
-      onToggleBoard: () => {},
       onSort: (column) => presses.push(column),
     });
     const headings = elements(tree).filter(
@@ -924,14 +1018,13 @@ describe("the columns sort", () => {
       const presses: AdpSortColumn[] = [];
       const tree = AdpBoardHeader({
         both: false,
-        shown: { redraft: boards === "redraft", dynasty: boards === "dynasty" },
         soleBoard: boards,
         soleDrafts: 900,
+      soleAuctions: 48,
         redraftDrafts: 900,
         dynastyDrafts: 304,
         rules: DEFAULT_LEAGUE_FILTERS,
         sort: DEFAULT_ADP_SORT,
-        onToggleBoard: () => {},
         onSort: (column) => presses.push(column),
       });
       const headings = elements(tree).filter((el) => el.props.column !== undefined);
@@ -1133,27 +1226,31 @@ describe("what the controls do", () => {
     press(panel, "onReset")();
   });
 
-  test("a board key toggles that market, and the last one lit stays lit", () => {
-    const toggles: string[] = [];
+  test("the board's head holds no keys of its own — every control in it sorts", () => {
+    // The two market keys are gone: they offered to take away one of two
+    // columns the board draws side by side anyway, and the draft counts they
+    // carried are on the ADP headings' hover, against the column they describe.
     const tree = AdpBoardHeader({
-      both: false,
-      shown: { redraft: true, dynasty: false },
+      both: true,
       soleBoard: "redraft",
       soleDrafts: 900,
+      soleAuctions: 48,
       redraftDrafts: 900,
       dynastyDrafts: 304,
       rules: DEFAULT_LEAGUE_FILTERS,
       sort: DEFAULT_ADP_SORT,
-      onToggleBoard: (board) => toggles.push(board),
       onSort: () => {},
     });
-    const keys = elements(tree).filter((el) => typeof el.props.onToggle === "function");
-    assert.equal(keys.length, 2);
-    for (const key of keys) press(key, "onToggle")(key.props.board);
-    assert.deepEqual(toggles, ["redraft", "dynasty"]);
-    // Which of those presses changes anything is `toggleAdpBoard`'s rule, and
-    // `withBoardToggle`'s test above is where it is checked.
-    assert.deepEqual(keys.map((k) => k.props.on), [true, false]);
+    const pressable = elements(tree).filter(
+      (el) => typeof el.props.onToggle === "function" || typeof el.props.onClick === "function",
+    );
+    assert.deepEqual(pressable, []);
+
+    const html = drawer();
+    assert.equal(/>Boards</.test(html), false);
+    // The counts survive the keys, on the heading whose column they describe.
+    assert.match(html, /title="[^"]*304 drafts in dynasty leagues"/);
+    assert.match(html, /title="[^"]*900 drafts in redraft and keeper leagues"/);
   });
 
   test("a season key drops the window with the season", () => {

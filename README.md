@@ -38,7 +38,9 @@ while you work.
 | `PROJECTIONS_SYNC` | no | on | Set to `off` to disable the weekly projections sync. Each week it refreshes is a ~5.6MB download. |
 | `STATS_SYNC` | no | on | Set to `off` to disable the weekly actual stat-line sync, likewise a multi-megabyte download per week. |
 | `KTC_SYNC` | no | on | Set to `off` to disable the KeepTradeCut values refresh and its per-player history backfill. |
-| `CACHE_DEBUG` | no | off | Set to `on` to log every read of the two server-side caches (the full ADP board, a manager's ranks) as `hit`, `miss` or `coalesced`. Development only — these are the hottest reads in the app. |
+| `NFL_DRAFT_SYNC` | no | on | Set to `off` to disable the NFL draft-position refresh — one ~2.6MB CSV, twice a day. The cheapest of the loops by a wide margin. |
+| `CACHE_DEBUG` | no | off | Set to `on` to log every read of the three server-side caches (the full ADP board, a manager's ranks, one league's core detail) as `hit`, `miss` or `coalesced`. Development only — these are the hottest reads in the app. |
+| `READ_TIMING` | no | off | Set to `on` to log how long each League Details read took, one line per route (`league.core`, `league.values`, `league.outlook`, `league.week`, `league.timeline`). Development only, for the same reason: a line per request is a production log nobody can read past. |
 
 Only the exact word `off` disables a loop. Anything else runs, including junk: a
 typo that stopped the syncs would leave the database quietly unfilled for hours
@@ -77,6 +79,13 @@ receives, so the two ends can't drift without a type error.
 - **`ktc/`** — scrapes KeepTradeCut dynasty rankings and per-player value
   history. `parse.ts` (page parsing) and `match.ts` (KTC → Sleeper id matching
   by name) are pure and directly tested; `client.ts` does the fetching.
+- **`nfl-draft/`** — where players were taken in the **NFL** draft (not the
+  fantasy drafts `manager/` crawls), keyed by Sleeper id. Sleeper publishes no
+  draft position, so this reads the DynastyProcess id crosswalk — the file
+  `nfl_data_py.import_ids()` reads. `parse.ts` (what a crosswalk row means),
+  `capital.ts` (pick → draft capital) and `validate.ts` (is this response the
+  crosswalk?) are pure and directly tested; `client.ts` fetches, `queries.ts`
+  reads, `scheduler.ts` runs the loop.
 - **`players/`** — caches Sleeper's ~12k-entry global players map, and owns
   every read of it.
 - **`projections/`** — stores Sleeper's weekly projections and owns every read of
@@ -96,7 +105,11 @@ receives, so the two ends can't drift without a type error.
 | --- | --- |
 | `GET /api/user/[username]` | Resolve a Sleeper user. |
 | `GET /api/user/[username]/leagues` | A manager's leagues, as a **newline-delimited JSON stream** (`result` / `progress` / `error` messages). Serves cached data immediately and pushes a second `result` when a background refresh finishes. |
-| `GET /api/league/[leagueId]` | One league's standings and rosters, with player ids resolved to names. |
+| `GET /api/league/[leagueId]` | One league's **core**: standings, rosters, members and owned draft picks, with player ids resolved to names. This is what the detail panel renders on. |
+| `GET/POST /api/league/[leagueId]/values` | The same league's KTC and ADP prices, on the ADP drawer's board. Answers a POST when the board's league rules are too long for a request line. |
+| `GET /api/league/[leagueId]/outlook` | Every roster's best rest-of-season lineup. `null` when the league can't be projected. |
+| `GET /api/league/[leagueId]/week?week=N` | The same league read as one week — projections, points per game and each team's current-versus-optimal lineup. |
+| `GET /api/league/[leagueId]/timeline` | The league's stored moves, for the history rail. Fetched only once a reader opens the history. |
 | `POST /api/players/sync` | Refresh the cached players map. `?force=1` bypasses the freshness gate. **Internal** — see below. |
 | `GET /api/projections` | A week of stored projections, ranked by the requested scoring. Reads only — it never calls Sleeper. |
 | `POST /api/projections/sync` | Refresh stored weekly projections. Defaults to the current and next week if stale; `?force=1` ignores the freshness gate, `?week=1,2` backfills specific weeks (at most 18), `?season=2025` picks another season. **Internal** — see below. |
@@ -176,7 +189,7 @@ nothing stored at all, which is not the same as a week that matched no filters.
 
 ## Background work
 
-All three loops start in [`src/instrumentation.ts`](src/instrumentation.ts) once
+All five loops start in [`src/instrumentation.ts`](src/instrumentation.ts) once
 migrations have applied. They are Node-only, `unref`'d so they never hold the
 process open, and guarded by Postgres advisory locks so extra instances sharing
 one database don't duplicate the work.
@@ -203,6 +216,20 @@ one database don't duplicate the work.
   that finds everything current costs two queries; past weeks are never
   re-fetched, since their numbers stop moving once the games are played. Fill the
   horizon in one go, or pull a past week, with `/api/projections/sync?week=N`.
+- **Stats sync** (checks every 15 min) — the other half of the projections: what
+  players actually did, week by week. Live weeks refresh hourly, settled weeks
+  monthly, and the archive back to 2000 is fetched once and never again. It is
+  what the Comps pool is assembled from.
+- **NFL draft sync** (every 12 hours) — where players were taken in the *real*
+  draft, which Sleeper's players map does not carry at all. One ~2.6MB CSV from
+  the DynastyProcess id crosswalk — the file `nfl_data_py.import_ids()` reads,
+  fetched directly rather than through Python, since that function is a single
+  `read_csv` of it. It is the Comps tool's draft-capital dimension. A response
+  that doesn't look like the crosswalk is refused rather than written, so a
+  truncated body can't delete several thousand good rows; see
+  [`validate.ts`](src/shared/nfl-draft/validate.ts). `scripts/nfl-draft-picks.py`
+  is the same read done through the library, kept as the provenance note and as
+  an oracle — `--check` diffs the TypeScript parser against it.
 
 ### Freshness windows
 
@@ -213,6 +240,7 @@ one database don't duplicate the work.
 | KTC values | 15 min |
 | Weekly projections — current + next week | 1 hour |
 | Manager league-list enumeration | 6 hours |
+| NFL draft positions | 12 hours |
 | Weekly projections — rest of season | 24 hours |
 | Sleeper players map | 24 hours |
 | KTC per-player history | 30 days |
@@ -306,8 +334,8 @@ Two settings need a decision before a production deploy:
 
 ### Running a worker
 
-The four background loops (KeepTradeCut, the league crawl, projections, stat
-lines) run *inside the process serving requests*, sharing its event loop and its
+The five background loops (KeepTradeCut, the league crawl, projections, stat
+lines, NFL draft positions) run *inside the process serving requests*, sharing its event loop and its
 Postgres pool. On one dyno — and in development — that is what you want: a
 second process would be ceremony around a database that isn't busy.
 

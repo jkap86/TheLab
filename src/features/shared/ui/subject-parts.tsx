@@ -34,7 +34,7 @@ export function SubjectToken({
 }) {
   const name = label?.name ?? subject.id;
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-active/30 bg-active/10 py-0.5 pl-1.5 pr-1 text-[11px] text-foreground/90">
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-active/30 bg-active/10 py-0.5 pl-1.5 pr-1 text-[0.6875rem] text-foreground/90">
       {subject.kind === "player" ? (
         <PositionBadge position={label?.position ?? null} />
       ) : (
@@ -69,7 +69,7 @@ export function MatchToggle({
 }) {
   return (
     <>
-      <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/40">
+      <span className="font-mono text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-foreground/40">
         Match
       </span>
       {(["all", "any"] as const).map((value) => (
@@ -78,7 +78,7 @@ export function MatchToggle({
           type="button"
           aria-pressed={match === value}
           onClick={() => onMatch(value)}
-          className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+          className={`rounded-full px-2.5 py-0.5 text-[0.6875rem] font-bold ${
             match === value
               ? "lab-chip lab-chip-sm lab-chip-on"
               : "lab-chip lab-chip-sm text-foreground/60 hover:text-foreground"

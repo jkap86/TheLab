@@ -93,8 +93,19 @@ export class TtlPromiseCache<V extends object> {
   /**
    * The cached value for `key`, computing it at most once across every caller
    * that asks while it is being computed.
+   *
+   * `options.ttlMs` overrides the cache's own TTL **for the entry this call
+   * stores**, for a cache whose keys age at different speeds — see
+   * `BoundedCache.set`. It is read only on the computing caller's path, which
+   * is the honest reading: a caller that coalesces onto a computation already
+   * running is asking for that value, and the entry's lifetime is a fact about
+   * the value rather than about who happened to ask for it first.
    */
-  read(key: string, compute: () => Promise<V>): Promise<V> {
+  read(
+    key: string,
+    compute: () => Promise<V>,
+    options?: { ttlMs?: number },
+  ): Promise<V> {
     const hit = this.resolved.get(key);
     if (hit !== undefined) {
       this.onOutcome("hit", key);
@@ -112,7 +123,7 @@ export class TtlPromiseCache<V extends object> {
     // rejection of *this* promise — the one the bookkeeping below is attached to.
     const promise = (async () => compute())().then(
       (value) => {
-        if (this.settle(key, promise)) this.resolved.set(key, value);
+        if (this.settle(key, promise)) this.resolved.set(key, value, options);
         return value;
       },
       (error: unknown) => {
@@ -129,6 +140,25 @@ export class TtlPromiseCache<V extends object> {
   /** What is stored for `key` right now, without computing anything. */
   peek(key: string): V | undefined {
     return this.resolved.get(key);
+  }
+
+  /**
+   * Drop one key, for a caller that has just rewritten what is behind it.
+   *
+   * **Both halves, which is what makes it an invalidation rather than a nudge.**
+   * Dropping the resolved entry alone would leave a computation that started
+   * before the write still holding the key: it reads the old rows, settles, and
+   * stores them for a full TTL — precisely the staleness this call exists to
+   * end, arriving a moment *after* it. Retiring the in-flight entry too makes
+   * `settle` report that something newer owns the key, so that computation still
+   * answers the callers already waiting on it (they asked before the write) and
+   * simply does not store what it read.
+   *
+   * The next reader misses and recomputes, which is the point.
+   */
+  forget(key: string): void {
+    this.resolved.delete(key);
+    this.pending.delete(key);
   }
 
   /** For tests, and for a sync that knows it has invalidated everything. */

@@ -187,7 +187,7 @@ export function MetricHeadings({
         draws that one, which is the line between what a row *is* and what is
         measured about it).
       */}
-      <span className="hidden min-w-0 flex-1 items-center truncate py-[9px] pl-1 pr-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/75 sm:flex">
+      <span className="hidden min-w-0 flex-1 items-center truncate py-[0.5625rem] pl-1 pr-2.5 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-foreground/75 sm:flex">
         {subject}
       </span>
 
@@ -196,12 +196,13 @@ export function MetricHeadings({
         return (
           <div
             key={slot}
-            // 6px of cell against the cells' own 10px, with the slot's 4px
-            // making up the difference — see {@link COLUMN_WIDTH}. The
-            // vertical padding is the same trade, so the rail is exactly as
-            // tall as it was: it is pinned inside the manager header, and a
+            // The cell's own inset less the slot's own 4px, so the label
+            // starts at the same x as the number under it: nothing below `sm`,
+            // where {@link COLUMN_BOX} spends 4px and the slot is all of it,
+            // and 6px from `sm`, where it spends 10. The vertical padding is
+            // the same trade, so the rail is exactly as tall as it was — a
             // heading that grows takes its height out of the list behind it.
-            className={`lab-ledge-col group/col relative px-1.5 py-1.5 ${COLUMN_WIDTH}`}
+            className={`lab-ledge-col group/col relative px-0 py-1.5 sm:px-1.5 ${COLUMN_WIDTH}`}
           >
             <button
               type="button"
@@ -213,7 +214,7 @@ export function MetricHeadings({
               title={metric?.label}
               className="block w-full text-left"
             >
-              <span className="lab-ledge-slot block truncate rounded-[3px] px-1 py-[3px] text-[10px] font-semibold uppercase tracking-wider text-foreground/90 transition-colors group-hover/col:text-active">
+              <span className="lab-ledge-slot block truncate rounded-[3px] px-1 py-[3px] text-[0.625rem] font-semibold uppercase tracking-wider text-foreground/90 transition-colors group-hover/col:text-active">
                 {metric?.label}
               </span>
             </button>
@@ -256,6 +257,26 @@ function rankTier(rank: { rank: number; of: number }): { p: number; tier: Tier }
  * being more; a value is printed plain, since there is nothing to place it
  * against. All three keep the same three-row height — label, number, a track
  * strip — so mixing them in one row leaves the numbers on a shared baseline.
+ *
+ * **Every number here steps down one size below `sm`, and that is the phone
+ * paying for `--app-font-scale` in the one place with nothing to pay it with.**
+ * From `sm` the column is a fixed 96px and scales with everything else; below it
+ * the four columns divide *the phone's own line*, which is the single length in
+ * the app that cannot scale — so raising the type squeezes them from both ends,
+ * the card's insets growing while the ink does. Measured in Chromium against the
+ * compiled stylesheet and the real `woff2` files, at a scale of 1 a 360px
+ * viewport had **no slack at all**: `3,249.98` (what `formatPoints` gives three
+ * of the league catalogue's metrics) and `121/121` (a share on a hundred-league
+ * account) each measured their column to the pixel. Held at their old sizes they
+ * overflow at 360, 375 and 390 alike.
+ *
+ * So below `sm` the value arm is `text-xs`, the rank and share numbers are
+ * `text-sm`, their denominators `0.625rem`, and {@link COLUMN_BOX} gives 6px of
+ * inset back. At 360 that is 57.9px of ink in 61 for the widest value and 58 in
+ * 61 for the widest share — the first spelling with slack rather than merely the
+ * first that fits. What it costs is that a phone's numbers stay roughly the size
+ * they are today (13.5px against 14) while every other thing on the page grows,
+ * which is the honest trade for a column that was already full.
  */
 function StatBody({ cell, title }: { cell: MetricCell; title: string }) {
   if (cell.kind === "share") {
@@ -266,10 +287,10 @@ function StatBody({ cell, title }: { cell: MetricCell; title: string }) {
     return (
       <>
         <span title={title} className="flex items-baseline gap-0.5 leading-none">
-          <span className="text-base font-bold tabular-nums text-foreground/85">
+          <span className="text-sm font-bold tabular-nums text-foreground/85 sm:text-base">
             {cell.held}
           </span>
-          <span className="text-[11px] tabular-nums text-foreground/40">
+          <span className="text-[0.625rem] tabular-nums text-foreground/40 sm:text-[0.6875rem]">
             /{cell.of}
           </span>
         </span>
@@ -294,14 +315,17 @@ function StatBody({ cell, title }: { cell: MetricCell; title: string }) {
             // Amber only where the catalogue asked for it — see
             // {@link MetricTone}. A tinted number is a verdict, and four of them
             // on a card would be four alarms.
-            className={`text-sm font-bold leading-none tabular-nums ${
+            //
+            // The step down below `sm` is {@link StatBody}'s own rule, not this
+            // arm's — see the note there.
+            className={`text-xs font-bold leading-none tabular-nums sm:text-sm ${
               cell.tone === "alert" ? "text-amber-300" : "text-foreground/85"
             }`}
           >
             {cell.text}
           </span>
         ) : (
-          <span className="text-base font-bold leading-none text-foreground/25">
+          <span className="text-sm font-bold leading-none text-foreground/25 sm:text-base">
             —
           </span>
         )}
@@ -318,16 +342,16 @@ function StatBody({ cell, title }: { cell: MetricCell; title: string }) {
       {cell.rank && t ? (
         <span title={title} className="flex items-baseline gap-0.5 leading-none">
           <span
-            className={`text-base font-bold tabular-nums ${TIER_TEXT[t.tier]}`}
+            className={`text-sm font-bold tabular-nums sm:text-base ${TIER_TEXT[t.tier]}`}
           >
             #{cell.rank.rank}
           </span>
-          <span className="text-[11px] tabular-nums text-foreground/40">
+          <span className="text-[0.625rem] tabular-nums text-foreground/40 sm:text-[0.6875rem]">
             /{cell.rank.of}
           </span>
         </span>
       ) : (
-        <span className="text-base font-bold leading-none text-foreground/25">
+        <span className="text-sm font-bold leading-none text-foreground/25 sm:text-base">
           —
         </span>
       )}

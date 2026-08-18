@@ -1,3 +1,4 @@
+import { draftCapital } from "../nfl-draft/capital.ts";
 import { COMPS_FIELDS } from "./fields.ts";
 
 import type { CompsBasis } from "./filters.ts";
@@ -60,6 +61,25 @@ export type CompsKtcHistoryInput = Record<
   { peak: number | null; trend: number | null }
 >;
 
+/**
+ * NFL draft picks per player id — `getNflDraftPicks`'s own map, handed straight
+ * through.
+ *
+ * **A missing key is unknown; a present entry with a null `overall` is
+ * undrafted.** That distinction is the map's whole contract and the reason this
+ * arrives as a `Map` rather than as a nullable number per player: a number
+ * cannot carry it, and flattening it here would lose it for every reader
+ * downstream. `draftCapital` is the one place it becomes a value.
+ *
+ * Time-invariant, like the birth date beside it: where a player was drafted is
+ * the same fact in every season of his career, so unlike the KTC and ADP inputs
+ * it needs no anchor and a historical row is exact rather than as-of.
+ */
+export type CompsDraftInput = ReadonlyMap<
+  string,
+  { season: string; round: number | null; slot: number | null; overall: number | null }
+>;
+
 /** The production fields read straight off a line — the derived ones aren't. */
 const STAT_FIELDS = COMPS_FIELDS.filter(
   (field) => field.family === "production" && field.derived !== true,
@@ -71,6 +91,28 @@ const STAT_FIELDS = COMPS_FIELDS.filter(
  * catalogue.
  */
 const GATED_FIELDS = STAT_FIELDS.filter((field) => field.gated === true);
+
+/**
+ * Every unverified *stat key* worth watching for: the gated fields' own keys
+ * plus the raw keys the derived fields are computed from. Tracked as stat keys
+ * rather than field keys because the two part company — `tm_off_snp` is a
+ * denominator no field is named after, and `snap_pct` is a field named after no
+ * key.
+ */
+const WATCHED_KEYS: readonly string[] = [
+  ...new Set([
+    ...GATED_FIELDS.map((field) => field.statKey as string),
+    ...COMPS_FIELDS.flatMap((field) => field.requires ?? []),
+  ]),
+];
+
+/** Per derived field, the keys its season's feed has to carry to answer it. */
+const REQUIRED_KEYS: Record<string, readonly string[]> = Object.fromEntries(
+  COMPS_FIELDS.filter((field) => field.derived === true).map((field) => [
+    field.key,
+    field.requires ?? [],
+  ]),
+);
 
 /**
  * Sleeper's own totals on a stored line — the keys `scoreStatLine` refuses to
@@ -106,26 +148,52 @@ export function ageAtSeasonStart(
 const stat = (
   stats: Record<string, number> | null,
   key: string,
-): number => {
-  const value = stats?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+): number => finite(stats?.[key]) ?? 0;
+
+/**
+ * A finite number or null — the *other* reading, for the keys whose absence is
+ * unknown rather than zero: a week with no snap count says nothing about how
+ * many snaps were played, where a week with no reception says there were none.
+ */
+const finite = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+
+/**
+ * The datasets that ride *onto* an assembled row rather than being read off its
+ * stat lines — each one an expensive query of its own, each loaded only where
+ * the board being run weighs a field that names it (`enrichment.ts`).
+ *
+ * **Every one is optional, and absent means unknown rather than zero** — the
+ * market family's own rule, which is exactly what makes a base pool a
+ * legitimate pool: it answers null for the fields nobody weighted, which is the
+ * same thing it would answer for a player those sources have never heard of.
+ */
+export type CompsEnrichmentInputs = {
+  ktc?: CompsKtcInput;
+  ktcHistory?: CompsKtcHistoryInput;
+  adp?: CompsAdpInput;
+  draft?: CompsDraftInput;
 };
 
+/**
+ * A season's weekly lines into pool rows.
+ *
+ * The datasets are accepted here as well as by {@link applyCompsEnrichment} —
+ * one call for a caller that has them in hand — but the read does not use that
+ * form: it assembles the base rows once, caches them, and merges whichever
+ * datasets a board actually asked for on top. Handed none, this is exactly that
+ * base row.
+ */
 export function assemblePoolRows({
   statLines,
   profiles,
-  ktc,
-  ktcHistory,
-  adp,
   season,
+  ...enrichment
 }: {
   statLines: readonly CompsStatLineInput[];
   profiles: Record<string, CompsProfileInput>;
-  ktc: CompsKtcInput;
-  ktcHistory: CompsKtcHistoryInput;
-  adp: CompsAdpInput;
   season: string;
-}): CompsPoolRow[] {
+} & CompsEnrichmentInputs): CompsPoolRow[] {
   // One accumulator per player: games, production and point totals in a
   // single pass. The share numerators are tracked apart from the totals —
   // they sum only the team-attributed lines, so numerator and denominator
@@ -139,6 +207,12 @@ export function assemblePoolRows({
       cells: string[];
       shareTgt: number;
       shareRush: number;
+      /** Snaps and team snaps over the weeks carrying *both* keys. */
+      snapPlayer: number;
+      snapTeam: number;
+      /** Snaps, and the targets from the same weeks — a different week set. */
+      snaps: number;
+      snapTgt: number;
     }
   >();
 
@@ -165,6 +239,10 @@ export function assemblePoolRows({
         cells: [],
         shareTgt: 0,
         shareRush: 0,
+        snapPlayer: 0,
+        snapTeam: 0,
+        snaps: 0,
+        snapTgt: 0,
       };
       byPlayer.set(line.player_id, entry);
     }
@@ -182,13 +260,27 @@ export function assemblePoolRows({
       for (const field of STAT_FIELDS) {
         entry.totals[field.key] += stat(stats, field.statKey as string);
       }
-      for (const field of GATED_FIELDS) {
-        if (!vocabulary.has(field.key) && (field.statKey as string) in stats) {
-          vocabulary.add(field.key);
-        }
+      for (const key of WATCHED_KEYS) {
+        if (!vocabulary.has(key) && key in stats) vocabulary.add(key);
       }
       for (const [i, key] of POINTS_KEYS.entries()) {
         entry.points[i] += stat(stats, key);
+      }
+
+      // The snap rates, each summed only over the weeks that can answer it:
+      // targets-per-snap over the weeks carrying snaps, snap share over the
+      // weeks carrying snaps *and* the team's. A numerator counting a week its
+      // denominator never saw is the failure the usage shares below already
+      // avoid by pairing on team-weeks.
+      const snaps = finite(stats.off_snp);
+      if (snaps !== null) {
+        entry.snaps += snaps;
+        entry.snapTgt += stat(stats, "rec_tgt");
+        const teamSnaps = finite(stats.tm_off_snp);
+        if (teamSnaps !== null) {
+          entry.snapPlayer += snaps;
+          entry.snapTeam += teamSnaps;
+        }
       }
     }
 
@@ -204,29 +296,44 @@ export function assemblePoolRows({
     }
   }
 
-  // A share out of the team-week cells the player actually appeared in — so a
-  // midseason trade reads each half against the right offense — as a
-  // percentage. Null where nothing can be attributed (no team on any line) or
-  // the denominator is empty (a season whose feed lacks the key entirely,
-  // which must not read as everyone commanding 0%).
-  const share = (
-    numerator: number,
+  // The team-week denominator a share is taken against: the cells the player
+  // actually appeared in, so a midseason trade reads each half against the
+  // right offense.
+  const teamTotal = (
     cells: readonly string[],
     totals: ReadonlyMap<string, number>,
-  ): number | null => {
-    if (cells.length === 0) return null;
+  ): number => {
     let denominator = 0;
     for (const cell of cells) denominator += totals.get(cell) ?? 0;
-    if (denominator <= 0) return null;
-    return round2((numerator / denominator) * 100);
+    return denominator;
   };
+
+  /** Whether the season's feed carries every key a derived field needs. */
+  const answers = (key: string): boolean =>
+    (REQUIRED_KEYS[key] ?? []).every((required) => vocabulary.has(required));
 
   const rows: CompsPoolRow[] = [];
   for (const [player_id, entry] of byPlayer) {
     const profile = profiles[player_id];
-    const marketKtc = ktc[player_id];
-    const history = ktcHistory[player_id];
-    const marketAdp = adp.get(player_id);
+
+    // Every derived rate's own numerator and denominator, scaled so the value
+    // is exactly `n / d` whatever the unit — a percentage carries the ×100 in
+    // its numerator. That uniformity is what lets a multi-season window pool
+    // any of them as Σn / Σd without knowing which rate it is holding.
+    const rates: Record<string, { n: number; d: number }> = {};
+    const rate = (
+      key: string,
+      n: number,
+      d: number,
+      known: boolean,
+    ): number | null => {
+      // Null where nothing can be attributed, where the denominator is empty,
+      // or where the season's feed never published the keys — none of which
+      // may read as everyone commanding 0%.
+      if (!known || !(d > 0)) return null;
+      rates[key] = { n, d };
+      return round2(n / d);
+    };
 
     const values: Record<string, number | null> = {};
     for (const field of STAT_FIELDS) {
@@ -234,19 +341,42 @@ export function assemblePoolRows({
       // stats are quoted at. A gated field outside the season's vocabulary is
       // unknown, never zero.
       values[field.key] =
-        field.gated === true && !vocabulary.has(field.key)
+        field.gated === true && !vocabulary.has(field.statKey as string)
           ? null
           : round2(entry.totals[field.key]);
     }
-    values.tgt_share = share(entry.shareTgt, entry.cells, teamTgt);
-    values.rush_share = share(entry.shareRush, entry.cells, teamRush);
+    const attributed = entry.cells.length > 0;
+    values.tgt_share = rate(
+      "tgt_share",
+      entry.shareTgt * 100,
+      teamTotal(entry.cells, teamTgt),
+      attributed,
+    );
+    values.rush_share = rate(
+      "rush_share",
+      entry.shareRush * 100,
+      teamTotal(entry.cells, teamRush),
+      attributed,
+    );
+    values.snap_pct = rate(
+      "snap_pct",
+      entry.snapPlayer * 100,
+      entry.snapTeam,
+      answers("snap_pct"),
+    );
+    values.tgt_per_snap = rate(
+      "tgt_per_snap",
+      entry.snapTgt,
+      entry.snaps,
+      answers("tgt_per_snap"),
+    );
     values.age = ageAtSeasonStart(profile?.birth_date ?? null, season);
-    values.ktc_sf = marketKtc?.sf ?? null;
-    values.ktc_oneqb = marketKtc?.oneqb ?? null;
-    values.ktc_peak_sf = history?.peak ?? null;
-    values.ktc_trend_sf = history?.trend ?? null;
-    values.adp_dynasty = marketAdp?.dynasty?.adp ?? null;
-    values.adp_redraft = marketAdp?.redraft?.adp ?? null;
+    // The enrichment-fed fields are written as unknown here and filled in by
+    // `applyCompsEnrichment` for whichever datasets were actually loaded, so a
+    // base row and an enriched one are the same shape — a reader can't tell "not
+    // loaded" from "this source has never heard of him", which is the honest
+    // reading either way and the one the market family already had.
+    for (const key of ENRICHED_KEYS) values[key] = null;
 
     rows.push({
       player_id,
@@ -257,8 +387,16 @@ export function assemblePoolRows({
       name: profile?.name ?? player_id,
       position: profile?.position ?? null,
       team: profile?.team ?? null,
+      // The pick rides beside the capital, the way `position` and `team` ride
+      // beside the values: it is what the reader actually wants printed —
+      // "1.05", "UDFA" — where the capital is what the distance is measured in.
+      // Unknown until the draft dataset is merged on, since it is that dataset's
+      // to answer; null there means no record, where a record with a null
+      // `overall` means undrafted.
+      draft: null,
       games: entry.games,
       values,
+      rates,
       points: {
         ppr: round2(entry.points[0]),
         half_ppr: round2(entry.points[1]),
@@ -266,7 +404,74 @@ export function assemblePoolRows({
       },
     });
   }
-  return rows;
+  return applyCompsEnrichment(rows, enrichment);
+}
+
+/**
+ * The fields no stat line answers — every one fed by a dataset the catalogue
+ * names, derived from `reads` rather than listed so a new market field is
+ * covered the moment it declares where it comes from.
+ */
+const ENRICHED_KEYS: readonly string[] = COMPS_FIELDS.filter(
+  (field) => field.reads.length > 0,
+).map((field) => field.key);
+
+/**
+ * The rows with the loaded datasets written onto them — the composition half of
+ * the pool, kept pure so what each dataset contributes is a tested fact rather
+ * than a read of `pool.ts`.
+ *
+ * **Only the datasets present are written.** A dataset absent leaves its fields
+ * exactly as they were, which is null on a base row: nothing here can turn "not
+ * loaded" into a zero, and nothing can overwrite a loaded value with an unknown
+ * one by being called twice with different halves.
+ *
+ * Non-mutating, because the rows it is handed are the frozen cached base pool:
+ * every enriched row is a fresh object with a fresh `values`, and the immutable
+ * parts (points, rates) are shared rather than copied. Given nothing to write it
+ * hands the same array straight back — an identity the memoized passes above it
+ * (`withCareerValues`) read as "the corpus has not changed".
+ */
+export function applyCompsEnrichment(
+  rows: readonly CompsPoolRow[],
+  { ktc, ktcHistory, adp, draft }: CompsEnrichmentInputs,
+): CompsPoolRow[] {
+  // The same array, not a copy: the identity is what the memoized passes above
+  // this read as "the corpus has not changed". The cast is only the readonly
+  // parameter being handed back out.
+  if (!ktc && !ktcHistory && !adp && !draft) return rows as CompsPoolRow[];
+
+  return rows.map((row) => {
+    const values = { ...row.values };
+    if (ktc) {
+      const priced = ktc[row.player_id];
+      values.ktc_sf = priced?.sf ?? null;
+      values.ktc_oneqb = priced?.oneqb ?? null;
+    }
+    if (ktcHistory) {
+      const history = ktcHistory[row.player_id];
+      values.ktc_peak_sf = history?.peak ?? null;
+      values.ktc_trend_sf = history?.trend ?? null;
+    }
+    if (adp) {
+      const board = adp.get(row.player_id);
+      values.adp_dynasty = board?.dynasty?.adp ?? null;
+      values.adp_redraft = board?.redraft?.adp ?? null;
+    }
+    let pick = row.draft;
+    if (draft) {
+      pick = draft.get(row.player_id) ?? null;
+      // Three answers folded to two by one call: a drafted player gets his
+      // pick's capital, an undrafted one the shared notch past the last pick,
+      // and a player with no record at all gets null — which excludes him from
+      // any comparison weighting this, rather than filing him with the
+      // undrafted.
+      values.draft_capital = draftCapital(
+        pick === null ? null : { playerId: row.player_id, ...pick },
+      );
+    }
+    return { ...row, draft: pick, values };
+  });
 }
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;

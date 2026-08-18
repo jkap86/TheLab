@@ -1,14 +1,61 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import { useMemo } from "react";
+
 import type { PlayerSummary } from "@/shared/players";
 
+import { adpValueRead } from "../../adp-controls";
+import { useAdpControls } from "../../adp-controls-context";
 import { shortPlayerName } from "../../format";
+import { leagueDetailNeeds } from "../../league-detail-needs.ts";
 import { pickLabel } from "../../pick-value";
 import { groupRosterByPosition } from "../../roster-groups";
 import type { RosterPlayer } from "../../roster-groups";
+import {
+  DEFAULT_PLAYER_COLUMNS,
+  PLAYER_COLUMN_PRESETS,
+  PLAYER_METRICS,
+  PLAYER_METRICS_BY_KEY,
+} from "../../roster-metrics";
+import {
+  DEFAULT_TEAM_COLUMNS,
+  TEAM_COLUMN_PRESETS,
+  TEAM_METRICS,
+  TEAM_METRICS_BY_KEY,
+} from "../../standings-metrics";
 import type { TimelineRoster } from "../../timeline";
+import {
+  NO_TIMELINE_BOARD,
+  timelineColumnNote,
+  timelinePlayerCell,
+  timelinePlayerContext,
+  timelineTeamCell,
+  timelineTeamContext,
+  type TimelineBoard,
+} from "../../timeline-columns";
+import { useColumnsEditor } from "../../use-columns-editor";
+import { useLeagueValues } from "../../use-league-detail";
+import { usePersistedColumns } from "../../use-persisted-columns";
+import { useTodayIso } from "../../use-today-iso.ts";
 import { Avatar } from "../avatar";
+import type { ColumnsEditor as ColumnsEditorComponent } from "../columns-editor";
+import { ColumnHeading } from "../league-detail/column-heading";
+import { COLUMN_GRID, NAME_SPAN, NO_COLUMN_GRID } from "../league-detail/standings";
 import { positionTextTone } from "../position-badge";
+
+/**
+ * The dialog both halves aim their columns from — the panel's own, loaded on the
+ * first press of a heading.
+ *
+ * Named by module path and `dynamic()` for the reason the panel does it: it is a
+ * `<dialog>` nobody has opened, and the trigger is a heading two components down,
+ * so the seam is a module boundary rather than an export name.
+ */
+const ColumnsEditor = dynamic(
+  () => import("../columns-editor").then((m) => m.ColumnsEditor),
+  { ssr: false },
+) as typeof ColumnsEditorComponent;
 
 /**
  * The league at one past moment, in the detail panel's own two-column shape:
@@ -23,19 +70,30 @@ import { positionTextTone } from "../position-badge";
  * `.lab-row` key for the selected manager, a rank-style tab on the row's corner,
  * and the name/meta pair of lines the standings row already uses.
  *
- * **What is not carried over is every number, and that is not a gap.** Ranks,
- * records, points for, projections, KTC and ADP are all facts about the league
- * *today*: the panel's own columns are correct beside a current roster and would
- * be attributing today's numbers to a team that no longer exists beside a past
- * one. So the two things this view states are the two things a rewind actually
- * knows — who held which roster, and who was on it — and everything else is left
- * to the panel, which is one press of `Now` away.
+ * **The panel's stat columns are carried over too, and which of them can answer
+ * is the one thing that differs.** This view used to draw no numbers at all, on
+ * the reasoning that ranks, records, points for and projections are facts about
+ * the league *today* and would be attributing today's numbers to a team that no
+ * longer exists. That reasoning is intact and is now enforced per column rather
+ * than by dropping the columns: a reader who has aimed both tables at KTC and
+ * scrubs back is asking what that roster was worth, and dropping their selection
+ * made them press `Now`, read the number, and press back.
  *
- * The one number that survives is the roster's **size**, which is knowable at any
- * moment and is what a reader is comparing across the league; it takes the seat
- * the record holds on a standings row.
+ * So the halves draw the same selection the panel is showing — the same stored
+ * keys, so there is nothing here to drift — and {@link timelineTeamCell} decides
+ * per metric whether the moment can answer it. A board price can: it prices an
+ * *asset*, so summing today's KTC or ADP over the players somebody held then is
+ * the number a rewind is usually opened for. Everything else draws an em dash
+ * with a hover saying to press `Now`, and {@link timelineColumnNote} says so once
+ * under both halves rather than leaving a reader to wonder why their columns are
+ * blank.
+ *
+ * The other number that survives is the roster's **size**, which is knowable at
+ * any moment and is what a reader is comparing across the league; it takes the
+ * seat the record holds on a standings row.
  */
 export function TimelineRosters({
+  leagueId,
   rosters,
   players,
   managers,
@@ -43,6 +101,16 @@ export function TimelineRosters({
   onSelect,
   caveat,
 }: {
+  /**
+   * The league these rosters belong to, for pricing them.
+   *
+   * It is read off the timeline payload rather than passed by either host, since
+   * the trades sheet's rail is anchored on a *trade* and only the payload knows
+   * which league that trade was in. The values read behind it is the panel's own
+   * — same key, same board — so it is a cache hit for every reader who has the
+   * panel open, which is every reader who can reach this view.
+   */
+  leagueId: string;
   /** The league at this stop, in draw order — see {@link timelineRosters}. */
   rosters: TimelineRoster[];
   players: Readonly<Record<string, PlayerSummary>>;
@@ -54,6 +122,64 @@ export function TimelineRosters({
   /** The line under the halves saying which moment this is, and how it is known. */
   caveat: string;
 }) {
+  // The board the panel prices on, read from the same store and the same query
+  // key — so a drawer narrowed to startup drafts narrows these rosters too, and
+  // a reader who has the panel open pays nothing for this.
+  const { controls, scope } = useAdpControls();
+  const today = useTodayIso();
+  const boardRead = useMemo(
+    () => adpValueRead(controls, scope, today),
+    [controls, scope, today],
+  );
+
+  // The panel's own selections, under the panel's own keys — which is what makes
+  // this "the columns the current view shows" by construction rather than by a
+  // prop somebody has to remember to thread. Both hosts open a league on a
+  // *season*, so these are the season keys; a week panel keys its columns apart
+  // and has no rail to scrub in any case.
+  const {
+    columns: teamColumns,
+    setColumn: setTeamColumn,
+    setColumns: setTeamColumns,
+    reset: resetTeamColumns,
+  } = usePersistedColumns("standings", DEFAULT_TEAM_COLUMNS, TEAM_METRICS);
+  const {
+    columns: playerColumns,
+    setColumn: setPlayerColumn,
+    setColumns: setPlayerColumns,
+    reset: resetPlayerColumns,
+  } = usePersistedColumns("roster", DEFAULT_PLAYER_COLUMNS, PLAYER_METRICS);
+
+  const teamEditor = useColumnsEditor();
+  const rosterEditor = useColumnsEditor();
+
+  // Read only where a column is showing a price, the rule the panel this shares
+  // its key with keeps — and here it is the *whole* rule rather than one third of
+  // it, because {@link REWINDABLE_METRICS} is `ktc`/`adp` and nothing else: every
+  // other column draws its "not at this moment" em dash whatever was fetched. So
+  // a rail scrubbed with the default projection columns on screen prices nothing,
+  // and an editor opened over it prices everything, on the same latch and for the
+  // same reason as the panel's.
+  const needsValues =
+    leagueDetailNeeds({ week: null, teamColumns, playerColumns }).values ||
+    teamEditor.mounted ||
+    rosterEditor.mounted;
+  const { data: values } = useLeagueValues(leagueId, boardRead, {
+    enabled: needsValues,
+  });
+  const board: TimelineBoard = useMemo(
+    () =>
+      values
+        ? {
+            ktc: values.ktc,
+            adp: values.adp,
+            adp_position: values.adp_position,
+            superflex: values.superflex,
+            draftCount: values.adp_draft_count,
+          }
+        : NO_TIMELINE_BOARD,
+    [values],
+  );
   // A roster the league doesn't hold falls back to the head of the list, the
   // panel's own reading of a `focusRosterId` naming a team that has since been
   // replaced — and the same fallback covers the first render, before anything has
@@ -61,9 +187,23 @@ export function TimelineRosters({
   const selected =
     rosters.find((r) => r.roster_id === selectedId) ?? rosters[0] ?? null;
 
+  // Which of the reader's own columns this moment cannot answer, named once
+  // under both halves. Null — and no line at all — when every one of them does.
+  const columnNote = timelineColumnNote(teamColumns, playerColumns);
+
+  // What the roster editor previews against: someone on the roster being shown,
+  // so the number in the preview is one a reader can find in the list beside it.
+  // The first *held* player rather than the first drawn one — the list is
+  // grouped by position and this is not — which is the same approximation the
+  // panel's own previews make, and why the editor names its subject in the
+  // footer rather than letting one row's figure pass as the column's answer.
+  // Sleeper pads an unfilled slot with an empty id or a literal "0", so a
+  // roster's first *entry* is not necessarily a player.
+  const previewId = selected?.players.find((id) => id && id !== "0") ?? null;
+
   if (!selected) {
     return (
-      <p className="px-3 pb-3 pt-1 text-[11px] text-foreground/35 @lg:px-5 @lg:pb-5">
+      <p className="px-3 pb-3 pt-1 text-[0.6875rem] text-foreground/35 @lg:px-5 @lg:pb-5">
         No rosters stored for this league yet.
       </p>
     );
@@ -89,24 +229,79 @@ export function TimelineRosters({
             managers={managers}
             selectedId={selected.roster_id}
             onSelect={onSelect}
+            columns={teamColumns}
+            board={board}
+            onOpenColumn={teamEditor.open}
           />
           <TimelineRosterDetail
             roster={selected}
             rosters={rosters}
             players={players}
             managers={managers}
+            columns={playerColumns}
+            board={board}
+            onOpenColumn={rosterEditor.open}
           />
         </div>
 
         {/* Outside both scroll boxes, where the panel keeps its own caveat: a note
             about how the numbers above it are known has to stay on screen with
-            them. */}
-        <p className="mt-2 shrink-0 text-[0.7rem] leading-relaxed text-foreground/40">
-          {caveat}
-        </p>
+            them.
+
+            Two sentences and not one: the first says which moment this is, the
+            second why some of the reader's own columns are empty at it. The
+            second is drawn only where there is a shortfall to report — a note
+            saying every column is fine would be a permanent band on the plate. */}
+        <div className="mt-2 shrink-0 space-y-1 text-[0.7rem] leading-relaxed text-foreground/40">
+          <p>{caveat}</p>
+          {columnNote && <p>{columnNote}</p>}
+        </div>
       </div>
+
+      {/* Outside the halves, since a `<dialog>` is in the top layer and nothing
+          about either scroll box reaches it. One per table, because a team's
+          aggregate and a player's number are two catalogues and two selections —
+          and both write the *panel's* stored keys, so aiming a column here aims
+          it there. */}
+      {teamEditor.mounted && (
+        <ColumnsEditor
+          metrics={TEAM_METRICS}
+          columns={teamColumns}
+          presets={TEAM_COLUMN_PRESETS}
+          ctx={timelineTeamContext(selected.players, board)}
+          previewLabel={managerName(selected, managers)}
+          openSlot={teamEditor.openSlot}
+          onClose={teamEditor.close}
+          onColumnChange={setTeamColumn}
+          onColumns={setTeamColumns}
+          onReset={resetTeamColumns}
+        />
+      )}
+      {rosterEditor.mounted && (
+        <ColumnsEditor
+          metrics={PLAYER_METRICS}
+          columns={playerColumns}
+          presets={PLAYER_COLUMN_PRESETS}
+          ctx={previewId ? timelinePlayerContext(previewId, board) : null}
+          previewLabel={previewId ? (players[previewId]?.name ?? previewId) : null}
+          openSlot={rosterEditor.openSlot}
+          onClose={rosterEditor.close}
+          onColumnChange={setPlayerColumn}
+          onColumns={setPlayerColumns}
+          onReset={resetPlayerColumns}
+        />
+      )}
     </div>
   );
+}
+
+/** What this view names a roster's holder by, and the avatar's fallback initial. */
+function managerName(
+  roster: TimelineRoster,
+  managers: Readonly<Record<string, TimelineManager>>,
+): string {
+  const manager = roster.user_id ? managers[roster.user_id] : undefined;
+  return manager?.display_name || `Roster ${roster.roster_id}`;
 }
 
 /** As much of a manager as this view names one by. */
@@ -130,17 +325,50 @@ function TimelineTeams({
   managers,
   selectedId,
   onSelect,
+  columns,
+  board,
+  onOpenColumn,
 }: {
   rosters: TimelineRoster[];
   managers: Readonly<Record<string, TimelineManager>>;
   selectedId: number;
   onSelect: (rosterId: number) => void;
+  /** The standings' own selection — see {@link TimelineRosters}. */
+  columns: string[];
+  board: TimelineBoard;
+  onOpenColumn: (slot: number) => void;
 }) {
+  // The standings' own templates, so a rewound row sits on the same tracks as the
+  // row it replaced and the two readings do not step sideways as the rail moves.
+  const grid = COLUMN_GRID[columns.length] ?? NO_COLUMN_GRID;
+  const nameSpan = NAME_SPAN[columns.length] ?? "col-span-1";
+  const inset = "pl-1 pr-2 @sm:pl-1.5 @sm:pr-2.5 @lg:pl-3 @lg:pr-4";
+
   return (
     <div className="lab-trough flex min-h-0 flex-col rounded-lg p-1 @lg:p-2">
-      <p className="shrink-0 truncate px-1 pb-2 pt-1 text-[0.6rem] uppercase tracking-wide text-foreground/50 @lg:px-3 @lg:text-xs">
-        Manager
-      </p>
+      <div
+        className={`grid shrink-0 ${grid} ${inset} items-center gap-x-2 pb-2 pt-1 text-[0.6rem] text-foreground/50 @lg:text-xs`}
+      >
+        {/* `invisible` rather than `hidden` below @lg: the cell has to keep its
+            grid track or the headings beside it slide left off the columns they
+            name. With no headings to seat there is room to say it at every
+            width — the standings' own rule. */}
+        <span
+          className={`truncate uppercase tracking-wide ${
+            columns.length > 0 ? "invisible @lg:visible" : ""
+          }`}
+        >
+          Manager
+        </span>
+        {columns.map((key, slot) => (
+          <ColumnHeading
+            key={slot}
+            className="normal-case tracking-normal @lg:uppercase @lg:tracking-wide"
+            label={(TEAM_METRICS_BY_KEY[key] ?? TEAM_METRICS[0]).label}
+            onOpen={() => onOpenColumn(slot)}
+          />
+        ))}
+      </div>
       {/* The list is what scrolls. The bar rides in a lane of its own rather than
           over the rows' trailing edge — 8px of padding, half of it paid for by
           bleeding into the trough's own inset, which is the standings' own
@@ -153,6 +381,10 @@ function TimelineTeams({
             manager={roster.user_id ? managers[roster.user_id] : undefined}
             active={roster.roster_id === selectedId}
             onSelect={() => onSelect(roster.roster_id)}
+            grid={grid}
+            nameSpan={nameSpan}
+            columns={columns}
+            board={board}
           />
         ))}
       </ul>
@@ -165,11 +397,19 @@ function TimelineTeamRow({
   manager,
   active,
   onSelect,
+  grid,
+  nameSpan,
+  columns,
+  board,
 }: {
   roster: TimelineRoster;
   manager: TimelineManager | undefined;
   active: boolean;
   onSelect: () => void;
+  grid: string;
+  nameSpan: string;
+  columns: string[];
+  board: TimelineBoard;
 }) {
   const name = manager?.display_name || `Roster ${roster.roster_id}`;
   // On the lit face a shade of the foreground token is a shade of the wrong
@@ -186,12 +426,12 @@ function TimelineTeamRow({
         // A raised key rather than a tinted row: pressing it drives the roster
         // half beside it, and the selected one is the part that is currently on.
         // `relative` is what the corner tab is positioned against.
-        className={`relative grid w-full grid-cols-[minmax(0,1fr)] items-center gap-y-0.5 rounded-md px-1 py-1.5 text-left @sm:px-1.5 @lg:px-3 @lg:py-2.5 ${
+        className={`relative grid w-full ${grid} items-center gap-x-2 gap-y-0.5 rounded-md px-1 py-1.5 text-left @sm:px-1.5 @lg:px-3 @lg:py-2.5 ${
           active ? "lab-row-on" : "lab-row"
         }`}
       >
         <span
-          className={`absolute left-0 top-0 inline-flex h-[17px] min-w-[26px] items-center justify-center rounded-br-md rounded-tl-md px-[5px] font-mono text-[9px] font-bold leading-none tracking-[0.04em] ${
+          className={`absolute left-0 top-0 inline-flex h-[1.0625rem] min-w-[1.625rem] items-center justify-center rounded-br-md rounded-tl-md px-[0.3125rem] font-mono text-[0.5625rem] font-bold leading-none tracking-[0.04em] ${
             active ? "lab-tab-on text-foreground/90" : "lab-tab text-foreground/60"
           }`}
         >
@@ -199,8 +439,12 @@ function TimelineTeamRow({
         </span>
 
         {/* Indented past the tab's overhang, which it gives up on this line
-            alone — the standings row's own construction. */}
-        <span className="flex min-w-0 items-center gap-1 pl-[22px] @lg:gap-2">
+            alone — the standings row's own construction. It spans every track of
+            its own template, so a long name runs under the value columns rather
+            than being squeezed into the name track twice over. */}
+        <span
+          className={`col-start-1 ${nameSpan} flex min-w-0 items-center gap-1 pl-[1.375rem] @lg:gap-2`}
+        >
           <Avatar url={manager?.avatar_url ?? null} name={name} size="sm" />
           <span
             className={`min-w-0 truncate text-[0.8125rem] font-medium @lg:text-[0.9375rem] @2xl:text-base ${
@@ -215,11 +459,40 @@ function TimelineTeamRow({
             a rewind actually knows. `in this trade` marks the sides rather than a
             tinted row or a badge: at this width a word is what fits, and it is
             the reason the sheet is open. */}
-        <span className={`truncate text-[0.6rem] tabular-nums @sm:text-[0.7rem] @lg:text-xs ${dim}`}>
+        <span
+          className={`col-start-1 truncate text-[0.6rem] tabular-nums @sm:text-[0.7rem] @lg:text-xs ${dim}`}
+        >
           {roster.players.length}{" "}
           {roster.players.length === 1 ? "player" : "players"}
           {roster.dealt && <span> · in this trade</span>}
         </span>
+
+        {/* The standings' own cells, on the standings' own tracks. A metric this
+            moment cannot answer is an em dash carrying the reason — see
+            {@link timelineTeamCell}. */}
+        {columns.map((key, slot) => {
+          const cell = timelineTeamCell(key, roster.players, board);
+          return (
+            <span
+              key={slot}
+              title={cell.title}
+              className={`text-right text-[0.65rem] tabular-nums @sm:text-[0.7rem] @lg:text-[0.8125rem] @xl:text-sm ${
+                // On the lit face a shade of the foreground token is a shade of
+                // the wrong colour, so the dim cell switches to opacity — the
+                // standings row's own rule.
+                active
+                  ? cell.text === null
+                    ? "opacity-40"
+                    : "opacity-85"
+                  : cell.text === null
+                    ? "text-foreground/25"
+                    : "text-foreground/70"
+              }`}
+            >
+              {cell.text ?? "—"}
+            </span>
+          );
+        })}
       </button>
     </li>
   );
@@ -255,22 +528,46 @@ function TimelineRosterDetail({
   rosters,
   players,
   managers,
+  columns,
+  board,
+  onOpenColumn,
 }: {
   roster: TimelineRoster;
   /** Every roster, for naming the one an acquired pick came from. */
   rosters: TimelineRoster[];
   players: Readonly<Record<string, PlayerSummary>>;
   managers: Readonly<Record<string, TimelineManager>>;
+  /** The roster panel's own selection — see {@link TimelineRosters}. */
+  columns: string[];
+  board: TimelineBoard;
+  onOpenColumn: (slot: number) => void;
 }) {
   const lines = groupRosterByPosition(roster.players, players).flatMap((group) =>
     group.players.map((player) => ({ position: group.position, player })),
   );
+  const grid = PLAYER_GRID[columns.length] ?? PLAYER_GRID[0];
 
   return (
     <div className="lab-plate lab-plate-sm flex min-h-0 flex-col rounded-lg p-1 @sm:p-1.5 @lg:p-4">
-      <p className="shrink-0 truncate px-1 pb-1.5 text-[0.6rem] uppercase tracking-wide text-foreground/50 @lg:px-0 @lg:text-xs">
-        Roster
-      </p>
+      {/* The caption is the rail's own first cell rather than a line above it,
+          which is what keeps the headings on the tracks they name without
+          spending a second line on a half this narrow. It is outside the scroll
+          box for the panel's reason: a heading is the only name a column of bare
+          numbers has, *and* the way to change one, so a rail that scrolled away
+          would be one a reader has to go back for. */}
+      <div
+        className={`grid shrink-0 ${grid} items-baseline gap-x-2 px-1 pb-1.5 text-[0.6rem] uppercase tracking-wide text-foreground/50 @lg:px-0 @lg:text-xs`}
+      >
+        <span className="truncate @3xl:col-span-2">Roster</span>
+        {columns.map((key, slot) => (
+          <ColumnHeading
+            key={slot}
+            className="text-[0.6rem] normal-case tracking-normal @lg:uppercase @lg:tracking-wide"
+            label={(PLAYER_METRICS_BY_KEY[key] ?? PLAYER_METRICS[0]).label}
+            onOpen={() => onOpenColumn(slot)}
+          />
+        ))}
+      </div>
 
       <div className="lab-scroll -mr-1 min-h-0 overflow-y-auto overscroll-contain pr-2">
         {lines.length === 0 && roster.picks.length === 0 ? (
@@ -286,6 +583,9 @@ function TimelineRosterDetail({
                 key={player.player_id}
                 position={position}
                 player={player}
+                grid={grid}
+                columns={columns}
+                board={board}
               />
             ))}
           </ul>
@@ -361,30 +661,36 @@ const ROW_BAND = "-mx-1 @max-3xl:odd:bg-foreground/[0.022]";
 function PlayerLine({
   position,
   player,
+  grid,
+  columns,
+  board,
 }: {
   position: string;
   player: RosterPlayer;
+  grid: string;
+  columns: string[];
+  board: TimelineBoard;
 }) {
   const tone = positionTextTone(position);
   const short = shortPlayerName(player.name, position);
 
   return (
     <li
-      className={`${ROW_BAND} relative grid grid-cols-[minmax(0,1fr)] items-center px-1 py-1 @3xl:grid-cols-[2.25rem_minmax(0,1fr)] @3xl:gap-x-2 @3xl:py-2`}
+      className={`${ROW_BAND} relative grid ${grid} items-center gap-x-2 px-1 py-1 @3xl:py-2`}
     >
       {/* `left-0` rather than a negative offset: the list is inside a scroll box,
           and `overflow-y: auto` computes `overflow-x` to `auto` too — so anything
           reaching past the box's leading edge is clipped rather than overhanging.
           The panel learned that one the hard way. */}
       <span
-        className={`lab-tab lab-tab-pos absolute left-0 top-[2px] inline-flex h-[17px] min-w-[26px] items-center justify-center rounded-[5px] px-1 font-mono text-[9px] font-bold uppercase leading-none tracking-[0.04em] @3xl:static @3xl:top-auto @3xl:w-full ${tone}`}
+        className={`lab-tab lab-tab-pos absolute left-0 top-[2px] inline-flex h-[1.0625rem] min-w-[1.625rem] items-center justify-center rounded-[5px] px-1 font-mono text-[0.5625rem] font-bold uppercase leading-none tracking-[0.04em] @3xl:static @3xl:top-auto @3xl:w-full ${tone}`}
       >
         {position}
       </span>
 
       <span
         title={player.name}
-        className="flex min-w-0 items-baseline gap-1.5 pl-[34px] text-[0.8125rem] text-foreground/85 @3xl:pl-0 @4xl:text-sm"
+        className="flex min-w-0 items-baseline gap-1.5 pl-[2.125rem] text-[0.8125rem] text-foreground/85 @3xl:pl-0 @4xl:text-sm"
       >
         {/* Contracted below `@lg` and whole above it, the panel's own treatment
             and its arithmetic: at this width the name track is roughly where real
@@ -409,6 +715,49 @@ function PlayerLine({
           </span>
         )}
       </span>
+
+      {/* The roster panel's own cells. A metric this moment cannot answer is an
+          em dash carrying the reason — see {@link timelinePlayerCell}. */}
+      {columns.map((key, slot) => {
+        const cell = timelinePlayerCell(key, player.player_id, board);
+        return (
+          <span
+            key={slot}
+            title={cell.title}
+            className={`text-right text-[0.65rem] tabular-nums @sm:text-[0.7rem] @lg:text-[0.8125rem] @xl:text-sm ${
+              cell.text === null ? "text-foreground/25" : "text-foreground/70"
+            }`}
+          >
+            {cell.text ?? "—"}
+          </span>
+        );
+      })}
     </li>
   );
 }
+
+/**
+ * The row template for each value-column count, written out rather than
+ * assembled so Tailwind sees every class string whole.
+ *
+ * The value tracks are the standings' own measurements, because the two halves
+ * are the same width — what differs is only the leading cell: the position chip
+ * is out of flow below `@3xl` (so it costs the row nothing but the name's
+ * indent) and the grid's first track from `@3xl` up, which is the switch the
+ * panel's own roster row makes at the same tier.
+ */
+const PLAYER_GRID: Record<number, string> = {
+  0: "grid-cols-[minmax(0,1fr)] @3xl:grid-cols-[2.25rem_minmax(0,1fr)]",
+  1:
+    "grid-cols-[minmax(0,1fr)_2.625rem] " +
+    "@sm:grid-cols-[minmax(0,1fr)_2.75rem] " +
+    "@lg:grid-cols-[minmax(0,1fr)_4rem] " +
+    "@xl:grid-cols-[minmax(0,1fr)_5rem] " +
+    "@3xl:grid-cols-[2.25rem_minmax(0,1fr)_5rem]",
+  2:
+    "grid-cols-[minmax(0,1fr)_2.625rem_2.625rem] " +
+    "@sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem] " +
+    "@lg:grid-cols-[minmax(0,1fr)_4rem_4rem] " +
+    "@xl:grid-cols-[minmax(0,1fr)_5rem_5rem] " +
+    "@3xl:grid-cols-[2.25rem_minmax(0,1fr)_5rem_5rem]",
+};

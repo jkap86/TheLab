@@ -5,6 +5,7 @@ import {
   COMPS_FIELDS,
   COMPS_POSITIONS,
   compsField,
+  compsFieldTakesWindow,
   defaultWeightsFor,
   isCompsPosition,
 } from "./fields.ts";
@@ -56,7 +57,7 @@ describe("COMPS_FIELDS", () => {
     }
     assert.deepEqual(
       COMPS_FIELDS.filter((f) => f.gated === true).map((f) => f.key),
-      ["pass_air_yd", "rec_air_yd"],
+      ["pass_air_yd", "rec_air_yd", "off_snp"],
     );
   });
 
@@ -71,8 +72,48 @@ describe("COMPS_FIELDS", () => {
     }
     assert.deepEqual(
       COMPS_FIELDS.filter((f) => f.derived === true).map((f) => f.key),
-      ["rush_share", "tgt_share"],
+      ["rush_share", "tgt_share", "snap_pct", "tgt_per_snap"],
     );
+  });
+
+  test("`requires` names raw stat keys and appears only on derived fields", () => {
+    // The gate a derived field is nullable through: it is a claim about the
+    // *feed*, so it names stat keys and never catalogue keys — `tm_off_snp` is
+    // a denominator no field is named after, which is exactly why the two
+    // vocabularies must not be confused.
+    const derivedKeys = new Set(
+      COMPS_FIELDS.filter((f) => f.derived === true).map((f) => f.key),
+    );
+    for (const field of COMPS_FIELDS) {
+      if (field.requires === undefined) continue;
+      assert.equal(field.derived, true, `${field.key} requires without derived`);
+      assert.ok(field.requires.length > 0, `${field.key} requires nothing`);
+      for (const required of field.requires) {
+        // A derived field is read off no line, so requiring one would be a
+        // gate on a key the feed can never carry — permanently null.
+        assert.ok(
+          !derivedKeys.has(required),
+          `${field.key} requires the derived ${required}`,
+        );
+      }
+    }
+    assert.deepEqual(
+      COMPS_FIELDS.filter((f) => f.requires !== undefined).map((f) => f.key),
+      ["snap_pct", "tgt_per_snap"],
+    );
+  });
+
+  test("a window applies to production and to nothing else", () => {
+    // Pooling is additive, which is what a count or a usage rate *is* and what
+    // a price and an age are not — two seasons of KTC pool into nothing
+    // anybody has a name for.
+    for (const field of COMPS_FIELDS) {
+      assert.equal(
+        compsFieldTakesWindow(field),
+        field.family === "production",
+        `${field.key} takes a window`,
+      );
+    }
   });
 
   test("every default weight is positive and within 0–100", () => {
@@ -164,7 +205,7 @@ describe("defaultWeightsFor", () => {
 describe("compsField / isCompsPosition", () => {
   test("resolves a catalogue key and refuses an unknown one", () => {
     assert.equal(compsField("rec_tgt")?.label, "Targets");
-    assert.equal(compsField("off_snp"), undefined);
+    assert.equal(compsField("kick_ret_yd"), undefined);
   });
 
   test("accepts the four supported positions and nothing else", () => {

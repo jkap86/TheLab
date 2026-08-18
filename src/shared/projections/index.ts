@@ -13,6 +13,7 @@ export {
   listPlayerWeekStats,
   listLineupWeekStats,
   getProjectedStatKeys,
+  clearProjectionMetaCaches,
 } from "./queries";
 export type { LineupWeekStats, RankedProjection } from "./queries";
 export { aggregateWeeklyStats } from "./aggregate";
@@ -53,7 +54,13 @@ export {
   recognisedSlots,
 } from "./optimal";
 export type { RosterPlayer, LineupSlot, LineupComparison } from "./optimal";
-export { orderLineupByKickoff, kickoffMoves } from "./kickoff-order";
+export { medianLineups, medianScore } from "./median";
+export {
+  orderLineupByKickoff,
+  kickoffMoves,
+  kickoffRanks,
+  KICKOFF_BUFFER_MS,
+} from "./kickoff-order";
 export type { KickoffSeat, KickoffPlayer, KickoffMove } from "./kickoff-order";
 export {
   SLOT_POSITIONS,
