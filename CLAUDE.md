@@ -1495,7 +1495,13 @@ These recur everywhere and are the rules most often broken by accident:
   (`MANAGER_SYNC_LIMIT`, defaulting to `databaseBudget().fanout`), reserved for
   **every** sync `/api/user/…/leagues` runs — a stale refresh is the *same*
   fan-out holding the same lock connection as a cold one. **The cap is a share of
-  the pool** rather than a number of its own. **It is three layers, not one** —
+  the pool** rather than a number of its own. **The variable is a *request*, not
+  a grant** — `fanoutLimit` clamps it to that share, as `LEAGUE_REFRESH_LIMIT`
+  is clamped for the other work of this shape, because a knob settable to the
+  pool size is the failure the cap exists for reached through the variable meant
+  to prevent it; junk, zero, a negative and a decimal all fall back to the
+  derivation, and a clamped request warns **once, as the semaphore is built**,
+  never per request. **It is three layers, not one** —
   the semaphore bounds this instance, the per-manager in-flight map dedupes
   within the process, and the advisory lock is the only one surviving a second
   dyno; reading any one alone makes the other two look redundant. **Acquisition

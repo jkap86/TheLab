@@ -148,3 +148,73 @@ function positiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number(value?.trim());
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
+
+/**
+ * A configured concurrency for work that holds a pool connection for its whole
+ * duration, and what became of it.
+ *
+ * **The knob is a request, not a grant** — the rule `dbHeavyReadConcurrency`
+ * already keeps for the analytical reads, applied to the two paths that hold a
+ * connection for *longer* than any query does: a manager's league sync and a
+ * league refresh each hold an advisory lock's session across a Sleeper fan-out
+ * plus every read and write the graph needs. `MANAGER_SYNC_LIMIT=10` against a
+ * pool of ten is not a wider budget, it is no budget — one manager able to take
+ * every connection the process has, arrived at through the variable meant to
+ * bound it, with nothing failing to say so.
+ *
+ * The ceiling is {@link DatabaseBudget.fanout} itself rather than the heavy
+ * reads' `poolMax - fanout`, because these are not reads competing with an
+ * ordinary request: each admitted unit *is* a request's worth of the pool held
+ * for as long as Sleeper takes, so the honest cap is exactly what one request
+ * may hold.
+ */
+export type FanoutLimit = {
+  /** The bound to use: the request clamped, or the derived default. */
+  limit: number;
+  /** What the environment asked for, or null if it said nothing readable. */
+  requested: number | null;
+  /** The most this process grants however it is asked. */
+  ceiling: number;
+};
+
+/**
+ * Read one such knob.
+ *
+ * Junk, empty, zero, a negative and a decimal all fall back to the derived
+ * default rather than failing the boot — the budget's own rule, and a zero
+ * would be an admission that admits nobody, which is an outage rather than a
+ * bound. The derived default is never clamped, because it *is* the reserved
+ * share: a ceiling under the number the app picks for itself would be a clamp
+ * arguing with its own default.
+ */
+export function fanoutLimit(
+  value: string | undefined,
+  budget: DatabaseBudget,
+): FanoutLimit {
+  const parsed = Number(value?.trim());
+  const requested = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  const ceiling = budget.fanout;
+
+  return {
+    requested,
+    ceiling,
+    limit: requested === null ? ceiling : Math.min(requested, ceiling),
+  };
+}
+
+/**
+ * What to say about a request that was cut down, or null when there is nothing
+ * to say.
+ *
+ * Pure, so the wording is testable and the `console.warn` stays one line at the
+ * module's own initialisation — an operator who set a number this app will not
+ * honour should be told once, at boot, rather than per request or not at all.
+ */
+export function clampNotice(name: string, limit: FanoutLimit): string | null {
+  if (limit.requested === null || limit.requested <= limit.ceiling) return null;
+
+  return (
+    `Configured ${name}=${limit.requested} exceeds the safe database ` +
+    `fan-out=${limit.ceiling}; using ${limit.ceiling}.`
+  );
+}

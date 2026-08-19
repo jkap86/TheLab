@@ -18,8 +18,10 @@ export type {
 } from "./sync";
 export {
   getLeagueRefreshState,
+  LEAGUE_REFRESH_LIMIT_VAR,
   leagueRefreshAdmission,
   leagueRefreshConcurrency,
+  leagueRefreshLimit,
   refreshLeague,
 } from "./league-refresh";
 export type { LeagueRefreshResult } from "./league-refresh";
@@ -34,8 +36,10 @@ export type {
 } from "./sync-freshness";
 export {
   createManagerSyncAdmission,
+  MANAGER_SYNC_LIMIT_VAR,
   managerSyncAdmission,
   managerSyncConcurrency,
+  managerSyncLimit,
 } from "./sync-admission";
 export type {
   ManagerSyncAdmission,
