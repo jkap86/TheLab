@@ -884,6 +884,34 @@ comparator reads**, since a five-armed ordering written twice is two orderings.
     one request holding more of the pool than the pool has. A fixed-width fan-out
     over units that are mostly *network* is not this
     (`LEAGUE_FETCH_CONCURRENCY` stays as it is).
+  - **A route's *enrichment* stage is that same fan-out wearing a fixed length,
+    and takes `loadEnrichments`** (`shared/db/fanout.ts`). `Promise.all([a(),
+    b(), c(), …])` over a handful of named, differently-typed reads is the shape
+    that reads as harmless because somebody counted them: `/api/adp` released
+    the aggregate's admitted connection and then opened five at once against a
+    budget of three. Tasks are **named** (the call site stays the destructured
+    object) and each **declares what it reads** — `dbRead` counts against
+    `databaseBudget().fanout`, `memoryRead` never queues, since serialising work
+    that takes no connection is latency for nothing, and the declaration is
+    conservative because it cannot be inferred. Three properties are the
+    contract: **every task is started**, including after another fails; **a
+    rejection gives its slot back** rather than killing the worker; and **the
+    first rejection chronologically is the one thrown**, since which error
+    arrives is what decides 503 against 500.
+  - **That bound is a plain concurrency limiter and must never be a second
+    admission.** A task may take the process-wide heavy-read slot *inside* the
+    route slot (`getDraftAuctionSpend` does), which is safe in that direction
+    only: the heavy budget is shared, a route's is private to one request, so no
+    holder of a heavy slot ever waits on a route slot. A heavy-read token taken
+    at the route would be one limiter acquired twice — a deadlock at the limit.
+  - **Two reads against one row are one read.** `/api/adp` resolved a page's
+    names and then re-asked `players`, on the same ids through the same index,
+    which of them had `years_exp = 0`; one column on the first read answers both
+    (`getPlayersWithExperience`) and the classification is pure
+    (`rookieClassIds`). Consolidate where the second read is the *same lookup*.
+    The two KTC reads beside it are deliberately left apart — an id lookup and a
+    `position = 'RDP'` filter over rows carrying no `sleeper_id` are different
+    populations, not one query asked twice.
   - **Out of budget is a 503, not a 500** (`isDatabaseBusy` →
     `app/api/read-failure.ts`). A 500 says stop asking, and asking again is
     exactly right when the database merely had no room. Applied at **every** route

@@ -1253,6 +1253,52 @@ about how it is laid out. Each replaced something that read as fine and wasn't.
     readers took every connection on the dyno. A fixed-width fan-out over units
     that are mostly *network* is not this (`LEAGUE_FETCH_CONCURRENCY` stays as
     it is, tuned against Sleeper's budget).
+  - **An *enrichment* fan-out is the same failure with a fixed length, and it
+    needed its own helper** (`shared/db/fanout.ts`, `loadEnrichments`).
+    `collectWithConcurrency` bounds a walk over a list: many units of one shape.
+    A route's enrichment stage is the other shape — a handful of named,
+    differently-typed reads decorating an answer already computed — and the
+    idiom for it is `Promise.all([a(), b(), c(), …])`, which reads as harmless
+    *because* the length is a constant somebody wrote down. `/api/adp` was five
+    of them: it finished the aggregate that had held one admitted connection,
+    released it, and then opened five at once against a fan-out budget of three,
+    so one reader held half the default pool **after** the expensive part of its
+    work was over. The tasks are named rather than positional, so the call site
+    stays the destructured object the `Promise.all` was, and each declares
+    whether it reads the database — `dbRead` counts against the budget,
+    `memoryRead` never queues, because serialising work that takes no connection
+    is latency bought for nothing. Three properties are the contract, and each
+    is a failure this codebase has had somewhere else: **every task is started**
+    (the `Promise.all` started them all, so stopping at the first rejection
+    would be a behaviour change hiding inside a performance fix); **a rejection
+    gives its slot back** rather than killing the worker holding it, which is
+    the `sleeper/limiter` rule about a permit leaked per blip; and **the first
+    rejection *chronologically* is the one thrown**, since which error arrives
+    is what decides 503 against 500.
+  - **The route-level bound is not a second admission, and that is what keeps it
+    deadlock-free.** `getDraftAuctionSpend` takes the process-wide heavy-read
+    slot for itself, *inside* the route slot `loadEnrichments` hands it. That
+    nests two limiters, which is only safe in one direction: the heavy budget is
+    shared and the route's is private to one request, so nothing holding a heavy
+    slot ever waits on a route slot and there is no cycle to close. Taking a
+    heavy-read token at the route instead would be the same limiter acquired
+    twice — a queue waiting on itself at the limit, which is the shape
+    `db/heavy-admission` is written against. `fanout.test.ts` pins it by
+    saturating the heavy budget from outside and asserting every enrichment
+    still completes.
+  - **Two reads against one row are one read.** `/api/adp` asked
+    `getPlayersByIds(ids)` for a page's names and then asked `players` again,
+    with the same ids through the same primary-key index, which of them had
+    `years_exp = 0`. One column on the first read answers both
+    (`getPlayersWithExperience`), and the classification moves to
+    `rookieClassIds` — pure, so what counts as a rookie is a testable rule
+    rather than a predicate only a database can answer. It is the *narrow*
+    consolidation on purpose: a smallint per row, not the blob beside it. The
+    two KTC reads next to it are deliberately **not** consolidated — one is an
+    id lookup and the other a filter on `position = 'RDP'` over rows that carry
+    no `sleeper_id` at all, so they are different populations rather than one
+    query asked twice, and folding them into an `OR` would trade two index-shaped
+    reads for one scan.
   - **Out of budget is a 503, not a 500** (`isDatabaseBusy` →
     `app/api/read-failure.ts`, the same pure/`NextResponse` split as
     `resolveManagerUser`/`resolveManagerRequest`). The two want opposite things

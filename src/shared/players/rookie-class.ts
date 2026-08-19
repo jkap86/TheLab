@@ -1,16 +1,25 @@
-import { getRookiePlayerIds } from "./queries";
-
 /**
  * Naming a rookie class — the seam future historical-class support goes behind.
  *
- * **How rookie picks are identified today, end to end.** `/api/adp` asks this
- * module which of a board's players are rookies and sends the answer as
- * `AdpPlayerPayload.rookie`; `rookieLadder` (`features/shared/pick-value`)
- * ranks exactly those rows into the pick ladder, so the k-th rookie off the
- * rookie-draft board *is* rookie pick k; and the drawer labels the ladder with
- * `classSeason` — always the **active** season, passed down as `defaultSeason`.
- * The only source any of it rests on is `players.years_exp = 0`, a fact about
- * *now*: the players map is replaced daily and carries no history.
+ * **How rookie picks are identified today, end to end.** `/api/adp` reads its
+ * board's players once (`getPlayersWithExperience`) and asks this module which of
+ * them are rookies, sending the answer as `AdpPlayerPayload.rookie`;
+ * `rookieLadder` (`features/shared/pick-value`) ranks exactly those rows into the
+ * pick ladder, so the k-th rookie off the rookie-draft board *is* rookie pick k;
+ * and the drawer labels the ladder with `classSeason` — always the **active**
+ * season, passed down as `defaultSeason`. The only source any of it rests on is
+ * `players.years_exp = 0`, a fact about *now*: the players map is replaced daily
+ * and carries no history.
+ *
+ * **It is a derivation rather than a query, and that is the whole of what
+ * changed.** The class used to be its own `SELECT … WHERE player_id = ANY($1)
+ * AND years_exp = 0` — the same index lookup on the same ids as the read that
+ * had just resolved those players' names, run a second time and holding a second
+ * connection out of a fan-out budget of three. `years_exp` now rides on that
+ * first read and the classification happens here, in memory, which is also what
+ * makes the rule directly testable: what counts as a rookie is one comparison in
+ * one pure function rather than a predicate in SQL that only a database can
+ * answer.
  *
  * **What prevents historical rookie ADP from working**, precisely:
  *
@@ -34,11 +43,20 @@ import { getRookiePlayerIds } from "./queries";
  * time, backfilled from a source better than `years_exp` — a schema change,
  * deliberately out of scope here. What this module fixes in the meantime is
  * the *shape*: the question is asked as "the members of {@link RookieClass}
- * among these ids", so when a real source exists, implementing the
+ * among these players", so when a real source exists, implementing the
  * `{ kind: "season" }` arm (and sending the season alongside `rookie` on the
  * payload) is the whole of the change — no caller has to be re-taught what a
  * rookie flag means.
+ *
+ * Pure, with no runtime imports at all: it reads what a caller already loaded.
  */
+
+/** The fields a class is named from — every player read carries these. */
+export type PlayerExperience = {
+  /** Sleeper's count of completed seasons; null where it has none on file. */
+  years_exp: number | null;
+};
+
 export type RookieClass =
   /** The class that is a rookie *now* — the only class the cache can name. */
   | { kind: "current" }
@@ -51,19 +69,30 @@ export type RookieClass =
 export const CURRENT_ROOKIE_CLASS: RookieClass = { kind: "current" };
 
 /**
- * Which of `ids` belong to `rookieClass`.
+ * Which of `players` belong to `rookieClass`, as a set of ids.
  *
- * The current class is `years_exp = 0` ({@link getRookiePlayerIds}, where the
- * absent-is-unknown rule is documented). A named season answers **empty** —
- * "cannot name that class", never a guess — which downstream reads as picks
- * being unpriced (`no-ladder`), the honest answer the current behaviour
- * already gives a historical board by construction: none of today's rookies
- * appear in a past season's drafts, so the flag never marks a row there.
+ * **Absent is "not known to be a rookie", never "veteran".** `years_exp` is null
+ * for a team defence and for anyone Sleeper hasn't filled it in for, and the
+ * ladder is an *ordering* — one wrongly-included name shifts every pick below it
+ * by one. So the test is an equality against 0 rather than anything looser, and
+ * a null simply doesn't match. An id the players cache doesn't carry is not in
+ * the map at all, which reads the same way.
+ *
+ * A named season answers **empty** — "cannot name that class", never a guess —
+ * which downstream reads as picks being unpriced (`no-ladder`), the honest
+ * answer the current behaviour already gives a historical board by construction:
+ * none of today's rookies appear in a past season's drafts, so the flag never
+ * marks a row there.
  */
-export async function getRookieClassIds(
-  ids: string[],
+export function rookieClassIds(
+  players: Readonly<Record<string, PlayerExperience>>,
   rookieClass: RookieClass = CURRENT_ROOKIE_CLASS,
-): Promise<Set<string>> {
+): Set<string> {
   if (rookieClass.kind === "season") return new Set();
-  return getRookiePlayerIds(ids);
+
+  const ids = new Set<string>();
+  for (const [id, player] of Object.entries(players)) {
+    if (player.years_exp === 0) ids.add(id);
+  }
+  return ids;
 }

@@ -433,7 +433,7 @@ export type PickAdpStandResult =
  *
  * Each of those is an honest refusal rather than a gap to be papered over. The
  * rookie board averaged no rookies (a historical board, whose class the players
- * cache can no longer name — see `getRookiePlayerIds` — or one narrowed past
+ * cache can no longer name — see `rookieClassIds` — or one narrowed past
  * them). The pick is deeper than the class it priced — a 5th-rounder against a
  * board carrying forty rookies has no rung, and inventing one would be pricing a
  * pick against a player nobody drafted. The startup board priced nobody, so

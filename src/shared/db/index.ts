@@ -22,6 +22,13 @@ export {
   DB_HEAVY_READ_LEGACY_VARS,
   DB_HEAVY_READ_LIMIT_VAR,
 } from "./heavy-admission";
+export { dbRead, loadEnrichments, memoryRead } from "./fanout";
+export type {
+  Enrichment,
+  EnrichmentResults,
+  EnrichmentSet,
+  EnrichmentSource,
+} from "./fanout";
 export { isDatabaseBusy } from "./timeout";
 export { jsonb } from "./json";
 export { msInterval } from "./interval";
