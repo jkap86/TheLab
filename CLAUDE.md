@@ -73,6 +73,21 @@ src/shared/    Domain logic, one folder per concern.
   is a field. **The question is per read, not per `Promise.all`** — dependent
   reads earn the same judgement, and the second one failing is not automatically
   fatal just because it had to wait for the first.
+- **Two consumers of one read take a snapshot, not a cache.**
+  `readWeekProjectionInputs` is the shape: `getLeagueWeekView` wanted the week's
+  projections for its per-player column and `getWeekLineups` wanted the identical
+  rows for the lineups, so one request read the heaviest table on the panel
+  twice. Four rules. It **holds reads and never derivations** — the scoring is
+  per league and the lock set is per request, so both are computed *from* it and
+  a second league can answer off one fetch. It is **passed down explicitly**
+  (`getWeekLineups`' optional `inputs`), because a snapshot that outlived the
+  request would be a per-league cache with no key that could say whose week it
+  held, and the callee still reads one of its own when handed none — the lineup
+  checker passes nothing. The reads it gathers **run in the same `Promise.all` as
+  the request's other independent ones**, and what follows is arithmetic, so
+  sharing does not turn two parallel reads into two waits. And **what it does not
+  need, it does not fetch**: the player metadata is the lineup solve's alone, so a
+  league with no slots or scoring on file stays at the one query it always cost.
 - Aliases: `@/*` → `src/*`, `@thelab/http` → the configured axios instance.
 
 ## Anything crossing the network
@@ -924,6 +939,21 @@ a route — it validates the query string and nothing else, and takes the defaul
 season as an *argument* rather than importing `DEFAULT_SEASON`, since that import
 is exactly what would make it untestable.
 
+**A *query count* is the one claim that side of the line cannot make**, because
+it is a fact about the composition file rather than about any module under it.
+`shared/stats/league-week.test.ts` is the exception and stays a narrow one: it
+drives the real loaders with `pool.query` and `@thelab/http`'s instance replaced
+by counting stubs, so nothing connects and what comes back is a fixture. Two
+things make it safe — the alias resolves under `tsx` and `new Pool(…)` does not
+connect, so importing the I/O module costs nothing; and the stub **dispatches on
+the table named in the SQL** rather than on call order, so a read moving between
+callers cannot quietly re-label itself. The rules those reads feed are still
+asserted where they are pure (`projections/week-inputs.test.ts`); this file
+asserts only the counts and the handful of numbers proving the shared snapshot
+reaches the solve intact. **Reading the same table twice in one request is not an
+error** — it answers, it typechecks, it passes every other test in the repo —
+which is why it takes a test of its own.
+
 **Three files carry an ADP name and they sit on opposite sides of the wire:**
 
 | File | Side | Job |
@@ -1752,10 +1782,12 @@ These recur everywhere and are the rules most often broken by accident:
 - **Eligibility is `fantasy_positions`, not `position`.** A back listed
   `["RB","WR"]` can fill a `REC_FLEX` his primary position bars him from, and the
   IDP leagues here start players at DL whose `position` reads LB.
-  `getFantasyPositions` is the query; **a player the cache doesn't know is
-  eligible for nothing**, which is better than recommending a lineup Sleeper
-  would reject. IR and taxi players *are* candidates — a stashed player is bench
-  depth that could be started, a deliberate choice.
+  `getFantasyPositions` is the query — `getPlayerLineupMeta` where the caller
+  also needs each player's **NFL team**, since both are one `players` row and two
+  reads of it can straddle a sync; **a player the cache doesn't know is eligible
+  for nothing**, which is better than recommending a lineup Sleeper would reject.
+  IR and taxi players *are* candidates — a stashed player is bench depth that
+  could be started, a deliberate choice.
 - **An optimal lineup that is arbitrary about interchangeable slots reads as a
   mistake.** The matching is free to seat the worse of two backs at RB1 — same
   total, but as advice it looks wrong and diffs against a sane current lineup as

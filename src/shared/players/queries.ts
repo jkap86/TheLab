@@ -49,28 +49,86 @@ export async function getPlayersByIds(
 }
 
 /**
- * Player ids → the NFL team each is on, for joining a player to his game.
+ * What solving one week's lineups needs to know about a player: what he is
+ * eligible to start at, and who he plays for.
  *
- * The slim half of {@link getPlayersByIds}, for callers that need nothing a
- * name resolves — the kickoff-ordered lineup reads a player's game time
- * through his team and the week's schedule, across the union of every roster
- * in a request. Null is Sleeper's own "no team" (a free agent, a retired
- * player), and an id the cache doesn't know is absent — both read as "game
- * unknown" downstream, never as a guess.
+ * Two halves of one row, which is the whole reason this type exists. They were
+ * two reads — {@link getFantasyPositions} for the slots and a `team` lookup for
+ * the kickoff join — both narrowed by the same id list against the same primary
+ * key, so a week's lineups read `players` twice for facts that arrive together.
  */
-export async function getPlayerTeams(
-  ids: string[],
-): Promise<Record<string, string | null>> {
-  if (ids.length === 0) return {};
+export type PlayerLineupMeta = {
+  /** Player id → the positions he is eligible at; see {@link getFantasyPositions}. */
+  positions: Record<string, string[]>;
+  /**
+   * Player id → the NFL team he is on, for joining him to his game. Null is
+   * Sleeper's own "no team" (a free agent, a retired player), and an id the
+   * cache doesn't know is absent — both read as "game unknown" downstream,
+   * never as a guess.
+   */
+  teams: Record<string, string | null>;
+};
 
-  const { rows } = await pool.query<{ player_id: string; team: string | null }>(
-    `SELECT player_id, team FROM players WHERE player_id = ANY($1)`,
+/**
+ * Eligibility and NFL team for these player ids, in one read.
+ *
+ * The two maps come off the *same* rows rather than two queries, so they cannot
+ * disagree about which players the cache knows — the case that used to be
+ * reachable, since two reads a moment apart straddle a players sync. Each half
+ * keeps the absence rule its own reader depends on: a player the cache doesn't
+ * know is eligible for nothing (so he never starts, rather than being seated by
+ * a guessed position), and his team is simply unknown (so he keeps his seat in
+ * the kickoff ordering rather than being dated by one).
+ *
+ * Deliberately not `getPlayersByIds` with more columns: a lineup solve wants no
+ * name resolved, and the union of every roster in a request is a few hundred
+ * ids wide.
+ */
+export async function getPlayerLineupMeta(
+  ids: string[],
+): Promise<PlayerLineupMeta> {
+  if (ids.length === 0) return { positions: {}, teams: {} };
+
+  const { rows } = await pool.query<{
+    player_id: string;
+    positions: string[];
+    position: string | null;
+    team: string | null;
+  }>(
+    // The `fantasy_positions` unnesting is {@link getFantasyPositions}' own —
+    // see its note for why it is done in SQL rather than over the JSONB.
+    `SELECT player_id, position, team,
+            ARRAY(SELECT jsonb_array_elements_text(
+                    CASE WHEN jsonb_typeof(fantasy_positions) = 'array'
+                         THEN fantasy_positions ELSE '[]'::jsonb END)) AS positions
+       FROM players
+      WHERE player_id = ANY($1)`,
     [ids],
   );
 
-  const out: Record<string, string | null> = {};
-  for (const r of rows) out[r.player_id] = r.team;
-  return out;
+  const positions: Record<string, string[]> = {};
+  const teams: Record<string, string | null> = {};
+  for (const r of rows) {
+    positions[r.player_id] = eligiblePositions(r);
+    teams[r.player_id] = r.team;
+  }
+  return { positions, teams };
+}
+
+/**
+ * Sleeper's `fantasy_positions`, falling back to the single `position` when it
+ * lists none — the one rule both readers of eligibility share, so the two
+ * queries below cannot answer differently for one player.
+ */
+function eligiblePositions(row: {
+  positions: string[];
+  position: string | null;
+}): string[] {
+  return row.positions.length > 0
+    ? row.positions
+    : row.position
+      ? [row.position]
+      : [];
 }
 
 /**
@@ -182,10 +240,7 @@ export async function getFantasyPositions(
   );
 
   const out: Record<string, string[]> = {};
-  for (const r of rows) {
-    out[r.player_id] =
-      r.positions.length > 0 ? r.positions : r.position ? [r.position] : [];
-  }
+  for (const r of rows) out[r.player_id] = eligiblePositions(r);
   return out;
 }
 

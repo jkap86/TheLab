@@ -23,7 +23,17 @@ export {
   getOptimalLineups,
   getWeeklyTeamPoints,
   getWeekLineups,
+  readWeekProjectionInputs,
 } from "./outlook";
+export {
+  bucketPlayerRows,
+  dayLockedPlayers,
+  solveWeekLineups,
+  weekProjectionPoints,
+} from "./week-inputs";
+export type { WeekProjectionInputs, WeekSolveInputs } from "./week-inputs";
+export { isProjectable, lineupCandidates, rosterPlayerIds } from "./candidates";
+export type { Projectable } from "./candidates";
 export type {
   LeagueOutlook,
   LeagueTeamsInput,

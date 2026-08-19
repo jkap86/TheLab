@@ -6,9 +6,14 @@ export {
   getPlayerIdsByPosition,
   getPlayerProfiles,
   getFantasyPositions,
-  getPlayerTeams,
+  getPlayerLineupMeta,
   getRookiePlayerIds,
 } from "./queries";
-export type { PlayerSummary, MatchablePlayer, PlayerProfile } from "./queries";
+export type {
+  PlayerSummary,
+  MatchablePlayer,
+  PlayerProfile,
+  PlayerLineupMeta,
+} from "./queries";
 export { getRookieClassIds, CURRENT_ROOKIE_CLASS } from "./rookie-class";
 export type { RookieClass } from "./rookie-class";

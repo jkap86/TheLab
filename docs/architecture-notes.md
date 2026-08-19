@@ -1809,7 +1809,7 @@ stops holding, a comment saying it does would not have caught it.
   readers — the lineup checker's kickoff ordering, the minute-accurate game lock
   and the season countdown — were built on the schedule call and each degraded
   politely, exactly as designed: `weekKickoffs` answered an empty map, so
-  `kickoffInputs` answered null, so `kickoff_order` was null in every league of
+  the kickoff read answered null, so `kickoff_order` was null in every league of
   every week of every season and the Kickoff column was a permanent em dash;
   the lock fell back to day accuracy; the countdown fell back to the NFL
   calendar's provisional instant — which for 2026 is the Thursday after Labor
@@ -2015,8 +2015,12 @@ stops holding, a comment saying it does would not have caught it.
 - **Eligibility is `fantasy_positions`, not `position`.** A back listed
   `["RB","WR"]` can fill a `REC_FLEX` his primary position bars him from, and
   Sleeper's own lineups use it — the IDP leagues here start players at DL whose
-  `position` reads LB. `getFantasyPositions` is the query; a player the cache
-  doesn't know is eligible for nothing, which is better than guessing and
+  `position` reads LB. `getFantasyPositions` is the query, and
+  `getPlayerLineupMeta` is the same read widened by one column for the callers
+  that also join a player to his game: eligibility and the NFL team are two
+  fields of one `players` row, so asking for them separately was two index
+  lookups on the same primary key and two answers that could straddle a players
+  sync. A player the cache doesn't know is eligible for nothing, which is better than guessing and
   recommending a lineup Sleeper would reject. IR and taxi players *are* candidates,
   though — this tool treats a stashed player as bench depth that could be started
   rather than as unavailable, a deliberate choice (Sleeper needs a roster move to
