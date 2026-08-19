@@ -33,7 +33,7 @@ while you work.
 | `REQUEST_DEADLINE_MS` | no | 30000 | The deadline the platform enforces on a request (Heroku's router answers `H12` at 30s). Every database wait is a share of it — connect at ⅙, advisory lock at ½, statement at ⅔ — so lowering it tightens them together. Set it if the app sits behind a proxy with a shorter timeout; the waits exist to be shorter than whatever gives up first. |
 | `INTERNAL_SYNC_SECRET` | in production, to use the sync routes | — | Shared secret gating the operator sync endpoints (see [Internal sync endpoints](#internal-sync-endpoints)). Sent as the `x-internal-sync-secret` header. In production an unset secret makes those routes answer **503** — they fail closed, never open. On a dev server an unset secret lets them through, so `npm run dev` can still force a sync by hand. |
 | `NFL_SEASON_OVERRIDE` | no | — | Pins the operating season (a 4-digit year). Otherwise the season is read from Sleeper's `state/nfl` and cached for six hours, so a league-year rollover needs no redeploy. An implausible value is ignored with a warning. |
-| `BACKGROUND_JOBS` | no | on | Set to `off` to disable **every** background loop in this process — the web process's switch in a web+worker deployment (see [Running a worker](#running-a-worker)). It outranks the four per-loop switches below, so a loop added later is off on a web dyno without a second edit. |
+| `BACKGROUND_JOBS` | no | every process | Where the background loops run. `worker` runs them in the dedicated worker only (`npm run worker`) and starts none in the web process — **the recommended production setting**, see [Running a worker](#running-a-worker). `off` disables every loop everywhere, the worker included, and outranks the five per-loop switches below, so a loop added later is off without a second edit. Unset — or any other value — every process that registers jobs runs them, which is what a single dyno and local development want. |
 | `LEAGUE_CRAWLER` | no | on | Set to `off` to disable the background league crawler. |
 | `PROJECTIONS_SYNC` | no | on | Set to `off` to disable the weekly projections sync. Each week it refreshes is a ~5.6MB download. |
 | `STATS_SYNC` | no | on | Set to `off` to disable the weekly actual stat-line sync, likewise a multi-megabyte download per week. |
@@ -269,6 +269,7 @@ Sleeper's nested payloads (settings, scoring, metadata, id arrays) are stored as
 | --- | --- |
 | `npm run dev` | Dev server. |
 | `npm run build` / `npm start` | Production build and serve. |
+| `npm run worker` | The background-job worker (`src/worker.ts`) — every scheduled loop, no HTTP listener. See [Running a worker](#running-a-worker). |
 | `npm test` | Unit tests (Node's test runner via `tsx`). |
 | `npm run typecheck` | `tsc --noEmit`. |
 | `npm run lint` | ESLint. |
@@ -313,8 +314,13 @@ those paths are kept thin so the logic worth testing sits outside them.
 
 ## Deployment
 
-Runs on Heroku via the `Procfile` (`web: npm start`) with Node 22 pinned in
-`package.json` `engines`.
+Runs on Heroku via the `Procfile` with Node 22 pinned in `package.json`
+`engines`. Two process types share one image and one database:
+
+```
+web:    npm start        # the Next server
+worker: npm run worker   # the background loops, no HTTP listener
+```
 
 Two settings need a decision before a production deploy:
 
@@ -335,36 +341,94 @@ Two settings need a decision before a production deploy:
 ### Running a worker
 
 The five background loops (KeepTradeCut, the league crawl, projections, stat
-lines, NFL draft positions) run *inside the process serving requests*, sharing its event loop and its
-Postgres pool. On one dyno — and in development — that is what you want: a
-second process would be ceremony around a database that isn't busy.
+lines, NFL draft positions) can run *inside the process serving requests*,
+sharing its event loop and its Postgres pool. On one dyno — and in development —
+that is what you want: a second process would be ceremony around a database that
+isn't busy.
 
 It stops being what you want once requests and crawling compete for
 `DATABASE_POOL_MAX` connections. The crawler holds a pooled connection across a
 league's whole Sleeper fan-out, and a request that has to queue for one is a
-request the platform answers `503` for on the app's behalf. Splitting them is
-configuration, not a second entry point:
+request the platform answers `503` for on the app's behalf.
+
+`src/worker.ts` is the dedicated process. It applies migrations, starts every
+loop and stays up until the platform stops it, and it **does not listen on a
+port** — no route manifest, no `$PORT`, none of the Next server that a second
+`npm start` would boot purely to fire the instrumentation hook.
 
 ```
 # Procfile
-web:    npm start        # set BACKGROUND_JOBS=off on this dyno
-worker: npm start        # nothing set — every loop runs
+web:    npm start        # BACKGROUND_JOBS=worker
+worker: npm run worker
 ```
 
-Same image, same database, one variable. Migrations run on boot in both, so the
-order they start in doesn't matter. **Advisory locking is untouched and stays
-load-bearing**: every loop takes its own lock, so a second worker started by
-accident — or a web dyno somebody left the jobs on — costs a skipped tick rather
-than a doubled scrape of Sleeper or KTC. Switching a loop off is a scheduling
-decision; the lock is the correctness one, and neither substitutes for the
-other.
+Migrations run on boot in both, so the order they start in doesn't matter.
 
-Give each dyno its own share of `DATABASE_POOL_MAX` when you do this: the
-ceiling that matters belongs to the database *role*, not to any one process.
+#### The one variable
+
+`BACKGROUND_JOBS` says *where* the loops run, and only the exact words `worker`
+and `off` mean anything:
+
+| Value | Web process | Worker process |
+| --- | --- | --- |
+| unset (or `on`, or anything unrecognised) | runs every loop | runs every loop |
+| `worker` | runs none | runs every loop |
+| `off` | runs none | runs none |
+
+Set it once on the app. Platform config vars are per-app, not per-dyno, so the
+role can't come from the environment — it is a fact each entry point knows about
+itself (`src/worker.ts` passes `"worker"`, `src/instrumentation.ts` passes
+`"web"`), and this variable says which roles are allowed to run jobs. That is
+also why `worker` does **not** switch the worker off: one variable, one setting,
+no second variable needed to put the jobs back.
+
+The five per-loop switches (`LEAGUE_CRAWLER`, `PROJECTIONS_SYNC`, `STATS_SYNC`,
+`KTC_SYNC`, `NFL_DRAFT_SYNC`) still answer for themselves inside whichever
+process is running the loops, so `LEAGUE_CRAWLER=off` means the same thing
+wherever it is read.
+
+#### Migrating an existing deployment
+
+Order matters, and the failure of doing it backwards is silent:
+
+1. Deploy. Nothing changes — unset, `BACKGROUND_JOBS` runs the loops in the web
+   process exactly as before. A production web process logs one line
+   recommending the split.
+2. `heroku ps:scale worker=1`.
+3. `heroku config:set BACKGROUND_JOBS=worker`.
+
+**Do not set `BACKGROUND_JOBS=worker` before a worker dyno is running.** With
+neither process running the loops, nothing refreshes KeepTradeCut, the league
+corpus, projections or stat lines — and nothing fails, so the only symptom is
+data that quietly stops moving. Run **at least one** worker.
+
+Give each dyno its own share of `DATABASE_POOL_MAX` when you split: the ceiling
+that matters belongs to the database *role*, not to any one process.
+
+#### What is untouched
+
+**Advisory locking stays load-bearing**: every loop takes its own lock, so a
+second worker started by accident — or a web dyno somebody left the jobs on —
+costs a skipped tick rather than a doubled scrape of Sleeper or KTC. Switching a
+loop off is a scheduling decision; the lock is the correctness one, and neither
+substitutes for the other. Nothing here changes any loop's cadence.
+
+The worker shuts down on `SIGTERM`/`SIGINT`: it stops every loop it started (in
+reverse order), releases its keep-alive and closes the connection pool, then
+lets the process exit on its own. A startup failure it can't recover from — no
+`DATABASE_URL`, a failed migration, a scheduler that throws on start — exits
+non-zero rather than leaving a dyno the platform reports as healthy and that is
+doing no work. A worker configured to run *no* jobs warns loudly and stays up,
+since that state is reached by somebody's explicit instruction and crash-looping
+the dyno would add nothing.
+
 `node-pg-migrate` and `pg` are kept as native Node modules via
 `serverExternalPackages` in `next.config.ts` — the migration runner loads
 migration files through a runtime `import()` the bundler can't statically
-resolve.
+resolve. `tsx` is a runtime dependency rather than a dev one for the same kind
+of reason: the worker is TypeScript run directly, the way `npm test` and
+`scripts/` already run, and a platform that prunes dev dependencies after the
+build would otherwise leave `npm run worker` with nothing to run it.
 
 ## Status
 

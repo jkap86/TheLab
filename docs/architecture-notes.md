@@ -981,10 +981,10 @@ however the other three were set — so `BACKGROUND_JOBS=off` disables the lot a
 the four per-job variables keep the names they had (a rename would quietly turn
 a loop somebody had deliberately disabled back on). Four things about it:
 
-- **The deployment it buys is one variable**, not a second entry point: the same
-  image runs twice, `BACKGROUND_JOBS=off` on the web dyno and nothing set on the
-  worker. Migrations run on boot in both, so their start order doesn't matter.
-  Nothing is required locally — unset, every loop runs as it always has.
+- **The deployment it buys is one variable**: `BACKGROUND_JOBS=worker` moves
+  every loop to the worker dyno and leaves the web process serving requests.
+  Migrations run on boot in both, so their start order doesn't matter. Nothing
+  is required locally — unset, every loop runs as it always has.
 - **The switch is scheduling; the lock is correctness, and neither substitutes
   for the other.** Turning a loop off on the web dyno is what stops it competing
   for the pool; the advisory lock is what makes a second worker started by
@@ -997,6 +997,53 @@ a loop somebody had deliberately disabled back on). Four things about it:
   all run: a typo that stopped the syncs would leave the database quietly
   unfilled for hours with nothing failing, where a typo that leaves them running
   is visible at once.
+
+**The switch was one variable and the entry point was still `npm start`, which
+was the half that didn't hold.** `BACKGROUND_JOBS=off` on the web dyno and a
+second `npm start` for the worker gets the *scheduling* right and pays for a
+full Next HTTP server — route manifest, `$PORT`, a request handler that will
+never be asked for anything — purely so the instrumentation hook fires. Worse,
+the deployment it describes has two ways to be half-configured and only one of
+them is visible: `off` on web with no worker scaled stops every refresh, and
+nothing fails, because a loop that never ran logs nothing. So there is a real
+worker (`src/worker.ts`), and four things hold the arrangement up:
+
+- **The registration list lives once** (`shared/jobs/start`), shared by the
+  instrumentation hook and the worker, and it is *derived* from
+  `BACKGROUND_JOB_VARS` rather than listed — the `DEFENSIVE_SLOTS` rule. Two
+  copies of that list drift, and the way they drift is a job added to one entry
+  point and never the other: a sync that silently stops on the day the
+  recommended deployment is adopted.
+- **There are two gates and they answer different questions.**
+  `backgroundJobSwitch` answers "should this job run at all"; `shared/jobs/mode`
+  answers "should this process be the one running them", which is where
+  `BACKGROUND_JOBS=worker` is read. The role cannot be another environment
+  variable, because platform config vars are per *app* rather than per dyno — so
+  it is a fact each entry point knows about itself and passes in. That is also
+  why `worker` doesn't switch the worker off: one variable, one setting, and no
+  second variable needed to put the jobs back.
+- **The default did not move, and that is deliberate.** Unset still runs every
+  loop in every process, so an existing deployment upgrades to exactly what it
+  had; a production web process on that default logs one line recommending the
+  split. Flipping the default the other way would stop every background refresh
+  on any app that deployed without scaling a worker — and *that* failure is the
+  silent one, which is the same argument as "only the exact word `off`".
+- **`isNodeRuntime` reads an absent `NEXT_RUNTIME` as Node.** The old guard was
+  `process.env.NEXT_RUNTIME !== "nodejs"`, which reads as "Node only" and means
+  "*Next's* Node only" — so the one process that exists to run these loops would
+  have started none of them and said nothing about it. The Edge bundle is still
+  excluded by the only value that names it.
+
+The worker's own lifecycle is `shared/jobs/run-worker`, which takes its I/O as
+arguments so a fatal startup failure exiting non-zero is an assertion rather
+than a hope. Two asymmetries in it: **a startup failure exits, a configuration
+that runs no jobs does not** — the first is a dyno the platform reports as
+healthy that does no work, the second is somebody's explicit instruction and
+crash-looping it adds nothing; and **the loops are stopped before the pool is
+closed**, since the other order is a tick mid-query losing its connection, which
+is a stack trace describing a clean shutdown. The worker also holds a ref'd
+keep-alive of its own, because every loop `unref`s its interval — right for a
+server held open by its socket, and exactly wrong for a process with no socket.
 
 The crawler is the loop that most wants that separation, and for a reason
 `shared/manager/sync-admission` already spells out from the other end: its
