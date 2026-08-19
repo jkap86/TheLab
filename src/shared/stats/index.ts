@@ -1,6 +1,15 @@
 export { getLeagueWeekView } from "./league-week";
 export type { LeagueWeekView, PpgSource, TeamWeekProjection } from "./league-week";
 export {
+  LEAGUE_WEEK_CACHE,
+  leagueWeekCacheKey,
+  memoizeLeagueWeek,
+  weekEntryTtlMs,
+} from "./read-cache";
+export type { LeagueWeekInput, MemoizedLeagueWeek } from "./read-cache";
+export { clearLeagueWeekCache, readLeagueWeekView } from "./week-read";
+export type { LeagueWeekReadInput } from "./week-read";
+export {
   notifyStatsSeasonWritten,
   onStatsSeasonWritten,
   resetStatsSeasonListeners,

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { LeagueWeekPayload, LeagueWeekViewPayload } from "@/shared/contract";
 import { LAST_REGULAR_WEEK } from "@/shared/projections";
 import { integer } from "@/shared/query";
-import { getLeagueWeekView } from "@/shared/stats";
+import { readLeagueWeekView } from "@/shared/stats";
 import type { LeagueWeekView } from "@/shared/stats";
 
 import { resolveLeagueRequest } from "../league-request";
@@ -28,6 +28,17 @@ export const dynamic = "force-dynamic";
  * most likely to open repeatedly, so keeping it off the first paint is worth
  * most here. Keyed on the week alone (never the board), so stepping a week
  * re-runs this and nothing else, and re-tuning the ADP drawer never re-runs it.
+ *
+ * **On the server it is coalesced rather than cached the way its siblings are**
+ * ({@link readLeagueWeekView}), because this is the panel's one *live* read.
+ * Callers arriving while a read is running share it, which costs no freshness at
+ * all — they asked before the answer existed. What they may then keep is bounded
+ * three ways over: the key carries every team's actual starters, so a lineup
+ * change is a key nothing has answered; the entry is cut short at the next
+ * kickoff, since that is the minute seats lock; and a minute is the ceiling over
+ * both — deliberately shorter than the browser's own window rather than longer,
+ * which is the opposite of every other cache in this app and the whole reason
+ * `shared/stats/read-cache` argues about it at length.
  *
  * **A failure costs the columns rather than the league, and it is still a
  * failure.** That first half is the judgement this read has always had — these
@@ -75,7 +86,7 @@ export async function GET(
     // annotated here rather than on the call, on the value that crosses.
     read: async (): Promise<LeagueWeekPayload> =>
       serializeWeekView(
-        await getLeagueWeekView({
+        await readLeagueWeekView({
           leagueId,
           season: detail.season,
           week: asked,

@@ -211,6 +211,83 @@ write is replacing. What that buys is not only correctness on the press: it is
 what lets both TTLs be set for the *background* writes they are genuinely stale
 about, instead of kept short in the hope of covering an interactive one.
 
+### The two enrichments on top of it
+
+**Caching the read *under* an expensive answer says nothing about the answer.**
+`readLeagueDetail` is what stops one panel's four requests becoming four league
+reads, and it was easy to read that as the League Details split having been paid
+for. It wasn't: the two enrichments computed *from* that detail are where the
+time actually goes — ~180ms of lineup solving for the rest-of-season outlook,
+~420–520ms of projections, form averages and per-team solves for a week — and
+every one of those ran in full for every request that asked. React Query keeps
+one browser from asking twice and reaches none of the cases that matter here: two
+tabs, two people looking at the same league, a revalidation landing beside a cold
+navigation, or simply two requests arriving before the first has finished. On the
+web dyno two copies of a solve are two spells of a blocked event loop.
+
+So there are two more caches — `readLeagueOutlook` (`projections/outlook-read`,
+`LEAGUE_OUTLOOK_CACHE`) and `readLeagueWeekView` (`stats/week-read`,
+`LEAGUE_WEEK_CACHE`) — and each is a pure `read-cache.ts` holding the policy, the
+key and a memoiser that takes its **loader as an argument**, plus a wiring module
+that supplies it. That is `manager/read-cache`'s split and
+`user-resolution`/`resolve`'s: `@/` does not resolve under the test runner and
+neither loader can be reached without a database, so the half that has to be
+tested is the half with nothing behind it — and what it buys is that the
+assertion is a request *count*.
+
+**The key is the invalidation, and that is the design rather than an omission.**
+Both keys spell out the slots, the scoring and every roster the answer is
+computed from, which is to say the league detail itself. A roster move, a lineup
+change or a settings change therefore produces a key nothing has answered yet, so
+a stale entry cannot be read at all — whatever the clock says, and whichever
+process wrote the rows. The path that would otherwise be embarrassing is the
+lineup checker's sync key: the press writes the graph, `persistLeagueGraph`
+forgets the league's core detail in the process that served it, the panel's
+refetch resolves the *new* rosters, and those rosters are a question this cache
+has never been asked. The invariant worth carrying away is that **an enrichment
+entry can never be staler than the detail it was computed from.** A hook would
+have bought nothing on top of that, and for the week it could not have been a
+hook at all: `shared/stats` reads `shared/manager`'s tables, so an invalidation
+called from `persistLeagueGraph` would be an import cycle and would have to
+become a listener registry — machinery for a guarantee the key already gives.
+
+**The outlook's window is the detail's, to the minute.** Eight minutes, asserted
+across the two files because neither can claim it alone. Longer would be an
+outlook outliving the rosters it describes; shorter would re-solve a dozen teams
+over eighteen weeks for rosters this process is still answering from memory — the
+same argument `LEAGUE_DETAIL_STALE_TIME` makes for holding one client window
+across all four of the panel's entries. What the clock is left bounding is the
+only input the key does not carry: the projections rows, whose sync's fastest
+tier is an hour.
+
+**The week is the one cache here whose window is deliberately shorter than the
+browser's in front of it.** Every other layer in this app exists to absorb a
+*revalidation*, which is why the ordering is always `client stale < server TTL`.
+A week view cannot play that role, because what it describes is live: the lineup
+a manager can still change until kickoff, and the seats that lock at every
+kickoff in the week. Held for as long as a browser calls it fresh, it would
+answer the panel's own sync key with the lineup that key was pressed to replace.
+So the ordering is inverted on purpose and `cache-layering.test.ts` asserts the
+inversion, with the reason attached, so nobody straightens it later.
+
+What the week cache is for is the **in-flight half**, which costs no freshness
+whatsoever — a caller that coalesces onto a running read asked for an answer that
+did not exist yet — and the resolved half is bounded three ways over: by the key,
+which carries every team's actual starters; by a minute; and by **the next
+kickoff**. That last one is the interesting bound. `lockedPlayers` settles a
+player's seat the minute his game starts (`kickoff <= now`), so at every instant
+in the week's schedule the answer changes — the gap column, the swap marks and
+the kickoff re-seat all move together — and an entry written at 12:59 and held a
+minute describes the 1pm games as movable after they kicked off, which is the one
+failure this read is least allowed: it names a swap Sleeper would refuse. The
+bound is read **off the answer** (`weekEntryTtlMs` over `view.games`, through
+`TtlPromiseCache`'s new `ttlMsFor`) rather than off a second schedule fetch, so
+the lifetime and the answer cannot disagree about what the schedule said. Every
+degradation runs the same way: an undated week takes the full minute, which is
+exactly what the day-accurate lock fallback underneath is already doing, and a
+non-positive lifetime stores nothing at all (`BoundedCache.set`), so a window of
+zero is precisely coalescing rather than a wrong answer.
+
 `TtlPromiseCache` (`shared/util`) is that layer, and it is `BoundedCache` plus
 the one thing that class deliberately refuses: an **in-flight map**, so ten
 callers arriving on a cold key run one computation. That refusal was right for

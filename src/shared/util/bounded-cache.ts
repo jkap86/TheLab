@@ -85,6 +85,14 @@ export class BoundedCache<V> {
   set(key: string, value: V, options?: { ttlMs?: number }): void {
     const ttlMs = options?.ttlMs ?? this.ttlMs;
     this.entries.delete(key);
+    // A non-positive lifetime is an entry already expired at the moment it is
+    // written: `get` would delete it unread, so storing it only holds a value in
+    // memory and a slot against `max` that nothing can ever be answered from.
+    // It is a real answer rather than a mistake — a per-entry TTL derived from
+    // the value's own freshness boundary reaches zero when that boundary is now
+    // (the week read's next kickoff), and what it means there is "coalesce the
+    // callers already waiting, keep nothing".
+    if (ttlMs <= 0) return;
     this.entries.set(key, { value, expires: Date.now() + ttlMs });
     // A `while` rather than an `if`: `max` can be lowered between writes, and a
     // single-step trim would then never converge.

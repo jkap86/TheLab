@@ -24,6 +24,15 @@ export {
   getWeeklyTeamPoints,
   getWeekLineups,
 } from "./outlook";
+export { clearLeagueOutlookCache, readLeagueOutlook } from "./outlook-read";
+export {
+  LEAGUE_OUTLOOK_CACHE,
+  leagueOutlookCacheKey,
+  memoizeLeagueOutlook,
+  rosterRevision,
+  sortedScoring,
+} from "./read-cache";
+export type { LeagueOutlookInput, MemoizedLeagueOutlook } from "./read-cache";
 export type {
   LeagueOutlook,
   LeagueTeamsInput,

@@ -59,6 +59,32 @@ describe("BoundedCache", () => {
     assert.equal(cache.size, 1, "and the expired one is dropped, not accumulated");
   });
 
+  test("a non-positive TTL stores nothing, rather than storing the unreadable", () => {
+    // An entry already expired at the moment it is written can never be answered
+    // from, so keeping it would hold a value in memory and a slot against `max`
+    // for nothing. It is a real answer rather than a mistake: a per-entry TTL
+    // derived from the value's own freshness boundary reaches zero when that
+    // boundary is now — the league week's next kickoff.
+    const cache = new BoundedCache<number>(10, 60_000);
+    cache.set("live", 1);
+    cache.set("already-expired", 2, { ttlMs: 0 });
+    cache.set("behind-us", 3, { ttlMs: -5_000 });
+
+    assert.equal(cache.size, 1, "the bound is not spent on entries nothing reads");
+    assert.equal(cache.get("already-expired"), undefined);
+    assert.equal(cache.get("behind-us"), undefined);
+    assert.equal(cache.get("live"), 1);
+  });
+
+  test("a non-positive TTL replaces what was there, it does not leave it", () => {
+    // The write still happened: leaving the old value readable would answer a
+    // caller from rows the new one supersedes.
+    const cache = new BoundedCache<number>(10, 60_000);
+    cache.set("a", 1);
+    cache.set("a", 2, { ttlMs: 0 });
+    assert.equal(cache.get("a"), undefined);
+  });
+
   test("an omitted TTL is exactly the cache's own", () => {
     // The common case must be untouched: every existing caller passes nothing.
     const cache = new BoundedCache<number>(10, 60_000);

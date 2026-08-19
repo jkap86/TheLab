@@ -100,11 +100,21 @@ export class TtlPromiseCache<V extends object> {
    * is the honest reading: a caller that coalesces onto a computation already
    * running is asking for that value, and the entry's lifetime is a fact about
    * the value rather than about who happened to ask for it first.
+   *
+   * `options.ttlMsFor` is the same rule one step further along: the lifetime is
+   * read **off the answer**, for a value that carries its own freshness
+   * boundary. The league week view is the case — what makes it go stale is the
+   * next kickoff, which is an instant in the very schedule the view already
+   * holds — and computing that bound from the value rather than from the key is
+   * what keeps the two from disagreeing. It wins over `ttlMs` when both are
+   * given, and a non-positive answer stores nothing at all (`BoundedCache.set`),
+   * which is how a boundary that has already arrived degrades to coalescing
+   * alone rather than to a wrong answer.
    */
   read(
     key: string,
     compute: () => Promise<V>,
-    options?: { ttlMs?: number },
+    options?: { ttlMs?: number; ttlMsFor?: (value: V) => number },
   ): Promise<V> {
     const hit = this.resolved.get(key);
     if (hit !== undefined) {
@@ -123,7 +133,11 @@ export class TtlPromiseCache<V extends object> {
     // rejection of *this* promise — the one the bookkeeping below is attached to.
     const promise = (async () => compute())().then(
       (value) => {
-        if (this.settle(key, promise)) this.resolved.set(key, value, options);
+        if (this.settle(key, promise)) {
+          this.resolved.set(key, value, {
+            ttlMs: options?.ttlMsFor ? options.ttlMsFor(value) : options?.ttlMs,
+          });
+        }
         return value;
       },
       (error: unknown) => {

@@ -1,5 +1,5 @@
 import type { LeagueOutlookPayload } from "@/shared/contract";
-import { getLeagueOutlook } from "@/shared/projections";
+import { readLeagueOutlook } from "@/shared/projections";
 
 import { resolveLeagueRequest } from "../league-request";
 import { readResponse } from "../../../read-response";
@@ -36,8 +36,16 @@ export const dynamic = "force-dynamic";
  * The throw is a failure status now ({@link readResponse}); the null is
  * untouched.
  *
- * It takes no board and no week, so its cache key is the league alone: a reader
- * re-tuning the ADP drawer or stepping through weeks never re-runs these solves.
+ * It takes no board and no week, so its browser cache key is the league alone: a
+ * reader re-tuning the ADP drawer or stepping through weeks never re-runs these
+ * solves.
+ *
+ * **The solve behind it is cached and coalesced on the server too**
+ * ({@link readLeagueOutlook}), which is the half no browser cache can reach: two
+ * tabs, two readers of one league, and a revalidation landing beside a cold
+ * navigation each ran the whole thing. Its key is the league's slots, scoring
+ * and rosters — the detail this route already resolved — so a roster that has
+ * just changed is a key nothing has answered yet.
  */
 export async function GET(
   request: Request,
@@ -55,7 +63,8 @@ export async function GET(
     // on the value that actually crosses — including its null, which is the
     // league's answer and not this route's failure.
     read: (): Promise<LeagueOutlookPayload> =>
-      getLeagueOutlook({
+      readLeagueOutlook({
+        leagueId,
         season: detail.season,
         rosterPositions: detail.roster_positions,
         scoringSettings: detail.scoring_settings,

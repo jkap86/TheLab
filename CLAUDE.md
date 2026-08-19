@@ -129,14 +129,55 @@ which is what lets client code import it without dragging `pg` into the bundle.
 
 Postgres protects Sleeper and KTC; TanStack Query protects Postgres from one
 browser. **The third cache protects the dyno from its own readers** — the case
-where one expensive answer is computed for several readers at once. Three of
+where one expensive answer is computed for several readers at once. Five of
 them: the full ADP board, a manager's ranks (CPU on the web process, so two
-readers are two spells of a blocked event loop), and a league's core detail.
+readers are two spells of a blocked event loop), a league's core detail, and the
+two League Details enrichments computed on top of that detail — its
+rest-of-season outlook and its week.
 
-That third one is not expensive the way the others are; it is there because
+The core detail is not expensive the way the others are; it is there because
 **one open makes four requests** — the values, outlook and week routes each need
 the same rosters, slots and scoring first, so uncached, splitting one payload
 into four would have introduced the tax a split is meant to avoid.
+
+**Caching the read under an enrichment says nothing about the enrichment
+itself.** `readLeagueDetail` stops four requests becoming four league reads; the
+solve on top of one of them — ~180ms for an outlook, ~450ms for a week — still
+ran once per tab, per reader and per revalidation, which is what
+`readLeagueOutlook` (`projections/outlook-read`) and `readLeagueWeekView`
+(`stats/week-read`) now hold. Both follow the same split as `manager/read-cache`:
+policy, key and memoiser in a pure `read-cache.ts` that takes its **loader as an
+argument**, so the assertion can be a request *count*; the wiring beside it.
+
+- **The key is the invalidation**, which is why neither has a hook. It spells out
+  the slots, the scoring and every roster the answer is computed from — the
+  league detail, in other words — so a roster move, a lineup change or a settings
+  change is a key nothing has answered yet. `persistLeagueGraph` already forgets
+  the detail in the process that served the press, so the panel's refetch resolves
+  the new rosters and cannot be handed a solve over the old ones. The invariant:
+  **an enrichment entry can never be staler than the detail it was computed
+  from.** What a hook would have to be for the week is a *listener* rather than a
+  call (`shared/stats` reads `shared/manager`'s tables, so the import runs the
+  other way), which is machinery for a guarantee the key already gives.
+- **The outlook's TTL is exactly the detail's**, eight minutes, asserted across
+  the two files: longer is an outlook outliving the rosters it describes, shorter
+  re-solves for rosters this process is still answering from memory. What the
+  clock is left bounding is the one input the key does not carry — the
+  projections rows, on their sync's hourly tier.
+- **The week is the one cache in this app whose window is deliberately *shorter*
+  than the browser's**, and that inversion is asserted in
+  `cache-layering.test.ts` so nobody straightens it. It is live data: what it
+  absorbs is a **burst** — the readers arriving inside one ~450ms computation of
+  each other, which is the half that costs no freshness at all, since a caller
+  that coalesces asked before the answer existed — rather than a revalidation. Its
+  ceiling is a minute, and the boundary that actually ends an entry is **the next
+  kickoff**, read off the answer's own `games` map (`weekEntryTtlMs`, through
+  `TtlPromiseCache`'s `ttlMsFor`) so the bound and the answer cannot disagree
+  about what the schedule said. `lockedPlayers` settles a seat the minute a game
+  starts, so an entry held past one names a swap Sleeper would refuse.
+- **A non-positive lifetime stores nothing** (`BoundedCache.set`), so a window of
+  zero is exactly coalescing and the bound is never spent on an entry no read can
+  return.
 
 - **Two of them are invalidated on *write* as well as by time, and it is the same
   write.** `persistLeagueGraph` forgets the league's core detail *and* the ranks
