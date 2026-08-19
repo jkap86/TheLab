@@ -2,7 +2,7 @@ import { getDraftAdpForPlayers, ADP_FILTER_DEFAULTS } from "@/shared/manager";
 import { getKtcSfHistoryAsOf, getKtcValuesAsOf } from "@/shared/ktc";
 import { getNflDraftPicks } from "@/shared/nfl-draft";
 import { getPlayerProfiles } from "@/shared/players";
-import { getActiveSeason } from "@/shared/season";
+import { peekActiveSeason } from "@/shared/season";
 import {
   listSeasonStatLines,
   listStoredPlayerSeasons,
@@ -158,20 +158,23 @@ async function loadSeasonPool(season: string): Promise<readonly CompsPoolRow[]> 
  * How long this season's entries are worth holding — its age against the
  * season the app is operating in, per {@link getCompsSeasonTtlMs}.
  *
- * `getActiveSeason` is asked rather than derived from the calendar because
- * *which season the app is in* is exactly what it answers, and it answers from
- * a process-local cache without waiting on Sleeper once warm (it serves a stale
- * value and refreshes behind the request, and never throws). A cold process
- * pays for it once, against reads that are about to run several statements
- * anyway.
+ * **Synchronous, and `peekActiveSeason` rather than `getActiveSeason` is the
+ * whole point.** This decides a cache lifetime, never an answer: a board for
+ * 2024 reads 2024's rows whatever this returns. Awaiting the resolver put a
+ * Sleeper call on the path of a read Postgres was ready to answer — on a cold
+ * process, before a single row of an entirely local corpus was served — so an
+ * outage at Sleeper became an outage in the one tool that needs nothing from
+ * it. The peek is a property read: the override, else whatever this process has
+ * already resolved, else `undefined`.
  *
- * **It decides a cache lifetime and never an answer**, which is what keeps it
- * inside the rule that an explicitly requested season must not be resolved
- * here: a board for 2024 reads 2024's rows whatever this returns, and the worst
- * a wrong answer buys is an entry held for fifteen minutes instead of a day.
+ * `undefined` falls to the live tier, which is the conservative direction: an
+ * entry rebuilt sooner than it needed to be costs a query, where an archive
+ * clock on a season that is still moving costs a day of a wrong answer. A
+ * process that has served any route defaulting a season already knows it, so
+ * the fallback is the first request after a boot rather than a standing state.
  */
-async function seasonTtlMs(season: string, staggerKey: string): Promise<number> {
-  return getCompsSeasonTtlMs(season, await getActiveSeason(), staggerKey);
+function seasonTtlMs(season: string, staggerKey: string): number {
+  return getCompsSeasonTtlMs(season, peekActiveSeason(), staggerKey);
 }
 
 /**
@@ -186,7 +189,7 @@ export async function getCompsPool(
 ): Promise<readonly CompsPoolRow[]> {
   const key = compsPoolCacheKey(season);
   return poolCache.read(key, () => loadSeasonPool(season), {
-    ttlMs: await seasonTtlMs(season, key),
+    ttlMs: seasonTtlMs(season, key),
   });
 }
 
@@ -271,7 +274,7 @@ async function getCompsEnrichment(
 ): Promise<CompsEnrichmentValue> {
   const key = compsEnrichmentCacheKey(enrichment, season);
   return enrichmentCache.read(key, () => LOADERS[enrichment](season), {
-    ttlMs: await seasonTtlMs(season, key),
+    ttlMs: seasonTtlMs(season, key),
   });
 }
 

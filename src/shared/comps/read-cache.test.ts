@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { createSeasonResolver } from "../season/resolve.ts";
 import { BoundedCache } from "../util/bounded-cache.ts";
 import { COMPS_ENRICHMENTS } from "./fields.ts";
 import {
@@ -153,6 +154,83 @@ describe("getCompsSeasonTtlMs", () => {
     // and the short clock can only cost a query.
     assert.ok(tier("all", "2026") < COMPS_SEASON_TTL_MS.recent);
     assert.ok(tier("2008", "unknown") < COMPS_SEASON_TTL_MS.recent);
+  });
+
+  test("an unknown current season falls to the short clock too", () => {
+    // The state this classification is *designed* to be in rather than an edge
+    // case: the caller peeks at the season this process happens to know
+    // (`peekActiveSeason`) precisely so that not knowing costs nothing, and a
+    // cold process serving comps before anything has defaulted a season answers
+    // `undefined` here.
+    //
+    // The live tier is the conservative reading in the only direction that
+    // matters. Too short costs one rebuild of an entry that could have been
+    // held longer; too long is an archive clock over a season that is still
+    // moving — a day of a wrong answer, bought to save a query.
+    for (const unknown of [undefined, null]) {
+      for (const season of ["2026", "2025", "2008", "2000"]) {
+        const ttl = getCompsSeasonTtlMs(season, unknown);
+        assert.ok(
+          ttl >= COMPS_SEASON_TTL_MS.live && ttl < COMPS_SEASON_TTL_MS.recent,
+          `${season} against an unknown current season should be live`,
+        );
+      }
+    }
+  });
+
+  test("the stagger still applies when the season is unknown", () => {
+    // The fallback is a *tier*, not a bypass: a corpus classified while the
+    // season is unresolved is populated in one walk like any other, so its
+    // entries must not come back in one instant either.
+    const keys = ["2019", ...COMPS_ENRICHMENTS.map((e) => `${e}:2019`)];
+    const ttls = new Set(
+      keys.map((key) => getCompsSeasonTtlMs("2019", undefined, key)),
+    );
+    assert.equal(ttls.size, keys.length, "two entries share an expiry instant");
+  });
+
+  test("classifying a season never asks anything outside this process", () => {
+    // The regression, driven through the composition production uses: the
+    // season arrives from the resolver's *peek*, which is a property read. A
+    // TTL resolved through `getActiveSeason` instead would put a Sleeper call
+    // — four attempts with backoff behind the shared axios instance — in front
+    // of a corpus already sitting in Postgres, so an outage upstream would
+    // become an outage in a tool that needs nothing from upstream.
+    //
+    // This fetch fails the test rather than answering, so any path that reaches
+    // for it is a failure rather than a slower pass.
+    const resolver = createSeasonResolver({
+      fetchState: async () => {
+        assert.fail("the TTL classification asked Sleeper for the season");
+      },
+      fallback: "2026",
+    });
+
+    const cold = getCompsSeasonTtlMs("2008", resolver.peekSeason());
+    assert.ok(
+      cold >= COMPS_SEASON_TTL_MS.live && cold < COMPS_SEASON_TTL_MS.recent,
+      "a cold process classifies conservatively rather than waiting",
+    );
+  });
+
+  test("a season already resolved is classified on its real age", () => {
+    // The other half: the conservative fallback must not become the *policy*.
+    // Once anything in the process has resolved the season — every route that
+    // defaults one does — the tiers are what they always were.
+    const resolver = createSeasonResolver({
+      fetchState: async () => ({ season: "2026" }),
+      fallback: "2000",
+    });
+
+    return resolver.resolve().then(() => {
+      const current = resolver.peekSeason();
+      assert.equal(current, "2026");
+      assert.ok(getCompsSeasonTtlMs("2026", current) < COMPS_SEASON_TTL_MS.recent);
+      assert.ok(getCompsSeasonTtlMs("2025", current) >= COMPS_SEASON_TTL_MS.recent);
+      assert.ok(
+        getCompsSeasonTtlMs("2008", current) >= COMPS_SEASON_TTL_MS.historical,
+      );
+    });
   });
 
   test("the stagger only ever extends, and never past a quarter of the tier", () => {

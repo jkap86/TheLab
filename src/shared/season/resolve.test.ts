@@ -255,3 +255,112 @@ test("isPlausibleSeason accepts a 4-digit year in range and nothing else", () =>
   assert.equal(isPlausibleSeason(null), false);
   assert.equal(isPlausibleSeason(""), false);
 });
+
+/**
+ * The synchronous half.
+ *
+ * `peekSeason` exists for a caller whose *answer* does not depend on the season
+ * and whose bookkeeping does — `comps/read-cache`, choosing how long to hold an
+ * entry. Blocking a corpus that is entirely in Postgres on a Sleeper call, to
+ * label how long a copy of it is worth keeping, is the failure it removes; so
+ * what these pin is that it never reaches for the upstream, whatever state the
+ * resolver is in.
+ */
+test("peekSeason answers undefined on a cold resolver, without a fetch", () => {
+  const upstream = state({ season: "2027" });
+  const resolver = createSeasonResolver({
+    fetchState: upstream.fetch,
+    fallback: "2026",
+  });
+
+  assert.equal(resolver.peekSeason(), undefined);
+  assert.equal(upstream.calls, 0, "peeking must never dial Sleeper");
+  // Not even a refresh started behind the caller: a peek is a property read.
+  assert.equal(resolver.peek(), null);
+});
+
+test("peekSeason answers the resolved season once one is known", async () => {
+  const upstream = state({ season: "2027" });
+  const resolver = createSeasonResolver({
+    fetchState: upstream.fetch,
+    fallback: "2026",
+  });
+
+  await resolver.resolve();
+  assert.equal(resolver.peekSeason(), "2027");
+  assert.equal(upstream.calls, 1, "and the peek added no call of its own");
+});
+
+test("peekSeason keeps answering while the upstream is down", async () => {
+  const time = clock();
+  const upstream = state({ season: "2027" });
+  const resolver = createSeasonResolver({
+    fetchState: upstream.fetch,
+    fallback: "2026",
+    now: time.now,
+    ttlMs: 1000,
+  });
+  await resolver.resolve();
+
+  upstream.breakIt();
+  time.advance(10_000);
+  // Stale by ten TTLs and the upstream refusing: a value that changes once a
+  // year is still the right one to classify a cache entry against.
+  assert.equal(resolver.peekSeason(), "2027");
+  assert.equal(upstream.calls, 1);
+});
+
+test("peekSeason honours the override, without a fetch", () => {
+  const upstream = state({ season: "2027" });
+  const resolver = createSeasonResolver({
+    fetchState: upstream.fetch,
+    fallback: "2026",
+    override: () => "2024",
+  });
+
+  assert.equal(resolver.peekSeason(), "2024");
+  assert.equal(upstream.calls, 0);
+});
+
+test("an implausible override is ignored by the peek too", () => {
+  const upstream = state({ season: "2027" });
+  const resolver = createSeasonResolver({
+    fetchState: upstream.fetch,
+    fallback: "2026",
+    override: () => "next year",
+  });
+
+  // Falls through to what is cached — nothing, here — rather than to the
+  // fallback: `undefined` means "this process does not know", which is a
+  // different claim from the compiled-in constant.
+  assert.equal(resolver.peekSeason(), undefined);
+  assert.equal(upstream.calls, 0);
+});
+
+test("peekSeason never answers the compiled-in fallback", async () => {
+  // The fallback is a release note (`DEFAULT_SEASON`); answering it from a peek
+  // would hand a caller a plausible year this process never resolved, and the
+  // caller's whole reason for peeking is that it can act on not knowing.
+  const resolver = createSeasonResolver({
+    fetchState: async () => {
+      throw new Error("upstream down");
+    },
+    fallback: "2026",
+  });
+
+  assert.equal(await resolver.resolve(), "2026");
+  assert.equal(resolver.peekSeason(), undefined);
+});
+
+test("reset makes the peek cold again", async () => {
+  const upstream = state({ season: "2027" });
+  const resolver = createSeasonResolver({
+    fetchState: upstream.fetch,
+    fallback: "2026",
+  });
+  await resolver.resolve();
+  assert.equal(resolver.peekSeason(), "2027");
+
+  resolver.reset();
+  assert.equal(resolver.peekSeason(), undefined);
+});

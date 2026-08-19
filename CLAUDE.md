@@ -232,24 +232,43 @@ it needs *before* admitting, or a full limiter is a queue waiting on itself). A
 read that admits for itself is **not** wrapped again — `getDraftAdpForPlayers`
 takes this same budget, so wrapping it is one limiter acquired twice, which at the
 limit is a deadlock rather than a slow page. That is enforced as well as written
-down: `run` carries the held slot in an `AsyncLocalStorage`, so a caller that does
-nest is passed through on the slot it already holds. And the **total** is what a
-test asserts — the arrangement this replaced passes every per-subsystem assertion
-there is. `DB_HEAVY_READ_LIMIT` configures it; `COMPS_READ_LIMIT` and
-`ADP_COMPUTE_LIMIT` are still honoured as aliases, tightest first.
+down: `run` carries a **token** for the held slot in an `AsyncLocalStorage`, so a
+caller that does nest is passed through on the slot it already holds — a token
+rather than a flag because the context is inherited by async resources that
+outlive the callback, and a detached descendant reading "already admitted" while
+holding nothing is the one way this bypasses the limiter; the token is
+deactivated as the slot goes back, so such a descendant queues like anyone else.
+And the **total** is what a test asserts — the arrangement this replaced passes
+every per-subsystem assertion there is. `DB_HEAVY_READ_LIMIT` configures it;
+`COMPS_READ_LIMIT` and `ADP_COMPUTE_LIMIT` are still honoured as aliases,
+tightest first — and **all three are a *request*, clamped to the pool less one
+ordinary request's fan-out share** (`dbHeavyReadCeiling`, 7 of 10). A knob that
+could be set to the whole pool is the failure this budget exists for, reached
+through the variable meant to prevent it; junk, zero and negatives still fall
+back to the derivation, which is never clamped because it *is* the reserved
+share.
 
 **A cache whose keys age at different speeds takes a TTL per key.**
 `BoundedCache.set`/`TtlPromiseCache.read` accept one; `getCompsSeasonTtlMs`
 chooses it per season, since comps walks the whole archive on every request and
 one fifteen-minute clock rebuilt seasons that have not moved in seventeen years —
-four times an hour, all at once, on whichever reader arrived first. Live season
+four times an hour, all at once, on whichever reader arrived first. **The season
+it classifies against is peeked, never resolved** (`peekActiveSeason`, never
+`getActiveSeason`): a lifetime for a corpus already in Postgres must not be able
+to block on Sleeper, so an unknown season takes the live tier — the shortest
+clock costs a query, where an archive clock over a season still moving costs a
+day of a wrong answer. Live season
 fifteen minutes (the floor the browser's stale time needs), last season six hours,
 older a day, plus a **deterministic** spread of up to a quarter of the tier keyed
 on the *entry* — random jitter makes the test a coin toss, and a season's pool and
 its datasets must not expire together. **A day rather than forever**, because
 history really is corrected here; `onStatsSeasonWritten` → `forgetCompsSeason`
 makes a correction visible at once where the sync and the reader share a process,
-and the day is the backstop where they don't. **A cache bound states its
+and the day is the backstop where they don't. **The announcement goes immediately
+after the committed write and *before* the bookkeeping that follows it** — after,
+the `persistLeagueGraph` rule; before, because a stamp failing on its own
+connection would otherwise leave corrected rows in Postgres and a day-long entry
+nothing could tell about them. **A cache bound states its
 invariant**: the enrichment cache is `COMPS_MAX_SEASONS × COMPS_ENRICHMENTS.length`,
 not a number that happens to fit this year's corpus.
 
@@ -783,7 +802,12 @@ comparator reads**, since a five-armed ordering written twice is two orderings.
   deterministic. Call it where a season would otherwise be *defaulted* and
   nowhere else. **A page that reads it must not be prerendered**
   (`force-dynamic`), or the resolution is baked into the bundle and it is a
-  hardcoded constant again.
+  hardcoded constant again. **`peekActiveSeason` is the synchronous half**, for a
+  caller whose *answer* doesn't depend on the season and whose bookkeeping does
+  (a cache choosing a TTL): it is the override else what this process already
+  resolved, never a fetch and never the compiled-in fallback, and `undefined`
+  means *not known* — which is only usable where the caller has a conservative
+  reading of not knowing.
 - **That last rule is broken by evaluation order, not by intent, and it takes a
   predicate to keep.** `parseAdpFilters(params, await getActiveSeason())`
   evaluates the argument first, so a historical read waits on a state call whose

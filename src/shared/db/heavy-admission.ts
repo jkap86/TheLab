@@ -40,13 +40,19 @@
  * admits.
  *
  * **And the rule is enforced rather than merely written down.** {@link run}
- * carries the fact that a slot is held in an `AsyncLocalStorage`, so work
- * reached from inside a slot that admits again is passed straight through on
- * the slot its caller already holds. A future caller that nests — the mistake
- * this file exists to make survivable — gets the reads it asked for at the
- * concurrency its outer slot bought, never a wedged process. It is a backstop,
- * not a licence: nesting still spends a slot for longer than the work needs,
- * and the tests pin the production call sites flat.
+ * carries a *token* for the held slot in an `AsyncLocalStorage`, so work
+ * reached from inside a live slot that admits again is passed straight through
+ * on the slot its caller already holds. A future caller that nests — the
+ * mistake this file exists to make survivable — gets the reads it asked for at
+ * the concurrency its outer slot bought, never a wedged process. It is a
+ * backstop, not a licence: nesting still spends a slot for longer than the work
+ * needs, and the tests pin the production call sites flat.
+ *
+ * A token rather than a flag because the context outlives the callback: an
+ * async resource created inside a slot inherits the store and can run after the
+ * permit has gone back, where "already admitted" would be a bypass with nothing
+ * behind it. The token is deactivated as the slot is given up, so such a
+ * descendant queues like any other caller.
  *
  * Pure and dependency-free beyond the two primitives it composes, so the
  * arithmetic and the semantics are testable with no pool behind them.
@@ -89,14 +95,34 @@ export const DB_HEAVY_READ_LEGACY_VARS = [
  * which waits for the first to finish rather than taking a connection every
  * other route on the dyno then queues behind.
  *
- * Explicit configuration wins over the derivation. Where more than one of the
- * legacy names is set the **tightest** wins: each of them was somebody asking
- * for less heavy work at once, and a budget is a ceiling, so the smaller number
- * is the one that still keeps the promise its operator made.
+ * **Precedence, and the clamp.** {@link DB_HEAVY_READ_LIMIT_VAR} wins over the
+ * legacy names; where more than one of *those* is set the **tightest** wins,
+ * since each was somebody asking for less heavy work at once and a budget is a
+ * ceiling. Whatever comes out of that is a *request*, not a grant: it is
+ * clamped to {@link dbHeavyReadCeiling}, because a number typed into a
+ * dashboard cannot be allowed to undo the thing this module exists for.
+ * `DB_HEAVY_READ_LIMIT=10` against a pool of 10 is not a wider budget, it is no
+ * budget — the arrangement this replaced, arrived at through the variable meant
+ * to prevent it, and with nothing failing to say so.
+ *
+ * The derivation is not clamped, because it *is* the reserved share. A ceiling
+ * below it would mean the app refusing the number it chose for itself.
  */
 export function dbHeavyReadConcurrency(
   env: Record<string, string | undefined> = process.env,
 ): number {
+  const requested = requestedHeavyReadLimit(env);
+  // Junk falls back rather than failing the boot, the budget module's own rule:
+  // a typo in a dashboard should not be why the comps tool stops answering —
+  // and a 0 or a negative would be a limiter that admits nobody.
+  if (requested === null) return databaseBudget(env).fanout;
+  return Math.min(requested, dbHeavyReadCeiling(env));
+}
+
+/** What the environment asked for, before the clamp — null if nothing readable. */
+function requestedHeavyReadLimit(
+  env: Record<string, string | undefined>,
+): number | null {
   const explicit = positiveInt(env[DB_HEAVY_READ_LIMIT_VAR]);
   if (explicit !== null) return explicit;
 
@@ -104,12 +130,32 @@ export function dbHeavyReadConcurrency(
     positiveInt(env[name]),
   ).filter((value): value is number => value !== null);
 
-  // Junk falls back rather than failing the boot, the budget module's own rule:
-  // a typo in a dashboard should not be why the comps tool stops answering —
-  // and a 0 or a negative would be a limiter that admits nobody.
-  return legacy.length > 0
-    ? Math.min(...legacy)
-    : databaseBudget(env).fanout;
+  return legacy.length > 0 ? Math.min(...legacy) : null;
+}
+
+/**
+ * The most heavy reads this process will run at once however it is configured.
+ *
+ * **The pool minus one ordinary request's fan-out share.** `databaseBudget`
+ * already names what a single *foreground* request may hold —
+ * {@link DatabaseBudget.fanout}, a third of the pool — so reserving exactly
+ * that leaves room for one normal request to run at full width while the
+ * analytical budget is saturated. On the default pool of ten: heavy reads may
+ * reach 7, and 3 connections are never theirs to take. That is the existing
+ * invariant reused rather than a second calculation competing with it.
+ *
+ * The floor is the derived default itself, which only matters on a pool small
+ * enough for the two to cross (three connections, where the fan-out share is
+ * already two): a ceiling under the number the app picks for itself would be a
+ * clamp arguing with its own default. It stays at or below `poolMax - 1` in
+ * every case, since `fanout` is at least 1 and at most `poolMax - 1`, so the
+ * hard promise — heavy reads can never be the whole pool — holds either way.
+ */
+export function dbHeavyReadCeiling(
+  env: Record<string, string | undefined> = process.env,
+): number {
+  const { poolMax, fanout } = databaseBudget(env);
+  return Math.max(fanout, poolMax - fanout);
 }
 
 /** A positive integer, or null for anything unreadable. */
@@ -128,20 +174,44 @@ function positiveInt(value: string | undefined): number | null {
  */
 export function createHeavyReadAdmission(limit: number): Limiter {
   const limiter = createLimiter(limit);
-  // The store is the flag itself: present means "this async context is already
-  // inside a slot". `AsyncLocalStorage` is what makes that a fact about the
-  // *call chain* rather than a module-level counter, which async interleaving
-  // would make meaningless the moment two readers overlap.
-  const held = new AsyncLocalStorage<true>();
+  // The store is a *token*, not a flag, and the mutable field is the whole of
+  // the difference. `AsyncLocalStorage` is what makes "already inside a slot" a
+  // fact about the *call chain* rather than a module-level counter, which async
+  // interleaving would make meaningless the moment two readers overlap — but
+  // the context propagates to every async resource created under it, including
+  // ones that outlive the callback that created them. A timer scheduled inside
+  // a slot and fired after it (`setTimeout(() => admission.run(work))` from an
+  // admitted callback that then returns) inherits the store, and against a bare
+  // `true` would read as admitted while holding nothing: the one shape that can
+  // put more heavy reads in flight than the limit, arrived at through the
+  // mechanism meant to prevent a deadlock.
+  //
+  // So the token is invalidated when its slot goes back, and a descendant that
+  // finds `active === false` acquires for itself. Nothing in this app detaches
+  // work from an admitted callback today; this is what keeps a caller that
+  // starts to from being a bound that silently isn't one.
+  const held = new AsyncLocalStorage<{ active: boolean }>();
 
   return {
     run<T>(fn: () => Promise<T>): Promise<T> {
-      // Re-entrant: the caller is already counted, so taking a second slot
-      // would deadlock at the limit and double-count below it. Neither is a
-      // shape any caller here has — this is what keeps a future one from
-      // discovering it in production.
-      if (held.getStore()) return fn();
-      return limiter.run(() => held.run(true, fn));
+      // Re-entrant while the slot is *live*: the caller is already counted, so
+      // taking a second slot would deadlock at the limit and double-count below
+      // it. Neither is a shape any caller here has — this is what keeps a
+      // future one from discovering it in production.
+      if (held.getStore()?.active) return fn();
+      return limiter.run(() => {
+        const context = { active: true };
+        return held.run(context, async () => {
+          try {
+            return await fn();
+          } finally {
+            // Before the slot is released (that is `limiter.run`'s own
+            // `finally`, which runs after this one), so there is no instant in
+            // which the token says admitted and the permit is already back.
+            context.active = false;
+          }
+        });
+      });
     },
     // Not re-entrancy aware, deliberately: `tryAcquire` hands back a release
     // the caller owns, so its slot is a thing rather than a context, and

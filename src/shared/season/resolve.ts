@@ -78,6 +78,23 @@ export type SeasonResolver = {
   resolve: () => Promise<string>;
   /** The cached value and when it was resolved; null before the first success. */
   peek: () => { season: string; at: number } | null;
+  /**
+   * The season this process can answer with *right now*: the override, else the
+   * cached value, else `undefined`.
+   *
+   * **Synchronous, and that is the whole of it** — no fetch, no refresh started
+   * behind the caller, not even a stale-check, because the caller is not asking
+   * for the season, it is asking whether this process happens to know it. That
+   * is what makes it safe to read from inside a module that must never depend
+   * on Sleeper being reachable: a cache deciding how long to hold an entry
+   * (`comps/read-cache`) has an answer for `undefined`, where a blocked request
+   * has none.
+   *
+   * Staleness is deliberately not reported. The value changes once a year, so
+   * an entry classified against a six-hour-old season is classified correctly;
+   * a caller needing the *current* answer wants {@link SeasonResolver.resolve}.
+   */
+  peekSeason: () => string | undefined;
   /** Drop the cache — for tests and for an operator-triggered re-read. */
   reset: () => void;
 };
@@ -185,6 +202,14 @@ export function createSeasonResolver(
       return startRefresh();
     },
     peek: () => cached,
+    peekSeason() {
+      // The same ladder `resolve` walks, minus every rung that can wait: an
+      // implausible override is ignored here as it is there, silently — this
+      // runs per cache read, and a warning per read is a log nobody can read.
+      const forced = override?.();
+      if (forced && isPlausibleSeason(forced)) return forced;
+      return cached?.season;
+    },
     reset: () => {
       cached = null;
       failedAt = null;

@@ -153,20 +153,39 @@ export const COMPS_SEASON_TTL_STAGGER_SHARE = 1 / 4;
  * entries do not expire in the same instant as its pool — it defaults to the
  * season, which is what a caller with one entry per season wants.
  *
- * An unparseable season falls to the live tier: the seasons come from
- * `listStoredSeasons`, so anything that isn't a year is a corpus this policy
- * doesn't understand, and the short clock is the reading that can only cost a
- * query.
+ * **`currentSeason` is what this process happens to know, not what it can find
+ * out** (`peekActiveSeason`, never `getActiveSeason`), which is why `undefined`
+ * is a documented input rather than a caller's problem. Resolving the season
+ * here would put a Sleeper call — up to four attempts with backoff behind the
+ * shared axios instance — in front of a corpus already sitting in Postgres,
+ * purely to *label how long to keep a copy of it*. An outage upstream would
+ * become an outage in a tool that needs nothing from upstream, which is the one
+ * failure this classification must not be able to cause.
+ *
+ * An unknown or unparseable season therefore falls to the **live** tier: the
+ * shortest clock, so the worst it can cost is an earlier rebuild of an entry
+ * that could have been held longer. Every other reading risks the opposite — an
+ * archive clock on a season that is still moving — and a day of a wrong answer
+ * is not a trade to make for a label. The same reading covers a season that
+ * isn't a year: the seasons come from `listStoredSeasons`, so anything else is a
+ * corpus this policy doesn't understand.
  */
 export function getCompsSeasonTtlMs(
   season: string,
-  currentSeason: string,
+  currentSeason: string | undefined | null,
   staggerKey: string = season,
 ): number {
   return withStagger(baseSeasonTtlMs(season, currentSeason), staggerKey);
 }
 
-function baseSeasonTtlMs(season: string, currentSeason: string): number {
+function baseSeasonTtlMs(
+  season: string,
+  currentSeason: string | undefined | null,
+): number {
+  // Spelled out rather than left to `Number(null) === 0`: an unknown season is
+  // a state this is *designed* for, and a coercion that happened to land on the
+  // right tier is not the same thing as a policy.
+  if (currentSeason == null) return COMPS_SEASON_TTL_MS.live;
   const year = Number(season);
   const current = Number(currentSeason);
   if (!Number.isInteger(year) || !Number.isInteger(current)) {

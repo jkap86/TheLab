@@ -373,6 +373,38 @@ what is in flight across both. The two variables the budget absorbed
 (`COMPS_READ_LIMIT`, `ADP_COMPUTE_LIMIT`) still configure it, tightest first,
 because each was somebody asking for less heavy work at once.
 
+**What the store holds has to be a token, not a flag, and the reason is that the
+context outlives the permit.** `AsyncLocalStorage` propagates into every async
+resource created under a callback, including ones that run after it returns — so
+an admitted read that schedules a timer and resolves leaves a descendant carrying
+"already inside a slot" while the slot itself has gone back to the limiter. Read
+as a bare `true`, that descendant walks straight past the bound: more heavy reads
+in flight than the limit, arrived at through the mechanism added to prevent a
+deadlock, and visible only as a pool that empties under load. The store is
+therefore `{ active: boolean }`, set false in the same `finally` that precedes
+the release, and the pass-through tests `getStore()?.active`. Nesting inside a
+*live* slot behaves exactly as before (three deep at a budget of one still
+terminates); a descendant of a finished one queues like any other caller. Nothing
+in the app detaches work from an admitted callback today, which is the point:
+this is what keeps the first caller that does from being a bound that silently
+isn't one.
+
+**And configuration is a request rather than a grant.** The derivation is
+conservative by construction, but `DB_HEAVY_READ_LIMIT=10` against a pool of ten
+walked straight around it — one cold comps board holding every connection the
+process has, which is the exact arrangement the shared budget was built to end,
+reached through the variable meant to prevent it and with nothing failing to say
+so. So whatever the environment asks for is clamped to `dbHeavyReadCeiling`: the
+pool *less one ordinary request's fan-out share*, which is `databaseBudget`'s
+existing invariant reused rather than a second calculation competing with it — 7
+of 10, with 3 connections never analytics' to take, so a normal request can still
+run at full width while the analytical budget is saturated. The floor under that
+ceiling is the derived default itself, which only matters on a pool of three
+where the two cross; and it is at or below `poolMax - 1` in every case, so the
+hard promise holds however the pool is sized. Junk, zero and negative values fall
+back to the derivation as they always did — a limiter that admits nobody is worse
+than one that admits too many.
+
 **A cache whose keys age at different speeds needs a TTL per key, and the cost of
 one clock was a cliff rather than a staleness.** Comps walks every stored season
 on every request, so the working set *is* the archive — ~27 seasons, two reads
@@ -392,6 +424,33 @@ and the reader share a process, `onStatsSeasonWritten` → `forgetCompsSeason`
 makes such a correction visible on the next request; the day is the backstop for
 a deployment where they don't, which is the trade every per-process cache here
 already makes.
+
+**Where that announcement sits in the sync is two rules, not one.** After the
+write, the `persistLeagueGraph` rule: a reader invalidating before the rows land
+caches exactly what is being replaced (`writeWeek` resolves only once its
+transaction has committed, so the line after it is the first safe point). But
+also *before* `markWeekSynced`, which is a second statement on a second
+connection and can fail on its own — a pool timeout there used to leave corrected
+rows in Postgres, a comps corpus holding the season for up to a day, and nothing
+able to tell it otherwise. The invariant is that stored data changing invalidates
+everything derived from it *from the commit onwards, whatever happens next*; the
+week still joins `failed` and is retried on the next tick, since the stamp is
+what a retry reads.
+
+**And the TTL classification itself must not be able to reach Sleeper.** The
+tiers are chosen against the season the app is operating in, which
+`getActiveSeason` answers — but awaiting it from inside the cache path put a
+state call (four attempts with backoff behind the shared axios instance) in front
+of a corpus already sitting in Postgres, on a cold process, purely to *label how
+long to keep a copy of it*. An outage upstream became an outage in the one tool
+that needs nothing from upstream. `peekActiveSeason` is the synchronous half of
+the resolver — the override, else whatever this process has already resolved,
+else `undefined`, and never the compiled-in fallback, since a peek's caller has
+to be able to act on not knowing. Unknown falls to the **live** tier, which is
+conservative in the only direction that matters: too short costs one rebuild,
+where too long is an archive clock over a season that is still moving. In
+practice the fallback is the first comps request after a boot and nothing else,
+because every route that defaults a season resolves it.
 
 **And a cache bound should state its invariant rather than fit today's numbers.**
 The enrichment cache held 128 entries against a working set of seasons × dataset
