@@ -1058,10 +1058,10 @@ however the other three were set — so `BACKGROUND_JOBS=off` disables the lot a
 the four per-job variables keep the names they had (a rename would quietly turn
 a loop somebody had deliberately disabled back on). Four things about it:
 
-- **The deployment it buys is one variable**, not a second entry point: the same
-  image runs twice, `BACKGROUND_JOBS=off` on the web dyno and nothing set on the
-  worker. Migrations run on boot in both, so their start order doesn't matter.
-  Nothing is required locally — unset, every loop runs as it always has.
+- **The deployment it buys is one variable**: `BACKGROUND_JOBS=worker` moves
+  every loop to the worker dyno and leaves the web process serving requests.
+  Migrations run on boot in both, so their start order doesn't matter. Nothing
+  is required locally — unset, every loop runs as it always has.
 - **The switch is scheduling; the lock is correctness, and neither substitutes
   for the other.** Turning a loop off on the web dyno is what stops it competing
   for the pool; the advisory lock is what makes a second worker started by
@@ -1074,6 +1074,53 @@ a loop somebody had deliberately disabled back on). Four things about it:
   all run: a typo that stopped the syncs would leave the database quietly
   unfilled for hours with nothing failing, where a typo that leaves them running
   is visible at once.
+
+**The switch was one variable and the entry point was still `npm start`, which
+was the half that didn't hold.** `BACKGROUND_JOBS=off` on the web dyno and a
+second `npm start` for the worker gets the *scheduling* right and pays for a
+full Next HTTP server — route manifest, `$PORT`, a request handler that will
+never be asked for anything — purely so the instrumentation hook fires. Worse,
+the deployment it describes has two ways to be half-configured and only one of
+them is visible: `off` on web with no worker scaled stops every refresh, and
+nothing fails, because a loop that never ran logs nothing. So there is a real
+worker (`src/worker.ts`), and four things hold the arrangement up:
+
+- **The registration list lives once** (`shared/jobs/start`), shared by the
+  instrumentation hook and the worker, and it is *derived* from
+  `BACKGROUND_JOB_VARS` rather than listed — the `DEFENSIVE_SLOTS` rule. Two
+  copies of that list drift, and the way they drift is a job added to one entry
+  point and never the other: a sync that silently stops on the day the
+  recommended deployment is adopted.
+- **There are two gates and they answer different questions.**
+  `backgroundJobSwitch` answers "should this job run at all"; `shared/jobs/mode`
+  answers "should this process be the one running them", which is where
+  `BACKGROUND_JOBS=worker` is read. The role cannot be another environment
+  variable, because platform config vars are per *app* rather than per dyno — so
+  it is a fact each entry point knows about itself and passes in. That is also
+  why `worker` doesn't switch the worker off: one variable, one setting, and no
+  second variable needed to put the jobs back.
+- **The default did not move, and that is deliberate.** Unset still runs every
+  loop in every process, so an existing deployment upgrades to exactly what it
+  had; a production web process on that default logs one line recommending the
+  split. Flipping the default the other way would stop every background refresh
+  on any app that deployed without scaling a worker — and *that* failure is the
+  silent one, which is the same argument as "only the exact word `off`".
+- **`isNodeRuntime` reads an absent `NEXT_RUNTIME` as Node.** The old guard was
+  `process.env.NEXT_RUNTIME !== "nodejs"`, which reads as "Node only" and means
+  "*Next's* Node only" — so the one process that exists to run these loops would
+  have started none of them and said nothing about it. The Edge bundle is still
+  excluded by the only value that names it.
+
+The worker's own lifecycle is `shared/jobs/run-worker`, which takes its I/O as
+arguments so a fatal startup failure exiting non-zero is an assertion rather
+than a hope. Two asymmetries in it: **a startup failure exits, a configuration
+that runs no jobs does not** — the first is a dyno the platform reports as
+healthy that does no work, the second is somebody's explicit instruction and
+crash-looping it adds nothing; and **the loops are stopped before the pool is
+closed**, since the other order is a tick mid-query losing its connection, which
+is a stack trace describing a clean shutdown. The worker also holds a ref'd
+keep-alive of its own, because every loop `unref`s its interval — right for a
+server held open by its socket, and exactly wrong for a process with no socket.
 
 The crawler is the loop that most wants that separation, and for a reason
 `shared/manager/sync-admission` already spells out from the other end: its
@@ -1330,6 +1377,52 @@ about how it is laid out. Each replaced something that read as fine and wasn't.
     readers took every connection on the dyno. A fixed-width fan-out over units
     that are mostly *network* is not this (`LEAGUE_FETCH_CONCURRENCY` stays as
     it is, tuned against Sleeper's budget).
+  - **An *enrichment* fan-out is the same failure with a fixed length, and it
+    needed its own helper** (`shared/db/fanout.ts`, `loadEnrichments`).
+    `collectWithConcurrency` bounds a walk over a list: many units of one shape.
+    A route's enrichment stage is the other shape — a handful of named,
+    differently-typed reads decorating an answer already computed — and the
+    idiom for it is `Promise.all([a(), b(), c(), …])`, which reads as harmless
+    *because* the length is a constant somebody wrote down. `/api/adp` was five
+    of them: it finished the aggregate that had held one admitted connection,
+    released it, and then opened five at once against a fan-out budget of three,
+    so one reader held half the default pool **after** the expensive part of its
+    work was over. The tasks are named rather than positional, so the call site
+    stays the destructured object the `Promise.all` was, and each declares
+    whether it reads the database — `dbRead` counts against the budget,
+    `memoryRead` never queues, because serialising work that takes no connection
+    is latency bought for nothing. Three properties are the contract, and each
+    is a failure this codebase has had somewhere else: **every task is started**
+    (the `Promise.all` started them all, so stopping at the first rejection
+    would be a behaviour change hiding inside a performance fix); **a rejection
+    gives its slot back** rather than killing the worker holding it, which is
+    the `sleeper/limiter` rule about a permit leaked per blip; and **the first
+    rejection *chronologically* is the one thrown**, since which error arrives
+    is what decides 503 against 500.
+  - **The route-level bound is not a second admission, and that is what keeps it
+    deadlock-free.** `getDraftAuctionSpend` takes the process-wide heavy-read
+    slot for itself, *inside* the route slot `loadEnrichments` hands it. That
+    nests two limiters, which is only safe in one direction: the heavy budget is
+    shared and the route's is private to one request, so nothing holding a heavy
+    slot ever waits on a route slot and there is no cycle to close. Taking a
+    heavy-read token at the route instead would be the same limiter acquired
+    twice — a queue waiting on itself at the limit, which is the shape
+    `db/heavy-admission` is written against. `fanout.test.ts` pins it by
+    saturating the heavy budget from outside and asserting every enrichment
+    still completes.
+  - **Two reads against one row are one read.** `/api/adp` asked
+    `getPlayersByIds(ids)` for a page's names and then asked `players` again,
+    with the same ids through the same primary-key index, which of them had
+    `years_exp = 0`. One column on the first read answers both
+    (`getPlayersWithExperience`), and the classification moves to
+    `rookieClassIds` — pure, so what counts as a rookie is a testable rule
+    rather than a predicate only a database can answer. It is the *narrow*
+    consolidation on purpose: a smallint per row, not the blob beside it. The
+    two KTC reads next to it are deliberately **not** consolidated — one is an
+    id lookup and the other a filter on `position = 'RDP'` over rows that carry
+    no `sleeper_id` at all, so they are different populations rather than one
+    query asked twice, and folding them into an `OR` would trade two index-shaped
+    reads for one scan.
   - **Out of budget is a 503, not a 500** (`isDatabaseBusy` →
     `app/api/read-failure.ts`, the same pure/`NextResponse` split as
     `resolveManagerUser`/`resolveManagerRequest`). The two want opposite things
@@ -1742,7 +1835,23 @@ stops holding, a comment saying it does would not have caught it.
   own**, for the reason `ADVISORY_LOCK_WAIT_MS` is a share of the request
   deadline: a manager sync is a held Postgres session *plus* the reads and writes
   each league needs, so what bounds it honestly is how much of the pool one
-  request may hold. **It is three layers and not one** — the semaphore bounds
+  request may hold. That last sentence is also why the environment variable can
+  only ever *lower* it. `MANAGER_SYNC_LIMIT` and `LEAGUE_REFRESH_LIMIT` both read
+  through `fanoutLimit`, which clamps whatever was set to `databaseBudget().fanout`
+  — `MANAGER_SYNC_LIMIT=10` on a pool of ten was not a wider budget, it was no
+  budget at all, and it was the shape `DB_HEAVY_READ_LIMIT` had already been
+  hardened against: the protection undone through the very variable that names
+  it, with nothing failing to say so. The clamp is a ceiling and not a target, so
+  a deployment asking for *less* still gets less; junk, zero, a negative and a
+  decimal fall back to the derivation rather than failing the boot (a zero would
+  be an admission that admits nobody, which is an outage rather than a bound, and
+  a fractional permit is a question with no good answer); and a request that was
+  cut down writes one `console.warn` naming what was configured and what is being
+  used, at the moment the semaphore is built — once per process, never per
+  request, because a bound silently not honoured is how the setting came to look
+  like it worked. `leagueRefreshConcurrency` moved into
+  `shared/manager/league-refresh-admission` to get that arithmetic on the
+  testable side of the I/O line; `league-refresh` re-exports it. **It is three layers and not one** — the semaphore bounds
   total activity on this instance, the per-manager in-flight map dedupes the same
   manager in this process, and the advisory lock is the only one of the three that
   survives a second dyno; reading any one of them alone makes the other two look
@@ -1886,7 +1995,7 @@ stops holding, a comment saying it does would not have caught it.
   readers — the lineup checker's kickoff ordering, the minute-accurate game lock
   and the season countdown — were built on the schedule call and each degraded
   politely, exactly as designed: `weekKickoffs` answered an empty map, so
-  `kickoffInputs` answered null, so `kickoff_order` was null in every league of
+  the kickoff read answered null, so `kickoff_order` was null in every league of
   every week of every season and the Kickoff column was a permanent em dash;
   the lock fell back to day accuracy; the countdown fell back to the NFL
   calendar's provisional instant — which for 2026 is the Thursday after Labor
@@ -2092,8 +2201,12 @@ stops holding, a comment saying it does would not have caught it.
 - **Eligibility is `fantasy_positions`, not `position`.** A back listed
   `["RB","WR"]` can fill a `REC_FLEX` his primary position bars him from, and
   Sleeper's own lineups use it — the IDP leagues here start players at DL whose
-  `position` reads LB. `getFantasyPositions` is the query; a player the cache
-  doesn't know is eligible for nothing, which is better than guessing and
+  `position` reads LB. `getFantasyPositions` is the query, and
+  `getPlayerLineupMeta` is the same read widened by one column for the callers
+  that also join a player to his game: eligibility and the NFL team are two
+  fields of one `players` row, so asking for them separately was two index
+  lookups on the same primary key and two answers that could straddle a players
+  sync. A player the cache doesn't know is eligible for nothing, which is better than guessing and
   recommending a lineup Sleeper would reject. IR and taxi players *are* candidates,
   though — this tool treats a stashed player as bench depth that could be started
   rather than as unavailable, a deliberate choice (Sleeper needs a roster move to

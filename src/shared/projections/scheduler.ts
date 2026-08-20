@@ -1,4 +1,5 @@
 import { backgroundJobSwitch, startBackgroundLoop } from "@/shared/util";
+import type { BackgroundLoopHandle } from "@/shared/util";
 
 import { syncProjections } from "./sync";
 
@@ -62,10 +63,11 @@ async function tick(): Promise<void> {
  *
  * Set `PROJECTIONS_SYNC=off` to disable (worth doing on a dev server — each week
  * it refreshes is a ~5.6MB download), or `BACKGROUND_JOBS=off` to disable every
- * loop at once — see {@link backgroundJobSwitch} for the web/worker split.
+ * loop at once, or `BACKGROUND_JOBS=worker` to run it on the worker dyno only —
+ * see {@link backgroundJobSwitch} and `shared/jobs/mode` for the two gates.
  */
-export function startProjectionsScheduler(): void {
-  startBackgroundLoop({
+export function startProjectionsScheduler(): BackgroundLoopHandle {
+  return startBackgroundLoop({
     name: "proj",
     intervalMs: PROJECTIONS_INTERVAL_MS,
     guardKey: "projections-scheduler",

@@ -73,6 +73,21 @@ src/shared/    Domain logic, one folder per concern.
   is a field. **The question is per read, not per `Promise.all`** — dependent
   reads earn the same judgement, and the second one failing is not automatically
   fatal just because it had to wait for the first.
+- **Two consumers of one read take a snapshot, not a cache.**
+  `readWeekProjectionInputs` is the shape: `getLeagueWeekView` wanted the week's
+  projections for its per-player column and `getWeekLineups` wanted the identical
+  rows for the lineups, so one request read the heaviest table on the panel
+  twice. Four rules. It **holds reads and never derivations** — the scoring is
+  per league and the lock set is per request, so both are computed *from* it and
+  a second league can answer off one fetch. It is **passed down explicitly**
+  (`getWeekLineups`' optional `inputs`), because a snapshot that outlived the
+  request would be a per-league cache with no key that could say whose week it
+  held, and the callee still reads one of its own when handed none — the lineup
+  checker passes nothing. The reads it gathers **run in the same `Promise.all` as
+  the request's other independent ones**, and what follows is arithmetic, so
+  sharing does not turn two parallel reads into two waits. And **what it does not
+  need, it does not fetch**: the player metadata is the lineup solve's alone, so a
+  league with no slots or scoring on file stays at the one query it always cost.
 - Aliases: `@/*` → `src/*`, `@thelab/http` → the configured axios instance.
 
 ## Anything crossing the network
@@ -714,11 +729,8 @@ decides for itself that a refresh is due and they queue up to do it in turn.
 
 **Every loop has a switch, and there is one switch over all of them**
 (`shared/util/background-jobs`). `BACKGROUND_JOBS=off` disables the lot and the
-four per-job variables keep the names they had. Four things about it:
+five per-job variables keep the names they had. Four things about it:
 
-- **The deployment it buys is one variable**, not a second entry point: the same
-  image runs twice, `BACKGROUND_JOBS=off` on the web dyno and nothing set on the
-  worker. Migrations run on boot in both, so start order doesn't matter.
 - **The switch is scheduling; the lock is correctness, and neither substitutes
   for the other.** Removing either because the other exists is the mistake to
   watch for.
@@ -726,6 +738,46 @@ four per-job variables keep the names they had. Four things about it:
   process without a second edit.
 - **Only the exact word `off` disables anything.** A typo that stopped the syncs
   would leave the database quietly unfilled for hours with nothing failing.
+- **`BACKGROUND_JOBS` is read by two gates and they answer different
+  questions.** `backgroundJobSwitch` answers "should this job run at all";
+  `shared/jobs/mode` answers "should this *process* be the one running them",
+  which is where the third value `worker` lives.
+
+**There is a real worker, and one registration list feeding both entry points.**
+`src/worker.ts` (`npm run worker`) applies migrations, starts every loop and
+holds itself open with no HTTP listener; `src/instrumentation.ts` does the same
+for the web server. Both go through `startBackgroundJobs` in `shared/jobs`, and
+that list is **derived from `BACKGROUND_JOB_VARS`** rather than written twice —
+two copies drift, and the way they drift is a job added to one entry point and
+not the other, which is a sync that silently stops the day the recommended
+deployment is adopted. Six rules:
+
+- **The role is passed in, never read from the environment.** Platform config
+  vars are per *app*, not per dyno, so `BACKGROUND_JOBS=worker` reaches both
+  processes and each one knows for itself which it is. That is why `worker` does
+  not switch the worker off — one variable, one setting, and no second variable
+  needed to put the jobs back.
+- **The default did not move.** Unset still runs every loop in every process, so
+  an existing deployment upgrades to what it had; a production web process on
+  that default logs one line recommending the split. Flipping it would stop
+  every refresh on any app that deployed without scaling a worker, and that
+  failure is the silent one — the same argument as "only the exact word `off`".
+  The Procfile and the README carry the ordering: **scale a worker before
+  setting the variable**, and run at least one.
+- **An absent `NEXT_RUNTIME` is Node** (`isNodeRuntime`). The old guard read as
+  "Node only" and meant "*Next's* Node only", so the one process that exists to
+  run these loops would have started none of them and said nothing.
+- **A startup failure exits non-zero; a configuration that runs no jobs does
+  not.** The first is a dyno reported as healthy doing no work; the second is
+  somebody's explicit instruction, and crash-looping it adds nothing.
+- **The loops are stopped before the pool is closed** on `SIGTERM`/`SIGINT`. The
+  other order is a tick mid-query losing its connection, which is a stack trace
+  describing a clean shutdown.
+- **The worker holds a ref'd keep-alive of its own**, because every loop
+  `unref`s its interval — right for a server held open by its socket, exactly
+  wrong for a process with no socket. `startBackgroundLoop` returns a handle so
+  a shutdown has something to stop; the handle's `stop` releases the guard key,
+  or a clean shutdown makes the loop unstartable for the life of the process.
 
 The crawler most wants that separation: its advisory lock spans the whole sync,
 network included, so it holds a pool connection across a league's entire Sleeper
@@ -925,6 +977,34 @@ comparator reads**, since a five-armed ordering written twice is two orderings.
     one request holding more of the pool than the pool has. A fixed-width fan-out
     over units that are mostly *network* is not this
     (`LEAGUE_FETCH_CONCURRENCY` stays as it is).
+  - **A route's *enrichment* stage is that same fan-out wearing a fixed length,
+    and takes `loadEnrichments`** (`shared/db/fanout.ts`). `Promise.all([a(),
+    b(), c(), …])` over a handful of named, differently-typed reads is the shape
+    that reads as harmless because somebody counted them: `/api/adp` released
+    the aggregate's admitted connection and then opened five at once against a
+    budget of three. Tasks are **named** (the call site stays the destructured
+    object) and each **declares what it reads** — `dbRead` counts against
+    `databaseBudget().fanout`, `memoryRead` never queues, since serialising work
+    that takes no connection is latency for nothing, and the declaration is
+    conservative because it cannot be inferred. Three properties are the
+    contract: **every task is started**, including after another fails; **a
+    rejection gives its slot back** rather than killing the worker; and **the
+    first rejection chronologically is the one thrown**, since which error
+    arrives is what decides 503 against 500.
+  - **That bound is a plain concurrency limiter and must never be a second
+    admission.** A task may take the process-wide heavy-read slot *inside* the
+    route slot (`getDraftAuctionSpend` does), which is safe in that direction
+    only: the heavy budget is shared, a route's is private to one request, so no
+    holder of a heavy slot ever waits on a route slot. A heavy-read token taken
+    at the route would be one limiter acquired twice — a deadlock at the limit.
+  - **Two reads against one row are one read.** `/api/adp` resolved a page's
+    names and then re-asked `players`, on the same ids through the same index,
+    which of them had `years_exp = 0`; one column on the first read answers both
+    (`getPlayersWithExperience`) and the classification is pure
+    (`rookieClassIds`). Consolidate where the second read is the *same lookup*.
+    The two KTC reads beside it are deliberately left apart — an id lookup and a
+    `position = 'RDP'` filter over rows carrying no `sleeper_id` are different
+    populations, not one query asked twice.
   - **Out of budget is a 503, not a 500** (`isDatabaseBusy` →
     `app/api/read-failure.ts`). A 500 says stop asking, and asking again is
     exactly right when the database merely had no room. Applied at **every** route
@@ -964,6 +1044,21 @@ wrappers, pure logic underneath.** `shared/manager/adp-filters` is that shape fo
 a route — it validates the query string and nothing else, and takes the default
 season as an *argument* rather than importing `DEFAULT_SEASON`, since that import
 is exactly what would make it untestable.
+
+**A *query count* is the one claim that side of the line cannot make**, because
+it is a fact about the composition file rather than about any module under it.
+`shared/stats/league-week.test.ts` is the exception and stays a narrow one: it
+drives the real loaders with `pool.query` and `@thelab/http`'s instance replaced
+by counting stubs, so nothing connects and what comes back is a fixture. Two
+things make it safe — the alias resolves under `tsx` and `new Pool(…)` does not
+connect, so importing the I/O module costs nothing; and the stub **dispatches on
+the table named in the SQL** rather than on call order, so a read moving between
+callers cannot quietly re-label itself. The rules those reads feed are still
+asserted where they are pure (`projections/week-inputs.test.ts`); this file
+asserts only the counts and the handful of numbers proving the shared snapshot
+reaches the solve intact. **Reading the same table twice in one request is not an
+error** — it answers, it typechecks, it passes every other test in the repo —
+which is why it takes a test of its own.
 
 **Three files carry an ADP name and they sit on opposite sides of the wire:**
 
@@ -1536,7 +1631,13 @@ These recur everywhere and are the rules most often broken by accident:
   (`MANAGER_SYNC_LIMIT`, defaulting to `databaseBudget().fanout`), reserved for
   **every** sync `/api/user/…/leagues` runs — a stale refresh is the *same*
   fan-out holding the same lock connection as a cold one. **The cap is a share of
-  the pool** rather than a number of its own. **It is three layers, not one** —
+  the pool** rather than a number of its own. **The variable is a *request*, not
+  a grant** — `fanoutLimit` clamps it to that share, as `LEAGUE_REFRESH_LIMIT`
+  is clamped for the other work of this shape, because a knob settable to the
+  pool size is the failure the cap exists for reached through the variable meant
+  to prevent it; junk, zero, a negative and a decimal all fall back to the
+  derivation, and a clamped request warns **once, as the semaphore is built**,
+  never per request. **It is three layers, not one** —
   the semaphore bounds this instance, the per-manager in-flight map dedupes
   within the process, and the advisory lock is the only one surviving a second
   dyno; reading any one alone makes the other two look redundant. **Acquisition
@@ -1793,10 +1894,12 @@ These recur everywhere and are the rules most often broken by accident:
 - **Eligibility is `fantasy_positions`, not `position`.** A back listed
   `["RB","WR"]` can fill a `REC_FLEX` his primary position bars him from, and the
   IDP leagues here start players at DL whose `position` reads LB.
-  `getFantasyPositions` is the query; **a player the cache doesn't know is
-  eligible for nothing**, which is better than recommending a lineup Sleeper
-  would reject. IR and taxi players *are* candidates — a stashed player is bench
-  depth that could be started, a deliberate choice.
+  `getFantasyPositions` is the query — `getPlayerLineupMeta` where the caller
+  also needs each player's **NFL team**, since both are one `players` row and two
+  reads of it can straddle a sync; **a player the cache doesn't know is eligible
+  for nothing**, which is better than recommending a lineup Sleeper would reject.
+  IR and taxi players *are* candidates — a stashed player is bench depth that
+  could be started, a deliberate choice.
 - **An optimal lineup that is arbitrary about interchangeable slots reads as a
   mistake.** The matching is free to seat the worse of two backs at RB1 — same
   total, but as advice it looks wrong and diffs against a sane current lineup as

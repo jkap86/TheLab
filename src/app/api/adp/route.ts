@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { AdpPayload, AdpPlayerPayload, ApiErrorPayload } from "@/shared/contract";
+import { dbRead, loadEnrichments } from "@/shared/db";
 import { getKtcPickBoard, getKtcValuesBySleeperId } from "@/shared/ktc";
 import {
   EMPTY_AUCTION_BOARDS,
@@ -9,7 +10,7 @@ import {
   parseAdpFilters,
   usesDefaultSeason,
 } from "@/shared/manager";
-import { getPlayersByIds, getRookieClassIds } from "@/shared/players";
+import { getPlayersWithExperience, rookieClassIds } from "@/shared/players";
 import { getActiveSeason } from "@/shared/season";
 
 import { readLeagueScope } from "../league-scope";
@@ -112,39 +113,56 @@ async function board(request: Request) {
     const result = await getDraftAdp(filters);
     const ids = result.rows.map((r) => r.player_id);
     // Four reads beside the aggregate that has already done the expensive work,
-    // none of which waits on another. The second is what makes a pick column
-    // possible at all — the *current* class through the rookie-class seam (see
-    // `shared/players/rookie-class` for what keeps historical classes out),
-    // since ranking the rookies on this board *is* the pick ladder. The third
-    // is what waiting costs, which ADP cannot answer for a pick whose class
-    // nobody can name yet. It is a few dozen rows off a 500-row table, and it is
-    // read whole because the anchor the discount is measured against is a fact
-    // about the board rather than about any pick — see `AdpPayload.pick_ktc`.
+    // **bounded to the fan-out budget rather than started all at once**. The
+    // aggregate's own connections have gone back by the time these run, so a
+    // bare `Promise.all` over them was one reader holding more of the pool
+    // *after* its expensive work than during it — a fixed-length fan-out looking
+    // harmless next to the walks `collectWithConcurrency` already bounds. Each
+    // is declared as reading the database, so `loadEnrichments` runs at most
+    // `databaseBudget().fanout` of them at a time and the route's shape stays
+    // the destructured object the `Promise.all` was.
     //
-    // The fourth is the KTC columns' own read, and it is narrowed to this page's
+    // The first is the players read, and it carries `years_exp` so the rookie
+    // class is a derivation over it rather than a second lookup on the same ids
+    // through the same index — the rookie-class seam is still what decides who
+    // counts (see `shared/players/rookie-class` for what keeps historical
+    // classes out), since ranking the rookies on this board *is* the pick ladder.
+    //
+    // The second is what waiting costs, which ADP cannot answer for a pick whose
+    // class nobody can name yet. It is a few dozen rows off a 500-row table, and
+    // it is read whole because the anchor the discount is measured against is a
+    // fact about the board rather than about any pick — see `AdpPayload.pick_ktc`.
+    //
+    // The third is the KTC columns' own read, and it is narrowed to this page's
     // ids where the pick board is not: a player price is a fact about *a player*,
     // so the page names exactly the ones it will draw, where the discount's
     // anchor is a fact about the board and cannot be asked for by pick. It is
     // keyed on `sleeper_id`, which the sync resolves by name — so the ~6% of
     // rostered players KTC doesn't carry, and every kicker and defence, are
-    // simply absent from the map and read as an em dash rather than a zero.
+    // simply absent from the map and read as an em dash rather than a zero. The
+    // two KTC reads stay two: one is an id lookup and the other a filter on
+    // `position = 'RDP'` over rows carrying no `sleeper_id` at all, so they are
+    // different populations rather than one query asked twice.
     //
-    // The fifth is the auction column, and it is the one that reads a *different
+    // The fourth is the auction column, and it is the one that reads a *different
     // population* rather than decorating this one: the same leagues, season and
     // window, over the draft type the board itself excludes. It is narrowed to
     // this page's ids for the reason the KTC read is — what a player cost is a
     // fact about a player — which is also what keeps it cheap enough to be a
-    // field on this response instead of a split of its own. It is not caught
-    // separately: a database that cannot answer it cannot answer the rest
-    // either, and an enrichment quietly sending an empty map would be a 200
-    // claiming the crawled auctions never bought anybody.
-    const [players, rookies, pickKtc, ktc, auction] = await Promise.all([
-      getPlayersByIds(ids),
-      getRookieClassIds(ids),
-      getKtcPickBoard(),
-      getKtcValuesBySleeperId(ids),
-      getDraftAuctionSpend(filters, ids),
-    ]);
+    // field on this response instead of a split of its own. It takes the shared
+    // heavy-read admission of its own accord, *inside* the slot this hands it,
+    // which is safe because that budget is process-wide and this one is private
+    // to the request: nothing holding a heavy slot ever waits on one of these.
+    // It is not caught separately: a database that cannot answer it cannot
+    // answer the rest either, and an enrichment quietly sending an empty map
+    // would be a 200 claiming the crawled auctions never bought anybody.
+    const { players, pickKtc, ktc, auction } = await loadEnrichments({
+      players: dbRead(() => getPlayersWithExperience(ids)),
+      pickKtc: dbRead(() => getKtcPickBoard()),
+      ktc: dbRead(() => getKtcValuesBySleeperId(ids)),
+      auction: dbRead(() => getDraftAuctionSpend(filters, ids)),
+    });
+    const rookies = rookieClassIds(players);
 
     const payload: AdpPayload = {
       filters,

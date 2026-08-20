@@ -1,5 +1,6 @@
 import { refreshStaleTradeStats } from "@/shared/trades";
 import { backgroundJobSwitch, startBackgroundLoop } from "@/shared/util";
+import type { BackgroundLoopHandle } from "@/shared/util";
 
 import { CRAWL_LEAGUE_BATCH, runLeagueCrawl } from "./crawl";
 
@@ -48,13 +49,15 @@ function fmtMs(ms: number): string {
  *
  * Set `LEAGUE_CRAWLER=off` to disable (e.g. for a local dev server that
  * shouldn't be crawling in the background), or `BACKGROUND_JOBS=off` to disable
- * every loop at once — which is how a web dyno is configured when a worker is
- * doing the crawling. This is the loop that most wants that separation: it holds
+ * every loop at once. `BACKGROUND_JOBS=worker` is the one that matters in
+ * production: it leaves this running on the worker dyno (`npm run worker`) and
+ * off the one serving requests. This is the loop that most wants that
+ * separation: it holds
  * a pool connection across a league's whole Sleeper fan-out, so on a busy web
  * process it is competing for connections with the requests it is meant to be
  * filling the cache for.
  */
-export function startLeagueCrawler(): void {
+export function startLeagueCrawler(): BackgroundLoopHandle {
   // Throttle state rides the closure, like the loop's own `ticking` guard: a
   // re-invoked start (dev/HMR) builds a closure the double-start guard never
   // ticks, so the running loop keeps the only live copy.
@@ -160,7 +163,7 @@ export function startLeagueCrawler(): void {
     );
   }
 
-  startBackgroundLoop({
+  return startBackgroundLoop({
     name: "crawl",
     intervalMs: LEAGUE_CRAWL_INTERVAL_MS,
     guardKey: "league-crawler",

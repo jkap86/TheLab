@@ -1,21 +1,28 @@
 import { pool } from "@/shared/db";
 
-/** A player resolved to a display name for rosters/picks UI. */
-export type PlayerSummary = {
-  player_id: string;
-  name: string;
-  position: string | null;
-  team: string | null;
+import { toPlayerSummary } from "./summary";
+import type { PlayerNameRow, PlayerSummary } from "./summary";
+
+// Re-exported from where every consumer already imports it: the shape moved to
+// `./summary` with the row mapping that produces it, the same split `ktc/values`
+// takes from `ktc/queries`.
+export type { PlayerSummary };
+
+/**
+ * A player summary plus the one fact a rookie class is named from.
+ *
+ * `years_exp` is Sleeper's count of *completed* seasons, and it rides on the
+ * summary rather than being asked for separately because both questions are the
+ * same index lookup on the same primary key — see
+ * {@link getPlayersWithExperience}. Null is "Sleeper hasn't filled it in",
+ * which is a team defence and a long tail of players, and it is never a zero:
+ * `rookieClassIds` reads the two apart.
+ */
+export type PlayerWithExperience = PlayerSummary & {
+  years_exp: number | null;
 };
 
-type Row = {
-  player_id: string;
-  full_name: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  position: string | null;
-  team: string | null;
-};
+type Row = PlayerNameRow;
 
 /**
  * Resolve player ids to names/position/team from the cache, keyed by id.
@@ -34,98 +41,126 @@ export async function getPlayersByIds(
   );
 
   const out: Record<string, PlayerSummary> = {};
-  for (const r of rows) {
-    const name =
-      r.full_name ??
-      ([r.first_name, r.last_name].filter(Boolean).join(" ") || r.player_id);
-    out[r.player_id] = {
-      player_id: r.player_id,
-      name,
-      position: r.position,
-      team: r.team,
-    };
-  }
+  for (const r of rows) out[r.player_id] = toPlayerSummary(r);
   return out;
 }
 
 /**
- * Player ids → the NFL team each is on, for joining a player to his game.
+ * The same lookup, carrying `years_exp` — the summary *and* the rookie class in
+ * one read.
  *
- * The slim half of {@link getPlayersByIds}, for callers that need nothing a
- * name resolves — the kickoff-ordered lineup reads a player's game time
- * through his team and the week's schedule, across the union of every roster
- * in a request. Null is Sleeper's own "no team" (a free agent, a retired
- * player), and an id the cache doesn't know is absent — both read as "game
- * unknown" downstream, never as a guess.
+ * **It exists because the two were two queries against one row.** `/api/adp`
+ * asked `getPlayersByIds` for the names of a page's players and then asked
+ * `players` again, with the same id list, which of them had `years_exp = 0`:
+ * the same index lookup on the same primary key, run twice, holding two
+ * connections out of a fan-out budget of three. One column widens the first read
+ * by a smallint per row and answers both — and it is the *narrow* consolidation
+ * on purpose, since the fields a rookie class is named from are one column
+ * rather than the blob beside them.
+ *
+ * The classification itself is not here: it is `rookieClassIds` in
+ * `./rookie-class`, pure, so what "a rookie" means stays one testable rule
+ * rather than a comparison written at each call site. Callers wanting only names
+ * keep {@link getPlayersByIds}, which is still the cheaper read for them.
  */
-export async function getPlayerTeams(
+export async function getPlayersWithExperience(
   ids: string[],
-): Promise<Record<string, string | null>> {
+): Promise<Record<string, PlayerWithExperience>> {
   if (ids.length === 0) return {};
 
-  const { rows } = await pool.query<{ player_id: string; team: string | null }>(
-    `SELECT player_id, team FROM players WHERE player_id = ANY($1)`,
+  const { rows } = await pool.query<Row & { years_exp: number | null }>(
+    `SELECT player_id, full_name, first_name, last_name, position, team, years_exp
+       FROM players
+      WHERE player_id = ANY($1)`,
     [ids],
   );
 
-  const out: Record<string, string | null> = {};
-  for (const r of rows) out[r.player_id] = r.team;
+  const out: Record<string, PlayerWithExperience> = {};
+  for (const r of rows) out[r.player_id] = { ...toPlayerSummary(r), years_exp: r.years_exp };
   return out;
 }
 
 /**
- * Which of `ids` are in their first NFL season — Sleeper's `years_exp` of 0.
+ * What solving one week's lineups needs to know about a player: what he is
+ * eligible to start at, and who he plays for.
  *
- * It exists for one caller and one question: `/api/adp` marks the rookies on a
- * board so the trades page can rank them into a **rookie-pick ladder**, where
- * the k-th rookie off the *rookie-draft* board is rookie pick k. That is what
- * puts a traded pick and a traded player on one scale, which no board of player
- * prices can do on its own.
- *
- * **Absent is "not known to be a rookie", never "veteran".** `years_exp` is null
- * for a team defence and for anyone Sleeper hasn't filled it in for, and the
- * ladder is an *ordering* — one wrongly-included name shifts every pick below it
- * by one. So the test is an equality against 0 rather than anything looser, and
- * a null simply doesn't match.
- *
- * **It names the class that is a rookie *now*, and that is a known limitation
- * rather than a design.** The players map is replaced daily and carries no
- * history, so a board for a past season finds none of today's rookies in it and
- * hands back an empty ladder — which reads as picks being unpriced on that
- * board (`no-ladder` in `features/trades/pick-value`, whose wording says the
- * board has no rookies to rank against), the honest answer rather than a ladder
- * built from prices those players never had.
- *
- * **The obvious fix is not one, which is why this is deferred rather than
- * done.** The only experience Sleeper gives is `years_exp`, which counts
- * completed seasons *as of now*, so naming the 2024 class means computing
- * `activeSeason − years_exp` — an inference, not a stored fact, and one that is
- * wrong for anyone whose count didn't advance (a missed season, a
- * practice-squad year, a return from out of the league). A wrong *inclusion*
- * shifts every rung below it, which is the one error here that propagates, so a
- * derivation that is right for most players is worse than an empty ladder that
- * says so. Doing this properly wants a persisted `rookie_season` written at sync
- * time — a column and a migration — and it wants a source better than
- * `years_exp` to backfill it from. Until then, historical rookie-pick values are
- * unavailable rather than approximate.
- *
- * Narrowed by id rather than returning every rookie, so this is an index lookup
- * on the primary key and the caller can't accidentally rank a player its board
- * never averaged.
+ * Two halves of one row, which is the whole reason this type exists. They were
+ * two reads — {@link getFantasyPositions} for the slots and a `team` lookup for
+ * the kickoff join — both narrowed by the same id list against the same primary
+ * key, so a week's lineups read `players` twice for facts that arrive together.
  */
-export async function getRookiePlayerIds(
-  ids: string[],
-): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
+export type PlayerLineupMeta = {
+  /** Player id → the positions he is eligible at; see {@link getFantasyPositions}. */
+  positions: Record<string, string[]>;
+  /**
+   * Player id → the NFL team he is on, for joining him to his game. Null is
+   * Sleeper's own "no team" (a free agent, a retired player), and an id the
+   * cache doesn't know is absent — both read as "game unknown" downstream,
+   * never as a guess.
+   */
+  teams: Record<string, string | null>;
+};
 
-  const { rows } = await pool.query<{ player_id: string }>(
-    `SELECT player_id
+/**
+ * Eligibility and NFL team for these player ids, in one read.
+ *
+ * The two maps come off the *same* rows rather than two queries, so they cannot
+ * disagree about which players the cache knows — the case that used to be
+ * reachable, since two reads a moment apart straddle a players sync. Each half
+ * keeps the absence rule its own reader depends on: a player the cache doesn't
+ * know is eligible for nothing (so he never starts, rather than being seated by
+ * a guessed position), and his team is simply unknown (so he keeps his seat in
+ * the kickoff ordering rather than being dated by one).
+ *
+ * Deliberately not `getPlayersByIds` with more columns: a lineup solve wants no
+ * name resolved, and the union of every roster in a request is a few hundred
+ * ids wide.
+ */
+export async function getPlayerLineupMeta(
+  ids: string[],
+): Promise<PlayerLineupMeta> {
+  if (ids.length === 0) return { positions: {}, teams: {} };
+
+  const { rows } = await pool.query<{
+    player_id: string;
+    positions: string[];
+    position: string | null;
+    team: string | null;
+  }>(
+    // The `fantasy_positions` unnesting is {@link getFantasyPositions}' own —
+    // see its note for why it is done in SQL rather than over the JSONB.
+    `SELECT player_id, position, team,
+            ARRAY(SELECT jsonb_array_elements_text(
+                    CASE WHEN jsonb_typeof(fantasy_positions) = 'array'
+                         THEN fantasy_positions ELSE '[]'::jsonb END)) AS positions
        FROM players
-      WHERE player_id = ANY($1)
-        AND years_exp = 0`,
+      WHERE player_id = ANY($1)`,
     [ids],
   );
-  return new Set(rows.map((r) => r.player_id));
+
+  const positions: Record<string, string[]> = {};
+  const teams: Record<string, string | null> = {};
+  for (const r of rows) {
+    positions[r.player_id] = eligiblePositions(r);
+    teams[r.player_id] = r.team;
+  }
+  return { positions, teams };
+}
+
+/**
+ * Sleeper's `fantasy_positions`, falling back to the single `position` when it
+ * lists none — the one rule both readers of eligibility share, so the two
+ * queries below cannot answer differently for one player.
+ */
+function eligiblePositions(row: {
+  positions: string[];
+  position: string | null;
+}): string[] {
+  return row.positions.length > 0
+    ? row.positions
+    : row.position
+      ? [row.position]
+      : [];
 }
 
 /**
@@ -182,10 +217,7 @@ export async function getFantasyPositions(
   );
 
   const out: Record<string, string[]> = {};
-  for (const r of rows) {
-    out[r.player_id] =
-      r.positions.length > 0 ? r.positions : r.position ? [r.position] : [];
-  }
+  for (const r of rows) out[r.player_id] = eligiblePositions(r);
   return out;
 }
 
