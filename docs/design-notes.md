@@ -1398,8 +1398,9 @@ part before redesigning it.
       all.
   - **Naming the rookie class took a column out of the players blob, and the
     whole feature rests on it.** `players.years_exp` is promoted from `data`
-    (backfilled in the migration, so no re-download), read by
-    `getRookiePlayerIds`, and sent as `AdpPlayerPayload.rookie`. Two rules travel
+    (backfilled in the migration, so no re-download), read alongside the names
+    on the board's one players lookup (`getPlayersWithExperience`), classified by
+    `rookieClassIds`, and sent as `AdpPlayerPayload.rookie`. Two rules travel
     with it. **Absent is "not known to be a rookie", never "veteran"** — it is
     null for a team defence and for anyone Sleeper hasn't filled in, and one
     wrongly-included name shifts the whole ladder. And **the cache carries no

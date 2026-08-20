@@ -56,7 +56,7 @@ export async function getNflDraftPicks(
  * Sleeper ids drafted in a given class — what the deferred `rookie_season`
  * question has been waiting for a real source to answer.
  *
- * `rookie-class.ts` describes the seam: `getRookieClassIds` answers an empty
+ * `rookie-class.ts` describes the seam: `rookieClassIds` answers an empty
  * set for its `{ kind: "season" }` arm because `years_exp` counts completed
  * seasons *as of now* and can only ever name the current class. A stored draft
  * class is the stored fact that arm wanted. Wiring it up is deliberately not

@@ -34,7 +34,13 @@
  * concurrent reservations rather than inferred from a comment.
  */
 
-import { databaseBudget, type DatabaseBudget } from "../db/budget.ts";
+import {
+  clampNotice,
+  databaseBudget,
+  fanoutLimit,
+  type DatabaseBudget,
+  type FanoutLimit,
+} from "../db/budget.ts";
 import { createLimiter, type LimiterStats } from "../sleeper/limiter.ts";
 
 /**
@@ -93,6 +99,9 @@ export type ManagerSyncAdmission = {
   stats(): LimiterStats & { inFlight: number };
 };
 
+/** The knob, named once so the clamp warning and the read cannot drift. */
+export const MANAGER_SYNC_LIMIT_VAR = "MANAGER_SYNC_LIMIT";
+
 /**
  * How many manager syncs one process may run at once, when nothing says
  * otherwise: {@link DatabaseBudget.fanout}, which is three at the default pool
@@ -107,18 +116,30 @@ export type ManagerSyncAdmission = {
  * held lock connections are a third of the pool and the rest is left for the
  * work those syncs are running, and for every other route on the dyno.
  *
- * `MANAGER_SYNC_LIMIT` overrides it. It is *not* the retired
- * `MANAGER_COLD_SYNC_LIMIT`: that one bounded a strict subset of this, so
- * honouring it here would silently re-scope whatever it was set to.
+ * `MANAGER_SYNC_LIMIT` *requests* it, and cannot raise it: the number is
+ * clamped to {@link DatabaseBudget.fanout} by {@link fanoutLimit}, because a
+ * knob that can be set to the pool size is the failure this bound exists for
+ * reached through the variable meant to prevent it. Junk falls back rather than
+ * failing the boot — the budget's own rule, since a typo in a dashboard should
+ * not be why a manager page stops answering.
+ *
+ * It is *not* the retired `MANAGER_COLD_SYNC_LIMIT`: that one bounded a strict
+ * subset of this, so honouring it here would silently re-scope whatever it was
+ * set to.
  */
 export function managerSyncConcurrency(
   env: Record<string, string | undefined> = process.env,
   budget: DatabaseBudget = databaseBudget(env),
 ): number {
-  const parsed = Number(env.MANAGER_SYNC_LIMIT?.trim());
-  // Junk falls back rather than failing the boot, the budget's own rule: a typo
-  // in a dashboard should not be why a manager page stops answering.
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : budget.fanout;
+  return managerSyncLimit(env, budget).limit;
+}
+
+/** The same reading, with what was asked for and what it was cut to. */
+export function managerSyncLimit(
+  env: Record<string, string | undefined> = process.env,
+  budget: DatabaseBudget = databaseBudget(env),
+): FanoutLimit {
+  return fanoutLimit(env[MANAGER_SYNC_LIMIT_VAR], budget);
 }
 
 /**
@@ -201,5 +222,22 @@ const globalForAdmission = globalThis as unknown as {
 
 export const managerSyncAdmission: ManagerSyncAdmission =
   (globalForAdmission.managerSyncAdmission ??= createManagerSyncAdmission(
-    managerSyncConcurrency(),
+    admittedLimit(),
   ));
+
+/**
+ * The bound this process will actually use, saying so once if it is not the one
+ * configured.
+ *
+ * Inside the `??=`, so the line is written when the semaphore is *built* — once
+ * per process rather than per request, and not at all on a module copy that
+ * finds the singleton already there. An operator who set a number this app will
+ * not honour should hear about it at boot; the alternative to a line here is
+ * silence, which is how the setting came to look like it worked.
+ */
+function admittedLimit(): number {
+  const limit = managerSyncLimit();
+  const notice = clampNotice(MANAGER_SYNC_LIMIT_VAR, limit);
+  if (notice) console.warn(`[manager-sync] ${notice}`);
+  return limit.limit;
+}

@@ -1,6 +1,8 @@
 export { mapWithConcurrency, collectWithConcurrency } from "./concurrency";
 export { errorMessage } from "./errors";
 export { startBackgroundLoop } from "./background-loop";
+export type { BackgroundLoopHandle } from "./background-loop";
+export { isNodeRuntime, NEXT_RUNTIME_VAR } from "./runtime";
 export {
   ALL_BACKGROUND_JOBS_VAR,
   BACKGROUND_JOB_VARS,
