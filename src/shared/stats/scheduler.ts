@@ -1,4 +1,5 @@
 import { backgroundJobSwitch, startBackgroundLoop } from "@/shared/util";
+import type { BackgroundLoopHandle } from "@/shared/util";
 
 import { syncStats } from "./sync";
 
@@ -73,11 +74,12 @@ async function tick(): Promise<void> {
  *
  * Set `STATS_SYNC=off` to disable (worth doing on a dev server — each week it
  * refreshes is a multi-megabyte download), or `BACKGROUND_JOBS=off` to disable
- * every loop at once — see {@link backgroundJobSwitch} for the web/worker
- * split.
+ * every loop at once, or `BACKGROUND_JOBS=worker` to run it on the worker dyno
+ * only — see {@link backgroundJobSwitch} and `shared/jobs/mode` for the two
+ * gates.
  */
-export function startStatsScheduler(): void {
-  startBackgroundLoop({
+export function startStatsScheduler(): BackgroundLoopHandle {
+  return startBackgroundLoop({
     name: "stats",
     intervalMs: STATS_INTERVAL_MS,
     guardKey: "stats-scheduler",

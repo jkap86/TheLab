@@ -673,11 +673,8 @@ decides for itself that a refresh is due and they queue up to do it in turn.
 
 **Every loop has a switch, and there is one switch over all of them**
 (`shared/util/background-jobs`). `BACKGROUND_JOBS=off` disables the lot and the
-four per-job variables keep the names they had. Four things about it:
+five per-job variables keep the names they had. Four things about it:
 
-- **The deployment it buys is one variable**, not a second entry point: the same
-  image runs twice, `BACKGROUND_JOBS=off` on the web dyno and nothing set on the
-  worker. Migrations run on boot in both, so start order doesn't matter.
 - **The switch is scheduling; the lock is correctness, and neither substitutes
   for the other.** Removing either because the other exists is the mistake to
   watch for.
@@ -685,6 +682,46 @@ four per-job variables keep the names they had. Four things about it:
   process without a second edit.
 - **Only the exact word `off` disables anything.** A typo that stopped the syncs
   would leave the database quietly unfilled for hours with nothing failing.
+- **`BACKGROUND_JOBS` is read by two gates and they answer different
+  questions.** `backgroundJobSwitch` answers "should this job run at all";
+  `shared/jobs/mode` answers "should this *process* be the one running them",
+  which is where the third value `worker` lives.
+
+**There is a real worker, and one registration list feeding both entry points.**
+`src/worker.ts` (`npm run worker`) applies migrations, starts every loop and
+holds itself open with no HTTP listener; `src/instrumentation.ts` does the same
+for the web server. Both go through `startBackgroundJobs` in `shared/jobs`, and
+that list is **derived from `BACKGROUND_JOB_VARS`** rather than written twice —
+two copies drift, and the way they drift is a job added to one entry point and
+not the other, which is a sync that silently stops the day the recommended
+deployment is adopted. Six rules:
+
+- **The role is passed in, never read from the environment.** Platform config
+  vars are per *app*, not per dyno, so `BACKGROUND_JOBS=worker` reaches both
+  processes and each one knows for itself which it is. That is why `worker` does
+  not switch the worker off — one variable, one setting, and no second variable
+  needed to put the jobs back.
+- **The default did not move.** Unset still runs every loop in every process, so
+  an existing deployment upgrades to what it had; a production web process on
+  that default logs one line recommending the split. Flipping it would stop
+  every refresh on any app that deployed without scaling a worker, and that
+  failure is the silent one — the same argument as "only the exact word `off`".
+  The Procfile and the README carry the ordering: **scale a worker before
+  setting the variable**, and run at least one.
+- **An absent `NEXT_RUNTIME` is Node** (`isNodeRuntime`). The old guard read as
+  "Node only" and meant "*Next's* Node only", so the one process that exists to
+  run these loops would have started none of them and said nothing.
+- **A startup failure exits non-zero; a configuration that runs no jobs does
+  not.** The first is a dyno reported as healthy doing no work; the second is
+  somebody's explicit instruction, and crash-looping it adds nothing.
+- **The loops are stopped before the pool is closed** on `SIGTERM`/`SIGINT`. The
+  other order is a tick mid-query losing its connection, which is a stack trace
+  describing a clean shutdown.
+- **The worker holds a ref'd keep-alive of its own**, because every loop
+  `unref`s its interval — right for a server held open by its socket, exactly
+  wrong for a process with no socket. `startBackgroundLoop` returns a handle so
+  a shutdown has something to stop; the handle's `stop` releases the guard key,
+  or a clean shutdown makes the loop unstartable for the life of the process.
 
 The crawler most wants that separation: its advisory lock spans the whole sync,
 network included, so it holds a pool connection across a league's entire Sleeper

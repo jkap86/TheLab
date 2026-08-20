@@ -1,4 +1,5 @@
 import { backgroundJobSwitch, startBackgroundLoop } from "@/shared/util";
+import type { BackgroundLoopHandle } from "@/shared/util";
 
 import { nflDraftRefreshTick } from "./refresh-tick";
 import { NFL_DRAFT_TTL_MS, syncNflDraftPicks } from "./sync";
@@ -27,10 +28,11 @@ const NFL_DRAFT_REFRESH_MS = NFL_DRAFT_TTL_MS / 4;
  * of them first finds the table stale is the only one that pulls the file.
  *
  * `NFL_DRAFT_SYNC=off` disables it, and `BACKGROUND_JOBS=off` disables every
- * loop — see {@link backgroundJobSwitch}.
+ * loop — see {@link backgroundJobSwitch}. Which *process* runs it is
+ * `BACKGROUND_JOBS=worker` and `shared/jobs/mode`, one layer up.
  */
-export function startNflDraftScheduler(): void {
-  startBackgroundLoop({
+export function startNflDraftScheduler(): BackgroundLoopHandle {
+  return startBackgroundLoop({
     name: "nfl-draft",
     intervalMs: NFL_DRAFT_REFRESH_MS,
     guardKey: "nfl-draft-scheduler",
