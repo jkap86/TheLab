@@ -5,6 +5,7 @@ import { databaseBudget } from "../db/budget.ts";
 import {
   createManagerSyncAdmission,
   managerSyncConcurrency,
+  managerSyncLimit,
 } from "./sync-admission.ts";
 
 /**
@@ -55,18 +56,71 @@ describe("managerSyncConcurrency", () => {
   });
 
   test("reads a positive integer override", () => {
-    assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: " 5 " }), 5);
+    // Within the share it is honoured exactly, which is what the knob is for:
+    // an operator asking for *less* sync concurrency gets less.
+    assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: " 2 " }), 2);
+    assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: "3" }), 3);
+  });
+
+  test("the override is a request, not a grant", () => {
+    // The hole this closes: `MANAGER_SYNC_LIMIT=10` on the default pool of ten
+    // let concurrent manager syncs hold every connection the process has —
+    // exactly what the fan-out share exists to prevent, arrived at through the
+    // variable meant to prevent it, with nothing failing to say so. Each sync
+    // holds an advisory-lock session across a whole Sleeper fan-out, so the
+    // ceiling is what one request may hold and nothing above it.
+    const fanout = databaseBudget({}).fanout;
+    for (const value of ["4", "10", "100", "1000000"]) {
+      assert.equal(
+        managerSyncConcurrency({ MANAGER_SYNC_LIMIT: value }),
+        fanout,
+        value,
+      );
+    }
+    assert.equal(managerSyncConcurrency({ MANAGER_SYNC_LIMIT: "10" }), 3);
+  });
+
+  test("the clamp holds across pool sizes", () => {
+    // The property rather than the table: however the pool is sized and however
+    // much is asked for, manager syncs never claim more of it than a single
+    // request may hold.
+    for (const poolMax of ["2", "3", "4", "10", "12", "30", "100"]) {
+      const fanout = databaseBudget({ DATABASE_POOL_MAX: poolMax }).fanout;
+      for (const value of [undefined, "1", "3", "9", "500"]) {
+        const limit = managerSyncConcurrency({
+          DATABASE_POOL_MAX: poolMax,
+          MANAGER_SYNC_LIMIT: value,
+        });
+        assert.ok(limit >= 1, `pool ${poolMax}, ${value}: admits nobody`);
+        assert.ok(limit <= fanout, `pool ${poolMax}, ${value}: ${limit} over ${fanout}`);
+      }
+    }
   });
 
   test("falls back rather than failing on junk", () => {
+    // A decimal is refused rather than rounded — a fractional permit is a
+    // question with no good answer — and a zero or a negative would be an
+    // admission that admits nobody, which is an outage rather than a bound.
     const fallback = databaseBudget({}).fanout;
-    for (const value of ["", "lots", "0", "-2", "1.5"]) {
+    for (const value of ["", "  ", "lots", "0", "-2", "1.5", "2.9", "NaN", "Infinity"]) {
       assert.equal(
         managerSyncConcurrency({ MANAGER_SYNC_LIMIT: value }),
         fallback,
         value,
       );
     }
+  });
+
+  test("reports what was asked for beside what it granted", () => {
+    // What the boot-time warning is written from: the clamp is only worth
+    // announcing where the two differ.
+    const asked = managerSyncLimit({ MANAGER_SYNC_LIMIT: "20" });
+    assert.deepEqual(asked, { requested: 20, ceiling: 3, limit: 3 });
+    assert.deepEqual(managerSyncLimit({ MANAGER_SYNC_LIMIT: "junk" }), {
+      requested: null,
+      ceiling: 3,
+      limit: 3,
+    });
   });
 
   test("ignores the retired cold-sync knob", () => {

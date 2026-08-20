@@ -1712,7 +1712,23 @@ stops holding, a comment saying it does would not have caught it.
   own**, for the reason `ADVISORY_LOCK_WAIT_MS` is a share of the request
   deadline: a manager sync is a held Postgres session *plus* the reads and writes
   each league needs, so what bounds it honestly is how much of the pool one
-  request may hold. **It is three layers and not one** — the semaphore bounds
+  request may hold. That last sentence is also why the environment variable can
+  only ever *lower* it. `MANAGER_SYNC_LIMIT` and `LEAGUE_REFRESH_LIMIT` both read
+  through `fanoutLimit`, which clamps whatever was set to `databaseBudget().fanout`
+  — `MANAGER_SYNC_LIMIT=10` on a pool of ten was not a wider budget, it was no
+  budget at all, and it was the shape `DB_HEAVY_READ_LIMIT` had already been
+  hardened against: the protection undone through the very variable that names
+  it, with nothing failing to say so. The clamp is a ceiling and not a target, so
+  a deployment asking for *less* still gets less; junk, zero, a negative and a
+  decimal fall back to the derivation rather than failing the boot (a zero would
+  be an admission that admits nobody, which is an outage rather than a bound, and
+  a fractional permit is a question with no good answer); and a request that was
+  cut down writes one `console.warn` naming what was configured and what is being
+  used, at the moment the semaphore is built — once per process, never per
+  request, because a bound silently not honoured is how the setting came to look
+  like it worked. `leagueRefreshConcurrency` moved into
+  `shared/manager/league-refresh-admission` to get that arithmetic on the
+  testable side of the I/O line; `league-refresh` re-exports it. **It is three layers and not one** — the semaphore bounds
   total activity on this instance, the per-manager in-flight map dedupes the same
   manager in this process, and the advisory lock is the only one of the three that
   survives a second dyno; reading any one of them alone makes the other two look
