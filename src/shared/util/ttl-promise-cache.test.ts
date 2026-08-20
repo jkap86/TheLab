@@ -252,6 +252,69 @@ describe("TtlPromiseCache", () => {
     assert.equal(cache.inFlight, 0);
   });
 
+  test("a read may take its TTL from the answer itself", async () => {
+    // The league week's case: what makes the view stale is the next kickoff,
+    // which is an instant in the schedule the view already carries — so the
+    // bound is read off the value rather than off the key, and the two cannot
+    // disagree about what the schedule said.
+    const cache = new TtlPromiseCache<{ ttl: number }>({
+      max: 8,
+      ttlMs: 60_000,
+      name: "test",
+    });
+
+    await cache.read("keep", async () => ({ ttl: 60_000 }), {
+      ttlMsFor: (value) => value.ttl,
+    });
+    await cache.read("drop", async () => ({ ttl: -1 }), {
+      ttlMsFor: (value) => value.ttl,
+    });
+
+    assert.deepEqual(cache.peek("keep"), { ttl: 60_000 });
+    assert.equal(cache.peek("drop"), undefined, "the answer's own bound applied");
+  });
+
+  test("a value's own TTL wins over one given by the caller", async () => {
+    const cache = new TtlPromiseCache<{ n: number }>({
+      max: 8,
+      ttlMs: 60_000,
+      name: "test",
+    });
+    await cache.read("a", async () => ({ n: 1 }), {
+      ttlMs: 60_000,
+      ttlMsFor: () => -1,
+    });
+    assert.equal(cache.peek("a"), undefined);
+  });
+
+  test("a non-positive TTL is coalescing and nothing else", async () => {
+    const { promise, release } = deferred<{ n: number }>();
+    let calls = 0;
+    const cache = new TtlPromiseCache<{ n: number }>({
+      max: 8,
+      ttlMs: 0,
+      name: "test",
+    });
+    const compute = () => {
+      calls += 1;
+      return promise;
+    };
+
+    // The half of this cache that costs no freshness at all: callers arriving
+    // while a computation runs asked for an answer that did not exist yet. What
+    // is deliberately not kept is the entry, so the bound is never spent on a
+    // value nothing may read.
+    const readers = [cache.read("a", compute), cache.read("a", compute)];
+    assert.equal(calls, 1);
+    release({ n: 1 });
+    for (const reader of readers) assert.deepEqual(await reader, { n: 1 });
+    assert.equal(cache.size, 0);
+    assert.equal(cache.inFlight, 0);
+
+    await cache.read("a", compute);
+    assert.equal(calls, 2, "and the next read computes again");
+  });
+
   test("clear drops both halves, and a compute in flight cannot un-coalesce the next", async () => {
     const first = deferred<{ n: number }>();
     const second = deferred<{ n: number }>();

@@ -12,6 +12,8 @@ import {
   LEAGUE_DETAIL_CACHE,
   MANAGER_RANKS_CACHE,
 } from "../../shared/manager/read-cache.ts";
+import { LEAGUE_OUTLOOK_CACHE } from "../../shared/projections/read-cache.ts";
+import { LEAGUE_WEEK_CACHE } from "../../shared/stats/read-cache.ts";
 import { COMPS_STALE_TIMES } from "../comps/comps-query.ts";
 import { ADP_STALE_TIMES } from "./adp-query.ts";
 import { LEAGUE_DETAIL_STALE_TIME } from "./league-query.ts";
@@ -86,6 +88,12 @@ const LAYERS = [
     client: LEAGUE_DETAIL_STALE_TIME,
     server: LEAGUE_DETAIL_CACHE.ttlMs,
     cost: "four queries, ×4 for a panel's four routes on a cold key",
+  },
+  {
+    what: "one league's rest-of-season outlook",
+    client: LEAGUE_DETAIL_STALE_TIME,
+    server: LEAGUE_OUTLOOK_CACHE.ttlMs,
+    cost: "a lineup solve per team per remaining week, on the web process",
   },
   {
     what: "the paged ADP board",
@@ -166,6 +174,45 @@ describe("cache layering", () => {
         `${layer.what}: a browser entry fresh for ${ms(layer.client)} is not a cache, it is a snapshot`,
       );
     }
+  });
+
+  describe("the league week is deliberately not one of these layers", () => {
+    /**
+     * The one read where the ordering above is **inverted on purpose**, which is
+     * why it is asserted rather than left to a comment somebody later "fixes".
+     *
+     * Every layer in the table is a server entry standing behind a browser
+     * entry: the client goes stale, revalidates, and this is what that
+     * revalidation should land in. The week view cannot play that role, because
+     * what it describes is *live* — the lineup a manager can still change and
+     * the seats that lock at each kickoff. Holding it for as long as a browser
+     * calls it fresh would answer the panel's own sync key with the lineup it
+     * was pressed to replace.
+     *
+     * So its server window is shorter than the client's, and what it absorbs is
+     * a **burst** rather than a revalidation: the tabs, readers and cold
+     * navigations that arrive inside one ~450ms computation of each other, which
+     * is the half that costs no freshness at all. Its freshness is carried by
+     * the key (every team's actual starters) and by the next kickoff, not by
+     * this clock — see `shared/stats/read-cache`.
+     */
+    test("its window is shorter than the browser's, not longer", () => {
+      assert.ok(
+        LEAGUE_WEEK_CACHE.ttlMs < LEAGUE_DETAIL_STALE_TIME,
+        `a week held for ${ms(LEAGUE_WEEK_CACHE.ttlMs)} against a client window of ` +
+          `${ms(LEAGUE_DETAIL_STALE_TIME)} is live lineup data cached like an aggregate`,
+      );
+    });
+
+    test("and short enough that a kickoff is the boundary that bites", () => {
+      // The NFL's windows sit hours apart and the closest pairs (4:05 and 4:25)
+      // are twenty minutes apart, so a window of minutes is the clock and the
+      // per-entry kickoff bound is what actually ends an entry.
+      assert.ok(
+        LEAGUE_WEEK_CACHE.ttlMs <= 2 * 60 * 1000,
+        `${ms(LEAGUE_WEEK_CACHE.ttlMs)} of live week data is a snapshot, not a burst absorber`,
+      );
+    });
   });
 
   test("no server entry outlives the reader's session by an order of magnitude", () => {

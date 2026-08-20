@@ -41,7 +41,24 @@ function calls(source: string, fn: string): boolean {
   return new RegExp(`(?<![\\w.\`{@])${fn}\\s*\\(`).test(source);
 }
 
-/** The loaders that used to be joined onto the core payload. */
+/**
+ * Called *or handed over* — a cached read wires its loader in by passing it
+ * (`memoizeLeagueOutlook(getLeagueOutlook)`) rather than by calling it, and a
+ * doc comment naming it is still not a use.
+ */
+function wires(source: string, fn: string): boolean {
+  return new RegExp(`(?<![\\w.\`{@])${fn}\\s*[(,)]`).test(source);
+}
+
+/**
+ * The loaders that used to be joined onto the core payload.
+ *
+ * Two of them are no longer named by a route at all: the outlook and the week
+ * are read through the process caches in front of them (`readLeagueOutlook`,
+ * `readLeagueWeekView`), which is asserted below rather than only here — a route
+ * that went back to calling the loader directly would answer identically and
+ * simply do the whole solve again for every tab, reader and revalidation.
+ */
 const ENRICHMENTS = [
   "getKtcValuesBySleeperId",
   "getDraftAdpForPlayers",
@@ -50,12 +67,21 @@ const ENRICHMENTS = [
   "getLeagueTimeline",
 ] as const;
 
+/** The reads each enrichment route actually calls — loaders and cached alike. */
+const ENRICHMENT_READS = [
+  "getKtcValuesBySleeperId",
+  "getDraftAdpForPlayers",
+  "readLeagueOutlook",
+  "readLeagueWeekView",
+  "getLeagueTimeline",
+] as const;
+
 describe("the core League Details route", () => {
   test("calls none of the enrichment loaders", () => {
     // The whole point of the split: the first paint waits on the structural read
     // and nothing else. Any one of these back in this file puts the panel behind
     // the slowest of four reads again.
-    for (const loader of ENRICHMENTS) {
+    for (const loader of [...ENRICHMENTS, ...ENRICHMENT_READS]) {
       assert.equal(calls(ROUTES.core, loader), false, `core route calls ${loader}`);
     }
   });
@@ -98,19 +124,55 @@ describe("each enrichment route reads its own dataset and no other", () => {
   const OWN: Record<keyof typeof ROUTES, readonly string[]> = {
     core: [],
     values: ["getKtcValuesBySleeperId", "getDraftAdpForPlayers"],
-    outlook: ["getLeagueOutlook"],
-    week: ["getLeagueWeekView"],
+    outlook: ["readLeagueOutlook"],
+    week: ["readLeagueWeekView"],
   };
 
   for (const name of ["values", "outlook", "week"] as const) {
     test(name, () => {
-      for (const loader of ENRICHMENTS) {
+      for (const loader of ENRICHMENT_READS) {
         assert.equal(
           calls(ROUTES[name], loader),
           OWN[name].includes(loader),
           `${name} route and ${loader} disagree`,
         );
       }
+    });
+  }
+});
+
+describe("the two expensive enrichments read through a cache of their own", () => {
+  /**
+   * The claim only the source can carry, and the one whose failure is silent.
+   *
+   * `readLeagueDetail` stops four requests from becoming four *league reads*; it
+   * does nothing about the work on top of one of them, which is what these two
+   * routes cost — ~180ms of lineup solving for the outlook, ~450ms of
+   * projections, form averages and solves for the week. A route that called the
+   * loader directly again would still answer, still typecheck and still pass
+   * every other test here, and would simply run the whole thing once per tab,
+   * per reader and per revalidation.
+   */
+  const CACHED: Record<"outlook" | "week", { loader: string; read: string; module: string }> = {
+    outlook: {
+      loader: "getLeagueOutlook",
+      read: "readLeagueOutlook",
+      module: "../../../shared/projections/outlook-read.ts",
+    },
+    week: {
+      loader: "getLeagueWeekView",
+      read: "readLeagueWeekView",
+      module: "../../../shared/stats/week-read.ts",
+    },
+  };
+
+  for (const [name, { loader, read: reader, module }] of Object.entries(CACHED)) {
+    test(`${name} goes through ${reader}, never the loader`, () => {
+      assert.ok(calls(ROUTES[name as "outlook" | "week"], reader));
+      assert.equal(calls(ROUTES[name as "outlook" | "week"], loader), false);
+      // The other end of it: the cached read is where the loader is named, so
+      // the pair cannot drift into a wrapper that wraps nothing.
+      assert.ok(wires(read(module), loader), `${module} does not read ${loader}`);
     });
   }
 });
