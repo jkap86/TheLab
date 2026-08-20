@@ -10,15 +10,15 @@ import {
   boardSignature,
   getDraftAdpForPlayers,
   getLeagueAdpBoards,
-  getManagerLeagueRosters,
   leagueAdpPool,
   parseAdpBoardChoices,
   parseSteepness,
   rankOf,
+  readManagerOptimalLineups,
+  readManagerSnapshot,
   rosterAdpValue,
 } from "@/shared/manager";
 import type { AdpBoardChoices, AdpBoardType, AdpFilters } from "@/shared/manager";
-import { getOptimalLineups } from "@/shared/projections";
 import { collectWithConcurrency, errorMessage } from "@/shared/util";
 
 import { readLeagueScope } from "../../../league-scope";
@@ -125,10 +125,13 @@ async function adpValuePayload(
   halvings: number,
   chosenBoard: AdpBoardChoices,
 ) {
-  const leagues = await getManagerLeagueRosters(userId, season);
-  const withOwn = leagues.filter((league) =>
-    league.teams.some((t) => t.owner_id === userId),
-  );
+  // Through the account's shared snapshot rather than straight at the query, for
+  // the reason the KTC route beside it is: the three requests a default Manager
+  // load fires together read the roster graph once between them. `owned` is the
+  // `withOwn` filter this route used to apply for itself, and it is the same
+  // population the shared lineups below are solved over. See
+  // `shared/manager/manager-snapshot`.
+  const { owned: withOwn } = await readManagerSnapshot(userId, season);
 
   if (withOwn.length === 0) {
     const empty: ManagerAdpValuePayload = { season, weeks: [], leagues: {} };
@@ -186,15 +189,13 @@ async function adpValuePayload(
     // card it opens can't disagree about who starts. A projections read that
     // fails costs the split and the rank and not the value — pricing a roster
     // needs no projection, so the totals still answer.
-    getOptimalLineups({
-      season,
-      leagues: withOwn.map((league) => ({
-        league_id: league.league_id,
-        rosterPositions: league.roster_positions,
-        scoringSettings: league.scoring_settings,
-        teams: league.teams,
-      })),
-    }).catch((error) => {
+    //
+    // **The identical solve the KTC route wants**, and now literally the same
+    // one: same rosters, same slots, same scoring, same horizon, because a
+    // starter value is a sum over whoever starts and neither lens has any say in
+    // who that is. The steepness slider and the board choices reprice this
+    // roster; they never reseat it.
+    readManagerOptimalLineups(userId, season).catch((error) => {
       console.error(
         `[adp-value] lineups failed for ${username}:`,
         errorMessage(error),

@@ -2,6 +2,7 @@ import { getFantasyPositions, getPlayerLineupMeta } from "@/shared/players";
 import { getWeekKickoffs } from "@/shared/schedule";
 
 import { aggregateWeeklyStats } from "./aggregate";
+import type { PlayerWeekStats } from "./aggregate";
 import { isProjectable, lineupCandidates, rosterPlayerIds } from "./candidates";
 import type { KickoffSeat } from "./kickoff-order";
 import { lockedPlayers } from "./locks";
@@ -284,12 +285,93 @@ export type LeagueTeamsInput = {
 async function readBatchInputs(
   season: string,
   leagues: readonly LeagueTeamsInput[],
+  inputs?: HorizonProjectionInputs,
 ) {
   const projectable = leagues.filter(isProjectable);
   if (projectable.length === 0) return null;
 
+  const shared =
+    inputs ?? (await readHorizonProjectionInputs({ season, leagues: projectable }));
+  if (shared.weeks.length === 0) return null;
+
+  return {
+    projectable,
+    weeks: shared.weeks,
+    stats: shared.stats,
+    positions: shared.positions,
+  };
+}
+
+/**
+ * The reads {@link readBatchInputs} makes, as a value a *caller* can hold.
+ *
+ * The `readWeekProjectionInputs` shape one horizon along, and it exists for the
+ * same reason: several answers on one screen are computed from these identical
+ * rows, and without a snapshot each of them reads them again. A default Manager
+ * load is three requests — the projected ranks, the KTC starter values and the
+ * ADP starter values — and each of the three opened by reading every stat line
+ * of every remaining week for every player on every roster of the account, plus
+ * the positions of all of them.
+ *
+ * The same four rules the week's snapshot keeps:
+ *
+ * - **Reads, never derivations.** The scoring is per league and the solve is per
+ *   caller, so both are computed *from* this rather than baked into it — which
+ *   is what lets one account's ranks and its two value lenses share one fetch.
+ * - **Passed down explicitly** (the optional `inputs` above), because a snapshot
+ *   that outlived its request would be a cache with no key that could say whose
+ *   rosters it held. `shared/manager/manager-snapshot` is where one is held for
+ *   a manager, keyed and bounded.
+ * - **A callee handed none reads its own**, so every existing caller is
+ *   unaffected by construction — `getLeagueOutlook` and the week's solve never
+ *   come through here at all.
+ * - **What it does not need, it does not fetch**: with no projectable league or
+ *   nothing left on the schedule it answers empty without touching the two
+ *   expensive reads, which is exactly what `readBatchInputs` did with its two
+ *   early returns.
+ *
+ * Empty `weeks` is how "nothing to project" travels, rather than a null: a
+ * caller can then be handed the snapshot unconditionally, and the reason its own
+ * subset is unprojectable stays its own question.
+ */
+export type HorizonProjectionInputs = {
+  /** The season these rows were read for — the snapshot's own subject. */
+  season: string;
+  /** Weeks still ahead, ascending; empty when there is nothing to project. */
+  weeks: number[];
+  /** Every stat line stored for those weeks, for every player asked about. */
+  stats: PlayerWeekStats[];
+  /** Lineup eligibility per player id, as the players cache holds it. */
+  positions: Record<string, string[]>;
+};
+
+/**
+ * Read {@link HorizonProjectionInputs} for a set of leagues in one pass.
+ *
+ * The player ids are the union across every *projectable* league given, which is
+ * what makes a snapshot taken over a superset usable by a caller holding a
+ * subset: an extra player's rows are extra keys in a map nothing opens, and both
+ * consumers bucket by their own rosters.
+ */
+export async function readHorizonProjectionInputs({
+  season,
+  leagues,
+}: {
+  season: string;
+  leagues: readonly LeagueTeamsInput[];
+}): Promise<HorizonProjectionInputs> {
+  const empty: HorizonProjectionInputs = {
+    season,
+    weeks: [],
+    stats: [],
+    positions: {},
+  };
+
+  const projectable = leagues.filter(isProjectable);
+  if (projectable.length === 0) return empty;
+
   const weeks = await getRemainingWeeks(season);
-  if (weeks.length === 0) return null;
+  if (weeks.length === 0) return empty;
 
   const playerIds = rosterPlayerIds(projectable.flatMap((l) => l.teams));
 
@@ -298,7 +380,7 @@ async function readBatchInputs(
     getFantasyPositions(playerIds),
   ]);
 
-  return { projectable, weeks, stats, positions };
+  return { season, weeks, stats, positions };
 }
 
 export type WeeklyTeamPoints = {
@@ -333,11 +415,19 @@ export type WeeklyTeamPoints = {
 export async function getWeeklyTeamPoints({
   season,
   leagues,
+  inputs,
 }: {
   season: string;
   leagues: readonly LeagueTeamsInput[];
+  /**
+   * The stat lines and positions to solve against, where a caller has already
+   * read them for a superset of these leagues — see
+   * {@link HorizonProjectionInputs}. Absent, this reads its own, which is what
+   * keeps every existing caller unaffected.
+   */
+  inputs?: HorizonProjectionInputs;
 }): Promise<WeeklyTeamPoints> {
-  const input = await readBatchInputs(season, leagues);
+  const input = await readBatchInputs(season, leagues, inputs);
   if (!input) return { weeks: [], points: new Map(), bench: new Map() };
   const { projectable, weeks, stats, positions } = input;
 
@@ -413,11 +503,14 @@ export type OptimalLineups = {
 export async function getOptimalLineups({
   season,
   leagues,
+  inputs,
 }: {
   season: string;
   leagues: readonly LeagueTeamsInput[];
+  /** As {@link getWeeklyTeamPoints}' — the reads, where a caller already holds them. */
+  inputs?: HorizonProjectionInputs;
 }): Promise<OptimalLineups> {
-  const input = await readBatchInputs(season, leagues);
+  const input = await readBatchInputs(season, leagues, inputs);
   if (!input) return { weeks: [], lineups: new Map() };
   const { projectable, weeks, stats, positions } = input;
 

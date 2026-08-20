@@ -553,6 +553,100 @@ the `Value` and `Market` presets — one press each — skip the solves entirely
 Measured against 400 leagues × 12 teams × 6 weeks: 1,284ms with them, 58ms
 without, and the standings identical across the two.
 
+### The Manager screen's shared snapshot
+
+**Caching each lens says nothing about the inputs all of them read.** A default
+Manager load fires three batch requests at once — the projected ranks, the KTC
+starter values and the ADP starter values — and each one is a correct, separate
+route with its own payload, its own cache policy and its own failure behaviour.
+Read from inside any one of them there is nothing wrong; read across the three
+there were three copies of the same reads:
+
+- `getManagerLeagueRosters(userId, season)` — two statements over `leagues` and
+  `rosters` for the whole account — **three times**;
+- every stored stat line of every remaining week for every player on every roster
+  of the account, plus the eligibility of all of them, **three times**, once
+  inside each route's own `getWeeklyTeamPoints`/`getOptimalLineups`;
+- and the rest-of-season lineup solve for every team in every league **twice**,
+  because the KTC and ADP routes each called `getOptimalLineups` over identical
+  rosters, identical slots, identical scoring and an identical horizon.
+
+That last one is the one worth dwelling on, because it is the shape that hides
+best. A starter value is a sum over whoever starts, and *neither lens has any say
+in who that is* — a KTC price and an ADP curve reprice a roster, they never
+reseat it. Two routes computing the same lineup and then valuing it differently
+reads as two independent features, and is one solve done twice on the web
+process's own event loop.
+
+`shared/manager/manager-snapshot` is the fix, and it is the shape
+`readWeekProjectionInputs` already set for the League Week panel one grain down:
+**a snapshot of the raw shared inputs, passed down explicitly, holding reads and
+never derivations.** Three coalesced entries — the roster graph, the account-wide
+projection inputs, and the aggregate lineups solved over the owned leagues — with
+the policy, the keys, the owned-league rule and the memoiser in a pure
+`snapshot-cache.ts` that takes its loaders as arguments, so the assertion can be
+a *call count*. That is the `outlook-read`/`read-cache` split again.
+
+Five things decide the design.
+
+**Three entries rather than one object with three lazy fields**, because they
+fail independently and are wanted by different callers. A projections read that
+fails must cost the lineups and leave the rosters answering — which is exactly
+the degradation the two value routes already had, and must keep: they price a
+roster with no projection at all and merely lose the split and the rank.
+
+**The ranks are deliberately not one of the entries.** They are cached and
+coalesced a layer up already (`MANAGER_RANKS_CACHE`), and their number is a
+genuinely different computation: one lineup per team *per week*, against the
+single aggregate lineup the value lenses want. What they share with the other two
+is the **reads**, and that is all they now take from here. Handing them the
+aggregate lineup would have widened the reuse by changing the answer, which is
+not a performance improvement.
+
+**The projection snapshot is taken over the superset.** The ranks project every
+league on the account (a league a manager has left still has a standing to rank
+against) where the value lenses price only the leagues holding a roster of
+theirs, so the shared read is the union: an extra league's rows are extra keys in
+a map the value lenses never open, and every consumer buckets by its own rosters.
+`getWeeklyTeamPoints` and `getOptimalLineups` take an optional `inputs` and read
+their own when handed none, so every existing caller — `getLeagueOutlook`, the
+lineup checker's own route — is unaffected by construction.
+
+**The window is seconds, and that inverts the rule the other caches keep.** Every
+other server cache here sits *behind* a browser stale time, because what it
+absorbs is a revalidation. This one holds user-specific roster state — the one
+thing a reader can change and then look straight at — so it is not a freshness
+policy at all: it is a **burst window**, sized for the fan-out of a single screen
+load. Thirty seconds for the rosters and the lineups, fifteen for the projection
+inputs (much the largest value here: tens of thousands of rows for a large
+account, so it is held for the burst that shares it and no longer). At those
+lifetimes most of the value is in `TtlPromiseCache`'s **in-flight map** rather
+than its resolved half — the resolved seconds are there for the ADP values,
+which are a POST whose league scope the client resolves first and which therefore
+routinely start a beat behind their two siblings. A non-positive lifetime would
+still be correct and would degrade to pure coalescing, which is the honest
+reading of how little is being *cached* here.
+
+**And it is invalidated on the write, like the two beside it.**
+`persistLeagueGraph` already forgot the league's core detail and the ranks of
+every manager rostered in it; it now forgets those managers' snapshots too, after
+the commit and for the same reason. What the clock is left covering is the
+seconds between the first and the last request of one load.
+
+Two regression tests carry it, and they are the two halves of one claim.
+`snapshot-cache.test.ts` counts what the memoiser asks of loaders that are
+arguments — one rosters read, one inputs read, one solve, across the three
+requests, with the callers staged so every one of them is genuinely in flight.
+`manager-snapshot.test.ts` is the second of this repo's two query-count tests
+(`stats/league-week.test.ts` is the other, and this borrows its
+dispatch-on-the-table-named-in-the-SQL rule): it drives the *real* reads against a
+counting `pool` and asserts `leagues` ×1, `rosters` ×1, `projections` ×1,
+`players` ×1 where all four were ×3, and that the two value lenses are handed the
+**same object** rather than two equal ones — `deepEqual` would pass on precisely
+the duplication this removes. It also solves the same leagues both ways, shared
+and unshared, and asserts the lineups and the weekly totals are identical, which
+is the statement that sharing the reads changed no number.
+
 ## The client cache
 
 **There are two caches and they protect different things.** Postgres protects

@@ -23,6 +23,7 @@ export {
   getOptimalLineups,
   getWeeklyTeamPoints,
   getWeekLineups,
+  readHorizonProjectionInputs,
   readWeekProjectionInputs,
 } from "./outlook";
 export { clearLeagueOutlookCache, readLeagueOutlook } from "./outlook-read";
@@ -44,6 +45,7 @@ export type { WeekProjectionInputs, WeekSolveInputs } from "./week-inputs";
 export { isProjectable, lineupCandidates, rosterPlayerIds } from "./candidates";
 export type { Projectable } from "./candidates";
 export type {
+  HorizonProjectionInputs,
   LeagueOutlook,
   LeagueTeamsInput,
   OptimalLineups,

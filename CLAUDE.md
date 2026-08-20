@@ -253,6 +253,32 @@ ten callers arriving on a cold key run one computation. Six rules:
   Postgres stays the source of truth. Nothing here wants Redis; it would put a
   network hop on the hot path.
 
+**Three lenses of one screen share their *inputs*, never their answers.** A
+default Manager load fires `…/ranks`, `…/ktc` and `…/adp-value` together, and
+each read the account's whole roster graph, each read every stat line of every
+remaining week for every rostered player, and two of them solved the identical
+rest-of-season lineup. `shared/manager/manager-snapshot` is one coalesced
+snapshot of those raw reads — `readWeekProjectionInputs`' shape a grain up —
+split into three entries (rosters, projection inputs, aggregate lineups) with
+policy, keys, the owned-league rule and the memoiser in a pure
+`snapshot-cache.ts` taking its loaders as arguments, so the assertion is a call
+*count*. Six rules. **Three entries, because they fail apart**: a projections
+read that fails costs the lineups and leaves the rosters answering, which is the
+degradation the value routes already had. **The ranks are not one of them** —
+they are cached a layer up and their number is one solve per team *per week*, so
+they take the reads and keep the solve; handing them the aggregate lineup widens
+the reuse by changing the answer. **The snapshot is the superset** (the ranks
+project leagues the manager has left; the value lenses price only the owned
+ones), and `getWeeklyTeamPoints`/`getOptimalLineups` take an optional `inputs`
+and read their own when handed none, so every other caller is unaffected by
+construction. **`ownedLeagues` is one function**, because two lenses spelling
+`withOwn` out separately is a starter value priced over one population and
+ranked over another. **The window is seconds and deliberately *shorter* than the
+browser's** — this is user-specific roster state, so it is a burst window for one
+load's fan-out rather than a freshness claim, and most of its value is
+`TtlPromiseCache`'s in-flight map. And **`persistLeagueGraph` forgets it** beside
+the ranks and the league detail, after the commit.
+
 **A cached read that joins several datasets is cached per dataset and gated per
 field.** A comps season pool is that season's stat lines and profiles, one entry
 every board shares; KTC, KTC history, ADP and the NFL draft each take an entry of
@@ -1047,15 +1073,21 @@ is exactly what would make it untestable.
 
 **A *query count* is the one claim that side of the line cannot make**, because
 it is a fact about the composition file rather than about any module under it.
-`shared/stats/league-week.test.ts` is the exception and stays a narrow one: it
-drives the real loaders with `pool.query` and `@thelab/http`'s instance replaced
-by counting stubs, so nothing connects and what comes back is a fixture. Two
-things make it safe — the alias resolves under `tsx` and `new Pool(…)` does not
-connect, so importing the I/O module costs nothing; and the stub **dispatches on
-the table named in the SQL** rather than on call order, so a read moving between
-callers cannot quietly re-label itself. The rules those reads feed are still
-asserted where they are pure (`projections/week-inputs.test.ts`); this file
-asserts only the counts and the handful of numbers proving the shared snapshot
+There are **two** such tests and the pair stays narrow:
+`shared/stats/league-week.test.ts` for one league's week, and
+`shared/manager/manager-snapshot.test.ts` for one Manager screen load. Both drive
+the real loaders with `pool.query` (and, for the week, `@thelab/http`'s instance)
+replaced by counting stubs, so nothing connects and what comes back is a fixture.
+Two things make them safe — the alias resolves under `tsx` and `new Pool(…)`
+does not connect, so importing the I/O module costs nothing; and the stub
+**dispatches on the table named in the SQL** rather than on call order, so a read
+moving between callers cannot quietly re-label itself. (Order that dispatch by
+what a statement *is* rather than by what it mentions: `FIELDED_A_TEAM_SQL` names
+`rosters` inside the leagues query, so matching the rosters read first counts
+that one twice and hides the duplication being measured.) The rules those reads
+feed are still asserted where they are pure
+(`projections/week-inputs.test.ts`, `manager/snapshot-cache.test.ts`); these two
+files assert only the counts and the handful of numbers proving a shared snapshot
 reaches the solve intact. **Reading the same table twice in one request is not an
 error** — it answers, it typechecks, it passes every other test in the repo —
 which is why it takes a test of its own.

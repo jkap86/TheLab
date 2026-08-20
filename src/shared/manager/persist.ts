@@ -6,6 +6,7 @@ import type { SleeperLeague } from "@/shared/sleeper";
 import { dedupeBy } from "./dedupe";
 import type { LeagueGraph } from "./graph";
 import { invalidateLeagueDetail } from "./league-detail-read";
+import { invalidateManagerSnapshot } from "./manager-snapshot";
 import { dedupeMatchups } from "./matchups";
 import { invalidateManagerRanks } from "./ranks-read";
 
@@ -332,10 +333,12 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
 /**
  * Persist one league graph in its own transaction (atomic per league).
  *
- * **Two in-process caches are dropped here, because two of them are answers
- * about rows this write replaces**: the league's own core detail, and the ranks
- * of every manager holding a roster in it — a standing, a points-for rank and
- * two projected ranks, all read off the rosters that have just changed.
+ * **Three in-process caches are dropped here, because all three are answers
+ * about rows this write replaces**: the league's own core detail; the ranks of
+ * every manager holding a roster in it — a standing, a points-for rank and two
+ * projected ranks, all read off the rosters that have just changed; and those
+ * managers' shared Manager snapshot, which is the roster graph itself plus the
+ * lineups solved over it that the KTC and ADP starter values are summed on.
  *
  * Both are dropped **after** the commit rather than before it, which is the only
  * ordering that ends staleness rather than moving it: a read that starts between
@@ -359,12 +362,13 @@ async function writeLeagueGraph(client: PoolClient, g: LeagueGraph): Promise<voi
 export async function persistLeagueGraph(g: LeagueGraph): Promise<void> {
   await withTransaction((client) => writeLeagueGraph(client, g));
   invalidateLeagueDetail([g.league.league_id]);
-  invalidateManagerRanks(
-    // A roster with no owner is an orphan Sleeper still lists; it names nobody
-    // whose ranks could be cached.
-    g.rosters.map((r) => r.owner_id).filter((id): id is string => Boolean(id)),
-    g.league.season,
-  );
+  // A roster with no owner is an orphan Sleeper still lists; it names nobody
+  // whose cached answers could be about it.
+  const owners = g.rosters
+    .map((r) => r.owner_id)
+    .filter((id): id is string => Boolean(id));
+  invalidateManagerRanks(owners, g.league.season);
+  invalidateManagerSnapshot(owners, g.league.season);
 }
 
 /**

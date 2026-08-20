@@ -3,8 +3,13 @@ import { getWeeklyTeamPoints } from "@/shared/projections";
 import type { WeeklyTeamPoints } from "@/shared/projections";
 import { TtlPromiseCache, deepFreeze, errorMessage } from "@/shared/util";
 
-import { getManagerLeagueRosters } from "./queries";
+import {
+  readManagerProjectionInputs,
+  readManagerSnapshot,
+} from "./manager-snapshot";
 import { projectedRank, rankOf, standingScore } from "./rank";
+import { toLeagueTeamsInput } from "./snapshot-cache";
+import type { ManagerRosterSnapshot } from "./snapshot-cache";
 import {
   MANAGER_RANKS_CACHE,
   managerRanksCacheKey,
@@ -124,8 +129,10 @@ async function computeManagerRanks(
   label: string,
 ): Promise<ManagerRanksPayload> {
   // Sequential rather than parallel: which rosters to project is the answer to
-  // the first read.
-  const leagues = await getManagerLeagueRosters(userId, season);
+  // the first read. Through the account's snapshot rather than straight at the
+  // query, so the two value lenses loading beside this one share the read
+  // instead of each making it — see `./manager-snapshot`.
+  const { leagues } = await readManagerSnapshot(userId, season);
 
   // A projections read that fails costs the projected ranks and not the payload
   // — the same call the KTC and ADP-value routes make, degraded the same way and
@@ -136,21 +143,15 @@ async function computeManagerRanks(
   // degraded shape is one the payload already describes — which is also what a
   // caller asking for no projections gets, by the same construction.
   const { weeks, points, bench } = options.projections
-    ? await getWeeklyTeamPoints({
-        season,
-        leagues: leagues.map((l) => ({
-          league_id: l.league_id,
-          rosterPositions: l.roster_positions,
-          scoringSettings: l.scoring_settings,
-          teams: l.teams,
-        })),
-      }).catch((error): WeeklyTeamPoints => {
-        console.error(
-          `[ranks] weekly points failed for ${label}:`,
-          errorMessage(error),
-        );
-        return NO_PROJECTIONS;
-      })
+    ? await weeklyPoints(userId, season, leagues).catch(
+        (error): WeeklyTeamPoints => {
+          console.error(
+            `[ranks] weekly points failed for ${label}:`,
+            errorMessage(error),
+          );
+          return NO_PROJECTIONS;
+        },
+      )
     : NO_PROJECTIONS;
 
   const ranks: ManagerRanksPayload["ranks"] = {};
@@ -197,4 +198,36 @@ async function computeManagerRanks(
   // so a route that sorted or annotated it in place would be editing what every
   // later reader gets.
   return deepFreeze({ season, weeks, ranks });
+}
+
+/**
+ * The weekly solves, over the account's shared projection reads.
+ *
+ * **The reads are shared and the solve is not**, which is the whole of what this
+ * function is for. The stat lines and the positions are identical to the ones
+ * the KTC and ADP starter values are computed from — the same players over the
+ * same remaining weeks — so reading them three times per screen load was
+ * arithmetic rather than judgement. What each week's own best lineup scores is a
+ * different question from what one aggregate lineup does, and is still solved
+ * here, per team per week, exactly as before.
+ *
+ * Its failures are the projections read's and the solve's alike, which is why it
+ * is a function rather than two awaits: both land in the single `catch` above,
+ * so the degraded answer is the one the payload already describes.
+ */
+async function weeklyPoints(
+  userId: string,
+  season: string,
+  leagues: ManagerRosterSnapshot["leagues"],
+): Promise<WeeklyTeamPoints> {
+  const inputs = await readManagerProjectionInputs(userId, season);
+  return getWeeklyTeamPoints({
+    season,
+    // Every league on the snapshot, not just the owned ones: a league the
+    // manager has left still has a standing to be ranked against. The mapping is
+    // the shared one, so this and the aggregate lineups cannot disagree about
+    // what a league is to the solver.
+    leagues: leagues.map(toLeagueTeamsInput),
+    inputs,
+  });
 }
