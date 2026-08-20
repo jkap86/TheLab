@@ -1,4 +1,5 @@
 import { backgroundJobSwitch, startBackgroundLoop } from "@/shared/util";
+import type { BackgroundLoopHandle } from "@/shared/util";
 
 import { syncKtcHistory } from "./history";
 import { KTC_TTL_MS, syncKtcValues } from "./sync";
@@ -63,10 +64,11 @@ async function tick(firstRun: boolean): Promise<void> {
  * `KTC_SYNC=off` disables it, and `BACKGROUND_JOBS=off` disables every loop —
  * see {@link backgroundJobSwitch}. This was the one loop with no switch at all,
  * which made "web dyno serves, worker dyno crawls" impossible to express however
- * the other three were set.
+ * the other three were set. Which *process* runs it is `BACKGROUND_JOBS=worker`
+ * and `shared/jobs/mode`, one layer above this switch.
  */
-export function startKtcScheduler(): void {
-  startBackgroundLoop({
+export function startKtcScheduler(): BackgroundLoopHandle {
+  return startBackgroundLoop({
     name: "ktc",
     intervalMs: KTC_REFRESH_MS,
     guardKey: "ktc-scheduler",

@@ -10,11 +10,13 @@ export {
 export { resolveDatabaseUrl, DATABASE_URL_ENV } from "./config";
 export type { DatabaseUrlResolution } from "./config";
 export {
+  clampNotice,
   databaseBudget,
+  fanoutLimit,
   REQUEST_DEADLINE_MS,
   DEFAULT_POOL_MAX,
 } from "./budget";
-export type { DatabaseBudget } from "./budget";
+export type { DatabaseBudget, FanoutLimit } from "./budget";
 export {
   createHeavyReadAdmission,
   dbHeavyReadAdmission,

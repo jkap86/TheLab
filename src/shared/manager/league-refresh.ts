@@ -1,15 +1,14 @@
 import {
   AdvisoryLockTimeoutError,
-  databaseBudget,
   leagueSyncLockKey,
   pool,
   withBlockingAdvisoryLock,
 } from "@/shared/db";
-import { cacheBustToken, createLimiter, getLeague } from "@/shared/sleeper";
-import type { Limiter } from "@/shared/sleeper";
+import { cacheBustToken, getLeague } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
 import { markLeaguesGone } from "./crawl-queue";
+import { leagueRefreshAdmission } from "./league-refresh-admission";
 import { getCurrentWeek, syncLeagueGraphs } from "./sync";
 import {
   LEAGUE_REFRESH_ATTEMPT_SQL,
@@ -80,47 +79,17 @@ export type LeagueRefreshResult =
   | { status: "failed"; updatedAt: Date | null };
 
 /**
- * How many on-demand league refreshes one process may run at once.
- *
- * {@link DatabaseBudget.fanout} by default — a share of the pool rather than a
- * number of its own, for the reason `managerSyncConcurrency` is one: a refresh
- * is a Postgres session held for its whole duration (the advisory lock) plus the
- * reads and writes the graph needs, so what bounds it honestly is how much of
- * the pool one request may hold.
- *
- * `LEAGUE_REFRESH_LIMIT` overrides it, and junk falls back rather than failing
- * the boot — the budget's own rule, since a typo in a dashboard should not be
- * why a button stops working.
+ * The bound and the limiter live in `./league-refresh-admission`, which imports
+ * nothing this module's I/O drags in, so the clamp on `LEAGUE_REFRESH_LIMIT` is
+ * assertable by Node's test runner. Re-exported here because this is where the
+ * bound is spent and where every caller already looks for it.
  */
-export function leagueRefreshConcurrency(
-  env: Record<string, string | undefined> = process.env,
-): number {
-  const parsed = Number(env.LEAGUE_REFRESH_LIMIT?.trim());
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : databaseBudget(env).fanout;
-}
-
-/**
- * The process's league-refresh admission, cached on `globalThis` in every
- * environment.
- *
- * The pool's rule, for the pool's reason: a route bundle carrying its own copy
- * of this module would get its own semaphore and its own idea of how many
- * refreshes are running, and nothing in the process could tell — two copies of
- * a cap of three is a cap of six, which is most of the pool.
- *
- * A bare {@link Limiter} rather than the manager admission's semaphore-plus-map,
- * because there is nothing here for the map to do: the per-league advisory lock
- * already collapses two callers on one league into one fan-out *and* hands both
- * the answer, which is strictly better than refusing the second as a duplicate.
- */
-const globalForRefresh = globalThis as unknown as {
-  leagueRefreshAdmission?: Limiter;
-};
-
-export const leagueRefreshAdmission: Limiter =
-  (globalForRefresh.leagueRefreshAdmission ??= createLimiter(
-    leagueRefreshConcurrency(),
-  ));
+export {
+  LEAGUE_REFRESH_LIMIT_VAR,
+  leagueRefreshAdmission,
+  leagueRefreshConcurrency,
+  leagueRefreshLimit,
+} from "./league-refresh-admission";
 
 /** When this league was last read from Sleeper, or null if we don't store it. */
 export async function getLeagueRefreshState(
