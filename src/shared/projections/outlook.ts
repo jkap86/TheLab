@@ -1,11 +1,9 @@
-import { getFantasyPositions, getPlayerTeams } from "@/shared/players";
+import { getFantasyPositions, getPlayerLineupMeta } from "@/shared/players";
 import { getWeekKickoffs } from "@/shared/schedule";
 
 import { aggregateWeeklyStats } from "./aggregate";
-import type { PlayerWeekStats } from "./aggregate";
 import { isProjectable, lineupCandidates, rosterPlayerIds } from "./candidates";
-import { orderLineupByKickoff } from "./kickoff-order";
-import type { KickoffPlayer, KickoffSeat } from "./kickoff-order";
+import type { KickoffSeat } from "./kickoff-order";
 import { lockedPlayers } from "./locks";
 import { compareLineup, optimalLineup, recognisedSlots } from "./optimal";
 import type { LineupComparison, LineupSlot } from "./optimal";
@@ -16,6 +14,12 @@ import {
   listPlayerWeekStats,
 } from "./queries";
 import { scoreStatLine, unprojectedScoring } from "./score";
+import {
+  bucketPlayerRows,
+  dayLockedPlayers,
+  solveWeekLineups,
+} from "./week-inputs";
+import type { WeekProjectionInputs } from "./week-inputs";
 import { groupWeeklyPoints, weeklyLineupSplit, weeklyRosters } from "./weekly";
 import type { PlayerSplit } from "./weekly";
 
@@ -337,7 +341,7 @@ export async function getWeeklyTeamPoints({
   if (!input) return { weeks: [], points: new Map(), bench: new Map() };
   const { projectable, weeks, stats, positions } = input;
 
-  const rowsByPlayer = bucketByPlayer(stats);
+  const rowsByPlayer = bucketPlayerRows(stats);
 
   const points = new Map<string, Map<number, number>>();
   const bench = new Map<string, Map<number, number>>();
@@ -554,20 +558,33 @@ export async function getWeekLineups({
   season,
   week,
   leagues,
+  inputs,
 }: {
   season: string;
   week: number;
   leagues: readonly LeagueTeamsInput[];
+  /**
+   * A snapshot the caller has already read for this same season, week and
+   * roster union — see {@link readWeekProjectionInputs}. Absent, this reads one
+   * of its own, which is what every caller that has nothing to share does.
+   *
+   * It is the caller's job that the snapshot covers these leagues, because
+   * covering them is what it read it for: a snapshot narrower than the rosters
+   * handed over would quietly project the missing players at zero, which is
+   * this file's own definition of the wrong answer that looks like a right one.
+   */
+  inputs?: WeekProjectionInputs;
 }): Promise<WeekLineups> {
   const projectable = leagues.filter(isProjectable);
   if (projectable.length === 0) return { week, teams: new Map() };
 
-  const playerIds = rosterPlayerIds(projectable.flatMap((l) => l.teams));
-
-  const [stats, positions] = await Promise.all([
-    listLineupWeekStats({ season, week, playerIds }),
-    getFantasyPositions(playerIds),
-  ]);
+  const shared =
+    inputs ??
+    (await readWeekProjectionInputs({
+      season,
+      week,
+      playerIds: rosterPlayerIds(projectable.flatMap((l) => l.teams)),
+    }));
 
   // The clause of the contract above that nothing else implements: a week with
   // no stored projections for any of these rosters is *absence*, never a map of
@@ -575,14 +592,14 @@ export async function getWeekLineups({
   // back `{optimal: 0, current: 0, points_left: 0}`, and "0.0 points left"
   // reads as "your lineup is already optimal" — the one wrong answer here that
   // looks like a working one.
-  if (stats.length === 0) return { week, teams: new Map() };
+  if (shared.stats.length === 0) return { week, teams: new Map() };
 
   // Kickoff instants for the lock and the re-seat below, read once for the
-  // account like the positions above: when a player's game kicks off is a fact
-  // about the schedule, not about any league. Judged per read — a failure
+  // account like the snapshot's positions: when a player's game kicks off is a
+  // fact about the schedule, not about any league. Judged per read — a failure
   // costs the ordering (null) and the lock's minute-accuracy (the day fallback
   // stands), never the lineups.
-  const kickoffs = await kickoffInputs(season, week, playerIds);
+  const kickoffs = await weekKickoffs(season, week);
 
   // One set for the account: whether a game has been played is a fact about
   // the schedule, so it is the same answer in every league the player is
@@ -591,153 +608,108 @@ export async function getWeekLineups({
   // so a schedule that can't be read degrades to the old behaviour rather
   // than unlocking a played game. The rule lives in `./locks`; `now` is one
   // reading per request, so every league judges the same instant.
-  const dayLocked = new Set(
-    stats.filter((row) => row.locked).map((row) => row.player_id),
-  );
+  const dayLocked = dayLockedPlayers(shared.stats);
   const locked = kickoffs
     ? lockedPlayers({
-        playerIds,
+        playerIds: shared.playerIds,
         dayLocked,
-        teams: kickoffs.teams,
-        kickoffs: kickoffs.byTeam,
+        teams: shared.teams,
+        kickoffs,
         now: Date.now(),
       })
     : dayLocked;
 
-  const rowsByPlayer = bucketByPlayer(stats);
-
-  const teams = new Map<string, Map<number, TeamWeekLineup>>();
-  for (const league of projectable) {
-    const scoring = league.scoringSettings;
-    // One week asked for, so the grouping holds one entry — read through the
-    // same helper the horizon path uses rather than a second spelling of it.
-    const points =
-      groupWeeklyPoints(
-        rosterPlayerIds(league.teams).flatMap((id) => rowsByPlayer.get(id) ?? []),
-        (s) => scoreStatLine(s, scoring),
-      ).get(week) ?? new Map<string, number>();
-
-    const byTeam = new Map<number, TeamWeekLineup>();
-    for (const team of league.teams) {
-      const candidates = lineupCandidates(
-        team,
-        positions,
-        // Zero for a player this week doesn't project, which is what
-        // `compareLineup` needs: he can only ever fill a slot nobody else
-        // wanted, and dropping him would overstate what the current lineup is
-        // scoring. (The horizon path omits him instead, because there the
-        // distinction is a bye rather than a zero — see `./weekly`.)
-        (id) => points.get(id) ?? 0,
-      );
-
-      const comparison = compareLineup({
-        rosterPositions: league.rosterPositions,
-        starters: team.starters,
-        players: candidates,
-        locked,
-        bestBall: league.bestBall,
-      });
-
-      byTeam.set(team.roster_id, {
-        optimal_points: comparison.optimal_points,
-        current_points: comparison.current_points,
-        points_left: comparison.points_left,
-        lineup: comparison.current,
-        sit: comparison.sit,
-        start: comparison.start,
-        // Null for a best-ball league before anything is looked up: Sleeper
-        // seats that lineup after the games, so there is no seat order for a
-        // manager to set — the same reason its sit/start are empty.
-        kickoff_order: league.bestBall
-          ? null
-          : kickoffOrdered(comparison.current, positions, kickoffs, locked),
-      });
-    }
-    teams.set(league.league_id, byTeam);
-  }
-
-  return { week, teams };
+  return {
+    week,
+    // Every decision below this line is pure and testable without a database —
+    // see `./week-inputs`, which is where the solve lives.
+    teams: solveWeekLineups({
+      inputs: shared,
+      leagues: projectable,
+      locked,
+      kickoffs,
+      score: (scoring) => (stats) => scoreStatLine(stats, scoring),
+    }),
+  };
 }
 
-/** What re-seating a lineup by kickoff needs: each player's team, each team's instant. */
-type KickoffInputs = {
-  teams: Record<string, string | null>;
-  byTeam: Map<string, number>;
-};
+/**
+ * The reads every answer about one week is computed from — the week's stat
+ * lines and the player metadata the lineup solve joins them to — gathered once
+ * so a request that asks two questions of them pays for one fetch.
+ *
+ * **Two queries, and it used to be four.** `getLeagueWeekView` read the week's
+ * projections for its per-player column and {@link getWeekLineups} read the
+ * identical rows again for the lineups, while the lineup path asked `players`
+ * once for eligibility and once more for each player's NFL team. The rows are
+ * the same rows and the two `players` facts are the same row (see
+ * `getPlayerLineupMeta`), so the duplication was arithmetic rather than
+ * judgement.
+ *
+ * **The snapshot does not decide anything**, which is what keeps it shareable:
+ * scoring is per league and locking is per request, so both are computed from
+ * it rather than baked into it.
+ */
+export async function readWeekProjectionInputs({
+  season,
+  week,
+  playerIds,
+  metadata = true,
+}: {
+  season: string;
+  week: number;
+  playerIds: string[];
+  /**
+   * Whether anything reading this snapshot will solve a lineup off it.
+   *
+   * The eligibility and NFL team are the *solve's* inputs alone — a projection
+   * column is scored off the stat lines and nothing else — so a caller that has
+   * already established there is no lineup to solve (a league with no slots or
+   * scoring on file, which {@link getWeekLineups} refuses before reading
+   * anything) leaves that read unmade rather than paying for a map nothing will
+   * open. Absent reads as *on*, so a caller that hasn't thought about it gets
+   * the whole snapshot.
+   */
+  metadata?: boolean;
+}): Promise<WeekProjectionInputs> {
+  const [stats, meta] = await Promise.all([
+    listLineupWeekStats({ season, week, playerIds }),
+    metadata
+      ? getPlayerLineupMeta(playerIds)
+      : Promise.resolve({ positions: {}, teams: {} }),
+  ]);
+
+  return {
+    season,
+    week,
+    playerIds,
+    stats,
+    positions: meta.positions,
+    teams: meta.teams,
+  };
+}
 
 /**
- * The kickoff instants behind {@link TeamWeekLineup.kickoff_order}, for the
- * union of every roster in the request — the schedule's week through
- * `shared/schedule`'s read-through cache, and each player's NFL team to join
- * him to it.
+ * The week's kickoff instants, or null when there is nothing honest to order
+ * against: a week the schedule names no believable instants for, or the read
+ * failing outright.
  *
- * Null when there is nothing honest to order against: a week the schedule
- * names no believable instants for, or either read failing outright. The
- * ordering itself holds any *single* player it can't date (see
+ * The ordering itself holds any *single* player it can't date (see
  * `./kickoff-order`), but with nothing dated at all the identity answer would
  * read as "already ordered" — a claim about a schedule this process hasn't
- * seen — so the whole ordering answers null instead.
+ * seen — so the whole ordering answers null instead. The player half of that
+ * join is on the snapshot now, which is what leaves this the one read here that
+ * leaves this app's own data.
  */
-async function kickoffInputs(
+async function weekKickoffs(
   season: string,
   week: number,
-  playerIds: string[],
-): Promise<KickoffInputs | null> {
+): Promise<Map<string, number> | null> {
   try {
-    const [byTeam, teams] = await Promise.all([
-      getWeekKickoffs(season, week),
-      getPlayerTeams(playerIds),
-    ]);
-    if (byTeam.size === 0) return null;
-    return { teams, byTeam };
+    const byTeam = await getWeekKickoffs(season, week);
+    return byTeam.size === 0 ? null : byTeam;
   } catch (error) {
     console.error(`[projections] kickoff inputs failed for week ${week}:`, error);
     return null;
   }
-}
-
-/**
- * One team's lineup re-seated by kickoff — the thin join between the lookups
- * above and the pure ordering, deciding nothing itself: eligibility, holds and
- * the objective all live in `./kickoff-order`, and a player whose team or
- * instant is unknown arrives there as a null kickoff and keeps his seat.
- */
-function kickoffOrdered(
-  lineup: readonly LineupSlot[],
-  positions: Record<string, string[]>,
-  kickoffs: KickoffInputs | null,
-  locked: ReadonlySet<string>,
-): KickoffSeat[] | null {
-  if (!kickoffs) return null;
-
-  const players: KickoffPlayer[] = [];
-  for (const seat of lineup) {
-    if (!seat.player_id) continue;
-    const team = kickoffs.teams[seat.player_id] ?? null;
-    players.push({
-      player_id: seat.player_id,
-      positions: positions[seat.player_id] ?? [],
-      kickoff: team === null ? null : (kickoffs.byTeam.get(team) ?? null),
-    });
-  }
-
-  return orderLineupByKickoff({ lineup, players, locked });
-}
-
-/**
- * The account's stat rows bucketed by player, so each league scores its own
- * rosters' rows rather than re-scanning the whole union per league. Mechanical
- * plumbing shared by the two batch readers above — it decides nothing, which is
- * why it lives here rather than in a pure module.
- */
-function bucketByPlayer(
-  stats: readonly PlayerWeekStats[],
-): Map<string, PlayerWeekStats[]> {
-  const rowsByPlayer = new Map<string, PlayerWeekStats[]>();
-  for (const row of stats) {
-    let rows = rowsByPlayer.get(row.player_id);
-    if (!rows) rowsByPlayer.set(row.player_id, (rows = []));
-    rows.push(row);
-  }
-  return rowsByPlayer;
 }

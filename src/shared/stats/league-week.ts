@@ -3,10 +3,13 @@ import { getPreviousLeagueScores, listRosterWeekPoints } from "@/shared/manager"
 import type { RosterWeekPoints } from "@/shared/manager";
 import {
   getWeekLineups,
-  listLineupWeekStats,
+  isProjectable,
   medianLineups,
+  readWeekProjectionInputs,
   scoreStatLine,
+  weekProjectionPoints,
 } from "@/shared/projections";
+import type { WeekProjectionInputs } from "@/shared/projections";
 import { getWeekGames } from "@/shared/schedule";
 import type { TeamGame } from "@/shared/schedule";
 
@@ -154,11 +157,26 @@ export type LeagueWeekView = {
 /**
  * Assemble {@link LeagueWeekView} for one league and one week.
  *
- * The five reads are independent of each other and run together; each decides
- * for itself whether a failure is fatal at the call site above, since a panel
+ * The reads are independent of each other and run together; each decides for
+ * itself whether a failure is fatal at the call site above, since a panel
  * missing one column is worth more than a panel that failed. The schedule read
  * decides for itself down in {@link getWeekGames}, which answers an empty map
  * rather than throwing — its own note says why.
+ *
+ * **The projection column and the lineups are one read, not two.** They are the
+ * same week of the same table for the same rosters, and asking twice is what
+ * this used to do: `weekProjection` read the week and `teamProjection` read it
+ * again through {@link getWeekLineups}, which then read `players` twice more for
+ * facts that arrive on one row. {@link readWeekProjectionInputs} is that fetch,
+ * made once and handed to both — the scoring stays per consumer, because it is
+ * the only thing that differed between them.
+ *
+ * **What follows the snapshot is arithmetic, so it is not a second wait.** The
+ * projection column is a dot product per row and the lineups are a solve per
+ * team; neither touches the network, and the schedule the solve reads its
+ * kickoffs from is the same `getWeekGames` answered above, through one
+ * process-wide cache. Splitting the two phases is what makes that a cache hit
+ * rather than a second flight of the same request.
  */
 export async function getLeagueWeekView({
   leagueId,
@@ -190,25 +208,36 @@ export async function getLeagueWeekView({
     ...new Set(teams.flatMap((team) => team.players ?? []).filter((id) => id && id !== "0")),
   ];
 
-  const [projection, ppgRead, lineups, teamPpgByRoster, games] = await Promise.all([
-    weekProjection({ season, week, playerIds, scoringSettings }),
+  // Asked before the read rather than after it, because it decides what the read
+  // costs: a league with no slots or scoring on file has no lineup to solve, so
+  // the player metadata half of the snapshot is left unfetched and this league
+  // stays at the one query it has always cost. The projection column still
+  // answers — it is the stat lines and the scoring, and neither is what is
+  // missing here.
+  const solvable = isProjectable({ rosterPositions, scoringSettings, teams });
+
+  const [inputs, ppgRead, teamPpgByRoster, games] = await Promise.all([
+    readWeekProjectionInputs({ season, week, playerIds, metadata: solvable }),
     playerPpgWindow({ season, week, playerIds, scoringSettings }),
-    teamProjection({
-      leagueId,
-      season,
-      week,
-      teams,
-      rosterPositions,
-      scoringSettings,
-      bestBall,
-    }),
     teamPpgWindow({ leagueId, week, teams }),
-    // The same fetch the lineup solve above reads its kickoff instants from,
+    // The same fetch the lineup solve below reads its kickoff instants from,
     // through one process-wide cache — so a panel naming a player's kickoff and
     // the ordering that re-seats him for it cost one schedule request between
     // them, and read one answer.
     getWeekGames(season, week),
   ]);
+
+  const projection = weekProjection(inputs, scoringSettings);
+  const lineups = await teamProjection({
+    inputs,
+    leagueId,
+    season,
+    week,
+    teams,
+    rosterPositions,
+    scoringSettings,
+    bestBall,
+  });
 
   return {
     week,
@@ -229,32 +258,24 @@ export async function getLeagueWeekView({
  * Every rostered player's projected points for the week, in this league's
  * scoring.
  *
- * **{@link listLineupWeekStats} rather than its horizon twin**, which is the one
- * decision in this function: that read keeps a game already played instead of
- * filtering it out. On a Sunday morning the horizon read has already dropped
+ * **The snapshot's rows rather than a horizon read**, which is the one decision
+ * behind this column: `listLineupWeekStats` keeps a game already played instead
+ * of filtering it out. On a Sunday morning the horizon read has already dropped
  * every Thursday starter, so his projection column would read as an em dash for
  * the rest of the week — for points he did in fact score, in the lineup the
- * reader is looking at. The same call the week's lineup solve makes, so the
- * player's number and the team total above it come off one population.
+ * reader is looking at.
+ *
+ * It is now literally the same rows the week's lineup solve reads, rather than
+ * the same *call* made twice, so the player's number and the team total above it
+ * cannot come off two populations however the week moves underneath them.
  */
-async function weekProjection({
-  season,
-  week,
-  playerIds,
-  scoringSettings,
-}: {
-  season: string;
-  week: number;
-  playerIds: string[];
-  scoringSettings: Record<string, number> | null;
-}): Promise<Map<string, number>> {
-  const rows = await listLineupWeekStats({ season, week, playerIds });
-
-  const projection = new Map<string, number>();
-  for (const row of rows) {
-    projection.set(row.player_id, scoreStatLine(row.stats, scoringSettings));
-  }
-  return projection;
+function weekProjection(
+  inputs: WeekProjectionInputs,
+  scoringSettings: Record<string, number> | null,
+): Map<string, number> {
+  return weekProjectionPoints(inputs.stats, (stats) =>
+    scoreStatLine(stats, scoringSettings),
+  );
 }
 
 /**
@@ -331,8 +352,16 @@ async function playerPpgWindow({
  * {@link getWeekLineups} rather than a solve of its own — the same call the
  * lineup checker's own rows are built on, so the gap a card prints and the gap
  * the panel it opens prints are one rule, played-game locking included.
+ *
+ * The snapshot is handed over rather than left to be re-read, which is the whole
+ * of this optimization: the rosters it covers are these rosters and the week is
+ * this week, so the read it would have made is the read that has already been
+ * made. It still awaits, because the kickoff instants behind the re-seat are a
+ * read of its own — one that answers from `shared/schedule`'s cache here, since
+ * the view's own `getWeekGames` filled it a moment ago.
  */
 async function teamProjection({
+  inputs,
   leagueId,
   season,
   week,
@@ -341,6 +370,7 @@ async function teamProjection({
   scoringSettings,
   bestBall,
 }: {
+  inputs: WeekProjectionInputs;
   leagueId: string;
   season: string;
   week: number;
@@ -352,6 +382,7 @@ async function teamProjection({
   const lineups = await getWeekLineups({
     season,
     week,
+    inputs,
     leagues: [
       {
         league_id: leagueId,
