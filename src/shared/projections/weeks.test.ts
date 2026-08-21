@@ -10,28 +10,32 @@ import {
 } from "./weeks.ts";
 
 describe("targetWeeks", () => {
-  test("follows display_week during the season, plus the next", () => {
-    assert.deepEqual(targetWeeks({ week: 6, display_week: 7 }), [7, 8]);
+  test("follows display_week during the season, plus the next two", () => {
+    assert.deepEqual(targetWeeks({ week: 6, display_week: 7 }), [7, 8, 9]);
   });
 
   test("uses display_week in the offseason, when week is 0", () => {
     // Projections for week 1 exist months before kickoff, so an offseason state
     // (week 0, display_week 1) should still have something to sync.
-    assert.deepEqual(targetWeeks({ week: 0, display_week: 1 }), [1, 2]);
+    assert.deepEqual(targetWeeks({ week: 0, display_week: 1 }), [1, 2, 3]);
   });
 
   test("falls back to week when display_week is missing or 0", () => {
-    assert.deepEqual(targetWeeks({ week: 4, display_week: 0 }), [4, 5]);
+    assert.deepEqual(targetWeeks({ week: 4, display_week: 0 }), [4, 5, 6]);
   });
 
   test("defaults to week 1 when NFL state is unavailable", () => {
-    assert.deepEqual(targetWeeks(null), [1, 2]);
+    assert.deepEqual(targetWeeks(null), [1, 2, 3]);
   });
 
   test("never looks past the last regular-season week", () => {
     assert.deepEqual(targetWeeks({ week: 18, display_week: 18 }), [LAST_REGULAR_WEEK]);
     // Playoff weeks report past 18; projections stop there.
     assert.deepEqual(targetWeeks({ week: 21, display_week: 21 }), [LAST_REGULAR_WEEK]);
+    // The clamp applies to the lookahead's tail, not only to its head: a window
+    // ending past 18 is truncated rather than naming a week that has no
+    // projections to fetch.
+    assert.deepEqual(targetWeeks({ week: 17, display_week: 17 }), [17, LAST_REGULAR_WEEK]);
   });
 
   test("honours the lookahead, including zero", () => {
@@ -44,15 +48,15 @@ describe("targetWeeks", () => {
 describe("horizonWeeks", () => {
   test("picks up where targetWeeks leaves off, through week 18", () => {
     const state = { week: 6, display_week: 7 };
-    assert.deepEqual(targetWeeks(state), [7, 8]);
-    assert.deepEqual(horizonWeeks(state), [9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+    assert.deepEqual(targetWeeks(state), [7, 8, 9]);
+    assert.deepEqual(horizonWeeks(state), [10, 11, 12, 13, 14, 15, 16, 17, 18]);
   });
 
   test("covers the whole season from the offseason", () => {
-    // The case that matters: in July every week past the first two is horizon,
+    // The case that matters: in July every week past the first three is horizon,
     // and Sleeper has already published all of them.
-    assert.equal(horizonWeeks({ week: 0, display_week: 1 }).length, 16);
-    assert.deepEqual(horizonWeeks({ week: 0, display_week: 1 })[0], 3);
+    assert.equal(horizonWeeks({ week: 0, display_week: 1 }).length, 15);
+    assert.deepEqual(horizonWeeks({ week: 0, display_week: 1 })[0], 4);
   });
 
   test("never overlaps the near window", () => {

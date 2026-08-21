@@ -91,8 +91,8 @@ export const HORIZON_ORDER_SQL = `s.attempt_at NULLS FIRST, w.week` as const;
 /**
  * Plain week order, for a list with no cap on it.
  *
- * The near window is two weeks and both are always fetched, so rotating them
- * buys nothing and costs the log its natural reading order. Spelled here rather
+ * The near window is three weeks and all of them are always fetched, so rotating
+ * them buys nothing and costs the log its natural reading order. Spelled here rather
  * than inline so the two orderings are visibly a choice between alternatives.
  */
 export const WEEK_ORDER_SQL = `w.week` as const;

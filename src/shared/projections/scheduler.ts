@@ -56,8 +56,8 @@ async function tick(): Promise<void> {
  * for the lifecycle guarantees (Node-only, idempotent, non-overlapping, and never
  * killed by a throwing tick).
  *
- * Keeps the current and next NFL week fresh by the hour, and the rest of the
- * season fresh by the day. `syncProjections` takes a Postgres advisory lock, so
+ * Keeps the current NFL week and the next two fresh by the hour, and the rest of
+ * the season fresh by the day. `syncProjections` takes a Postgres advisory lock, so
  * running several app instances against one database doesn't multiply the load on
  * Sleeper.
  *
@@ -72,7 +72,7 @@ export function startProjectionsScheduler(): BackgroundLoopHandle {
     intervalMs: PROJECTIONS_INTERVAL_MS,
     guardKey: "projections-scheduler",
     ...backgroundJobSwitch("projections"),
-    cadence: "check every 15 min; this week hourly, rest of season daily",
+    cadence: "check every 15 min; this week + 2 hourly, rest of season daily",
     tick,
   });
 }

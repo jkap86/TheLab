@@ -3,12 +3,23 @@ import type { SleeperNflState } from "@/shared/sleeper";
 /** Last week Sleeper publishes regular-season projections for. */
 export const LAST_REGULAR_WEEK = 18;
 
-/** Weeks past the current one the sync keeps warm. */
-export const PROJECTION_LOOKAHEAD = 1;
+/**
+ * Weeks past the current one the sync keeps warm.
+ *
+ * Two rather than one because the week being *set* is not the only week being
+ * decided: a waiver claim or a trade is made against the week after it, so the
+ * week-after-next is already load-bearing while it is still on the horizon's
+ * day-long clock. Widening the near window is what moves it onto the hourly one.
+ *
+ * The cost is one more ~5.6MB fetch an hour and one fewer week on the horizon —
+ * paid against the near tier's clock, not the horizon's, which is why this is a
+ * different decision from raising `HORIZON_WEEKS_PER_TICK`.
+ */
+export const PROJECTION_LOOKAHEAD = 2;
 
 /**
  * Weeks the background sync keeps fresh at the news-cycle TTL: the one being
- * played and the one being set.
+ * played, the one being set, and the one being planned for.
  *
  * `display_week` is preferred over `week` because it is the week Sleeper's own UI
  * is pointed at — it rolls over once a week's games are done, which is exactly

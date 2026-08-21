@@ -112,7 +112,7 @@ receives, so the two ends can't drift without a type error.
 | `GET /api/league/[leagueId]/timeline` | The league's stored moves, for the history rail. Fetched only once a reader opens the history. |
 | `POST /api/players/sync` | Refresh the cached players map. `?force=1` bypasses the freshness gate. **Internal** — see below. |
 | `GET /api/projections` | A week of stored projections, ranked by the requested scoring. Reads only — it never calls Sleeper. |
-| `POST /api/projections/sync` | Refresh stored weekly projections. Defaults to the current and next week if stale; `?force=1` ignores the freshness gate, `?week=1,2` backfills specific weeks (at most 18), `?season=2025` picks another season. **Internal** — see below. |
+| `POST /api/projections/sync` | Refresh stored weekly projections. Defaults to the current week and the next two if stale; `?force=1` ignores the freshness gate, `?week=1,2` backfills specific weeks (at most 18), `?season=2025` picks another season. **Internal** — see below. |
 | `GET /api/adp` | Average draft position over the crawled drafts, filtered by draft and league attributes. |
 
 #### Internal sync endpoints
@@ -210,9 +210,9 @@ one database don't duplicate the work.
   players per tick; their pages are 3–6MB each).
 - **Projections sync** (checks every 15 min) — stores Sleeper's weekly player
   projections for the whole rest of the season, on two clocks. The current NFL
-  week and the next refresh hourly, because they move on injury news; the weeks
-  behind them refresh daily, two per tick, because a week-12 projection in July
-  changes over weeks rather than hours. Freshness is judged per week, so a tick
+  week and the next two refresh hourly, because they move on injury news; the
+  weeks behind them refresh daily, four per tick, because a week-12 projection in
+  July changes over weeks rather than hours. Freshness is judged per week, so a tick
   that finds everything current costs two queries; past weeks are never
   re-fetched, since their numbers stop moving once the games are played. Fill the
   horizon in one go, or pull a past week, with `/api/projections/sync?week=N`.
@@ -238,7 +238,7 @@ one database don't duplicate the work.
 | Manager league sync | 10 min |
 | Stored league (crawler refresh) | seasonal: 15 min in-season, 1 hour in the draft window, 6 hours offseason |
 | KTC values | 15 min |
-| Weekly projections — current + next week | 1 hour |
+| Weekly projections — current + next two weeks | 1 hour |
 | Manager league-list enumeration | 6 hours |
 | NFL draft positions | 12 hours |
 | Weekly projections — rest of season | 24 hours |
