@@ -1243,7 +1243,22 @@ injury designation changes them, and the rest of the season at a day because it
 doesn't. One gate for both would have to choose between a stale lineup and 90MB an
 hour. Where the slow tier is also large, cap how many slices a tick will fetch
 (`HORIZON_WEEKS_PER_TICK`) and report what the cap deferred — a skipped slice that
-reads as "fresh" is how a backfill silently stops advancing. Reporting it is not
+reads as "fresh" is how a backfill silently stops advancing.
+
+The two tiers also fail together unless something says otherwise, which took an
+incident to notice. The horizon's freshness query runs before any week is
+fetched, so anything that makes *that one read* throw — a statement timeout
+under load, or a database one migration behind the `attempt_at` column it orders
+on — propagated out of `syncProjections` and cost the near window too. Nothing
+about it read as a projections outage: the loop survived (that is what
+`startBackgroundLoop` is for), printed one `[proj] Tick failed:` line, and this
+week's lineup numbers simply stopped moving. The horizon read is now the one
+allowed to fail, and the interesting part is the second half — making it
+non-fatal is exactly what creates the opportunity to report the whole rest of
+the season as fresh on the strength of a read that never returned, so
+`consultedWeeks` narrows what a run may *claim* to what it actually asked. The
+crash was a bad outcome; a backfill that has stopped, described as a season with
+nothing due, is the worse one this codebase keeps meeting. Reporting it is not
 enough on its own, though: a cap is only a rate limit if the queue under it
 rotates, and what stops it rotating is a slice that can never stamp. See the
 `projection_week_syncs` entry under **Database** for the `attempt_at` half.

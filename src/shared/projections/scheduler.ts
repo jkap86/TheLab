@@ -19,16 +19,23 @@ import { syncProjections } from "./sync";
 export const PROJECTIONS_INTERVAL_MS = 15 * 60 * 1000;
 
 async function tick(): Promise<void> {
-  const { locked, season, synced, deferred, empty, failed, rejected } =
-    await syncProjections();
+  const {
+    locked, season, synced, deferred, empty, failed, rejected,
+    horizonUnavailable,
+  } = await syncProjections();
   if (locked) return;
 
   // Silent when everything was fresh — the common case, every 15 minutes.
+  // `horizonUnavailable` is in the condition rather than only in the message: a
+  // run that synced this week and could not consult the horizon at all is
+  // otherwise indistinguishable here from one where nothing was due, which is
+  // the silence that let a broken gate run for a day.
   if (
     synced.length === 0 &&
     empty.length === 0 &&
     failed.length === 0 &&
-    rejected.length === 0
+    rejected.length === 0 &&
+    horizonUnavailable === null
   ) {
     return;
   }
@@ -47,6 +54,9 @@ async function tick(): Promise<void> {
   // Says how much backfill is left, so a horizon that stops advancing is visible
   // in the log rather than only in the data.
   if (deferred.length) parts.push(`${deferred.length} horizon week(s) still due`);
+  // The full reason is already on the error the sync logged; naming it here is
+  // what keeps a near-window-only run from reading as an ordinary one.
+  if (horizonUnavailable) parts.push(`horizon gate unavailable`);
 
   console.log(`[proj] ${season} — ${parts.join("; ")}.`);
 }
