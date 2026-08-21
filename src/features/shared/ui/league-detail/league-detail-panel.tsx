@@ -30,11 +30,12 @@ import {
   TEAM_METRICS,
   type TeamMetricContext,
 } from "../../standings-metrics";
+import { degradedNotice } from "../../degraded";
 import { useColumnsEditor } from "../../use-columns-editor";
 import { useLeagueDetail } from "../../use-league-detail";
 import { usePersistedColumns } from "../../use-persisted-columns";
 import type { ColumnsEditor as ColumnsEditorComponent } from "../columns-editor";
-import { PanelLoading, PanelMessage } from "../panel-message";
+import { DegradedNotice, PanelLoading, PanelMessage } from "../panel-message";
 import { headToHead } from "./head-to-head";
 import { PanelSettings } from "./panel-settings";
 import {
@@ -276,7 +277,16 @@ export function LeagueDetailPanel({
     return previewing ? { ...columns, values: true, outlook: true } : columns;
   }, [week, teamColumnState.columns, rosterColumnState.columns, previewing]);
 
-  const { data, loading, error } = useLeagueDetail(leagueId, board, week, needs);
+  const { data, loading, error, degraded } = useLeagueDetail(
+    leagueId,
+    board,
+    week,
+    needs,
+  );
+  // The price lenses fail apart from each other and apart from the rosters, so a
+  // lens that could not answer is a line above a panel that still draws — never
+  // the panel's own error, which replaces it.
+  const degradedLine = degradedNotice(degraded);
 
   // The query container is here rather than around the loaded panel alone, so
   // every state this can be in is measured against one width — including the
@@ -304,16 +314,19 @@ export function LeagueDetailPanel({
           <PanelMessage>No roster data yet.</PanelMessage>
         </PanelState>
       ) : (
-        <Panel
-          data={data}
-          focusRosterId={focusRosterId}
-          opponentRosterId={opponentRosterId}
-          week={week}
-          teamColumnState={teamColumnState}
-          rosterColumnState={rosterColumnState}
-          teamEditor={teamEditor}
-          rosterEditor={rosterEditor}
-        />
+        <>
+          {degradedLine && <DegradedNotice>{degradedLine}</DegradedNotice>}
+          <Panel
+            data={data}
+            focusRosterId={focusRosterId}
+            opponentRosterId={opponentRosterId}
+            week={week}
+            teamColumnState={teamColumnState}
+            rosterColumnState={rosterColumnState}
+            teamEditor={teamEditor}
+            rosterEditor={rosterEditor}
+          />
+        </>
       )}
     </div>
   );

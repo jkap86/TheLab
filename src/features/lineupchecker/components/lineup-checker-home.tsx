@@ -20,6 +20,7 @@ import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 // page that imports anything shared. See each folder's own index.
 import { ColumnsBar } from "@/features/shared/ui/columns-bar";
 import { ManagerHeader } from "@/features/shared/ui/manager-header";
+import { DegradedNotice } from "@/features/shared/ui/panel-message";
 import { SubjectRail } from "@/features/shared/ui/subject-rail";
 
 import { useLineupView } from "../hooks/use-lineup-view";
@@ -275,6 +276,19 @@ export function LineupCheckerHome() {
           unresolved, which is a page still worth having. */}
       {view.error && <Notice tone="error">{view.error}</Notice>}
       {matchups.error && <Notice tone="error">{matchups.error}</Notice>}
+      {/* A third state, and the one that used to be invisible: the pairings
+          answered and the week's solve did not, so every row draws with its
+          opponent resolved and its numbers blank. Reported beside the list
+          rather than instead of it — and beside `matchups.error` rather than
+          folded into it, because nothing failed from the reader's side and there
+          is nothing to press. */}
+      {matchups.degraded && (
+        <DegradedNotice>
+          Couldn&rsquo;t project this week&rsquo;s lineups — the pairings below are
+          current and the numbers read blank rather than zero, and will be
+          re-read.
+        </DegradedNotice>
+      )}
 
       {/* All three states are judged on the *unfiltered* list before the
           filtered one: a cold load is a cold load whatever is selected, and an

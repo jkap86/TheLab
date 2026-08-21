@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import type { ManagerRanksPayload } from "../contract/index.ts";
 import type { AdpFilters } from "./adp-filters.ts";
 import {
   ADP_BOARD_CACHE,
@@ -9,6 +10,7 @@ import {
   MANAGER_RANKS_CACHE,
   adpBoardCacheKey,
   managerRanksCacheKey,
+  rankEntryTtlMs,
 } from "./read-cache.ts";
 
 /**
@@ -208,6 +210,42 @@ describe("the manager ranks cache", () => {
     // the write (`persistLeagueGraph` → `invalidateManagerRanks`), so the clock
     // answers for the projections half — whose near-week slices refresh hourly.
     assert.ok(MANAGER_RANKS_CACHE.ttlMs <= 60 * 60 * 1000);
+  });
+});
+
+describe("how long a ranks payload is worth keeping", () => {
+  const payload = (
+    projections: ManagerRanksPayload["projections"],
+  ): ManagerRanksPayload => ({
+    season: "2026",
+    weeks: projections === "ok" ? [1, 2] : [],
+    projections,
+    ranks: {},
+  });
+
+  test("a payload that answered keeps the cache's own window", () => {
+    assert.equal(rankEntryTtlMs(payload("ok")), MANAGER_RANKS_CACHE.ttlMs);
+  });
+
+  test("an empty horizon is an answer, not a shortfall", () => {
+    // The case the whole distinction exists for: a manager with nothing left to
+    // project has `weeks: []` and every `proj` null, which is byte-identical to
+    // the degraded payload and must still be cached.
+    const settled: ManagerRanksPayload = { ...payload("ok"), weeks: [] };
+    assert.equal(rankEntryTtlMs(settled), MANAGER_RANKS_CACHE.ttlMs);
+  });
+
+  test("a skipped projections half is cached like any other answer", () => {
+    // `?projections=0` is the cheap read a reader whose columns name no
+    // projected metric actually asked for. Treating it as degraded would make
+    // the commonest ranks read in the app uncacheable.
+    assert.equal(rankEntryTtlMs(payload("skipped")), MANAGER_RANKS_CACHE.ttlMs);
+  });
+
+  test("a failed projections half is stored for no time at all", () => {
+    // Zero, which `BoundedCache.set` refuses to store — so the failure costs the
+    // callers already coalesced onto this computation and nobody after them.
+    assert.equal(rankEntryTtlMs(payload("error")), 0);
   });
 });
 

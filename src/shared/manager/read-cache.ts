@@ -68,6 +68,7 @@
 
 import { booleanFilter } from "../query/parse.ts";
 
+import type { ManagerRanksPayload } from "../contract/index.ts";
 import type { AdpFilters } from "./adp-filters.ts";
 
 /**
@@ -319,6 +320,35 @@ export function adpBoardCacheKey(filters: AdpFilters): string {
     filters.limit,
     filters.offset,
   ]);
+}
+
+/**
+ * How long one ranks payload is worth keeping: {@link MANAGER_RANKS_CACHE}'s own
+ * window, or **nothing at all** when the projections half failed.
+ *
+ * This is the policy half of the fix for the one degraded answer in this app
+ * that a long-lived cache used to hold as a fact. `computeManagerRanks` keeps
+ * serving the partial payload — the record and points ranks are read off rosters
+ * already in hand, and throwing them away because a second read failed is a
+ * worse answer — but the degraded payload is indistinguishable *by shape* from a
+ * manager with nothing left to project, so it went into fifteen minutes of
+ * process memory and five of browser cache as exactly that. Zero here means
+ * `BoundedCache.set` stores nothing, so the failure costs the callers already
+ * waiting on this computation and nobody after them.
+ *
+ * **`"skipped"` is cached normally, and that is the load-bearing half.** Nothing
+ * failed on a `?projections=0` read: it is the cheap answer the caller asked
+ * for, its empty `weeks` is exactly right, and treating it as degraded would
+ * make the read every columns-aimed-elsewhere reader makes uncacheable.
+ *
+ * It is here rather than beside the cache for the reason every key in this file
+ * is: it takes its input as an argument and imports nothing at runtime, so the
+ * rule can be asserted directly. A TTL rule that fires on the wrong status is
+ * silent in both directions — one too broad never caches, one too narrow caches
+ * the failure — which is the same shape of mistake a cache key makes.
+ */
+export function rankEntryTtlMs(payload: ManagerRanksPayload): number {
+  return payload.projections === "error" ? 0 : MANAGER_RANKS_CACHE.ttlMs;
 }
 
 /**

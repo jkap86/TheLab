@@ -11,4 +11,7 @@
  * shared part now needs to name these keys. Nothing about their shape changed,
  * and this tool's own hooks read them from here as they always have.
  */
-export { lineupQueryKeys } from "@/features/shared/lineup-query";
+export {
+  MATCHUPS_STALE_TIME,
+  lineupQueryKeys,
+} from "@/features/shared/lineup-query";

@@ -95,6 +95,10 @@ export const leagueQueryKeys = {
  * "how long the *manager area's* answers are worth reusing", and this answer
  * stopped being one of them when a second tool started opening the same panel.
  *
+ * **It is a ceiling rather than the whole policy** for one of the four: the
+ * values read can answer with a price lens it could not compute, and such an
+ * answer is worth none of this window — see `degradedStaleTime`.
+ *
  * **One number for all four entries**, which is a claim rather than an
  * omission: the enrichments are computed *from* the core read, so a window in
  * which the rosters are worth reusing is exactly the window in which a lineup

@@ -38,3 +38,24 @@ export const lineupQueryKeys = {
   matchups: (userId: string, week: number | null = null) =>
     ["lineupchecker", "matchups", userId.toLowerCase(), week ?? "upcoming"] as const,
 };
+
+/**
+ * How long a set of matchups is worth reusing in the browser.
+ *
+ * Five minutes, against the league crawler's own fifteen in season: the pairing
+ * for a week is fixed once the league has scheduled it, and what actually moves
+ * within a week is the lineups either side of it. Short enough that a reader who
+ * comes back mid-Sunday is not reading a pairing from Thursday, long enough that
+ * a trip out to another tool and back is free.
+ *
+ * It travels **with the key** rather than staying in the hook, the arrangement
+ * `LEAGUE_DETAIL_STALE_TIME` and `MANAGER_STALE_TIMES` already keep: how long an
+ * entry is worth reusing is a fact about the entry, and the tests that reason
+ * about these windows — `cache-layering.test.ts`, `degraded-cache.test.ts` — are
+ * shared modules that cannot import a feature to find one. The tool re-exports
+ * it under the name its own consumers already read it by.
+ *
+ * **It is a ceiling rather than the whole policy.** A payload whose week could
+ * not be solved is worth none of it — see `degradedStaleTime`.
+ */
+export const MATCHUPS_STALE_TIME = 5 * 60 * 1000;

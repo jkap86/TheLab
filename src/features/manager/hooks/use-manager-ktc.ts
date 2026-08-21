@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 
+import { degradedStaleTime, ktcDegraded } from "@/features/shared/degraded";
+
 import { STALE_TIMES } from "../query-config";
 import { managerQueryKeys } from "../query-keys";
 import type { ManagerKtcResult, ManagerLeague } from "../types";
@@ -52,7 +54,10 @@ export function useManagerKtc(
     leagues,
     "ktc",
     "Failed to load values",
-    STALE_TIMES.ktc,
+    // The totals answer without a projection, so a failed lineup solve still
+    // draws a card — but a quarter of an hour is a long time to remember every
+    // starter split as null when the read that would fill them merely fell over.
+    degradedStaleTime(STALE_TIMES.ktc, ktcDegraded),
     enabled,
     null,
     season,

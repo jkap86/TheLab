@@ -246,6 +246,45 @@ describe("an enrichment that fails says so", () => {
   });
 });
 
+describe("the values route's two lenses fail apart, and say so", () => {
+  /**
+   * The same rule as the block above, arrived at from the other side.
+   *
+   * `…/outlook` and `…/week` were a route-level swallow — the *whole* answer
+   * came back null. This one is a swallow per *lens*: each read was caught into
+   * the empty form of its own dataset, which is exactly what a roster of kickers
+   * and rookies legitimately produces. So a KTC outage arrived as "nothing on
+   * this roster is priced", cached for the panel's whole stale time with no
+   * layer able to tell.
+   *
+   * The partial-success half is deliberately unchanged and is what keeps this
+   * route from going through `readResponse` like its two siblings: one lens
+   * failing must still leave the other's numbers on screen. What is asserted
+   * here is that the guard now *reports* rather than fabricates.
+   */
+  test("each lens is guarded through readOptional, not a bare catch", () => {
+    assert.ok(calls(ROUTES.values, "readOptional"));
+    assert.equal(
+      /\.catch\(/.test(ROUTES.values),
+      false,
+      "values route still catches a lens into an empty answer",
+    );
+  });
+
+  test("both statuses reach the payload", () => {
+    // Separately, because the two are separate facts: a reader is told which
+    // column is blank, not merely that something is.
+    assert.match(ROUTES.values, /\n\s+ktc_status:\s*ktcRead\.status/);
+    assert.match(ROUTES.values, /\n\s+adp_status:\s*adpRead\.status/);
+  });
+
+  test("neither lens is fatal to the other", () => {
+    // The join is still a join: `readOptional` never rejects, so one lens
+    // falling over cannot make this `Promise.all` fail-fast.
+    assert.match(ROUTES.values, /Promise\.all\(\[/);
+  });
+});
+
 describe("the four routes share one league read", () => {
   test("every one of them resolves through the cached helper", () => {
     // A split that ran `getLeagueDetail` four times would have traded blocking

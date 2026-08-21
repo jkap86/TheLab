@@ -76,3 +76,33 @@ export function ErrorCard({ message }: { message: string }) {
     </div>
   );
 }
+
+/**
+ * A section of a page that could not be computed, reported **beside** the
+ * content that could.
+ *
+ * The third tone in this file, and the difference from the other two is what it
+ * replaces: {@link PanelMessage}'s error tone stands in for a panel's contents
+ * and {@link ErrorCard} for a whole page, where this one stands in for nothing
+ * at all — the rows are drawn, the columns it names are blank, and the line says
+ * which. That is the amber the manager tabs already wear for "refresh failed —
+ * showing cached data", which is the same situation one layer out.
+ *
+ * `role="status"` rather than `alert`: nothing is broken from the reader's side,
+ * there is nothing to press, and the entry behind it is stale so the next read
+ * re-asks. Interrupting for it would be the intrusive spelling of a message
+ * whose whole content is "this will sort itself out".
+ */
+export function DegradedNotice({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      role="status"
+      // `shrink-0` because one of its three call sites is a flex column whose
+      // other child is a panel that scrolls: a line of text has nothing to give
+      // up, and squeezing it is how a two-line sentence becomes one and a half.
+      className="mb-3 shrink-0 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-sm text-amber-300"
+    >
+      {children}
+    </p>
+  );
+}
