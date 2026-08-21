@@ -11,7 +11,7 @@ import { getActiveSeason } from "@/shared/season";
 import { fetchWeekProjections, getNflState } from "@/shared/sleeper";
 import { errorMessage } from "@/shared/util";
 
-import { HORIZON_ORDER_SQL, WEEK_ORDER_SQL } from "./horizon-queue";
+import { consultedWeeks, HORIZON_ORDER_SQL, WEEK_ORDER_SQL } from "./horizon-queue";
 import type { WeekOrderSql } from "./horizon-queue";
 import { toProjectionRows } from "./parse";
 import { clearProjectionMetaCaches } from "./queries";
@@ -109,6 +109,29 @@ export type ProjectionsSyncSummary = {
    * `./validate`.
    */
   rejected: { week: number; reason: string }[];
+  /**
+   * Why the horizon's freshness gate could not be consulted this run, or null.
+   *
+   * The two tiers are one `await` apart and were one failure apart too: the
+   * horizon's `staleWeeks` runs before any week is fetched, and its rejection
+   * left `withAdvisoryLock` through `syncProjections` entirely — so a fault in
+   * the *daily, optional* tier cost the *hourly, critical* one, which had
+   * already been asked for and was sitting in `nearDue` when the tick died. The
+   * whole signal was one `[proj] Tick failed:` line, and this week's lineup
+   * numbers went stale behind it.
+   *
+   * Observed rather than hypothesised: a database one migration behind (the
+   * `attempt_at` column {@link HORIZON_ORDER_SQL} orders on) errors on exactly
+   * this query and no other, so every tick threw and nothing — near or far —
+   * was ever fetched.
+   *
+   * So the horizon read is the one that is allowed to fail: it degrades to "no
+   * horizon this run", the near window proceeds, and the reason travels on the
+   * summary the way a refusal's does. **The near read is deliberately not
+   * wrapped** — it is the tier being protected, and a tick that cannot ask what
+   * this week needs has nothing to degrade *to*.
+   */
+  horizonUnavailable: string | null;
 };
 
 /**
@@ -307,14 +330,32 @@ export async function syncProjections(
     const nearDue = force
       ? near
       : await staleWeeks(season, near, ttlMs, WEEK_ORDER_SQL);
-    const farStale = far.length
-      ? await staleWeeks(season, far, horizonTtlMs, HORIZON_ORDER_SQL)
-      : [];
+    // Non-fatal on purpose — see `horizonUnavailable`. The near window is
+    // already resolved above and must not be lost to a fault in the tier behind
+    // it.
+    let horizonUnavailable: string | null = null;
+    let farStale: number[] = [];
+    if (far.length) {
+      try {
+        farStale = await staleWeeks(season, far, horizonTtlMs, HORIZON_ORDER_SQL);
+      } catch (error) {
+        // With a fallback, so the overload returns `string`: a non-Error throw
+        // still has to name itself on the summary.
+        horizonUnavailable = errorMessage(error, "unknown error");
+        console.error(
+          `[proj] Horizon freshness gate failed for ${season}; syncing the near ` +
+            `window only:`,
+          horizonUnavailable,
+        );
+      }
+    }
     const farDue = farStale.slice(0, Math.max(0, horizonPerRun));
     const deferred = farStale.slice(farDue.length);
 
     const due = [...nearDue, ...farDue];
-    const fresh = [...near, ...far].filter(
+    // A horizon that could not be *asked* is not a horizon that is fresh; see
+    // `consultedWeeks`, where that rule is spelled out and tested.
+    const fresh = consultedWeeks(near, far, horizonUnavailable === null).filter(
       (w) => !due.includes(w) && !deferred.includes(w),
     );
 
@@ -330,6 +371,14 @@ export async function syncProjections(
         // behind it instead of consuming the cap on every tick forever. It
         // stays stale — `synced_at` is untouched — so it is still retried, just
         // no longer ahead of everything else.
+        //
+        // Left fatal to the week, deliberately, though it is only bookkeeping.
+        // Swallowing it to "fetch anyway" was tried and is worse: the write
+        // that *records* the fetch (`markWeekSynced`) stamps the same column,
+        // so on a database missing it the week fails regardless — having first
+        // spent ~5.6MB of Sleeper budget and rewritten the rows, every week of
+        // every tick, forever. Failing here spends nothing and says the same
+        // thing. A stamp is only skippable where what follows it can succeed.
         await markWeekAttempted(season, week);
 
         const entries = await fetchWeekProjections(season, week);
@@ -381,6 +430,7 @@ export async function syncProjections(
 
     return {
       locked: false, season, synced, fresh, deferred, empty, failed, rejected,
+      horizonUnavailable,
     };
   });
 
@@ -394,6 +444,7 @@ export async function syncProjections(
       empty: [],
       failed: [],
       rejected: [],
+      horizonUnavailable: null,
     }
   );
 }

@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 
 import {
   compareWeekAttempts,
+  consultedWeeks,
   HORIZON_ORDER_SQL,
   orderWeeksByAttempt,
   WEEK_ORDER_SQL,
@@ -150,5 +151,36 @@ describe("the SQL spells the same rule as the comparator", () => {
     // stamps the week fresh for its whole TTL for having failed.
     assert.ok(migration.includes("alter column synced_at drop not null"));
     assert.ok(migration.includes("alter column synced_at drop default"));
+  });
+});
+
+describe("consultedWeeks", () => {
+  const near = [2, 3];
+  const far = [4, 5, 6];
+
+  test("an answered gate covers both tiers", () => {
+    assert.deepEqual(consultedWeeks(near, far, true), [2, 3, 4, 5, 6]);
+  });
+
+  test("an unavailable gate drops the horizon rather than calling it fresh", () => {
+    // The failure this exists for: `fresh` is what a run claims needed nothing
+    // done, so folding in weeks whose freshness query never returned reports a
+    // stalled backfill as a season with nothing due.
+    assert.deepEqual(consultedWeeks(near, far, false), [2, 3]);
+  });
+
+  test("the near window is never dropped by the horizon's failure", () => {
+    // The whole point of making that read non-fatal: the tier being protected
+    // is the hourly one, and it is answered by its own query.
+    assert.deepEqual(consultedWeeks(near, [], false), near);
+    assert.deepEqual(consultedWeeks(near, far, false), near);
+  });
+
+  test("copies rather than aliasing its arguments", () => {
+    // `fresh` is filtered from this and the summary is handed to callers; an
+    // alias of `near` would make that filter observable on the tier list.
+    const result = consultedWeeks(near, far, false);
+    result.push(99);
+    assert.deepEqual(near, [2, 3]);
   });
 });

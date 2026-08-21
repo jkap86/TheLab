@@ -106,3 +106,27 @@ export const WEEK_ORDER_SQL = `w.week` as const;
  * compiler can enumerate.
  */
 export type WeekOrderSql = typeof HORIZON_ORDER_SQL | typeof WEEK_ORDER_SQL;
+
+/**
+ * The weeks a run is entitled to call *fresh* — the ones whose freshness it
+ * actually asked about.
+ *
+ * A run reports `fresh` as "due, minus what I fetched, minus what the cap
+ * deferred", which is only true of weeks the gate was able to answer for. When
+ * the horizon's own query fails there is no answer for those weeks at all, and
+ * folding them into `fresh` anyway reports the whole rest of the season as
+ * current on the strength of a read that never returned — a backfill that has
+ * stopped, described as one that had nothing to do.
+ *
+ * That is strictly worse than the crash it replaces, which is the reason this
+ * is a function rather than a `[...near, ...far]` at the call site: making the
+ * horizon read non-fatal is what creates the opportunity to lie about it, so
+ * the two belong together and this half is the one that can be tested.
+ */
+export function consultedWeeks(
+  near: readonly number[],
+  far: readonly number[],
+  horizonAvailable: boolean,
+): number[] {
+  return horizonAvailable ? [...near, ...far] : [...near];
+}

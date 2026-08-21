@@ -830,6 +830,33 @@ Where the slow tier is also large, cap how many slices a tick will fetch
 (`HORIZON_WEEKS_PER_TICK`) and **report what the cap deferred** — a skipped slice
 that reads as "fresh" is how a backfill silently stops advancing.
 
+**Two tiers in one tick means the slow one's gate is a read like any other, and
+the per-read fatality question applies to it.** The horizon's `staleWeeks` runs
+*before* any week is fetched, so its rejection used to leave `syncProjections`
+entirely and cost the near window — which had already been resolved and was
+sitting in `nearDue` — for a fault in the tier that can wait a day. One
+`[proj] Tick failed:` line was the whole signal. It is caught now
+(`horizonUnavailable`), and three rules hold it: **the near read is deliberately
+not wrapped**, since it is the tier being protected and a tick that cannot ask
+what this week needs has nothing to degrade *to*; **a tier that could not be
+asked is not a tier that is fresh** (`consultedWeeks`, pure and tested — folding
+those weeks into `fresh` anyway reports a stalled backfill as a season with
+nothing due, which is strictly worse than the crash it replaces); and **the
+scheduler's silence has to break for it**, or a near-window-only run reads
+exactly like an ordinary quiet tick. The `attempt_at` stamp beside it is
+deliberately left *fatal* to its week — swallowing it was tried, and the write
+that records the fetch stamps the same column, so the week fails anyway having
+first spent the 5.6MB. **A stamp is only skippable where what follows it can
+succeed.**
+
+**A schema a migration behind is a live failure mode of this shape, not a
+deployment detail.** Migrations apply on boot, so a checkout pulled while the
+dev server is up runs new code against the old schema until something restarts
+it — and the `globalThis` guard in `startBackgroundLoop` means the loop keeps
+its *original* closure, so the breakage arrives whenever the process next
+restarts rather than when the code did. `db/migrations` is the first thing to
+check when a loop starts failing right after a pull.
+
 The league crawler varies on time instead of slice: `manager/crawl-ttl` picks one
 TTL per tick from live NFL state — 15 minutes in-season, an hour through the
 75-day window before kickoff, six hours in the deep offseason. **Only
