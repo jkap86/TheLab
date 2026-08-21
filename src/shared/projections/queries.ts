@@ -49,8 +49,9 @@ export function clearProjectionMetaCaches(): void {
  * The newest week with stored projections for a season, or null when none are
  * stored at all.
  *
- * What a read route should default to: the sync keeps the current and next week
- * fresh, so the newest stored week is the one Sleeper is currently projecting —
+ * What a read route should default to: the sync keeps the current week and the
+ * next two fresh, so the newest stored week is one Sleeper is currently
+ * projecting —
  * and asking the database rather than Sleeper's NFL state keeps the read path off
  * the network, and honest about what is actually here to read.
  */

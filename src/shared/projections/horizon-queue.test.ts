@@ -117,8 +117,8 @@ describe("the SQL spells the same rule as the comparator", () => {
   });
 
   test("the uncapped fragment orders on the week alone", () => {
-    // The near window is two weeks and both are always fetched, so rotating them
-    // buys nothing. A fragment that named `attempt_at` here would be reading a
+    // The near window is three weeks and all of them are always fetched, so
+    // rotating them buys nothing. A fragment that named `attempt_at` here would be reading a
     // column the near window has no use for.
     assert.equal(WEEK_ORDER_SQL, "w.week");
     assert.ok(!WEEK_ORDER_SQL.includes("attempt_at"));

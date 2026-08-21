@@ -821,8 +821,11 @@ Two cadences, and the choice matters:
   offseason.
 
 **A slice's TTL should match how fast *that slice* moves, not the table's.** The
-projections sync runs two: this week and next at an hour because an injury
-designation changes them, the rest of the season at a day because it doesn't.
+projections sync runs two: this week and the next two at an hour because an
+injury designation changes them, the rest of the season at a day because it
+doesn't. **The width of the near window is itself a slice decision** — a week
+moves onto the hourly clock because it is being *decided* (a waiver claim is
+made against the week after the one being set), not because it is close.
 Where the slow tier is also large, cap how many slices a tick will fetch
 (`HORIZON_WEEKS_PER_TICK`) and **report what the cap deferred** — a skipped slice
 that reads as "fresh" is how a backfill silently stops advancing.

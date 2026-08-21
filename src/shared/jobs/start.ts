@@ -77,7 +77,8 @@ async function loadStarters(): Promise<BackgroundJobStarters> {
     // league members — the same sync the leagues route runs on a username
     // search.
     crawler: manager.startLeagueCrawler,
-    // The current and next NFL week's player projections, so the lineup tools
+    // The current NFL week's player projections and the next two, so the lineup
+    // tools
     // read Postgres instead of a 5.6MB Sleeper response per visit.
     projections: projections.startProjectionsScheduler,
     // The other half of that: what players actually did, which is what a

@@ -1238,9 +1238,16 @@ Two cadences, and the choice matters:
   offseason.
 
 A slice's TTL should match how fast *that slice* moves, not the table's. The same
-projections sync runs two: this week and next are gated at an hour because an
-injury designation changes them, and the rest of the season at a day because it
-doesn't. One gate for both would have to choose between a stale lineup and 90MB an
+projections sync runs two: this week and the next two are gated at an hour
+because an injury designation changes them, and the rest of the season at a day
+because it doesn't. Where the boundary sits is the same kind of decision as the
+TTLs either side of it: `PROJECTION_LOOKAHEAD` is 2 rather than 1 because the
+week being *set* is not the only week being decided — a waiver claim or a trade
+is made against the week after it, so that week is load-bearing while it is
+still on the day-long clock. Widening the near window costs one more ~5.6MB
+fetch an hour and takes one week off the horizon; it is not the same lever as
+`HORIZON_WEEKS_PER_TICK`, which changes burst size and not how often any week is
+refetched. One gate for both would have to choose between a stale lineup and 90MB an
 hour. Where the slow tier is also large, cap how many slices a tick will fetch
 (`HORIZON_WEEKS_PER_TICK`) and report what the cap deferred — a skipped slice that
 reads as "fresh" is how a backfill silently stops advancing. Reporting it is not

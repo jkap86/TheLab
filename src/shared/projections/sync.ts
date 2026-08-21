@@ -47,7 +47,7 @@ export const PROJECTIONS_HORIZON_TTL_MS = 24 * 60 * 60 * 1000;
  * The same shape as the KTC history backfill and for the same reason: a tick that
  * pulls the whole rest of the season at once is a burst on Sleeper and a long
  * stretch of held advisory lock. At the 15-minute loop interval four a tick walks
- * all sixteen inside an hour, comfortably within their day-long TTL — and the
+ * all fifteen inside an hour, comfortably within their day-long TTL — and the
  * daily volume is unchanged either way, since the TTL is what decides how often a
  * week is refetched at all. The cap is about the size of the burst, so what it
  * buys is how long a *cold* horizon spends describing a shorter season than the
@@ -235,7 +235,8 @@ function writeWeek(
  * Fetch and store weekly projections.
  *
  * With no options it covers the whole rest of the season, on two clocks: the
- * current week and the next are refreshed hourly because they move on news, and
+ * current week and the next two are refreshed hourly because they move on news,
+ * and
  * the weeks behind them are refreshed daily, a couple per run (see
  * `PROJECTIONS_HORIZON_TTL_MS` and `HORIZON_WEEKS_PER_TICK`). One gate would have
  * to pick between re-downloading 90MB an hour and letting this week go stale.
