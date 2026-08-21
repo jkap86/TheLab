@@ -2223,7 +2223,26 @@ stops holding, a comment saying it does would not have caught it.
   a week is one 5.6MB fetch rather than nine.
 - **`state/nfl` reports week 0 all offseason** while projections for week 1 are
   already published. Gating on `week` alone means syncing nothing until
-  September; `display_week` is the one to follow (see `projections/weeks`).
+  September; `display_week` is the one to follow (see `projections/weeks`) —
+  but only where `season_type` says it is naming a regular-season week at all.
+
+  The rest of that sentence took a production incident to write. In preseason
+  `week` and `display_week` count *preseason* weeks, and nothing about the two
+  numbers says so: `{week: 2, display_week: 2, season_type: "pre"}` reads
+  exactly like the second week of the season. The sync's near window therefore
+  advanced one regular-season week per preseason week, and the damage was not
+  the weeks it moved onto but the one it moved off. `horizonWeeks` starts
+  *after* the near window, so a week that falls behind it is a past week, and
+  past weeks are deliberately never re-fetched — their numbers stop moving once
+  the games are played. Week 1's games had not been played. It was in neither
+  list, and would have stayed there through kickoff.
+
+  Every layer degraded politely, which is why it ran for days: the loop ticked,
+  the log printed `wk2` and `wk3` every hour exactly as designed, all eighteen
+  weeks were present in Postgres, and the only visible symptom was one week's
+  `updated_at` quietly falling behind the others. The lesson is the shape rather
+  than the field — **a pair of functions that partition a range needs the union
+  asserted, not just the disjointness.** Both halves were individually right.
 - **A projection's `pts_ppr` is not any league's PPR.** It is scored at 0.05 a
   passing yard, where Sleeper's own league default is 0.04 — worth ~2.3 points a
   quarterback, before house rules. Only 14 of the 120 leagues stored here land

@@ -1847,7 +1847,33 @@ These recur everywhere and are the rules most often broken by accident:
   so a week is one 5.6MB fetch rather than nine.
 - **`state/nfl` reports week 0 all offseason** while projections for week 1 are
   already published. Gating on `week` alone means syncing nothing until
-  September; **`display_week` is the one to follow**.
+  September; **`display_week` is the one to follow — but only once
+  `season_type` says it is naming a regular-season week.** Neither number
+  carries its own units. In preseason they count *preseason* weeks, so
+  `{week: 2, display_week: 2, season_type: "pre"}` is mid-August while
+  regular-season week 1 is three weeks out, and reading it unqualified walks the
+  sync's near window forward one real week per preseason week. What it leaves
+  behind is not merely stale: a week *before* the near window is a past week to
+  `horizonWeeks`, and past weeks are never re-fetched — so week 1 sat in
+  **neither tier**, five days cold, while weeks 2 and 3 were refreshed hourly
+  for a season whose first game had not been played. Found in production on
+  2026-08-21. `regularSeasonWeek` is the one reader: only `"regular"` and
+  `"post"` name a regular-season week, everything else answers 1 — the
+  `crawl-ttl` rule that only `"regular"` is matched by name, since Sleeper
+  labels the rest of the year `"pre"` and `"off"`.
+- **`season_start_date` is not the second opinion it looks like.** The obvious
+  cross-check on the above, and it was wrong where it mattered: the 2026 state
+  carries `2026-08-06` while week 1's own `game_date` rows say September 9th, so
+  it is naming the *preseason* opener. `crawl-ttl` may use it because it sizes a
+  **TTL**, where a month's error costs extra fetches; anything picking a **week**
+  from it would pick the wrong one. When a week number is the answer, the
+  `game_date` rows already stored are the check — that is the "derive it from
+  stored data" rule, and it is what caught this.
+- **Two tiers that partition the season must actually cover it.** `targetWeeks`
+  and `horizonWeeks` were each individually correct and jointly left a hole,
+  which no test of either could see. `weeks.test.ts` asserts the union covers
+  1..18 rather than only that they do not overlap — **a partition needs both
+  halves asserted, and the missing one is always the one that fails silently.**
 - **A projection's `pts_ppr` is not any league's PPR.** It is scored at 0.05 a
   passing yard, where Sleeper's own league default is 0.04 — worth ~2.3 points a
   quarterback, before house rules. Only 14 of 120 leagues stored here land within
