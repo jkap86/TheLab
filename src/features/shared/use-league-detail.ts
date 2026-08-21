@@ -14,6 +14,7 @@ import { errorMessage } from "@/shared/util";
 
 import type { AdpRead } from "./adp-controls";
 import { fetchJson, fetchScoped } from "./api";
+import { degradedStaleTime, valuesDegraded, valuesFailures } from "./degraded";
 import type { LeagueDetailNeeds } from "./league-detail-needs";
 import { LEAGUE_DETAIL_STALE_TIME, leagueQueryKeys } from "./league-query";
 
@@ -118,6 +119,17 @@ export type LeagueDetailState = {
   loading: boolean;
   /** The core's failure. An enrichment that fails costs its own columns. */
   error: string | null;
+  /**
+   * Which price lenses came back unanswered, for the line the panel draws over
+   * its rows — empty when both answered, when neither was asked for, and while
+   * the read is still in flight.
+   *
+   * It is separate from {@link error} because it is a different kind of thing:
+   * `error` replaces the panel, this stands beside it. Without it a reader sees
+   * a column of em dashes and reads them as "nothing priced", which is exactly
+   * the claim the route can no longer make.
+   */
+  degraded: string[];
 };
 
 /**
@@ -132,6 +144,10 @@ export type LeagueDetailState = {
 const NO_VALUES: LeagueValuesPayload = {
   superflex: false,
   ktc_updated_at: null,
+  // Nothing has been read, so neither lens has failed — the panel is waiting,
+  // not degraded, and the notice above it must not fire on a read in flight.
+  ktc_status: "ok",
+  adp_status: "ok",
   adp_board: "redraft",
   adp_draft_count: 0,
   ktc: {},
@@ -211,7 +227,12 @@ export function useLeagueValues(
         "Failed to price this league",
         signal,
       ),
-    staleTime: LEAGUE_DETAIL_STALE_TIME,
+    // **The two lenses fail independently and share one entry.** A KTC outage
+    // leaves every ADP number on this payload intact and vice versa, which is
+    // why the route reports them apart — but the entry holding either failure is
+    // one the browser must not keep, since a `200` carrying an empty `ktc` map is
+    // otherwise indistinguishable from a roster KeepTradeCut does not price.
+    staleTime: degradedStaleTime(LEAGUE_DETAIL_STALE_TIME, valuesDegraded),
     // The prices are two columns of a table already on screen, so a board change
     // dims and replaces them rather than blanking them — the flash every other
     // hook here refuses. Compared against the *league* prefix rather than the
@@ -347,5 +368,9 @@ export function useLeagueDetail(
     // a panel the reader is already reading, not a loading screen.
     loading: core.isPending,
     error: core.error ? errorMessage(core.error, "Something went wrong") : null,
+    // Read off the payload rather than off the query's status, because this is
+    // the failure that *succeeded*: the request was a 200 and the parts of it
+    // that answered are on screen.
+    degraded: valuesFailures(values.data ?? null),
   };
 }

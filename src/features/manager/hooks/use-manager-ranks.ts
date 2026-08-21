@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 
+import { degradedStaleTime, ranksDegraded } from "@/features/shared/degraded";
+
 import { STALE_TIMES } from "../query-config";
 import { managerQueryKeys } from "../query-keys";
 import type { ManagerLeague, ManagerRanksResult } from "../types";
@@ -56,7 +58,11 @@ export function useManagerRanks(
     // so an older client and a bookmark answer exactly as they always did.
     projections ? "ranks" : "ranks?projections=0",
     "Failed to load ranks",
-    STALE_TIMES.ranks,
+    // A payload whose projections half failed is drawn — the record and points
+    // ranks on it are real — and immediately stale, so the next mount re-asks
+    // rather than holding a page of blank projected columns for five minutes.
+    // `?projections=0` is *not* that: nothing failed, and it keeps the window.
+    degradedStaleTime(STALE_TIMES.ranks, ranksDegraded),
     true,
     null,
     season,

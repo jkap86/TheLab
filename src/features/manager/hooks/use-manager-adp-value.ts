@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 
 import type { AdpRead } from "@/features/shared";
+import { adpValueDegraded, degradedStaleTime } from "@/features/shared/degraded";
 
 import { STALE_TIMES } from "../query-config";
 import { managerQueryKeys } from "../query-keys";
@@ -74,7 +75,10 @@ export function useManagerAdpValue(
     leagues,
     "adp-value",
     "Failed to load draft values",
-    STALE_TIMES.adpValue,
+    // Per board, exactly as the key is: a board whose lineup solve failed is the
+    // one entry that must not be reused, and every other board already read is
+    // untouched.
+    degradedStaleTime(STALE_TIMES.adpValue, adpValueDegraded),
     enabled,
     board,
     season,

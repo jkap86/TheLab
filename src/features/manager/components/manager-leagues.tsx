@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 
 import { adpValueRead, useTodayIso } from "@/features/shared";
+import { degradedNotice, managerFailures } from "@/features/shared/degraded";
+import { DegradedNotice } from "@/features/shared/ui/panel-message";
 import { usePersistedColumns } from "@/features/shared/use-persisted-columns";
 
 import { useAdpControls } from "../filters-context";
@@ -131,6 +133,20 @@ export function ManagerLeagues({ searched }: { searched: string }) {
     season: view.seasonRead,
   });
 
+  /**
+   * Which of the three batch reads answered with a section it could not compute.
+   *
+   * The three `error`s beside it stay deliberately unread — a read that failed
+   * outright leaves its chips empty and the list is still the page. This is the
+   * *other* failure: a `200` whose optional half fell over, which draws exactly
+   * the same em dashes and would otherwise read as "these leagues have no
+   * projections". Named rather than counted, and drawn once above the list
+   * rather than per card, the rule a list-wide fact keeps everywhere here.
+   */
+  const degraded = degradedNotice(
+    managerFailures({ ranks: ranks.data, ktc: ktc.data, adp: adp.data }),
+  );
+
   const total = view.data?.leagues.length ?? 0;
   const showing = view.filtered.length;
 
@@ -199,6 +215,7 @@ export function ManagerLeagues({ searched }: { searched: string }) {
           the plate sat almost exactly between two cards and could be read as
           belonging to either; at 18 there is visibly more ground above it than
           below. Check that before moving it. */}
+      {degraded && <DegradedNotice>{degraded}</DegradedNotice>}
       <ul className="flex w-full flex-col gap-[1.125rem]">
         {view.filtered.map((league) => (
           <LeagueCard

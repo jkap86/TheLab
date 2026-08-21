@@ -18,7 +18,7 @@ import {
   parseSteepness,
 } from "@/shared/manager";
 import type { LeagueDetail, PlayerBoardAdp } from "@/shared/manager";
-import { errorMessage } from "@/shared/util";
+import { readOptional } from "@/shared/util";
 
 import { resolveLeagueRequest } from "../league-request";
 import { readFailureResponse } from "../../../read-failure";
@@ -130,28 +130,36 @@ async function priceRosters(args: {
     board: chosenBoard,
   });
 
-  const [ktcSet, adpResult] = await Promise.all([
-    getKtcValuesBySleeperId(playerIds).catch((error): KtcValueSet => {
-      console.error(`[league] KTC failed for ${leagueId}:`, errorMessage(error));
-      return { values: {}, updated_at: null };
-    }),
-    getDraftAdpForPlayers(board, playerIds).catch(
-      (error): {
-        draft_count: number;
-        redraft_drafts: number;
-        dynasty_drafts: number;
-        values: Map<string, PlayerBoardAdp>;
-      } => {
-        console.error(`[league] ADP failed for ${leagueId}:`, errorMessage(error));
-        return {
-          draft_count: 0,
-          redraft_drafts: 0,
-          dynasty_drafts: 0,
-          values: new Map(),
-        };
-      },
+  // Each guards its own failure, so one lens going down costs its column and not
+  // the other's — that half is unchanged and is the whole reason this is a join
+  // rather than a fail-fast batch. What is new is that the guard *reports*:
+  // the empty `{}`/`new Map()` these used to substitute is precisely what a
+  // roster of unpriced players legitimately produces, so a failed read arrived as
+  // a successful "nothing priced" and sat in the browser cache as one.
+  const [ktcRead, adpRead] = await Promise.all([
+    readOptional(`[league] KTC for ${leagueId}`, () =>
+      getKtcValuesBySleeperId(playerIds),
+    ),
+    readOptional(`[league] ADP for ${leagueId}`, () =>
+      getDraftAdpForPlayers(board, playerIds),
     ),
   ]);
+
+  // The empty forms are still what the payload is built from — a failed lens
+  // draws em dashes, not zeroes — but they are now reached only through a
+  // `status` that says so.
+  const ktcSet: KtcValueSet = ktcRead.value ?? { values: {}, updated_at: null };
+  const adpResult: {
+    draft_count: number;
+    redraft_drafts: number;
+    dynasty_drafts: number;
+    values: Map<string, PlayerBoardAdp>;
+  } = adpRead.value ?? {
+    draft_count: 0,
+    redraft_drafts: 0,
+    dynasty_drafts: 0,
+    values: new Map(),
+  };
 
   const ktc: Record<string, number> = {};
   for (const [id, value] of Object.entries(ktcSet.values)) {
@@ -183,6 +191,8 @@ async function priceRosters(args: {
   return {
     superflex,
     ktc_updated_at: ktcSet.updated_at,
+    ktc_status: ktcRead.status,
+    adp_status: adpRead.status,
     adp_board: boardType,
     adp_draft_count:
       boardType === "dynasty" ? adpResult.dynasty_drafts : adpResult.redraft_drafts,

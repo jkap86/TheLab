@@ -1,13 +1,14 @@
 import type { LeagueRankSet, ManagerRanksPayload } from "@/shared/contract";
 import { getWeeklyTeamPoints } from "@/shared/projections";
 import type { WeeklyTeamPoints } from "@/shared/projections";
-import { TtlPromiseCache, deepFreeze, errorMessage } from "@/shared/util";
+import { TtlPromiseCache, deepFreeze, readOptional } from "@/shared/util";
 
 import { getManagerLeagueRosters } from "./queries";
 import { projectedRank, rankOf, standingScore } from "./rank";
 import {
   MANAGER_RANKS_CACHE,
   managerRanksCacheKey,
+  rankEntryTtlMs,
   type ManagerRanksOptions,
 } from "./read-cache";
 
@@ -26,7 +27,15 @@ import {
  * of the four is left out of the payload entirely.
  */
 
-/** The empty triple `getWeeklyTeamPoints` itself returns with nothing to project. */
+/**
+ * The empty triple `getWeeklyTeamPoints` itself returns with nothing to project.
+ *
+ * It stands in for two different things and the payload now says which: a caller
+ * who asked for no projections, and a projections read that fell over. It is
+ * deliberately *not* what a successful-but-empty read produces — that comes back
+ * from `getWeeklyTeamPoints` and is already this shape, which is exactly why the
+ * substitution was invisible.
+ */
 const NO_PROJECTIONS: WeeklyTeamPoints = {
   weeks: [],
   points: new Map(),
@@ -104,7 +113,8 @@ export function clearManagerRanksCache(): void {
  * two spellings of one account are one manager, so putting it in the key would
  * compute the same thousands of solves once per spelling. It can only ever
  * describe the caller that actually ran the computation, which is the only
- * caller a failure is reported to — failures are never cached.
+ * caller a failure is reported to — a thrown failure is never cached, and
+ * neither is a payload whose projections half failed (see {@link rankEntryTtlMs}).
  */
 export function readManagerRanks(
   userId: string,
@@ -112,8 +122,23 @@ export function readManagerRanks(
   options: ManagerRanksOptions,
   label: string = userId,
 ): Promise<ManagerRanksPayload> {
-  return ranksCache.read(managerRanksCacheKey(userId, season, options), () =>
-    computeManagerRanks(userId, season, options, label),
+  return ranksCache.read(
+    managerRanksCacheKey(userId, season, options),
+    () => computeManagerRanks(userId, season, options, label),
+    // **A degraded answer is served and never stored.** The lifetime is read off
+    // the answer for the reason the league week's is (`TtlPromiseCache.read`):
+    // what makes this payload unfit to keep is a fact about the payload, not
+    // about its key, and computing it anywhere else is two places that can
+    // disagree. A non-positive lifetime stores nothing at all
+    // (`BoundedCache.set`), so a projections failure degrades to *coalescing* —
+    // the callers already waiting share this computation, and the next request
+    // recomputes against a database that may well have recovered.
+    //
+    // This is the whole reason `projections` is on the payload. Without it the
+    // fabricated empty triple was indistinguishable from a real one, so the
+    // cache had nothing to decide on and held a second of database trouble for
+    // fifteen minutes as "this manager has no projections".
+    { ttlMsFor: rankEntryTtlMs },
   );
 }
 
@@ -131,27 +156,31 @@ async function computeManagerRanks(
   // — the same call the KTC and ADP-value routes make, degraded the same way and
   // for the same reason. Two of the four ranks here are read straight off the
   // rosters this read already has, so failing the whole request would throw away
-  // answers that are already in hand. The fallback is the *empty* triple
-  // `getWeeklyTeamPoints` itself returns when there is nothing to project, so the
-  // degraded shape is one the payload already describes — which is also what a
-  // caller asking for no projections gets, by the same construction.
-  const { weeks, points, bench } = options.projections
-    ? await getWeeklyTeamPoints({
-        season,
-        leagues: leagues.map((l) => ({
-          league_id: l.league_id,
-          rosterPositions: l.roster_positions,
-          scoringSettings: l.scoring_settings,
-          teams: l.teams,
-        })),
-      }).catch((error): WeeklyTeamPoints => {
-        console.error(
-          `[ranks] weekly points failed for ${label}:`,
-          errorMessage(error),
-        );
-        return NO_PROJECTIONS;
-      })
-    : NO_PROJECTIONS;
+  // answers that are already in hand.
+  //
+  // What changed is that the degradation is now *reported*. The fallback is the
+  // empty triple `getWeeklyTeamPoints` itself returns with nothing to project —
+  // which is the point: the two were indistinguishable, so a failure was cached
+  // as a fact. `readOptional` keeps the partial answer and hands back which of
+  // the two happened, and {@link rankEntryTtlMs} is what acts on it.
+  const projected = options.projections
+    ? await readOptional(`[ranks] weekly points for ${label}`, () =>
+        getWeeklyTeamPoints({
+          season,
+          leagues: leagues.map((l) => ({
+            league_id: l.league_id,
+            rosterPositions: l.roster_positions,
+            scoringSettings: l.scoring_settings,
+            teams: l.teams,
+          })),
+        }),
+      )
+    : null;
+
+  const { weeks, points, bench }: WeeklyTeamPoints =
+    projected?.value ?? NO_PROJECTIONS;
+  const projections: ManagerRanksPayload["projections"] =
+    projected === null ? "skipped" : projected.status;
 
   const ranks: ManagerRanksPayload["ranks"] = {};
   for (const league of leagues) {
@@ -196,5 +225,5 @@ async function computeManagerRanks(
   // Frozen because it is shared: every caller inside the TTL holds this object,
   // so a route that sorted or annotated it in place would be editing what every
   // later reader gets.
-  return deepFreeze({ season, weeks, ranks });
+  return deepFreeze({ season, weeks, projections, ranks });
 }

@@ -19,7 +19,7 @@ import {
 } from "@/shared/manager";
 import type { AdpBoardChoices, AdpBoardType, AdpFilters } from "@/shared/manager";
 import { getOptimalLineups } from "@/shared/projections";
-import { collectWithConcurrency, errorMessage } from "@/shared/util";
+import { collectWithConcurrency, readOptional } from "@/shared/util";
 
 import { readLeagueScope } from "../../../league-scope";
 import { readFailureResponse } from "../../../read-failure";
@@ -131,7 +131,14 @@ async function adpValuePayload(
   );
 
   if (withOwn.length === 0) {
-    const empty: ManagerAdpValuePayload = { season, weeks: [], leagues: {} };
+    // `lineups: "ok"` for the reason the KTC route's empty payload says so:
+    // nothing was asked of the solver and nothing failed.
+    const empty: ManagerAdpValuePayload = {
+      season,
+      weeks: [],
+      lineups: "ok",
+      leagues: {},
+    };
     return NextResponse.json(empty);
   }
 
@@ -186,21 +193,22 @@ async function adpValuePayload(
     // card it opens can't disagree about who starts. A projections read that
     // fails costs the split and the rank and not the value — pricing a roster
     // needs no projection, so the totals still answer.
-    getOptimalLineups({
-      season,
-      leagues: withOwn.map((league) => ({
-        league_id: league.league_id,
-        rosterPositions: league.roster_positions,
-        scoringSettings: league.scoring_settings,
-        teams: league.teams,
-      })),
-    }).catch((error) => {
-      console.error(
-        `[adp-value] lineups failed for ${username}:`,
-        errorMessage(error),
-      );
-      return null;
-    }),
+    //
+    // Reported rather than swallowed, exactly as the sibling KTC route reports
+    // it: the bare `null` this replaces read as "no lineup to draw starters
+    // from", which is a real state of a league with nothing left to project, so
+    // a failed solve was cached under a board key as that answer.
+    readOptional(`[adp-value] lineups for ${username}`, () =>
+      getOptimalLineups({
+        season,
+        leagues: withOwn.map((league) => ({
+          league_id: league.league_id,
+          rosterPositions: league.roster_positions,
+          scoringSettings: league.scoring_settings,
+          teams: league.teams,
+        })),
+      }),
+    ),
     // The raw ADP per board — the curve is applied per league below, since it
     // depends on each league's startable pool, not on the board alone.
     //
@@ -230,7 +238,7 @@ async function adpValuePayload(
     const own = league.teams.find((t) => t.owner_id === userId)!;
     const board = boardValues.get(leagueBoard.get(league.league_id)!)!;
     const pool = leagueAdpPool(league.teams.length, league.roster_positions);
-    const lineup = lineups?.lineups.get(league.league_id) ?? null;
+    const lineup = lineups.value?.lineups.get(league.league_id) ?? null;
 
     /**
      * This league's rosters read off one side of the fetch. Both sides are
@@ -295,7 +303,8 @@ async function adpValuePayload(
 
   const payload: ManagerAdpValuePayload = {
     season,
-    weeks: lineups?.weeks ?? [],
+    weeks: lineups.value?.weeks ?? [],
+    lineups: lineups.status,
     leagues: priced,
   };
   return NextResponse.json(payload);

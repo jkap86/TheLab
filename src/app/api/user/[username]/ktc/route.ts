@@ -9,7 +9,7 @@ import {
 } from "@/shared/ktc";
 import { getManagerLeagueRosters, rankOf } from "@/shared/manager";
 import { getOptimalLineups } from "@/shared/projections";
-import { errorMessage } from "@/shared/util";
+import { readOptional } from "@/shared/util";
 
 import { readFailureResponse } from "../../../read-failure";
 import { resolveManagerIdRequest } from "../manager-request";
@@ -65,6 +65,10 @@ async function ktcPayload(username: string, userId: string, season: string) {
       season,
       updated_at: null,
       weeks: [],
+      // Nothing was asked of the solver and nothing failed: a manager holding no
+      // roster is a real, complete answer, so this is `"ok"` rather than the
+      // status of a read that never happened.
+      lineups: "ok",
       leagues: {},
     };
     return NextResponse.json(empty);
@@ -82,18 +86,25 @@ async function ktcPayload(username: string, userId: string, season: string) {
     // card it opens can't disagree about who starts. A projections read that
     // fails costs the split and the rank and not the value — pricing a roster
     // needs no projection, so the totals still answer.
-    getOptimalLineups({
-      season,
-      leagues: withOwn.map((league) => ({
-        league_id: league.league_id,
-        rosterPositions: league.roster_positions,
-        scoringSettings: league.scoring_settings,
-        teams: league.teams,
-      })),
-    }).catch((error) => {
-      console.error(`[ktc] lineups failed for ${username}:`, errorMessage(error));
-      return null;
-    }),
+    //
+    // Guarded through `readOptional` rather than caught into a bare `null`: the
+    // null was indistinguishable from a league with nothing left to project, so
+    // the browser held a page of null splits as a fresh success for a quarter of
+    // an hour. The degradation is unchanged; what is added is `lineups` on the
+    // payload saying which of the two it is.
+    readOptional(`[ktc] lineups for ${username}`, () =>
+      getOptimalLineups({
+        season,
+        leagues: withOwn.map((league) => ({
+          league_id: league.league_id,
+          rosterPositions: league.roster_positions,
+          scoringSettings: league.scoring_settings,
+          teams: league.teams,
+        })),
+      }),
+    ),
+    // Unguarded: the prices *are* this payload, so a KTC read that fails is the
+    // request's failure and belongs to the route's own catch.
     getKtcValuesBySleeperId(playerIds),
   ]);
 
@@ -117,7 +128,8 @@ async function ktcPayload(username: string, userId: string, season: string) {
       const value = rosterKtcValue({
         players: team.players,
         starters:
-          lineups?.lineups.get(league.league_id)?.get(team.roster_id) ?? null,
+          lineups.value?.lineups.get(league.league_id)?.get(team.roster_id) ??
+          null,
         values,
       });
       if (value.split) starterValue.set(team.roster_id, value.split.starters);
@@ -134,7 +146,8 @@ async function ktcPayload(username: string, userId: string, season: string) {
   const payload: ManagerKtcPayload = {
     season,
     updated_at: ktc.updated_at,
-    weeks: lineups?.weeks ?? [],
+    weeks: lineups.value?.weeks ?? [],
+    lineups: lineups.status,
     leagues: priced,
   };
   return NextResponse.json(payload);

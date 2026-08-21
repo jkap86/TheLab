@@ -32,6 +32,10 @@ import type {
   ProjectionFilters,
   ProjectionsSyncSummary,
 } from "@/shared/projections";
+import type {
+  OptionalReadStatus,
+  SkippableReadStatus,
+} from "@/shared/util";
 
 /**
  * The wire contract between this app's API routes and the client that reads
@@ -47,6 +51,39 @@ import type {
  * client code import this module without dragging `pg` into the bundle, and
  * what keeps the manager-module references here from being a runtime cycle.
  */
+
+/**
+ * Whether an **optional section** of a payload is an answer or a shortfall.
+ *
+ * Several payloads here carry a bonus computed beside their subject — a lineup
+ * solve behind a value split, a week's projections beside its pairings, a price
+ * beside a roster — and every one of them can legitimately come back empty. What
+ * they could not say until now is *why*: the routes caught a failed read and
+ * substituted the empty answer, so "this league has nothing to project" and "the
+ * projections read fell over" arrived as one `200` and were cached as one fact.
+ *
+ * `"ok"` is a claim about the **read**, not about the value: an empty map under
+ * `"ok"` is still the honest "nothing here", and that reading is unchanged.
+ * `"error"` says the section could not be computed, which is what lets a client
+ * draw the blank *and* refuse to hold it — see `degradedStaleTime`.
+ *
+ * It is `OptionalReadStatus` under a wire name rather than a second spelling of
+ * it, so a route hands `readOptional`'s own `status` straight to its payload and
+ * the two cannot drift.
+ */
+export type EnrichmentStatus = OptionalReadStatus;
+
+/**
+ * {@link EnrichmentStatus} plus the third word a section needs where the caller
+ * can ask for it not to be computed at all — today only `?projections=0` on the
+ * ranks route.
+ *
+ * `"skipped"` is not a degraded answer and must not be treated as one: nothing
+ * failed, nothing is missing that was asked for, and the payload is exactly what
+ * was requested. Collapsing it into `"error"` would make every cheap ranks read
+ * un-cacheable; collapsing it into `"ok"` would claim a projection was attempted.
+ */
+export type SkippableEnrichmentStatus = SkippableReadStatus;
 
 /** The public user shape returned by the app's user/leagues APIs. */
 export type UserInfo = {
@@ -96,6 +133,19 @@ export type LeagueRosterValues = {
   adp_board: AdpBoardType;
   /** How many crawled drafts stood behind the ADP board — a thin board is noisy. */
   adp_draft_count: number;
+  /**
+   * Whether the KTC half of this payload is an answer or a shortfall.
+   *
+   * The two lenses are fetched independently and each guards its own failure, so
+   * a KTC outage costs its column and nothing else — {@link adp} still prices
+   * every roster. What this adds is the half the guard used to destroy: an empty
+   * {@link ktc} under `"error"` is a read that fell over, where an empty one
+   * under `"ok"` is a roster of kickers and rookies KeepTradeCut does not price.
+   * The client draws the same em dash either way and refuses to *keep* the first.
+   */
+  ktc_status: EnrichmentStatus;
+  /** The same claim for the ADP half — see {@link ktc_status}. */
+  adp_status: EnrichmentStatus;
   /** Player id → KTC dynasty value on this league's board; unpriced ids absent. */
   ktc: Record<string, number>;
   /** Player id → ADP-derived draft-capital value on this league's board; unpriced absent. */
@@ -956,13 +1006,33 @@ export type ManagerRanksPayload = {
   /**
    * Weeks the projected totals cover, ascending — the horizon travels with the
    * number here as it does everywhere else. Empty when nothing remains to
-   * project *or* when the projections read failed, in which case every `proj` is
-   * null and the record and points ranks answer as usual — they are read off the
-   * rosters and never depended on it. The two are not distinguished, the same
-   * choice the KTC and ADP-value routes make for their own null `split`: what a
-   * reader can act on is that there is no projection, not why.
+   * project, when the caller asked for no projections, and when the projections
+   * read failed; which of the three is {@link projections}, and the difference
+   * matters to the caches either side of this payload rather than to the em dash
+   * on screen.
    */
   weeks: number[];
+  /**
+   * What happened to the projected half — the one part of this payload that can
+   * fail on its own.
+   *
+   * `"ok"` is a projections read that answered; an empty {@link weeks} under it
+   * is the honest "nothing remains to project". `"skipped"` is `?projections=0`,
+   * where nothing was attempted and nothing is missing. `"error"` is the read
+   * falling over: every `proj` and `proj_bench` is null and `weeks` is empty,
+   * while the record and points ranks answer as usual — they come off the rosters
+   * this read already had and never depended on the projections.
+   *
+   * **The three used to be one shape**, and the payload said so on purpose. That
+   * was defensible while the only consumer was a card drawing an em dash; it
+   * stopped being defensible once the answer was *cached* — a degraded payload
+   * went into `MANAGER_RANKS_CACHE` for fifteen minutes and into the browser for
+   * five, so a second of database trouble read as a manager with no projections
+   * for the rest of the window, and no layer could tell. An `"error"` payload is
+   * stored by neither cache now (see `readManagerRanks`), which is a decision
+   * only this field makes expressible.
+   */
+  projections: SkippableEnrichmentStatus;
   /**
    * League id → the manager's ranks there. A league is absent when none of the
    * three can be formed: the manager holds no roster in it, or its rosters
@@ -1046,9 +1116,11 @@ export type LeagueMatchupPayload = {
   opponent: MatchupOpponentPayload | null;
   /**
    * The manager's own lineup for the week, or null where the league can't be
-   * projected — no slots or scoring on file, nothing stored for the week, or the
-   * projections read failed outright. Null is "no answer" and never a zero, the
-   * rule every projected number here keeps.
+   * projected — no slots or scoring on file, or nothing stored for the week.
+   * Null is "no answer" and never a zero, the rule every projected number here
+   * keeps. A projections read that *failed* nulls this too, and says so on
+   * {@link ManagerMatchupsPayload.projections} rather than leaving the two
+   * indistinguishable.
    */
   projection: MatchupProjectionPayload | null;
   /**
@@ -1105,6 +1177,19 @@ export type LeagueMatchupPayload = {
 export type ManagerMatchupsPayload = {
   season: string;
   week: number | null;
+  /**
+   * Whether the week's lineup solve answered.
+   *
+   * The pairings are what this page is a list of and they are read separately,
+   * so a solve that falls over costs the numbers and not the rows — every
+   * `projection`, `opponent_projection` and `median_projection` is null and the
+   * opponents still resolve. `"ok"` with those nulls is a league the week cannot
+   * be projected for (no slots, no scoring, nothing stored); `"error"` is the
+   * read failing, and is what keeps the browser from remembering a page of
+   * blanks as a fresh answer. `"ok"` is also what a `week: null` payload carries,
+   * since there was no week to solve and nothing failed.
+   */
+  projections: EnrichmentStatus;
   /** League id → that league's matchup. Absent = the week isn't stored for it. */
   matchups: Record<string, LeagueMatchupPayload>;
 };
@@ -1160,10 +1245,21 @@ export type ManagerKtcPayload = {
   updated_at: string | null;
   /**
    * Weeks the lineup behind every `split` was ranked over, ascending. Empty when
-   * nothing remains to project, in which case every `split` is null and only the
-   * totals are answerable.
+   * nothing remains to project *and* when the solve failed; which of the two is
+   * {@link lineups}.
    */
   weeks: number[];
+  /**
+   * Whether the lineup solve behind every `split` and `starters_rank` answered.
+   *
+   * Pricing a roster needs no projection, so a failed solve costs the split and
+   * the rank and never the totals — which is why this is a status on a `200`
+   * rather than a failed request. `"ok"` with a null `split` is a league with
+   * nothing left to project; `"error"` is the solve falling over, and is what
+   * stops the browser holding a page of null splits as a fresh, successful
+   * answer for the whole stale time.
+   */
+  lineups: EnrichmentStatus;
   /**
    * League id → that roster's value and its starter-value rank. A league is
    * absent when the manager holds no roster in it; a league whose roster KTC
@@ -1253,10 +1349,17 @@ export type ManagerAdpValuePayload = {
   season: string;
   /**
    * Weeks the lineup behind every `split` was ranked over, ascending. Empty when
-   * nothing remains to project, in which case every `split` is null and only the
-   * totals answer.
+   * nothing remains to project *and* when the solve failed; which of the two is
+   * {@link lineups}.
    */
   weeks: number[];
+  /**
+   * Whether the lineup solve behind every `split` and `starters_rank` answered —
+   * the same field, for the same reason, as {@link ManagerKtcPayload.lineups}.
+   * The ADP boards themselves are **not** optional here: a board fetch that
+   * fails is this request's failure and comes back as one.
+   */
+  lineups: EnrichmentStatus;
   /**
    * League id → that roster priced on both league-type boards. Absent for a
    * league the manager holds no roster in; present with a zero total and

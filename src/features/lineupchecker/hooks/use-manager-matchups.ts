@@ -3,27 +3,33 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchJson } from "@/features/shared";
+import { degradedStaleTime, matchupsDegraded } from "@/features/shared/degraded";
 import { errorMessage } from "@/shared/util";
 
-import { lineupQueryKeys } from "../query-keys";
+import { MATCHUPS_STALE_TIME, lineupQueryKeys } from "../query-keys";
 import type { ManagerMatchupsPayload } from "../types";
 
-/**
- * How long a set of matchups is worth reusing in the browser.
- *
- * Five minutes, against the league crawler's own fifteen in season: the pairing
- * for a week is fixed once the league has scheduled it, and what actually moves
- * within a week is the lineups either side of it. Short enough that a reader who
- * comes back mid-Sunday is not reading a pairing from Thursday, long enough that
- * a trip out to another tool and back is free.
- */
-export const MATCHUPS_STALE_TIME = 5 * 60 * 1000;
+// The stale time moved to `features/shared/lineup-query.ts`, beside the key it
+// is about — the mover's rule this codebase keeps, and the same arrangement the
+// league panel's and the manager tabs' windows already have. Re-exported under
+// its old name: this tool's barrel already publishes it from here.
+export { MATCHUPS_STALE_TIME };
 
 export type ManagerMatchupsState = {
   data: ManagerMatchupsPayload | null;
   /** True until the first answer arrives; false again while a refresh runs. */
   loading: boolean;
   error: string | null;
+  /**
+   * True when the pairings answered but the week's lineup solve did not.
+   *
+   * Distinct from {@link error}, which is the whole read failing and leaves no
+   * rows: here every row draws, with its opponent resolved and its numbers
+   * blank. Reported so the page can say the blanks are a shortfall rather than
+   * a hundred leagues that cannot be projected — and the entry behind it is
+   * already stale, so nothing needs pressing.
+   */
+  degraded: boolean;
 };
 
 /**
@@ -65,7 +71,10 @@ export function useManagerMatchups(
         signal,
       ),
     enabled: userId !== null,
-    staleTime: MATCHUPS_STALE_TIME,
+    // A week whose solve failed is drawn and immediately stale: the pairings on
+    // it are real, and holding its blank projections as a fresh success for five
+    // minutes is how one busy second read as "no league can be projected".
+    staleTime: degradedStaleTime(MATCHUPS_STALE_TIME, matchupsDegraded),
     // Stepping a week is a *different question*, so it is a different key — and
     // without this every press would replace the whole list with a loading state
     // and back. Holding the previous week's rows while the next lands is the
@@ -82,5 +91,6 @@ export function useManagerMatchups(
     // forever loading.
     loading: userId !== null && query.isPending,
     error: query.error ? errorMessage(query.error, "Something went wrong") : null,
+    degraded: query.data !== undefined && matchupsDegraded(query.data),
   };
 }
