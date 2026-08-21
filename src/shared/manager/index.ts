@@ -103,6 +103,27 @@ export {
   invalidateLeagueDetail,
   readLeagueDetail,
 } from "./league-detail-read";
+export {
+  clearManagerSnapshotCache,
+  invalidateManagerSnapshot,
+  readManagerOptimalLineups,
+  readManagerProjectionInputs,
+  readManagerSnapshot,
+} from "./manager-snapshot";
+export {
+  MANAGER_LINEUPS_CACHE,
+  MANAGER_PROJECTION_INPUTS_CACHE,
+  MANAGER_SNAPSHOT_CACHE,
+  managerSnapshotCacheKey,
+  memoizeManagerSnapshot,
+  ownedLeagues,
+  toLeagueTeamsInput,
+} from "./snapshot-cache";
+export type {
+  ManagerRosterSnapshot,
+  ManagerSnapshotLoaders,
+  MemoizedManagerSnapshot,
+} from "./snapshot-cache";
 export { parseManagerRanksOptions } from "./read-cache";
 export type { ManagerRanksOptions } from "./read-cache";
 export {

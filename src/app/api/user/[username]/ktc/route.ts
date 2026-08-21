@@ -7,8 +7,11 @@ import {
   ktcBoardValue,
   rosterKtcValue,
 } from "@/shared/ktc";
-import { getManagerLeagueRosters, rankOf } from "@/shared/manager";
-import { getOptimalLineups } from "@/shared/projections";
+import {
+  rankOf,
+  readManagerOptimalLineups,
+  readManagerSnapshot,
+} from "@/shared/manager";
 import { readOptional } from "@/shared/util";
 
 import { readFailureResponse } from "../../../read-failure";
@@ -34,7 +37,8 @@ export const dynamic = "force-dynamic";
  * before the projections read is gone. It cost eleven answers nobody asked for
  * back when the card showed only the manager's own number; a rank is worth the
  * extra solve, and the aggregate lineup is the cheapest of the three batch
- * entry points (see {@link getOptimalLineups}).
+ * entry points — and is now solved once for the account and shared with the
+ * ADP-value route beside it (see {@link readManagerOptimalLineups}).
  */
 export async function GET(
   request: Request,
@@ -55,10 +59,15 @@ export async function GET(
 async function ktcPayload(username: string, userId: string, season: string) {
   // Sequential rather than parallel: which rosters to price is the answer to
   // the first read.
-  const leagues = await getManagerLeagueRosters(userId, season);
-  const withOwn = leagues.filter((league) =>
-    league.teams.some((t) => t.owner_id === userId),
-  );
+  //
+  // Through the account's shared snapshot rather than straight at the query, so
+  // this route, the ADP values and the projected ranks — the three requests a
+  // default Manager load fires together — read the roster graph once between
+  // them. `owned` is the `withOwn` filter this route used to apply for itself,
+  // moved to where the lineups below are solved from it, so a starter value and
+  // the lineup it sums cannot be computed over different populations. See
+  // `shared/manager/manager-snapshot`.
+  const { owned: withOwn } = await readManagerSnapshot(userId, season);
 
   if (withOwn.length === 0) {
     const empty: ManagerKtcPayload = {
@@ -92,16 +101,14 @@ async function ktcPayload(username: string, userId: string, season: string) {
     // the browser held a page of null splits as a fresh success for a quarter of
     // an hour. The degradation is unchanged; what is added is `lineups` on the
     // payload saying which of the two it is.
+    //
+    // **The identical solve the ADP-value route wants**, over the same rosters,
+    // slots, scoring and horizon: a starter value is a sum over whoever starts,
+    // and neither lens has any say in who that is. Two calls to
+    // `getOptimalLineups` were two copies of it on the web process's own event
+    // loop; the shared read is one, and the guarded failure is unchanged.
     readOptional(`[ktc] lineups for ${username}`, () =>
-      getOptimalLineups({
-        season,
-        leagues: withOwn.map((league) => ({
-          league_id: league.league_id,
-          rosterPositions: league.roster_positions,
-          scoringSettings: league.scoring_settings,
-          teams: league.teams,
-        })),
-      }),
+      readManagerOptimalLineups(userId, season),
     ),
     // Unguarded: the prices *are* this payload, so a KTC read that fails is the
     // request's failure and belongs to the route's own catch.

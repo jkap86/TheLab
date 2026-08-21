@@ -4,6 +4,7 @@ import { afterEach, describe, test } from "node:test";
 import { pool } from "@/shared/db";
 import { clearProjectionMetaCaches } from "@/shared/projections";
 
+import { clearManagerSnapshotCache } from "./manager-snapshot.ts";
 import { clearManagerRanksCache, readManagerRanks } from "./ranks-read.ts";
 
 /**
@@ -95,6 +96,11 @@ const restore = pool.query;
 afterEach(() => {
   pool.query = restore;
   clearManagerRanksCache();
+  // The manager snapshot holds this account's roster graph for a few seconds so
+  // the three lenses of one screen load share it; dropped here for the reason
+  // the ranks cache is, since a season reused across tests would otherwise be
+  // answered from the previous test's stub.
+  clearManagerSnapshotCache();
   // `getRemainingWeeks` is memoised per season for five minutes, so a season
   // reused across tests would answer from the previous test's stub.
   clearProjectionMetaCaches();
@@ -205,7 +211,14 @@ describe("a manager's ranks when the projections read throws", () => {
     // `rankEntryTtlMs` the degraded payload sat here for fifteen minutes and
     // every reader of this manager in that window was told they had no
     // projections.
-    assert.equal(counts.leagues, 2);
+    //
+    // **The projections read is what this counts, and deliberately not the
+    // rosters read beside it.** The roster graph is shared across the three
+    // lenses of one screen load by `manager-snapshot`, whose window is seconds
+    // and whose entry is not this payload — so the second request here rightly
+    // reuses it while still recomputing the answer that was degraded. What must
+    // never be reused is the degraded payload itself, and a second stat-line
+    // read is exactly the evidence that it wasn't.
     assert.equal(counts.stats, 2);
   });
 
