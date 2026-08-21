@@ -99,6 +99,7 @@ export type { ProjectionRow } from "./parse";
 export {
   targetWeeks,
   horizonWeeks,
+  regularSeasonWeek,
   parseWeeks,
   LAST_REGULAR_WEEK,
   MAX_REQUESTED_WEEKS,
