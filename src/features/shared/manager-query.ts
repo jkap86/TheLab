@@ -171,6 +171,13 @@ export function dependentManagerQueryKeys(
  * move at genuinely different speeds — the same rule the background loops follow
  * (a slice's TTL should match how fast *that slice* moves). The client-wide
  * defaults, `gcTime` among them, are in `features/shared/query-client`.
+ *
+ * **Each is a ceiling rather than the whole policy.** Three of these routes can
+ * answer with a section they could not compute — the projected ranks, and the
+ * lineup solve behind the two valuations' starter splits — and such an answer is
+ * worth none of the window below: it is drawn and simultaneously stale, so the
+ * next mount re-asks. See `degradedStaleTime` in `features/shared/degraded.ts`,
+ * which is what each of those three hooks wraps its number in.
  */
 export const MANAGER_STALE_TIMES = {
   /**

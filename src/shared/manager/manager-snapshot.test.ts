@@ -343,7 +343,15 @@ describe("the numbers the lenses report", () => {
     stub();
     const [ranks] = await screenLoad();
 
-    assert.deepEqual(Object.keys(ranks).sort(), ["ranks", "season", "weeks"]);
+    assert.deepEqual(Object.keys(ranks).sort(), [
+      "projections",
+      "ranks",
+      "season",
+      "weeks",
+    ]);
+    // The status of the optional half, which is a fact about the read rather
+    // than about the value — see `shared/util/optional-read`.
+    assert.equal(ranks.projections, "ok");
     assert.equal(ranks.season, SEASON);
     assert.deepEqual(ranks.weeks, WEEKS);
     assert.deepEqual(Object.keys(ranks.ranks.owned).sort(), [
@@ -362,6 +370,7 @@ describe("the numbers the lenses report", () => {
     const counts = stub();
     const ranks = await readManagerRanks(USER, SEASON, { projections: false });
 
+    assert.equal(ranks.projections, "skipped");
     assert.equal(counts.projections, 0);
     assert.equal(counts.players, 0);
     assert.deepEqual(ranks.weeks, []);
@@ -449,6 +458,9 @@ describe("a failed read", () => {
     // And the ranks degrade the same way rather than failing: two of their four
     // numbers come straight off these rosters.
     const ranks = await readManagerRanks(USER, SEASON, { projections: true });
+    // Reported as a failure rather than as an empty projection — the shared read
+    // is guarded exactly as the unshared one was.
+    assert.equal(ranks.projections, "error");
     assert.deepEqual(ranks.weeks, []);
     assert.deepEqual(ranks.ranks.owned.standing, { rank: 1, of: 2 });
     assert.equal(ranks.ranks.owned.proj, null);

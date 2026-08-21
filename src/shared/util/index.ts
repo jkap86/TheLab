@@ -13,3 +13,9 @@ export { BoundedCache } from "./bounded-cache";
 export { TtlPromiseCache } from "./ttl-promise-cache";
 export type { CacheOutcome, TtlPromiseCacheOptions } from "./ttl-promise-cache";
 export { deepFreeze } from "./deep-freeze";
+export { readOptional } from "./optional-read";
+export type {
+  OptionalRead,
+  OptionalReadStatus,
+  SkippableReadStatus,
+} from "./optional-read";

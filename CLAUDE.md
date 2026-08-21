@@ -1049,6 +1049,34 @@ comparator reads**, since a five-armed ordering written twice is two orderings.
     nullable because `getLeagueWeekView` isn't. The graceful half stays where it
     always belonged: the enrichments are separate queries, so only the core's
     error is the panel's error.
+  - **A bonus that is genuinely non-fatal still may not be answered with the
+    empty form of itself.** The rule above covers the read whose failure the
+    route can afford to *report*; five reads here cannot, because the answer
+    around them is worth sending — the projected ranks beside a record, the
+    lineup solve behind a KTC or ADP split, either price lens on a League Details
+    panel, the lineup checker's week beside its pairings. Every one of them used
+    to be `.catch(() => <the empty answer>)`, and the empty answer is precisely
+    what the successful case produces for a finished season, an unpriced roster
+    or an unprojectable league — so the failure was cached as that fact, by the
+    browser for its stale time and by `MANAGER_RANKS_CACHE` for fifteen minutes,
+    with no layer able to tell and no failure for the retry to act on. Wrap such
+    a read in `readOptional` (`shared/util/optional-read.ts`), which keeps the
+    partial answer and hands back **which of the two happened**, and put that
+    status on the payload (`EnrichmentStatus`; `SkippableEnrichmentStatus` where
+    a caller can ask for the work to be skipped, as `?projections=0` does). Four
+    rules. **`"ok"` is a claim about the read, never about the value** — an empty
+    map under it is still the honest "nothing here", which is the whole
+    distinction being restored. **A skipped section is not a degraded one**, or
+    the cheap read every columns-aimed-elsewhere reader makes becomes
+    uncacheable. **A degraded answer is served and never stored**: `ranks` reads
+    its lifetime off the answer (`rankEntryTtlMs` through
+    `TtlPromiseCache`'s `ttlMsFor`), and a non-positive lifetime stores nothing,
+    so the failure costs the callers already coalesced onto it and nobody after
+    them. And **the browser does the same**, through `degradedStaleTime`
+    (`features/shared/degraded.ts`): the payload is drawn and simultaneously
+    stale, so the next mount re-asks rather than a poll doing it. Only the
+    *statuses* are per section — the failed lens is named to the reader
+    (`DegradedNotice`) so a column of em dashes does not read as a zero.
 
 ## Testing
 

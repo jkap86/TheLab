@@ -593,7 +593,12 @@ Five things decide the design.
 fail independently and are wanted by different callers. A projections read that
 fails must cost the lineups and leave the rosters answering — which is exactly
 the degradation the two value routes already had, and must keep: they price a
-roster with no projection at all and merely lose the split and the rank.
+roster with no projection at all and merely lose the split and the rank. Sharing
+a read must not quietly make it fatal, and it must not quietly make it silent
+either: the shared solve is still called through `readOptional`, so a failure is
+still *reported* as `lineups: "error"` rather than arriving as a league with
+nothing left to project. A rejection is never stored, so the next request
+retries.
 
 **The ranks are deliberately not one of the entries.** They are cached and
 coalesced a layer up already (`MANAGER_RANKS_CACHE`), and their number is a
@@ -1573,6 +1578,84 @@ about how it is laid out. Each replaced something that read as fine and wasn't.
     every other test in the repo; and `league-cache.test.ts` asserts the client
     end — a failed enrichment is an errored query with no data, a `200 null` is a
     success, the retry runs on the first and not the second.
+  - **A bonus that is genuinely non-fatal still may not be answered with the
+    empty form of itself**, which is the same failure one layer further in — and
+    it survived the fix above precisely *because* that fix was about the reads a
+    route could afford to fail on.
+
+    Five reads here cannot be failed on. The projected ranks sit beside a record
+    and a points-for rank read off rosters already in hand; the lineup solve
+    behind the KTC and ADP starter splits sits beside totals that need no
+    projection; League Details' two price lenses sit beside each other; the
+    lineup checker's week sits beside the pairings its list is built from.
+    Throwing the whole answer away because the second read failed is a worse
+    answer than a partial one, so every one of them was written as
+    `.catch(() => <the empty answer>)` — and *that* is the trap, because the
+    empty answer is not a placeholder. It is exactly what the successful case
+    produces: `weeks: []` with every `proj` null is a manager whose season is
+    over; a null lineup set is a league with no slots or scoring on file; an
+    empty `ktc` map is a roster of kickers and rookies KeepTradeCut does not
+    price; an empty teams map is a week with nothing stored. The degraded payload
+    and the real one are the same bytes.
+
+    What made that worse than a wrong number is where the bytes went. React Query
+    holds a `200` for its stale time — five minutes on the ranks and the week,
+    fifteen on the two valuations — and its single retry is spent on *failures*,
+    of which there was none. `MANAGER_RANKS_CACHE` holds it for fifteen minutes
+    per process, for every reader and every tab at once. So one second of a busy
+    pool became a quarter of an hour of "this manager has no projections", served
+    to everybody, invisible in the logs of every layer that passed it along.
+
+    `shared/util/optional-read.ts` is the fix and it changes nothing about the
+    degradation: `readOptional` keeps the partial answer and returns **which of
+    the two happened**, which the route puts on its payload as
+    `EnrichmentStatus` (or `SkippableEnrichmentStatus`, where a caller can ask
+    for the work not to be done at all — `?projections=0`). Four things hold it
+    up, and each is a way of getting it wrong that would be silent.
+
+    **`"ok"` is a claim about the read, not about the value.** The point is not
+    that an empty answer becomes an error; it is that an empty answer stays
+    exactly as expressible as it was, and a failure stops borrowing its
+    spelling. **A skipped section is not a degraded one**: `?projections=0` is
+    the cheap answer a reader whose four columns name no projected metric
+    actually asked for, and folding it into `"error"` would make the commonest
+    ranks read in the app uncacheable at both layers. **A degraded answer is
+    served and never stored** — `rankEntryTtlMs` is read off the answer through
+    `TtlPromiseCache`'s `ttlMsFor`, the mechanism the league week's own kickoff
+    bound already uses, and a non-positive lifetime stores nothing
+    (`BoundedCache.set`), so a failure degrades to *coalescing*: the callers
+    already waiting share the computation and the next request retries against a
+    database that may well have recovered. Reading the lifetime off the answer
+    rather than deciding it at the call site is what keeps the cache and the
+    payload from disagreeing about what the payload says. And **the browser does
+    the same**, through `degradedStaleTime`: a payload whose status says a
+    section failed is worth zero milliseconds, so it is on screen *and* stale,
+    and the next mount, reconnect or consumer of the key re-asks. Zero rather
+    than a short window because there is no interval that is right — the read
+    failed for a reason this layer cannot see — and nothing polls, because a
+    stale entry with no observer costs nothing while a poll turns one busy
+    database into a page hammering it.
+
+    The statuses stay per *section* rather than per response, which is what
+    preserves the partial success the catches were protecting: a KTC outage on a
+    League Details panel leaves every ADP number intact, and the payload says so
+    field by field even though the entry holding it is one the browser drops.
+    What a reader sees is the em dash they always saw plus one amber line naming
+    the columns that are blank (`DegradedNotice`) — because "0.00" and a silent
+    dash are the two things a transient failure must never be turned into.
+
+    Tested in four places, since no one of them can carry the claim:
+    `shared/util/optional-read.test.ts` for what the wrapper returns (an empty
+    success is `"ok"`, a synchronous throw is caught, it never rejects inside a
+    `Promise.all`); `shared/manager/ranks-read.test.ts` drives the real
+    `readManagerRanks` with `pool.query` stubbed — the second file in the repo to
+    do that, and for `league-week.test.ts`'s reason — and asserts that a thrown
+    projections read is not reported as no projections, that the record and
+    points ranks still answer, that the degraded payload is not cached, and that
+    the retry succeeds; `shared/manager/read-cache.test.ts` pins the TTL rule
+    itself, including that an empty horizon and a skipped read are both cached;
+    and `features/shared/degraded-cache.test.ts` asserts the browser end as a
+    request *count* across a remount, for all five reads.
 
 ## Testing
 

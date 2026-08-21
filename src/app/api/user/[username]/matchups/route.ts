@@ -17,7 +17,8 @@ import {
 import type { LeagueTeamsInput, WeekLineups } from "@/shared/projections";
 import { integer } from "@/shared/query";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
-import { errorMessage } from "@/shared/util";
+import { readOptional } from "@/shared/util";
+import type { OptionalRead } from "@/shared/util";
 
 import { readFailureResponse } from "../../../read-failure";
 import { resolveManagerIdRequest } from "../manager-request";
@@ -76,7 +77,15 @@ export async function GET(
   try {
     const week = requested.value ?? (await getUpcomingWeek(season));
     if (week === null) {
-      const empty: ManagerMatchupsPayload = { season, week: null, matchups: {} };
+      // `"ok"`: a season with nothing stored ahead of today has no week to solve,
+      // so there was no read to fail. That is a real answer about the season and
+      // not a shortfall — the page says as much rather than offering a retry.
+      const empty: ManagerMatchupsPayload = {
+        season,
+        week: null,
+        projections: "ok",
+        matchups: {},
+      };
       return NextResponse.json(empty);
     }
 
@@ -85,7 +94,12 @@ export async function GET(
       getManagerLeagueRosters(userId, season),
     ]);
 
-    const lineups = await weekLineups({ season, week, username, rows, leagues });
+    const solved = await weekLineups({ season, week, username, rows, leagues });
+    // The empty shape `getWeekLineups` itself returns with nothing to project,
+    // which is what a failed solve degrades to — and, until this read started
+    // reporting its own status, what a failed solve was *indistinguishable*
+    // from.
+    const lineups: WeekLineups = solved.value ?? { week, teams: new Map() };
     const medians = leagueMedians(leagues, lineups);
 
     const matchups: Record<string, LeagueMatchupPayload> = {};
@@ -130,7 +144,12 @@ export async function GET(
       };
     }
 
-    const payload: ManagerMatchupsPayload = { season, week, matchups };
+    const payload: ManagerMatchupsPayload = {
+      season,
+      week,
+      projections: solved.status,
+      matchups,
+    };
     return NextResponse.json(payload);
   } catch (error) {
     console.error("[matchups] query failed:", error);
@@ -199,9 +218,15 @@ function leagueMedians(
  * numbers are a column on top of them. That is the same call
  * `/api/league/[leagueId]` makes for its outlook and the `ranks` route makes for
  * its projected ranks — decided per read rather than per route, and this read is
- * not what the route is for. The fallback is the empty shape `getWeekLineups`
- * itself returns when there is nothing to project, so the degraded answer is one
- * the payload already describes.
+ * not what the route is for.
+ *
+ * **And the failure is reported.** The degraded answer is the empty shape
+ * `getWeekLineups` itself returns with nothing to project, which is exactly the
+ * problem: fabricated, it was a hundred leagues each saying "this week cannot be
+ * projected" — a claim the client cached as a fresh success for five minutes and
+ * no layer could tell from the truth. `readOptional` keeps the degradation and
+ * hands back which of the two it is, so the route can put it on
+ * {@link ManagerMatchupsPayload.projections}.
  */
 async function weekLineups({
   season,
@@ -215,7 +240,7 @@ async function weekLineups({
   username: string;
   rows: readonly ManagerMatchup[];
   leagues: readonly LeagueRosterSet[];
-}): Promise<WeekLineups> {
+}): Promise<OptionalRead<WeekLineups>> {
   const playing = new Map<string, Set<number>>();
   for (const row of rows) {
     const rosters = playing.get(row.league_id) ?? new Set<number>();
@@ -250,13 +275,7 @@ async function weekLineups({
         ];
   });
 
-  return getWeekLineups({ season, week, leagues: input }).catch(
-    (error): WeekLineups => {
-      console.error(
-        `[matchups] week lineups failed for ${username}:`,
-        errorMessage(error),
-      );
-      return { week, teams: new Map() };
-    },
+  return readOptional(`[matchups] week lineups for ${username}`, () =>
+    getWeekLineups({ season, week, leagues: input }),
   );
 }

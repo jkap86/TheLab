@@ -6,6 +6,7 @@ import { errorMessage } from "@/shared/util";
 
 import type { ManagerLeague } from "@/shared/manager";
 
+import type { DataHolder } from "./degraded";
 import { fetchManagerResource } from "./manager-query";
 
 export type ManagerResourceState<T> = {
@@ -58,7 +59,17 @@ export function useManagerResource<T>(
   leagues: ManagerLeague[] | null,
   path: string,
   fallbackError: string,
-  staleTime: number,
+  /**
+   * How long the answer is worth reusing.
+   *
+   * A **function** where the answer can come back partly unanswered: three of
+   * these five routes carry a status saying whether their optional half was
+   * computed, and a payload whose half failed must not be held as a fresh
+   * success for the resource's ordinary window — see {@link degradedStaleTime},
+   * which is the only thing that builds one of these. A plain number is every
+   * other caller, unchanged.
+   */
+  staleTime: number | ((query: DataHolder<T>) => number),
   /**
    * A second gate on top of "are there leagues to ask about".
    *

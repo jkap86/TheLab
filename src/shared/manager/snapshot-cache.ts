@@ -50,7 +50,9 @@
  * read that fails costs the two entries under it and not the rosters — which is
  * the failure isolation the routes already have and must keep: KTC and ADP
  * price a roster with no projection at all, they merely lose the split and the
- * rank.
+ * rank. Sharing a read makes it neither fatal nor silent: the callers still wrap
+ * it in `readOptional`, so a failure reaches the payload as a status rather than
+ * as an empty answer, and a rejection is never stored here.
  *
  * **The ranks are deliberately not one of these entries.** They are already
  * cached and coalesced a layer up (`MANAGER_RANKS_CACHE`), and their weekly
