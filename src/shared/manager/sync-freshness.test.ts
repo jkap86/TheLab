@@ -5,12 +5,16 @@ import {
   LEAGUE_REFRESH_ATTEMPT_SQL,
   LEAGUE_REFRESH_COOLDOWN_MS,
   MANAGER_SYNC_STAMP_SQL,
+  SETTLED_SYNC_TTL_MS,
   SYNC_ATTEMPT_TTL_MS,
   SYNC_TTL_MS,
   leagueRefreshGate,
   managerSyncGate,
+  seasonSyncTier,
+  syncTtlMsFor,
   type LeagueRefreshState,
   type ManagerSyncState,
+  type SeasonSyncTier,
 } from "./sync-freshness.ts";
 
 const NOW = 1_800_000_000_000;
@@ -273,5 +277,114 @@ describe("LEAGUE_REFRESH_ATTEMPT_SQL", () => {
     assert.match(LEAGUE_REFRESH_ATTEMPT_SQL, /WHERE league_id = \$1/);
     const used = [...LEAGUE_REFRESH_ATTEMPT_SQL.matchAll(/\$(\d+)/g)].map((m) => m[1]);
     assert.deepEqual([...new Set(used)], ["1"]);
+  });
+});
+
+describe("seasonSyncTier", () => {
+  test("the season being played is active", () => {
+    assert.equal(seasonSyncTier("2026", "2026"), "active");
+  });
+
+  test("the season just finished is settled", () => {
+    assert.equal(seasonSyncTier("2025", "2026"), "settled");
+  });
+
+  test("anything older is archive", () => {
+    assert.equal(seasonSyncTier("2024", "2026"), "archive");
+    assert.equal(seasonSyncTier("2017", "2026"), "archive");
+  });
+
+  test("a season ahead of the active one stays active", () => {
+    // Sleeper answers an unknown league year with an empty list, and retiring
+    // that would make "no leagues yet" permanent until the rollover.
+    assert.equal(seasonSyncTier("2027", "2026"), "active");
+  });
+
+  test("not knowing the active season falls back to the shortest clock", () => {
+    // `peekActiveSeason` answers undefined on a cold process, and the caller is
+    // allowed to hand it straight over: extra fetches are the failure you can
+    // see, where the other direction retires a live season.
+    assert.equal(seasonSyncTier("2024", undefined), "active");
+    assert.equal(seasonSyncTier("2024", null), "active");
+    assert.equal(seasonSyncTier(undefined, "2026"), "active");
+    assert.equal(seasonSyncTier("nonsense", "2026"), "active");
+  });
+});
+
+describe("syncTtlMsFor", () => {
+  test("lengthens as the season recedes", () => {
+    assert.equal(syncTtlMsFor("active"), SYNC_TTL_MS);
+    assert.equal(syncTtlMsFor("settled"), SETTLED_SYNC_TTL_MS);
+    assert.equal(syncTtlMsFor("archive"), Number.POSITIVE_INFINITY);
+    assert.ok(SYNC_TTL_MS < SETTLED_SYNC_TTL_MS);
+  });
+});
+
+describe("a past season's gate", () => {
+  const gateAt = (s: ManagerSyncState | null, tier: SeasonSyncTier) =>
+    managerSyncGate(s, { now: NOW, requestedAt: NOW, tier });
+
+  const complete = (agoMs: number) =>
+    state({ syncedAt: ago(agoMs), attemptAt: ago(agoMs) });
+
+  test("a completely synced archive season is never re-synced", () => {
+    // The retirement: a finished season cannot change, so there is nothing a
+    // re-fetch could learn. Years later it is still complete and still not run.
+    const gate = gateAt(complete(SYNC_TTL_MS * 1_000_000), "archive");
+    assert.deepEqual(gate, { run: false, complete: true, reason: "fresh" });
+  });
+
+  test("the same state on the active tier is due", () => {
+    // The tier is the only thing that differs, which is what makes it the whole
+    // of the change.
+    const gate = gateAt(complete(SYNC_TTL_MS * 1_000_000), "active");
+    assert.equal(gate.run, true);
+    assert.equal(gate.complete, false);
+  });
+
+  test("last season is held for a month, then asked once more", () => {
+    assert.equal(gateAt(complete(SETTLED_SYNC_TTL_MS - 1), "settled").run, false);
+    assert.equal(gateAt(complete(SETTLED_SYNC_TTL_MS + 1), "settled").run, true);
+  });
+
+  test("an archive season never synced completely is still due", () => {
+    // The retirement is bought by `synced_at`, and only a run that dropped no
+    // league advances it — so a graph that has never been whole is not retired
+    // by having been attempted.
+    assert.deepEqual(gateAt(null, "archive"), {
+      run: true,
+      complete: false,
+      reason: "due",
+    });
+  });
+
+  test("a partial archive sync retries on the ordinary attempt window", () => {
+    // The attempt throttle is deliberately untiered: waiting a month — or
+    // forever — to retry three leagues a Sleeper timeout dropped is exactly the
+    // page where the retry is free and one round of it earns the retirement.
+    const partial = (agoMs: number) => state({ syncedAt: null, attemptAt: ago(agoMs) });
+    assert.equal(gateAt(partial(SYNC_ATTEMPT_TTL_MS - 1), "archive").reason, "throttled");
+    assert.equal(gateAt(partial(SYNC_ATTEMPT_TTL_MS + 1), "archive").run, true);
+  });
+
+  test("force still overrides a retired season", () => {
+    const gate = managerSyncGate(complete(1_000), {
+      now: NOW,
+      requestedAt: NOW,
+      force: true,
+      tier: "archive",
+    });
+    assert.equal(gate.run, true);
+    // It describes the data, not the decision: forcing a refresh over a complete
+    // graph is still a complete graph until the new one lands.
+    assert.equal(gate.complete, true);
+  });
+
+  test("the tier defaults to active, so a caller with no season is unchanged", () => {
+    const at = complete(SYNC_TTL_MS + 1);
+    assert.deepEqual(
+      managerSyncGate(at, { now: NOW, requestedAt: NOW }),
+      gateAt(at, "active"),
+    );
   });
 });

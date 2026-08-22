@@ -4,6 +4,7 @@ import {
   pool,
   withBlockingAdvisoryLock,
 } from "@/shared/db";
+import { peekActiveSeason } from "@/shared/season";
 import { getLeague, getNflState, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague, SleeperNflState } from "@/shared/sleeper";
 import { syncTradeRosters } from "@/shared/trades";
@@ -14,7 +15,8 @@ import {
   markLeaguesGone,
   stampLeagueSyncAttempts,
 } from "./crawl-queue";
-import { fetchLeagueGraph, type GraphWeeks, type WeekRange } from "./graph";
+import { fetchLeagueGraph, type GraphWeeks } from "./graph";
+import { leagueGraphWeeks, type SyncClock } from "./graph-weeks";
 import {
   getStoredMaxMatchupWeekByLeague,
   getStoredMaxWeekByLeague,
@@ -24,7 +26,11 @@ import {
 import { invalidateManagerSnapshot } from "./manager-snapshot";
 import { getManagerSyncState, getUnlistedManagerLeagueIds } from "./queries";
 import { invalidateManagerRanks } from "./ranks-read";
-import { MANAGER_SYNC_STAMP_SQL, managerSyncGate } from "./sync-freshness";
+import {
+  MANAGER_SYNC_STAMP_SQL,
+  managerSyncGate,
+  seasonSyncTier,
+} from "./sync-freshness";
 
 /** Child rows persisted across a set of league graphs. */
 export type LeagueCounts = {
@@ -144,17 +150,32 @@ const emptyCounts = (): LeagueCounts => ({
 /**
  * The current NFL week, floored to 1: offseason moves are logged at week 1 while
  * Sleeper's state reports week 0. Nothing exists past it, so it bounds every
- * transaction fetch. Split from {@link getCurrentWeek} for callers that already
- * hold the state — the crawler derives this and its freshness tier from one
- * fetch.
+ * transaction fetch. Split from {@link getSyncClock} for callers that already
+ * hold the state — the crawler derives this, the season and its freshness tier
+ * from one fetch.
  */
 export function flooredWeek(state: SleeperNflState | null): number {
   return Math.max(state?.week ?? 1, 1);
 }
 
-/** {@link flooredWeek} of a fresh `state/nfl` read. */
-export async function getCurrentWeek(): Promise<number> {
-  return flooredWeek(await getNflState());
+/**
+ * The week *and* the season off one `state/nfl` read.
+ *
+ * **It replaces a bare `getCurrentWeek`, and the pairing is the point.** A week
+ * number on its own does not say which season's week it is, and every caller of
+ * {@link syncLeagueGraphs} was reading the app's week and applying it to
+ * whatever season it happened to be syncing — see `./graph-weeks` for what that
+ * cost a past season. Handing the two out together is what makes the mistake
+ * unavailable rather than merely fixed: there is no longer a function that
+ * answers half the question.
+ *
+ * A state read that fails leaves `activeSeason` null, which `isFinishedSeason`
+ * reads as "not known to be finished" — the live ceiling, and so exactly the
+ * behaviour that existed before it was consulted.
+ */
+export async function getSyncClock(): Promise<SyncClock> {
+  const state = await getNflState();
+  return { currentWeek: flooredWeek(state), activeSeason: state?.season ?? null };
 }
 
 /**
@@ -165,10 +186,9 @@ export async function getCurrentWeek(): Promise<number> {
  * back the batch. `onProgress` fires after each league completes.
  *
  * A league's weeks are frozen once past, so only the tail of each week-keyed
- * collection is re-fetched: from its last stored week minus one (to catch
- * late-settling waivers and trades, and the stat corrections that move a closed
- * week's points) up to `currentWeek`. A league with nothing stored is backfilled
- * from week 1.
+ * collection is re-fetched, and the ceiling is per league rather than per tick —
+ * see `./graph-weeks`, which owns both halves of that decision and the reason a
+ * finished season must not be bounded by the current one's week.
  *
  * Transactions and matchups are gated **separately**, on their own stored
  * weeks. They fill up independently — every league stored before matchups
@@ -177,7 +197,7 @@ export async function getCurrentWeek(): Promise<number> {
  */
 export async function syncLeagueGraphs(
   leagues: SleeperLeague[],
-  currentWeek: number,
+  clock: SyncClock,
   options: {
     concurrency?: number;
     onProgress?: (progress: SyncProgress) => void;
@@ -203,14 +223,11 @@ export async function syncLeagueGraphs(
     getStoredMaxWeekByLeague(leagueIds),
     getStoredMaxMatchupWeekByLeague(leagueIds),
   ]);
-  const tailFrom = (stored: number | undefined): WeekRange => ({
-    from: stored ? Math.max(stored - 1, 1) : 1,
-    to: Math.max(currentWeek, stored ?? 1, 1),
-  });
-  const weeksFor = (leagueId: string): GraphWeeks => ({
-    transactions: tailFrom(storedMaxWeek.get(leagueId)),
-    matchups: tailFrom(storedMaxMatchupWeek.get(leagueId)),
-  });
+  const weeksFor = (league: SleeperLeague): GraphWeeks =>
+    leagueGraphWeeks(league.season, clock, {
+      transactions: storedMaxWeek.get(league.league_id),
+      matchups: storedMaxMatchupWeek.get(league.league_id),
+    });
 
   let loaded = 0;
   let failed = 0;
@@ -222,9 +239,7 @@ export async function syncLeagueGraphs(
 
   await mapWithConcurrency(leagues, concurrency, async (league) => {
     try {
-      const graph = await fetchLeagueGraph(league, weeksFor(league.league_id), {
-        fresh,
-      });
+      const graph = await fetchLeagueGraph(league, weeksFor(league), { fresh });
       await persistLeagueGraph(graph);
       // The pre-trade rosters ride on this pass because this is where both of
       // their inputs land — the current rosters and the transaction log — and
@@ -428,6 +443,13 @@ async function syncManagerLeaguesLocked(
     now: Date.now(),
     requestedAt: requestedAt.getTime(),
     force,
+    // `peekActiveSeason` and never `getActiveSeason`: this decides a *TTL*, not
+    // the answer, so it must not be able to block on Sleeper — and `undefined`
+    // is read as the active tier, the shortest clock, which is the behaviour
+    // this had before tiers existed. The route ahead of this asked the same
+    // question the same way; two spellings of "is this due" is the bug one
+    // function exists to prevent.
+    tier: seasonSyncTier(season, peekActiveSeason()),
   });
   if (!gate.run) {
     // Skipped with nothing in flight, so this is not a `locked` answer — but
@@ -442,7 +464,10 @@ async function syncManagerLeaguesLocked(
     };
   }
 
-  const currentWeek = await getCurrentWeek();
+  // The clock carries the season as well as the week, so a sync of a *past*
+  // season fetches that season whole rather than stopping at whatever week the
+  // current one has reached — see `./graph-weeks`.
+  const clock = await getSyncClock();
   const leagues = await getUserLeagues(userId, season);
 
   const leagueIds = leagues.map((l) => l.league_id);
@@ -462,11 +487,10 @@ async function syncManagerLeaguesLocked(
     console.warn("[leagues] demand stamp failed:", errorMessage(error));
   });
 
-  const { loaded, failed, counts } = await syncLeagueGraphs(
-    leagues,
-    currentWeek,
-    { concurrency, onProgress },
-  );
+  const { loaded, failed, counts } = await syncLeagueGraphs(leagues, clock, {
+    concurrency,
+    onProgress,
+  });
 
   // After the graphs, because the route re-reads the leagues list once this
   // returns and a tombstone written now is one the reader sees on this press —

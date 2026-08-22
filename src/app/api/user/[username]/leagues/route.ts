@@ -3,11 +3,13 @@ import {
   getManagerSyncState,
   managerSyncAdmission,
   managerSyncGate,
+  seasonSyncTier,
   syncManagerLeagues,
   toUserInfo,
 } from "@/shared/manager";
 import type { LeaguesStreamMessage } from "@/shared/contract";
 import { ensurePlayersFresh } from "@/shared/players";
+import { peekActiveSeason } from "@/shared/season";
 
 import { isInternalRequest } from "../../../internal-auth";
 import { readFailureResponse } from "../../../read-failure";
@@ -85,7 +87,18 @@ export async function GET(
   // `requestedAt: now` because nothing has been queued for yet — the race arms
   // of the gate are for the caller that has just waited on the lock.
   const now = Date.now();
-  const gate = managerSyncGate(syncState, { now, requestedAt: now, force });
+  // The season's tier is what decides how long a *complete* graph stays fresh: a
+  // finished season cannot change, so one that has been synced completely is
+  // never re-synced on a clock. `peekActiveSeason` because this is bookkeeping
+  // rather than the answer — an explicitly requested `?season` must not send a
+  // read to Sleeper to find out what year it is, and not knowing falls back to
+  // the shortest clock.
+  const gate = managerSyncGate(syncState, {
+    now,
+    requestedAt: now,
+    force,
+    tier: seasonSyncTier(season, peekActiveSeason()),
+  });
   /**
    * Whether there is an honest answer to send immediately.
    *

@@ -478,6 +478,34 @@ collisions stay visible.
   and **`SyncSummary.complete` is the only field that licenses `stale: false`** —
   `failed === 0` is not it, since a run that did nothing has no failures to
   report and no claim to make either.
+- **A finished season is synced once, completely, and then never again.** The
+  crawler was already scoped to the active season at every queue read, but the
+  *manager* sync was not: `/api/user/[username]/leagues?season=2024` ran the full
+  ~11-requests-per-league fan-out every ten minutes forever, on a page the header
+  plate's season stepper walks back to 2017. `seasonSyncTier` puts a season on
+  one of three clocks — active minutes, last season a month, older unbounded —
+  and `managerSyncGate` reads the tier for its freshness window. Four rules.
+  **The tier is the *freshness* window and never the attempt throttle**: what a
+  tier lengthens is the quiet a complete graph buys, and an incomplete one has
+  bought nothing, so a past season that dropped three leagues to a timeout
+  retries on the cadence it always did and stops the moment it completes.
+  **Last season is a month rather than unbounded**, because `getActiveSeason`
+  rolls over off `state/nfl` well before the old year's playoffs settle and the
+  graph re-reads its stored week *minus one* to catch late corrections — the
+  `STATS_SETTLED_TTL_MS` argument, borrowed whole. **The active season is what a
+  season it cannot classify falls back to** (`peekActiveSeason` answers
+  `undefined` on a cold process, a season ahead of the rollover is not finished),
+  the `crawl-ttl` rule that extra fetches are the failure you can see. And **the
+  tier is decided with `peekActiveSeason`, never `getActiveSeason`** — a TTL is
+  bookkeeping, and an explicitly requested `?season` must not send a read to
+  Sleeper to find out what year it is.
+- **A retirement is only as sound as the graph it retires, so it is worth asking
+  what is already stored.** The tier above was safe to add only alongside the
+  ceiling fix below and a migration withdrawing `synced_at` from every past
+  season — every truncated run had dropped no league, so every one of them
+  stamped complete, and the new tier would have frozen the truncation on the day
+  it was fixed. **When a TTL becomes "never", the rows written under the old one
+  are part of the change.**
 - **A per-key lock is computed, not listed** — `managerSyncLockKey(userId)`
   hashes the id into the object slot under one class id. **There are two such
   classes** (`HASHED_LOCK_CLASSES`): `leagueSyncLockKey` hashes ids from the same
@@ -1884,6 +1912,22 @@ These recur everywhere and are the rules most often broken by accident:
   looking wrong.
 - Transactions are keyed by week with no all-at-once endpoint; a league's full
   history is the union of each week.
+- **The ceiling on those weeks is a fact about the *league's* season, not the
+  app's.** `syncLeagueGraphs` bounded both week-keyed collections by
+  `state/nfl`'s week, which names a week of the season Sleeper is *in* — so a
+  2024 league synced in the 2026 offseason stored week 1 and nothing else, and
+  stayed there, since the next pass read a stored max of 1 and computed
+  `max(currentWeek, stored)` = 1 again. Mid-season it was the same bug wearing a
+  plausible number, filling in lockstep with the current week and reaching week
+  18 in January. `shared/manager/graph-weeks` owns the decision (pure, tested); a
+  finished season takes `LAST_REGULAR_WEEK`. Two rules hold it. **The week and
+  the season travel together** — `getSyncClock` replaced a bare
+  `getCurrentWeek`, because a week number alone cannot say which season's week it
+  is and every caller was free to pair it with the wrong one; there is now no
+  function that answers half the question. And **an unreadable state is not a
+  finished season**: both sides unparseable answers the live ceiling, which is
+  the behaviour that existed before the check, since the other direction stops
+  fetching weeks a live season is still playing.
 - **Matchups are the second collection keyed that way, and the two are gated
   separately.** `league/<id>/matchups/<week>` returns a *side* per roster, not a
   game — two sides share a `matchup_id`, null for a bye — so `matchups` is keyed

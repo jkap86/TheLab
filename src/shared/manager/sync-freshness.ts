@@ -33,11 +33,104 @@
  * Keeping them in one file is what makes that difference legible.
  */
 
-/** How long a **fully successful** sync stays fresh before a re-fetch is due. */
+/** How long a **fully successful** sync of the *current* season stays fresh. */
 export const SYNC_TTL_MS = 10 * 60 * 1000;
 
 /**
+ * How long a **fully successful** sync of the season just finished stays fresh.
+ *
+ * Thirty days, borrowed wholesale from `stats`' {@link STATS_SETTLED_TTL_MS} and
+ * for its argument: a finished season is final, so the only thing a re-read buys
+ * is healing a graph that stored thin once, and a month is often enough for that
+ * and rare enough to cost nothing.
+ *
+ * **Not `Infinity`, and the season *just* finished is exactly why.**
+ * `getActiveSeason` rolls over off Sleeper's `state/nfl`, which names the new
+ * league year well before the old one's playoffs settle — and `syncLeagueGraphs`
+ * deliberately re-fetches from the stored week *minus one* to catch
+ * late-settling waivers, trades and the stat corrections that move a closed
+ * week's points. Retiring last season on the day of the rollover freezes it
+ * mid-playoffs.
+ */
+export const SETTLED_SYNC_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Which clock a season's league graph is on.
+ *
+ * The tier the crawler already has for *time* (`./crawl-ttl`), applied to
+ * *seasons*: what a re-sync can possibly discover falls away as a season
+ * recedes, so the TTL in front of it should too. Nothing about the schema
+ * changes — a past season is already its own set of `leagues` rows, because
+ * Sleeper mints a new `league_id` per season — and nothing is deleted, since the
+ * reads with no manager in the question (the ADP board, the trades market) are
+ * what that corpus is kept whole for. What changes is only how often a manager's
+ * graph for it is asked about again.
+ */
+export type SeasonSyncTier =
+  /** The season being played. Minutes. */
+  | "active"
+  /** The season just finished, still inside the correction window. A month. */
+  | "settled"
+  /** Anything older. Synced once, completely, and then never again. */
+  | "archive";
+
+/**
+ * Which tier a season sits in, against the season the app is operating in.
+ *
+ * **An unknown or unparseable season on either side answers `"active"`**, the
+ * shortest clock — the `crawl-ttl` rule that a missing date fails toward the
+ * fresh tier, and the reason the caller may hand this `peekActiveSeason`'s
+ * `undefined` without checking it first. Extra fetches are the failure you can
+ * see; the other direction retires a live season on the strength of a value
+ * nobody could read.
+ *
+ * A season *ahead* of the active one is `"active"` too. Sleeper answers an
+ * unknown league year with an empty list, and retiring that answer forever would
+ * make "this manager has no leagues yet" permanent for the whole of the year
+ * before the rollover.
+ */
+export function seasonSyncTier(
+  season: string | null | undefined,
+  activeSeason: string | null | undefined,
+): SeasonSyncTier {
+  const year = seasonYear(season);
+  const active = seasonYear(activeSeason);
+  if (year === null || active === null || year >= active) return "active";
+  return year === active - 1 ? "settled" : "archive";
+}
+
+/**
+ * How long a complete sync stays fresh on a tier — `Infinity` for the archive,
+ * where "fresh" means *final*: the graph is complete, the season cannot change,
+ * and there is nothing a re-fetch could learn.
+ *
+ * `Infinity` rather than a very large number so the retirement is legible at the
+ * comparison rather than inferred from a magnitude, and so `now - syncedAt <
+ * ttl` needs no special case to express it.
+ */
+export function syncTtlMsFor(tier: SeasonSyncTier): number {
+  if (tier === "settled") return SETTLED_SYNC_TTL_MS;
+  if (tier === "archive") return Number.POSITIVE_INFINITY;
+  return SYNC_TTL_MS;
+}
+
+/** A four-digit year as a number, or null for anything that isn't one. */
+function seasonYear(season: string | null | undefined): number | null {
+  return season && /^\d{4}$/.test(season) ? Number(season) : null;
+}
+
+/**
  * How long *any* attempt suppresses the next one, whatever it achieved.
+ *
+ * **It is deliberately not tiered, where {@link SYNC_TTL_MS} now is**, and the
+ * asymmetry is the point: what a tier lengthens is the quiet a *complete* graph
+ * buys, and an incomplete one has bought nothing. A reader who steps the header
+ * back to 2019 and loses three leagues to a Sleeper timeout would otherwise wait
+ * a month — or forever — to be shown them, on a page where the retry is free and
+ * one round of it is all that stands between the graph and the retirement above.
+ * So a past season retries on exactly the cadence it always did, and stops the
+ * moment it completes. That leaves the equality below describing the active
+ * tier, which is the tier it was written about.
  *
  * Deliberately the same duration as {@link SYNC_TTL_MS} rather than shorter,
  * and that is the whole of the retry-storm protection: before this split, a
@@ -74,7 +167,9 @@ export type SyncGate = {
   run: boolean;
   /**
    * Whether what is **stored** is a complete, current graph — a fully successful
-   * sync inside {@link SYNC_TTL_MS}, and nothing else.
+   * sync inside the season's own window ({@link syncTtlMsFor}), and nothing
+   * else. On the archive tier that window is unbounded, so one complete sync of
+   * a finished season is complete forever: the retirement.
    *
    * Deliberately independent of `run` and of `force`: it describes the data, not
    * the decision, so an operator forcing a refresh over a complete graph is
@@ -107,6 +202,11 @@ export type SyncGate = {
  * 3. **Freshness before the throttle**, so a complete sync reports `fresh`
  *    rather than the throttle that would also have caught it — the two are
  *    different answers to a caller and to a log.
+ *
+ * `tier` is the only thing that varies the freshness window, and it defaults to
+ * `"active"` so a caller that has no season in hand gets the shortest clock —
+ * see {@link seasonSyncTier}, which is the one thing that should ever compute
+ * it. The throttle is untiered on purpose; see {@link SYNC_ATTEMPT_TTL_MS}.
  */
 export function managerSyncGate(
   state: ManagerSyncState | null,
@@ -114,11 +214,17 @@ export function managerSyncGate(
     now,
     requestedAt,
     force = false,
-  }: { now: number; requestedAt: number; force?: boolean },
+    tier = "active",
+  }: {
+    now: number;
+    requestedAt: number;
+    force?: boolean;
+    tier?: SeasonSyncTier;
+  },
 ): SyncGate {
   const syncedAt = state?.syncedAt?.getTime() ?? null;
   const attemptAt = state?.attemptAt?.getTime() ?? null;
-  const complete = syncedAt !== null && now - syncedAt < SYNC_TTL_MS;
+  const complete = syncedAt !== null && now - syncedAt < syncTtlMsFor(tier);
 
   if (syncedAt !== null && syncedAt >= requestedAt) {
     return { run: false, complete, reason: "raced" };

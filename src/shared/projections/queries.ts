@@ -117,7 +117,7 @@ export async function getRemainingWeeks(season: string): Promise<number[]> {
  * game, so this still names week 1 on the Monday night of week 1, which is when
  * a lineup for it can still be changed.
  *
- * **Not `manager`'s `getCurrentWeek`, which reads `state/nfl`.** That one is for
+ * **Not `manager`'s `getSyncClock`, which reads `state/nfl`.** That one is for
  * the sync path, where a Sleeper call is the point; a cache-backed route never
  * waits on Sleeper for something the database can already answer. The cost of
  * that is honesty rather than accuracy: this can only name a week whose
