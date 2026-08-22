@@ -3526,6 +3526,74 @@ part before redesigning it.
     the question wrongly first. The two payloads are the other tabs' resources
     behind a shared cache, fetched when the panel opens or a subject is selected —
     both naming the same query keys, so the two gates cost one request.
+- **The manager's three views are a switch above the rail, and what it replaced
+  was not a control but the absence of one.** Leagues, Players and Leaguemates
+  are three *routes* and always have been — three entries in `tools.ts` with a
+  `pattern` and an `hrefFor` apiece, which the tools grid and the app bar's menu
+  already read. On the page there was nothing: the only way between them was the
+  menu, behind a press, in a list of seven. What stood in for them were the
+  subject rail's two shares keys, 10px pills at the trailing end of the filter
+  row — and those open a **picker** over the list you are already on and have
+  never gone to either view. So the two most valuable readings of an account
+  were named by the least prominent parts on the screen, by parts that did not
+  go there.
+
+  That is the diagnosis the mockups converged on and it is worth keeping,
+  because "make the buttons bigger" was the request and would not have fixed it:
+  the keys were not too small, they were **seated among controls that narrow and
+  named a destination they did not have**. Six things hold the answer up:
+  - **Raised means press me, recessed means you are here, and that is the whole
+    of the state.** The two you can go to are `.lab-billet` blocks — a wall
+    running down *and* right, graded lit-corner to dark, which is the strongest
+    "separate object" mark the app owns and the same block the ADP trigger
+    wears. The one you are on is the same box with the face cut away, and the
+    current cell is a `<span>` rather than a link to itself: a part that does
+    nothing when pressed must not travel under the finger. No "active" tint is
+    doing any work here, which is what makes it legible before it is read.
+  - **`.lab-seat` is a fourth member of the sink family, not a reuse of the
+    third.** `.lab-well`, `.lab-readout` and `.lab-trough` exist separately
+    because a shadow does not scale, and the switch adds a fourth scale:
+    `.lab-readout` is tuned for a 28px countdown digit and at the switch's 43px
+    read as a *tinted box* rather than a cut — measured against the two blocks
+    beside it, which is the only comparison that matters, since "you are here"
+    here means lower than those. Deeper sink, a fill that falls away from the
+    light, a hard black lip on the top edge (light dying on a cut's near wall is
+    what says the face was removed rather than darkened), and the hairline a
+    step brighter than the family's, because on this one the ring is carrying
+    state. Found by rendering it, not by reading it — the entry beside this one
+    on sampling pixels, third instance.
+  - **The three cells are one height, and that is arithmetic.** A raised cell is
+    its face plus the 5px it stands on; the sunk one has no wall and takes those
+    5px back as padding, 2 above and 3 below. One number on both and the tops do
+    not line up, which reads as three parts seated wrong rather than as one
+    switched. 5px rather than the bar's 6px because thickness falls with count
+    and this is three of the heaviest part in the app on one line, under a
+    header plate that is already a lit face.
+  - **The cells are intrinsic at every width, and equal thirds is the thing that
+    was tried and reverted.** Thirds of 354px is 110px, which clips
+    "LEAGUEMATES" to "LEAGUEM…" — a tool's own name reading as broken, where the
+    truncation rule only ever licensed clipping a field whose *content varies*.
+    Measured at 390px the three come to 312px of 354, so they fit with 26px to
+    spare and `flex-wrap` is the honest failure for a width that does not: a
+    name on its own line, never one cut inside a word. What a phone loses is the
+    22px glyph seat and nothing else — the labels never contract, so the glyph
+    is not what tells one key from another — and the 3px lit rail **stays**,
+    being the mark that says which cell at exactly the width the sunk material
+    has least room to say it alone.
+  - **The key that stays says the act, not the list.** With the switch above
+    naming Players and Leaguemates, the rail's two keys contracting to those
+    same words was one word on one screen meaning two things. They read "Browse
+    players" / "Browse leaguemates" now and contract to "Browse" alone, which is
+    what they always did — open a picker over the list you are on. This is the
+    lineup checker's rail too, where it is simply the more accurate label.
+  - **`usePathname` is typed `string` and answers null off the App Router**,
+    which reached `isToolActive` as `.split` on null. `ViewSwitch` reads the
+    router and folds it; `ViewSwitchRow` takes a string and draws. That split is
+    the thin-I/O-wrapper rule applied to routing, and it is what lets the two
+    claims a compiler cannot make — which cell is sunk, and that the links go to
+    the **searched** manager rather than the connected one the menu resolves —
+    be a test rather than an assertion in a comment.
+
 - **The league filters lead that rail, which is what makes it the page's filter
   row rather than one of two.** The key was machined into the header plate's
   bottom-right corner — 20px, the smallest type on the card, under the countdown,

@@ -62,6 +62,7 @@ import {
   ManagerHeader,
   type HeaderStat,
 } from "@/features/shared/ui/manager-header";
+import { ViewSwitch } from "@/features/shared/ui/view-switch";
 import { EmptyState, ErrorCard, LoadingState } from "./manager-leagues-status";
 import { SubjectRail } from "./subject-rail";
 import { PanelMessage } from "./ui";
@@ -252,6 +253,21 @@ export function LeaguesViewLayout({
         leagueCount={filtered.length}
         stat={stat}
       />
+
+      {/* The three views of this account, over the row that narrows whichever
+          one you are on. **Ungated where the rail below it is gated on
+          `hasLeagues`**, because it is navigation rather than a control over the
+          list: an account holding no leagues has nothing to narrow and still has
+          a Players tab, so the rail goes and this stays. The cold-load screen
+          returns above this, which is right for the same reason — up there the
+          header naming the account is not drawn either, and a switch between
+          three readings of an account is not worth offering before there is one.
+
+          Seated between the plate and the rail rather than inside either. The
+          plate says whose account this is, this says which reading of it, and
+          the rail says which rows that reading leaves — three questions, in the
+          order they are asked. */}
+      <ViewSwitch searched={searched} />
 
       {/* The page's two filter rows and the list's own heading rail, between the
           card and the rows and belonging to neither: they narrow the list, and

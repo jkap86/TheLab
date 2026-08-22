@@ -1438,6 +1438,24 @@ that does nothing.
 
 ### Components and state
 
+- **`usePathname` is typed `string` and is not one.** Outside the App Router's
+  context it answers null, which reaches a matcher as `.split` on null and takes
+  the page down — invisible in the app and immediate under the test runner,
+  which is the one caller always outside it. Fold it (`?? ""`) at the component
+  that reads it and hand a *string* to the half that decides, which is the
+  thin-I/O-wrapper rule applied to routing: `ViewSwitch` reads the router and
+  `ViewSwitchRow` draws, so which cell is sunk and where the links go are a test
+  rather than a claim. An unknown path must match nothing and offer every
+  door — a switch that cannot say where you are should never light the wrong
+  cell.
+- **A shared glyph set's stroke is not a constant across its sizes.** These
+  paths are laid out on a 24 viewBox and scaled by the box, so `ToolIcon`'s 1.6
+  renders at 1.33px in the menu and 0.93px on a 14px key — a hairline beside the
+  1.28px the rail's own 16-viewBox glyphs carry. `SIZES` is a closed table of
+  named sizes with a stroke apiece, and a table rather than a `className` prop
+  for the reason a shared part hard-coding a box has already gone wrong here:
+  `.h-5` and `.h-3\.5` tie on specificity and sort alphabetically, so an
+  override wins or loses on the generated order with nothing to say which.
 - **A pure-SVG component is not a client component.** Reach for `"use client"`
   when there's state or a handler, not because a component draws. Use `useId` for
   gradient and clip ids so two instances can't collide.
@@ -1721,6 +1739,24 @@ These recur everywhere and are the rules most often broken by accident:
 - **A hover warms only the cheap read**, on fine pointers only (`pointerenter`
   fires on a touch, so a tap would prefetch and then immediately fetch), debounced
   with a cancel on leave. Keyboard focus is exempt — focus is deliberate.
+- **A key must not name a place it does not go.** The manager's three views are
+  three *routes*, and the only way between them was the app bar's menu, behind a
+  press, in a list of seven — while two 10px pills at the trailing end of the
+  filter rail carried their exact names and opened a picker over the current
+  list instead. Both parts were then hard to place, and neither was findable.
+  Draw the destination as a destination (`ViewSwitch`: raised for where you can
+  go, `.lab-seat` for where you are, the current cell a `<span>` so there is no
+  press that does nothing), and make the key that stays say the *act* rather
+  than the list — "Browse players", not "Players". **The tell is one word
+  appearing twice on a screen meaning two things.**
+- **A switch over routes reads the tools catalogue, never a list of its own.**
+  `tools.ts` already owns the names, the destinations, the glyphs and the
+  current-page patterns, so a second list drifts the day a view is renamed;
+  `toolsInGroup("Manager")` is the membership test, and a fourth view joins by
+  joining the group. It resolves against the **searched** manager where the app
+  bar's menu resolves against the connected one — a switch between three
+  readings of the account on screen must not change whose account that is — and
+  both go through `toolHref`, which owns the URL-encoding once.
 - **A label for a person is a username; a label for a team is a team name.** A
   team name is a nickname changed at will, so labelling by it makes the same
   opponent read as a different person in every league they're in. Pass the same
