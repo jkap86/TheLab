@@ -1434,34 +1434,6 @@ export type AdpPlayerPayload = {
    * a player the crawled auctions never bought.
    */
   auction: AdpAuctionBoards;
-  /**
-   * What KeepTradeCut prices him at, on both of the boards KTC publishes —
-   * superflex and 1QB.
-   *
-   * **A second opinion beside the two averages, and deliberately not a third
-   * board.** Everything else on this payload is a reading of the drafts this app
-   * crawled; this is what one public market says the same player is worth, which
-   * is the number a reader already has open in another tab when they are deciding
-   * whether an ADP looks cheap. Sent per row for the reason the averages are —
-   * a player appears exactly once here, so there is nothing a side map would
-   * deduplicate.
-   *
-   * **It is a *dynasty* board whichever ADP column it is read beside**, which is
-   * the one thing a reader has to know about it: KTC scrapes only
-   * `dynasty-rankings`, so the same two numbers sit against the redraft average
-   * and against the dynasty one. That is honest rather than a mismatch — it is a
-   * second lens on the player, not a per-market price — and it is why the columns
-   * are named for KTC's own two boards (SF, 1QB) rather than for this board's two
-   * markets. The headings' hover says so.
-   *
-   * **Null is "KTC has no price", never zero.** KTC carries ~500 dynasty skill
-   * players, so kickers, defences, IDP and the deep end of every position are off
-   * its board entirely — which is a different claim from being worth nothing, the
-   * same distinction {@link AdpBoardStats} draws by being null under `min_picks`.
-   * Both fields inside can be null too, for a player KTC knows and prices on
-   * neither board.
-   */
-  ktc: KtcValue | null;
 };
 
 /**

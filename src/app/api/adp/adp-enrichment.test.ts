@@ -57,17 +57,25 @@ describe("the ADP route's enrichment stage", () => {
   });
 
   test("declares every enrichment as a database read", () => {
-    // Four reads, four declarations: a loader smuggled in outside `dbRead` is a
-    // connection the bound does not know about.
+    // Three reads, three declarations: a loader smuggled in outside `dbRead` is
+    // a connection the bound does not know about.
     for (const loader of [
       "getPlayersWithExperience",
       "getKtcPickBoard",
-      "getKtcValuesBySleeperId",
       "getDraftAuctionSpend",
     ]) {
       assert.ok(calls(ROUTE, loader), `route no longer reads ${loader}`);
     }
-    assert.equal(callCount(ROUTE, "dbRead"), 4, "an enrichment is not declared");
+    assert.equal(callCount(ROUTE, "dbRead"), 3, "an enrichment is not declared");
+    // And the one that left: the per-player KTC lookup fed two columns the ADP
+    // panel no longer draws, so it was a page-sized read nothing on the wire
+    // could report. `getKtcPickBoard` above is not the same read and stays — it
+    // is the future-season discount, which is a fact about the board.
+    assert.equal(
+      calls(ROUTE, "getKtcValuesBySleeperId"),
+      false,
+      "route still reads KTC prices nothing draws",
+    );
     // The bound is the shared budget's, never a number of this route's own.
     assert.equal(
       /loadEnrichments\(\s*\{[^]*?\}\s*,\s*\d/.test(ROUTE),
@@ -125,7 +133,6 @@ describe("the ADP route's enrichment stage", () => {
       "redraft",
       "dynasty",
       "auction",
-      "ktc",
     ]) {
       assert.match(
         ROUTE,

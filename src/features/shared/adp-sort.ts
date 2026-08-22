@@ -33,7 +33,7 @@ import type { AdpBoardType } from "@/shared/manager";
  *   the trade card's own rule for an unpriced line, which sinks to the bottom of
  *   its block and never out of it.
  * - **A press picks the direction that answers the question.** ADP ascends
- *   (pick 1 is the best pick); value, KTC and Taken descend (more is more); a
+ *   (pick 1 is the best pick); value, Taken and Bid descend (more is more); a
  *   name ascends. A second press on the same column flips it. That is what makes
  *   one press enough, and it is {@link NATURAL_DIRECTION}.
  *
@@ -59,11 +59,10 @@ export type AdpSortColumn =
   | "adp_redraft"
   | "adp_dynasty"
   | "taken"
-  | "auction"
+  | "auction_redraft"
+  | "auction_dynasty"
   | "value_redraft"
-  | "value_dynasty"
-  | "ktc_sf"
-  | "ktc_oneqb";
+  | "value_dynasty";
 
 export type AdpSortDirection = "asc" | "desc";
 
@@ -86,9 +85,10 @@ export const DEFAULT_ADP_SORT: AdpSort = { column: "rank", direction: "asc" };
  * Which way a column points on its *first* press — the direction that answers
  * the question the column is there to answer.
  *
- * A reader pressing KTC wants the expensive players, not the kickers; a reader
- * pressing ADP wants pick 1. Opening every column ascending would make half of
- * them a two-press control for their obvious reading.
+ * A reader pressing Bid wants the players a room emptied its budget on, not the
+ * dollar fliers; a reader pressing ADP wants pick 1. Opening every column
+ * ascending would make half of them a two-press control for their obvious
+ * reading.
  */
 const NATURAL_DIRECTION: Record<AdpSortColumn, AdpSortDirection> = {
   rank: "asc",
@@ -97,11 +97,10 @@ const NATURAL_DIRECTION: Record<AdpSortColumn, AdpSortDirection> = {
   adp_redraft: "asc",
   adp_dynasty: "asc",
   taken: "desc",
-  auction: "desc",
+  auction_redraft: "desc",
+  auction_dynasty: "desc",
   value_redraft: "desc",
   value_dynasty: "desc",
-  ktc_sf: "desc",
-  ktc_oneqb: "desc",
 };
 
 /**
@@ -118,26 +117,25 @@ export function nextAdpSort(current: AdpSort, column: AdpSortColumn): AdpSort {
 /**
  * The columns a given board mode actually draws.
  *
- * Three of them are mode-specific, and each would otherwise leave a sort pointing
- * at a column that is not on screen: `taken` and `auction` exist only in
- * single-board mode (both boards trade the first for the second ADP column, and
- * there is no width for two of the second), and each board's own ADP and Value
- * columns exist only where that board is lit. The KTC pair is in every mode — it
- * is a fact about the player rather than about either market.
+ * `taken` is the one that is genuinely mode-specific: both boards trade it for
+ * the second ADP column, and its share moves to that column's hover. Everything
+ * else is board-qualified, so the same three markets' columns — ADP, Bid, Value
+ * — exist in whichever mode that market is lit, which is what lets a sort survive
+ * a reader toggling the other board on.
  *
  * **A column hidden by a container tier is still a column of this mode**, which
- * is the one thing not to "fix" here: `auction` is seated from `@md` and the KTC
- * pair from `@lg`, so on a narrow panel a reader can hold a sort on a column they
- * cannot see. That is the same state a KTC sort has always been able to reach by
- * resizing, and it is right — the ordering stays the one they chose, and widening
- * the panel shows them the column it is on. What {@link resolveAdpSort} guards is
- * a column that has no *data* on screen, not one the width has folded away.
+ * is the one thing not to "fix" here: the Bid column is seated from `@md` with
+ * one market lit and its pair from `@lg` with two, so on a narrow panel a reader
+ * can hold a sort on a column they cannot see. That is right — the ordering stays
+ * the one they chose, and widening the panel shows them the column it is on. What
+ * {@link resolveAdpSort} guards is a column that has no *data* on screen, not one
+ * the width has folded away.
  */
 export function adpSortColumns(
   both: boolean,
   soleBoard: AdpBoardType,
 ): AdpSortColumn[] {
-  const shared: AdpSortColumn[] = ["rank", "name", "position", "ktc_sf", "ktc_oneqb"];
+  const shared: AdpSortColumn[] = ["rank", "name", "position"];
   if (both) {
     return [
       ...shared,
@@ -145,9 +143,17 @@ export function adpSortColumns(
       "adp_dynasty",
       "value_redraft",
       "value_dynasty",
+      "auction_redraft",
+      "auction_dynasty",
     ];
   }
-  return [...shared, `adp_${soleBoard}`, "taken", "auction", `value_${soleBoard}`];
+  return [
+    ...shared,
+    `adp_${soleBoard}`,
+    "taken",
+    `auction_${soleBoard}`,
+    `value_${soleBoard}`,
+  ];
 }
 
 /**
@@ -225,19 +231,16 @@ function sortKey(
         return pick.dynasty?.adp ?? null;
       // A pick was taken in none of these drafts — it was never on the board —
       // so it has no share to sort on, which is the same em dash the cell draws.
-      // The auction column is the same answer for the same reason: what an
+      // The auction columns are the same answer for the same reason: what an
       // auction sells is players, so a rookie pick was never a lot in one.
       case "taken":
-      case "auction":
+      case "auction_redraft":
+      case "auction_dynasty":
         return null;
       case "value_redraft":
         return value(pick.redraft?.adp, pick.redraft?.discount);
       case "value_dynasty":
         return value(pick.dynasty?.adp, pick.dynasty?.discount);
-      case "ktc_sf":
-        return pick.ktc?.sf ?? null;
-      case "ktc_oneqb":
-        return pick.ktc?.oneqb ?? null;
       default:
         return null;
     }
@@ -262,16 +265,14 @@ function sortKey(
     // denominator here is *per player* — a row bought in two auctions and one
     // bought in fifty are averaging different things — so the two orderings are
     // genuinely different and only the displayed one is the column's question.
-    case "auction":
-      return player.auction[ctx.soleBoard]?.share ?? null;
+    case "auction_redraft":
+      return player.auction.redraft?.share ?? null;
+    case "auction_dynasty":
+      return player.auction.dynasty?.share ?? null;
     case "value_redraft":
       return value(player.redraft?.adp);
     case "value_dynasty":
       return value(player.dynasty?.adp);
-    case "ktc_sf":
-      return player.ktc?.sf ?? null;
-    case "ktc_oneqb":
-      return player.ktc?.oneqb ?? null;
     default:
       return null;
   }
@@ -302,8 +303,8 @@ function compareKeys(
  * caller's array is a memo other things read.
  *
  * Every other column ties back to that natural order by index, which is what
- * makes a sort *total* — a column of em dashes, or a whole board on one KTC
- * value, still comes back in a fixed order rather than whatever the engine's
+ * makes a sort *total* — a column of em dashes, or a whole board on one bid
+ * share, still comes back in a fixed order rather than whatever the engine's
  * sort happens to do that render.
  */
 export function sortAdpEntries(

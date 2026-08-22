@@ -44,14 +44,14 @@ import {
   adpRowHeight,
   ADP_ROW_OVERSCAN,
   AUCTION_COLUMN_SEAT,
+  AUCTION_PAIR_SEAT,
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
-  KTC_COLUMN_SEAT,
 } from "./adp-drawer.constants.ts";
 import {
+  type AdpBoardCounts,
   PICK_AUCTION_TITLE,
   PICK_TAKEN_TITLE,
-  ktcTitle,
   withLeagueFilters,
 } from "./adp-drawer.utils.ts";
 
@@ -154,9 +154,6 @@ const player = (id: string, over: Partial<AdpPlayerPayload> = {}): AdpPlayerPayl
   // The crawled auctions bought nobody by default: they are a small slice of
   // the corpus, so both boards null is the ordinary row rather than a case.
   auction: { redraft: null, dynasty: null },
-  // Unpriced unless a case asks: KTC carries ~500 players, so an em dash in
-  // those columns is the common row rather than the exception.
-  ktc: null,
   ...over,
 });
 
@@ -177,6 +174,12 @@ const payload = (over: Partial<AdpPayload> = {}): AdpPayload => ({
   ...over,
 });
 
+/** The two denominators per market, as the loaded payload above carries them. */
+const counts: AdpBoardCounts = {
+  redraft: { drafts: 900, auctions: 48 },
+  dynasty: { drafts: 304, auctions: 11 },
+};
+
 const loaded = (over: Partial<AdpPayload> = {}): AdpState => ({
   data: payload(over),
   error: null,
@@ -195,6 +198,36 @@ const density = { months: [{ season: "2026", month: "2026-05", drafts: 120 }], e
  * what puts the focus back. Passing them in rather than making them here is what
  * keeps this section a plain function this file can call.
  */
+
+/**
+ * The board's `<li>`s, whole — player rows and pick rows alike, since both wear
+ * {@link BOARD_ROW_CLASS} and sit in the same grid.
+ */
+function boardRows(markup: string): string[] {
+  return [...markup.matchAll(/<li [^>]*class="absolute[^]*?<\/li>/g)].map((m) => m[0]);
+}
+
+/** How many elements sit *directly* inside one of those rows — its cells. */
+function cellsIn(row: string): number {
+  const body = row.slice(row.indexOf(">") + 1, row.lastIndexOf("</li>"));
+  let depth = 0;
+  let cells = 0;
+  for (const tag of body.match(/<\/?[a-z][^>]*>/g) ?? []) {
+    if (tag.startsWith("</")) depth--;
+    else {
+      if (depth === 0) cells++;
+      if (!tag.endsWith("/>")) depth++;
+    }
+  }
+  return cells;
+}
+
+/** The widest variant of a grid template, in tracks. */
+function trackCount(template: string): number {
+  const widest = [...template.matchAll(/grid-cols-\[([^\]]+)\]/g)].at(-1);
+  assert.ok(widest, "expected a grid template");
+  return widest[1].split("_").length;
+}
 
 function drawer(over: Partial<Parameters<typeof AdpDrawer>[0]> = {}): string {
   return renderToStaticMarkup(
@@ -804,25 +837,33 @@ describe("the column configurations", () => {
     }
   });
 
-  test("the Bid column is a single-board column, like Taken", () => {
-    // Two markets would want two of these and the row has no width for them —
-    // with both boards up the share is on each ADP cell's hover instead.
+  test("one market lit draws one Bid column, both markets draw one each", () => {
+    // A share is per market, so it cannot be one column standing for two — which
+    // is exactly what the tracks KTC's pair used to hold were spent on.
     for (const boards of ["redraft", "dynasty"] as const) {
       const html = drawer({ controls: { ...defaultAdpControls("2026"), boards } });
       assert.match(html, />Bid</, `${boards}: expected a Bid heading`);
+      assert.doesNotMatch(html, />Bid R</, `${boards}: one market wants one column`);
     }
-    assert.doesNotMatch(drawer(), />Bid</);
+    const both = drawer();
+    assert.match(both, />Bid R</);
+    assert.match(both, />Bid D</);
   });
 
-  test("the Bid heading and its cells cross their tier together", () => {
+  test("each Bid heading and its cells cross their tier together", () => {
     // A heading seated a tier apart from the column under it is a label over the
-    // wrong numbers — invisible in review and obvious on screen. One heading
-    // plus one cell on each of the three player rows.
-    const html = drawer({
+    // wrong numbers — invisible in review and obvious on screen.
+    const one = drawer({
       controls: { ...defaultAdpControls("2026"), boards: "redraft" },
     });
-    const seated = (html.match(new RegExp(AUCTION_COLUMN_SEAT, "g")) ?? []).length;
-    assert.equal(seated, 1 + 3);
+    // One heading plus one cell on each of the three player rows, at `@md`.
+    assert.equal((one.match(new RegExp(AUCTION_COLUMN_SEAT, "g")) ?? []).length, 1 + 3);
+    // And two of each at `@lg` with both markets up.
+    const both = drawer();
+    assert.equal((both.match(new RegExp(AUCTION_PAIR_SEAT, "g")) ?? []).length, 2 + 2 * 3);
+    // The pair takes the `@lg` seat and never the single column's `@md` one —
+    // that string still appears on the value pair, so this counts the two.
+    assert.equal((both.match(new RegExp(AUCTION_COLUMN_SEAT, "g")) ?? []).length, 2 + 2 * 3);
   });
 
   test("a bid is a share, and a player no auction bought an em dash", () => {
@@ -858,6 +899,54 @@ describe("the column configurations", () => {
     assert.doesNotMatch(html, />0%</);
   });
 
+  test("both markets up, each row draws its own two shares", () => {
+    // The claim the pair exists for: a player can be cheap in one market and
+    // dear in the other, and one column could only ever have said one of them.
+    const html = drawer({
+      board: loaded({
+        players: [
+          player("1", {
+            auction: {
+              redraft: { buys: 9, share: 58.4, min_share: 40, max_share: 71, stdev: 8.2 },
+              dynasty: { buys: 3, share: 12, min_share: 8, max_share: 15, stdev: 3 },
+            },
+          }),
+          player("2"),
+          player("3", {
+            auction: {
+              redraft: null,
+              dynasty: { buys: 4, share: 0.5, min_share: 0.5, max_share: 0.5, stdev: 0 },
+            },
+          }),
+        ],
+      }),
+    });
+    const drawn = [
+      ...html.matchAll(
+        new RegExp(`${AUCTION_PAIR_SEAT} text-right text-xs tabular-nums[^>]*>([^<]+)<`, "g"),
+      ),
+    ];
+    assert.deepEqual(drawn.map((m) => m[1]), ["58%", "12%", "0.5%"]);
+    assert.doesNotMatch(html, />0%</);
+    // Three blanks — both of player 2's and player 3's redraft — each an em dash
+    // and never a zero. Read off the pair's own seat rather than off the type
+    // treatment: a bare `>0<` matches the rolling draft counter's digit strip,
+    // which is why the "never a zero" rule has to be asserted against the cells
+    // that could wrongly render one.
+    const blank = html.match(
+      new RegExp(`${AUCTION_PAIR_SEAT} text-right text-xs text-foreground/25"?>—`, "g"),
+    );
+    assert.equal(blank?.length, 3);
+  });
+
+  test("each Bid heading states its own auctions, not the other market's", () => {
+    // Two populations, two counts. One shared string would put whichever
+    // arrived first under both headings.
+    const html = drawer();
+    assert.match(html, /48 crawled redraft auctions/);
+    assert.match(html, /11 crawled dynasty auctions/);
+  });
+
   test("the heading states the auctions it averaged, which are not the board's drafts", () => {
     const html = drawer({
       controls: { ...defaultAdpControls("2026"), boards: "redraft" },
@@ -868,77 +957,72 @@ describe("the column configurations", () => {
     assert.match(html, /48 crawled redraft auctions/);
   });
 
+  test("a row has exactly as many cells as its grid has tracks", () => {
+    // **The failure this catches is silent and invisible in review.** A cell
+    // rendered into a track that isn't there does not overflow — it *wraps* onto
+    // an implicit row, where `justify-self-end` lands it in the gutter and
+    // pushes it off the edge. Shedding or adding a column means all three
+    // places: the template, the heading, and the row's own cell. Pick rows are
+    // in the sweep too, since they sit in the same grid at the same fixed height
+    // and a column drawn in one kind of row and not the other drifts the whole
+    // windowed list.
+    const rookies = [
+      player("r1", { rookie: true }),
+      player("r2", { rookie: true }),
+      player("r3", { rookie: true }),
+    ];
+    const withPicks = loaded({
+      players: rookies,
+      pick_ktc: { "2027|1|": { sf: 6000, oneqb: 5400 } },
+    });
+    for (const [boards, template] of [
+      ["both", BOARD_COLUMNS_BOTH],
+      ["redraft", BOARD_COLUMNS_ONE],
+      ["dynasty", BOARD_COLUMNS_ONE],
+    ] as const) {
+      const html = drawer({
+        controls: { ...defaultAdpControls("2026"), boards },
+        board: withPicks,
+      });
+      const tracks = trackCount(template);
+      const drawn = boardRows(html);
+      assert.ok(drawn.length > 0, `${boards}: expected rows to measure`);
+      for (const row of drawn) {
+        assert.equal(cellsIn(row), tracks, `${boards}: a row is not ${tracks} cells`);
+      }
+      // And the heading rail, which shares the template: a heading missing from
+      // a row of controls is a column of bare numbers nobody can name.
+      const headings = [...html.matchAll(/<button[^>]*activate to sort/g)].length;
+      assert.equal(headings, tracks, `${boards}: headings do not match the tracks`);
+    }
+  });
+
   test("the collapsible columns are seated behind the panel's own container queries", () => {
     // `@md` and `@lg`, which measure the drawer rather than the viewport — the
     // panel is narrower than the screen everywhere a laptop is involved.
     const html = drawer();
     assert.match(html, /hidden @md:block/);
-    assert.match(html, new RegExp(KTC_COLUMN_SEAT));
+    assert.match(html, new RegExp(AUCTION_PAIR_SEAT));
   });
 
-  test("the KTC pair is drawn whichever markets are lit, and seated as one", () => {
-    // KTC publishes superflex and 1QB; this board's own two columns are redraft
-    // and dynasty. Those are different axes, so the same two KTC columns are
-    // right in both modes — a branch that drew them per market would be
-    // claiming a per-market price KTC does not publish.
+  test("KeepTradeCut is off this board entirely", () => {
+    // Its two columns were a second lens on the *player* — a dynasty price
+    // standing beside a redraft average — and the tracks they held are the bid
+    // pair now. Asserted in both modes, because they used to be drawn in both.
     for (const boards of ["both", "redraft", "dynasty"] as const) {
       const html = drawer({ controls: { ...defaultAdpControls("2026"), boards } });
-      // `SF` and `1QB` rather than `KTC SF` / `KTC 1QB`: the longer pair does
-      // not fit a 40px track once a sort caret is on it, so the source lives in
-      // the hover and the accessible name. See `BOARD_COLUMNS_ONE`.
-      assert.match(html, />SF</, `${boards}: expected an SF heading`);
-      assert.match(html, />1QB</, `${boards}: expected a 1QB heading`);
-      assert.match(html, /aria-label="KeepTradeCut superflex dynasty value/);
-      assert.match(html, /aria-label="KeepTradeCut 1QB dynasty value/);
-      // The heading and its cells cross the tier together, or the label is
-      // sitting over the wrong numbers at some width. Two headings plus two
-      // cells on each of the three player rows.
-      const seated = (html.match(new RegExp(KTC_COLUMN_SEAT, "g")) ?? []).length;
-      assert.equal(seated, 2 + 2 * 3, `${boards}: heading and cells must share a seat`);
+      // Read off the headings rather than the whole panel: `SF` is also a *team*
+      // on every row of the fixture, which is exactly the kind of match that
+      // would let this pass while the columns were still drawn.
+      const headings = [
+        ...html.matchAll(/<button[^>]*activate to sort[^"]*"[^>]*>([^<]*)/g),
+      ].map((m) => m[1]);
+      assert.ok(!headings.includes("SF"), `${boards}: a KTC heading survives`);
+      assert.ok(!headings.includes("1QB"), `${boards}: a KTC heading survives`);
+      assert.doesNotMatch(html, /KeepTradeCut/, `${boards}: a KTC hover survives`);
     }
   });
 
-  test("a KTC price is a number, and an unpriced player an em dash", () => {
-    const html = drawer({
-      board: loaded({
-        players: [
-          player("1", { ktc: { sf: 9412, oneqb: 8770 } }),
-          // KTC carries ~500 dynasty skill players, so "no price" is the
-          // ordinary state of a kicker rather than a gap in the data.
-          player("2", { ktc: null }),
-          // And one board priced while the other isn't is a real row too.
-          player("3", { ktc: { sf: 6000, oneqb: null } }),
-        ],
-      }),
-    });
-    // Read off the KTC cells specifically rather than the whole panel: a bare
-    // `>0<` matches the rolling draft counter's digit strip, which is why the
-    // "never a zero" rule has to be asserted against the cells that could
-    // wrongly render one.
-    // Anchored on the KTC seat, not on the type treatment alone: the auction
-    // cell wears the same weight and tone deliberately (neither moves under the
-    // curve), so a probe for the tone would read whichever came first.
-    const priced = [
-      ...html.matchAll(
-        new RegExp(`${KTC_COLUMN_SEAT} [^"]*tabular-nums text-foreground/60"[^>]*>([^<]+)<`, "g"),
-      ),
-    ];
-    assert.deepEqual(priced.map((m) => m[1]), ["9,412", "8,770", "6,000"]);
-    // Three unpriced cells — both of player 2's, and player 3's 1QB — each an
-    // em dash and never a zero.
-    const blank = html.match(/hidden @lg:block text-right text-xs text-foreground\/25"?>—</g);
-    assert.equal(blank?.length, 3);
-  });
-
-  test("the headings say which board KTC's number is from", () => {
-    // The board's biggest caveat, and the only place there is room for it: KTC
-    // scrapes a *dynasty* board, so these columns sit beside a redraft average
-    // as readily as a dynasty one.
-    const html = drawer({ controls: { ...defaultAdpControls("2026"), boards: "redraft" } });
-    assert.ok(html.includes(ktcTitle("sf")));
-    assert.ok(html.includes(ktcTitle("oneqb")));
-    assert.match(html, /a dynasty board whichever ADP column it is read beside/);
-  });
 });
 
 describe("the columns sort", () => {
@@ -946,7 +1030,7 @@ describe("the columns sort", () => {
     const html = drawer();
     const headings = [...html.matchAll(/<button[^>]*aria-label="([^"]*activate to sort[^"]*)"/g)];
     // Nine in both-boards mode: rank, name, position, two ADP, two value, two
-    // KTC. Every one of them a real control with a name — `aria-sort` is not
+    // bid. Every one of them a real control with a name — `aria-sort` is not
     // available to a list of `<li>`, so the label carries the state instead.
     assert.equal(headings.length, 9);
     // The board opens on its own merge, which is a column like any other rather
@@ -978,10 +1062,7 @@ describe("the columns sort", () => {
     const tree = AdpBoardHeader({
       both: true,
       soleBoard: "redraft",
-      soleDrafts: 900,
-      soleAuctions: 48,
-      redraftDrafts: 900,
-      dynastyDrafts: 304,
+      counts,
       rules: DEFAULT_LEAGUE_FILTERS,
       sort: DEFAULT_ADP_SORT,
       onSort: (column) => presses.push(column),
@@ -999,8 +1080,8 @@ describe("the columns sort", () => {
       "adp_dynasty",
       "value_redraft",
       "value_dynasty",
-      "ktc_sf",
-      "ktc_oneqb",
+      "auction_redraft",
+      "auction_dynasty",
     ]);
     // What each of those presses *means* is `nextAdpSort`'s, tested beside it —
     // this is only the wiring.
@@ -1019,10 +1100,7 @@ describe("the columns sort", () => {
       const tree = AdpBoardHeader({
         both: false,
         soleBoard: boards,
-        soleDrafts: 900,
-      soleAuctions: 48,
-        redraftDrafts: 900,
-        dynastyDrafts: 304,
+        counts,
         rules: DEFAULT_LEAGUE_FILTERS,
         sort: DEFAULT_ADP_SORT,
         onSort: (column) => presses.push(column),
@@ -1031,21 +1109,30 @@ describe("the columns sort", () => {
       for (const el of headings) press(el, "onSort")(el.props.column);
       assert.ok(presses.includes(`adp_${boards}`));
       assert.ok(presses.includes(`value_${boards}`));
+      assert.ok(presses.includes(`auction_${boards}`));
       assert.ok(presses.includes("taken"));
       // And never the market that isn't drawn.
       const other = boards === "redraft" ? "dynasty" : "redraft";
       assert.ok(!presses.includes(`adp_${other}`));
+      assert.ok(!presses.includes(`auction_${other}`));
     }
   });
 
   test("sorting a column reorders the rows on screen", () => {
-    // The board's own merge is by ADP, so a KTC sort has to produce a different
+    // The board's own merge is by ADP, so a Bid sort has to produce a different
     // list — this is the end-to-end check that the sort reaches the rendered
     // rows rather than only the header's own state.
+    const bid = (share: number) => ({
+      buys: 5,
+      share,
+      min_share: share,
+      max_share: share,
+      stdev: 0,
+    });
     const players = [
-      player("1", { ktc: { sf: 10, oneqb: 10 } }),
-      player("2", { ktc: { sf: 9000, oneqb: 9000 } }),
-      player("3", { ktc: { sf: 500, oneqb: 500 } }),
+      player("1", { auction: { redraft: bid(2), dynasty: null } }),
+      player("2", { auction: { redraft: bid(90), dynasty: null } }),
+      player("3", { auction: { redraft: bid(30), dynasty: null } }),
     ];
     const html = drawer({ board: loaded({ players }) });
     const order = (markup: string) =>
@@ -1057,7 +1144,7 @@ describe("the columns sort", () => {
     // that the rows the drawer renders are the sorted list and not `rows`.
     const sorted = sortAdpEntries(
       adpBoardEntries(players, [], "both"),
-      { column: "ktc_sf", direction: "desc" },
+      { column: "auction_redraft", direction: "desc" },
       { soleBoard: "redraft", rules: DEFAULT_LEAGUE_FILTERS, steepness: 3 },
     );
     assert.deepEqual(
@@ -1233,10 +1320,7 @@ describe("what the controls do", () => {
     const tree = AdpBoardHeader({
       both: true,
       soleBoard: "redraft",
-      soleDrafts: 900,
-      soleAuctions: 48,
-      redraftDrafts: 900,
-      dynastyDrafts: 304,
+      counts,
       rules: DEFAULT_LEAGUE_FILTERS,
       sort: DEFAULT_ADP_SORT,
       onSort: () => {},

@@ -271,7 +271,7 @@ export function AdpDrawer({
         aria-describedby={premiseId}
         tabIndex={-1}
         data-closing={closing ? "" : undefined}
-        // `@container`, so the board's value and KTC columns key off the panel's
+        // `@container`, so the board's value and bid columns key off the panel's
         // own width rather than the viewport's — the panel is narrower than the
         // screen everywhere a laptop is involved. The panel carries no
         // `@`-variant of its own, which is what keeps that safe (an element is
@@ -279,10 +279,10 @@ export function AdpDrawer({
         //
         // **36rem rather than the 32 it was, and the four extra rem are a
         // column budget rather than a preference.** The board's densest state is
-        // nine columns — both markets' ADP, both their values, and KTC's two
-        // boards — which is 412px of fixed track and gap; at 32rem that left the
-        // name 60px, which is not a name. See `BOARD_COLUMNS_BOTH` for the
-        // arithmetic. It is still `w-full` under that cap, so a phone is
+        // nine columns — both markets' ADP, both their values and both their
+        // auction bids — which is 408px of fixed track and gap; at 32rem that
+        // left the name 64px, which is not a name. See `BOARD_COLUMNS_BOTH` for
+        // the arithmetic. It is still `w-full` under that cap, so a phone is
         // unchanged and the two collapsible pairs simply aren't drawn there.
         className="adp-drawer-panel @container relative ml-auto flex h-full w-full max-w-[36rem] flex-col border-l border-active/20 bg-[rgb(12,23,33)] shadow-[-24px_0_60px_rgba(0,0,0,0.5)] outline-none"
         // `forwards` on the way out, so the panel holds off screen for the beat

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { AdpPayload, AdpPlayerPayload, ApiErrorPayload } from "@/shared/contract";
 import { dbRead, loadEnrichments } from "@/shared/db";
-import { getKtcPickBoard, getKtcValuesBySleeperId } from "@/shared/ktc";
+import { getKtcPickBoard } from "@/shared/ktc";
 import {
   EMPTY_AUCTION_BOARDS,
   getDraftAdp,
@@ -63,6 +63,8 @@ export const dynamic = "force-dynamic";
  * leagues, season and window as the averages and deliberately ignores
  * `draft_type` — the board is never averaged over auctions, so a column honouring
  * that filter would be empty for every caller. See `shared/manager/adp-auction`.
+ * The drawer draws it per market, which is what the columns KTC's two boards
+ * used to hold were spent on.
  *
  * `rounds_min`/`rounds_max` matter more than they look: a dynasty league's
  * 4-round rookie draft and its 25-round startup are both drafts, and pick 1 of
@@ -112,7 +114,7 @@ async function board(request: Request) {
   try {
     const result = await getDraftAdp(filters);
     const ids = result.rows.map((r) => r.player_id);
-    // Four reads beside the aggregate that has already done the expensive work,
+    // Three reads beside the aggregate that has already done the expensive work,
     // **bounded to the fan-out budget rather than started all at once**. The
     // aggregate's own connections have gone back by the time these run, so a
     // bare `Promise.all` over them was one reader holding more of the pool
@@ -133,33 +135,29 @@ async function board(request: Request) {
     // it is read whole because the anchor the discount is measured against is a
     // fact about the board rather than about any pick — see `AdpPayload.pick_ktc`.
     //
-    // The third is the KTC columns' own read, and it is narrowed to this page's
-    // ids where the pick board is not: a player price is a fact about *a player*,
-    // so the page names exactly the ones it will draw, where the discount's
-    // anchor is a fact about the board and cannot be asked for by pick. It is
-    // keyed on `sleeper_id`, which the sync resolves by name — so the ~6% of
-    // rostered players KTC doesn't carry, and every kicker and defence, are
-    // simply absent from the map and read as an em dash rather than a zero. The
-    // two KTC reads stay two: one is an id lookup and the other a filter on
-    // `position = 'RDP'` over rows carrying no `sleeper_id` at all, so they are
-    // different populations rather than one query asked twice.
-    //
-    // The fourth is the auction column, and it is the one that reads a *different
+    // The third is the auction columns, and it is the one that reads a *different
     // population* rather than decorating this one: the same leagues, season and
     // window, over the draft type the board itself excludes. It is narrowed to
-    // this page's ids for the reason the KTC read is — what a player cost is a
-    // fact about a player — which is also what keeps it cheap enough to be a
-    // field on this response instead of a split of its own. It takes the shared
-    // heavy-read admission of its own accord, *inside* the slot this hands it,
-    // which is safe because that budget is process-wide and this one is private
-    // to the request: nothing holding a heavy slot ever waits on one of these.
-    // It is not caught separately: a database that cannot answer it cannot
-    // answer the rest either, and an enrichment quietly sending an empty map
-    // would be a 200 claiming the crawled auctions never bought anybody.
-    const { players, pickKtc, ktc, auction } = await loadEnrichments({
+    // this page's ids — what a player cost is a fact about a player, where the
+    // discount's anchor above is a fact about the board and cannot be asked for
+    // by pick — which is also what keeps it cheap enough to be a field on this
+    // response instead of a split of its own. It takes the shared heavy-read
+    // admission of its own accord, *inside* the slot this hands it, which is safe
+    // because that budget is process-wide and this one is private to the request:
+    // nothing holding a heavy slot ever waits on one of these. It is not caught
+    // separately: a database that cannot answer it cannot answer the rest either,
+    // and an enrichment quietly sending an empty map would be a 200 claiming the
+    // crawled auctions never bought anybody.
+    //
+    // **There were four, and the fourth was a per-player KTC lookup.** It fed two
+    // columns the board no longer draws — the panel's `@lg` tail is the redraft
+    // and dynasty bid shares now — so it was a page-sized id lookup nothing on
+    // the wire read. The pick board above stays: it is not a column either, it is
+    // the future-season discount and the seasons there are picks worth listing
+    // for at all.
+    const { players, pickKtc, auction } = await loadEnrichments({
       players: dbRead(() => getPlayersWithExperience(ids)),
       pickKtc: dbRead(() => getKtcPickBoard()),
-      ktc: dbRead(() => getKtcValuesBySleeperId(ids)),
       auction: dbRead(() => getDraftAuctionSpend(filters, ids)),
     });
     const rookies = rookieClassIds(players);
@@ -186,10 +184,6 @@ async function board(request: Request) {
           // — the shared empty rather than a fresh literal per row, since most
           // of a page gets it.
           auction: auction.values.get(row.player_id) ?? EMPTY_AUCTION_BOARDS,
-          // Absent means KTC has never heard of him; present with two nulls
-          // means KTC knows him and prices him nowhere. Both read as an em dash,
-          // and neither is a zero — see `AdpPlayerPayload.ktc`.
-          ktc: ktc.values[row.player_id] ?? null,
         };
       }),
       pick_ktc: pickKtc,
