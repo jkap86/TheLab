@@ -3621,6 +3621,66 @@ part before redesigning it.
     the **searched** manager rather than the connected one the menu resolves —
     be a test rather than an assertion in a comment.
 
+- **On the leagues page that switch is two keys and no third cell, because the
+  other two views are drawers down either side of a list that never leaves.**
+  The entry above put the three routes on the page; this is the next step, and
+  it is a change to what the other two *are* rather than to how they are drawn.
+  Players and Leaguemates already existed twice over — as routes, and as the two
+  shares browses the rail's keys opened over the leagues list, which are the
+  matching tab's own list with the same four pickable columns and the same
+  league filters. So the leagues page now draws exactly two keys, they are
+  buttons, and what they open is the browse: Players from the left edge,
+  Leaguemates from the right, with the league cards still on screen between
+  them. `ManagerViewDrawers` is the row; `LeaguesViewLayout` takes it through a
+  `views` slot whose default is still `ViewSwitch`, so the two routes that
+  remain are unchanged.
+
+  Five things hold it up.
+  - **The Leagues cell going is the point, not a saving.** A switch draws the
+    view you are on as a cut-in seat — a cell that says "you are here" and does
+    nothing when pressed, which is honest when the three are three routes and is
+    a cell spent on nothing the moment the other two stop being somewhere to
+    leave by. What is left is two keys, both of which do something, over a list
+    that is always there.
+  - **The browse became a side drawer, and the list beside it is the whole
+    argument.** Centred at 1180px the sheet covered the page it narrows edge to
+    edge on every laptop, so committing live — a row press narrowing the league
+    list behind the glass — was a claim a reader had to take on trust and then
+    close the sheet to check. Anchored at 46rem the cards are next to it, still
+    scrolled where they were left, visibly going as subjects are picked. 46rem is
+    a column budget rather than a taste: 432px of that is the four stat columns
+    at `sm:w-24` in the app's 18px rem, and what the sheet's padding, the well,
+    the card's insets, the chevron and the avatar spend around them leaves the
+    name 204px — measured in headless Chromium against the compiled stylesheet,
+    per the rule two entries up. On a 1280px laptop that leaves ~450px of cards.
+  - **Which side is the *kind's* fact, not the door's.** The two variants declare
+    it (`SharesSheet`'s `side`), so a browse opens in the same place whichever
+    key was pressed, and *which* browse is up is legible from the geometry before
+    a word of it is read. The four things that follow from a side — the margins
+    that pin the dialog, the corners and wall it keeps, the shadow's direction
+    and the keyframe it arrives on — come off one `SIDES` table, because getting
+    one of them from the other side is a panel sliding in through its own wall
+    and three of the four are invisible in review. The keyframes are named by the
+    edge (`drawer-in-left`, `drawer-in-right`) rather than by the part, and the
+    ADP drawer's own were renamed onto them.
+  - **The rail gives its two Browse keys up here, and only here.** They open the
+    identical drawers; one thing behind two pairs of doors forty pixels apart
+    reads as two different lists until one of them is opened. `SubjectRail`'s
+    `browse` is false on this page and default everywhere else — the two routes
+    that remain, and the lineup checker, where the rail is still the only door.
+    The seam before the keys goes with them, since a groove parts two groups and
+    one with nothing on its far side is a rule.
+  - **The row is derived from the tools catalogue, not from a list of two.** A
+    manager view that is a ranked list of subjects says which (`Tool.browses`),
+    and the row is the views that said one — so Leagues is *absent* rather than
+    filtered out by name, and a fourth view joins by declaring what it browses,
+    exactly as it joins the switch by joining the group. The names, glyphs and
+    order stay the catalogue's, and the keys are the switch's own cells to the
+    class (`VIEW_KEY` and its neighbours, exported rather than retyped): a reader
+    crossing from the Players route back to Leagues should meet the same part,
+    not a second part shaped like it. The state behind both doors is one hook,
+    `useSharesBrowse`, holding the latch that keeps each browse's chunk split.
+
 - **The league filters lead that rail, which is what makes it the page's filter
   row rather than one of two.** The key was machined into the header plate's
   bottom-right corner — 20px, the smallest type on the card, under the countdown,

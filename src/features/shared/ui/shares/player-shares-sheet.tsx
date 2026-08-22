@@ -92,6 +92,12 @@ export function PlayerSharesSheet({
       view={view}
       open={open}
       onClose={onClose}
+      // The left edge, because the two keys that open the pair are in catalogue
+      // order and this is the first of them — a browse arriving from the side its
+      // key sits on is the one bit of orientation a drawer can give for free. It
+      // is the kind's own fact rather than a caller's, so both doors onto it open
+      // the same panel in the same place; see `SharesSheet`'s `side`.
+      side="left"
       kind="player"
       title="Player shares"
       subject="Player"

@@ -89,10 +89,18 @@ function withClient(node: ReactNode): string {
   }
 }
 
-/** The rail's markup. */
-function rail(over: Partial<SubjectView> = {}): string {
-  return withClient(createElement(SubjectRail, { view: { ...view, ...over } }));
+/** The rail's markup, over a patched view and with `props` on the rail itself. */
+function rail(
+  over: Partial<SubjectView> = {},
+  props: { browse?: boolean } = {},
+): string {
+  return withClient(
+    createElement(SubjectRail, { view: { ...view, ...over }, ...props }),
+  );
 }
+
+/** How many grooves the row is machined with — see `RailSeam`. */
+const seams = (html: string) => (html.match(/h-3\.5 w-px shrink-0/g) ?? []).length;
 
 /** Every element in a returned tree, depth-first. */
 function elements(node: ReactNode): ReactElement<Record<string, unknown>>[] {
@@ -156,6 +164,30 @@ describe("the two doors", () => {
         `expected no sheet at rest, found ${inside}`,
       );
     }
+  });
+
+  test("a page drawing the doors itself gets none here", () => {
+    // The leagues list draws these two as the keys that used to link to the
+    // Players and Leaguemates routes (`ManagerViewDrawers`), opening the same
+    // two drawers. Two pairs of doors onto one thing, forty pixels apart, reads
+    // as two different lists until one of them is opened — so the row gives its
+    // pair up rather than repeating them.
+    const html = rail({}, { browse: false });
+    assert.doesNotMatch(html, />Browse players</);
+    assert.doesNotMatch(html, />Browse leaguemates</);
+    assert.doesNotMatch(html, /aria-haspopup="dialog"/);
+    // The search is the row's own question and stays: a reader who knows the
+    // name they want has always been able to type it here.
+    assert.match(html, />Player or leaguemate</);
+  });
+
+  test("the groove before them goes with them", () => {
+    // A seam parts two groups of parts, so one with nothing on its far side is a
+    // rule rather than machining. With the keys gone the count ends the row.
+    const withKeys = rail({ filtered: [LEAGUES[0]] });
+    const without = rail({ filtered: [LEAGUES[0]] }, { browse: false });
+    assert.match(without, /1 of 3/);
+    assert.equal(seams(without), seams(withKeys) - 1);
   });
 
   test("each key carries a handler, and pressing one does not throw", () => {

@@ -96,6 +96,7 @@ export function ColumnsBar<C>({
   ctx,
   previewLabel,
   view,
+  browse,
   storey,
   headings = true,
   pinned = false,
@@ -122,6 +123,17 @@ export function ColumnsBar<C>({
    * part. Omitted, this is exactly the heading rail it has always been.
    */
   view?: SubjectView;
+  /**
+   * Whether that rail draws its own two doors onto the shares browses.
+   *
+   * Forwarded to {@link SubjectRail}, whose prop of the same name carries the
+   * argument — false only on the leagues page, which draws the pair itself as
+   * the two keys that used to link to those views. It is a passthrough rather
+   * than something this component decides, which is the same line the `view`
+   * prop above draws: what the filter row is made of is the rail's business, and
+   * all this owns is where it is placed.
+   */
+  browse?: boolean;
   /**
    * An upper storey inside the billet, for a list whose filter is not the
    * page's — the shares sheet, which draws the selection it is editing there
@@ -206,7 +218,7 @@ export function ColumnsBar<C>({
 
   return (
     <>
-      {view && <SubjectRail view={view} />}
+      {view && <SubjectRail view={view} browse={browse} />}
 
       {/* No rows and no storey is no billet: a heading rail with nothing to
           head and no control on it is a lit face saying nothing.

@@ -12,7 +12,6 @@ import {
 } from "react";
 
 import { SEARCH_FIELD } from "../control-type.ts";
-import { closeSheet, latchSheet } from "../sheet-latch.ts";
 import {
   type Subject,
   type SubjectKind,
@@ -32,43 +31,8 @@ import { useReturnFocus } from "../use-return-focus";
 import { Avatar } from "./avatar";
 import { LeagueFiltersPlaceholder } from "./league-filters-seat";
 import { PositionBadge } from "./position-badge";
+import { SharesBrowseSheets, useSharesBrowse } from "./shares/shares-browse";
 import { MatchToggle, SubjectToken } from "./subject-parts";
-
-/**
- * The two shares sheets, each loaded the first time it is opened.
- *
- * One is the Players tab's whole apparatus and the other the Leaguemates tab's —
- * the share cards, the metric catalogue, the columns editor behind the heading
- * rail, and for the players one the ADP board — none of which is on screen until
- * a key is pressed, and none of which the Leagues tab would otherwise parse at
- * all. `ssr: false` for the reason the columns editor takes it: a dialog nobody
- * has opened has no server-rendered state worth having.
- *
- * **Two `dynamic()` calls rather than one shell imported once**, because the seam
- * worth splitting is the one a reader actually stops at: most open one browse and
- * never the other, and the players half carries the whole ADP apparatus the
- * leaguemates half has no column for. Measured, that is 6.8KB and 6.5KB against
- * ~9KB for a single chunk holding both.
- *
- * The cost is that {@link SharesSheet} is inlined into *each* of them — webpack
- * does not hoist a module shared by two async chunks into a third — so a reader
- * who opens both pays for the shell twice. That is the right way round: it is
- * ~4KB duplicated for the minority who browse both, against ~2KB of dead
- * catalogue and reads for everyone who browses one. Worth re-measuring if the
- * shell ever grows into the larger half of a chunk.
- */
-const PlayerSharesSheet = dynamic(
-  () => import("./shares/player-shares-sheet").then((m) => m.PlayerSharesSheet),
-  { ssr: false },
-);
-
-const LeaguemateSharesSheet = dynamic(
-  () =>
-    import("./shares/leaguemate-shares-sheet").then(
-      (m) => m.LeaguemateSharesSheet,
-    ),
-  { ssr: false },
-);
 
 /**
  * The league filters, loaded the first time this rail renders a list to narrow.
@@ -215,6 +179,7 @@ const RESULT_LIMIT = 8;
 export function SubjectRail({
   view,
   leading,
+  browse: browseKeys = true,
 }: {
   view: SubjectView;
   /**
@@ -227,26 +192,30 @@ export function SubjectRail({
    * `.lab-chip-sm` keys), which is `SEATS.rail`'s rule everywhere else here.
    */
   leading?: ReactNode;
+  /**
+   * Whether the row carries its own two doors onto the browses.
+   *
+   * **False where the page already draws them, which is the leagues list.** The
+   * view keys above this rail open the identical two drawers
+   * ({@link ManagerViewDrawers}), and two pairs of doors onto one thing forty
+   * pixels apart is not a choice a reader can make — it reads as two different
+   * lists until one of them is opened. So the keys are drawn once, and where a
+   * page has somewhere better to put them this row gives them up rather than
+   * repeating them. Everywhere else — the Players and Leaguemates routes, the
+   * lineup checker — this rail is still the only door and the default holds.
+   *
+   * It is the *keys* this drops and not the browses: with nothing here to press,
+   * nothing latches, so the two chunks stay undownloaded exactly as they do for a
+   * reader who never opens one.
+   */
+  browse?: boolean;
 }) {
   const { subjects, setSubjects } = view;
   const [open, setOpen] = useState(false);
-  /**
-   * Which browse is up, if either.
-   *
-   * One value rather than a flag apiece: both are modal, so two open at once is
-   * unrepresentable rather than merely avoided — and the rail is behind whichever
-   * is up, so a reader cannot reach the other key to try.
-   */
-  const [sheet, setSheet] = useState<SubjectKind | null>(null);
-  /**
-   * Which have ever been opened — latched, so closing doesn't unmount a dialog
-   * inside its own close handler and a second press is instant.
-   *
-   * Latched *per kind* rather than once for both, because mounting is what
-   * downloads the chunk: a reader who only ever browses players must not pay for
-   * the leaguemates list's catalogue and reads.
-   */
-  const [mounted, setMounted] = useState<readonly SubjectKind[]>([]);
+  // Which browse is up, which have ever been, and the two sheets themselves —
+  // one apparatus, shared with the leagues page's view keys, which are the other
+  // door onto exactly these two drawers. See {@link useSharesBrowse}.
+  const browse = useSharesBrowse();
   const [query, setQuery] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -307,25 +276,20 @@ export function SubjectRail({
   }, []);
 
   /**
-   * Open a browse: latch its chunk in, then put it up.
+   * Open a browse from this row.
    *
-   * **Both writes are here rather than one of them in the render body**, which
-   * is the whole of the change. The latch used to be applied as
-   * `if (sheet && !mounted.includes(sheet)) setMounted(...)` while rendering —
-   * a render-phase update, so opening a sheet re-ran this entire rail
-   * synchronously before React committed anything, in the same frame as the
-   * dialog mounting, two lazy chunks evaluating and (for players) the roster and
-   * ADP reads starting. In a press handler the two setters are one batched
-   * update, and the render body is a function of its props again.
-   *
-   * The panel goes down with it: two floating things over one list, one covering
-   * the other, is two answers to "where am I".
+   * The search panel goes down with it: two floating things over one list, one
+   * covering the other, is two answers to "where am I". Everything else about
+   * opening one — the latch, the batched pair of writes, which kind is up — is
+   * {@link useSharesBrowse}'s, because the view keys press the same button.
    */
-  const openSheet = useCallback((kind: SubjectKind) => {
-    close();
-    setMounted((m) => latchSheet(m, kind));
-    setSheet(kind);
-  }, [close]);
+  const openSheet = useCallback(
+    (kind: SubjectKind) => {
+      close();
+      browse.show(kind);
+    },
+    [close, browse],
+  );
 
   // A press outside the rail dismisses the panel. Pointer-down rather than
   // click, so dragging out of it doesn't leave it up — the same gesture the
@@ -547,9 +511,10 @@ export function SubjectRail({
                 seating — the same argument that put the ADP block beside Tools
                 rather than beside the page chip.
 
-                Three at most: the count is drawn only once something has
-                narrowed, so at rest this is the two keys and its own seam is
-                gone with it. */}
+                Three at most, and sometimes one: the count is drawn only once
+                something has narrowed, so at rest this is the two keys and its
+                own seam is gone with it — and where the page draws the doors
+                itself ({@link browse}) what is left here is the count alone. */}
             <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
               {/* The rail's own answer. Dimmed while the maps behind a selection
                   are still being read, since the number is briefly zero and a
@@ -586,7 +551,10 @@ export function SubjectRail({
                     <span className="sr-only"> leagues</span>
                   </span>
 
-                  <RailSeam />
+                  {/* A groove parts two groups, so it is drawn only where there
+                      is a second group to part from — with the browse keys given
+                      up to the page's own, this number is the end of the row. */}
+                  {browseKeys && <RailSeam />}
                 </>
               )}
 
@@ -618,25 +586,29 @@ export function SubjectRail({
                   "Browse" alone once there are tokens crowding the row, exactly
                   as the search trigger contracts: the icon is what still tells
                   the pair apart. */}
-              <button
-                type="button"
-                onClick={() => openSheet("player")}
-                aria-haspopup="dialog"
-                className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[0.625rem] font-semibold text-foreground/75 transition-colors hover:text-foreground"
-              >
-                <SharesIcon />
-                {count > 0 ? "Browse" : "Browse players"}
-              </button>
+              {browseKeys && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => openSheet("player")}
+                    aria-haspopup="dialog"
+                    className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[0.625rem] font-semibold text-foreground/75 transition-colors hover:text-foreground"
+                  >
+                    <SharesIcon />
+                    {count > 0 ? "Browse" : "Browse players"}
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => openSheet("leaguemate")}
-                aria-haspopup="dialog"
-                className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[0.625rem] font-semibold text-foreground/75 transition-colors hover:text-foreground"
-              >
-                <MatesIcon />
-                {count > 0 ? "Browse" : "Browse leaguemates"}
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => openSheet("leaguemate")}
+                    aria-haspopup="dialog"
+                    className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[0.625rem] font-semibold text-foreground/75 transition-colors hover:text-foreground"
+                  >
+                    <MatesIcon />
+                    {count > 0 ? "Browse" : "Browse leaguemates"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -669,24 +641,10 @@ export function SubjectRail({
         )}
       </div>
 
-      {/* `onClose` clears only its own kind: a sheet closing is the last thing
-          that happens on the way out of it, and clearing the state flatly would
-          have one dialog's exit cancel whatever had just been asked for. */}
-      {mounted.includes("player") && (
-        <PlayerSharesSheet
-          view={view}
-          open={sheet === "player"}
-          onClose={() => setSheet((s) => closeSheet(s, "player"))}
-        />
-      )}
-
-      {mounted.includes("leaguemate") && (
-        <LeaguemateSharesSheet
-          view={view}
-          open={sheet === "leaguemate"}
-          onClose={() => setSheet((s) => closeSheet(s, "leaguemate"))}
-        />
-      )}
+      {/* The browses this row's keys open, mounted per kind once one has been.
+          Rendered whether or not the keys are drawn, which costs nothing: with no
+          key there is nothing to latch and both stay unmounted. */}
+      <SharesBrowseSheets view={view} browse={browse} />
     </div>
   );
 }

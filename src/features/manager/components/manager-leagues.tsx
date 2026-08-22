@@ -22,6 +22,7 @@ import {
 import { ColumnsBar } from "./columns-bar";
 import { LeagueCard } from "./league-card";
 import { LeaguesViewLayout } from "./leagues-view-layout";
+import { ManagerViewDrawers } from "./view-drawers";
 
 /**
  * The leagues view: this manager's leagues as a filterable list of cards, each
@@ -180,9 +181,18 @@ export function ManagerLeagues({ searched }: { searched: string }) {
         value: showing,
         sub: showing === total ? undefined : `of ${total} total`,
       }}
+      // The other two views, as drawers down either side rather than as routes
+      // away from here — which is why this page draws no cell for itself. The
+      // list is the one thing always on screen, so a subject picked in either
+      // browse narrows something the reader can watch narrow.
+      views={<ManagerViewDrawers view={view} />}
       columns={
         <ColumnsBar
           view={view}
+          // The rail gives its two Browse keys up here: they open the identical
+          // drawers the view keys a few pixels above do, and one thing behind two
+          // pairs of doors on one screen reads as two things until one is opened.
+          browse={false}
           headings={showing > 0}
           // The heading rail holds the top through an open league too: it is
           // what names the four columns the rows under it are being read on, and

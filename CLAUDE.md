@@ -1749,6 +1749,16 @@ These recur everywhere and are the rules most often broken by accident:
   press that does nothing), and make the key that stays say the *act* rather
   than the list — "Browse players", not "Players". **The tell is one word
   appearing twice on a screen meaning two things.**
+- **A key may name a *view* rather than a route, but only where what it opens is
+  that view.** On the leagues page Players and Leaguemates are keys that open the
+  two shares browses as drawers — and those browses are the matching tab's own
+  list, same catalogue, same four pickable columns — so the word is honest and
+  the rule above is kept rather than bent. Two things make it so and both are
+  load-bearing: **the page you are on gets no key at all** (a cut-in seat is a
+  cell spent on nothing once the others stop being somewhere to leave by), and
+  **the same thing does not keep a second pair of doors** — the rail's Browse
+  keys are given up exactly where these are drawn (`SubjectRail`'s `browse`),
+  since one list behind two pairs of doors on one screen reads as two lists.
 - **A switch over routes reads the tools catalogue, never a list of its own.**
   `tools.ts` already owns the names, the destinations, the glyphs and the
   current-page patterns, so a second list drifts the day a view is renamed;
@@ -1756,7 +1766,23 @@ These recur everywhere and are the rules most often broken by accident:
   joining the group. It resolves against the **searched** manager where the app
   bar's menu resolves against the connected one — a switch between three
   readings of the account on screen must not change whose account that is — and
-  both go through `toolHref`, which owns the URL-encoding once.
+  both go through `toolHref`, which owns the URL-encoding once. **The row that
+  replaces it on the leagues page reads the same catalogue**, through
+  `Tool.browses` — the subject a view is a ranked list of, declared by the two
+  that are one and by Leagues not at all — so the missing cell is a *derivation*
+  rather than a name filtered out, and the keys are the switch's own cells to
+  the class (`VIEW_KEY` and its neighbours, exported rather than retyped).
+- **A drawer's side is a fact about what it holds, not about the key pressed.**
+  Both shares browses have two doors, so a panel arriving from a different edge
+  depending on which was pressed is two panels as far as a reader is concerned;
+  each *kind* declares its own side instead (`SharesSheet`'s `side`, players
+  left and leaguemates right), and which panel is up is then legible from the
+  geometry before a word of it is read. The four things that follow from a side
+  — the margins pinning the dialog, the corners and wall it keeps, the shadow's
+  direction, the keyframe it arrives on — come off **one table**, because
+  getting one of them from the other side is a panel sliding in through its own
+  wall and three of the four are invisible in review. Keyframes are named by the
+  **edge** (`drawer-in-left`), never by the part.
 - **A label for a person is a username; a label for a team is a team name.** A
   team name is a nickname changed at will, so labelling by it makes the same
   opponent read as a different person in every league they're in. Pass the same
