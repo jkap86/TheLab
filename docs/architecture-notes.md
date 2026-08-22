@@ -1007,6 +1007,61 @@ row and its drafts **stay**, because they still feed ADP, and a manager-driven
 sync that finds the league alive again clears the marker. Deleting the row would
 have thrown away good data to fix a scheduling problem.
 
+**A marker that only one subsystem reads is a marker the rest of the app is
+wrong about, and that took a year to notice because nothing failed.** `gone_at`
+was written for the crawler's queue and read only there, so a deleted league
+kept every row that puts it on screen. That is not an oversight in the writing —
+it is what the tombstone *means*: `league_users` and `rosters` are replaced only
+by a sync of the league itself, and a tombstoned league is deliberately never
+synced again, so its membership and its rosters are frozen rather than cleared.
+`FIELDED_A_TEAM_SQL` went on matching, and the league went on being listed,
+ranked, priced and counted into every share denominator indefinitely. The tell
+was there and pointed the wrong way: pressing the league's refresh key answered
+**"League gone"** and left it exactly where it was, which reads as a display bug
+in the key rather than as the read layer not knowing.
+
+So `LIVE_LEAGUE_SQL` is applied at every read that answers *this manager's
+leagues*, on `FIELDED_A_TEAM_SQL`'s rule and for its reason — a league hidden
+from the list but still counted in a share is a denominator describing rows
+nobody renders — and `MANAGER_LEAGUE_SQL` is the two of them as one fragment, so
+a read cannot apply one half and not the other. The two reads that cannot take
+it whole (`getManagerRosters`, `getManagerMatchups`) take the liveness half
+alone: they join `rosters.owner_id`, which is the other predicate's first half,
+but that join is precisely what a frozen roster satisfies forever.
+
+**The negative half is the one worth a test.** Reads with no manager in the
+question keep the whole corpus — the ADP board averages a dead league's drafts
+and the trades board shows what moved in it, which is what the row was kept
+for — so "filter it everywhere" is a silent corpus shrink that raises nothing
+and fails no other assertion. `manager/gone-leagues.test.ts` asserts both
+directions against the real SQL for that reason.
+
+**The enumeration is the earliest signal a league is gone, and it was being
+thrown away.** `syncManagerLeagues` asks Sleeper which leagues a manager is in
+and then writes back only the ones it got; a league that dropped out of that
+answer was simply never mentioned again, so the tombstone waited on the crawler
+happening to claim it — a whole freshness TTL at best, and on a deployment
+running no background jobs, never. `reconcileUnlistedLeagues` reads it now, and
+the shape is forced by one fact: **absent from the list is not deleted**.
+Sleeper drops a manager from their own enumeration when they *leave* a league
+too, and that league is alive and full of other people, so a tombstone written
+off the enumeration alone would hide it from every one of them and pull it out
+of the crawl. Only `getLeague` separates the two, so the candidates are probed
+and only a null answer tombstones; a departure needs nothing done to it, since
+the next sync of that league replaces its rosters without the manager's and the
+predicate stops matching on its own.
+
+Two bounds follow from that asymmetry. A departure stays a candidate until its
+league is next crawled, so the probe is **capped and ordered on
+`sync_attempt_at`** — the crawler's own "staying eager and holding the head of
+the queue are the same fact" rule — with the stamp taken *before* the fetch, so
+a backlog is walked rather than re-walked and a failing probe rotates to the
+back of its own queue. And an **empty enumeration reconciles nothing**:
+`sleeperGet` folds a 200-with-null into `[]`, so "no leagues" is what a failed
+request looks like from here, and it is the one answer that would queue every
+league the manager has. That is `replaceManagerLeagueOrder`'s guard, and the
+same test for it.
+
 Refreshing a slice that can shrink means **upsert then delete what's missing, in
 one transaction** — an upsert alone leaves rows that quietly look current
 (`shared/projections/sync`). Guard the delete on a non-empty fetch, so an

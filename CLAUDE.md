@@ -515,6 +515,30 @@ collisions stay visible.
   slot in every refresh rotation. `leagues.gone_at` marks it and the crawler
   skips it; **the row and its drafts stay**, because they still feed ADP, and a
   manager-driven sync that finds the league alive clears the marker.
+- **A tombstone the reads don't apply is a league that never leaves the app.**
+  `gone_at` gated the crawler's queue and nothing else, and a tombstoned league
+  is deliberately never synced again — so its `league_users` and `rosters` rows
+  are *frozen*, not cleared, `FIELDED_A_TEAM_SQL` keeps matching, and it stays
+  listed, ranked, priced and in every share denominator forever (its refresh key
+  meanwhile answering "League gone"). `LIVE_LEAGUE_SQL` is applied at every read
+  answering "this manager's leagues", and `MANAGER_LEAGUE_SQL` is the two
+  predicates as **one fragment**, so no read can apply half of it; the two
+  joining `rosters.owner_id` take the liveness half alone, since that join is
+  exactly what a frozen roster satisfies. **Reads with no manager in the question
+  keep the whole corpus** — the ADP board and the trades market are what the row
+  was kept for — so filtering it everywhere is a silent corpus shrink;
+  `gone-leagues.test.ts` asserts both directions against the real SQL.
+- **The manager's own enumeration is the fast tombstone signal, and absent from
+  it is not deleted.** Sleeper drops a manager from their league list when they
+  *leave* a league too, so `reconcileUnlistedLeagues` probes each candidate with
+  `getLeague` and tombstones only the nulls — a departure resolves itself when
+  that league is next crawled without the manager's roster. Without it a deletion
+  waits on the crawler claiming the league: a freshness TTL at best, never on a
+  deployment running no background jobs. Two bounds, both already house rules:
+  the probe is **capped and ordered on `sync_attempt_at`**, stamped *before* the
+  fetch, because a departure stays a candidate until its league is re-crawled;
+  and an **empty enumeration reconciles nothing**, `replaceManagerLeagueOrder`'s
+  guard for its reason.
 - **Refreshing a slice that can shrink means upsert then delete what's missing,
   in one transaction** — an upsert alone leaves rows that quietly look current.
   **Guard the delete on a non-empty fetch.**

@@ -198,6 +198,33 @@ const MEDIAN_MATCH_SQL = `
  * key test can't be misread as a placeholder by anything between here and
  * Postgres.
  */
+/**
+ * True where Sleeper still serves the league.
+ *
+ * `gone_at` is the tombstone for a league Sleeper answers 200-with-null for —
+ * one somebody deleted. The row and its children stay on purpose: the drafts
+ * under it still feed `/api/adp` and its completed trades are still market
+ * history, which is why a deletion is *marked* rather than cascaded away.
+ *
+ * **What the marker never did was stop anybody reading it.** It gated the
+ * crawler's queue and nothing else, so a deleted league kept every row that
+ * puts it on screen — `league_users` and `rosters` are only ever replaced by a
+ * sync of the league itself, and a tombstoned league is never synced again, so
+ * those rows are frozen rather than cleared. The league stayed in the leagues
+ * list, in the share denominators and in the leaguemate counts indefinitely,
+ * and pressing its refresh key answered "League gone" while leaving it exactly
+ * where it was.
+ *
+ * So it is applied at every read that answers *this manager's leagues*, on
+ * {@link FIELDED_A_TEAM_SQL}'s rule and for its reason: a league hidden from
+ * the list but still counted in a share is a denominator describing rows nobody
+ * renders. Reads with no manager in the question keep the whole corpus — the
+ * ADP board and the trades market are what the row was kept for.
+ *
+ * Interpolated, so a call site must alias `leagues` as `l`.
+ */
+const LIVE_LEAGUE_SQL = `l.gone_at IS NULL`;
+
 const FIELDED_A_TEAM_SQL = `(
   EXISTS (
     SELECT 1 FROM rosters r
@@ -218,6 +245,23 @@ const FIELDED_A_TEAM_SQL = `(
     )
   )
 )`;
+
+/**
+ * The two facts every manager-scoped league read needs: Sleeper still serves
+ * the league, and the manager fielded a team in it.
+ *
+ * One fragment rather than two spelled out per call site, which is
+ * {@link FIELDED_A_TEAM_SQL}'s own argument carried one step further — the
+ * reads behind the cards disagreeing with the leagues route about *which*
+ * leagues those are is work done for rows nobody renders, and a read that
+ * applied one half and not the other would be exactly that. The two reads that
+ * cannot take it whole take {@link LIVE_LEAGUE_SQL} alone, for the reason given
+ * on each: they join `rosters.owner_id`, which is this predicate's first half.
+ *
+ * Interpolated, so a call site must alias `leagues` as `l` and bind the
+ * manager's user id as `$1`.
+ */
+const MANAGER_LEAGUE_SQL = `${LIVE_LEAGUE_SQL} AND ${FIELDED_A_TEAM_SQL}`;
 
 /**
  * Read a manager's leagues for a season from the DB, with the manager's own team
@@ -250,7 +294,7 @@ export async function getManagerLeagues(
      LEFT JOIN manager_league_order mo
        ON mo.league_id = l.league_id AND mo.user_id = $1 AND mo.season = $2
      WHERE l.season = $2
-       AND ${FIELDED_A_TEAM_SQL}
+       AND ${MANAGER_LEAGUE_SQL}
      ORDER BY mo.position ASC NULLS LAST, l.name`,
     [userId, season],
   );
@@ -267,6 +311,56 @@ export async function getManagerLeagues(
           },
     ),
   );
+}
+
+/**
+ * Leagues still on this manager's list that Sleeper's enumeration did not
+ * mention — the candidates for a tombstone, oldest attempt first.
+ *
+ * **The enumeration is the fast signal that a league is gone, and nothing used
+ * to read it.** `syncManagerLeagues` asks Sleeper which leagues this manager is
+ * in and then only ever writes the ones it got back, so a league that dropped
+ * out of that answer was left exactly as it was: it kept its stored rosters and
+ * members, kept passing {@link MANAGER_LEAGUE_SQL}, and stayed on the page until
+ * the crawler's refresh rotation happened to claim it — a whole TTL later at
+ * best, and never at all on a deployment running no background jobs.
+ *
+ * **Absent from the list is not deleted, though, which is why this returns
+ * candidates rather than an answer.** Sleeper drops a manager from their own
+ * enumeration when they *leave* a league too, and that league is alive and full
+ * of other people — tombstoning it would hide it from every one of them and
+ * pull it out of the crawl. Only `getLeague` can tell the two apart, so the
+ * caller probes each of these and tombstones the nulls; the departures resolve
+ * themselves on their own, since the next sync of one replaces its rosters
+ * without the manager's and {@link FIELDED_A_TEAM_SQL} stops matching.
+ *
+ * That is also what the bound is for. A departure stays a candidate until its
+ * league is next crawled, so an unbounded probe would re-ask Sleeper about every
+ * league a manager ever left, on every sync, forever. Capped and ordered on
+ * `sync_attempt_at` — the crawler's own "staying eager and holding the head of
+ * the queue are the same fact" rule — so the caller's stamp rotates a probed
+ * league to the back of its own queue and a backlog is walked rather than
+ * re-walked.
+ */
+export async function getUnlistedManagerLeagueIds(
+  userId: string,
+  season: string,
+  listedIds: readonly string[],
+  limit: number,
+): Promise<string[]> {
+  const { rows } = await pool.query<{ league_id: string }>(
+    `SELECT l.league_id
+       FROM leagues l
+       JOIN league_users lu
+         ON lu.league_id = l.league_id AND lu.user_id = $1
+      WHERE l.season = $2
+        AND NOT (l.league_id = ANY($3::varchar[]))
+        AND ${MANAGER_LEAGUE_SQL}
+      ORDER BY l.sync_attempt_at ASC NULLS FIRST, l.league_id
+      LIMIT $4`,
+    [userId, season, [...listedIds], limit],
+  );
+  return rows.map((r) => r.league_id);
 }
 
 /**
@@ -293,7 +387,7 @@ export async function getManagerLeagueIds(
        JOIN league_users lu
          ON lu.league_id = l.league_id AND lu.user_id = $1
       WHERE l.season = $2
-        AND ${FIELDED_A_TEAM_SQL}`,
+        AND ${MANAGER_LEAGUE_SQL}`,
     [userId, season],
   );
   return rows.map((r) => r.league_id);
@@ -326,7 +420,7 @@ export async function getLeaguemateIds(
        JOIN league_users lm
          ON lm.league_id = l.league_id AND lm.user_id <> $1
       WHERE l.season = $2
-        AND ${FIELDED_A_TEAM_SQL}`,
+        AND ${MANAGER_LEAGUE_SQL}`,
     [userId, season],
   );
   return rows.map((r) => r.user_id);
@@ -429,6 +523,12 @@ export async function getAdpLeagues(
  * {@link getManagerLeagues}: everything else about a league would be repeated
  * once per rostered player.
  *
+ * It needs no {@link FIELDED_A_TEAM_SQL} — it joins `owner_id`, which is that
+ * predicate's first half — but it does take {@link LIVE_LEAGUE_SQL}, which the
+ * join cannot stand in for: a deleted league's `rosters` rows are frozen, not
+ * cleared, so the manager holds a roster there forever and every player on it
+ * would keep counting toward their shares.
+ *
  * A league with no entry is one whose rosters aren't cached, or where the
  * manager holds none; an entry with an empty array is a league they hold a
  * roster in and nobody on it yet (pre-draft). The two are different and the
@@ -445,7 +545,8 @@ export async function getManagerRosters(
     `SELECT r.league_id, r.players
        FROM rosters r
        JOIN leagues l ON l.league_id = r.league_id
-      WHERE r.owner_id = $1 AND l.season = $2`,
+      WHERE r.owner_id = $1 AND l.season = $2
+        AND ${LIVE_LEAGUE_SQL}`,
     [userId, season],
   );
 
@@ -473,7 +574,10 @@ export async function getManagerRosters(
  *
  * It needs no {@link FIELDED_A_TEAM_SQL}, for {@link getManagerRosters}' reason:
  * it joins on `owner_id`, which is that predicate's first half. A manager who
- * left a league holds no roster there and so has no side of its games.
+ * left a league holds no roster there and so has no side of its games. It takes
+ * {@link LIVE_LEAGUE_SQL} for that read's reason too — a deleted league keeps
+ * its stored rosters and matchups, so the lineup checker would go on pairing
+ * the manager against an opponent in a league nobody can open.
  *
  * The opponent's name is resolved through the roster's owner rather than carried
  * on the matchup, because the matchup knows only roster ids — and an orphan team
@@ -511,7 +615,8 @@ export async function getManagerMatchups(
          ON opp.league_id = o.league_id AND opp.roster_id = o.roster_id
        LEFT JOIN league_users lu
          ON lu.league_id = opp.league_id AND lu.user_id = opp.owner_id
-      WHERE r.owner_id = $1 AND l.season = $2`,
+      WHERE r.owner_id = $1 AND l.season = $2
+        AND ${LIVE_LEAGUE_SQL}`,
     [userId, season, week],
   );
 
@@ -566,7 +671,7 @@ export async function getManagerLeaguemates(
          ON me.league_id = lu.league_id AND me.user_id = $1
        JOIN leagues l ON l.league_id = lu.league_id
       WHERE l.season = $2
-        AND ${FIELDED_A_TEAM_SQL}
+        AND ${MANAGER_LEAGUE_SQL}
       ORDER BY lu.updated_at`,
     [userId, season],
   );
@@ -614,7 +719,7 @@ export async function getManagerLeagueRosters(
        JOIN league_users lu
          ON lu.league_id = l.league_id AND lu.user_id = $1
       WHERE l.season = $2
-        AND ${FIELDED_A_TEAM_SQL}`,
+        AND ${MANAGER_LEAGUE_SQL}`,
     [userId, season],
   );
   if (leagues.length === 0) return [];
