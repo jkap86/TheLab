@@ -10,13 +10,13 @@ import type { AdpPlayerPayload } from "@/shared/contract";
 import { previewAdpValue } from "../../adp-controls";
 import type { LeagueFilters } from "../../league-filters";
 import { PositionBadge } from "../position-badge";
-import { AdpCell, AuctionCell, KtcCell, ValueCell } from "./adp-board-cells";
+import { AdpCell, AuctionCell, ValueCell } from "./adp-board-cells";
 import { BOARD_ROW_CLASS, adpRowHeight } from "./adp-drawer.constants.ts";
 import {
+  type AdpBoardCounts,
   adpCellTitle,
   auctionCellTitle,
   auctionShare,
-  ktcTitle,
   takenShare,
 } from "./adp-drawer.utils.ts";
 
@@ -46,10 +46,7 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   offset,
   both,
   soleBoard,
-  soleDrafts,
-  soleAuctions,
-  redraftDrafts,
-  dynastyDrafts,
+  counts,
   rules,
   steepness,
 }: {
@@ -65,11 +62,13 @@ export const AdpBoardRow = memo(function AdpBoardRow({
   offset: number;
   both: boolean;
   soleBoard: AdpBoardType;
-  soleDrafts: number | null;
-  /** The auctions the Bid cell's share is averaged over — its own population. */
-  soleAuctions: number | null;
-  redraftDrafts: number | null;
-  dynastyDrafts: number | null;
+  /**
+   * The denominators this row's hovers state, per market — the drafts an ADP
+   * was averaged over and the auctions a bid was, which are two populations.
+   * One object rather than four props because the memo compares by identity and
+   * the caller holds it in a `useMemo`.
+   */
+  counts: AdpBoardCounts;
   /** The board's league rules — what the value cell's pool is anchored to. */
   rules: LeagueFilters;
   steepness: number;
@@ -107,15 +106,15 @@ export const AdpBoardRow = memo(function AdpBoardRow({
       <PositionBadge position={player.position} />
       {both ? (
         <>
-          {/* The auction share rides on these hovers with both boards up: there
-              is no width for two more numeric columns, so each market's ADP
-              cell states its own. */}
+          {/* The share still rides on these hovers as well as on its own cells:
+              the Bid pair is seated at `@lg`, so below that tier the ADP cell is
+              where the reading is stated — the same call the Taken share makes. */}
           <AdpCell
             adp={player.redraft?.adp ?? null}
             title={playerAdpTitle(
               player.redraft,
               "redraft",
-              redraftDrafts,
+              counts.redraft.drafts,
               player.auction.redraft,
             )}
           />
@@ -124,36 +123,41 @@ export const AdpBoardRow = memo(function AdpBoardRow({
             title={playerAdpTitle(
               player.dynasty,
               "dynasty",
-              dynastyDrafts,
+              counts.dynasty.drafts,
               player.auction.dynasty,
             )}
           />
           <ValueCell value={value(player.redraft)} collapsible />
           <ValueCell value={value(player.dynasty)} collapsible />
+          <AuctionCell
+            label={auctionShare(player.auction.redraft)}
+            title={bidTitle(player.auction.redraft, "redraft", counts)}
+            paired
+          />
+          <AuctionCell
+            label={auctionShare(player.auction.dynasty)}
+            title={bidTitle(player.auction.dynasty, "dynasty", counts)}
+            paired
+          />
         </>
       ) : (
         <>
           <AdpCell
             adp={sole?.adp ?? null}
-            title={playerAdpTitle(sole, soleBoard, soleDrafts, soleBid)}
+            title={playerAdpTitle(sole, soleBoard, counts[soleBoard].drafts, soleBid)}
           />
           {/* Of the drafts on this board, not of every draft crawled — which is
               what makes it readable beside the ADP. */}
           <span className="text-right text-xs tabular-nums text-foreground/40">
-            {takenShare(sole, soleDrafts)}
+            {takenShare(sole, counts[soleBoard].drafts)}
           </span>
           <AuctionCell
             label={auctionShare(soleBid)}
-            title={soleBid ? auctionCellTitle(soleBid, soleBoard, soleAuctions) : undefined}
+            title={bidTitle(soleBid, soleBoard, counts)}
           />
           <ValueCell value={value(sole)} />
         </>
       )}
-      {/* Outside the branch, because KTC's two boards are superflex and 1QB —
-          a different axis from the redraft and dynasty markets the branch is
-          about, so the same two cells are right whichever of those is lit. */}
-      <KtcCell value={player.ktc?.sf ?? null} title={ktcTitle("sf")} />
-      <KtcCell value={player.ktc?.oneqb ?? null} title={ktcTitle("oneqb")} />
     </li>
   );
 });
@@ -172,4 +176,19 @@ function playerAdpTitle(
   auction: AdpAuctionStats | null,
 ): string | undefined {
   return entry ? adpCellTitle(entry, board, drafts, auction) : undefined;
+}
+
+/**
+ * A Bid cell's hover, or nothing where the crawled auctions never bought him.
+ *
+ * The em dash is left bare here rather than explained: on a *player* row it is a
+ * gap in the sample and says so by being blank, where a pick row's blank is a
+ * column that does not apply and needs the hover to say which.
+ */
+function bidTitle(
+  stats: AdpAuctionStats | null,
+  board: AdpBoardType,
+  counts: AdpBoardCounts,
+): string | undefined {
+  return stats ? auctionCellTitle(stats, board, counts[board].auctions) : undefined;
 }

@@ -14,6 +14,7 @@ import {
   adpRowHeight,
   ADP_ROW_OVERSCAN,
 } from "./adp-drawer.constants.ts";
+import type { AdpBoardCounts } from "./adp-drawer.utils.ts";
 
 /**
  * The list, windowed: a spacer as tall as the whole board holding only the rows
@@ -43,10 +44,7 @@ export function AdpBoardRows({
   scrollRef,
   both,
   soleBoard,
-  soleDrafts,
-  soleAuctions,
-  redraftDrafts,
-  dynastyDrafts,
+  counts,
   rules,
   steepness,
 }: {
@@ -63,11 +61,12 @@ export function AdpBoardRows({
   scrollRef: RefObject<HTMLDivElement | null>;
   both: boolean;
   soleBoard: AdpBoardType;
-  soleDrafts: number | null;
-  /** The auctions the Bid column's shares are averaged over — its own count. */
-  soleAuctions: number | null;
-  redraftDrafts: number | null;
-  dynastyDrafts: number | null;
+  /**
+   * Each market's drafts and auctions — the denominators the player rows' hovers
+   * state. Threaded straight through: a pick row has no sample of its own to
+   * report, so only {@link AdpBoardRow} takes it.
+   */
+  counts: AdpBoardCounts;
   /** The board's league rules, threaded to the rows' value cells. */
   rules: LeagueFilters;
   steepness: number;
@@ -155,15 +154,7 @@ export function AdpBoardRows({
         return row.kind === "pick" ? (
           <AdpPickBoardRow key={row.key} pick={row.pick} {...seat} />
         ) : (
-          <AdpBoardRow
-            key={row.key}
-            player={row.player}
-            {...seat}
-            soleDrafts={soleDrafts}
-            soleAuctions={soleAuctions}
-            redraftDrafts={redraftDrafts}
-            dynastyDrafts={dynastyDrafts}
-          />
+          <AdpBoardRow key={row.key} player={row.player} {...seat} counts={counts} />
         );
       })}
     </ul>

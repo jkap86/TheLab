@@ -6,12 +6,11 @@ import { previewAdpValue } from "../../adp-controls";
 import type { LeagueFilters } from "../../league-filters";
 import type { AdpPickRow as AdpPick, AdpPickStats } from "../../adp-picks";
 import { ordinal } from "../../format";
-import { AdpCell, AuctionCell, KtcCell, ValueCell } from "./adp-board-cells";
+import { AdpCell, AuctionCell, ValueCell } from "./adp-board-cells";
 import { BOARD_ROW_CLASS, adpRowHeight } from "./adp-drawer.constants.ts";
 import {
   PICK_AUCTION_TITLE,
   PICK_TAKEN_TITLE,
-  ktcPickTitle,
   pickCellTitle,
   pickValueTitle,
 } from "./adp-drawer.utils.ts";
@@ -27,10 +26,11 @@ import {
  * What it draws differently is only what a pick genuinely differs in. The
  * position pill carries the **round** rather than a position, since a pick has
  * none and the round is the fact a reader scans a column of picks for. The Taken
- * column is an em dash with a hover saying why — a pick was taken in none of
- * these drafts, which is not a gap in the data. And the value carries the
- * future-season discount the ADP beside it deliberately does not, so the two
- * columns can disagree by design; both hovers say so.
+ * and Bid columns are em dashes with hovers saying why — a pick was taken in
+ * none of these drafts and auctioned in none of them either, which is not a gap
+ * in the data. And the value carries the future-season discount the ADP beside
+ * it deliberately does not, so the two columns can disagree by design; both
+ * hovers say so.
  *
  * Memoised on the same terms as the player row: primitives and the row's own
  * object, no callbacks, and an `offset` rather than a style object.
@@ -103,6 +103,11 @@ export const AdpPickBoardRow = memo(function AdpPickBoardRow({
             title={pick.dynasty ? pickValueTitle(rules, pick, pick.dynasty) : undefined}
             collapsible
           />
+          {/* Both bid columns, both an em dash, and the hover on each says why:
+              what an auction sells is players, so a rookie pick was never a lot
+              in one — the column does not apply rather than having no data. */}
+          <AuctionCell label={null} title={PICK_AUCTION_TITLE} paired />
+          <AuctionCell label={null} title={PICK_AUCTION_TITLE} paired />
         </>
       ) : (
         <>
@@ -120,19 +125,6 @@ export const AdpPickBoardRow = memo(function AdpPickBoardRow({
           />
         </>
       )}
-      {/* KTC's own price for the pick, not this board's reading of one. The ADP
-          cells beside it are the *rung* — the rookie the pick returns, averaged
-          out of the drafts on screen — which is this app's arithmetic; a column
-          headed KTC has to carry KTC's number or it is putting one under the
-          other's name. See `AdpPickRow.ktc`. */}
-      <KtcCell
-        value={pick.ktc?.sf ?? null}
-        title={ktcPickTitle(pick.label, pick.ktcExact)}
-      />
-      <KtcCell
-        value={pick.ktc?.oneqb ?? null}
-        title={ktcPickTitle(pick.label, pick.ktcExact)}
-      />
     </li>
   );
 });

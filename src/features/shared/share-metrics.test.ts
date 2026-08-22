@@ -42,7 +42,6 @@ const adp: AdpPlayerPayload = {
   dynasty: { adp: 14.6, min_pick: 3, max_pick: 41, picks: 88, stdev: 6.4 },
   // The share catalogue's ADP metrics read the two averages and nothing else.
   auction: { redraft: null, dynasty: null },
-  ktc: null,
 };
 
 /** Priced on one board only — a rookie no redraft has taken, typically. */

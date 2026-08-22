@@ -4,16 +4,15 @@ import type { LeagueFilters } from "../../league-filters";
 import type { AdpSort, AdpSortColumn } from "../../adp-sort";
 import {
   AUCTION_COLUMN_SEAT,
+  AUCTION_PAIR_SEAT,
   BOARD_COLUMNS_BOTH,
   BOARD_COLUMNS_ONE,
   BOARD_NAMES,
-  KTC_COLUMN_SEAT,
 } from "./adp-drawer.constants.ts";
 import {
-  KTC_BOARD_NAMES,
+  type AdpBoardCounts,
   auctionTitle,
   boardTitle,
-  ktcTitle,
   sortHeadingLabel,
   takenTitle,
   valueTitle,
@@ -52,10 +51,7 @@ const HEADING_ROW =
 export function AdpBoardHeader({
   both,
   soleBoard,
-  soleDrafts,
-  soleAuctions,
-  redraftDrafts,
-  dynastyDrafts,
+  counts,
   rules,
   sort,
   refreshing = false,
@@ -63,15 +59,13 @@ export function AdpBoardHeader({
 }: {
   both: boolean;
   soleBoard: AdpBoardType;
-  soleDrafts: number | null;
   /**
-   * The auctions behind the Bid column — a *different* count from `soleDrafts`,
-   * because it is a different population: the same leagues and window, over the
-   * one draft type the board never averages.
+   * The drafts and the auctions behind each market's columns. Two counts per
+   * board rather than one, because the Bid heading names a *different*
+   * population from the ADP heading beside it — the same leagues and window,
+   * over the one draft type the board never averages.
    */
-  soleAuctions: number | null;
-  redraftDrafts: number | null;
-  dynastyDrafts: number | null;
+  counts: AdpBoardCounts;
   /** The board's league rules — the value headings' premise reads its size. */
   rules: LeagueFilters;
   /**
@@ -133,10 +127,10 @@ export function AdpBoardHeader({
           {heading("name", "Player", "Player name", { align: "left" })}
           {heading("position", "Pos", "Position", { align: "left" })}
           {heading("adp_redraft", "ADP R", "Redraft ADP", {
-            title: boardTitle("redraft", redraftDrafts),
+            title: boardTitle("redraft", counts.redraft.drafts),
           })}
           {heading("adp_dynasty", "ADP D", "Dynasty ADP", {
-            title: boardTitle("dynasty", dynastyDrafts),
+            title: boardTitle("dynasty", counts.dynasty.drafts),
           })}
           {heading("value_redraft", "Val R", "Redraft draft capital", {
             title: valueTitle(rules),
@@ -146,7 +140,19 @@ export function AdpBoardHeader({
             title: valueTitle(rules),
             className: "hidden @md:block",
           })}
-          {ktcHeadings(heading)}
+          {/* One per market, which is the whole of what the KTC pair's tracks
+              bought: a bid share is a fact about *this* board's own two markets,
+              so unlike the pair it replaced it cannot be one column standing for
+              both. Each names its own auction count, which is not the draft
+              count on the ADP heading two columns left. */}
+          {heading("auction_redraft", "Bid R", "Average redraft auction bid, as a share of budget", {
+            title: auctionTitle("redraft", counts.redraft.auctions),
+            className: AUCTION_PAIR_SEAT,
+          })}
+          {heading("auction_dynasty", "Bid D", "Average dynasty auction bid, as a share of budget", {
+            title: auctionTitle("dynasty", counts.dynasty.auctions),
+            className: AUCTION_PAIR_SEAT,
+          })}
         </div>
       ) : (
         <div className={`grid ${BOARD_COLUMNS_ONE} ${HEADING_ROW}`}>
@@ -154,7 +160,7 @@ export function AdpBoardHeader({
           {heading("name", "Player", "Player name", { align: "left" })}
           {heading("position", "Pos", "Position", { align: "left" })}
           {heading(`adp_${soleBoard}`, "ADP", `${BOARD_NAMES[soleBoard]} ADP`, {
-            title: boardTitle(soleBoard, soleDrafts),
+            title: boardTitle(soleBoard, counts[soleBoard].drafts),
           })}
           {/* "Taken" is a share, and the header is the only place to say of
               what — a column reading 46% next to an ADP of 3.2 is otherwise
@@ -167,54 +173,16 @@ export function AdpBoardHeader({
               track, and the second is what the column is a reading of. What it
               is a share *of* — and that these are drafts the ADP beside it is
               never averaged over — is the hover's job. */}
-          {heading("auction", "Bid", "Average auction bid, as a share of budget", {
-            title: auctionTitle(soleBoard, soleAuctions),
+          {heading(`auction_${soleBoard}`, "Bid", "Average auction bid, as a share of budget", {
+            title: auctionTitle(soleBoard, counts[soleBoard].auctions),
             className: AUCTION_COLUMN_SEAT,
           })}
           {heading(`value_${soleBoard}`, "Value", "Draft capital", {
             title: valueTitle(rules),
           })}
-          {ktcHeadings(heading)}
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * The KTC pair, identical in both column configurations.
- *
- * Written once rather than in each branch because they are the one part of this
- * row that does *not* vary with the boards on screen: KTC's two boards are
- * superflex and 1QB, which is a different axis from redraft and dynasty, so the
- * same two columns are correct whichever markets are lit. Two branches spelling
- * them separately would be two chances for the seat or the heading to drift, and
- * a heading seated a tier apart from its column is a label over the wrong
- * numbers.
- */
-function ktcHeadings(
-  heading: (
-    column: AdpSortColumn,
-    label: string,
-    name: string,
-    extra?: { title?: string; className?: string; align?: "left" | "right" },
-  ) => React.ReactNode,
-) {
-  return (
-    <>
-      {heading(
-        "ktc_sf",
-        KTC_BOARD_NAMES.sf,
-        "KeepTradeCut superflex dynasty value",
-        { title: ktcTitle("sf"), className: KTC_COLUMN_SEAT },
-      )}
-      {heading(
-        "ktc_oneqb",
-        KTC_BOARD_NAMES.oneqb,
-        "KeepTradeCut 1QB dynasty value",
-        { title: ktcTitle("oneqb"), className: KTC_COLUMN_SEAT },
-      )}
-    </>
   );
 }
 

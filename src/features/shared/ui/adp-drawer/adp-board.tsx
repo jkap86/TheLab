@@ -29,7 +29,11 @@ import {
   AdpBoardNoRows,
 } from "./adp-board-empty-state";
 import { EMPTY_PICK_KTC, EMPTY_PLAYERS } from "./adp-drawer.constants.ts";
-import { soleBoardOf } from "./adp-drawer.utils.ts";
+import {
+  type AdpBoardCounts,
+  EMPTY_BOARD_COUNTS,
+  soleBoardOf,
+} from "./adp-drawer.utils.ts";
 
 /**
  * The list itself — the one part of the drawer that scrolls.
@@ -118,7 +122,7 @@ export function AdpBoard({
   // *this list on screen*: that store is shared with the trades board and the
   // lineup checker, is seeded from a league, and drives four priced reads — none
   // of which has any business changing because somebody sorted a column. It
-  // survives a filter change on purpose (a reader sorting by KTC and then
+  // survives a filter change on purpose (a reader sorting by Bid and then
   // narrowing the population is still asking the same question) and dies with
   // the drawer, which unmounts on close.
   const [sort, setSort] = useState<AdpSort>(DEFAULT_ADP_SORT);
@@ -175,25 +179,24 @@ export function AdpBoard({
     // heading is pressed, so this fires on the press and on nothing else.
   }, [identity, activeSort]);
 
-  const {
-    redraft_drafts,
-    dynasty_drafts,
-    redraft_auctions,
-    dynasty_auctions,
-    player_count,
-  } = board.data ?? {
-    redraft_drafts: null,
-    dynasty_drafts: null,
-    redraft_auctions: null,
-    dynasty_auctions: null,
-    player_count: null,
-  };
-  const soleDrafts = soleBoard === "dynasty" ? dynasty_drafts : redraft_drafts;
-  // Read off the same board and deliberately not off the same field: the Bid
-  // column averages the draft type this board never does, so its denominator is
-  // its own count and quoting `soleDrafts` there would state a sample the number
-  // was not taken over.
-  const soleAuctions = soleBoard === "dynasty" ? dynasty_auctions : redraft_auctions;
+  const player_count = board.data?.player_count ?? null;
+  // The four denominators as one object, so the header and the rows read them
+  // the same way and a market's two counts cannot be threaded apart. Drafts and
+  // auctions are deliberately *not* one field: the Bid columns average the draft
+  // type the board itself never does, so quoting a board's draft count beside a
+  // share would state a sample the number was not taken over.
+  //
+  // Memoised because {@link AdpBoardRow} is `memo`'d on prop identity — a fresh
+  // object per render would re-render every row in the window on every scroll
+  // notification, which is exactly what the memo is there to prevent.
+  const counts: AdpBoardCounts = useMemo(() => {
+    const data = board.data;
+    if (!data) return EMPTY_BOARD_COUNTS;
+    return {
+      redraft: { drafts: data.redraft_drafts, auctions: data.redraft_auctions },
+      dynasty: { drafts: data.dynasty_drafts, auctions: data.dynasty_auctions },
+    };
+  }, [board.data]);
 
   return (
     // `min-h-0` is the load-bearing one — see the note above.
@@ -219,10 +222,7 @@ export function AdpBoard({
           <AdpBoardHeader
             both={both}
             soleBoard={soleBoard}
-            soleDrafts={soleDrafts}
-            soleAuctions={soleAuctions}
-            redraftDrafts={redraft_drafts}
-            dynastyDrafts={dynasty_drafts}
+            counts={counts}
             rules={controls.leagueRules}
             sort={activeSort}
             refreshing={board.stale}
@@ -250,10 +250,7 @@ export function AdpBoard({
                 scrollRef={scrollRef}
                 both={both}
                 soleBoard={soleBoard}
-                soleDrafts={soleDrafts}
-                soleAuctions={soleAuctions}
-                redraftDrafts={redraft_drafts}
-                dynastyDrafts={dynasty_drafts}
+                counts={counts}
                 rules={controls.leagueRules}
                 steepness={steepness}
               />

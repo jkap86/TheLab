@@ -57,8 +57,10 @@ export function takenTitle(board: AdpBoardType): string {
  * The auction column's cell: an average share of the room's budget, written at
  * the precision the number deserves.
  *
- * **The split at 10% is what keeps the track honest.** The column is 36px, which
- * holds four characters — so `100%` and `9.9%` both fit and `100.0%` does not.
+ * **The split at 10% is what keeps the track honest.** The narrower of its two
+ * seats is 36px, which holds four characters — so `100%` and `9.9%` both fit and
+ * `100.0%` does not, and the wider seat is written the same way rather than
+ * spelling one board's shares to a different precision from the other's.
  * That is the same bound the reading wants anyway: the bottom of a roster is a
  * dollar of two hundred, and rounding 0.5% to a whole percent rounds it to zero,
  * while a tenth of a percent on a 58% player is noise.
@@ -77,11 +79,14 @@ export function auctionShare(stats: AdpAuctionStats | null): string | null {
  * The auction heading's hover: what the column is a share *of*, and over how
  * many rooms.
  *
- * The heading is `Bid`, which says the market and not the unit — so this is the
- * only place that can state the denominator twice over: a share of one manager's
- * budget, averaged over the auctions on this board. It also names the one thing
- * about the column a reader would otherwise have to infer, which is that these
- * are *not* the drafts the ADP beside it is averaged over.
+ * The heading is `Bid` (or `Bid R`/`Bid D` with both markets up), which says the
+ * market and not the unit — so this is the only place that can state the
+ * denominator twice over: a share of one manager's budget, averaged over the
+ * auctions on *this* board. It also names the one thing about the column a
+ * reader would otherwise have to infer, which is that these are not the drafts
+ * the ADP beside it is averaged over. It takes the board as an argument for that
+ * reason: with both boards lit the two headings are two different populations,
+ * and one shared string would state whichever count came first under both.
  */
 export function auctionTitle(board: AdpBoardType, auctions: number | null): string {
   const rooms =
@@ -122,71 +127,17 @@ const pct = (share: number): string => `${share.toFixed(1)}%`;
 export const PICK_AUCTION_TITLE =
   "A rookie pick isn’t auctioned in these rooms — it stands on the rookie its rung took";
 
-/** Which of KTC's two boards a column reads. */
-export type KtcBoard = "sf" | "oneqb";
-
-/**
- * How each is spelled in a heading 40px wide — which is to say without the word
- * `KTC` in front of it.
- *
- * Measured rather than chosen: `KTC 1QB` with a sort caret is 56.1px, and buying
- * the pair that width costs 40px out of a name track that has 128 in the board's
- * densest state. The attribution moves to {@link ktcTitle}, which has room for
- * the source *and* for the caveat that matters more — see `BOARD_COLUMNS_ONE`
- * for the whole arithmetic.
- */
-export const KTC_BOARD_NAMES: Record<KtcBoard, string> = {
-  sf: "SF",
-  oneqb: "1QB",
-};
-
-/**
- * A KTC heading's hover, and the one place the board's biggest caveat is stated.
- *
- * **KTC's board is a dynasty board, and these columns sit beside a redraft
- * average as readily as a dynasty one.** That is not a mismatch to hide — it is
- * a second lens on the player rather than a per-market price — but a reader
- * comparing a redraft ADP against a KTC number has to know the two are not
- * answering the same question, and the column is 44px of digits with nowhere to
- * say so. Hence here, on both headings, whichever markets are on screen.
- */
-export function ktcTitle(board: KtcBoard): string {
-  const lineup =
-    board === "sf"
-      ? "superflex (two-quarterback) leagues"
-      : "single-quarterback leagues";
-  return `KeepTradeCut’s dynasty trade value for ${lineup} — a dynasty board whichever ADP column it is read beside, and unpriced for kickers, defences and the deep end of every position`;
-}
-
-/**
- * A KTC cell's hover on a *pick* row: which of KTC's rows the number came off.
- *
- * A player's price needs no such line — KTC prices the player, and the heading
- * has already said which board. A pick is the case where the two vocabularies
- * only nearly line up: KTC publishes three thirds of a round for the drafts it
- * has an opinion about and one untiered row for the rest, so a number is
- * routinely read off a broader row than the pick being priced. Saying so is the
- * same "priced" against "priced exactly" distinction the trade card draws.
- */
-export function ktcPickTitle(label: string, exact: boolean): string {
-  const base = `KeepTradeCut’s own price for the ${label}`;
-  return exact
-    ? base
-    : `${base}, estimated from a broader row than this pick’s own third of the round`;
-}
-
 /**
  * One ADP cell's hover: the spread behind the average, and the sample it was
  * taken over. It carries what the Taken column says in single-board mode, so
  * nothing is lost when both boards are up and that column has stepped aside.
  *
- * **The auction share rides here on the same terms**, and for the same reason
- * twice over: the column is absent with both boards up (there is no width for
- * two more of them) and below `@md` (there is no width for one), so this is the
- * only place the reading is stated at those sizes. It is appended rather than
- * folded in, and only when there is one — a hover that always ended in a clause
- * about auctions would be saying "no auction data" on nearly every row of a
- * board where that is the normal case.
+ * **The auction share rides here on the same terms**, and still for a width
+ * reason: the Bid column is seated at `@md` with one market lit and at `@lg`
+ * with two, so on a narrower panel this hover is the only place the reading is
+ * stated. It is appended rather than folded in, and only when there is one — a
+ * hover that always ended in a clause about auctions would be saying "no auction
+ * data" on nearly every row of a board where that is the normal case.
  */
 export function adpCellTitle(
   entry: AdpBoardStats,
@@ -288,6 +239,35 @@ export function sortHeadingLabel(
 export function soleBoardOf(shown: AdpShownBoards): AdpBoardType {
   return shown === "dynasty" ? "dynasty" : "redraft";
 }
+
+/**
+ * The two denominators every heading and hover on this board is read against,
+ * per market.
+ *
+ * **Two counts rather than one, because they are two populations.** A board's
+ * drafts are what its ADP column averages; its auctions are the draft type that
+ * column deliberately never includes, counted over the same leagues, season and
+ * window. Quoting one beside the other's number names a sample it was not taken
+ * over — which is the whole reason the wire carries
+ * `redraft_auctions`/`dynasty_auctions` at all.
+ *
+ * It is one object rather than four scalars because every consumer wants the
+ * same pair and the *sole*-board halves are a derivation off it: with one market
+ * lit the header, the rows and their hovers all read `counts[soleBoard]`, so
+ * there is no separately-threaded `soleDrafts` to disagree with the board it is
+ * supposed to describe. {@link AdpBoardRow} is memoised, so the caller holds this
+ * in a `useMemo` — a fresh object per render would fail every row's comparison.
+ */
+export type AdpBoardCounts = Record<
+  AdpBoardType,
+  { readonly drafts: number | null; readonly auctions: number | null }
+>;
+
+/** Nothing loaded yet: four honest nulls, which every reader draws as absent. */
+export const EMPTY_BOARD_COUNTS: AdpBoardCounts = Object.freeze({
+  redraft: Object.freeze({ drafts: null, auctions: null }),
+  dynasty: Object.freeze({ drafts: null, auctions: null }),
+});
 
 /**
  * Move to another season, dropping the window with it.

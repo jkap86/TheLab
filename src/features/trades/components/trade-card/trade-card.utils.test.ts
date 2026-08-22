@@ -240,7 +240,6 @@ describe("sideContext", () => {
           redraft: null,
           dynasty: { picks: 12, adp: 16, min_pick: 8, max_pick: 30, stdev: 4 },
           auction: { redraft: null, dynasty: null },
-          ktc: null,
         },
       },
       adpBoard: "dynasty",

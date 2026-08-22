@@ -29,8 +29,8 @@ import type { AdpPlayerPayload } from "@/shared/contract";
  *   where a pick sits among the players, and the default sort must hand that
  *   back untouched rather than re-deriving it.
  * - **A row with no answer sinks in *both* directions.** An em dash is not a
- *   small number; treating it as one floats every unpriced kicker to the top of
- *   an ascending KTC column.
+ *   small number; treating it as one floats every player the crawled auctions
+ *   never bought to the top of an ascending Bid column.
  * - **Every sort is total.** Ties fall back to the merge, so a column of em
  *   dashes still comes back in a fixed order rather than the engine's.
  * - **A value sort is not an ADP sort reversed.** For a player the two agree,
@@ -63,7 +63,6 @@ const player = (
   // The crawled auctions bought nobody by default: they are a small slice of
   // the corpus, so both boards null is the ordinary row rather than a case.
   auction: { redraft: null, dynasty: null },
-  ktc: null,
   ...over,
 });
 
@@ -94,8 +93,6 @@ const pick = (key: string, over: Partial<AdpPickRow> = {}): AdpPickRow => ({
   label: `2026 1.0${key}`,
   redraft: pickStats(10),
   dynasty: pickStats(10),
-  ktc: null,
-  ktcExact: true,
   ...over,
 });
 
@@ -148,49 +145,57 @@ describe("the board's own order is a column", () => {
 
 describe("a row with no answer sinks either way", () => {
   const rows = entries([
-    player("priced", { ktc: { sf: 5000, oneqb: 4000 } }),
-    player("unpriced", { ktc: null }),
-    player("cheap", { ktc: { sf: 100, oneqb: 90 } }),
+    player("dear", { auction: { redraft: bid(58), dynasty: null } }),
+    player("unbought", { auction: { redraft: null, dynasty: null } }),
+    player("cheap", { auction: { redraft: bid(2), dynasty: null } }),
   ]);
 
   test("descending puts the biggest first and the em dash last", () => {
-    assert.deepEqual(sortBy(rows, "ktc_sf", "desc"), ["priced", "cheap", "unpriced"]);
+    assert.deepEqual(sortBy(rows, "auction_redraft", "desc"), [
+      "dear",
+      "cheap",
+      "unbought",
+    ]);
   });
 
   test("ascending puts the smallest first and the em dash *still* last", () => {
     // The one that is easy to get wrong: `null` as a small number floats every
-    // kicker KTC has never priced to the top of the column.
-    assert.deepEqual(sortBy(rows, "ktc_sf", "asc"), ["cheap", "priced", "unpriced"]);
+    // player the crawled auctions never bought to the top of the column — and
+    // that is most of a board, since auctions are a small slice of the corpus.
+    assert.deepEqual(sortBy(rows, "auction_redraft", "asc"), [
+      "cheap",
+      "dear",
+      "unbought",
+    ]);
   });
 
-  test("a player KTC knows and prices nowhere sinks with the rest", () => {
-    // `foldKtcValues` keeps such a player in the map carrying two nulls, which
-    // is a different fact from an id KTC has never heard of and the same answer
-    // here.
+  test("a row priced on the other market only sinks with the rest", () => {
+    // Bought at auction, just not in a room on this board — a different fact
+    // from never bought and the same answer in this column.
     const known = entries([
-      player("known", { ktc: { sf: null, oneqb: null } }),
-      player("priced", { ktc: { sf: 10, oneqb: 10 } }),
+      player("other", { auction: { redraft: null, dynasty: bid(90) } }),
+      player("here", { auction: { redraft: bid(10), dynasty: null } }),
     ]);
-    assert.deepEqual(sortBy(known, "ktc_sf", "desc"), ["priced", "known"]);
-    assert.deepEqual(sortBy(known, "ktc_sf", "asc"), ["priced", "known"]);
+    assert.deepEqual(sortBy(known, "auction_redraft", "desc"), ["here", "other"]);
+    assert.deepEqual(sortBy(known, "auction_redraft", "asc"), ["here", "other"]);
   });
 });
 
 describe("every sort is total", () => {
   test("ties fall back to the board's own order", () => {
     const rows = entries([player("a"), player("b"), player("c")]);
-    // Every row unpriced, so the column can tell none of them apart.
-    assert.deepEqual(sortBy(rows, "ktc_sf", "desc"), ["a", "b", "c"]);
-    assert.deepEqual(sortBy(rows, "ktc_sf", "asc"), ["a", "b", "c"]);
+    // No row was bought, so the column can tell none of them apart.
+    assert.deepEqual(sortBy(rows, "auction_redraft", "desc"), ["a", "b", "c"]);
+    assert.deepEqual(sortBy(rows, "auction_redraft", "asc"), ["a", "b", "c"]);
   });
 
   test("a partial tie keeps the merge inside each group", () => {
     const rows = entries([
-      player("a", { ktc: { sf: 100, oneqb: 1 } }),
-      player("b", { ktc: { sf: 900, oneqb: 1 } }),
-      player("c", { ktc: { sf: 100, oneqb: 1 } }),
+      player("a", { auction: { redraft: bid(10), dynasty: null } }),
+      player("b", { auction: { redraft: bid(90), dynasty: null } }),
+      player("c", { auction: { redraft: bid(10), dynasty: null } }),
     ]);
-    assert.deepEqual(sortBy(rows, "ktc_sf", "desc"), ["b", "a", "c"]);
+    assert.deepEqual(sortBy(rows, "auction_redraft", "desc"), ["b", "a", "c"]);
   });
 });
 
@@ -230,17 +235,20 @@ describe("what each column reads", () => {
       player("dear", { auction: { redraft: bid(58, 2), dynasty: null } }),
       player("cheap", { auction: { redraft: bid(4, 40), dynasty: null } }),
     ]);
-    assert.deepEqual(sortBy(rows, "auction", "desc"), ["dear", "cheap"]);
-    assert.deepEqual(sortBy(rows, "auction", "asc"), ["cheap", "dear"]);
+    assert.deepEqual(sortBy(rows, "auction_redraft", "desc"), ["dear", "cheap"]);
+    assert.deepEqual(sortBy(rows, "auction_redraft", "asc"), ["cheap", "dear"]);
   });
 
-  test("Bid reads the lit market, and the other market cannot reach it", () => {
+  test("Bid sorts its own market, and the other market cannot reach it", () => {
+    // Board-qualified rather than read off the lit board, which is what lets the
+    // pair stand side by side with both markets up: one column per market, each
+    // ordering the shares it actually draws.
     const rows = entries([
       player("a", { auction: { redraft: bid(10), dynasty: bid(90) } }),
       player("b", { auction: { redraft: bid(90), dynasty: bid(10) } }),
     ]);
-    assert.deepEqual(sortBy(rows, "auction", "desc", { soleBoard: "redraft" }), ["b", "a"]);
-    assert.deepEqual(sortBy(rows, "auction", "desc", { soleBoard: "dynasty" }), ["a", "b"]);
+    assert.deepEqual(sortBy(rows, "auction_redraft", "desc"), ["b", "a"]);
+    assert.deepEqual(sortBy(rows, "auction_dynasty", "desc"), ["a", "b"]);
   });
 
   test("a row the crawled auctions never bought sinks either way", () => {
@@ -251,8 +259,8 @@ describe("what each column reads", () => {
       player("none"),
       player("some", { auction: { redraft: bid(12), dynasty: null } }),
     ]);
-    assert.deepEqual(sortBy(rows, "auction", "asc"), ["some", "none"]);
-    assert.deepEqual(sortBy(rows, "auction", "desc"), ["some", "none"]);
+    assert.deepEqual(sortBy(rows, "auction_redraft", "asc"), ["some", "none"]);
+    assert.deepEqual(sortBy(rows, "auction_redraft", "desc"), ["some", "none"]);
   });
 
   test("a pick has no Bid either — what an auction sells is players", () => {
@@ -260,8 +268,8 @@ describe("what each column reads", () => {
       pick("1"),
       player("a", { auction: { redraft: bid(20), dynasty: null } }),
     ]);
-    assert.deepEqual(sortBy(rows, "auction", "desc"), ["a", "2026 1.01"]);
-    assert.deepEqual(sortBy(rows, "auction", "asc"), ["a", "2026 1.01"]);
+    assert.deepEqual(sortBy(rows, "auction_redraft", "desc"), ["a", "2026 1.01"]);
+    assert.deepEqual(sortBy(rows, "auction_redraft", "asc"), ["a", "2026 1.01"]);
   });
 
   test("the name column sorts a pick by its label and a player by his name", () => {
@@ -333,9 +341,10 @@ describe("a value sort is not an ADP sort reversed", () => {
 
 describe("a press picks the direction that answers the question", () => {
   test("a new column opens the way a reader means it", () => {
-    // Pressing KTC to find the expensive players, and ADP to find pick 1.
-    assert.deepEqual(nextAdpSort(DEFAULT_ADP_SORT, "ktc_sf"), {
-      column: "ktc_sf",
+    // Pressing Bid to find the players a room emptied its budget on, and ADP to
+    // find pick 1.
+    assert.deepEqual(nextAdpSort(DEFAULT_ADP_SORT, "auction_redraft"), {
+      column: "auction_redraft",
       direction: "desc",
     });
     assert.deepEqual(nextAdpSort(DEFAULT_ADP_SORT, "adp_dynasty"), {
@@ -373,31 +382,33 @@ describe("a sort cannot outlive the column it names", () => {
     assert.ok(adpSortColumns(false, "redraft").includes("taken"));
   });
 
-  test("both boards draw no Bid column either", () => {
-    // For a different reason from Taken's, and worth stating: the share is per
-    // market, so two boards would want two of these columns and the row has no
-    // width for them. With both up it is on each ADP cell's hover instead.
-    assert.ok(!adpSortColumns(true, "redraft").includes("auction"));
-    assert.ok(adpSortColumns(false, "dynasty").includes("auction"));
+  test("both boards draw a Bid column each, and Taken is the only one they drop", () => {
+    // The share is per market, so two boards want two of these — which is what
+    // the tracks KTC's pair used to hold were spent on. Taken is the one that
+    // genuinely cannot come along: its column is where the second ADP goes.
+    const both = adpSortColumns(true, "redraft");
+    assert.ok(both.includes("auction_redraft"));
+    assert.ok(both.includes("auction_dynasty"));
+    assert.ok(adpSortColumns(false, "dynasty").includes("auction_dynasty"));
   });
 
   test("a single board draws only its own market's columns", () => {
     const redraft = adpSortColumns(false, "redraft");
     assert.ok(redraft.includes("adp_redraft"));
     assert.ok(redraft.includes("value_redraft"));
+    assert.ok(redraft.includes("auction_redraft"));
     assert.ok(!redraft.includes("adp_dynasty"));
     assert.ok(!redraft.includes("value_dynasty"));
+    assert.ok(!redraft.includes("auction_dynasty"));
   });
 
-  test("the KTC pair is in every mode — it is not a fact about either market", () => {
-    for (const columns of [
-      adpSortColumns(true, "redraft"),
-      adpSortColumns(false, "redraft"),
-      adpSortColumns(false, "dynasty"),
-    ]) {
-      assert.ok(columns.includes("ktc_sf"));
-      assert.ok(columns.includes("ktc_oneqb"));
-    }
+  test("a market's Bid sort survives the other board being toggled on", () => {
+    // The point of qualifying the column by board rather than by which one is
+    // lit: the reader ordered by redraft bids, and widening the board to both
+    // markets must not throw that away.
+    const sort: AdpSort = { column: "auction_redraft", direction: "desc" };
+    assert.equal(resolveAdpSort(sort, false, "redraft"), sort);
+    assert.equal(resolveAdpSort(sort, true, "redraft"), sort);
   });
 
   test("a sort whose column has left the screen falls back to the merge", () => {
@@ -412,29 +423,31 @@ describe("a sort cannot outlive the column it names", () => {
   test("a sort that is still drawn is handed back unchanged", () => {
     // The same object, which is what keeps the board's scroll from resetting on
     // a render that changed nothing about the order.
-    const sort: AdpSort = { column: "ktc_oneqb", direction: "desc" };
+    const sort: AdpSort = { column: "name", direction: "desc" };
     assert.equal(resolveAdpSort(sort, true, "redraft"), sort);
     assert.equal(resolveAdpSort(sort, false, "dynasty"), sort);
   });
 });
 
 describe("picks and players sort together", () => {
-  test("a KTC sort interleaves them on KTC's own numbers", () => {
-    // A pick's KTC price is KTC's own row for the pick, not this board's
-    // reading of one — so the column compares like with like.
+  test("an ADP sort interleaves them, because a pick reads a player's average", () => {
+    // The whole reason a pick is a row in this list rather than a table beside
+    // it: its number is the rung's, out of the same drafts, so the column
+    // compares like with like.
     const rows = entries([
-      player("a", { ktc: { sf: 5000, oneqb: 5000 } }),
-      pick("1", { ktc: { sf: 7000, oneqb: 6500 } }),
-      player("b", { ktc: { sf: 1000, oneqb: 1000 } }),
+      player("a", { redraft: stats(5) }),
+      pick("1", { redraft: pickStats(12) }),
+      player("b", { redraft: stats(30) }),
     ]);
-    assert.deepEqual(sortBy(rows, "ktc_sf", "desc"), ["2026 1.01", "a", "b"]);
+    assert.deepEqual(sortBy(rows, "adp_redraft", "asc"), ["a", "2026 1.01", "b"]);
   });
 
-  test("a pick KTC cannot price sinks like any other unpriced row", () => {
+  test("a pick past the class the board priced sinks like any other blank", () => {
     const rows = entries([
-      pick("1", { ktc: null }),
-      player("a", { ktc: { sf: 10, oneqb: 10 } }),
+      pick("1", { redraft: null }),
+      player("a", { redraft: stats(30) }),
     ]);
-    assert.deepEqual(sortBy(rows, "ktc_sf", "desc"), ["a", "2026 1.01"]);
+    assert.deepEqual(sortBy(rows, "adp_redraft", "asc"), ["a", "2026 1.01"]);
+    assert.deepEqual(sortBy(rows, "adp_redraft", "desc"), ["a", "2026 1.01"]);
   });
 });

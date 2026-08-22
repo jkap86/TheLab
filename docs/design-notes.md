@@ -2140,22 +2140,44 @@ part before redesigning it.
     the Taken and Value columns at every width; both trade Taken for the second
     ADP (its share moves to the ADP cells' hover) and seat the two value
     columns only from `@md` up — the panel is its own `@container`, so that
-    measures the drawer, not the viewport. **A third pair sits past those, and
-    it is the one pair the boards selection does not touch**: KTC's superflex and 1QB
-    prices, `SF` and `1QB`, seated from `@lg` and drawn whichever markets are
-    lit. KTC publishes *dynasty* values and nothing else, so the same two
-    numbers stand beside a redraft average as beside a dynasty one — a second
-    lens on the player rather than a per-market price, which is why the columns
-    are named for KTC's two boards and not for this board's two markets, and why
-    the headings' hover is where that caveat is stated. It is a **tail** because
-    a collapsible column added mid-row makes the board step sideways as the
-    panel crosses a tier, and `@lg` rather than `@md` because nine columns is
-    408px of chrome: the panel went 32rem → 36rem to keep the name track at
-    128px in that state, which is what a roster row gets on a phone. A pick row
-    carries KTC's *own* price for the pick (`AdpPickRow.ktc`, off the `pick_ktc`
-    board the payload already sent) rather than this app's rung arithmetic — a
-    column headed KTC has to carry KTC's number or it is filing one under the
-    other's name. `boards` lives on `AdpControls`
+    measures the drawer, not the viewport. **A third pair sits past those in the
+    `@lg` tail, and it used to be KTC's and is the auction bids' now.** KTC
+    published `SF` and `1QB` — *dynasty* prices standing beside a redraft
+    average as readily as a dynasty one, a second lens on the **player** rather
+    than a per-market price. That is a question the comps and trades tools
+    answer at length and this board only ever restated, where what a reader
+    cannot get anywhere else here is what the same drafts actually **paid**: so
+    the two tracks went to `Bid R` and `Bid D`, readings of the board's own two
+    markets. It is also what finally made that share a column with both boards
+    up — it had been on the ADP cells' hover there purely for want of two
+    tracks, and the pair occupying them has gone. It stays a **tail** because a
+    collapsible column added mid-row makes the board step sideways as the panel
+    crosses a tier, and `@lg` rather than `@md` because the densest state is
+    still nine columns and 408px of chrome: the panel went 32rem → 36rem to keep
+    the name track at 128px there, against `Christian McCaffrey`'s 122.7px. Those
+    px are the nominal frame at 16 to the rem; the app runs at
+    `--app-font-scale: 1.125`, and since the tracks, the gaps, the panel's cap and
+    the type are all `rem` the scale multiplies both sides — on screen that state
+    is a 648px panel, a 144px name and a 138.0px `Christian McCaffrey`, measured —
+    the name cell carries the team tag too, so the longest names truncate through
+    that and a little into themselves, exactly as they did under the pair this
+    replaced.
+    The one comparison the frame does not carry is against a *viewport*, which
+    scales with nothing: a real 390px phone leaves the single-board name 61.5px
+    and truncates every name of any length, which is true before this change as
+    well as after it, since neither collapsible pair is drawn at that width. Two
+    tracks changed width with the swap and both are measurements: the bid pair is
+    2.75rem because `Bid R ▲` is 41.3px and would clip inside its own word in the
+    2.5rem `SF` sat in, and the value pair pays that back at 3.25 → 3rem because
+    its headings read `Val R` here and only the single-board template spells the
+    column `Value`. A pick
+    row draws an em dash in both, with a hover saying why — what an auction
+    sells is players — which is the call the Taken column already makes. The
+    pick rows still read KTC, for the future-season discount and for which
+    seasons there are picks worth listing at all; what left with the columns is
+    `AdpPickRow.ktc` and the per-player `AdpPlayerPayload.ktc`, and with the
+    latter a page-sized `getKtcValuesBySleeperId` lookup nothing on the wire
+    could report. `boards` lives on `AdpControls`
     beside `steepness` and shares its standing exactly: display state, never on
     the query string (the cache would split into two entries holding identical
     payloads) and never counted as a narrowing. What "Match a league…" seeds
@@ -2237,36 +2259,41 @@ part before redesigning it.
   for the reason it always defaulted that way: an auction's `pick_no` is
   nomination order, so its "ADP" is not one.
 
-  - **The auctions come back as a column rather than as a draft type, and the
-    column is single-board only.** What an auction publishes that a snake draft
+  - **The auctions come back as a column rather than as a draft type, and there
+    is one of it per market.** What an auction publishes that a snake draft
     cannot is a *price* — the winning bid over the room's budget — so it is a
     second reading of the same players rather than a fourth setting of
     `draft_type`; `shared/manager/adp-auction` reads it over the same leagues,
     season and window with that one filter overridden, and the wire carries its
     own `redraft_auctions`/`dynasty_auctions` because quoting the board's draft
-    count beside it would name a sample the share was never taken over.
+    count beside it would name a sample the share was never taken over. Each
+    heading states its own count for the same reason: with both markets lit
+    those are two populations, and one shared string would put whichever
+    arrived first under both.
 
-    Where it *sits* is arithmetic rather than taste, and the arithmetic is why
-    it is not simply two more columns. The both-boards row is already nine tracks
-    at the 36rem panel with the name down to 128px, and a per-market share needs
-    one column per market — so with both boards up the reading moves to each ADP
-    cell's hover, exactly as the Taken share does, and the column exists only
-    where a single market is lit. That leaves it 2.25rem (the position column's
-    width: `Bid ▲` measures 33.6px in a 36px track, and the widest cell, `100%`,
-    is 28.8px) seated from `@md`. A tier lower would put it on a 390px phone,
-    where the single-board name is already 98px and 52px of column and gap takes
-    it to 46 — no name at all. At the full-width panel with every column up the
-    name has **143px**, above the 128 the both-boards state already lives at; the
-    band it costs is 513–530px, where the KTC pair has just arrived, which is the
-    non-monotonicity a tier that adds a column always buys.
+    Where it *sits* is arithmetic rather than taste. A per-market share needs one
+    column per market, and the both-boards row had no two tracks to give it while
+    KTC's pair held the `@lg` tail — which is why the reading lived on each ADP
+    cell's hover there, exactly as the Taken share does. It still does below
+    that tier, since the pair is seated at `@lg` and the single column at `@md`:
+    a hover is what a narrow panel has. With one market lit the column is 2.25rem
+    (the position column's width: `Bid ▲` measures 29.9px in a 36px track, and
+    the widest cell, `100%`, is 30.7px); with both it is 2.75rem, because a lit
+    `Bid R` carries a sort caret and measures 41.3px. A tier lower would put the
+    single column on a phone, where the name is 61.5px of a real 390px panel and
+    the column plus its gap is 49.5 of the same pixels — 12px left, which is no
+    name at all. The single-board state has no `@lg` tier at all now, so at the
+    full-width panel with every column up its name has **240px** nominal.
 
     Two smaller consequences follow the house rules rather than the board. The
     share is written to four characters — integer at or above 10%, one decimal
     below — because a tenth of a percent on a 58% player is noise while a whole
-    percent on a $1 flier is zero, and because that is what the track holds. And
-    a *pick* row draws an em dash with a hover saying why, the same call the
-    Taken column makes one cell to its left: what an auction sells is players, so
-    the column does not apply rather than having no data.
+    percent on a $1 flier is zero, and because that is what the narrower of the
+    two tracks holds; the wider one is written the same way rather than spelling
+    one market's shares to a different precision from the other's. And a *pick*
+    row draws an em dash with a hover saying why, the same call the Taken column
+    makes one cell to its left: what an auction sells is players, so the column
+    does not apply rather than having no data.
 
   The board is fetched by
   the layout and gated on `open`, so a tab nobody opened it on costs no request;
