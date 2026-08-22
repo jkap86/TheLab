@@ -144,6 +144,33 @@ export async function pendingManagers(
 }
 
 /**
+ * Stamp `sync_attempt_at` for leagues somebody is about to ask Sleeper about
+ * outside the crawler's own claim.
+ *
+ * {@link claimStaleLeagues} does this as part of claiming, in one statement, so
+ * two ticks cannot pick the same batch. This is the same stamp for the caller
+ * that needs no claim: a manager's sync probing the leagues that left their
+ * enumeration already holds that manager's advisory lock, and two managers
+ * sharing a league both probing it costs one duplicate request rather than a
+ * double write.
+ *
+ * Stamped **before** the fetch, the rule `projection_week_syncs.attempt_at`
+ * carries: a probe that fails or is refused must still rotate its league to the
+ * back of the queue, or the same handful hold the head of it on every sync and
+ * the rest are never reached.
+ */
+export async function stampLeagueSyncAttempts(
+  leagueIds: readonly string[],
+): Promise<void> {
+  if (leagueIds.length === 0) return;
+  await pool.query(
+    `UPDATE leagues SET sync_attempt_at = now()
+      WHERE league_id = ANY($1::varchar[])`,
+    [[...leagueIds]],
+  );
+}
+
+/**
  * Tombstone leagues Sleeper no longer serves, so the refresh queue stops
  * claiming them: an unmarked deleted league is due forever — its `updated_at`
  * never advances — and permanently burns a claim slot plus a Sleeper request

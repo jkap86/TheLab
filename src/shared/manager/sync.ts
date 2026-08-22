@@ -4,12 +4,16 @@ import {
   pool,
   withBlockingAdvisoryLock,
 } from "@/shared/db";
-import { getNflState, getUserLeagues } from "@/shared/sleeper";
+import { getLeague, getNflState, getUserLeagues } from "@/shared/sleeper";
 import type { SleeperLeague, SleeperNflState } from "@/shared/sleeper";
 import { syncTradeRosters } from "@/shared/trades";
 import { errorMessage, mapWithConcurrency } from "@/shared/util";
 
-import { markLeaguesAccessed } from "./crawl-queue";
+import {
+  markLeaguesAccessed,
+  markLeaguesGone,
+  stampLeagueSyncAttempts,
+} from "./crawl-queue";
 import { fetchLeagueGraph, type GraphWeeks, type WeekRange } from "./graph";
 import {
   getStoredMaxMatchupWeekByLeague,
@@ -17,7 +21,9 @@ import {
   persistLeagueGraph,
   replaceManagerLeagueOrder,
 } from "./persist";
-import { getManagerSyncState } from "./queries";
+import { invalidateManagerSnapshot } from "./manager-snapshot";
+import { getManagerSyncState, getUnlistedManagerLeagueIds } from "./queries";
+import { invalidateManagerRanks } from "./ranks-read";
 import { MANAGER_SYNC_STAMP_SQL, managerSyncGate } from "./sync-freshness";
 
 /** Child rows persisted across a set of league graphs. */
@@ -110,6 +116,20 @@ export type { ManagerSyncState, SyncGate, SyncGateReason } from "./sync-freshnes
  * caused the request queue to blow past axios' timeout budget.
  */
 export const LEAGUE_FETCH_CONCURRENCY = 6;
+
+/**
+ * Leagues probed per sync to find out whether they were deleted.
+ *
+ * The set this bounds is "on this manager's list, absent from Sleeper's
+ * enumeration", which in the steady state is empty — a deletion is tombstoned
+ * the first time it is seen and never comes back. What it is sized against is
+ * the other member of that set: a league the manager *left*, which stays a
+ * candidate until the crawler next replaces its rosters, and would otherwise be
+ * re-probed on every sync of theirs for as long as that takes. Small because it
+ * only has to drain faster than deletions arrive, and it is spent on top of a
+ * fan-out that is already this manager's whole league graph.
+ */
+const UNLISTED_PROBE_LIMIT = 8;
 
 const emptyCounts = (): LeagueCounts => ({
   rosters: 0,
@@ -311,6 +331,87 @@ export async function syncManagerLeagues(
   }
 }
 
+/**
+ * Tombstone the leagues that left this manager's enumeration because Sleeper
+ * deleted them.
+ *
+ * **The enumeration is the earliest signal this app gets that a league is
+ * gone**, and until now it was thrown away: the sync wrote back the leagues
+ * Sleeper listed and simply never mentioned the rest, so a deleted league kept
+ * its stored rosters and members — nothing replaces those but a sync of the
+ * league itself, which a deleted league never gets again — and went on being
+ * listed, ranked, priced and counted into every share until the crawler's
+ * refresh rotation happened to claim it. That is a whole freshness TTL at best,
+ * and on a deployment running no background jobs it is never.
+ *
+ * Every id here is **probed rather than trusted**, because absence from the list
+ * means one of two opposite things: Sleeper deleted the league, or the manager
+ * left it and it is alive and full of other people. `getLeague` is the only
+ * thing that can tell them apart — the same probe `partitionSyncFailures` and
+ * `refreshLeague` make, folding 404 into Sleeper's usual 200-with-null — and
+ * only its null answer tombstones. A departure needs nothing done to it: the
+ * next sync of that league replaces its rosters without the manager's, and
+ * `FIELDED_A_TEAM_SQL` stops matching.
+ *
+ * **An empty enumeration reconciles nothing.** `sleeperGet` folds a 200-with-null
+ * into `[]`, so "no leagues" is what a failed request looks like from here, and
+ * it is the one answer that would put every league this manager has into the
+ * probe queue. Guarded for {@link replaceManagerLeagueOrder}'s reason and by the
+ * same test.
+ *
+ * Non-fatal, and reported rather than thrown: what it fixes is a stale row on a
+ * page, where what it sits inside is the sync that fills that page in. A probe
+ * that fails leaves the league exactly as it was and the next sync tries again.
+ */
+async function reconcileUnlistedLeagues(
+  userId: string,
+  season: string,
+  listedIds: readonly string[],
+): Promise<void> {
+  if (listedIds.length === 0) return;
+
+  const candidates = await getUnlistedManagerLeagueIds(
+    userId,
+    season,
+    listedIds,
+    UNLISTED_PROBE_LIMIT,
+  );
+  if (candidates.length === 0) return;
+
+  // Before the probes, so a league whose probe fails or is refused still rotates
+  // to the back of its own queue rather than holding the head of it forever.
+  await stampLeagueSyncAttempts(candidates);
+
+  const goneIds: string[] = [];
+  await mapWithConcurrency(candidates, LEAGUE_FETCH_CONCURRENCY, async (id) => {
+    try {
+      if (!(await getLeague(id))) goneIds.push(id);
+    } catch (error) {
+      // Ambiguous, so nothing is claimed about the league — a tombstone is the
+      // one answer here that hides a live league from everybody in it.
+      console.warn(`[leagues] could not probe league ${id}:`, errorMessage(error));
+    }
+  });
+
+  if (goneIds.length === 0) return;
+  await markLeaguesGone(goneIds);
+
+  // `persistLeagueGraph`'s rule, after its write rather than before: this
+  // manager's ranks and roster snapshot were computed over a league list that
+  // still had these in it, and the leagues route re-reads that list the moment
+  // this returns — so without it the page drops the league and the lenses beside
+  // it keep pricing and ranking it for the rest of their TTL. Only this manager,
+  // because only this manager's ids are in hand; every other member's entries
+  // expire on the clock, which is what it does for any background write.
+  invalidateManagerRanks([userId], season);
+  invalidateManagerSnapshot([userId], season);
+
+  console.info(
+    `[leagues] tombstoned ${goneIds.length} league(s) Sleeper no longer serves ` +
+      `for ${userId} (${season}): ${goneIds.join(", ")}.`,
+  );
+}
+
 async function syncManagerLeaguesLocked(
   userId: string,
   season: string,
@@ -366,6 +467,21 @@ async function syncManagerLeaguesLocked(
     currentWeek,
     { concurrency, onProgress },
   );
+
+  // After the graphs, because the route re-reads the leagues list once this
+  // returns and a tombstone written now is one the reader sees on this press —
+  // and because a probe is a Sleeper request, which has no business competing
+  // with the fan-out this sync exists to run. It cannot take the sync down: a
+  // stale row on a page is what it fixes, and losing the page to fix it would be
+  // the worse trade.
+  try {
+    await reconcileUnlistedLeagues(userId, season, leagueIds);
+  } catch (error) {
+    console.warn(
+      `[leagues] could not reconcile deleted leagues for ${userId}:`,
+      errorMessage(error),
+    );
+  }
 
   // A league Sleeper dropped on the floor is a league this manager's graph is
   // still missing, so the run only *completes* when none did. Both timestamps
