@@ -19,6 +19,7 @@ import {
   stampableManagers,
   unrecordedFailures,
 } from "./discovery";
+import type { SyncClock } from "./graph-weeks";
 import { persistGoneLeagues, persistUnsyncedLeagues } from "./persist";
 import { flooredWeek, syncLeagueGraphs } from "./sync";
 
@@ -185,7 +186,7 @@ const NO_DISCOVERY: DiscoveryResult = {
  */
 async function refreshStaleLeagues(
   season: string,
-  currentWeek: number,
+  clock: SyncClock,
   limit: number,
   ttlMs: number,
 ): Promise<RefreshResult> {
@@ -220,7 +221,7 @@ async function refreshStaleLeagues(
   // stays due forever and burns a slot plus a Sleeper request every rotation.
   await markLeaguesGone(goneIds);
 
-  const result = await syncLeagueGraphs(leagues, currentWeek, {
+  const result = await syncLeagueGraphs(leagues, clock, {
     concurrency: CRAWL_CONCURRENCY,
   });
 
@@ -308,7 +309,7 @@ async function partitionSyncFailures(
  */
 async function discoverMemberLeagues(
   season: string,
-  currentWeek: number,
+  clock: SyncClock,
   limit: number,
   cap: number,
 ): Promise<DiscoveryResult> {
@@ -338,7 +339,7 @@ async function discoverMemberLeagues(
   // "eligible" means and why a manager is taken whole or not at all.
   const selection = selectDiscoveryLeagues(userIds, byManager, known, cap);
 
-  const result = await syncLeagueGraphs(selection.leagues, currentWeek, {
+  const result = await syncLeagueGraphs(selection.leagues, clock, {
     concurrency: CRAWL_CONCURRENCY,
   });
 
@@ -431,20 +432,22 @@ export async function runLeagueCrawl(
   // nothing, which is why the tier fields are null on the locked fallback.
   const summary = await withAdvisoryLock(LOCK_KEYS.leagueCrawl, async () => {
     const state = await getNflState();
-    const currentWeek = flooredWeek(state);
+    // One state read answers both the week and the season it belongs to; the
+    // crawl only ever claims the active season's leagues, so this clock never
+    // reaches `graph-weeks`' finished-season arm — it is passed through so that
+    // no caller of `syncLeagueGraphs` can be the one that forgets.
+    const clock: SyncClock = {
+      currentWeek: flooredWeek(state),
+      activeSeason: state?.season ?? null,
+    };
     // One TTL for the whole tick — the stats and the claim must agree on what
     // "due" means, or the numbers reported describe a different queue than the
     // one crawled.
     const { ttlMs, tier } = leagueCrawlTtl(state);
-    const refresh = await refreshStaleLeagues(
-      season,
-      currentWeek,
-      leagueLimit,
-      ttlMs,
-    );
+    const refresh = await refreshStaleLeagues(season, clock, leagueLimit, ttlMs);
     const discovery = await discoverMemberLeagues(
       season,
-      currentWeek,
+      clock,
       managerLimit,
       discoveryCap,
     );

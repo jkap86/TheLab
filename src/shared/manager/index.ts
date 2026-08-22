@@ -1,11 +1,24 @@
 export {
   syncManagerLeagues,
   syncLeagueGraphs,
-  getCurrentWeek,
+  getSyncClock,
   managerSyncGate,
   SYNC_TTL_MS,
   SYNC_ATTEMPT_TTL_MS,
 } from "./sync";
+export {
+  SETTLED_SYNC_TTL_MS,
+  seasonSyncTier,
+  syncTtlMsFor,
+} from "./sync-freshness";
+export type { SeasonSyncTier } from "./sync-freshness";
+export {
+  collectionWeeks,
+  graphWeekCeiling,
+  isFinishedSeason,
+  leagueGraphWeeks,
+} from "./graph-weeks";
+export type { SyncClock } from "./graph-weeks";
 export type {
   ManagerSyncState,
   SyncGate,
