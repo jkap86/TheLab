@@ -25,10 +25,13 @@ import { SyncCaveats } from "./sync-state.tsx";
  * did would be exactly the layout shift moving the state line out of flow was
  * meant to stop.
  *
- * It is the same trade the record bar itself already makes — it keeps an empty
- * rail before a game is played, so the plate is the same height in September as
- * in December. A card above a list pays for its height in list; it should pay a
- * constant.
+ * **The record bar no longer makes that trade and this lane still does**, which
+ * is the distinction worth keeping: a caveat appears and disappears *within* a
+ * session, on a refresh landing under the reader's eye, so an unreserved lane is
+ * a list jumping while it is being read. A season starting is not that — it
+ * happens once a year, and the height it would change is one card's at the top
+ * of a page that scrolls. See {@link RecordBar}, which stopped drawing an empty
+ * rail for exactly the reason this lane keeps an empty one.
  */
 const BODY_PADDING = "pb-5 sm:pb-6";
 

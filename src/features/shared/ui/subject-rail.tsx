@@ -359,7 +359,9 @@ export function SubjectRail({
    * on screen. Both controls sit here now, so the denominator is the whole
    * account and the numerator is what the two of them leave between them: one
    * number answering the row it is on. The plate's corner tab states the same
-   * total, which is where a reader sees what this is out of.
+   * total, which is where a reader sees what this is out of — and which is also
+   * why {@link narrowed} is what decides whether this row prints a number at
+   * all: unnarrowed, the two would be the same figure twice.
    */
   const total = leagues?.length ?? 0;
   const narrowed = view.filtered.length !== total;
@@ -543,7 +545,11 @@ export function SubjectRail({
                 input: the count says how many leagues are left, and the keys are
                 the two ranked lists of who is in them. That is what earns the
                 seating — the same argument that put the ADP block beside Tools
-                rather than beside the page chip. */}
+                rather than beside the page chip.
+
+                Three at most: the count is drawn only once something has
+                narrowed, so at rest this is the two keys and its own seam is
+                gone with it. */}
             <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
               {/* The rail's own answer. Dimmed while the maps behind a selection
                   are still being read, since the number is briefly zero and a
@@ -553,19 +559,36 @@ export function SubjectRail({
                   screen the list under it is the context, and read aloud on its
                   own "19 of 121" names nothing. */}
               {/* Narrowed by *either* control, since both are on this row now.
-                  Unnarrowed it is the bare total: a denominator restating its own
-                  numerator is the thing the plate keeps having to relearn. */}
-              <span
-                role="status"
-                className={`shrink-0 pl-1 font-mono text-[0.625rem] tabular-nums ${
-                  view.subjectsLoading ? "text-foreground/25" : "text-foreground/55"
-                }`}
-              >
-                {narrowed ? `${view.filtered.length} of ${total}` : `${total}`}
-                <span className="sr-only"> leagues</span>
-              </span>
+                  **Unnarrowed there is no number here at all**, which is that
+                  same rule carried one step further than it was: the total is
+                  already stated, in the plate's own corner tab a few pixels up,
+                  so `123` under `Leagues 123` was not a denominator restating
+                  its numerator but the numerator printed twice — the second time
+                  with its only label `sr-only`, and announced by a `role="status"`
+                  on a page where nothing had changed. What is left is the one
+                  reading that says something: what these two controls left, out
+                  of the account the tab above states.
 
-              <RailSeam />
+                  Clearing the last selection takes the number away rather than
+                  returning it to the total, and that is the honest spelling — the
+                  answer to "how many did I narrow to" is that you have not. */}
+              {narrowed && (
+                <>
+                  <span
+                    role="status"
+                    className={`shrink-0 pl-1 font-mono text-[0.625rem] tabular-nums ${
+                      view.subjectsLoading
+                        ? "text-foreground/25"
+                        : "text-foreground/55"
+                    }`}
+                  >
+                    {view.filtered.length} of {total}
+                    <span className="sr-only"> leagues</span>
+                  </span>
+
+                  <RailSeam />
+                </>
+              )}
 
               {/* The other two doors: the whole ranked list of each kind, over
                   the page, with what is worth knowing about every name on it. The

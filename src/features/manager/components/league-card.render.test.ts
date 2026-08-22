@@ -114,19 +114,32 @@ describe("the record ledge", () => {
     assert.match(html, /<span class="sr-only"> of 12 by record<\/span>/);
   });
 
-  test("a preseason league states the record and no standing", () => {
-    // `0-0` is a true count; a rank there would place a season nobody has
-    // played. The same rule the stat columns' rank cells keep.
+  test("a preseason league has no plate either", () => {
+    // `0-0` is a true count, which is why the header plate keeps it; on a card
+    // it is the same absence wearing digits. Every league reports it all
+    // preseason, so the plate would be drawn a hundred times saying one thing,
+    // and it is drawn out of the league name's own width — see the ledge's note.
     const html = card({
       league: { ...league, record: { wins: 0, losses: 0, ties: 0 } },
       ranks: { standing: null, points: null, proj: null, proj_bench: null },
     });
-    assert.match(html, /lab-readout[^"]*">0-0</);
+    assert.doesNotMatch(html, /lab-readout/);
     // Probed by what the standing *says* rather than by its finish: the specs
     // bezel seated in the head cuts its captions into the floor the same way, so
     // `lab-engraved` alone stopped being this plate's own mark the moment a
     // second part on the card wore one.
     assert.doesNotMatch(html, /by record/);
+    // The name's own plate is untouched, and it is what gets the width back.
+    assert.equal(html.split("lab-nameplate").length - 1, 1);
+  });
+
+  test("a league one game in states it", () => {
+    // The sum, not the wins: 0-1 is a season under way and has plenty to report.
+    const html = card({
+      league: { ...league, record: { wins: 0, losses: 1, ties: 0 } },
+      ranks: { standing: null, points: null, proj: null, proj_bench: null },
+    });
+    assert.match(html, /lab-readout[^"]*">0-1</);
   });
 
   test("a league with neither fact has no plate at all", () => {
@@ -148,9 +161,12 @@ describe("the league specs", () => {
     // describing a row of it.
     const html = card();
     assert.match(html, /Dynasty/);
-    assert.match(html, /12 Team/);
-    assert.match(html, /1QB \+ SF/);
-    assert.match(html, /1TE/);
+    // Probed as caption-then-value, because that pairing is the fact: a value
+    // carries no unit of its own, so `12` on its own says nothing and `>12<`
+    // would match a rank cell. See `leagueSpecs`' note on the unit.
+    assert.match(html, /Teams<\/span>[^]*?>12</);
+    assert.match(html, /QB<\/span>[^]*?>1 \+ SF</);
+    assert.match(html, /TE<\/span>[^]*?>1</);
   });
 
   test("it is the trades board's bezel, not a second drawing of one", () => {
@@ -199,7 +215,9 @@ describe("the league specs", () => {
     // zero. The league is still a 12-team dynasty and still says so.
     const html = card({ league: { ...league, roster_positions: null } });
     assert.match(html, /Dynasty/);
-    assert.match(html, /12 Team/);
-    assert.doesNotMatch(html, /0QB|0TE/);
+    assert.match(html, /Teams<\/span>[^]*?>12</);
+    // The gauges are gone, not drawn as a zero — probed by the captions, since
+    // a bare `0` is what the value would now be.
+    assert.doesNotMatch(html, />QB<|>TE</);
   });
 });

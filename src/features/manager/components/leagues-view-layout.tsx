@@ -37,10 +37,18 @@ import { subjectSummary } from "../subjects";
  * the first league card could be drawn, on all three tabs.
  *
  * The **trigger** stays statically imported: it is in the header at first paint,
- * it carries the badge that says what the board is set to, and it is small.
+ * it carries the mark that says the board *has been* narrowed, and it is small.
  * Splitting the part that is visible from the part that isn't is the whole point
  * of the exercise — see `TradesHome` for the same split, and `ColumnsBar` for a
  * third.
+ *
+ * **What that mark is not is a badge naming the setting.** `range`, `season` and
+ * `draftCount` are passed to it and reach only its `aria-label`; on screen the
+ * trigger lights three bars and says "ADP", which is deliberate — there is no
+ * room in the app bar to write the board out, and the drawer names itself the
+ * moment it opens. Worth being exact about here, because "says what the board is
+ * set to" is a claim a reader on a phone (where there is no hover either) cannot
+ * check, and the props' presence makes it look true from this file.
  */
 const AdpDrawer = dynamic(
   () => import("@/features/shared/ui/adp-drawer").then((m) => m.AdpDrawer),

@@ -763,7 +763,15 @@ function LeagueNameplate({
         onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={panelId}
-        title="Standings and rosters for this league"
+        // **The name, not a description of the press.** The heading truncates
+        // against the ledge and this is the only backstop it has — a title
+        // spent saying what the button does left a clipped league unreadable
+        // at every width, which is the one field on the card with nowhere else
+        // to put its content. What the press does is already announced, by
+        // `aria-expanded` and by the panel it opens; what the name *is* was
+        // announced nowhere. The same call the heading rail makes for a
+        // truncated column label, and the gauges for a contracted spec.
+        title={name}
         className={NAMEPLATE_BUTTON}
       >
         {name}

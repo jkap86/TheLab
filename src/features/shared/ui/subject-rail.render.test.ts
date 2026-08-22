@@ -178,14 +178,19 @@ describe("the row itself", () => {
     assert.match(html, />Player or leaguemate</);
   });
 
-  test("the count answers the row it is on", () => {
+  // The plate's corner tab already states the account's total a few pixels up,
+  // so an unnarrowed rail printing it again is the numerator twice — the second
+  // time with its only label `sr-only` and announced by a `role="status"` on a
+  // page where nothing changed.
+  test("prints no count while nothing has narrowed", () => {
     const html = rail();
-    assert.match(html, /aria-hidden="true"><\/span>|role="status"/);
-    assert.match(html, /3<span class="sr-only"> leagues<\/span>/);
+    assert.doesNotMatch(html, /role="status"/);
+    assert.doesNotMatch(html, /<span class="sr-only"> leagues<\/span>/);
   });
 
   test("a narrowed list states both halves", () => {
     const narrowed = rail({ filtered: [LEAGUES[0]] });
+    assert.match(narrowed, /role="status"/);
     assert.match(narrowed, /1 of 3<span class="sr-only"> leagues<\/span>/);
   });
 });

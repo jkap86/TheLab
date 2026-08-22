@@ -149,12 +149,30 @@ function RecordLine({
  * The same three numbers as proportion — where a .520 season and a .680 one are
  * told apart at a glance rather than by reading.
  *
- * An unplayed season keeps the empty rail rather than dropping it, so the plate
- * is the same height in September as in December: a card that pins itself under
- * the app bar can't change how much of the list it covers as the season turns
- * over.
+ * **An unplayed season draws no rail**, and the empty one it used to keep was
+ * held up by a premise that has since gone. The argument was that the plate had
+ * to be the same height in September as in December because *it pinned itself
+ * under the app bar*, and a card covering the list can't change how much of it
+ * it covers. This card scrolls away now — that is the same change that took its
+ * ground paint, its gutter bleed and its fade — so the height it holds is its
+ * own, paid once at the top of the page.
+ *
+ * What is left is the reading, and the reading is against it: an empty capped
+ * rail under `0-0` is a progress bar at zero, which is the one thing this bar
+ * must not say. The record's own rule is that `pct` is null before a game is
+ * played rather than `.000`, because `.000` is a claim about a season nobody has
+ * played — and a rail drawn empty is that claim in the other notation, sitting
+ * directly under the digits that are honest. The dial beside it already answers
+ * this case with an em dash.
+ *
+ * It costs the plate no height either, which is why this is free rather than a
+ * trade: the readout in the slot is 3.5rem and the identity column comes to less
+ * than that with the rail *in*, so the row's height is the readout's either way.
  */
 function RecordBar({ record }: { record: OverallRecord }) {
+  // Nothing rather than an empty housing — the list's own rule, applied to the
+  // one part of this card that was still keeping a placeholder.
+  if (record.games === 0) return null;
   return (
     // The digits in `RecordLine` are the accessible reading of this; the bar is
     // the same three numbers as shape.
@@ -162,17 +180,13 @@ function RecordBar({ record }: { record: OverallRecord }) {
     // stretched a metre across the plate, which reads as a progress bar for
     // something rather than a proportion between two counts.
     <div aria-hidden="true" className="mt-1.5 flex h-1 max-w-[26.25rem] gap-0.5">
-      {record.games === 0 ? (
-        <span className="block flex-1 rounded-sm bg-foreground/[0.07]" />
-      ) : (
-        recordBarParts(record).map((part) => (
-          <span
-            key={part.key}
-            className={`block rounded-sm ${part.tone}`}
-            style={{ flexGrow: part.count }}
-          />
-        ))
-      )}
+      {recordBarParts(record).map((part) => (
+        <span
+          key={part.key}
+          className={`block rounded-sm ${part.tone}`}
+          style={{ flexGrow: part.count }}
+        />
+      ))}
     </div>
   );
 }

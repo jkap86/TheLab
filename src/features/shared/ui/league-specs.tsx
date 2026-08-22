@@ -76,6 +76,21 @@ export function LeagueSpecsBezel({
  * overflows, since the seam below is drawn by index and survives the wrap as the
  * housing's own inner edge.
  *
+ * **A wrapped bezel is full width, so on a phone that argument was being made
+ * and then broken.** `max-w-full` on a shrink-to-fit box resolves to the full
+ * width the moment the content exceeds it, and six gauges do not fit a phone at
+ * any honest spelling — measured against the real face, the widest run is 415px
+ * against the 336 a 415px screen leaves. So the housing *did* reach both walls,
+ * with a last row holding one gauge and two thirds of a lit trough holding
+ * nothing, which reads as a hole in the part rather than as a part.
+ *
+ * The fix is the one the comment above already names: fill it. {@link SPEC_BAY}
+ * grows, so each row shares out whatever its own line has left and the bays tile
+ * the trough edge to edge. It is **a no-op wherever the run fits** — a
+ * shrink-to-fit box has no free space to distribute — so nothing changes on a
+ * laptop, or on a phone for the four- and five-gauge leagues that now stay on
+ * one row. What it changes is only the case that was already broken.
+ *
  * The material and its two depths are `.lab-bezel` in `globals.css`, per the
  * rule that a `.lab-*` class carries material and never layout.
  */
@@ -90,8 +105,17 @@ export const SPEC_BEZEL =
  * scale down: giving each bay a face would be a third countable depth inside a
  * part that already has two, and nothing inside the housing is built like a part
  * for the same reason nothing inside the card is built like a card.
+ *
+ * **`grow` and not `flex-1`, which is the whole of what makes it safe.**
+ * `flex-1` sets a basis of zero, and a flex container's own max-content width is
+ * computed from its items' bases — so the bezel would stop being as wide as the
+ * league's settings and every bay would come out the same width. `grow` leaves
+ * the basis on the content, so the bezel measures exactly what it always did and
+ * the growth only ever spends free space a wrap has already created. See
+ * {@link SPEC_BEZEL}.
  */
-export const SPEC_BAY = "flex min-w-0 flex-col gap-px px-[0.3125rem] pb-[3px] pt-0.5";
+export const SPEC_BAY =
+  "flex min-w-0 grow flex-col gap-px px-[0.3125rem] pb-[3px] pt-0.5";
 
 /**
  * The cut parting one gauge from the one before it — the card's own milled seam

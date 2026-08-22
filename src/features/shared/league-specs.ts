@@ -108,7 +108,7 @@ function plural(count: number, noun: string): string {
 }
 
 /**
- * How a league's quarterback lineup reads: `1QB`, `1QB + SF`, `2QB`, `SF`.
+ * How a league's quarterback lineup reads: `1`, `1 + SF`, `2`, `SF`.
  *
  * The two counts are kept apart rather than summed into "superflex or not",
  * because they are different rooms: a league starting two bare QB slots forces
@@ -116,13 +116,19 @@ function plural(count: number, noun: string): string {
  * *permits* one — the same distinction the filters draw by offering `QB` and
  * `SUPER_FLEX` as separate groups beside the combined `QB+SF`.
  *
- * A count above one is spelled out on both halves (`2QB + 2SF`), which no league
+ * A count above one is spelled out on both halves (`2 + 2SF`), which no league
  * seen here runs and which costs nothing to be right about.
+ *
+ * **The bare count carries no `QB`, because the gauge's caption already does** —
+ * see {@link leagueSpecs}' note on the unit. The superflex half keeps its
+ * letters: `SF` is the *name* of a second kind of slot rather than the unit the
+ * bay is counting, so dropping it would leave `1 + 1` claiming two of the same
+ * thing. That asymmetry is the rule working, not an exception to it.
  */
 export function qbSlotLabel(qb: number, sf: number): string {
-  if (sf === 0) return `${qb}QB`;
+  if (sf === 0) return `${qb}`;
   const superflex = sf === 1 ? "SF" : `${sf}SF`;
-  return qb === 0 ? superflex : `${qb}QB + ${superflex}`;
+  return qb === 0 ? superflex : `${qb} + ${superflex}`;
 }
 
 /**
@@ -141,6 +147,23 @@ export function qbSlotLabel(qb: number, sf: number): string {
  * is not evidence that it starts no tight end — the same rule that keeps
  * `k = 0` from sweeping in every unsynced league in the filters. So the lineup
  * tokens simply aren't drawn there, and the run is shorter rather than wrong.
+ *
+ * **A value never carries the unit its caption already states**, and this is the
+ * rule the whole two-line bay exists to make possible. Best ball reached it
+ * first — "Best ball" under a caption reading `Best ball` is a line spent on
+ * nothing — and four of the six were breaking it: `12 Team` under `Teams`,
+ * `1QB + SF` under `QB`, `1TE` under `TE`, `TEP 0.5` under `TE prem`. Two costs,
+ * and neither is aesthetic. The run is what pushes a card's head onto a second
+ * line at phone width, and it is drawn once per league down a list a hundred
+ * long: measured against the real face, trimming the units takes a five-gauge
+ * league from two rows to one at 390px and up, and a four-gauge one from two to
+ * one at 360. Six gauges do not fit a phone either way. And the units were
+ * what made the values ambiguous — `1QB` on the display face at 9.5px reads as
+ * `10B`, since Orbitron's `Q` loses its tail at that size and `tabular-nums`
+ * opens a figure's worth of space in front of it. A bare `1` cannot be misread.
+ *
+ * The exception is a token whose letters are a *name* rather than a unit: `SF`
+ * is a second kind of slot, `Best ball` is a way of setting lineups. Those stay.
  */
 export function leagueSpecs(league: ManagerLeague | null): LeagueSpec[] {
   if (!league) return [];
@@ -165,7 +188,7 @@ export function leagueSpecs(league: ManagerLeague | null): LeagueSpec[] {
     specs.push({
       key: "teams",
       caption: "Teams",
-      label: `${league.total_rosters} Team`,
+      label: `${league.total_rosters}`,
       title: `${league.total_rosters}-team league`,
       tone: "config",
     });
@@ -193,7 +216,7 @@ export function leagueSpecs(league: ManagerLeague | null): LeagueSpec[] {
     specs.push({
       key: "te",
       caption: "TE",
-      label: `${te}TE`,
+      label: `${te}`,
       title: `Starts ${plural(te, "tight end")}`,
       tone: "config",
     });
@@ -201,15 +224,17 @@ export function leagueSpecs(league: ManagerLeague | null): LeagueSpec[] {
 
   // Absent from a stored `scoring_settings` is 0 — Sleeper omits what a league
   // doesn't pay for, which is exactly why `bonus_rec_te > 0` is how the filters
-  // ask this. The rate travels with the token: half a point and a full point
-  // are different leagues, and "TEP" alone would call them the same one.
+  // ask this. The rate *is* the value: half a point and a full point are
+  // different leagues, and a bay reading only "TEP" would call them the same
+  // one — which is the same argument as the caption rule above, run the other
+  // way round. The unit is what the caption says; the rate is what varies.
   const tep = scoringValue(league, "bonus_rec_te");
   if (tep !== null && tep > 0) {
     const rate = formatRuleValue(tep);
     specs.push({
       key: "tep",
       caption: "TE prem",
-      label: `TEP ${rate}`,
+      label: rate,
       title: `TE premium — ${rate} extra per tight end reception`,
       tone: "config",
     });

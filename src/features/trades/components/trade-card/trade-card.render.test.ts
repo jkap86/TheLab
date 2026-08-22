@@ -359,9 +359,12 @@ describe("what the header says", () => {
     // reader who already knows the league.
     const html = card();
     assert.match(html, /Dynasty/);
-    assert.match(html, /12 Team/);
-    assert.match(html, /1QB \+ SF/);
-    assert.match(html, /1TE/);
+    // Caption-then-value, because that pairing is the fact: a value carries no
+    // unit of its own now (see `leagueSpecs`), so a bare `12` proves nothing on
+    // a card that also prints haul totals.
+    assert.match(html, /Teams<\/span>[^]*?>12</);
+    assert.match(html, /QB<\/span>[^]*?>1 \+ SF</);
+    assert.match(html, /TE<\/span>[^]*?>1</);
   });
 
   test("every gauge carries the unit its value counts", () => {
@@ -414,8 +417,10 @@ describe("what the header says", () => {
     // still a 12-team dynasty and still says so.
     const html = card({ league: { ...league, roster_positions: null } });
     assert.match(html, /Dynasty/);
-    assert.match(html, /12 Team/);
-    assert.doesNotMatch(html, /0TE|0QB/);
+    assert.match(html, /Teams<\/span>[^]*?>12</);
+    // Probed by the captions: with the units off the values, "gone" and "zero"
+    // are `>TE<` against `>0<` rather than two spellings of a token.
+    assert.doesNotMatch(html, />QB<|>TE</);
   });
 
   test("an undated trade says so, on a plate it still draws", () => {
