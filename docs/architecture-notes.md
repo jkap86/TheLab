@@ -912,6 +912,82 @@ refreshed`) and only where leagues actually failed: a locked sync has its own
 note, and a throttled skip is ordinary operation, so warning on either would put
 a permanent band on the plate.
 
+**A season the NFL has finished with is the one case where that whole apparatus
+is asking a question with no answer, and it took two changes to say so.** The
+crawler had been scoped to the active season from the day it landed — every
+queue read is `WHERE season = $1` against `getActiveSeason()` — so a past
+season's league rows were written once and never claimed again. The manager sync
+was not. `/api/user/[username]/leagues?season=2024` runs the same
+~11-requests-per-league fan-out on the same ten-minute TTL as the live season,
+forever, and it is not a corner case: the header plate's season stepper walks
+back to `FIRST_SLEEPER_SEASON`, so every reader who steps back a year and stays
+past ten minutes re-downloads a season that cannot have changed.
+
+`seasonSyncTier` is the fix, and it is the crawler's own `crawl-ttl` idea moved
+from *time* to *seasons*: what a re-sync can possibly discover falls away as a
+season recedes, so the TTL in front of it should too. Active minutes, last
+season a month, older unbounded — `syncTtlMsFor` returns `Infinity` for the
+archive, so `now - syncedAt < ttl` expresses the retirement with no special
+case, and the retirement is legible at the comparison rather than inferred from
+a magnitude. Four decisions are worth keeping.
+
+**The tier varies the freshness window and deliberately not the attempt
+throttle**, which inverts the "two TTLs are deliberately equal" rule above in
+exactly one direction. What a tier lengthens is the quiet a *complete* graph
+buys; an incomplete one has bought nothing. A reader who steps back to 2019 and
+loses three leagues to a Sleeper timeout would otherwise wait a month — or
+forever — to be shown them, on the one page where the retry is free and a single
+round of it is all that stands between the graph and the retirement. So a past
+season retries on the cadence it always did and stops the moment it completes,
+which leaves the equality above describing the active tier, the tier it was
+written about.
+
+**Last season is a month rather than unbounded**, borrowed whole from
+`STATS_SETTLED_TTL_MS` and for its argument. `getActiveSeason` rolls over off
+Sleeper's `state/nfl`, which names the new league year well before the old one's
+playoffs settle, and `syncLeagueGraphs` re-reads from the stored week *minus
+one* precisely to catch late-settling waivers, trades and stat corrections.
+Retiring last season on the day of the rollover freezes it mid-playoffs.
+
+**Everything unclassifiable falls back to the active tier** — an unparseable
+season, a season *ahead* of the rollover (Sleeper answers an unknown league year
+with an empty list, and retiring that would make "no leagues yet" permanent for
+a year), and a `peekActiveSeason` that has not resolved yet. The `crawl-ttl`
+rule: extra fetches are the failure you can see, where the other direction
+retires a live season on the strength of a value nobody could read. That is also
+what lets the caller hand `peekActiveSeason()`'s `undefined` straight over
+without checking it, which matters because **the tier is decided with `peek` and
+never `getActiveSeason`** — a TTL is bookkeeping, not the answer, and an
+explicitly requested `?season` must not send a read to Sleeper to find out what
+year it is.
+
+**And the retirement was not safe to add on its own, because the graphs it would
+have retired were not whole.** `syncLeagueGraphs` bounded both week-keyed
+collections by `state/nfl`'s week, which names a week of the season Sleeper is
+*in* rather than the one being synced. A 2024 league synced during an offseason
+therefore fetched exactly one week of transactions and one of matchups —
+`flooredWeek` answers 1 — and stayed there permanently: the next pass read a
+stored max week of 1 and computed `max(currentWeek, stored)` = 1 again.
+Mid-season it was the same bug wearing a plausible number, filling in lockstep
+with the current week and reaching week 18 only in January. Every one of those
+runs dropped no league, so every one of them stamped `synced_at`, which the new
+tier reads as *complete, finished, never ask again*.
+
+So three things landed together. `shared/manager/graph-weeks` owns the ceiling
+(pure and tested, the "a decision in the composition file wants a pure module"
+rule): a finished season takes `LAST_REGULAR_WEEK`, imported from
+`projections/weeks` rather than redeclared for the reason `stats/weeks` states
+beside its own copy of that import. `getSyncClock` replaced the bare
+`getCurrentWeek` so the week and the season travel together — a week number
+alone cannot say which season's week it is, and every caller was free to pair it
+with the wrong one, so the point is that there is no longer a function answering
+half the question. And a migration withdraws `synced_at` from every past season
+on file, because **when a TTL becomes "never", the rows written under the old
+one are part of the change**: without it the fix would never reach a graph
+already stored and the truncation would have become permanent on the day it was
+repaired. It costs one re-sync per manager per past season somebody actually
+opens, since nothing in the background ever asks for one.
+
 **A per-key lock is computed, not listed** — `managerSyncLockKey(userId)` hashes
 the id into the object slot under one class id, because you cannot enumerate
 every manager in `LOCK_KEYS` ahead of time. The rule above still holds for the

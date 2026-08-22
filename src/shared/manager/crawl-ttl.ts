@@ -30,9 +30,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * Pick the refresh TTL for this tick from the raw NFL state.
  *
- * Raw, not `getCurrentWeek()`: the week-0 floor makes the offseason and real
- * week 1 indistinguishable, which is exactly the distinction this exists to
- * draw. Only `"regular"` is matched by name — every other `season_type` is
+ * Raw, not `getSyncClock()`'s floored week: the week-0 floor makes the offseason
+ * and real week 1 indistinguishable, which is exactly the distinction this
+ * exists to draw. Only `"regular"` is matched by name — every other `season_type` is
  * decided by distance from kickoff, because Sleeper labels most of the offseason
  * "off" and flips to "pre" only around the preseason games, so a gate on either
  * spelling silently reclassifies the weeks in between. Postseason lands in the

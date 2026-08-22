@@ -9,7 +9,7 @@ import { errorMessage } from "@/shared/util";
 
 import { markLeaguesGone } from "./crawl-queue";
 import { leagueRefreshAdmission } from "./league-refresh-admission";
-import { getCurrentWeek, syncLeagueGraphs } from "./sync";
+import { getSyncClock, syncLeagueGraphs } from "./sync";
 import {
   LEAGUE_REFRESH_ATTEMPT_SQL,
   leagueRefreshGate,
@@ -227,8 +227,7 @@ async function refreshLeagueLocked(
     return { status: "gone" };
   }
 
-  const currentWeek = await getCurrentWeek();
-  const result = await syncLeagueGraphs([league], currentWeek, {
+  const result = await syncLeagueGraphs([league], await getSyncClock(), {
     concurrency: 1,
     fresh,
   });
