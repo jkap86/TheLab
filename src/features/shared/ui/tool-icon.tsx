@@ -69,17 +69,49 @@ const PATHS: Record<ToolIconName, React.ReactNode> = {
   ),
 };
 
-export function ToolIcon({ name }: { name: ToolIconName }) {
+/**
+ * The two boxes this set is drawn in, and the stroke each one needs.
+ *
+ * **The weight is not a constant, because a stroke on a 24 viewBox is not a
+ * width on screen.** These paths are laid out at 24 and scaled by the box, so
+ * 1.6 renders at 1.33px in the menu and at 0.93px on a 14px key — a hairline
+ * against the 1.28px the rail's own 16-viewBox glyphs carry beside it. The
+ * small size takes 2, which lands at 1.17px and reads as the same pen.
+ *
+ * **It is a table rather than a `className` prop**, for the rule a shared part
+ * hard-coding a box has already broken once here: Tailwind emits `.h-5` and
+ * `.h-3\.5` at equal specificity and sorts them alphabetically, so a caller's
+ * override would win or lose on the generated order and nothing in the class
+ * list or the compiler would say which. A closed set of named sizes cannot be
+ * half-overridden.
+ */
+const SIZES = {
+  /** The app bar's menu — a row that is scanned. */
+  menu: { box: "h-5 w-5", stroke: 1.6 },
+  /** Sunk in a key's milled seat — the manager view switch. */
+  key: { box: "h-3.5 w-3.5", stroke: 2 },
+} as const;
+
+export type ToolIconSize = keyof typeof SIZES;
+
+export function ToolIcon({
+  name,
+  size = "menu",
+}: {
+  name: ToolIconName;
+  size?: ToolIconSize;
+}) {
+  const { box, stroke } = SIZES[size];
   return (
     <svg
       aria-hidden
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.6}
+      strokeWidth={stroke}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="h-5 w-5"
+      className={box}
     >
       {PATHS[name]}
     </svg>

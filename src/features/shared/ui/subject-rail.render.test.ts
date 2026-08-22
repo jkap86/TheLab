@@ -129,8 +129,13 @@ function tree(): ReactNode {
 describe("the two doors", () => {
   test("both keys are on the row, each announcing a dialog", () => {
     const html = rail();
-    assert.match(html, />Player shares</);
-    assert.match(html, />Leaguemate shares</);
+    // They name the *act*, not the list: "Players" and "Leaguemates" are two
+    // whole views of the account, and are the words the switch above this row
+    // carries. A key naming a destination it does not go to is what made both
+    // of these hard to place — what they open is a picker over the list you are
+    // already on.
+    assert.match(html, />Browse players</);
+    assert.match(html, />Browse leaguemates</);
     assert.equal((html.match(/aria-haspopup="dialog"/g) ?? []).length, 2);
   });
 

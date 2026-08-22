@@ -607,9 +607,17 @@ export function SubjectRail({
                   belongs to a control that is *narrowing* something, which a
                   door onto a list never is.
 
-                  The label spells out what the sheet holds at rest and contracts
-                  once there are tokens crowding the row, exactly as the search
-                  trigger does: the icon is what still tells the pair apart. */}
+                  **The label names the *act*, not the list.** These used to
+                  read "Player shares" / "Leaguemate shares" and contract to
+                  "Players" / "Leaguemates" — which were the names of two whole
+                  *views* of the account, and are now the words on the switch a
+                  few pixels above this row ({@link ViewSwitch}). A key naming a
+                  destination it does not go to is the confusion that made both
+                  parts hard to place: what these do is open a picker over the
+                  list you are already on. So they say so, and contract to
+                  "Browse" alone once there are tokens crowding the row, exactly
+                  as the search trigger contracts: the icon is what still tells
+                  the pair apart. */}
               <button
                 type="button"
                 onClick={() => openSheet("player")}
@@ -617,7 +625,7 @@ export function SubjectRail({
                 className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[0.625rem] font-semibold text-foreground/75 transition-colors hover:text-foreground"
               >
                 <SharesIcon />
-                {count > 0 ? "Players" : "Player shares"}
+                {count > 0 ? "Browse" : "Browse players"}
               </button>
 
               <button
@@ -627,7 +635,7 @@ export function SubjectRail({
                 className="lab-chip lab-chip-sm flex shrink-0 items-center gap-1.5 rounded-full px-2 py-[3px] text-[0.625rem] font-semibold text-foreground/75 transition-colors hover:text-foreground"
               >
                 <MatesIcon />
-                {count > 0 ? "Leaguemates" : "Leaguemate shares"}
+                {count > 0 ? "Browse" : "Browse leaguemates"}
               </button>
             </div>
           </div>
