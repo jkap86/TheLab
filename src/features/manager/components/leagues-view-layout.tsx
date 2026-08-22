@@ -108,6 +108,7 @@ export function LeaguesViewLayout({
   view,
   stat,
   columns,
+  views,
   children,
 }: {
   view: FilteredLeagues;
@@ -125,6 +126,22 @@ export function LeaguesViewLayout({
    * the rows are in — see {@link ListLedge}.
    */
   columns?: ReactNode;
+  /**
+   * The row between the header plate and the filter rail: which reading of this
+   * account is on screen.
+   *
+   * {@link ViewSwitch} by default — the three views as three routes, the one you
+   * are on cut into the page. The leagues list passes its own
+   * ({@link ManagerViewDrawers}), because there the other two are drawers over it
+   * rather than routes away from it, so the row is two keys and no cell for the
+   * page you are already on.
+   *
+   * A node rather than a flag, since what varies is a whole part and the state
+   * behind it: the drawer row owns which browse is up, and a boolean here would
+   * make this scaffold the place that knew. The seat and its clearance stay this
+   * layout's, which is what keeps the two rows interchangeable.
+   */
+  views?: ReactNode;
   /** The tab's content, rendered once at least one league passes the filters. */
   children: ReactNode;
 }) {
@@ -267,7 +284,7 @@ export function LeaguesViewLayout({
           plate says whose account this is, this says which reading of it, and
           the rail says which rows that reading leaves — three questions, in the
           order they are asked. */}
-      <ViewSwitch searched={searched} />
+      {views ?? <ViewSwitch searched={searched} />}
 
       {/* The page's two filter rows and the list's own heading rail, between the
           card and the rows and belonging to neither: they narrow the list, and

@@ -1777,7 +1777,8 @@ body {
   }
 }
 
-/* The ADP drawer, coming in off the right edge and leaving the same way.
+/* A drawer, coming in off an edge and leaving the same way — the ADP board off
+   the right, the two shares browses off whichever side their key sits on.
    A drawer is the one part of the app whose *place* is the thing to say — it
    comes from outside the page rather than appearing over it, which is what a
    slide states and a fade does not — so the panel travels and the scrim fades
@@ -1790,15 +1791,27 @@ body {
    control gets out of the way. The timings stay at the call site with the rest
    of them — the exit's duration is also how long the component keeps the drawer
    mounted, so it is one constant in the component rather than a number here for
-   that one to be kept in step with. */
-@keyframes adp-drawer-in {
+   that one to be kept in step with.
+
+   Named by the edge rather than by the part, because there is more than one
+   drawer now: the two shares browses arrive off the left and the right, and a
+   second spelling of `translateX(100%)` under a part's own name is the drift a
+   shared keyframe exists to stop. Only the right pair has an exit — the browses
+   are native dialogs, which are gone in the frame they close and have nothing to
+   play one on. */
+@keyframes drawer-in-right {
   from {
     transform: translateX(100%);
   }
 }
-@keyframes adp-drawer-out {
+@keyframes drawer-out-right {
   to {
     transform: translateX(100%);
+  }
+}
+@keyframes drawer-in-left {
+  from {
+    transform: translateX(-100%);
   }
 }
 @keyframes adp-scrim-in {
@@ -1836,6 +1849,7 @@ body {
   .filters-dialog-panel,
   .filters-segment-pop,
   .tools-menu-panel,
+  .shares-drawer-panel,
   .adp-drawer-panel,
   .adp-drawer-scrim {
     animation: none !important;

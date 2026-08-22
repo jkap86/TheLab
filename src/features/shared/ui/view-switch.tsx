@@ -71,6 +71,59 @@ import { ToolIcon } from "./tool-icon";
  * the control — three cells, one of them cut in — which is the rule the league
  * cards' own per-card labels were removed for.
  */
+/**
+ * The row the cells sit in.
+ *
+ * The clearance is the plate's, not a gap of its own: this sits between two lit
+ * faces — the header above and the filter rail below — and both carry their own
+ * bottom margin, so what is spent here is only the space this part needs beneath
+ * it. The horizontal inset is the rail's own (`px-4 pl-5`), so the switch, the
+ * rail and the heading billet share one left edge rather than each finding its
+ * own.
+ *
+ * **The four class strings below are exported because there is a second row of
+ * these cells**, and it is not a switch: on the leagues page the two other views
+ * are drawers over the list rather than routes away from it, so their keys are
+ * buttons ({@link ManagerViewDrawers}). What must not vary between the two rows
+ * is the material and the geometry — a reader crossing from the Players route
+ * back to Leagues should meet the same part, not a second part shaped like it —
+ * so the classes are named here once rather than retyped there, which is the rule
+ * `ToolIcon`'s size table keeps for the same reason.
+ */
+export const VIEW_ROW = "mb-3 border border-transparent px-4 pl-5";
+
+/** The cells' own line, wrapping rather than compressing — see {@link ViewSwitchRow}. */
+export const VIEW_ROW_LIST = "flex flex-wrap items-stretch gap-2 sm:gap-2.5";
+
+/**
+ * A raised cell's wall.
+ *
+ * `group` is for the glyph alone: the seat it sits in is a cut, so there is no
+ * face to lighten under the cursor and the block's own glow is doing the rest.
+ */
+export const VIEW_KEY =
+  "lab-billet lab-billet-key lab-notch-all group flex pb-[5px] pr-[5px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/70";
+
+/** The lit face inside that wall. */
+export const VIEW_KEY_FACE =
+  "lab-billet-face lab-notch-all flex items-center gap-2 py-2 pl-[9px] pr-3 sm:gap-2.5 sm:pr-[15px]";
+
+/**
+ * What is written on a cell: the tool's glyph in its seat, then its name.
+ *
+ * Exported with the classes above and for the same reason — the drawer keys wear
+ * the identical pair, and a cell whose glyph seat or type step differed from the
+ * switch's would read as a different kind of control.
+ */
+export function ViewKeyFace({ tool, lit = false }: { tool: Tool; lit?: boolean }) {
+  return (
+    <>
+      <ViewGlyph tool={tool} lit={lit} />
+      <ViewLabel tool={tool} lit={lit} />
+    </>
+  );
+}
+
 export function ViewSwitch({ searched }: { searched: string }) {
   // **`usePathname` is typed `string` and is not one.** Outside the App Router's
   // context it answers null, which reached `isToolActive` as a `.split` on null
@@ -102,17 +155,8 @@ export function ViewSwitchRow({
   const views = toolsInGroup("Manager");
 
   return (
-    <nav
-      aria-label="Manager views"
-      // The clearance is the plate's, not a gap of its own: this sits between
-      // two lit faces — the header above and the filter rail below — and both
-      // carry their own bottom margin, so what is spent here is only the space
-      // this part needs beneath it. The horizontal inset is the rail's own
-      // (`px-4 pl-5`), so the switch, the rail and the heading billet share one
-      // left edge rather than each finding its own.
-      className="mb-3 border border-transparent px-4 pl-5"
-    >
-      <ul className="flex flex-wrap items-stretch gap-2 sm:gap-2.5">
+    <nav aria-label="Manager views" className={VIEW_ROW}>
+      <ul className={VIEW_ROW_LIST}>
         {views.map((tool) => {
           const here = isToolActive(tool, pathname);
           return (
@@ -135,16 +179,9 @@ export function ViewSwitchRow({
                   <ViewLabel tool={tool} lit />
                 </span>
               ) : (
-                <Link
-                  href={toolHref(tool, searched)}
-                  // `group` for the glyph alone: the seat it sits in is a cut,
-                  // so there is no face to lighten under the cursor and the
-                  // block's own glow is doing the rest.
-                  className="lab-billet lab-billet-key lab-notch-all group flex pb-[5px] pr-[5px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-active/70"
-                >
-                  <span className="lab-billet-face lab-notch-all flex items-center gap-2 py-2 pl-[9px] pr-3 sm:gap-2.5 sm:pr-[15px]">
-                    <ViewGlyph tool={tool} />
-                    <ViewLabel tool={tool} />
+                <Link href={toolHref(tool, searched)} className={VIEW_KEY}>
+                  <span className={VIEW_KEY_FACE}>
+                    <ViewKeyFace tool={tool} />
                   </span>
                 </Link>
               )}

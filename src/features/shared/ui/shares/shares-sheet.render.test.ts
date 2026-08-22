@@ -82,6 +82,7 @@ function sheet(
       view,
       open: true,
       onClose: () => {},
+      side: "left",
       kind: "player",
       title: "Player shares",
       subject: "Player",
@@ -184,23 +185,49 @@ describe("the sheet's own states are unchanged", () => {
     // stopped raising a blur layer each, not this.
     const html = sheet(shares(20));
     assert.match(html, /backdrop-blur-xl/);
-    assert.match(html, /rounded-2xl border border-active\/25/);
+    assert.match(html, /border-active\/25/);
+  });
+
+  test("the browse is anchored to its own edge, whole", () => {
+    // Four things have to agree about which side a drawer came from, and three
+    // of them are invisible in review: a panel pinned left that rounds its left
+    // corners, walls its free edge on the wrong side, or slides in from the
+    // right is wrong in a way only a screenshot shows. They come off one table
+    // (`SIDES`), so this is the assertion that the table is what is read.
+    const html = sheet(shares(20));
+    // Pinned to the left edge, full height, and every margin spelled out —
+    // a `<dialog>` is centred by the user agent's own `margin: auto`.
+    assert.match(html, /my-0 ml-0 mr-auto h-dvh max-h-dvh/);
+    // Corners and wall on the free edge only.
+    assert.match(html, /rounded-r-2xl border-r/);
+    assert.doesNotMatch(html, /rounded-l-2xl/);
+    // And it arrives from the side it is pinned to.
+    assert.match(html, /animation:drawer-in-left/);
+  });
+
+  test("the leagues page is still there beside it", () => {
+    // The whole reason for the shape: the browse commits live, so the list it
+    // narrows has to be on screen while a row is pressed. A width that filled
+    // the viewport would put this back where it started.
+    const html = sheet(shares(20));
+    assert.match(html, /w-\[min\(46rem,calc\(100vw-2\.5rem\)\)\]/);
   });
 });
 
 describe("where the focus can land", () => {
   test("the panel is focusable without being a tab stop", () => {
     // On a coarse pointer the focus goes here rather than into the field:
-    // focusing a text input *is* raising the software keyboard, over a sheet
-    // sized in `vh` and the list the reader came to scroll. `tabIndex={-1}` is
-    // what makes it a place to put the focus and not a stop in the order — the
-    // first Tab still lands on the first control, and Escape still belongs to
-    // the dialog. Which of the two is chosen is `hasFinePointer`'s, tested
-    // beside itself.
+    // focusing a text input *is* raising the software keyboard, over a drawer
+    // the height of the screen and the list the reader came to scroll.
+    // `tabIndex={-1}` is what makes it a place to put the focus and not a stop
+    // in the order — the first Tab still lands on the first control, and Escape
+    // still belongs to the dialog. Which of the two is chosen is
+    // `hasFinePointer`'s, tested beside itself.
     const html = sheet(shares(20));
-    const panel = /<div tabindex="-1" class="flex h-full flex-col[^"]*"/.exec(
-      html,
-    );
+    const panel =
+      /<div tabindex="-1" class="shares-drawer-panel flex h-full flex-col[^"]*"/.exec(
+        html,
+      );
     assert.ok(panel, "expected the sheet's panel to be a focus target");
     // And the field is still there to be focused on a mouse, and to be tapped.
     assert.match(html, /aria-label="Search player shares"/);

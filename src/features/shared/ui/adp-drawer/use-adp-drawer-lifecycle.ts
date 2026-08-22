@@ -64,7 +64,7 @@ export function useAdpDrawerLifecycle({
   const panelRef = useRef<HTMLDivElement>(null);
 
   // The drawer is on its way out: closed as far as everything else is
-  // concerned, still mounted so `adp-drawer-out` has something to play on.
+  // concerned, still mounted so `drawer-out-right` has something to play on.
   const [closing, setClosing] = useState(false);
 
   // Adjusted during render against the previous `open` rather than in an effect

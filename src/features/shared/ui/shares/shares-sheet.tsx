@@ -42,6 +42,41 @@ const LeagueFiltersModal = dynamic(
   },
 );
 
+/** Which edge a browse arrives from — see {@link SharesSheet}'s `side`. */
+export type SheetSide = "left" | "right";
+
+/**
+ * Everything that follows from which edge a browse is anchored to, in one table.
+ *
+ * Four properties have to agree — the margins that pin the dialog, the corners
+ * and the wall it keeps, the direction it casts a shadow in, and the keyframe it
+ * arrives on — and getting one of them from the other side is a panel that slides
+ * in through its own wall. A table rather than four ternaries at the four call
+ * sites, for the reason `ToolIcon`'s sizes are one: a shared part hard-coding a
+ * box its caller has to override is a part no caller can override it on.
+ *
+ * The margins are written as four explicit sides rather than `m-0` plus one
+ * `auto`, because a `<dialog>` is centred by the user agent's own `margin: auto`
+ * and Tailwind emits the shorthand before the longhand — the shape of the
+ * `hidden`-loses-to-`inline-flex` bug, and just as silent.
+ */
+const SIDES = {
+  left: {
+    dialog: "ml-0 mr-auto",
+    panel: "rounded-r-2xl border-r",
+    shadow:
+      "shadow-[24px_0_90px_-30px_rgba(0,0,0,0.95),0_0_70px_-24px_rgba(0,255,229,0.35),inset_0_1px_0_rgba(255,255,255,0.1)]",
+    animation: "drawer-in-left",
+  },
+  right: {
+    dialog: "mr-0 ml-auto",
+    panel: "rounded-l-2xl border-l",
+    shadow:
+      "shadow-[-24px_0_90px_-30px_rgba(0,0,0,0.95),0_0_70px_-24px_rgba(0,255,229,0.35),inset_0_1px_0_rgba(255,255,255,0.1)]",
+    animation: "drawer-in-right",
+  },
+} as const satisfies Record<SheetSide, unknown>;
+
 /** How the shell hands its selection wiring to the list it is drawing. */
 export type SharesSelection<T> = {
   /** Whether this row is one of the subjects narrowing the league list. */
@@ -51,7 +86,7 @@ export type SharesSelection<T> = {
 };
 
 /**
- * A shares browse, as a sheet over the leagues page.
+ * A shares browse, as a drawer down one side of the leagues page.
  *
  * It replaces the 26rem panel the *shares* keys used to drop under the rail, and
  * the thing it replaces is not the list — it is what the list was allowed to say.
@@ -72,7 +107,17 @@ export type SharesSelection<T> = {
  * {@link PlayerSharesSheet} and {@link LeaguemateSharesSheet}, and each is the
  * reads plus its own copy and nothing else.
  *
- * Five things are load-bearing.
+ * Six things are load-bearing.
+ *
+ * **It is a side drawer rather than a sheet in the middle of the screen, and the
+ * leagues list beside it is the reason.** Centred at 1180px it covered the page
+ * it narrows edge to edge on every laptop, so committing live — a row press
+ * narrowing the list behind the glass — was a claim a reader had to take on
+ * trust and then close the sheet to check. Anchored to an edge at 46rem the list
+ * is *there*, next to it, still scrolled where they left it: the cards visibly
+ * go as subjects are picked, which is the whole of what the browse is for. It is
+ * also what lets the two keys above the rail stop being links to two other pages
+ * — see {@link ManagerViewDrawers}, which is the door this shape was cut for.
  *
  * **It is glass, and the glass is spent on the frame.** Everything else in this
  * app is a lit metal face on an opaque ground, so a translucent panel is the one
@@ -114,6 +159,7 @@ export function SharesSheet<T extends ShareRow>({
   view,
   open,
   onClose,
+  side,
   kind,
   title,
   subject,
@@ -136,6 +182,19 @@ export function SharesSheet<T extends ShareRow>({
   view: SubjectView;
   open: boolean;
   onClose: () => void;
+  /**
+   * Which edge the browse comes in off — players from the left, leaguemates from
+   * the right, wherever either is opened from.
+   *
+   * **It is a fact about the kind rather than about the door**, which is why the
+   * two variants supply it and no caller of theirs is asked. Both doors onto a
+   * browse sit on the leagues page — the view keys above the rail and the rail's
+   * own — so a browse that arrived from a different side depending on which key
+   * was pressed would be two panels as far as a reader is concerned; and once
+   * each kind keeps its own side, *which* panel is up is legible from the
+   * geometry before a word of it is read.
+   */
+  side: SheetSide;
   /** Which half of the selection a row of this list is — see {@link Subject}. */
   kind: SubjectKind;
   /** The sheet's own name, in the title bar: `Player shares`. */
@@ -307,8 +366,21 @@ export function SharesSheet<T extends ShareRow>({
         if (event.target === ref.current) closeDialog(ref.current);
       }}
       // A thinner scrim than the other two dialogs wear: this one is meant to be
-      // seen through, and at their 0.72 the page behind the glass is gone.
-      className="m-auto h-[min(88vh,54rem)] w-[min(1180px,calc(100vw-2rem))] bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.5)]"
+      // seen through, and at their 0.72 the page behind the glass is gone. The
+      // drawer leaves a strip of the league list uncovered as well, which is the
+      // other half of the same claim — see the shape note above.
+      //
+      // **46rem is a column budget, the same arithmetic the ADP drawer's 36 is.**
+      // A share row is a name and the four stat columns, which are `w-24` each
+      // from `sm` up (`COLUMN_WIDTH`) — 432px of fixed track at the app's 18px
+      // rem, before the name has anything. Against this panel's 828px the sheet's
+      // own padding, the well and the card's insets spend ~113 more and the
+      // chevron and avatar ahead of the name another ~79, which leaves the name
+      // ~205px: room for the long ones, which truncate to a `title` rather than
+      // to nothing. Narrower and the browse stops being the matching tab's list;
+      // wider and there is no leagues page left beside it — at 46rem a 1280px
+      // laptop keeps ~450px of cards, which is a card and its numbers.
+      className={`my-0 ${SIDES[side].dialog} h-dvh max-h-dvh w-[min(46rem,calc(100vw-2.5rem))] max-w-full bg-transparent p-0 text-foreground backdrop:bg-[rgba(4,10,16,0.5)]`}
     >
       <div
         ref={panelRef}
@@ -317,8 +389,19 @@ export function SharesSheet<T extends ShareRow>({
         // has to land somewhere that is not a text field, or opening the sheet
         // opens the keyboard.
         tabIndex={-1}
-        className="flex h-full flex-col overflow-hidden rounded-2xl border border-active/25 bg-gradient-to-b from-[rgba(24,45,60,0.72)] to-[rgba(9,20,31,0.86)] shadow-[0_50px_90px_-30px_rgba(0,0,0,0.95),0_0_70px_-24px_rgba(0,255,229,0.35),inset_0_1px_0_rgba(255,255,255,0.1)] outline-none backdrop-blur-xl"
-        style={{ animation: "dialog-rise 0.18s cubic-bezier(0.2,0.9,0.3,1)" }}
+        // `shares-drawer-panel` carries no style of its own — it is the marker the
+        // reduced-motion block reads, since a slide is motion where the rise it
+        // replaced was barely any. Nothing else needs adding there: a native
+        // dialog is gone in the frame it closes, so there is no exit animation to
+        // freeze and no beat spent mounted waiting for one.
+        className={`shares-drawer-panel flex h-full flex-col overflow-hidden border-active/25 bg-gradient-to-b from-[rgba(24,45,60,0.72)] to-[rgba(9,20,31,0.86)] outline-none backdrop-blur-xl ${SIDES[side].panel} ${SIDES[side].shadow}`}
+        // The same beat and the same curve as the rise it replaces; what changed
+        // is the gesture, because the panel's *place* is now the thing to say —
+        // it comes in off the edge its key sits at rather than growing out of the
+        // middle of the page. See `drawer-in-left` in `globals.css`.
+        style={{
+          animation: `${SIDES[side].animation} 0.18s cubic-bezier(0.2,0.9,0.3,1)`,
+        }}
       >
         {/* The panel's specular rail, as the filters dialog and the header plate
             wear — without it a face this large reads as a sheet of glass rather

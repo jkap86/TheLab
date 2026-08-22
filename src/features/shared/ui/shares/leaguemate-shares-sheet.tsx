@@ -80,6 +80,9 @@ export function LeaguemateSharesSheet({
       view={view}
       open={open}
       onClose={onClose}
+      // The right edge — the players browse takes the left, and the pair is drawn
+      // in that order wherever both keys are. See `SharesSheet`'s `side`.
+      side="right"
       kind="leaguemate"
       title="Leaguemate shares"
       subject="Leaguemate"

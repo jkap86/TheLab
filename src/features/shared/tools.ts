@@ -12,6 +12,8 @@
  * load it under Node's runner.
  */
 
+import type { SubjectKind } from "./subjects.ts";
+
 /** Which glyph the menu draws for a tool; resolved by `ui/tool-icon`. */
 export type ToolIconName =
   | "leagues"
@@ -69,6 +71,22 @@ export type Tool = {
    * the drift this flag prevents.
    */
   accountless?: true;
+  /**
+   * The subject this view is a ranked list of, where it is one.
+   *
+   * Two of the three manager views are: Players is the manager's player shares
+   * and Leaguemates is their leaguemate shares, and both of those lists already
+   * exist as a browse that can be laid over the leagues page rather than
+   * navigated to (`SharesSheet`). Leagues declares nothing, because a league is
+   * the page rather than a subject on it.
+   *
+   * **It is here rather than in a list of two patterns beside the drawer keys**,
+   * for the reason `ViewSwitch` reads this catalogue rather than naming three
+   * routes: the row that draws those keys is then derived — the Leagues cell is
+   * *absent* rather than filtered out by name, and a fourth manager view joins
+   * the row by declaring what it browses. See `ManagerViewDrawers`.
+   */
+  browses?: SubjectKind;
 };
 
 export const tools: Tool[] = [
@@ -95,6 +113,7 @@ export const tools: Tool[] = [
     icon: "players",
     pattern: "/manager/*/players",
     hrefFor: (username) => `/manager/${username}/players`,
+    browses: "player",
   },
   {
     href: "/manager",
@@ -104,6 +123,7 @@ export const tools: Tool[] = [
     icon: "leaguemates",
     pattern: "/manager/*/leaguemates",
     hrefFor: (username) => `/manager/${username}/leaguemates`,
+    browses: "leaguemate",
   },
   {
     href: "/picktracker",

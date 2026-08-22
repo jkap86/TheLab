@@ -268,7 +268,7 @@ describe("what is on screen", () => {
     assert.equal(ADP_DRAWER_ENTER_MS, 460);
     assert.equal(ADP_DRAWER_EXIT_MS, 340);
     const html = drawer();
-    assert.match(html, new RegExp(`adp-drawer-in ${ADP_DRAWER_ENTER_MS}ms`));
+    assert.match(html, new RegExp(`drawer-in-right ${ADP_DRAWER_ENTER_MS}ms`));
     assert.match(html, new RegExp(`adp-scrim-in ${ADP_DRAWER_ENTER_MS}ms`));
   });
 

@@ -290,13 +290,13 @@ export function AdpDrawer({
         // back into view for a frame.
         style={{
           animation: closing
-            ? `adp-drawer-out ${ADP_DRAWER_EXIT_MS}ms cubic-bezier(0.4, 0, 1, 1) forwards`
+            ? `drawer-out-right ${ADP_DRAWER_EXIT_MS}ms cubic-bezier(0.4, 0, 1, 1) forwards`
             // A gentler decelerate than the entrance curves elsewhere in the
             // app, because it is running over twice their duration: an
             // out-quint spends four fifths of its travel in the first third,
             // which at this length reads as a panel that snaps in and then
             // creeps the last few pixels rather than as a slower slide.
-            : `adp-drawer-in ${ADP_DRAWER_ENTER_MS}ms cubic-bezier(0.32, 0.72, 0, 1)`,
+            : `drawer-in-right ${ADP_DRAWER_ENTER_MS}ms cubic-bezier(0.32, 0.72, 0, 1)`,
         }}
       >
         {/* Pinned: two lines, whatever is being set.
