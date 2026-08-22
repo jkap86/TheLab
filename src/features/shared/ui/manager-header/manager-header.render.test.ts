@@ -133,11 +133,27 @@ describe("what the corners and the body owe the wall", () => {
     assert.match(plate(), /class="relative z-\[1\] flex items-center/);
   });
 
+  test("the record bar is bands, or it is nothing", () => {
+    // Preseason every league reports `0-0`, so the rail would be drawn empty —
+    // a progress bar at zero under digits whose own rule is that `pct` is null
+    // rather than `.000` there. The dial beside it already answers with an em
+    // dash. See {@link RecordBar}, whose constant-height premise went when this
+    // card stopped pinning itself under the app bar.
+    const unplayed = plate({
+      record: { wins: 0, losses: 0, ties: 0, games: 0, pct: null, leagues: 121 },
+    });
+    assert.doesNotMatch(unplayed, /max-w-\[26\.25rem\]/);
+    // And it is still drawn the moment there is a proportion to draw.
+    assert.match(plate(), /max-w-\[26\.25rem\]/);
+  });
+
   test("the caveat lane is reserved whether or not there is a caveat", () => {
     // The lane is what keeps {@link SyncCaveats} off the record bar, and
     // reserving it *permanently* is the point: a lane that appeared with the
     // caveat would be the layout shift moving that row out of flow was for.
     // Asserted on the quiet header, which is the case that would regress.
+    // This lane and the bar above part company on purpose — a caveat comes and
+    // goes inside one session, where a season starts once a year.
     assert.match(plate(), /pb-5 sm:pb-6/);
   });
 

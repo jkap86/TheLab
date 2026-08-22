@@ -179,9 +179,22 @@ export function LeagueCard({
  * stat slots, because it is what the record means in its league — reading it
  * anywhere else is reading half the fact, which is why it is not in the metric
  * catalogue. And **absent is not zero**: a league with no record renders no
- * plate rather than an empty housing, and a preseason league renders the record
- * without a standing, since `0-0` is a true count where a rank there would place
- * a season nobody has played.
+ * plate rather than an empty housing.
+ *
+ * **A record with no games played is the third case, and it renders no plate
+ * either.** `0-0` is a true count, which is why the header plate keeps it — one
+ * card, read once, where the digits are the season's own "not yet". Down a list
+ * of a hundred it is a different object: every league reports `0-0` all
+ * preseason, so the plate is drawn a hundred times, says the same thing every
+ * time, and is *identical to* the standing being absent — which the rule above
+ * already draws as nothing. It is not free, either. The plate and the nameplate
+ * are two items of one row, so what the record spends is the league's name, and
+ * preseason is exactly when the fewest names have room and the ledge has the
+ * least to say. A card that has played renders it as it always did.
+ *
+ * The rule generalises: `0-0` beside a *live* number is a reading, and `0-0`
+ * beside nothing, on every row, is a housing claiming a fact it hasn't got —
+ * which is the same test the caveat line applies to itself.
  */
 function RecordLedge({
   record,
@@ -195,10 +208,15 @@ function RecordLedge({
   // in has neither fact, and a plate there would be the card reporting that it
   // has nothing to report. The lineup checker's ledge parts company here and
   // says why — there, "nothing to report" is itself an answer worth printing.
-  if (!record && !standing) return null;
+  //
+  // A record nobody has played a game in is the same absence wearing digits —
+  // see the note above. `played` is the *sum*, not `wins > 0`: a league that is
+  // 0-3 has plenty to report.
+  const played = record ? record.wins + record.losses + record.ties > 0 : false;
+  if (!played && !standing) return null;
   return (
     <CardLedge>
-      {record && (
+      {played && record && (
         <span className="lab-readout rounded px-1.5 py-px text-[0.78125rem] font-semibold leading-4 tabular-nums text-foreground/85">
           {formatRecord(record)}
         </span>

@@ -38,21 +38,29 @@ describe("qbSlotLabel", () => {
   // The two counts stay apart because they are different rooms: two bare QB
   // slots force a second quarterback, a superflex only permits one.
   test("spells the four shapes a lineup takes", () => {
-    assert.equal(qbSlotLabel(1, 0), "1QB");
-    assert.equal(qbSlotLabel(2, 0), "2QB");
-    assert.equal(qbSlotLabel(1, 1), "1QB + SF");
+    assert.equal(qbSlotLabel(1, 0), "1");
+    assert.equal(qbSlotLabel(2, 0), "2");
+    assert.equal(qbSlotLabel(1, 1), "1 + SF");
     assert.equal(qbSlotLabel(0, 1), "SF");
+  });
+
+  // The count drops its `QB` because the gauge's caption carries it; `SF` keeps
+  // its letters because they name a second kind of slot rather than the unit
+  // being counted — `1 + 1` would claim two of the same thing.
+  test("carries no QB unit, and keeps SF's name", () => {
+    assert.ok(!qbSlotLabel(1, 1).includes("QB"));
+    assert.ok(qbSlotLabel(1, 1).includes("SF"));
   });
 
   // No league here runs one, and it costs nothing to be right about.
   test("spells a count above one on both halves", () => {
-    assert.equal(qbSlotLabel(2, 2), "2QB + 2SF");
+    assert.equal(qbSlotLabel(2, 2), "2 + 2SF");
     assert.equal(qbSlotLabel(0, 2), "2SF");
   });
 
   // A real answer, not a missing one — the league starts no quarterback.
   test("says zero where the lineup genuinely has none", () => {
-    assert.equal(qbSlotLabel(0, 0), "0QB");
+    assert.equal(qbSlotLabel(0, 0), "0");
   });
 });
 
@@ -86,7 +94,7 @@ describe("leagueSpecs", () => {
     const l = league({
       roster_positions: ["QB", "SUPER_FLEX", "RB", "TE", "TE", "BN"],
     });
-    assert.deepEqual(labels(l), ["Redraft", "12 Team", "1QB + SF", "2TE"]);
+    assert.deepEqual(labels(l), ["Redraft", "12", "1 + SF", "2"]);
   });
 
   // The rule this module shares with the filters: null is not zero. An unsynced
@@ -99,7 +107,7 @@ describe("leagueSpecs", () => {
   // Present and empty is a real answer, and a different one.
   test("reports a genuinely empty lineup as zero", () => {
     const l = league({ roster_positions: [] });
-    assert.deepEqual(labels(l), ["Redraft", "12 Team", "0QB", "0TE"]);
+    assert.deepEqual(labels(l), ["Redraft", "12", "0", "0"]);
   });
 
   // Absent from a stored blob is 0 — Sleeper omits what a league doesn't pay
@@ -116,9 +124,9 @@ describe("leagueSpecs", () => {
   // Half a point and a full point are different leagues; the rate travels.
   test("carries the premium's rate, formatted as typed", () => {
     const half = leagueSpecs(league({ scoring_settings: { bonus_rec_te: 0.5 } }));
-    assert.equal(half.find((s) => s.key === "tep")?.label, "TEP 0.5");
+    assert.equal(half.find((s) => s.key === "tep")?.label, "0.5");
     const full = leagueSpecs(league({ scoring_settings: { bonus_rec_te: 1 } }));
-    assert.equal(full.find((s) => s.key === "tep")?.label, "TEP 1");
+    assert.equal(full.find((s) => s.key === "tep")?.label, "1");
   });
 
   // Lineup is the overwhelming default: a token on nearly every card says
@@ -190,6 +198,29 @@ describe("leagueSpecs", () => {
         `${spec.key} restates itself`,
       );
     }
+  });
+
+  // The other half of that rule, and the half four of the six were breaking:
+  // a *counted* value carries the number and nothing else, because the unit is
+  // already cut into the bezel above it. `12 Team` under `Teams` cost the run
+  // the width that pushed a card's head onto a second line at phone width, and
+  // `1QB` at 9.5px on the display face reads as `10B`. Written as shapes rather
+  // than as the four literals, so a new spelling has to answer the rule rather
+  // than a fixture.
+  test("a counted value carries no unit of its own", () => {
+    const l = league({
+      settings: { type: 2, best_ball: 1 },
+      roster_positions: ["QB", "SUPER_FLEX", "TE", "BN"],
+      scoring_settings: { bonus_rec_te: 0.5 },
+    });
+    const byKey = new Map(leagueSpecs(l).map((s) => [s.key, s.label]));
+    // A plain number: how many teams, how many tight ends, what the premium pays.
+    for (const key of ["teams", "te", "tep"]) {
+      assert.match(byKey.get(key) ?? "", /^\d+(\.\d+)?$/, `${key} carries a unit`);
+    }
+    // The one shape that keeps letters, and only the ones naming the *other*
+    // slot — see {@link qbSlotLabel}.
+    assert.match(byKey.get("qb") ?? "", /^(\d+( \+ \d*SF)?|\d*SF)$/);
   });
 
   // It sits above a value in a housing the run is read *across*, so a caption
