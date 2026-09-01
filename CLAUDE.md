@@ -47,11 +47,16 @@ shared/http     fetch + bounded retry. Knows nothing about Sleeper.
 shared/sleeper  the client, the process-wide concurrency bound, the 404 rule.
 shared/season   which season "now" means, resolved rather than compiled in.
 shared/user     a typed name -> a Sleeper user, memoized.
+shared/manager  a manager's league graph: fetch it, persist it, read it back.
+shared/db       the pool, the transaction, the bulk insert, the advisory lock.
 ```
 
 **`shared/http` is native `fetch`, where TheLabX uses axios + axios-retry behind
-a `@thelab/http` alias.** This app carries no runtime dependency outside React
-and Next, and axios-retry's ladder — three retries on top of a 30s timeout each,
+a `@thelab/http` alias.** The runtime dependencies here are React, Next and `pg`
+— that last one deliberately, because the league graph is the app's own data
+rather than a cache of Sleeper's and a hand-rolled wire protocol is not a thing
+to own. Nothing else earns one. axios-retry's ladder — three retries on top of a
+30s timeout each,
 `shouldResetTimeout` and all — is up to ~141s of a request's life re-dialling an
 upstream, which `shared/season` documents as the thing that made a cold season
 resolve unacceptable in front of a request. The *contract* is kept identical so a
@@ -90,15 +95,15 @@ no season should not pay a Sleeper round-trip for one.
 
 ### Known drift
 
-`sleeper/limiter.ts` is a **narrow** port. TheLabX's also carries an admission
-half — `tryAcquire` for callers that shed rather than queue, `AbortSignal` and
-`maxWaitMs` bounds on the wait, and the `AdmissionAbortedError` /
-`AdmissionTimeoutError` pair that lets a caller tell a refusal from failed work.
-Every one of those serves something this app has not ported yet (a streaming
-leagues route holding a response open, a request budget, advisory-locked syncs).
-Bring that half over with the route that needs it; the FIFO queue here is the
-part it builds on and is faithful, including the slot *transfer* in `release()`
-that keeps the bound from widening across the microtask gap.
+`sleeper/limiter.ts` is now the whole file, admission half included — the
+streaming leagues route is the caller that was being waited for, and
+`manager/sync-admission.ts` is built on `tryAcquire`. `limiter.test.ts` came
+with it and is what pins the two properties that are silent when wrong: the slot
+*transfer* in `release()` that keeps the bound from widening across the
+microtask gap, and a cancelled waiter leaving the queue rather than being handed
+a permit it has stopped waiting for. One thing is still trimmed:
+`ADMISSION_REFUSALS` names two errors where TheLabX names three — the third is
+its request budget's, and joins when that ports.
 
 `sleeper/types/sleeper.types.ts` doc comments still cite `SLEEPER_DATA_BASE` and
 `manager/crawl-ttl`, which arrive with the projections and crawler ports. Twelve
@@ -112,13 +117,70 @@ a field is cheap.
 kept: the first carries the argument for why it is *not* a cheaper
 `getActiveSeason`, which is the part a reader would otherwise get wrong.
 
-**Untested, and the three worth knowing about.** `sleeper/limiter.ts`,
-`season/resolve.ts` and `user/memoize-manager-lookup.ts` all hold decisions that
-are silent when wrong — the slot transfer across the microtask gap, the failure
-backoff that deliberately does not re-stamp the cache, the rejection eviction
-that makes a 502 immediately retryable — and all three take their clock and
-their upstream as arguments specifically so they can be tested without either.
-`http.test.ts` is the shape to copy.
+**Untested, and the two worth knowing about.** `season/resolve.ts` and
+`user/memoize-manager-lookup.ts` both hold decisions that are silent when wrong
+— the failure backoff that deliberately does not re-stamp the cache, the
+rejection eviction that makes a 502 immediately retryable — and both take their
+clock and their upstream as arguments specifically so they can be tested without
+either. `http.test.ts` is the shape to copy.
+
+## The league graph
+
+`shared/manager` is a manager's leagues and everything hanging off them —
+rosters, members, traded picks, drafts and their picks, transactions, matchups —
+fetched from Sleeper and mirrored into Postgres. The route that drives it is
+`GET /api/user/[username]/leagues`.
+
+**It answers NDJSON, and the shape is the feature.** Postgres is read first and
+sent immediately; if what is stored is stale, a sync runs behind it and streams
+a progress line per league before a second, final `result`. A first visit has no
+cache, so it gets the same stream with the progress lines in front. One
+consequence to keep: **the cold path sends no opening `result`**, so a client
+reading "a sync is running" off that message alone is wrong for exactly the case
+the progress bar exists for — a `progress` event is itself that news.
+
+**Fetch the whole graph, then persist it.** Never hold a transaction or a pooled
+connection while queued on the Sleeper limiter: the queue can be long, and a
+connection held across it is how a bounded upstream becomes an unbounded
+database problem. `fetchLeagueGraph` reads Sleeper whole and `persistLeagueGraph`
+opens the transaction afterwards. The per-manager advisory lock *is* held across
+Sleeper work, deliberately — `sync-admission` is what bounds how many such
+sessions exist at once, and it is `tryAcquire` rather than `run` because every
+caller is holding a response open.
+
+**Two columns, two questions, at both grains.** `manager_syncs.synced_at` and
+`leagues.updated_at` mean "this was last written *whole*"; `attempt_at` and
+`sync_attempt_at` mean "somebody last *tried*". Freshness is read off the first
+pair and the retry throttle off the second, and collapsing them is how a partial
+graph buys itself a full TTL of quiet — or, in the other direction, how a
+failing upstream turns every request into a fresh fan-out. A row that has never
+had a graph written takes `NEVER_REFRESHED_SQL` rather than `DEFAULT now()`: a
+default is a claim.
+
+**An empty answer from Sleeper is indistinguishable from a failure**, because
+`sleeperGetOptional` folds a 404 and a 200-with-null into the same `[]`. So the
+guards are load-bearing and must not be simplified away:
+`MANDATORY_GRAPH_COLLECTIONS` refuses to delete stored users or rosters on an
+empty fetch and leaves the league due; `replaceManagerLeagueOrder` and
+`reconcileUnlistedLeagues` return early on an empty enumeration. Drafts are
+upserted and *never* deleted — the cascade would take `draft_picks` with them.
+
+Migrations are `db/migrations/*.sql` under node-pg-migrate, applied by
+`npm run migrate:up` **and** on boot from `src/instrumentation.ts`, which
+rethrows: a server must not serve requests against a schema it cannot vouch for.
+
+The numbers TheLabX derives from a request-deadline budget are constants here —
+`DEFAULT_POOL_MAX` and the pool's three timeouts, `ADVISORY_LOCK_WAIT_MS`,
+`DEFAULT_MANAGER_SYNC_LIMIT` (a third of the pool). They are the numbers that
+budget produced; the crawler port is what makes a derivation earn its place
+again, and the call sites do not move when it does.
+
+**What is deliberately not ported**, each with the route it arrives with: the
+background crawler and its scheduler, discovery and claim queue (the freshness
+columns are already in the schema for it); the per-league refresh press, its
+cooldown gate and the cache-busting token; the in-process read caches and
+therefore `persistLeagueGraph`'s `affectedOwnerIds`; the request budget and its
+503 taxonomy; players, projections and trades.
 
 ## Theme
 
