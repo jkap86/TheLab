@@ -113,3 +113,24 @@ was the only thing setting them, and `ToolIconName` keeps `"players"` and
 `"leaguemates"` for tabs no tool declares. The comment above the entry in
 `features/tools/constants/tools.ts` still describes the three-entry shape and is
 stale until the split returns or the comment goes.
+
+## Theme
+
+`globals.css` defines three things the ported tool components depend on:
+`--color-active` (the cyan accent behind `text-active` / `bg-active` /
+`border-active`), `--color-foreground`, and `--font-display`. They live in
+`@theme` rather than `@theme inline` because nothing indirects through a second
+variable any more — the values are written where they are read.
+
+Two loose ends this left, both live:
+
+- **Nothing sets a page background.** The `body` rule that applied
+  `var(--background)` and `var(--foreground)` is gone, so `--color-foreground:
+  #ffffff` paints every `text-foreground/*` in the tool components white on the
+  browser's default white. The `:root` `--background` / `--foreground` pair and
+  the `prefers-color-scheme: dark` block that overrides them are now read by
+  nothing.
+- `layout.tsx` still loads Geist and Geist Mono and puts `--font-geist-sans` /
+  `--font-geist-mono` on `<html>`, but `@theme` no longer maps either, so the
+  fonts are fetched and unused. `--font-display` is bare `Arial` with no
+  fallback stack.
