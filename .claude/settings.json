@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(echo \"===TSC_EXIT_$?===\")",
+      "Bash(npx eslint *)",
+      "Bash(echo \"===LINT_EXIT_$?===\")"
+    ]
+  }
+}

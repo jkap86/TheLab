@@ -11,6 +11,9 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // Tests import with explicit `.ts` extensions so Node's built-in runner can
+    // resolve them directly (`npm test`); nothing is emitted, so this is safe.
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
@@ -19,7 +22,11 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // TheLabX's alias for the same module, so a file ported from it needs no
+      // edit to its import — see CLAUDE.md on why this one is `fetch` there and
+      // axios here.
+      "@thelab/http": ["./src/shared/http"]
     }
   },
   "include": [

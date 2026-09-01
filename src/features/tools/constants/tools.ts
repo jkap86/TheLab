@@ -1,16 +1,41 @@
 import { Tool } from "../types/tools.types";
 
 export const tools: Tool[] = [
-  
+  // The manager tool is three entries, not one: its tabs answer different
+  // questions (which leagues, which players, which people) and land on separate
+  // routes, so both the grid and the menu link each directly rather than
+  // dropping you on Leagues to navigate again. They share the account-less
+  // `href` — the username search — and differ only in `hrefFor`.
   {
     href: "/manager",
     text: "Leagues",
     description:
       "Rank your leagues by record, points, roster value, and projections.",
     group: "Manager",
-    icon: "manager",
+    icon: "leagues",
     pattern: "/manager/*/leagues",
     hrefFor: (username) => `/manager/${username}/leagues`,
+  },
+  {
+    href: "/manager",
+    text: "Players",
+    description:
+      "See who you hold, in how many leagues, and at what share of them.",
+    group: "Manager",
+    icon: "players",
+    pattern: "/manager/*/players",
+    hrefFor: (username) => `/manager/${username}/players`,
+    browses: "player",
+  },
+  {
+    href: "/manager",
+    text: "Leaguemates",
+    description: "See who you play against most, and which leagues you share.",
+    group: "Manager",
+    icon: "leaguemates",
+    pattern: "/manager/*/leaguemates",
+    hrefFor: (username) => `/manager/${username}/leaguemates`,
+    browses: "leaguemate",
   },
   {
     href: "/picktracker",
@@ -47,7 +72,8 @@ export const tools: Tool[] = [
     group: "Player tools",
     icon: "comps",
     pattern: "/comps",
-    
+    // A question about the player pool, not about anyone's account — like
+    // Trades, live without a resolved username.
     accountless: true,
   },
 ];

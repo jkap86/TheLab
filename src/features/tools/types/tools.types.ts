@@ -1,5 +1,10 @@
+import type { SubjectKind } from "@/features/shared";
+
+/** Which glyph the menu draws for a tool. */
 export type ToolIconName =
-    | "manager"
+    | "leagues"
+    | "players"
+    | "leaguemates"
     | "picktracker"
     | "trades"
     | "lineup"
@@ -55,6 +60,6 @@ export type Tool = {
      * *absent* rather than filtered out by name, and a fourth manager view joins
      * the row by declaring what it browses. See `ManagerViewDrawers`.
      */
-    browses?: string;
+    browses?: SubjectKind;
 };
 

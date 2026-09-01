@@ -3,3 +3,4 @@
 // modules build on it.
 
 export { storeAccount, useStoredAccount } from "./account";
+export type { SubjectKind } from "./subjects";
