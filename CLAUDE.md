@@ -46,7 +46,7 @@ Four `shared/` concerns stack, and the order is the whole design:
 shared/http     fetch + bounded retry. Knows nothing about Sleeper.
 shared/sleeper  the client, the process-wide concurrency bound, the 404 rule.
 shared/season   which season "now" means, resolved rather than compiled in.
-shared/util/user  a typed name -> a Sleeper user, memoized.
+shared/user     a typed name -> a Sleeper user, memoized.
 ```
 
 **`shared/http` is native `fetch`, where TheLabX uses axios + axios-retry behind
@@ -74,16 +74,21 @@ second only where an absent resource is an answer the caller can act on.
 **Never default a season from `DEFAULT_SEASON`.** It is a release note disguised
 as a string; call `getActiveSeason()`. An *explicitly requested* season
 (`?season=2024`) must never go through the resolver — it is the caller's answer,
-and routes reading it stay deterministic. Validate it with `isPlausibleSeason`,
+and routes reading it stay deterministic. `parseRequestedSeason` in
+`shared/season` is where that rule lives: it validates with `isPlausibleSeason`,
 the same predicate the resolver accepts Sleeper's answer with, so "looks like a
-season" has one spelling.
+season" has one spelling. It returns **three** states, not two — `null` means
+"not asked" and is the only one the caller fills from `getActiveSeason()`.
+Collapsing absent and invalid is how `?season=abc` quietly becomes the current
+season.
+
+It lives in `shared/` rather than beside a route because it used to live beside
+one, in `app/api/user/[username]/manager-request.ts`, where `npm test` could not
+reach it — and where a helper returning six fields for a caller that read one
+cost every request an `await getActiveSeason()` it discarded. A route that needs
+no season should not pay a Sleeper round-trip for one.
 
 ### Known drift
-
-`PageShell` sits at `src/shared/ui/page-shell/page-shell.tsx`, which is UI inside
-`shared/` and so on the wrong side of the split above. It belongs at
-`src/features/shared/ui/page-shell.tsx`; moving it also touches
-`src/app/tools/page.tsx`. Left alone deliberately rather than overlooked.
 
 `sleeper/limiter.ts` is a **narrow** port. TheLabX's also carries an admission
 half — `tryAcquire` for callers that shed rather than queue, `AbortSignal` and
@@ -95,42 +100,58 @@ Bring that half over with the route that needs it; the FIFO queue here is the
 part it builds on and is faithful, including the slot *transfer* in `release()`
 that keeps the bound from widening across the microtask gap.
 
-Four files under `src/shared/util/` are now one-line re-exports of the modules
-that superseded them — `get-active-season.ts`, `is-season.ts`,
-`sleeper-avatar-url.ts` and `user/get-sleeper-user.ts`. They exist only because
-the session that moved them could not run `rm`. Nothing imports them; delete
-them.
-
 `sleeper/types/sleeper.types.ts` doc comments still cite `SLEEPER_DATA_BASE` and
-`manager/crawl-ttl`, which arrive with the projections and crawler ports.
-`Tool.icon` and `Tool.pattern` are likewise set on every tool and read by
-nothing — the tool-icon component and the app bar that consume them in TheLabX
-have not been ported.
+`manager/crawl-ttl`, which arrive with the projections and crawler ports. Twelve
+of its fourteen types have no reader yet, and that is deliberate: it is the
+ported schema-of-record, and re-transcribing an API by hand is the expensive
+half. `Tool` was trimmed the other way, to the five fields anything consumes —
+`icon`, `pattern`, `group` and `browses` were set and never read, and re-adding
+a field is cheap.
 
-The manager tool is back to a single `/manager/*` entry, so `Tool.browses` and
-the `SubjectKind` it narrows to now have no callers either — the three-tab split
-was the only thing setting them, and `ToolIconName` keeps `"players"` and
-`"leaguemates"` for tabs no tool declares. The comment above the entry in
-`features/tools/constants/tools.ts` still describes the three-entry shape and is
-stale until the split returns or the comment goes.
+`peekActiveSeason` and `resetActiveSeason` likewise have no caller. Both are
+kept: the first carries the argument for why it is *not* a cheaper
+`getActiveSeason`, which is the part a reader would otherwise get wrong.
+
+**Untested, and the three worth knowing about.** `sleeper/limiter.ts`,
+`season/resolve.ts` and `user/memoize-manager-lookup.ts` all hold decisions that
+are silent when wrong — the slot transfer across the microtask gap, the failure
+backoff that deliberately does not re-stamp the cache, the rejection eviction
+that makes a 502 immediately retryable — and all three take their clock and
+their upstream as arguments specifically so they can be tested without either.
+`http.test.ts` is the shape to copy.
 
 ## Theme
 
-`globals.css` defines three things the ported tool components depend on:
-`--color-active` (the cyan accent behind `text-active` / `bg-active` /
-`border-active`), `--color-foreground`, and `--font-display`. They live in
-`@theme` rather than `@theme inline` because nothing indirects through a second
-variable any more — the values are written where they are read.
+Two schemes, one set of markup, and `globals.css` is the whole of it: tokens on
+`:root`, a `prefers-color-scheme: dark` block that moves them, and `@theme
+inline` mapping them into Tailwind's namespace.
 
-Two loose ends this left, both live:
+**`inline` is load-bearing.** A plain `@theme` bakes its value into every
+generated utility, so `text-foreground` would resolve once at build time and no
+`:root` override could move it afterwards. `inline` emits `var(--foreground)` at
+each use site instead and lets the cascade do it. (This reverses an earlier note
+here arguing for plain `@theme` on the grounds that nothing indirected any more.
+Supporting a second scheme is what made the indirection earn its place.)
 
-- **Nothing sets a page background.** The `body` rule that applied
-  `var(--background)` and `var(--foreground)` is gone, so `--color-foreground:
-  #ffffff` paints every `text-foreground/*` in the tool components white on the
-  browser's default white. The `:root` `--background` / `--foreground` pair and
-  the `prefers-color-scheme: dark` block that overrides them are now read by
-  nothing.
-- `layout.tsx` still loads Geist and Geist Mono and puts `--font-geist-sans` /
-  `--font-geist-mono` on `<html>`, but `@theme` no longer maps either, so the
-  fonts are fetched and unused. `--font-display` is bare `Arial` with no
-  fallback stack.
+Two rules for adding to it:
+
+- **Write alphas over `--color-foreground`, not literal colours.**
+  `bg-foreground/[0.04]` and `border-foreground/12` are what make one card read
+  correctly in both schemes — a translucent dark tint on a light ground and a
+  translucent light tint on a dark one are the same glass.
+- **Anything that must name a colour becomes a token.** The header scrim, the
+  card shadow, the accent glow and the error text are all `var(--…)` in the
+  class string for exactly this reason: an `rgba()` typed into a Tailwind
+  arbitrary value cannot invert.
+
+**The accent is two colours, deliberately.** `#00ffe5` is ~15:1 on the dark
+ground and ~1.3:1 on white, and it is used as *text*. Light mode gets a teal
+(`#0b6d63`, ~5.2:1). Watch alphas on it — `text-active/80` drops the light-mode
+label below AA, which is why the account heading uses full opacity.
+
+`--font-display` maps `--font-geist-sans` from `layout.tsx`, which is the only
+face loaded. Geist Mono was loaded too and mapped by nothing; it is gone.
+
+`.lab-anim` marks anything decorative that moves, so the
+`prefers-reduced-motion` rule can stop all of it at once. It uses `!important`
+because those animations are set inline.

@@ -48,6 +48,43 @@ export function isPlausibleSeason(value: unknown): value is string {
   return year >= 2000 && year <= 2100;
 }
 
+export type RequestedSeason =
+  | { ok: true; season: string }
+  | { ok: false; error: string };
+
+/**
+ * Parse a caller-supplied `?season`, or `null` when they supplied none.
+ *
+ * Rejected rather than passed through: a junk season would reach Sleeper and
+ * sync nothing, and the caller would see an indistinguishable "manager has no
+ * leagues" instead of a 400.
+ *
+ * Validated with {@link isPlausibleSeason} — the resolver's own predicate —
+ * rather than a bare 4-digit test, so the season a caller may *ask* for and the
+ * season the resolver will *accept* from Sleeper are one rule. Two spellings of
+ * "looks like a season" is how `?season=0000` becomes a 200 with nothing in it.
+ *
+ * **`null` means "not asked", not "invalid".** That is the whole reason this
+ * returns three states rather than two: only the blank is filled from
+ * `getActiveSeason()`, because an explicitly requested season is the caller's
+ * answer and must stay exactly what they asked for. A caller that collapsed
+ * absent and invalid together would quietly serve the current season to someone
+ * who asked for `?season=abc`.
+ */
+export function parseRequestedSeason(
+  raw: string | null | undefined,
+): RequestedSeason | null {
+  const season = raw?.trim();
+  if (!season) return null;
+  if (!isPlausibleSeason(season)) {
+    return {
+      ok: false,
+      error: `Invalid season: ${season}. Expected a 4-digit year.`,
+    };
+  }
+  return { ok: true, season };
+}
+
 export type SeasonState = { season?: string | null } | null;
 
 export type SeasonResolverOptions = {

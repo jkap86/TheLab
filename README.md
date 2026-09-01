@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# The Lab
 
-## Getting Started
+Fantasy football tools for Sleeper leagues. A [Next.js](https://nextjs.org) app
+with no runtime dependency outside React and Next — the Sleeper client, the HTTP
+retry ladder and the season resolver are all in `src/shared/`.
 
-First, run the development server:
+## Running it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # http://localhost:3000, which redirects to /tools
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Requires **Node ≥ 22.6** — `npm test` runs under Node's own test runner with
+`--experimental-strip-types`, which is where that floor comes from.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Dev server |
+| `npm run build` / `npm start` | Production build and serve |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Node's test runner over `src/**/*.test.ts` |
+| `npm run check` | All three of the above, in order |
 
-## Learn More
+If `npm run typecheck` fails on a file under `.next/types/`, the generated route
+validator is stale rather than the code being wrong — `rm -rf .next` and run it
+again.
 
-To learn more about Next.js, take a look at the following resources:
+## Configuration
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Both variables are optional and neither has a `.env` file in the repo.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `NFL_SEASON_OVERRIDE` | unset | Forces the active season. Read fresh on every call, so it takes effect on a running process. Overrides Sleeper's `state/nfl`. |
+| `SLEEPER_MAX_CONCURRENCY` | `24` | Ceiling on how many requests one process may have open to Sleeper at once. The knob to reach for on a 429, and the one to lower before touching any per-caller number — it is the only bound that applies to the process rather than to one call site. |
 
-## Deploy on Vercel
+## Layout
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/app/       Routes only — pages and API handlers. No business logic.
+src/features/  Client UI, one folder per tool. `features/shared/` holds
+               cross-feature pieces.
+src/shared/    Domain logic and the API contract, one folder per concern.
+               Never UI.
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`CLAUDE.md` has the rules that are easy to get wrong and the reasoning behind
+them — the import direction between `shared/` and `features/`, the barrel
+convention, when a `.ts` extension belongs on an import, and why every Sleeper
+call goes through one client. Read it before adding to `src/shared/`.

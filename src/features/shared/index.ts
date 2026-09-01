@@ -3,4 +3,7 @@
 // modules build on it.
 
 export { storeAccount, useStoredAccount } from "./account";
-export type { SubjectKind } from "./subjects";
+export { apiFetch, isAbortError } from "./api";
+export { Avatar } from "./avatar";
+export { errorMessage } from "./error-message";
+export { PageShell } from "./ui/page-shell";

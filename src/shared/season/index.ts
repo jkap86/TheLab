@@ -5,10 +5,12 @@ import { createSeasonResolver } from "./resolve";
 export {
   createSeasonResolver,
   isPlausibleSeason,
+  parseRequestedSeason,
   SEASON_FAILURE_BACKOFF_MS,
   SEASON_TTL_MS,
 } from "./resolve";
 export type {
+  RequestedSeason,
   SeasonResolver,
   SeasonResolverOptions,
   SeasonState,

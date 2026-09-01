@@ -1,5 +1,5 @@
-import { ToolsHome } from "@/features/tools/components/tools-home";
-import { PageShell } from "@/shared/ui/page-shell/page-shell";
+import { PageShell } from "@/features/shared";
+import { ToolsHome } from "@/features/tools";
 
 export default function ToolsPage() {
   return (

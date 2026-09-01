@@ -1,12 +1,11 @@
 import Link from "next/link";
 
-import type { Tool } from "@/features/tools/types/tools.types";
+import type { Tool } from "../types/tools.types";
 import {
   TOOL_CARD_HOVER,
   TOOL_CARD_SURFACE,
   ToolCardContent,
 } from "./tool-card";
-
 
 export function ToolLinkCard({
   tool,

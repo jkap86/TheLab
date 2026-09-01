@@ -1,11 +1,18 @@
+/*
+ * `sm` and `md` grow with the *container* rather than the viewport, because
+ * they label rows in a list whose width is set by the panel around it, not by
+ * the window. That means their `@lg:` half only fires inside an ancestor marked
+ * `@container` — without one the variants are inert and the avatar silently
+ * stays at its base size. `lg` and `xl` are fixed and need no container.
+ */
 const SIZES = {
   sm: "h-5 w-5 text-[0.6rem] @lg:h-6 @lg:w-6 @lg:text-xs",
   md: "h-7 w-7 text-xs @lg:h-9 @lg:w-9 @lg:text-sm",
-  // The manager header's identity plate: big enough to be the card's anchor,
-  // small enough to share a phone-width row with the win dial beside it.
+  // An identity plate: big enough to anchor a card, small enough to share a
+  // phone-width row with whatever sits beside it.
   lg: "h-11 w-11 text-lg",
-  // A page that is *about* one account — the tools lookup, a pick tracker's
-  // league — where the avatar is the subject rather than a label on a row.
+  // A page that is *about* one account — the tools lookup — where the avatar is
+  // the subject rather than a label on a row.
   xl: "h-16 w-16 text-2xl",
 } as const;
 

@@ -1,16 +1,14 @@
-import { UserInfo } from "@/shared/contract";
+import type { UserInfo } from "@/shared/contract";
 
-import { tools } from "../constants/tools"
-
+import { tools } from "../constants/tools";
 import { toolHref } from "../helpers/tool-href";
-
 import { ToolLinkCard } from "./tool-link-card";
 
 export function ToolGrid({ user }: { user: UserInfo | null }) {
   return (
     <ul className="grid gap-4 sm:grid-cols-2">
       {tools.map((tool) => (
-        <li key={tool.text}>
+        <li key={tool.href}>
           <ToolLinkCard
             tool={tool}
             href={toolHref(tool, user?.username ?? null)}

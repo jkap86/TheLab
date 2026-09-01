@@ -31,9 +31,6 @@ const globalScope = globalThis as typeof globalThis & {
 export const sleeperLimiter: Limiter = (globalScope[LIMITER_KEY] ??=
   createLimiter(sleeperConcurrency()));
 
-/** In flight, queued and the peak — for a log line or a health check. */
-export const sleeperLimiterStats = () => sleeperLimiter.stats();
-
 /**
  * GET a Sleeper endpoint, returning `fallback` when Sleeper responds with a null
  * body — its convention for "no data" (e.g. a user with no leagues).

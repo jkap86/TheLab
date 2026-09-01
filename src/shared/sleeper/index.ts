@@ -8,7 +8,6 @@ export {
   sleeperGet,
   sleeperGetOptional,
   sleeperLimiter,
-  sleeperLimiterStats,
   sleeperUrl,
   SLEEPER_API_BASE,
   SLEEPER_CDN_BASE,

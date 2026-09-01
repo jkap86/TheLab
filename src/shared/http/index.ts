@@ -147,15 +147,18 @@ function isRetryable(error: unknown): boolean {
 
 const delay = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
-    let onAbort: (() => void) | undefined;
-    const timer = setTimeout(() => {
-      if (onAbort && signal) signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    onAbort = () => {
+    // `onAbort` closes over `timer` and the timeout closes back over `onAbort`.
+    // Declaring the handler first keeps both `const`: its body reads `timer`,
+    // but it cannot run before the listener is registered on the last line, by
+    // which point `timer` is assigned.
+    const onAbort = () => {
       clearTimeout(timer);
       reject(signal?.reason);
     };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
     signal?.addEventListener("abort", onAbort, { once: true });
   });
 

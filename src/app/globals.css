@@ -1,19 +1,104 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Two themes, one set of components.
+ *
+ * The tokens are declared here on `:root` and mapped into Tailwind's namespace
+ * by `@theme inline` below. The indirection is what makes the media query work:
+ * a plain `@theme` bakes its value into every generated utility, so
+ * `text-foreground` would resolve once, at build time, and no `:root` override
+ * could move it afterwards. `inline` emits `var(--foreground)` at each use site
+ * instead, and the cascade does the rest.
+ *
+ * The components are written in alphas over `--color-foreground`
+ * (`bg-foreground/[0.04]`, `border-foreground/12`), which is the pattern that
+ * makes one set of markup work in both themes: a translucent dark tint on a
+ * light ground and a translucent light tint on a dark one read as the same
+ * glass card. Anything that had to name a literal colour — the header gradient,
+ * the card shadow, the accent glow, the error text — is a token here rather
+ * than an `rgba()` in a class string, because those are exactly the values that
+ * cannot invert on their own.
+ */
 
-@theme {
-  --color-active: #00ffe5;
-  --color-foreground: #ffffff;
-  --font-display: Arial
+:root {
+  --background: #f6f7f9;
+  --foreground: #171717;
+
+  /*
+   * The cyan is a dark-mode colour. It sits at ~15:1 on the dark ground and
+   * ~1.3:1 on the light one, and it is used as *text* — the account label and
+   * the Find button — so light mode gets a teal dark enough to read (~5.2:1)
+   * rather than a dimmed cyan that would not.
+   */
+  --accent: #0b6d63;
+  --accent-glow: rgba(13, 148, 136, 0.35);
+
+  --error: #b91c1c;
+
+  /* The sticky header's scrim, and the fade that carries it into the page. */
+  --header-from: rgba(226, 232, 240, 0.78);
+  --header-to: rgba(203, 213, 225, 0.86);
+
+  --surface-shadow: rgba(15, 23, 42, 0.22);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+
+    --accent: #00ffe5;
+    --accent-glow: rgba(0, 255, 229, 0.45);
+
+    --error: #fca5a5;
+
+    --header-from: rgba(28, 48, 65, 0.72);
+    --header-to: rgba(11, 22, 34, 0.82);
+
+    --surface-shadow: rgba(0, 0, 0, 0.7);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-active: var(--accent);
+  --color-error: var(--error);
+
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/*
+ * The resolved-account dot: an expanding ring that reads as a live connection.
+ * Drawn with a box-shadow rather than a pseudo-element so it can sit on a bare
+ * `<span>` inside a flex row.
+ */
+@keyframes tools-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  70% {
+    box-shadow: 0 0 0 0.5rem transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/*
+ * Anything decorative that moves carries `.lab-anim`, so one rule turns all of
+ * it off. `!important` because the animations are set inline, which otherwise
+ * outranks this.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .lab-anim {
+    animation: none !important;
+    transition: none !important;
   }
 }

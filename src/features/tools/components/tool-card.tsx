@@ -1,11 +1,11 @@
 export const TOOL_CARD_SURFACE =
   "relative flex h-full flex-col overflow-hidden rounded-2xl border border-foreground/12 " +
-  "bg-foreground/[0.04] p-6 backdrop-blur-xl shadow-[0_24px_60px_-34px_rgba(0,0,0,0.7)]";
+  "bg-foreground/[0.04] p-6 backdrop-blur-xl shadow-[0_24px_60px_-34px_var(--surface-shadow)]";
 
 export const TOOL_CARD_HOVER =
   "group transition-[transform,border-color,background-color,box-shadow] duration-300 " +
   "hover:-translate-y-1 hover:border-active/50 hover:bg-foreground/[0.06] " +
-  "hover:shadow-[0_34px_74px_-36px_rgba(0,255,229,0.45)] " +
+  "hover:shadow-[0_34px_74px_-36px_var(--accent-glow)] " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60";
 
 /** One corner tick of the instrument frame; `sides` picks which two borders. */

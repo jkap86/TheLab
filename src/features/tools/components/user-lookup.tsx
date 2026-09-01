@@ -3,10 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { UserInfo } from "@/shared/contract";
-import { errorMessage } from "@/shared/util";
 
-import { Avatar } from "@/features/shared/avatar";
-import { apiFetch, isAbortError } from "@/features/shared/api";
+import { apiFetch, Avatar, errorMessage, isAbortError } from "@/features/shared";
 
 export function UserLookup({
   user,
@@ -61,8 +59,10 @@ export function UserLookup({
   };
 
   return (
-    <section className="rounded-2xl border border-foreground/12 bg-foreground/[0.04] p-6 shadow-[0_24px_60px_-34px_rgba(0,0,0,0.7)] backdrop-blur-xl">
-      <h2 className="mb-4 font-display text-[0.6875rem] font-medium uppercase tracking-[0.28em] text-active/80">
+    <section className="@container rounded-2xl border border-foreground/12 bg-foreground/[0.04] p-6 shadow-[0_24px_60px_-34px_var(--surface-shadow)] backdrop-blur-xl">
+      {/* Full opacity rather than /80: the light-mode accent is already only
+          ~5:1 against the page, and the alpha dropped this label below AA. */}
+      <h2 className="mb-4 font-display text-[0.6875rem] font-medium uppercase tracking-[0.28em] text-active">
         Your Sleeper account
       </h2>
 
@@ -74,8 +74,8 @@ export function UserLookup({
             size="xl"
           />
           <div className="min-w-0 flex-1">
-            {/* Sleeper lets a display name go missing, and falls back to the
-                username itself — the same pairing `ManagerHeader` shows. */}
+            {/* Sleeper lets a display name go missing, so the username is
+                the fallback everywhere this pair is shown. */}
             <p className="truncate font-display text-2xl font-semibold tracking-tight">
               {user.display_name || user.username}
             </p>
@@ -131,7 +131,7 @@ export function UserLookup({
       )}
 
       {error && (
-        <p role="alert" className="mt-3 text-sm text-red-300">
+        <p role="alert" className="mt-3 text-sm text-error">
           {error}
         </p>
       )}

@@ -1,4 +1,4 @@
-import { ApiErrorPayload } from "@/shared/contract";
+import type { ApiErrorPayload } from "@/shared/contract";
 
 export async function apiFetch(
   url: string,
