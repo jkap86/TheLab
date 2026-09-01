@@ -8,34 +8,13 @@ export const tools: Tool[] = [
   // `href` — the username search — and differ only in `hrefFor`.
   {
     href: "/manager",
-    text: "Leagues",
+    text: "Manager",
     description:
       "Rank your leagues by record, points, roster value, and projections.",
     group: "Manager",
     icon: "leagues",
-    pattern: "/manager/*/leagues",
-    hrefFor: (username) => `/manager/${username}/leagues`,
-  },
-  {
-    href: "/manager",
-    text: "Players",
-    description:
-      "See who you hold, in how many leagues, and at what share of them.",
-    group: "Manager",
-    icon: "players",
-    pattern: "/manager/*/players",
-    hrefFor: (username) => `/manager/${username}/players`,
-    browses: "player",
-  },
-  {
-    href: "/manager",
-    text: "Leaguemates",
-    description: "See who you play against most, and which leagues you share.",
-    group: "Manager",
-    icon: "leaguemates",
-    pattern: "/manager/*/leaguemates",
-    hrefFor: (username) => `/manager/${username}/leaguemates`,
-    browses: "leaguemate",
+    pattern: "/manager/*",
+    hrefFor: (username) => `/manager/${username}`,
   },
   {
     href: "/picktracker",

@@ -106,3 +106,10 @@ them.
 `Tool.icon` and `Tool.pattern` are likewise set on every tool and read by
 nothing — the tool-icon component and the app bar that consume them in TheLabX
 have not been ported.
+
+The manager tool is back to a single `/manager/*` entry, so `Tool.browses` and
+the `SubjectKind` it narrows to now have no callers either — the three-tab split
+was the only thing setting them, and `ToolIconName` keeps `"players"` and
+`"leaguemates"` for tabs no tool declares. The comment above the entry in
+`features/tools/constants/tools.ts` still describes the three-entry shape and is
+stale until the split returns or the comment goes.
