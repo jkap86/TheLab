@@ -61,12 +61,20 @@ function formatRecord(record: LeagueRecord): string {
   return record.ties > 0 ? `${base}–${record.ties}` : base;
 }
 
-// Spelled out per count so Tailwind sees each class it must generate.
+/**
+ * The tile row, per column count, spelled out so Tailwind sees each class it
+ * must generate.
+ *
+ * The tiles have the card's full width to themselves, so they take equal shares
+ * of it and the row reads as one instrument strip across the card. Two across
+ * on a phone is the exception: at 390 a four-way split is 70px a tile, which is
+ * narrower than the rank it holds.
+ */
 const GRID_COLS: Record<number, string> = {
   1: "grid-cols-1",
   2: "grid-cols-2",
-  3: "grid-cols-2",
-  4: "grid-cols-2",
+  3: "grid-cols-2 sm:grid-cols-3",
+  4: "grid-cols-2 sm:grid-cols-4",
 };
 
 export function LeagueCard({
@@ -155,8 +163,12 @@ export function LeagueCard({
             {` · ${league.total_rosters}-team · ${status}`}
           </p>
 
+          {/* The ranks get the row to themselves, under the identity rather
+              than beside it — so the tiles stay a direct child of the summary,
+              which is what keeps their `translateZ` alive. A wrapper here would
+              be a flat rendering context and the depth would silently go. */}
           <div
-            className={`relative mt-5 grid gap-2.5 ${GRID_COLS[columns.length] ?? "grid-cols-2"} [transform:translateZ(22px)]`}
+            className={`relative mt-5 grid gap-2.5 ${GRID_COLS[columns.length] ?? GRID_COLS[2]} [transform:translateZ(22px)]`}
           >
             {columns.map((id) => (
               <MetricTile key={id} id={id} entry={entry} />

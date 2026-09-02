@@ -726,6 +726,22 @@ rather than as a position. A null rank or a one-roster league draws empty.
 points and capital, off an exhaustive `Record<LineupMetricId, …>` like every
 other list on this side of the seam.
 
+**One card per row, and the ranks are a strip across it.** The grid was three
+across; it is `grid-cols-1` at every width now. The card keeps its stacked
+composition — name, rule, manager line, then the tiles on their own row — and
+the tiles take equal shares of the full width rather than a fixed size, so the
+row reads as one instrument strip. Two across on a phone stays the exception: a
+four-way split at 390 is 70px a tile, narrower than the rank it holds.
+
+The tiles must stay a **direct child of the `<summary>`**. Laying the identity
+and the ranks side by side needs wrappers, and a plain wrapper is a flat
+rendering context: every `translateZ` under it collapses into the card's plane,
+the same failure the clip causes above and with the same absence of an error to
+say so. (Side by side was tried first and the wrappers had to carry
+`preserve-3d` to survive it; on their own line no wrapper is needed at all,
+which is the cheaper answer.) The `10rem`-capped tiles that arrangement wanted
+went with it — a cap only earns its place where something competes for the row.
+
 **Two CSS constraints are inherited from the tools page and bite again**, plus
 one that is this page's own:
 
@@ -743,8 +759,10 @@ Three things were changed against the handoff, each because a render showed it:
   card lands at ~241px and *every* metric tile clips to "ROS STA…" over
   "1st o…" — the rank the tile exists to show. The handoff's own note named this
   as the fix and said the honest answer is a wider shell rather than dropping to
-  two columns, and it is: at `console` the card is 326px and every tile reads
-  whole. `/tools` keeps `wide`.
+  two columns, and it is: at `console` the card was 326px and every tile read
+  whole. The grid is one across since, which spends the same width on a 1014px
+  card at 1280 — the strip above — rather than on three columns. `/tools` keeps
+  `wide`.
 - **The raise is z-ordered on the `<li>`, not on the `<summary>`.** The
   `perspective` makes each grid item its own stacking context, so a card that
   rises cannot paint over the one after it in DOM order — an open card sat

@@ -7,11 +7,12 @@ export function PageShell({
    * `wide` relaxes the gutters for dense content like the tool grid.
    *
    * `console` is wider still, and it exists for one measurable reason: the
-   * leagues grid is three across holding *readouts*, and a readout that
-   * truncates is not a readout. At `wide` a league card lands at ~241px, which
-   * clips every metric tile to "ROS STA…" over "1st o…" — the rank the tile
-   * exists to show. The three columns are what the page is for, so the width
-   * is what gives.
+   * leagues page is rows of *readouts*, and a readout that truncates is not a
+   * readout. It arrived when the grid was three across and a league card
+   * landed at ~241px at `wide`, clipping every metric tile to "ROS STA…" over
+   * "1st o…" — the rank the tile exists to show. One card per row spends the
+   * width differently but on the same thing: the tiles are a strip across the
+   * card, and an open card's team browser gets a real pane each.
    */
   width?: "default" | "wide" | "console";
 }) {

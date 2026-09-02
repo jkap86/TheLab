@@ -238,7 +238,7 @@ export function LeaguesHome({
               </div>
             </Plate>
           ) : (
-            <ul className="relative m-0 grid list-none grid-cols-1 gap-[1.125rem] p-0 sm:grid-cols-2 lg:grid-cols-3">
+            <ul className="relative m-0 grid list-none grid-cols-1 gap-[1.125rem] p-0">
               {visible.map((league) => (
                 <LeagueCard
                   key={league.league_id}
