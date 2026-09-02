@@ -6,14 +6,14 @@ import type {
 } from "@/shared/contract";
 
 import { formatRank, LINEUP_METRIC_LABELS } from "../helpers/lineup-metrics";
-import { DraftPicks } from "./draft-picks";
-import { LineupBreakdown } from "./lineup-breakdown";
+import { LeagueTeams } from "./league-teams";
 
 /**
  * One league: the name and the chosen rank columns, with everything else — the
- * season line, the manager's team and record, the solved lineup — behind a
+ * season line, the manager's team and record, the team browser — behind a
  * `<details>` disclosure. The card stays hook-free on purpose: the one
- * interaction it owns is the disclosure, and the platform already ships it.
+ * interaction it owns is the disclosure, and the state a card does need
+ * (which team, which metric) lives in `LeagueTeams` below it.
  */
 
 /**
@@ -115,13 +115,7 @@ export function LeagueCard({
             </div>
           )}
 
-          {entry && entry.lineup.starters.length > 0 && (
-            <LineupBreakdown lineup={entry.lineup} />
-          )}
-
-          {/* After the lineup, the way Sleeper orders a team page: players,
-              then the picks. Renders nothing where the roster owns none. */}
-          {entry && <DraftPicks picks={entry.picks} />}
+          {entry && entry.teams.length > 0 && <LeagueTeams entry={entry} />}
         </div>
       </details>
     </li>

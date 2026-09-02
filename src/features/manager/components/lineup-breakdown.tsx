@@ -64,7 +64,14 @@ function PlayerRow({
   );
 }
 
-export function LineupBreakdown({ lineup }: { lineup: LeagueLineup }) {
+export function LineupBreakdown({
+  lineup,
+  title = "ROS lineup",
+}: {
+  lineup: LeagueLineup;
+  /** The teams pane passes the selected team's name; alone, the section names itself. */
+  title?: string;
+}) {
   const [lens, setLens] = useState<Lens>("points");
 
   // The starters' total under the current lens, so the headline number always
@@ -84,12 +91,13 @@ export function LineupBreakdown({ lineup }: { lineup: LeagueLineup }) {
         : null;
 
   return (
-    <div className="mt-3 border-t border-foreground/10 pt-3">
+    // No margin of its own: the teams pane aligns this border with its list's.
+    <div className="border-t border-foreground/10 pt-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold tracking-wide text-foreground/60">
-          ROS lineup
+        <span className="min-w-0 truncate text-xs font-semibold tracking-wide text-foreground/60">
+          {title}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <div
             role="group"
             aria-label="Value lens"

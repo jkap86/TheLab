@@ -6,8 +6,7 @@ import {
   LAST_REGULAR_WEEK,
   getManagerDraftAdp,
   getManagerLeagueRosters,
-  managerRosterPicks,
-  rankLeagueLineups,
+  solveLeagueEntry,
 } from "@/shared/manager";
 import { getRosProjections } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
@@ -100,21 +99,10 @@ export async function GET(
       const board = isSuperflexLineup(league.roster_positions)
         ? adp.superflex
         : adp.standard;
-      const { lineup, ranks } = rankLeagueLineups(
-        league,
-        userId,
-        projections,
-        board,
-      );
-      // A null lineup means the store moved between the query and here — the
+      const entry = solveLeagueEntry(league, userId, season, projections, board);
+      // A null entry means the store moved between the query and here — the
       // league drops out of the payload, as it always has for roster-less ones.
-      if (lineup) {
-        solved[league.league_id] = {
-          lineup,
-          ranks,
-          picks: managerRosterPicks(league, season, userId),
-        };
-      }
+      if (entry) solved[league.league_id] = entry;
     }
 
     const payload: ManagerLineupsPayload = {

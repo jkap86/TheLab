@@ -210,6 +210,28 @@ describe("rankLeagueLineups", () => {
     assert.equal(ranks.ros_bench, null);
   });
 
+  test("every roster's solve comes back with its totals, in roster order", () => {
+    const board: RosProjections = {
+      w1: projected("w1", ["WR"], { rec: 20 }),
+      w2: projected("w2", ["WR"], { rec: 10 }),
+    };
+    const l = league([roster(1, "t1", ["w1"]), roster(2, "me", ["w2"])]);
+    const { rosters } = rankLeagueLineups(l, "me", board, NO_ADP);
+
+    // The teams pane renders from these, so nobody's solve is discarded.
+    assert.deepEqual(
+      rosters.map((r) => [
+        r.roster.roster_id,
+        r.lineup.starters[0]?.player?.player_id,
+        r.totals.ros_starters,
+      ]),
+      [
+        [1, "w1", 20],
+        [2, "w2", 10],
+      ],
+    );
+  });
+
   test("a manager holding no roster gets a null lineup and null ranks", () => {
     const board: RosProjections = { w1: projected("w1", ["WR"], { rec: 5 }) };
     const l = league([roster(1, "t1", ["w1"])]);

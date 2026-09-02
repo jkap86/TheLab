@@ -258,13 +258,23 @@ everything. The client (`use-manager-lineups`) fetches it after the leagues
 stream settles; `!refreshing` flipping true is also the refetch after a cold
 sync, which is exactly when the rosters it solves from were written.
 
-**Only the manager's lineup ships; everyone else is reduced to a rank.** Each
-league's payload entry is `{ lineup, ranks }` (`LeagueLineupEntry`), and
-`manager/league-ranks.ts` is the pure module behind it: one `solveLeagueLineup`
-per roster, all five metric totals read off that one solve
-(`lineupMetricTotals` — the solver already prices `points` *and* `adp_value`
-onto every player, so there is no second valuation pass to drift from the
-first). Ranks are standard competition ranking — ties share the better rank,
+**Every team ships, solved.** Each league's payload entry is
+`{ teams, ranks }` (`LeagueLineupEntry`), one `LeagueTeam` per stored roster —
+lineup, all five metric totals, pick portfolio, label, `is_manager` — because
+the expanded card is a team browser, not a mirror of the manager's roster.
+(It used to ship the manager's lineup alone and reduce everyone else to a
+rank; the team picker is what reversed that, and the ~50KB a twelve-team
+league costs is the price of never refetching per click.) `totals` ships
+rather than being re-summed on the client because the sums carry edge rules
+(`lineupMetricTotals`) and a second spelling is how the teams column would
+drift from the ranks beside it. `manager/league-teams.ts` composes the entry
+— `solveLeagueEntry` = ranks + picks + the `leagueTeamName` label rule
+(team name → owner's display name → "Roster N", blanks folding in with null)
+— so the route stays a handler; `manager/league-ranks.ts` remains the pure
+solve-and-rank underneath: one `solveLeagueLineup` per roster, all five metric
+totals read off that one solve (the solver already prices `points` *and*
+`adp_value` onto every player, so there is no second valuation pass to drift
+from the first). Ranks are standard competition ranking — ties share the better rank,
 the next distinct total skips — and `of` counts the rosters actually ranked,
 orphans and empty rosters included, not `total_rosters`. **A metric ranks
 `null` when every roster in the league totals zero on it**: one rule that
@@ -289,10 +299,21 @@ zero-runtime character, and the client cannot read a list out of
 `shared/manager` without dragging `pg` into the bundle.
 
 On the page, each league card is the league name plus up to four rank columns
-("2nd of 12"), with the season line, team/record and `LineupBreakdown` behind
-a `<details>` disclosure — `league-card.tsx` stays hook-free on purpose. The
-breakdown's number column is one lens at a time, points or capital, flipped by
-a per-card toggle (`useState`, deliberately unpersisted): the two figures never
+("2nd of 12"), with the season line, team/record and the team browser behind a
+`<details>` disclosure — `league-card.tsx` stays hook-free on purpose, and the
+state a card does need lives in `league-teams.tsx` below it. The browser is
+two panes: every team on the left with one number column, the selected team —
+the manager's by default — solved out on the right as `LineupBreakdown` then
+`DraftPicks`, Sleeper's team-page order. The column's metric is a per-card
+`<select>` (default ROS starters) and the list is *sorted* by it, because it
+is the standings behind the card's "2nd of 12" — the order and the number must
+agree — and when every team totals zero on the metric the column shows dashes,
+the same all-zero rule the server ranks `null` by. Selection is *resolved*,
+not synced (`chosen ?? manager's team`), so a payload refresh under an open
+card falls back rather than pointing at a ghost. The breakdown's number column
+is one lens at a time, points or capital, flipped by
+a per-card toggle (`useState`, deliberately unpersisted, like the metric
+select): the two figures never
 share a column because they would read as the same unit, and the headline total
 follows the lens so it always agrees with the rows beneath it. The
 column choice is a *set*, rendered in canonical order and persisted under
@@ -303,8 +324,8 @@ dependency), and it enforces its bounds by disabling rather than correcting:
 the fifth box greys out at four, the last checked box at one, so an invalid
 selection cannot be made rather than being repaired after.
 
-**The expanded card also lists the roster's future draft picks**, the way
-Sleeper's own team page does, and the reconstruction is the part that is easy
+**Every team's future draft picks ride its `LeagueTeam`**, the way Sleeper's
+own team page lists them, and the reconstruction is the part that is easy
 to get wrong: Sleeper's `traded_picks` lists only picks that have *changed
 hands*, so a portfolio is the whole enumerated grid — every roster owning its
 own pick per (season, round) — with the traded rows overriding cells.
@@ -313,15 +334,20 @@ tests: `dynastyPickGrid` fixes the three-season horizon a dynasty league's
 pick market actually runs (a startup never counts as this year's rookie class,
 and only `complete` rolls the window — both readings fail toward showing a
 pick that exists), while every other format derives its grid from the trades
-because it has no standing horizon to read. `managerRosterPicks` is this
-repo's addition to the file: it composes in TypeScript what TheLabX's
+because it has no standing horizon to read. `leagueRosterPicks` is this
+repo's addition to the file (born `managerRosterPicks`; the team browser is
+what made it per-roster): it composes in TypeScript what TheLabX's
 `getDraftSlots` does in SQL-plus-cache (one manager's leagues per request
 don't need a tier), keeping its four decisions — the season's latest draft
 wins and is chosen *before* its order is read, an auction's order is not a
 pick order, and the slot comes off `draft_order` through the **original**
-roster's owner, because that slot is where the pick actually falls. The card's
+roster's owner, because that slot is where the pick actually falls. `from` is
+relative to the owning roster — the same asset is "from Slim" in one portfolio
+and origin-less in the one it came out of — and it names the *person*
+(display name), where the teams pane prefers the team name: "from" points at
+who traded it away. The card's
 naming rule is Sleeper's: "1.05" once the order is set, "2nd" before, and the
-origin ("from NellyNell86") printed only where there is no slot to say which
+origin printed only where there is no slot to say which
 pick this is — the payload ships both facts (`slot`, `from` on `RosterPick`)
 and the rule lives in `draft-picks.tsx`. The pick context rides the same
 `getManagerLeagueRosters` row the ranks are solved from (`ManagerLeagueRow`),

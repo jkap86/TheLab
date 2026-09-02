@@ -241,7 +241,7 @@ function toRecord(r: LeagueRow): LeagueRecord | null {
 
 /**
  * One league as the lineups route reads it: {@link RankLeague} for the solve,
- * plus everything `managerRosterPicks` resolves the pick portfolio from. One
+ * plus everything `leagueRosterPicks` resolves the pick portfolios from. One
  * row type rather than two queries, so the ranks and the picks cannot be
  * answered off different league sets.
  */
@@ -306,7 +306,8 @@ export async function getManagerLeagueRosters(
               WHERE d.league_id = l.league_id) AS drafts,
             (SELECT COALESCE(jsonb_agg(jsonb_build_object(
                       'user_id',      u.user_id,
-                      'display_name', u.display_name)), '[]'::jsonb)
+                      'display_name', u.display_name,
+                      'team_name',    u.team_name)), '[]'::jsonb)
                FROM league_users u
               WHERE u.league_id = l.league_id) AS users
        FROM leagues l

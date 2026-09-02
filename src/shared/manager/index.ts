@@ -52,12 +52,14 @@ export type { ManagerLeagueRow } from "./queries";
 export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
 export { lineupMetricTotals, rankLeagueLineups } from "./league-ranks";
-export type { LeagueRosterRow, RankLeague } from "./league-ranks";
+export type { LeagueRosterRow, RankLeague, RankedRoster } from "./league-ranks";
+export { leagueTeamName, solveLeagueEntry } from "./league-teams";
+export type { LineupLeagueRow } from "./league-teams";
 export {
   DYNASTY_LEAGUE_TYPE,
   DYNASTY_PICK_SEASONS,
   dynastyPickGrid,
-  managerRosterPicks,
+  leagueRosterPicks,
   ownedDraftPicks,
 } from "./draft-picks";
 export type {

@@ -1,12 +1,11 @@
 /**
  * Which future draft picks each roster owns, reconstructed from a league's
- * traded-pick records — and, for the manager's own roster, resolved into the
- * named picks the card shows.
+ * traded-pick records — and resolved into the named picks the card shows.
  *
  * Sleeper's `traded_picks` lists only picks that have changed hands — an untraded
  * pick isn't in it at all — so a roster's real portfolio is the whole pick grid
  * for the seasons in play, with the traded rows overriding who holds each cell.
- * Ported whole from TheLabX with its tests; {@link managerRosterPicks} is this
+ * Ported whole from TheLabX with its tests; {@link leagueRosterPicks} is this
  * repo's addition, composing in TypeScript what TheLabX's `getDraftSlots` does
  * in SQL — see its doc for why. Pure apart from a type-only contract import, so
  * it unit-tests like `league-ranks`; the query layer hands it the rows.
@@ -265,10 +264,19 @@ export function ownedDraftPicks(
 /** The roster columns pick resolution reads — a slice of what the query sends. */
 export type PickRoster = { roster_id: number; owner_id: string | null };
 
-/** Identity as `league_users` stores it — what an acquired pick's origin is named from. */
-export type LeagueUserName = { user_id: string; display_name: string | null };
+/**
+ * Identity as `league_users` stores it. An acquired pick's origin is named from
+ * `display_name` — a username names a *person*, which is what "from" means —
+ * while the teams pane prefers `team_name`, the way Sleeper labels a league's
+ * teams; `leagueTeamName` in `league-teams` is that rule's one spelling.
+ */
+export type LeagueUserName = {
+  user_id: string;
+  display_name: string | null;
+  team_name: string | null;
+};
 
-/** Everything {@link managerRosterPicks} reads off one league's stored graph. */
+/** Everything {@link leagueRosterPicks} reads off one league's stored graph. */
 export type PickLeague = {
   /** `settings.type`, already guarded and cast — see `LEAGUE_TYPE_SQL`. */
   league_type: number;
@@ -332,29 +340,27 @@ function seasonDraftSlots(
 }
 
 /**
- * The manager's future draft picks in one league, named for the card.
+ * Every roster's future draft picks in one league, named for the card, keyed
+ * by owning roster id.
  *
  * {@link ownedDraftPicks} lays the grid — resolved through
  * {@link dynastyPickGrid} for a dynasty league, derived from the trades for
- * every other format — and this keeps only the manager's own portfolio, since
- * only their roster ships. Each pick then carries the two facts Sleeper names
- * one by: its `slot`, read off that season's draft order through the *original*
+ * every other format. Each pick then carries the two facts Sleeper names one
+ * by: its `slot`, read off that season's draft order through the *original*
  * roster's owner (that slot is where the pick actually falls), and `from`, the
  * original owner's name — only where the pick was acquired, because a roster's
- * own pick has no origin worth printing.
+ * own pick has no origin worth printing. `from` is relative to the owning
+ * roster: the same asset is "from Slim" in one portfolio and origin-less in
+ * the portfolio it came out of.
  *
- * A manager holding no roster gets `[]`, as does every roster in a league whose
- * grid comes out empty — a redraft league, or a dynasty with no measured depth
- * and no traded pick.
+ * A roster owning nothing is absent from the map — as is every roster in a
+ * league whose grid comes out empty (a redraft league, or a dynasty with no
+ * measured depth and no traded pick) — and the caller reads absence as `[]`.
  */
-export function managerRosterPicks(
+export function leagueRosterPicks(
   league: PickLeague,
   season: string,
-  managerUserId: string,
-): RosterPick[] {
-  const mine = league.rosters.find((r) => r.owner_id === managerUserId);
-  if (!mine) return [];
-
+): Map<number, RosterPick[]> {
   const grid =
     league.league_type === DYNASTY_LEAGUE_TYPE
       ? dynastyPickGrid(season, league.drafts, league.previous_league_id)
@@ -365,8 +371,6 @@ export function managerRosterPicks(
     season,
     grid,
   );
-  const picks = owned.get(mine.roster_id);
-  if (!picks) return [];
 
   const names = new Map(league.users.map((u) => [u.user_id, u.display_name]));
   const owners = new Map(league.rosters.map((r) => [r.roster_id, r.owner_id]));
@@ -378,21 +382,31 @@ export function managerRosterPicks(
     return name?.trim() || `Roster ${rosterId}`;
   };
 
+  // One order read per season for the whole league, not per portfolio.
   const slotsBySeason = new Map<string, Map<number, number> | null>();
-  return picks.map((pick) => {
-    let slots = slotsBySeason.get(pick.season);
+  const slotsFor = (pickSeason: string): Map<number, number> | null => {
+    let slots = slotsBySeason.get(pickSeason);
     if (slots === undefined) {
-      slots = seasonDraftSlots(league.drafts, pick.season, league.rosters);
-      slotsBySeason.set(pick.season, slots);
+      slots = seasonDraftSlots(league.drafts, pickSeason, league.rosters);
+      slotsBySeason.set(pickSeason, slots);
     }
-    return {
-      season: pick.season,
-      round: pick.round,
-      slot: slots?.get(pick.original_roster_id) ?? null,
-      from:
-        pick.original_roster_id === mine.roster_id
-          ? null
-          : originName(pick.original_roster_id),
-    };
-  });
+    return slots;
+  };
+
+  const named = new Map<number, RosterPick[]>();
+  for (const [rosterId, picks] of owned) {
+    named.set(
+      rosterId,
+      picks.map((pick) => ({
+        season: pick.season,
+        round: pick.round,
+        slot: slotsFor(pick.season)?.get(pick.original_roster_id) ?? null,
+        from:
+          pick.original_roster_id === rosterId
+            ? null
+            : originName(pick.original_roster_id),
+      })),
+    );
+  }
+  return named;
 }

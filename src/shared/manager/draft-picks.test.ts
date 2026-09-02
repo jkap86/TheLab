@@ -4,7 +4,7 @@ import { describe, test } from "node:test";
 import {
   DYNASTY_LEAGUE_TYPE,
   dynastyPickGrid,
-  managerRosterPicks,
+  leagueRosterPicks,
   ownedDraftPicks,
 } from "./draft-picks.ts";
 import type {
@@ -258,7 +258,7 @@ describe("dynastyPickGrid", () => {
   });
 });
 
-describe("managerRosterPicks", () => {
+describe("leagueRosterPicks", () => {
   const orderedDraft = (
     season: string,
     draft_order: Record<string, unknown> | null,
@@ -281,8 +281,8 @@ describe("managerRosterPicks", () => {
     traded_picks: [],
     drafts: [],
     users: [
-      { user_id: "me", display_name: "Me" },
-      { user_id: "t2", display_name: "Slim" },
+      { user_id: "me", display_name: "Me", team_name: null },
+      { user_id: "t2", display_name: "Slim", team_name: null },
     ],
     rosters: [
       { roster_id: 1, owner_id: "me" },
@@ -291,13 +291,35 @@ describe("managerRosterPicks", () => {
     ...overrides,
   });
 
+  /** Roster 1's picks — the perspective most tests read the league from. */
+  const rosterOne = (league: PickLeague, season: string) =>
+    leagueRosterPicks(league, season).get(1) ?? [];
+
   test("an own pick has no origin; an acquired one names its original owner", () => {
     const league = base({ traded_picks: [pick("2027", 1, 2, 1)] });
-    const picks = managerRosterPicks(league, "2026", "me");
+    const picks = rosterOne(league, "2026");
 
     assert.deepEqual(picks, [
       { season: "2027", round: 1, slot: null, from: null },
       { season: "2027", round: 1, slot: null, from: "Slim" },
+    ]);
+  });
+
+  test("the origin is relative to each portfolio, off one shared grid", () => {
+    // Rosters swap picks across rounds: each portfolio must read its own
+    // acquisition as "from" the other and its kept pick as origin-less.
+    const league = base({
+      traded_picks: [pick("2027", 1, 2, 1), pick("2027", 2, 1, 2)],
+    });
+    const byRoster = leagueRosterPicks(league, "2026");
+
+    assert.deepEqual(byRoster.get(1), [
+      { season: "2027", round: 1, slot: null, from: null },
+      { season: "2027", round: 1, slot: null, from: "Slim" },
+    ]);
+    assert.deepEqual(byRoster.get(2), [
+      { season: "2027", round: 2, slot: null, from: null },
+      { season: "2027", round: 2, slot: null, from: "Me" },
     ]);
   });
 
@@ -309,7 +331,7 @@ describe("managerRosterPicks", () => {
       traded_picks: [pick("2026", 1, 2, 1)],
       drafts: [orderedDraft("2026", { me: 2, t2: 1 })],
     });
-    const picks = managerRosterPicks(league, "2026", "me");
+    const picks = rosterOne(league, "2026");
 
     assert.deepEqual(picks, [
       { season: "2026", round: 1, slot: 2, from: null },
@@ -322,7 +344,7 @@ describe("managerRosterPicks", () => {
       traded_picks: [pick("2026", 1, 2, 1), pick("2027", 1, 2, 1)],
       drafts: [orderedDraft("2026", null)],
     });
-    const picks = managerRosterPicks(league, "2026", "me");
+    const picks = rosterOne(league, "2026");
 
     // 2026's draft exists but has no order; 2027's doesn't exist at all.
     assert.deepEqual(
@@ -337,7 +359,7 @@ describe("managerRosterPicks", () => {
       drafts: [orderedDraft("2026", { me: 1, t2: 2 }, { type: "auction" })],
     });
     assert.deepEqual(
-      managerRosterPicks(league, "2026", "me").map((p) => p.slot),
+      rosterOne(league, "2026").map((p) => p.slot),
       [null, null],
     );
   });
@@ -360,7 +382,7 @@ describe("managerRosterPicks", () => {
       ],
     });
     assert.deepEqual(
-      managerRosterPicks(league, "2026", "me").map((p) => p.slot),
+      rosterOne(league, "2026").map((p) => p.slot),
       [null, null],
     );
   });
@@ -375,7 +397,7 @@ describe("managerRosterPicks", () => {
         { roster_id: 3, owner_id: null },
       ],
     });
-    const acquired = managerRosterPicks(league, "2026", "me").at(-1);
+    const acquired = rosterOne(league, "2026").at(-1);
 
     assert.deepEqual(acquired, {
       season: "2026",
@@ -396,7 +418,7 @@ describe("managerRosterPicks", () => {
         }),
       ],
     });
-    const picks = managerRosterPicks(league, "2026", "me");
+    const picks = rosterOne(league, "2026");
 
     // The 2026 class is taken, so the window is 2027-2029, two rounds deep.
     assert.deepEqual(
@@ -407,11 +429,15 @@ describe("managerRosterPicks", () => {
   });
 
   test("a redraft league with no pick trades owns no pick assets", () => {
-    assert.deepEqual(managerRosterPicks(base(), "2026", "me"), []);
+    assert.equal(leagueRosterPicks(base(), "2026").size, 0);
   });
 
-  test("a manager holding no roster here gets an empty list", () => {
+  test("a roster that owns nothing is absent, not present-and-empty", () => {
+    // Roster 2's only pick in the derived grid was dealt to roster 1.
     const league = base({ traded_picks: [pick("2026", 1, 2, 1)] });
-    assert.deepEqual(managerRosterPicks(league, "2026", "nobody"), []);
+    const byRoster = leagueRosterPicks(league, "2026");
+
+    assert.equal(byRoster.has(2), false);
+    assert.equal(byRoster.get(1)?.length, 2);
   });
 });

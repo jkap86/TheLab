@@ -76,10 +76,10 @@ export type MetricRank = { rank: number; of: number };
 export type LineupRanks = Record<LineupMetricId, MetricRank | null>;
 
 /**
- * One future draft pick the manager's roster owns, named the way Sleeper names
- * it. The facts ship and the display rule lives in the card: a pick whose
- * draft order is set reads by its slot ("1.05"), an unordered one by its round
- * ("2nd"), with the origin shown only where the slot can't be.
+ * One future draft pick a roster owns, named the way Sleeper names it. The
+ * facts ship and the display rule lives in the card: a pick whose draft order
+ * is set reads by its slot ("1.05"), an unordered one by its round ("2nd"),
+ * with the origin shown only where the slot can't be.
  */
 export type RosterPick = {
   season: string;
@@ -98,12 +98,37 @@ export type RosterPick = {
   from: string | null;
 };
 
-/** One league's answer: the manager's own solved lineup, plus their ranks. */
-export type LeagueLineupEntry = {
+/**
+ * One team in a league's expanded card: its solved lineup, its pick portfolio,
+ * and its total under every rankable lens.
+ *
+ * `totals` ships rather than being re-summed on the client because the sums
+ * carry edge rules (`lineupMetricTotals` — null points and null capital count
+ * zero, the bench re-rounds) and a second spelling of them is how the teams
+ * column would drift from the ranks it sits beside. The `Record` is exhaustive
+ * by construction, so a new metric id breaks this compile too until it ships.
+ */
+export type LeagueTeam = {
+  roster_id: number;
+  /** The team's own name, its owner's display name, or "Roster N". */
+  name: string;
+  /** True on the page's manager — the card's default selection, at most one. */
+  is_manager: boolean;
   lineup: LeagueLineup;
-  ranks: LineupRanks;
+  totals: Record<LineupMetricId, number>;
   /** The roster's future draft picks, sorted by season, round, own-first. */
   picks: RosterPick[];
+};
+
+/**
+ * One league's answer: every stored roster's solve — the expanded card lets
+ * the reader open any team, not just the manager's — plus the manager's ranks.
+ * Teams arrive in roster-id order; the card sorts by whichever metric its
+ * column is showing.
+ */
+export type LeagueLineupEntry = {
+  teams: LeagueTeam[];
+  ranks: LineupRanks;
 };
 
 /** `GET /api/user/[username]/lineups` — every roster solved, batched. */

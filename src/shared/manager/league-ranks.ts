@@ -9,9 +9,10 @@
  * **One solve per roster is the whole design.** `solveLeagueLineup` already
  * prices every player's points *and* draft capital onto the lineup it returns,
  * so all five metrics fall out of the solves the rank needs anyway — there is
- * no second valuation pass to drift from the first. The other rosters' lineups
- * are discarded after their totals are read: the payload carries the manager's
- * seats and everyone else's rank, never eleven strangers' rosters.
+ * no second valuation pass to drift from the first. Every solve is returned,
+ * totals attached: the expanded card lets the reader open any team in the
+ * league, so the payload carries all of them, not just the manager's.
+ * (It used to discard the others; the team picker is what reversed that.)
  *
  * **A metric ranks null when every roster in the league totals zero on it.**
  * That one rule covers both degenerate cases — no projections read (both ROS
@@ -78,6 +79,13 @@ export function lineupMetricTotals(
   };
 }
 
+/** One roster's solve with its metric totals — what the teams pane renders from. */
+export type RankedRoster = {
+  roster: LeagueRosterRow;
+  lineup: LeagueLineup;
+  totals: Record<LineupMetricId, number>;
+};
+
 /**
  * Solve every roster in the league and rank the manager's on each metric.
  *
@@ -86,14 +94,19 @@ export function lineupMetricTotals(
  * not here). A league holding no roster of theirs returns a null lineup and
  * all-null ranks; the query already filters those out, so hitting it means the
  * store moved between reads, and the route omits the league the way it always
- * has.
+ * has. `rosters` comes back in the caller's roster order either way — the
+ * ranks and the teams pane must be read off the same set of solves.
  */
 export function rankLeagueLineups(
   league: RankLeague,
   managerUserId: string,
   projections: RosProjections,
   adp: ReadonlyMap<string, number>,
-): { lineup: LeagueLineup | null; ranks: LineupRanks } {
+): {
+  lineup: LeagueLineup | null;
+  ranks: LineupRanks;
+  rosters: RankedRoster[];
+} {
   const solved = league.rosters.map((roster) => {
     const one: RosLineupLeague = {
       league_id: league.league_id,
@@ -119,6 +132,7 @@ export function rankLeagueLineups(
         capital_bench: null,
         capital_starters: null,
       },
+      rosters: solved,
     };
   }
 
@@ -146,5 +160,6 @@ export function rankLeagueLineups(
       capital_bench: rankOn("capital_bench"),
       capital_starters: rankOn("capital_starters"),
     },
+    rosters: solved,
   };
 }
