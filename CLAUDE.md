@@ -291,6 +291,10 @@ zero-runtime character, and the client cannot read a list out of
 On the page, each league card is the league name plus up to four rank columns
 ("2nd of 12"), with the season line, team/record and `LineupBreakdown` behind
 a `<details>` disclosure — `league-card.tsx` stays hook-free on purpose. The
+breakdown's number column is one lens at a time, points or capital, flipped by
+a per-card toggle (`useState`, deliberately unpersisted): the two figures never
+share a column because they would read as the same unit, and the headline total
+follows the lens so it always agrees with the rows beneath it. The
 column choice is a *set*, rendered in canonical order and persisted under
 `thelab:lineup-columns` by `lineup-columns.ts`, a wrapper over the internal
 `local-store.ts` on the same terms as `account.ts`. The picker is a native
