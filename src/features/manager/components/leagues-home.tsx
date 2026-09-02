@@ -1,12 +1,20 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
-import { Avatar, useLineupColumns } from "@/features/shared";
+import {
+  activeFilterCount,
+  Avatar,
+  DEFAULT_LEAGUE_FILTERS,
+  filterSummary,
+  matchesFilters,
+  useLineupColumns,
+} from "@/features/shared";
 
 import { useManagerLeagues } from "../hooks/use-manager-leagues";
 import { useManagerLineups } from "../hooks/use-manager-lineups";
 import { LeagueCard } from "./league-card";
+import { LeagueFiltersDialog } from "./league-filters-dialog";
 import { LineupColumnsDialog } from "./lineup-columns-dialog";
 
 /**
@@ -30,7 +38,31 @@ export function LeaguesHome({
 }) {
   const state = useManagerLeagues(username, season);
   const { user, leagues, progress, refreshing, error, refreshError } = state;
+  // **Read off the unfiltered list, both of them.** `cold` decides whether the
+  // page is a progress bar, and the gate below decides whether the lineups are
+  // fetched at all; taken off the filtered list, a selection that matches
+  // nothing would put the cold sync bar back on screen and suppress the solve
+  // for every league on the account.
   const cold = leagues.length === 0 && refreshing;
+
+  // **The selection is per-manager and unpersisted** — a way of reading this
+  // list, not a device preference, which is the argument `LeagueTeams` makes for
+  // its own `<select>`. The reset happens during render rather than in an
+  // effect, the idiom `useManagerLeagues` documents: an effect would paint one
+  // frame of the new manager's leagues under the old manager's filters.
+  const [filters, setFilters] = useState(DEFAULT_LEAGUE_FILTERS);
+  const subject = `${username} ${season ?? ""}`;
+  const [renderedSubject, setRenderedSubject] = useState(subject);
+  if (renderedSubject !== subject) {
+    setRenderedSubject(subject);
+    setFilters(DEFAULT_LEAGUE_FILTERS);
+  }
+
+  const narrowing = activeFilterCount(filters) > 0;
+  const visible = useMemo(
+    () => leagues.filter((league) => matchesFilters(league, filters)),
+    [leagues, filters],
+  );
 
   // Fetched once the leagues settle — `!refreshing` flipping true is also what
   // refetches after a cold sync, when the rosters this read solves from were
@@ -61,11 +93,27 @@ export function LeaguesHome({
             <p className="mt-0.5 text-xs text-foreground/60">
               {state.season} season
               {leagues.length > 0 &&
-                ` · ${leagues.length} league${leagues.length === 1 ? "" : "s"}`}
+                (narrowing
+                  ? ` · ${visible.length} of ${leagues.length} leagues`
+                  : ` · ${leagues.length} league${leagues.length === 1 ? "" : "s"}`)}
+            </p>
+          )}
+          {/* A modal hides its own state, so this line is the only thing on the
+              page saying what the list below has been narrowed to. */}
+          {narrowing && (
+            <p className="mt-0.5 truncate text-xs text-active">
+              {filterSummary(filters)}
             </p>
           )}
         </div>
-        <LineupColumnsDialog columns={columns} />
+        <div className="flex shrink-0 gap-2">
+          <LeagueFiltersDialog
+            filters={filters}
+            onChange={setFilters}
+            leagues={leagues}
+          />
+          <LineupColumnsDialog columns={columns} />
+        </div>
       </header>
 
       {error ? (
@@ -98,9 +146,25 @@ export function LeaguesHome({
             <p className="rounded-2xl border border-foreground/12 bg-foreground/[0.04] p-6 text-sm text-foreground/60">
               No leagues found{state.season ? ` for ${state.season}` : ""}.
             </p>
+          ) : visible.length === 0 ? (
+            // A different claim from the one above: that one is about the
+            // manager, this one is about the selection — and it is the reader's
+            // to undo, so it says so.
+            <div className="rounded-2xl border border-foreground/12 bg-foreground/[0.04] p-6">
+              <p className="text-sm text-foreground/60">
+                No leagues match these filters.
+              </p>
+              <button
+                type="button"
+                onClick={() => setFilters(DEFAULT_LEAGUE_FILTERS)}
+                className="mt-3 rounded-lg border border-active/40 bg-active/10 px-4 py-1.5 text-sm font-medium text-active transition-colors hover:bg-active/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/50"
+              >
+                Clear filters
+              </button>
+            </div>
           ) : (
             <ul className="grid gap-3 @2xl:grid-cols-2">
-              {leagues.map((league) => (
+              {visible.map((league) => (
                 <LeagueCard
                   key={league.league_id}
                   league={league}

@@ -12,14 +12,20 @@ export type LeagueRecord = { wins: number; losses: number; ties: number };
 /**
  * A manager's league, as read from Postgres and sent on the leagues stream.
  *
- * Trimmed to what the league card renders. TheLabX's carries `settings`,
- * `roster_positions` and `scoring_settings` too, for a lineup solver and a
- * scoring read that are not ported — this repo's `Tool` sets the precedent for
- * which way to err, and re-adding a field is cheap.
- *
  * `avatar_url` is a full URL rather than Sleeper's avatar id, built server-side
  * by `sleeperAvatarUrl`, so a `"use client"` module never imports
  * `shared/sleeper` to render one.
+ *
+ * **The last three are Sleeper's own blobs, sent whole, and that is the league
+ * filters' doing** — this type was trimmed to what the card renders until
+ * `features/shared/league-filters` needed them. Whole rather than reduced to
+ * derived booleans, because the Settings and Scoring menus are built from the
+ * keys *the leagues in hand actually carry*: what a league pays for and how it
+ * is configured are house rules, and a fixed list of flags would offer keys
+ * nobody sets while hiding the one someone wants to filter on. The cost is
+ * ~2.2KB a league — Sleeper writes out its whole scoring template — and it is
+ * paid twice on a refresh stream, since the cached result and the post-sync one
+ * both carry the list.
  */
 export type ManagerLeague = {
   league_id: string;
@@ -31,6 +37,23 @@ export type ManagerLeague = {
   /** The manager's team name in this league, where they have set one. */
   team_name: string | null;
   record: LeagueRecord | null;
+  /**
+   * The league's lineup slots, `["QB","RB",…,"BN"]`.
+   *
+   * **Null and `[]` are different answers and readers must keep them apart.** A
+   * league whose graph has not been fetched has no lineup on file, where an
+   * empty array would be a league that starts nobody — which is why `slotCount`
+   * answers null and a slot rule *fails* rather than passing on an assumed zero.
+   */
+  roster_positions: string[] | null;
+  /**
+   * Sleeper's league settings blob — `type`, `best_ball`, `taxi_slots`,
+   * `trade_deadline` and ~45 more. Loosely typed because it is: the values are
+   * mostly numbers, and a reader that needs one guards for it.
+   */
+  settings: Record<string, unknown> | null;
+  /** What the league pays per stat — `rec`, `pass_td`, `bonus_rec_te`, … */
+  scoring_settings: Record<string, number> | null;
 };
 
 /** Incremental sync progress, reported after each league finishes. */

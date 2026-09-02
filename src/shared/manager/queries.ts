@@ -191,6 +191,10 @@ type LeagueRow = {
   wins: string | null;
   losses: string | null;
   ties: string | null;
+  // JSONB comes back parsed, so these arrive as the shapes the contract names.
+  roster_positions: string[] | null;
+  settings: Record<string, unknown> | null;
+  scoring_settings: Record<string, number> | null;
 };
 
 /**
@@ -212,6 +216,7 @@ export async function getManagerLeagues(
 ): Promise<ManagerLeague[]> {
   const { rows } = await pool.query<LeagueRow>(
     `SELECT l.league_id, l.name, l.season, l.status, l.total_rosters, l.avatar,
+        l.roster_positions, l.settings, l.scoring_settings,
         lu.team_name,
         mr.settings->>'wins'   AS wins,
         mr.settings->>'losses' AS losses,
@@ -240,6 +245,11 @@ export async function getManagerLeagues(
     avatar_url: sleeperAvatarUrl(r.avatar, "thumb"),
     team_name: r.team_name,
     record: toRecord(r),
+    // Sleeper's own blobs, forwarded rather than reduced — see `ManagerLeague`
+    // for why the league filters need the keys and not a set of flags.
+    roster_positions: r.roster_positions,
+    settings: r.settings,
+    scoring_settings: r.scoring_settings,
   }));
 }
 

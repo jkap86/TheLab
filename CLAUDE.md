@@ -258,12 +258,14 @@ it arrives with `/api/adp` and its filters. **There is no ADP data in this repo:
 the curve is the seam, waiting for a source.**
 
 `shared/projections/slots.ts` is the zero-runtime-import slot vocabulary,
-copied verbatim; `DEFENSIVE_SLOTS`/`IDP_SLOTS` have no reader yet, on the same
-terms as `sleeper.types.ts` above — it is the ported vocabulary of record.
-Modules that must resolve under Node's test runner (`adp-value.ts`,
-`optimal.ts`, `ktc/roster.ts`) import it relatively with `.ts` rather than
-through the folder's barrel, which reaches the network via `ros-read` and is
-therefore server-only.
+copied verbatim. `IDP_SLOTS` has the reader its doc comment always named — the
+league filters' `IDP` slot group — and `DEFENSIVE_SLOTS` still has none, which
+is now the *point* of keeping the two apart rather than an accident: the filter
+narrows on the individual defenders and the projections caveat wants the wider
+set. Modules that must resolve under Node's test runner (`adp-value.ts`,
+`optimal.ts`, `ktc/roster.ts`, `league-filters/defaults.ts`) import it
+relatively with `.ts` rather than through the folder's barrel, which reaches the
+network via `ros-read` and is therefore server-only.
 
 ## Rest-of-season lineups
 
@@ -430,6 +432,98 @@ with `/api/adp`.
 pricing the way `adp-value.ts` was from its board half — ADP boards and lineup
 pricing both split on it and a second spelling is the drift it prevents. The
 folder's sync half arrived since; see the KeepTradeCut section below.
+
+## Filtering the league list
+
+`features/shared/league-filters` narrows the manager page's leagues on five
+dimensions, and the split between them is the design: **two are fixed segments
+over what a league *is*** (Type — Sleeper's `settings.type` 0/1/2/3 — and
+Format, which is `best_ball`), and **three are lists of rules the reader
+builds** (Settings, Roster slots, Scoring), each rule a key, a comparison and a
+number. The four questions worth one press survive as quick-adds that write the
+equivalent rule: `QB+SF ≥ 2` *is* `isSuperflexLineup`, spelled in a vocabulary
+the reader can then edit into `QB+SF = 3`.
+
+Ported from TheLabX minus its `season` and `status` fields. Season is gone
+because this route answers one season by construction, so the control would have
+a single option — a fact rather than a choice, which is what its own
+`SeasonBand` self-hides for. Status was out of scope. Both removals are enforced
+by the compiler: `FIXED_FILTERS`, the `ActiveFilter` union and `clearFilter`'s
+switch are walked generically, so a field added or dropped breaks every reader.
+
+**The leagues payload carries Sleeper's `settings`, `scoring_settings` and
+`roster_positions` whole, and that is what the rule builder costs.**
+`ManagerLeague` was trimmed to what the card renders; these three came back
+because the Settings and Scoring menus are built from *the keys the leagues in
+hand actually carry* — what a league pays for and how it is configured are house
+rules, and a fixed list of derived flags would offer keys nobody sets while
+hiding the one someone wants. Measured on a 113-league account: 519KB of NDJSON,
+33KB gzipped, and the two `result` messages on a refresh stream each carry the
+list. The compression is why this is affordable; the menus it buys are 54
+settings keys and 152 scoring keys rather than a handful of booleans.
+
+**Null is not zero, in three places, and each is a filter that would otherwise
+return the wrong rows silently.** An unsynced `roster_positions` makes
+`slotCount` null so `K = 0` — "leagues without a kicker" — cannot sweep in every
+league whose lineup was never read. A `total_rosters` of 0 is a row stored
+before the league answered, not a real size. And `SettingKey.absent` is read
+*per key*, because Sleeper omits what a league doesn't set: `taxi_slots` missing
+is no taxi squad, but a week has no zero on its scale, so `trade_deadline`
+missing is unknown. An absent *scoring* key is a real 0 for the same reason —
+which is exactly why TE premium is asked as `bonus_rec_te > 0`.
+
+**Three value kinds, and the third is the one that bites.** A quantity gets a
+number field and all six comparisons. A *named* key (`disable_trades` 0/1) gets
+a menu and narrows to is / is not, because `>` on an enum is a question with no
+meaning and `disable_trades = 1` is a filter a reader cannot check. A
+*sentinel* — Sleeper spells "no trade deadline" as `trade_deadline: 99` — reads
+as **null for comparison** and is reachable **by name** instead: read as a week,
+`99 ≤ 12` is false so "an early deadline" works by luck while `99 ≥ 13` answers
+"leagues that trade late" with every league that never stops trading. It keeps
+its number field and gets a key beside it; leaving that key returns the field to
+the bay's opening number, never to 99. `waiver_type` deliberately stays a
+quantity: its 0/1/2 is an ordering nobody has verified, and a quantity is only
+terse where a wrong name is a filter that lies.
+
+Comparisons carry an epsilon, because rates are floats and an exact `===` is one
+binary representation away from denying that a half-PPR league pays 0.5. The
+lists are **AND**, ordered cheapest-first — a league rejected on its type never
+walks its lineup.
+
+`type` and `best_ball` are excluded from the Settings menu (`NON_SETTING_KEYS`):
+they are the Type and Format rails four inches higher, and two controls over one
+axis is an empty list with nothing on screen saying which emptied it.
+
+**The dialog edits a draft and commits on Apply** — the one place it diverges
+from `LineupColumnsDialog`, which writes live. Every number in it is a count
+(per option, per rule, and the rail's total), and a count is only readable if
+the population behind it holds still while you read it; a rule's number field
+would otherwise re-filter on every keystroke. The per-option counts are a
+*cross-tab*, not a tally: each probes the whole draft with one field
+substituted, so lighting Dynasty moves the Format row's numbers underneath it.
+The per-rule count is what that rule *alone* leaves — the answer to "is this the
+rule that emptied my list", which a running total cannot give once there are
+three.
+
+**The selection is per-manager and unpersisted**, on `LeagueTeams`' terms: it is
+a way of reading this list, not a device preference, so it is `useState` rather
+than a `local-store` wrapper. The reset when the manager changes happens
+*during render*, the idiom `useManagerLeagues` documents — an effect would paint
+one frame of the new manager's leagues under the old manager's filters.
+
+Two things on the page must keep reading the **unfiltered** array: `cold`, which
+decides whether the page is a progress bar, and the gate on `useManagerLineups`.
+Taken off the filtered list, a selection matching nothing would put the cold
+sync bar back on screen and suppress the solve for every league on the account.
+The empty states are two, because they are two claims: "No leagues found" is
+about the manager, "No leagues match these filters" is about the selection and
+carries the button that undoes it.
+
+The theme rule bit here and is worth restating: **no alpha on the accent as
+text.** TheLabX draws an already-added quick-add dimmed at `text-active/40`,
+which is ~2:1 on light mode's teal. Here an added preset is drawn *lit* instead
+— the same treatment the rails give a chosen option, which is also a no-op to
+press again, and which has the advantage of being true.
 
 ## KeepTradeCut values
 
