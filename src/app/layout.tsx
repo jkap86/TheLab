@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-// The one loaded face, wired to `--font-display` in `globals.css`. Geist Mono
-// was loaded here too and mapped by nothing — two families fetched, subset and
-// preloaded on every page load for markup that never asked for a monospace.
+// Two faces, both mapped: `--font-display` for everything, `--font-mono` for
+// the account readout, the key legends and the section labels. Geist Mono was
+// previously loaded here and mapped by nothing; it is wired up in
+// `globals.css` now, so it is fetched for markup that asks for it.
 const geistSans = Geist({
   variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
@@ -17,7 +23,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

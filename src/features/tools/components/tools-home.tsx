@@ -5,27 +5,49 @@ import { storeAccount, useStoredAccount } from "@/features/shared";
 import { UserLookup } from "./user-lookup";
 import { ToolGrid } from "./tools-grid";
 
+/**
+ * The page as one console: a bevelled panel holding the wordmark plate, the
+ * account readout and the tool grid.
+ *
+ * The sticky translucent header the account card used to sit under is gone.
+ * The account is a compact readout on the wordmark's row now, so there is
+ * nothing left that needs to follow the scroll, and the panel can carry its own
+ * light instead of a scrim. (`--header-from` / `--header-to`, the scrim's two
+ * tokens, went with it — the sticky header was their only reader.)
+ *
+ * The gutter steps 6 -> 8 -> 13 rather than going straight to the design's 13:
+ * the wordmark plate is a fixed-width object, and at a phone's width the
+ * padding is the only thing left to give it.
+ */
 export function ToolsHome({ heading }: { heading: React.ReactNode }) {
   const user = useStoredAccount();
 
   return (
-    <>
-      <div className="sticky top-0 z-40 -mx-6 -mt-16 bg-[linear-gradient(180deg,var(--header-from),var(--header-to))] px-6 pb-5 pt-3 backdrop-blur-xl after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-16 after:bg-gradient-to-b after:from-[var(--header-to)] after:to-transparent">
+    <div className="relative rounded-3xl border border-foreground/9 bg-[image:var(--panel-bg)] px-6 pb-[4.5rem] pt-16 shadow-[var(--panel-shadow)] sm:px-8 md:px-13">
+      {/* Grain, then the specular hairline along the panel's top edge. Both are
+          what keep a large flat surface from reading as flat. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[image:var(--panel-grain)]"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
+      />
+
+      <header className="relative flex flex-wrap items-center gap-6">
         {heading}
-        <div className="mt-6">
+        <div className="ml-auto">
           <UserLookup user={user} onUserChange={storeAccount} />
         </div>
-      </div>
+      </header>
 
-      {user ? (
-        <p className="mb-6 mt-4 text-lg text-foreground/60">
-          Pick a tool to get started.
-        </p>
-      ) : (
-        <div className="mt-10" />
-      )}
+      <div
+        aria-hidden
+        className="my-9 h-px bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
+      />
 
       <ToolGrid user={user} />
-    </>
+    </div>
   );
 }

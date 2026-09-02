@@ -12,12 +12,14 @@
  *
  * The components are written in alphas over `--color-foreground`
  * (`bg-foreground/[0.04]`, `border-foreground/12`), which is the pattern that
- * makes one set of markup work in both themes: a translucent dark tint on a
- * light ground and a translucent light tint on a dark one read as the same
- * glass card. Anything that had to name a literal colour — the header gradient,
- * the card shadow, the accent glow, the error text — is a token here rather
- * than an `rgba()` in a class string, because those are exactly the values that
- * cannot invert on their own.
+ * makes one set of markup work in both themes.
+ *
+ * The instrument chrome added for the tools page (the title plate, the account
+ * readout, the tactile keys, the card bevels) cannot be expressed that way: a
+ * bevel is a *stack* of literal light and shadow layers, and inverting it is a
+ * different stack, not a different alpha. So each one is a token here — a
+ * gradient or a shadow list — with a light-mode counterpart in the media query,
+ * and the components only ever name the token.
  */
 
 :root {
@@ -35,16 +37,78 @@
 
   --error: #b91c1c;
 
-  /* The sticky header's scrim, and the fade that carries it into the page. */
-  --header-from: rgba(226, 232, 240, 0.78);
-  --header-to: rgba(203, 213, 225, 0.86);
-
   --surface-shadow: rgba(15, 23, 42, 0.22);
+
+  /* ---- Instrument chrome (light) ------------------------------------- */
+
+  /* The console the whole page sits on. */
+  --panel-bg: radial-gradient(120% 80% at 50% -20%, #e8eef1 0%, #f2f5f7 38%, #f6f7f9 72%);
+  --panel-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(15, 23, 42, 0.08),
+    0 60px 120px -60px rgba(15, 23, 42, 0.25);
+  --panel-grain: repeating-linear-gradient(45deg, rgba(15, 23, 42, 0.014) 0 1px, transparent 1px 3px);
+  --panel-specular: linear-gradient(to right, transparent, rgba(11, 109, 99, 0.35), transparent);
+
+  /* The recessed plate the wordmark is engraved into. */
+  --plate-bg: linear-gradient(180deg, #dfe6ea 0%, #eef3f5 55%, #e2e9ec 100%);
+  --plate-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.8), 0 24px 44px -28px rgba(15, 23, 42, 0.3);
+  /* The engraved face, and the extrusion sunk underneath it. */
+  --chrome-face: linear-gradient(180deg, #6b8a8d 0%, #4e6f73 26%, #38585c 46%, #2b494d 53%, #567b7f 62%,
+    #476b6f 82%, #33555a 100%);
+  --chrome-extrude: #ffffff;
+  --chrome-extrude-shadow: 0 1px 0 #f4f8f9, 0 2px 0 #eaf0f1, 0 3px 0 #e0e8ea, 0 4px 0 #d7e0e3,
+    0 5px 1px rgba(255, 255, 255, 0.9);
+  /*
+   * Depth on the engraved type. It has to be `drop-shadow()` filters rather
+   * than a `text-shadow`, because the face is a gradient clipped to the glyphs
+   * — its colour is `transparent`, so a text-shadow would show *through* the
+   * letterforms. And it has to be a token rather than a filter list in a class
+   * string: the dark scheme sinks the type with black, the light scheme lifts
+   * it with white, and one baked list smears whichever ground it was not
+   * written for.
+   */
+  --wordmark-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.9))
+    drop-shadow(0 2px 4px rgba(15, 23, 42, 0.28));
+
+  /* The raised bezel the flask mark is mounted on, and the tactile keys. */
+  --bezel-bg: linear-gradient(180deg, #ffffff, #dbe4e7);
+  --bezel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -2px 4px rgba(15, 23, 42, 0.14),
+    0 6px 14px -6px rgba(15, 23, 42, 0.3), 0 0 20px -4px rgba(13, 148, 136, 0.35);
+  --key-bg: linear-gradient(180deg, #ffffff, #e3eaed);
+  --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 0 rgba(15, 23, 42, 0.14),
+    0 7px 14px -7px rgba(15, 23, 42, 0.3);
+  --key-shadow-pressed: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 0 rgba(15, 23, 42, 0.14);
+
+  /* The account readout: a lit window, not a card. */
+  --readout-bg: linear-gradient(180deg, #eaf6f4, #dcefeb);
+  --readout-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.2), inset 0 0 20px rgba(13, 148, 136, 0.12);
+  --readout-scanlines: repeating-linear-gradient(to bottom, rgba(13, 148, 136, 0.07) 0 1px, transparent 1px 3px);
+  --readout-text: #0b6d63;
+  --readout-text-glow: none;
+  /* The milled groove between a readout and its key. */
+  --groove: linear-gradient(to bottom, transparent, rgba(15, 23, 42, 0.28), transparent);
+  --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.9);
+
+  /* The tool cards. */
+  --card-bg: linear-gradient(158deg, rgba(15, 23, 42, 0.05), rgba(15, 23, 42, 0.012) 46%, rgba(15, 23, 42, 0.035));
+  --card-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(15, 23, 42, 0.1);
+  --card-lift: 0 12px 28px -22px rgba(15, 23, 42, 0.4);
+  --card-lift-hover: 0 38px 70px -22px rgba(15, 23, 42, 0.45);
+  --card-halo-hover: 0 0 70px -14px rgba(13, 148, 136, 0.4);
+  --card-sheen: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.55), transparent);
+  --card-specular: linear-gradient(180deg, rgba(255, 255, 255, 0.6), transparent);
+  --card-floor: repeating-linear-gradient(to right, rgba(13, 148, 136, 0.16) 0 1px, transparent 1px 20px),
+    repeating-linear-gradient(to bottom, rgba(13, 148, 136, 0.16) 0 1px, transparent 1px 20px);
+  --card-edge-light: linear-gradient(to right, transparent, rgba(13, 148, 136, 0.85), transparent);
+  --card-title-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.9))
+    drop-shadow(0 2px 4px rgba(15, 23, 42, 0.2));
+  --card-title-depth-hover: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.9))
+    drop-shadow(0 2px 4px rgba(15, 23, 42, 0.2)) drop-shadow(0 0 18px var(--accent-glow));
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    --background: #08090a;
     --foreground: #ededed;
 
     --accent: #00ffe5;
@@ -52,10 +116,58 @@
 
     --error: #fca5a5;
 
-    --header-from: rgba(28, 48, 65, 0.72);
-    --header-to: rgba(11, 22, 34, 0.82);
-
     --surface-shadow: rgba(0, 0, 0, 0.7);
+
+    /* ---- Instrument chrome (dark) ------------------------------------ */
+
+    --panel-bg: radial-gradient(120% 80% at 50% -20%, #16303c 0%, #0b1418 38%, #08090a 72%);
+    --panel-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.11), inset 0 -1px 0 rgba(0, 0, 0, 0.7),
+      0 60px 120px -60px #000;
+    --panel-grain: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px);
+    --panel-specular: linear-gradient(to right, transparent, rgba(180, 255, 247, 0.5), transparent);
+
+    --plate-bg: linear-gradient(180deg, #0a1114 0%, #101d21 55%, #0b1316 100%);
+    --plate-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.1),
+      inset 0 0 30px rgba(0, 255, 229, 0.06), 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 44px -28px #000;
+    --chrome-face: linear-gradient(180deg, #ffffff 0%, #d8ecec 26%, #8fb3b6 46%, #4d7175 53%, #cfe7e7 62%,
+      #a8c6c7 82%, #6d8f92 100%);
+    --chrome-extrude: #0a1113;
+    --chrome-extrude-shadow: 0 1px 0 #09100f, 0 2px 0 #080e0e, 0 3px 0 #070c0c, 0 4px 0 #060a0a,
+      0 5px 1px rgba(0, 0, 0, 0.9), 0 0 34px rgba(0, 255, 229, 0.18);
+    --wordmark-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35))
+      drop-shadow(0 3px 5px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 22px var(--accent-glow));
+
+    --bezel-bg: linear-gradient(180deg, #2b3a3f, #0d1618);
+    --bezel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.85),
+      0 6px 14px -6px #000, 0 0 20px -4px rgba(0, 255, 229, 0.4);
+    --key-bg: linear-gradient(180deg, #2a383e, #111b1e);
+    --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 3px 0 rgba(0, 0, 0, 0.7),
+      0 7px 14px -7px #000;
+    --key-shadow-pressed: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 1px 0 rgba(0, 0, 0, 0.7);
+
+    --readout-bg: linear-gradient(180deg, #04100f, #061816);
+    --readout-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 0 20px rgba(0, 255, 229, 0.11);
+    --readout-scanlines: repeating-linear-gradient(to bottom, rgba(0, 255, 229, 0.07) 0 1px, transparent 1px 3px);
+    --readout-text: #9ffff2;
+    --readout-text-glow: 0 0 11px rgba(0, 255, 229, 0.75);
+    --groove: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9), transparent);
+    --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.07);
+
+    --card-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.018) 46%,
+      rgba(255, 255, 255, 0.05));
+    --card-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.17), inset 0 -1px 0 rgba(0, 0, 0, 0.55);
+    --card-lift: 0 12px 28px -22px rgba(0, 0, 0, 0.95);
+    --card-lift-hover: 0 38px 70px -22px rgba(0, 0, 0, 0.95);
+    --card-halo-hover: 0 0 70px -14px rgba(0, 255, 229, 0.45);
+    --card-sheen: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.14), transparent);
+    --card-specular: linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent);
+    --card-floor: repeating-linear-gradient(to right, rgba(0, 255, 229, 0.16) 0 1px, transparent 1px 20px),
+      repeating-linear-gradient(to bottom, rgba(0, 255, 229, 0.16) 0 1px, transparent 1px 20px);
+    --card-edge-light: linear-gradient(to right, transparent, rgba(0, 255, 229, 0.85), transparent);
+    --card-title-depth: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6))
+      drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5));
+    --card-title-depth-hover: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6))
+      drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 22px var(--accent-glow));
   }
 }
 
@@ -64,9 +176,13 @@
   --color-foreground: var(--foreground);
   --color-active: var(--accent);
   --color-error: var(--error);
+  --color-readout: var(--readout-text);
 
   --font-display: var(--font-geist-sans), ui-sans-serif, system-ui,
     "Helvetica Neue", Arial, sans-serif;
+  /* The readout, the key legends and the section labels are the only monospace
+     on the page, and the only reason the face is loaded again. */
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 body {
@@ -100,5 +216,17 @@ body {
   .lab-anim {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/*
+ * The cards rise toward the viewer on hover. Under reduced motion the rise and
+ * the resting tilt both go — a card that is permanently tilted but never moves
+ * reads as a rendering fault rather than a choice.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .lab-card-3d,
+  .lab-card-3d:hover {
+    transform: none !important;
   }
 }

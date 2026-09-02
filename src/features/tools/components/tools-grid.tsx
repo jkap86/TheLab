@@ -6,9 +6,17 @@ import { ToolLinkCard } from "./tool-link-card";
 
 export function ToolGrid({ user }: { user: UserInfo | null }) {
   return (
-    <ul className="grid gap-4 sm:grid-cols-2">
+    // Three across at the top breakpoint: the grid is sized for the ~8-10 tools
+    // this page is growing into, not the five it has.
+    //
+    // Each `<li>` owns the `perspective` (so every card is projected from its
+    // own centre rather than from one vanishing point at the grid's middle) and
+    // is itself `flex`, which is what lets the card be `flex-1` instead of
+    // `h-full` — see the note in `tool-card.tsx`. The row gap leaves room for
+    // the hover rise; the column gap does not need to.
+    <ul className="grid grid-cols-1 gap-x-[1.125rem] gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
       {tools.map((tool) => (
-        <li key={tool.href}>
+        <li key={tool.href} className="flex [perspective:2400px]">
           <ToolLinkCard
             tool={tool}
             href={toolHref(tool, user?.username ?? null)}

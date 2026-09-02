@@ -588,6 +588,77 @@ barrel's exact terms: a client module needing `isSuperflexLineup` imports
 (`ktcBoardValue`, `rosterKtcValue`) — readers all, arriving with the surface
 that reads them.
 
+## The tools console
+
+`/tools` is one bevelled panel: the wordmark plate and the account readout on
+one row, a rule, then the tool grid. Applied from a design handoff, and three
+things about it are structural rather than cosmetic.
+
+**The sticky header is gone, and nothing replaced it.** The account used to be a
+full-width card under a translucent scrim that followed the scroll; it is a
+compact readout on the heading's own row now, so there is nothing left to
+follow. The scrim's two tokens went with it — a token whose only reader was
+deleted is dead weight, in the same way Geist Mono was before this page asked
+for it.
+
+**The grid is three across at `lg`**, sized for the eight to ten tools the page
+is growing into rather than the five it has. `PageShell width="wide"` is reused
+for it; the design's placeholder cards (Values, Matchups, Drafts, League Graph)
+are *not* shipped and `constants/tools.ts` is untouched.
+
+**Two CSS constraints carry the card, and both are silent when broken.**
+
+- **`transform-style: preserve-3d` and `overflow: hidden` are mutually
+  exclusive.** The clip forces a flat rendering context and every child
+  `translateZ` collapses into the card's plane — no error, just a card whose
+  contents no longer separate from the glass as it rises. So every decorative
+  layer (specular, sheen, graticule floor, glow, edge light) lives inside one
+  absolutely-positioned wrapper that does the clipping, and the content layers
+  stay direct children. Do not move the clip onto the card.
+- **The card is `flex-1` inside a `flex` `<li>`, never `h-full`.** A percentage
+  height cannot resolve against an auto-sized grid row: the row is sized short
+  and the card's layout box overflows its own cell, putting the "Open" row under
+  the next row of cards. It looks correct until the descriptions are uneven.
+
+The `<li>` owns the `perspective` rather than the `<ul>`, so each card is
+projected from its own centre instead of from one vanishing point at the grid's
+middle.
+
+**The type is a gradient clipped to the glyphs, which changes what depth is
+made of.** `bg-clip-text` + `text-transparent` means a `text-shadow` renders
+*through* the letterforms; depth has to be `drop-shadow()` filters, which follow
+the glyph alpha. Both the wordmark and the tool names do this, and both take
+their filter stack from a token — see the Theme section for why the stack cannot
+be written into the class string.
+
+**Both copies of the wordmark are `whitespace-nowrap`, and the type steps down
+below `sm`.** The engraving is two stacked copies of "The Lab" — an `aria-hidden`
+extrusion under the `<h1>` face. If the face wraps and the extrusion cannot, the
+extrusion's second line hangs off the plate as a ghost "LAB"; the plate is also
+wider than a phone at 2.5rem, so the two are one fix. For the same reason the
+panel's gutter steps `6 → 8 → 13` rather than going straight to the design's 13,
+and the lookup input is fluid below `sm` and `w-56` above it — a fixed-width
+input is wider than the panel's content box on a phone.
+
+**Light mode is derived, not measured.** The design was approved in dark; every
+chrome token has a light counterpart reasoned out from it (bevels invert, the
+chrome face becomes a dark metal gradient so it reads on a light plate, the
+readout's glow is `none` because a glow under dark-on-light type only smears
+it). It was checked at 1280 and 390 in both schemes after the port, which is
+what turned up the ghost wordmark and the smeared engraving, but it has had no
+designer's pass.
+
+**Only `LabWordmark` joined the barrel.** The page passes it in as `ToolsHome`'s
+heading, which is what keeps the one piece of static copy on the server side of
+the client boundary. `tools`, `toolHref` and `Tool` stay out on the folder rule:
+only this folder's own modules build on them.
+
+Accessibility that the chrome must not cost: exactly one `<h1>` (the extrusion
+copy is `aria-hidden`), the readout's live state announced by `sr-only`
+"Connected" rather than by the pulsing dot alone, disabled cards keeping
+`role="link"` + `aria-disabled` + their `sr-only` reason, and nothing below
+`foreground/60` or under 11px — the mono legends sit exactly on that floor.
+
 ## Theme
 
 Two schemes, one set of markup, and `globals.css` is the whole of it: tokens on
@@ -607,18 +678,31 @@ Two rules for adding to it:
   `bg-foreground/[0.04]` and `border-foreground/12` are what make one card read
   correctly in both schemes — a translucent dark tint on a light ground and a
   translucent light tint on a dark one are the same glass.
-- **Anything that must name a colour becomes a token.** The header scrim, the
-  card shadow, the accent glow and the error text are all `var(--…)` in the
-  class string for exactly this reason: an `rgba()` typed into a Tailwind
-  arbitrary value cannot invert.
+- **Anything that must name a colour becomes a token.** The card shadow, the
+  accent glow and the error text are all `var(--…)` in the class string for
+  exactly this reason: an `rgba()` typed into a Tailwind arbitrary value cannot
+  invert. (The header scrim's `--header-from` / `--header-to` were the third
+  example until the tools page's sticky header went; the tokens went with it.)
+- **A bevel is a stack, and the inverse is a different stack — not a different
+  alpha.** The tools console's chrome (plate, bezel, key, readout, groove, card,
+  panel) is therefore a token *per surface* holding a whole gradient or
+  shadow list, with a light counterpart in the media query, rather than the
+  alphas the rest of the app is written in. The same goes for depth on
+  *engraved* type: `--wordmark-depth` and `--card-title-depth` sink the glyphs
+  with black on the dark ground and lift them with white on the light one, and
+  the hover glow is a second token (`--card-title-depth-hover`) because `filter`
+  does not compose across two declarations the way `box-shadow` lists do.
 
 **The accent is two colours, deliberately.** `#00ffe5` is ~15:1 on the dark
 ground and ~1.3:1 on white, and it is used as *text*. Light mode gets a teal
 (`#0b6d63`, ~5.2:1). Watch alphas on it — `text-active/80` drops the light-mode
 label below AA, which is why the account heading uses full opacity.
 
-`--font-display` maps `--font-geist-sans` from `layout.tsx`, which is the only
-face loaded. Geist Mono was loaded too and mapped by nothing; it is gone.
+`--font-display` maps `--font-geist-sans` and `--font-mono` maps
+`--font-geist-mono`, both loaded in `layout.tsx`. Geist Mono was dropped once
+for being loaded and mapped by nothing; it is back because the tools console's
+readout, key legends and labels ask for it — the test is a reader, not the
+file's presence.
 
 `.lab-anim` marks anything decorative that moves, so the
 `prefers-reduced-motion` rule can stop all of it at once. It uses `!important`

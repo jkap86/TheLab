@@ -1,19 +1,15 @@
 import { PageShell } from "@/features/shared";
-import { ToolsHome } from "@/features/tools";
+import { LabWordmark, ToolsHome } from "@/features/tools";
 
 export default function ToolsPage() {
   return (
-    <PageShell>
+    // `wide` because the grid is three across now; the default gutters were cut
+    // for a two-column page.
+    <PageShell width="wide">
       {/* The heading is passed in rather than owned by `ToolsHome`, which is a
           client component: this keeps the page's one piece of static copy on
           the server side of the boundary. */}
-      <ToolsHome
-        heading={
-          <h1 className="font-display text-3xl font-semibold tracking-tight">
-            The Lab
-          </h1>
-        }
-      />
+      <ToolsHome heading={<LabWordmark />} />
     </PageShell>
   );
 }

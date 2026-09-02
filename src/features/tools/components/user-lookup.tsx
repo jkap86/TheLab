@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 
 import type { UserInfo } from "@/shared/contract";
 
-import { apiFetch, Avatar, errorMessage, isAbortError } from "@/features/shared";
+import { apiFetch, errorMessage, isAbortError } from "@/features/shared";
+
+import { AccountReadout } from "./account-readout";
 
 export function UserLookup({
   user,
@@ -58,56 +60,34 @@ export function UserLookup({
     setError(null);
   };
 
-  return (
-    <section className="@container rounded-2xl border border-foreground/12 bg-foreground/[0.04] p-6 shadow-[0_24px_60px_-34px_var(--surface-shadow)] backdrop-blur-xl">
-      {/* Full opacity rather than /80: the light-mode accent is already only
-          ~5:1 against the page, and the alpha dropped this label below AA. */}
-      <h2 className="mb-4 font-display text-[0.6875rem] font-medium uppercase tracking-[0.28em] text-active">
-        Your Sleeper account
-      </h2>
+  // Resolved and unresolved are different objects now, not two states of one
+  // card: the readout is an instrument reporting a value, and the lookup is the
+  // control you use when it has none.
+  if (user) {
+    return (
+      <div className="flex flex-col items-end gap-2">
+        <AccountReadout user={user} onChange={handleChange} />
+      </div>
+    );
+  }
 
-      {user ? (
-        <div className="flex items-center gap-4">
-          <Avatar
-            url={user.avatar_url}
-            name={user.display_name || user.username}
-            size="xl"
+  return (
+    <div className="flex flex-col items-stretch gap-2 sm:items-end">
+      <form
+        onSubmit={handleSubmit}
+        className="flex w-full items-center rounded-full border border-foreground/8 bg-[image:var(--key-bg)] p-1.5 shadow-[var(--plate-shadow)] sm:w-auto"
+      >
+        <label htmlFor="tools-username" className="sr-only">
+          Sleeper username
+        </label>
+        {/* The window shrinks with the row below `sm` and takes the design's
+            fixed width above it: a `w-56` input is wider than the panel's
+            content box on a phone, and the row has no other slack to give. */}
+        <div className="relative flex min-w-0 flex-1 items-center overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] shadow-[var(--readout-shadow)] sm:flex-none">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
           />
-          <div className="min-w-0 flex-1">
-            {/* Sleeper lets a display name go missing, so the username is
-                the fallback everywhere this pair is shown. */}
-            <p className="truncate font-display text-2xl font-semibold tracking-tight">
-              {user.display_name || user.username}
-            </p>
-            <p className="text-sm text-foreground/45">@{user.username}</p>
-          </div>
-          {/* This account is resolved (right avatar, right spelling) — the whole
-              point of looking it up before a tool is picked — so it reads as a
-              live connection. The dot's expanding ring animates via `tools-pulse`
-              and freezes under reduced motion (`.lab-anim`). */}
-          <span className="hidden shrink-0 items-center gap-2 text-xs text-foreground/55 sm:inline-flex">
-            <span
-              className="lab-anim h-1.5 w-1.5 rounded-full bg-active"
-              style={{ animation: "tools-pulse 2.4s ease-out infinite" }}
-            />
-            Connected
-          </span>
-          <button
-            type="button"
-            onClick={handleChange}
-            className="shrink-0 rounded-lg border border-foreground/15 px-4 py-2 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/50"
-          >
-            Change
-          </button>
-        </div>
-      ) : (
-        <form
-          onSubmit={handleSubmit}
-          className="flex flex-wrap items-center gap-3"
-        >
-          <label htmlFor="tools-username" className="sr-only">
-            Sleeper username
-          </label>
           <input
             id="tools-username"
             type="text"
@@ -118,24 +98,29 @@ export function UserLookup({
             placeholder="Sleeper username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-foreground/15 bg-foreground/[0.03] px-4 py-2.5 text-base placeholder:text-foreground/35 focus:border-active/50 focus:outline-none focus:ring-1 focus:ring-active/40"
+            className="relative w-full min-w-0 bg-transparent px-4 py-2 font-mono text-[0.9375rem] text-readout placeholder:text-foreground/35 focus:outline-none sm:w-56"
           />
-          <button
-            type="submit"
-            disabled={loading || !username.trim()}
-            className="rounded-lg border border-active/40 bg-active/10 px-5 py-2.5 font-medium text-active transition-colors hover:bg-active/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/50 disabled:cursor-not-allowed disabled:border-foreground/10 disabled:bg-transparent disabled:text-foreground/25"
-          >
-            {loading ? "Finding…" : "Find"}
-          </button>
-        </form>
-      )}
+        </div>
+
+        <span
+          aria-hidden
+          className="mx-2 my-[0.1875rem] w-px self-stretch bg-[image:var(--groove)] shadow-[var(--groove-highlight)]"
+        />
+
+        <button
+          type="submit"
+          disabled={loading || !username.trim()}
+          className="shrink-0 rounded-full border border-foreground/10 bg-[image:var(--key-bg)] px-4 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/80 shadow-[var(--key-shadow)] transition-[transform,box-shadow,color] duration-150 hover:text-readout active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 disabled:cursor-not-allowed disabled:text-foreground/25 disabled:shadow-[var(--key-shadow-pressed)] disabled:active:translate-y-0"
+        >
+          {loading ? "Finding…" : "Find"}
+        </button>
+      </form>
 
       {error && (
-        <p role="alert" className="mt-3 text-sm text-error">
+        <p role="alert" className="text-sm text-error">
           {error}
         </p>
       )}
-    </section>
+    </div>
   );
 }
-

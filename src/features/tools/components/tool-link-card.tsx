@@ -22,8 +22,8 @@ export function ToolLinkCard({
       // bare `<div>` the attribute has no host role and is simply dropped, so
       // the card announced as ordinary text and the dimming — the only thing
       // saying it is inert — was invisible to a screen reader. The reason is
-      // stated too, since the account this is waiting on is resolved in a card
-      // several hundred pixels up the page.
+      // stated too, since the account this is waiting on is resolved in a
+      // readout several hundred pixels up the page.
       <div
         role="link"
         aria-disabled="true"
