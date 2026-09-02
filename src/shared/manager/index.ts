@@ -42,7 +42,14 @@ export {
   leagueGraphWeeks,
 } from "./graph-weeks";
 export type { SyncClock } from "./graph-weeks";
-export { getManagerLeagues, getManagerSyncState } from "./queries";
+export {
+  getManagerDraftAdp,
+  getManagerLeagues,
+  getManagerLineupRows,
+  getManagerSyncState,
+} from "./queries";
+export { solveLeagueLineup } from "./ros-lineups";
+export type { RosLineupLeague } from "./ros-lineups";
 export {
   managerSyncAdmission,
   createManagerSyncAdmission,
@@ -56,3 +63,15 @@ export type {
   ManagerSyncRefusal,
   ManagerSyncReservation,
 } from "./sync-admission";
+export {
+  ADP_PEAK,
+  DEFAULT_STEEPNESS,
+  STEEPNESS_RANGE,
+  TYPICAL_STARTING_SLOTS,
+  adpValue,
+  leagueAdpPool,
+  parseSteepness,
+  rosterAdpValue,
+  startingSlotCount,
+} from "./adp-value";
+export type { AdpRosterValue } from "./adp-value";

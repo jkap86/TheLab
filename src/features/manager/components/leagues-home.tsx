@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Avatar } from "@/features/shared";
 
 import { useManagerLeagues } from "../hooks/use-manager-leagues";
+import { useManagerLineups } from "../hooks/use-manager-lineups";
 import { LeagueCard } from "./league-card";
 
 /**
@@ -29,6 +30,15 @@ export function LeaguesHome({
   const state = useManagerLeagues(username, season);
   const { user, leagues, progress, refreshing, error, refreshError } = state;
   const cold = leagues.length === 0 && refreshing;
+
+  // Fetched once the leagues settle — `!refreshing` flipping true is also what
+  // refetches after a cold sync, when the rosters this read solves from were
+  // just written. See the hook.
+  const lineups = useManagerLineups(
+    username,
+    state.season,
+    leagues.length > 0 && !refreshing,
+  );
 
   return (
     <section className="@container">
@@ -88,7 +98,11 @@ export function LeaguesHome({
           ) : (
             <ul className="grid gap-3 @2xl:grid-cols-2">
               {leagues.map((league) => (
-                <LeagueCard key={league.league_id} league={league} />
+                <LeagueCard
+                  key={league.league_id}
+                  league={league}
+                  lineup={lineups?.leagues[league.league_id] ?? null}
+                />
               ))}
             </ul>
           )}

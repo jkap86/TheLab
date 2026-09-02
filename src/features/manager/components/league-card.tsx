@@ -1,5 +1,7 @@
-import type { LeagueRecord, ManagerLeague } from "@/shared/contract";
+import type { LeagueLineup, LeagueRecord, ManagerLeague } from "@/shared/contract";
 import { Avatar } from "@/features/shared";
+
+import { LineupBreakdown } from "./lineup-breakdown";
 
 /**
  * Sleeper's `status`, as words rather than its own vocabulary.
@@ -21,7 +23,14 @@ function formatRecord(record: LeagueRecord): string {
   return record.ties > 0 ? `${base}–${record.ties}` : base;
 }
 
-export function LeagueCard({ league }: { league: ManagerLeague }) {
+export function LeagueCard({
+  league,
+  lineup,
+}: {
+  league: ManagerLeague;
+  /** This league's solved lineup, once the batched lineups read lands. */
+  lineup?: LeagueLineup | null;
+}) {
   const status = STATUS_LABELS[league.status] ?? league.status;
   // Sleeper stores an unset team name as an empty string about as often as it
   // omits the key, so blank is folded in with null rather than rendered as one:
@@ -60,6 +69,8 @@ export function LeagueCard({ league }: { league: ManagerLeague }) {
           )}
         </div>
       )}
+
+      {lineup && lineup.starters.length > 0 && <LineupBreakdown lineup={lineup} />}
     </li>
   );
 }

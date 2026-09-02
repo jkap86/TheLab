@@ -1,0 +1,514 @@
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
+
+import {
+  compareLineup,
+  optimalLineup,
+  recognisedSlots,
+  startingSlots,
+} from "./optimal.ts";
+import type { RosterPlayer } from "./optimal.ts";
+
+/**
+ * The lineup this produces is advice a manager acts on, and a wrong answer looks
+ * exactly like a right one — so the flex cases are pinned individually and the
+ * whole thing is cross-checked against brute force on random rosters at the end.
+ */
+
+const p = (
+  player_id: string,
+  positions: string | string[],
+  points: number,
+): RosterPlayer => ({
+  player_id,
+  positions: Array.isArray(positions) ? positions : [positions],
+  points,
+});
+
+/** Ids in the filled slots, in slot order; null for an empty slot. */
+const filled = (slots: readonly string[], players: RosterPlayer[]) =>
+  optimalLineup(slots, players).map((s) => s.player_id);
+
+const points = (slots: readonly string[], players: RosterPlayer[]) =>
+  Math.round(optimalLineup(slots, players).reduce((a, s) => a + s.points, 0) * 100) / 100;
+
+describe("startingSlots", () => {
+  test("drops the slots that hold players without starting them", () => {
+    assert.deepEqual(
+      startingSlots(["QB", "RB", "BN", "FLEX", "IR", "BN", "TAXI"]),
+      ["QB", "RB", "FLEX"],
+    );
+  });
+});
+
+describe("recognisedSlots", () => {
+  test("keeps the startable slots in order, duplicates included", () => {
+    assert.deepEqual(
+      recognisedSlots(["QB", "RB", "RB", "BN", "WR", "IR", "FLEX"]),
+      ["QB", "RB", "RB", "WR", "FLEX"],
+    );
+  });
+
+  /**
+   * A slot with no positions is eligible for nobody, so leaving it in would seat
+   * an empty scoring zero and quietly drag the team's total down. `compareLineup`
+   * names it in `unknown_slots` instead; the batch callers just leave it out.
+   */
+  test("drops a slot the solver has no positions for", () => {
+    assert.deepEqual(recognisedSlots(["QB", "WEIRD_FLEX", "WR"]), ["QB", "WR"]);
+  });
+});
+
+describe("optimalLineup", () => {
+  test("fills each slot from the players eligible for it", () => {
+    const roster = [p("qb", "QB", 20), p("rb", "RB", 15), p("wr", "WR", 12)];
+    assert.deepEqual(filled(["QB", "RB", "WR"], roster), ["qb", "rb", "wr"]);
+  });
+
+  test("gives a slot its best eligible player", () => {
+    const roster = [p("rb1", "RB", 15), p("rb2", "RB", 9)];
+    assert.deepEqual(filled(["RB"], roster), ["rb1"]);
+  });
+
+  test("FLEX takes the best of RB/WR/TE left over", () => {
+    const roster = [p("rb1", "RB", 15), p("rb2", "RB", 14), p("wr1", "WR", 12)];
+    assert.deepEqual(filled(["RB", "FLEX"], roster), ["rb1", "rb2"]);
+  });
+
+  test("seats the better player in the stricter slot, not the flex", () => {
+    // Both orderings score 29; only one of them reads as sensible advice, and
+    // the arbitrary one would diff against a sane lineup as two needless moves.
+    const roster = [p("rb1", "RB", 15), p("rb2", "RB", 14)];
+    assert.deepEqual(filled(["FLEX", "RB"], roster), ["rb2", "rb1"]);
+    assert.deepEqual(filled(["RB", "FLEX"], roster), ["rb1", "rb2"]);
+  });
+
+  test("orders two copies of the same slot best first", () => {
+    // Both orderings are the same lineup for the same points, but a roster that
+    // lists RB2 above RB1 reads as an oversight, and diffs against a sane current
+    // lineup as two moves that change nothing.
+    const roster = [p("rb1", "RB", 15), p("rb2", "RB", 14), p("rb3", "RB", 9)];
+    assert.deepEqual(filled(["RB", "RB"], roster), ["rb1", "rb2"]);
+    assert.deepEqual(filled(["FLEX", "FLEX"], roster), ["rb1", "rb2"]);
+  });
+
+  test("SUPER_FLEX starts a second quarterback when he outscores the flex", () => {
+    const roster = [p("qb1", "QB", 22), p("qb2", "QB", 19), p("rb1", "RB", 14)];
+    assert.deepEqual(filled(["QB", "SUPER_FLEX"], roster), ["qb1", "qb2"]);
+  });
+
+  test("SUPER_FLEX takes a skill player when he outscores the backup QB", () => {
+    const roster = [p("qb1", "QB", 22), p("qb2", "QB", 9), p("rb1", "RB", 14)];
+    assert.deepEqual(filled(["QB", "SUPER_FLEX"], roster), ["qb1", "rb1"]);
+  });
+
+  test("solves overlapping flexes that slot-by-slot filling gets wrong", () => {
+    // WRRB_FLEX takes RB/WR, REC_FLEX takes WR/TE — neither contains the other.
+    // Filling WRRB first grabs the WR and strands the RB: 10 + 3 = 13. Putting the
+    // WR in REC_FLEX instead scores 18.
+    const roster = [p("wr", "WR", 10), p("rb", "RB", 8), p("te", "TE", 3)];
+    assert.equal(points(["WRRB_FLEX", "REC_FLEX"], roster), 18);
+    assert.deepEqual(filled(["WRRB_FLEX", "REC_FLEX"], roster), ["rb", "wr"]);
+  });
+
+  test("the same trap in the other slot order", () => {
+    const roster = [p("wr", "WR", 10), p("rb", "RB", 8), p("te", "TE", 3)];
+    assert.equal(points(["REC_FLEX", "WRRB_FLEX"], roster), 18);
+    assert.deepEqual(filled(["REC_FLEX", "WRRB_FLEX"], roster), ["wr", "rb"]);
+  });
+
+  test("uses a dual-eligible player wherever he is worth more", () => {
+    // A DL/LB with an LB and an IDP_FLEX open: he should free the flex for the
+    // better of the others rather than blocking it.
+    const roster = [p("hybrid", ["DL", "LB"], 12), p("lb", "LB", 11), p("db", "DB", 4)];
+    assert.equal(points(["LB", "IDP_FLEX"], roster), 23);
+  });
+
+  test("leaves a slot empty when nobody is eligible", () => {
+    const roster = [p("wr", "WR", 12)];
+    assert.deepEqual(filled(["WR", "K", "DEF"], roster), ["wr", null, null]);
+  });
+
+  test("starts nobody in an unrecognised slot", () => {
+    assert.deepEqual(filled(["WEIRD_FLEX"], [p("wr", "WR", 12)]), [null]);
+  });
+
+  test("is deterministic when players tie", () => {
+    const roster = [p("b", "RB", 10), p("a", "RB", 10)];
+    assert.deepEqual(filled(["RB"], roster), ["a"]);
+    assert.deepEqual(filled(["RB"], [...roster].reverse()), ["a"]);
+  });
+
+  test("handles an empty roster and an empty lineup", () => {
+    assert.deepEqual(optimalLineup([], [p("wr", "WR", 12)]), []);
+    assert.deepEqual(filled(["QB"], []), [null]);
+  });
+});
+
+describe("compareLineup", () => {
+  const roster = [
+    p("qb1", "QB", 20),
+    p("rb1", "RB", 15),
+    p("rb2", "RB", 14),
+    p("wr1", "WR", 12),
+    p("te1", "TE", 4),
+  ];
+
+  test("finds the points a bad lineup is leaving on the bench", () => {
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN", "BN"],
+      starters: ["qb1", "rb1", "te1"],
+      players: roster,
+    });
+
+    assert.equal(result.current_points, 39);
+    assert.equal(result.optimal_points, 49);
+    assert.equal(result.points_left, 10);
+    assert.deepEqual(result.start, ["rb2"]);
+    assert.deepEqual(result.sit, ["te1"]);
+  });
+
+  test("says nothing to change when the lineup is already optimal", () => {
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX"],
+      starters: ["qb1", "rb1", "rb2"],
+      players: roster,
+    });
+
+    assert.equal(result.points_left, 0);
+    assert.deepEqual(result.start, []);
+    assert.deepEqual(result.sit, []);
+  });
+
+  test("reads Sleeper's empty-slot marker as an empty slot", () => {
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB"],
+      starters: ["qb1", "0"],
+      players: roster,
+    });
+
+    assert.deepEqual(result.current[1], { slot: "RB", player_id: null, points: 0 });
+    assert.deepEqual(result.start, ["rb1"]);
+  });
+
+  test("scores a started player with no projection as zero, not as absent", () => {
+    // Dropping him would credit the current lineup with a slot it isn't using.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB"],
+      starters: ["qb1", "unknown-player"],
+      players: roster,
+    });
+
+    assert.equal(result.current[1].player_id, "unknown-player");
+    assert.equal(result.current[1].points, 0);
+    assert.equal(result.current_points, 20);
+    assert.deepEqual(result.sit, ["unknown-player"]);
+  });
+
+  test("drops an unrecognised slot from both lineups and names it", () => {
+    const result = compareLineup({
+      rosterPositions: ["QB", "WEIRD_FLEX", "RB"],
+      starters: ["qb1", "wr1", "rb1"],
+      players: roster,
+    });
+
+    assert.deepEqual(result.unknown_slots, ["WEIRD_FLEX"]);
+    assert.deepEqual(
+      result.current.map((s) => [s.slot, s.player_id]),
+      [["QB", "qb1"], ["RB", "rb1"]],
+    );
+    // The RB slot keeps its own starter: dropping the unknown slot must not
+    // shift `starters` by one and blame the wrong player.
+    assert.equal(result.points_left, 0);
+  });
+
+  test("ignores bench slots on both sides", () => {
+    const result = compareLineup({
+      rosterPositions: ["QB", "BN", "BN"],
+      starters: ["qb1"],
+      players: roster,
+    });
+
+    assert.equal(result.current.length, 1);
+    assert.equal(result.optimal.length, 1);
+    assert.equal(result.points_left, 0);
+  });
+
+  test("never reports negative points left", () => {
+    const result = compareLineup({
+      rosterPositions: ["QB"],
+      starters: ["qb1"],
+      players: [p("qb1", "QB", 20.005)],
+    });
+    assert.ok(result.points_left >= 0);
+  });
+});
+
+/**
+ * A week that is part-way played, which is the case the rest of this module
+ * deliberately knows nothing about.
+ *
+ * Every test above asks "what is the best lineup from this roster"; these ask
+ * "what is the best lineup still *reachable*", which is the only answerable
+ * question once some of the games are behind you. The failure being pinned is
+ * not an arithmetic one — it is advice to make a move the platform will refuse,
+ * which reads as a perfectly plausible number.
+ */
+describe("compareLineup with played games locked", () => {
+  const roster = [
+    p("qb1", "QB", 20),
+    p("rb1", "RB", 15),
+    p("rb2", "RB", 14),
+    p("wr1", "WR", 12),
+    p("te1", "TE", 4),
+  ];
+
+  test("holds a played starter's slot instead of upgrading it", () => {
+    // te1 played Thursday and scored his 4. rb2 is on the bench with 14 and has
+    // not played. Without the lock this reads `+10, start rb2` — a swap for a
+    // slot that is settled.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: ["qb1", "rb1", "te1"],
+      players: roster,
+      locked: new Set(["te1"]),
+    });
+
+    assert.equal(result.points_left, 0);
+    assert.deepEqual(result.start, []);
+    assert.deepEqual(result.sit, []);
+    // He is still in the lineup and still scoring — locked is not benched.
+    assert.equal(result.current_points, 39);
+    assert.equal(result.optimal_points, 39);
+    assert.deepEqual(result.optimal[2], { slot: "FLEX", player_id: "te1", points: 4 });
+  });
+
+  test("a played bench player cannot be started", () => {
+    // rb2 is the better player and is sitting on the bench, but his game is
+    // over: there is nothing to be done about it this week.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "BN"],
+      starters: ["qb1", "te1"],
+      players: roster,
+      locked: new Set(["rb2"]),
+    });
+
+    assert.deepEqual(result.start, ["rb1"]);
+    assert.equal(result.optimal_points, 35);
+  });
+
+  test("still moves what is movable into the slots that are still open", () => {
+    // The lock holds one slot; the rest of the lineup is solved as usual.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: ["qb1", "te1", "wr1"],
+      players: roster,
+      locked: new Set(["te1"]),
+    });
+
+    // te1 keeps the RB slot he is somehow in; FLEX is open and takes the best
+    // movable player left.
+    assert.equal(result.current[1].player_id, "te1");
+    assert.equal(result.optimal[1].player_id, "te1");
+    assert.deepEqual(result.start, ["rb1"]);
+    assert.deepEqual(result.sit, ["wr1"]);
+    assert.equal(result.points_left, 3);
+  });
+
+  test("an empty slot stays open even while another is locked", () => {
+    // A settled slot must not make the rest of the lineup settled with it.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX"],
+      starters: ["qb1", "0", "te1"],
+      players: roster,
+      locked: new Set(["te1"]),
+    });
+
+    assert.deepEqual(result.start, ["rb1"]);
+    assert.equal(result.optimal[1].player_id, "rb1");
+  });
+
+  test("an empty lock set is the unlocked answer, to the point", () => {
+    // The horizon callers pass nothing at all, and a caller mid-week may find
+    // nothing played yet; both have to be the question this module already
+    // answers rather than a near-miss of it.
+    const args = {
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: ["qb1", "rb1", "te1"],
+      players: roster,
+    };
+
+    assert.deepEqual(
+      compareLineup({ ...args, locked: new Set() }),
+      compareLineup(args),
+    );
+  });
+
+  test("locking everything leaves the lineup exactly as it stands", () => {
+    // Monday night, nothing left to play: the gap is zero whatever the bench
+    // holds, because there is no move left to make.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: ["qb1", "rb1", "te1"],
+      players: roster,
+      locked: new Set(roster.map((player) => player.player_id)),
+    });
+
+    assert.equal(result.points_left, 0);
+    assert.deepEqual(result.optimal, result.current);
+  });
+});
+
+describe("compareLineup in a best-ball league", () => {
+  const roster = [
+    p("qb1", "QB", 20),
+    p("rb1", "RB", 15),
+    p("rb2", "RB", 14),
+    p("wr1", "WR", 12),
+    p("te1", "TE", 4),
+  ];
+
+  // The `starters` array of a best-ball league is whatever the draft left
+  // behind: nobody sets a lineup there, so it is evidence of nothing. Every
+  // test below hands over a deliberately bad one.
+  const seated = ["qb1", "te1", "wr1"];
+
+  test("starts the best lineup whatever the roster's starters array says", () => {
+    const set = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: seated,
+      players: roster,
+      bestBall: true,
+    });
+
+    assert.deepEqual(set.current, set.optimal);
+    assert.deepEqual(
+      set.current.map((slot) => slot.player_id),
+      ["qb1", "rb1", "rb2"],
+    );
+  });
+
+  test("has no gap and no move to recommend", () => {
+    // The same roster read as an ordinary league leaves 13 on the bench and asks
+    // for two swaps. Here there is nothing to act on, and reporting one would be
+    // advice against a lineup nobody sets.
+    const ordinary = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: seated,
+      players: roster,
+    });
+    assert.equal(ordinary.points_left, 13);
+    assert.deepEqual(ordinary.sit, ["te1", "wr1"]);
+
+    const best = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: seated,
+      players: roster,
+      bestBall: true,
+    });
+    assert.equal(best.points_left, 0);
+    assert.equal(best.current_points, best.optimal_points);
+    assert.equal(best.optimal_points, 49);
+    assert.deepEqual(best.sit, []);
+    assert.deepEqual(best.start, []);
+  });
+
+  test("ignores a played game, because the seat is chosen after it", () => {
+    // rb1 and rb2 have played and te1 has not. In an ordinary league that
+    // settles their slots; here Sleeper picks the best combination at the end of
+    // the week regardless, so the answer is the unconstrained one.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "FLEX", "BN"],
+      starters: seated,
+      players: roster,
+      locked: new Set(["rb1", "rb2"]),
+      bestBall: true,
+    });
+
+    assert.deepEqual(
+      result.current.map((slot) => slot.player_id),
+      ["qb1", "rb1", "rb2"],
+    );
+    assert.equal(result.points_left, 0);
+  });
+
+  test("still names the slots it does not recognise", () => {
+    // The coverage caveat is a fact about this app's slot vocabulary, not about
+    // who sets the lineup, so it survives the shortcut above.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "MYSTERY", "BN"],
+      starters: seated,
+      players: roster,
+      bestBall: true,
+    });
+
+    assert.deepEqual(result.unknown_slots, ["MYSTERY"]);
+    assert.equal(result.current.length, 2);
+  });
+
+  test("hands back two lineups that cannot edit each other", () => {
+    // They are one lineup and the caller reads them as two — a shared array
+    // would let a re-seat of either silently rewrite the other.
+    const result = compareLineup({
+      rosterPositions: ["QB", "RB", "BN"],
+      starters: seated,
+      players: roster,
+      bestBall: true,
+    });
+
+    result.current[0] = { slot: "QB", player_id: null, points: 0 };
+    assert.equal(result.optimal[0].player_id, "qb1");
+  });
+});
+
+describe("optimalLineup vs brute force", () => {
+  test("matches an exhaustive search on 400 random rosters", () => {
+    // The greedy is only optimal because of an argument about matroids; this is
+    // the check that the argument survived contact with the implementation.
+    const SLOTS = ["QB", "RB", "WR", "TE", "FLEX", "SUPER_FLEX", "WRRB_FLEX", "REC_FLEX"];
+    const POSITIONS = [["QB"], ["RB"], ["WR"], ["TE"], ["RB", "WR"], ["WR", "TE"]];
+
+    // Seeded so a failure is reproducible; Math.random would report a different
+    // counterexample every run.
+    let seed = 20260727;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed % n;
+    };
+
+    const best = (slots: string[], players: RosterPlayer[]): number => {
+      const used = new Set<string>();
+      const walk = (i: number): number => {
+        if (i === slots.length) return 0;
+        let top = walk(i + 1); // leave this slot empty
+        for (const player of players) {
+          if (used.has(player.player_id)) continue;
+          const allowed = {
+            QB: ["QB"], RB: ["RB"], WR: ["WR"], TE: ["TE"],
+            FLEX: ["RB", "WR", "TE"], SUPER_FLEX: ["QB", "RB", "WR", "TE"],
+            WRRB_FLEX: ["RB", "WR"], REC_FLEX: ["WR", "TE"],
+          }[slots[i]] as string[];
+          if (!player.positions.some((x) => allowed.includes(x))) continue;
+          used.add(player.player_id);
+          top = Math.max(top, player.points + walk(i + 1));
+          used.delete(player.player_id);
+        }
+        return top;
+      };
+      return Math.round(walk(0) * 100) / 100;
+    };
+
+    for (let run = 0; run < 400; run++) {
+      const slots = Array.from({ length: 1 + rand(4) }, () => SLOTS[rand(SLOTS.length)]);
+      const players = Array.from({ length: 1 + rand(7) }, (_, i) =>
+        p(`p${i}`, POSITIONS[rand(POSITIONS.length)], rand(300) / 10),
+      );
+
+      assert.equal(
+        points(slots, players),
+        best(slots, players),
+        `suboptimal for slots ${slots.join("/")} and ${JSON.stringify(players)}`,
+      );
+    }
+  });
+});

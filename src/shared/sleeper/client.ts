@@ -8,12 +8,26 @@ import type { SleeperUser } from "./types/sleeper.types";
 export const SLEEPER_API_BASE = "https://api.sleeper.app/v1";
 export const SLEEPER_CDN_BASE = "https://sleepercdn.com";
 
+/**
+ * Sleeper's undocumented data host — projections, stats, scores. A different
+ * host from the v1 API with no version segment, and nothing about it is
+ * promised, so its readers parse defensively (see `SleeperProjection`).
+ * Requests to it go through {@link sleeperGet} like every other Sleeper call:
+ * the concurrency bound is per upstream operator, not per hostname.
+ */
+export const SLEEPER_DATA_BASE = "https://api.sleeper.com";
+
 const joinSegments = (segments: (string | number)[]): string =>
   segments.map((s) => encodeURIComponent(String(s))).join("/");
 
 /** Build a Sleeper API URL, encoding every path segment. */
 export function sleeperUrl(...segments: (string | number)[]): string {
   return `${SLEEPER_API_BASE}/${joinSegments(segments)}`;
+}
+
+/** {@link sleeperUrl} for the data host — see {@link SLEEPER_DATA_BASE}. */
+export function sleeperDataUrl(...segments: (string | number)[]): string {
+  return `${SLEEPER_DATA_BASE}/${joinSegments(segments)}`;
 }
 
 /**

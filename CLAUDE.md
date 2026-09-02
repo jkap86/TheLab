@@ -169,6 +169,16 @@ Migrations are `db/migrations/*.sql` under node-pg-migrate, applied by
 `npm run migrate:up` **and** on boot from `src/instrumentation.ts`, which
 rethrows: a server must not serve requests against a schema it cannot vouch for.
 
+**To reset the database, run the migrations down — never a `DROP TABLE` sweep.**
+`npm run migrate:down -- 2` (the numeric argument is a count) drops all ten
+tables in dependency order and deletes the `pgmigrations` rows as it goes;
+`npm run migrate:up` then rebuilds. Dropping the tables directly leaves that
+history populated, and a populated history is a claim in the same way a
+`DEFAULT now()` is: `migrate:up` and the boot hook both report "up to date" and
+recreate nothing, so the server comes up healthy against no schema at all. The
+down blocks were folded in from TheLabX's eight live migrations and are only
+ever exercised by this path, so `--dry-run` first is worth the second it costs.
+
 The numbers TheLabX derives from a request-deadline budget are constants here —
 `DEFAULT_POOL_MAX` and the pool's three timeouts, `ADVISORY_LOCK_WAIT_MS`,
 `DEFAULT_MANAGER_SYNC_LIMIT` (a third of the pool). They are the numbers that
@@ -180,7 +190,119 @@ background crawler and its scheduler, discovery and claim queue (the freshness
 columns are already in the schema for it); the per-league refresh press, its
 cooldown gate and the cache-busting token; the in-process read caches and
 therefore `persistLeagueGraph`'s `affectedOwnerIds`; the request budget and its
-503 taxonomy; players, projections and trades.
+503 taxonomy; players, trades, and projections *storage* — the pure projections
+core (solver, scorer, aggregation) arrived with the lineups route below, but
+the Postgres tables, the weekly sync and its background loops stay with the
+loops that need them.
+
+## Valuing a roster off ADP
+
+`shared/manager/adp-value.ts` turns an average draft pick into a number that can
+be summed. **ADP is ordinal**, so it cannot be added as it stands — a deeper
+roster would only pile up a larger (worse) number and a stud would *lower* the
+total. `adpValue` inverts it onto a cardinal scale and `rosterAdpValue` sums
+that across a roster.
+
+Three decisions carry the module, and all three are in its doc comments:
+
+- **The curve, not a plain inversion.** `maxPick − adp` would make the gap from
+  pick 1 to 2 worth the same as 100 to 101, which overvalues bench depth and
+  undervalues the players a season is won with. It is exponential decay:
+  `ADP_PEAK · 2^(−halvings · (adp − 1) / pool)`.
+- **Anchored to the startable pool, not to a pick count.** `pool` is
+  `leagueAdpPool` — teams × starting slots — so the same ADP means the same
+  thing in a 10- and a 14-team league, and a deeper-starting league (superflex,
+  extra flex, IDP) extends value further down the board because it starts more
+  players. `TYPICAL_STARTING_SLOTS` is the fallback, and it lives in that one
+  function so two lenses on the same league cannot anchor differently.
+- **`DEFAULT_STEEPNESS` is measured, not chosen.** 2.75, fit against 14,082
+  two-sided trades — a completed trade is a revealed near-indifference, so the
+  curve making the fewest look lopsided is the one the market uses. The comment
+  carries why only count-asymmetric trades can answer it and why the figure is a
+  ceiling; re-running TheLabX's `scripts/fit-adp-curve.ts` is how to challenge
+  it.
+
+`rosterAdpValue` takes `bench` as `total − starters` so the three numbers always
+reconcile and a lineup naming someone the roster doesn't hold cannot overdraw
+the bench; an id with no ADP is skipped rather than counted as zero, which is
+what makes `priced` worth reporting beside `rostered`.
+
+The module is pure — its one import is the slot vocabulary — which is the point:
+it unit-tests without a fetch or a database, and `adp-value.test.ts` pins the
+curve's shape (monotonic, peak-capped, pool- and steepness-responsive) rather
+than its literal outputs.
+
+**Ported as the curve half only.** TheLabX's file continues into the *board* —
+`adpBoardFor`, `parseAdpBoardChoices`, `boardSignature`, `ADP_VALUE_PARAMS` —
+which decides *which crawled drafts* a roster is priced against, and pooling ADP
+across different games is meaningless, so that half is load-bearing wherever
+real ADP is involved. It is absent because nothing crawls drafts here yet, and
+it arrives with `/api/adp` and its filters. **There is no ADP data in this repo:
+the curve is the seam, waiting for a source.**
+
+`shared/projections/slots.ts` is the zero-runtime-import slot vocabulary,
+copied verbatim; `DEFENSIVE_SLOTS`/`IDP_SLOTS` have no reader yet, on the same
+terms as `sleeper.types.ts` above — it is the ported vocabulary of record.
+Modules that must resolve under Node's test runner (`adp-value.ts`,
+`optimal.ts`, `ktc/roster.ts`) import it relatively with `.ts` rather than
+through the folder's barrel, which reaches the network via `ros-read` and is
+therefore server-only.
+
+## Rest-of-season lineups
+
+`GET /api/user/[username]/lineups` solves every league's roster into optimal
+starters and bench — one request for the whole page, because the projections
+span is shared across every league and per-card requests would refetch nothing
+but re-enter everything. The client (`use-manager-lineups`) fetches it after
+the leagues stream settles; `!refreshing` flipping true is also the refetch
+after a cold sync, which is exactly when the rosters it solves from were
+written.
+
+**The ordering is projections first, draft capital second — as arithmetic, not
+as a second code path.** `manager/ros-lineups.ts` hands the solver one number
+per player: rest-of-season points plus `adpValue · 1e-7`, the scale chosen so
+the largest possible ADP contribution (10,000 · 1e-7 = 0.001) sits below the
+0.01 that points are rounded to. A projected point can never be outbid by
+draft capital; capital only decides among players whose projections say
+nothing — unprojected stashes, and whole leagues when no projections were read
+(a past season, a failed feed). The payload carries the real pair (`points`
+null when unprojected — never zero — and `adp_value`), so the epsilon cannot
+leak into a total.
+
+The solve itself is TheLabX's, ported whole with its tests: `optimal.ts` (the
+matroid-greedy lineup solver — overlapping flexes are why it isn't a sort),
+`score.ts` (a league's own scoring as a dot product — Sleeper's `pts_ppr` is
+its *default* scoring, and TE-premium or 6-pt-pass leagues differ by exactly
+the margin that misseats a bench), and `aggregate.ts` (sum stat lines, then
+score once — scoring is linear, so that is exact).
+
+**Projections are fetched on request, not stored — deliberately.** TheLabX
+syncs them to Postgres because its background loops read them every tick; here
+the lineups route is the only reader, so `projections/ros-read.ts` pulls the
+remaining weeks from Sleeper's data host (`api.sleeper.com`, undocumented — the
+type doc on `SleeperProjection` is the contract) through the same limiter as
+everything else, folds them (`ros.ts`), and keeps the folded board in process
+for 30 minutes. A failed span is evicted, never cached — the
+`memoize-manager-lookup` rule — and degrades to `from_week: null` plus the
+fallback rather than failing the route. Rows with a null `game_id` are the
+feed's "no game this week" and carry ADP placeholders in `stats`; folding them
+in would sum draft metadata into a season total. The identity half of a row
+(name, positions) is read from *any* row, though — an unprojected player still
+needs positions to be seated by the fallback at all.
+
+The fallback's ADP comes from the drafts already synced with the manager's own
+league graph (`getManagerDraftAdp`), split superflex/standard by counting
+`QB_ELIGIBLE_STARTING_SLOTS` in SQL — the same derived list `isSuperflexLineup`
+reads, bound as a parameter so the two spellings cannot drift. Coverage follows
+that data: a dynasty league's synced draft is its rookie draft, so vets there
+have no number and an unprojected vet sorts to the bench bottom with nothing to
+say. That is the fallback degrading honestly, not a bug; the real boards arrive
+with `/api/adp`.
+
+`shared/ktc/` exists as `roster.ts` only — the superflex predicate, trimmed
+from TheLabX's KTC pricing the way `adp-value.ts` was from its board half —
+because ADP boards and lineup pricing both split on it and a second spelling is
+the drift it prevents.
 
 ## Theme
 

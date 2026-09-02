@@ -5,12 +5,14 @@
 export {
   getSleeperUser,
   sleeperAvatarUrl,
+  sleeperDataUrl,
   sleeperGet,
   sleeperGetOptional,
   sleeperLimiter,
   sleeperUrl,
   SLEEPER_API_BASE,
   SLEEPER_CDN_BASE,
+  SLEEPER_DATA_BASE,
 } from "./client";
 export {
   getUserLeagues,

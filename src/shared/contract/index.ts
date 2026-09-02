@@ -11,3 +11,9 @@ export {
   type LeaguesErrorMessage,
   type LeaguesStreamMessage,
 } from "./leagues";
+export {
+  type LineupPlayer,
+  type LineupSeat,
+  type LeagueLineup,
+  type ManagerLineupsPayload,
+} from "./lineups";

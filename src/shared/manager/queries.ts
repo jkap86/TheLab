@@ -1,7 +1,9 @@
 import { pool } from "@/shared/db";
 import type { LeagueRecord, ManagerLeague } from "@/shared/contract";
+import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 
+import type { RosLineupLeague } from "./ros-lineups";
 import type { ManagerSyncState } from "./sync-freshness";
 
 /*
@@ -222,6 +224,94 @@ function toRecord(r: LeagueRow): LeagueRecord | null {
     losses: Number(r.losses ?? 0),
     ties: Number(r.ties ?? 0),
   };
+}
+
+/**
+ * What the lineups route solves each league from: the slots, the scoring, and
+ * the manager's own roster. An inner JOIN on `rosters` on purpose — a league
+ * where the manager holds no roster (left, or chopped out) has no lineup to
+ * solve, where {@link getManagerLeagues} still lists it.
+ */
+export async function getManagerLineupRows(
+  userId: string,
+  season: string,
+): Promise<RosLineupLeague[]> {
+  const { rows } = await pool.query<{
+    league_id: string;
+    total_rosters: number;
+    roster_positions: string[] | null;
+    scoring_settings: Record<string, number> | null;
+    players: string[] | null;
+  }>(
+    `SELECT l.league_id, l.total_rosters, l.roster_positions,
+            l.scoring_settings, mr.players
+       FROM leagues l
+       JOIN rosters mr
+         ON mr.league_id = l.league_id AND mr.owner_id = $1
+      WHERE l.season = $2
+        AND ${LIVE_LEAGUE_SQL}`,
+    [userId, season],
+  );
+
+  return rows.map((r) => ({
+    league_id: r.league_id,
+    total_rosters: r.total_rosters,
+    roster_positions: r.roster_positions,
+    scoring_settings: r.scoring_settings,
+    players: r.players ?? [],
+  }));
+}
+
+/**
+ * Average draft position over the drafts already synced for this manager's
+ * leagues, split into the two board populations the superflex predicate
+ * defines — pooling ADP across the two games would price a quarterback off the
+ * wrong market at every position (see `adp-value.ts`).
+ *
+ * This is deliberately the fallback's ADP, not TheLabX's crawled boards: the
+ * population is whatever drafts ride along with the manager's own league graph,
+ * which for a dynasty league is its rookie draft. Coverage follows the data —
+ * a player those drafts never took has no number here, and the lineup solve
+ * treats that as "nothing to say" rather than zero. The real board machinery
+ * arrives with `/api/adp`.
+ *
+ * The superflex test is {@link QB_ELIGIBLE_STARTING_SLOTS} counted in SQL —
+ * the same derived list `isSuperflexLineup` reads, bound rather than spelled,
+ * so the two cannot drift.
+ */
+export async function getManagerDraftAdp(
+  userId: string,
+  season: string,
+): Promise<{ superflex: Map<string, number>; standard: Map<string, number> }> {
+  const { rows } = await pool.query<{
+    player_id: string;
+    adp: number;
+    superflex: boolean;
+  }>(
+    `SELECT p.player_id,
+            AVG(p.pick_no)::float8 AS adp,
+            sf.superflex
+       FROM draft_picks p
+       JOIN drafts d ON d.draft_id = p.draft_id
+       JOIN leagues l ON l.league_id = d.league_id
+       JOIN league_users lu
+         ON lu.league_id = l.league_id AND lu.user_id = $1
+      CROSS JOIN LATERAL (
+        SELECT (SELECT count(*)
+                  FROM jsonb_array_elements_text(l.roster_positions) slot
+                 WHERE slot = ANY($3::text[])) > 1 AS superflex
+      ) sf
+      WHERE l.season = $2
+        AND p.player_id IS NOT NULL
+        AND ${LIVE_LEAGUE_SQL}
+      GROUP BY p.player_id, sf.superflex`,
+    [userId, season, [...QB_ELIGIBLE_STARTING_SLOTS]],
+  );
+
+  const superflex = new Map<string, number>();
+  const standard = new Map<string, number>();
+  for (const r of rows) (r.superflex ? superflex : standard).set(r.player_id, r.adp);
+  return { superflex, standard };
 }
 
 /**
