@@ -1,11 +1,19 @@
 @import "tailwindcss";
 
 /*
- * Two themes, one set of components.
+ * Two themes, one set of components. **Dark is the default**, and light is
+ * reached only by the toggle.
+ *
+ * That is a choice, not an oversight: the console is a dark-first design and
+ * its light half is derived from it, so dark is what the app *is* rather than
+ * what a particular machine happens to prefer. `prefers-color-scheme` used to
+ * select between them and no longer does — with a persisted toggle in the
+ * header, an OS query is a second answer to a question that now has an owner,
+ * and the two disagree the moment anyone presses the button.
  *
  * The tokens are declared here on `:root` and mapped into Tailwind's namespace
- * by `@theme inline` below. The indirection is what makes the media query work:
- * a plain `@theme` bakes its value into every generated utility, so
+ * by `@theme inline` below. The indirection is what makes the override work: a
+ * plain `@theme` bakes its value into every generated utility, so
  * `text-foreground` would resolve once, at build time, and no `:root` override
  * could move it afterwards. `inline` emits `var(--foreground)` at each use site
  * instead, and the cascade does the rest.
@@ -18,11 +26,86 @@
  * readout, the tactile keys, the card bevels) cannot be expressed that way: a
  * bevel is a *stack* of literal light and shadow layers, and inverting it is a
  * different stack, not a different alpha. So each one is a token here — a
- * gradient or a shadow list — with a light-mode counterpart in the media query,
- * and the components only ever name the token.
+ * gradient or a shadow list — with a light-mode counterpart below, and the
+ * components only ever name the token.
  */
 
 :root {
+  /* Native widgets — the caret, the scrollbars, an autofilled field —
+     follow this rather than the tokens below. */
+  color-scheme: dark;
+
+  --background: #08090a;
+  --foreground: #ededed;
+
+  --accent: #00ffe5;
+  --accent-glow: rgba(0, 255, 229, 0.45);
+
+  --error: #fca5a5;
+
+  --surface-shadow: rgba(0, 0, 0, 0.7);
+
+  /* ---- Instrument chrome (dark) ------------------------------------ */
+
+  --panel-bg: radial-gradient(120% 80% at 50% -20%, #16303c 0%, #0b1418 38%, #08090a 72%);
+  --panel-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.11), inset 0 -1px 0 rgba(0, 0, 0, 0.7),
+    0 60px 120px -60px #000;
+  --panel-grain: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px);
+  --panel-specular: linear-gradient(to right, transparent, rgba(180, 255, 247, 0.5), transparent);
+
+  --plate-bg: linear-gradient(180deg, #0a1114 0%, #101d21 55%, #0b1316 100%);
+  --plate-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 30px rgba(0, 255, 229, 0.06), 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 44px -28px #000;
+  --chrome-face: linear-gradient(180deg, #ffffff 0%, #d8ecec 26%, #8fb3b6 46%, #4d7175 53%, #cfe7e7 62%,
+    #a8c6c7 82%, #6d8f92 100%);
+  --chrome-extrude: #0a1113;
+  --chrome-extrude-shadow: 0 1px 0 #09100f, 0 2px 0 #080e0e, 0 3px 0 #070c0c, 0 4px 0 #060a0a,
+    0 5px 1px rgba(0, 0, 0, 0.9), 0 0 34px rgba(0, 255, 229, 0.18);
+  --wordmark-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35))
+    drop-shadow(0 3px 5px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 22px var(--accent-glow));
+
+  --bezel-bg: linear-gradient(180deg, #2b3a3f, #0d1618);
+  --bezel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.85),
+    0 6px 14px -6px #000, 0 0 20px -4px rgba(0, 255, 229, 0.4);
+  --key-bg: linear-gradient(180deg, #2a383e, #111b1e);
+  --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 3px 0 rgba(0, 0, 0, 0.7),
+    0 7px 14px -7px #000;
+  --key-shadow-pressed: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 1px 0 rgba(0, 0, 0, 0.7);
+
+  --readout-bg: linear-gradient(180deg, #04100f, #061816);
+  --readout-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 0 20px rgba(0, 255, 229, 0.11);
+  --readout-scanlines: repeating-linear-gradient(to bottom, rgba(0, 255, 229, 0.07) 0 1px, transparent 1px 3px);
+  --readout-text: #9ffff2;
+  --readout-text-glow: 0 0 11px rgba(0, 255, 229, 0.75);
+  --groove: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9), transparent);
+  --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.07);
+
+  --card-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.018) 46%,
+    rgba(255, 255, 255, 0.05));
+  --card-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.17), inset 0 -1px 0 rgba(0, 0, 0, 0.55);
+  --card-lift: 0 12px 28px -22px rgba(0, 0, 0, 0.95);
+  --card-lift-hover: 0 38px 70px -22px rgba(0, 0, 0, 0.95);
+  --card-halo-hover: 0 0 70px -14px rgba(0, 255, 229, 0.45);
+  --card-sheen: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.14), transparent);
+  --card-specular: linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent);
+  --card-floor: repeating-linear-gradient(to right, rgba(0, 255, 229, 0.16) 0 1px, transparent 1px 20px),
+    repeating-linear-gradient(to bottom, rgba(0, 255, 229, 0.16) 0 1px, transparent 1px 20px);
+  --card-edge-light: linear-gradient(to right, transparent, rgba(0, 255, 229, 0.85), transparent);
+  --card-title-depth: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6))
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5));
+  --card-title-depth-hover: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6))
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 22px var(--accent-glow));
+}
+
+/*
+ * Light is the opt-out, reached only by the toggle: `data-theme="light"` on
+ * `<html>`, set before the first paint by the boot script in `layout.tsx` and
+ * flipped by `ThemeToggle`. Dark needs no counterpart selector — it is what
+ * `:root` above already says.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+
   --background: #f6f7f9;
   --foreground: #171717;
 
@@ -106,71 +189,6 @@
     drop-shadow(0 2px 4px rgba(15, 23, 42, 0.2)) drop-shadow(0 0 18px var(--accent-glow));
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #08090a;
-    --foreground: #ededed;
-
-    --accent: #00ffe5;
-    --accent-glow: rgba(0, 255, 229, 0.45);
-
-    --error: #fca5a5;
-
-    --surface-shadow: rgba(0, 0, 0, 0.7);
-
-    /* ---- Instrument chrome (dark) ------------------------------------ */
-
-    --panel-bg: radial-gradient(120% 80% at 50% -20%, #16303c 0%, #0b1418 38%, #08090a 72%);
-    --panel-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.11), inset 0 -1px 0 rgba(0, 0, 0, 0.7),
-      0 60px 120px -60px #000;
-    --panel-grain: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px);
-    --panel-specular: linear-gradient(to right, transparent, rgba(180, 255, 247, 0.5), transparent);
-
-    --plate-bg: linear-gradient(180deg, #0a1114 0%, #101d21 55%, #0b1316 100%);
-    --plate-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.1),
-      inset 0 0 30px rgba(0, 255, 229, 0.06), 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 44px -28px #000;
-    --chrome-face: linear-gradient(180deg, #ffffff 0%, #d8ecec 26%, #8fb3b6 46%, #4d7175 53%, #cfe7e7 62%,
-      #a8c6c7 82%, #6d8f92 100%);
-    --chrome-extrude: #0a1113;
-    --chrome-extrude-shadow: 0 1px 0 #09100f, 0 2px 0 #080e0e, 0 3px 0 #070c0c, 0 4px 0 #060a0a,
-      0 5px 1px rgba(0, 0, 0, 0.9), 0 0 34px rgba(0, 255, 229, 0.18);
-    --wordmark-depth: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35))
-      drop-shadow(0 3px 5px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 22px var(--accent-glow));
-
-    --bezel-bg: linear-gradient(180deg, #2b3a3f, #0d1618);
-    --bezel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.85),
-      0 6px 14px -6px #000, 0 0 20px -4px rgba(0, 255, 229, 0.4);
-    --key-bg: linear-gradient(180deg, #2a383e, #111b1e);
-    --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 3px 0 rgba(0, 0, 0, 0.7),
-      0 7px 14px -7px #000;
-    --key-shadow-pressed: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 1px 0 rgba(0, 0, 0, 0.7);
-
-    --readout-bg: linear-gradient(180deg, #04100f, #061816);
-    --readout-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 0 20px rgba(0, 255, 229, 0.11);
-    --readout-scanlines: repeating-linear-gradient(to bottom, rgba(0, 255, 229, 0.07) 0 1px, transparent 1px 3px);
-    --readout-text: #9ffff2;
-    --readout-text-glow: 0 0 11px rgba(0, 255, 229, 0.75);
-    --groove: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9), transparent);
-    --groove-highlight: 1px 0 0 rgba(255, 255, 255, 0.07);
-
-    --card-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.018) 46%,
-      rgba(255, 255, 255, 0.05));
-    --card-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.17), inset 0 -1px 0 rgba(0, 0, 0, 0.55);
-    --card-lift: 0 12px 28px -22px rgba(0, 0, 0, 0.95);
-    --card-lift-hover: 0 38px 70px -22px rgba(0, 0, 0, 0.95);
-    --card-halo-hover: 0 0 70px -14px rgba(0, 255, 229, 0.45);
-    --card-sheen: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.14), transparent);
-    --card-specular: linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent);
-    --card-floor: repeating-linear-gradient(to right, rgba(0, 255, 229, 0.16) 0 1px, transparent 1px 20px),
-      repeating-linear-gradient(to bottom, rgba(0, 255, 229, 0.16) 0 1px, transparent 1px 20px);
-    --card-edge-light: linear-gradient(to right, transparent, rgba(0, 255, 229, 0.85), transparent);
-    --card-title-depth: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6))
-      drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5));
-    --card-title-depth-hover: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6))
-      drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 22px var(--accent-glow));
-  }
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -229,4 +247,28 @@ body {
   .lab-card-3d:hover {
     transform: none !important;
   }
+}
+
+/*
+ * The theme toggle renders both of its faces and lets the cascade pick one.
+ *
+ * The alternative — reading the stored theme in React — cannot be right on the
+ * first paint: the choice is applied to `<html>` by an inline script while the
+ * HTML is still parsing, and a glyph rendered from client state has to wait for
+ * hydration to learn it. That is one frame of the wrong sun on every load.
+ */
+.theme-when-dark {
+  display: inline-flex;
+}
+
+.theme-when-light {
+  display: none;
+}
+
+:root[data-theme="light"] .theme-when-dark {
+  display: none;
+}
+
+:root[data-theme="light"] .theme-when-light {
+  display: inline-flex;
 }

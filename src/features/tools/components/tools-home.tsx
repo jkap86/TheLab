@@ -1,7 +1,8 @@
 "use client";
 
-import { storeAccount, useStoredAccount } from "@/features/shared";
+import { storeAccount, ThemeToggle, useStoredAccount } from "@/features/shared";
 
+import { CONSOLE_HOUSING, CONSOLE_KEY } from "./console-chrome";
 import { UserLookup } from "./user-lookup";
 import { ToolGrid } from "./tools-grid";
 
@@ -35,10 +36,18 @@ export function ToolsHome({ heading }: { heading: React.ReactNode }) {
         className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
       />
 
-      <header className="relative flex flex-wrap items-center gap-6">
+      <header className="relative flex flex-wrap items-center gap-x-6 gap-y-5">
         {heading}
-        <div className="ml-auto">
+        {/* The cluster wraps within itself rather than the header wrapping it:
+            below `sm` the lookup takes a whole row, and the theme key follows
+            onto its own, still right-aligned. Squeezing the two onto one line
+            at a phone's width leaves an input too narrow to read a username
+            in. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
           <UserLookup user={user} onUserChange={storeAccount} />
+          <div className={CONSOLE_HOUSING}>
+            <ThemeToggle className={`${CONSOLE_KEY} inline-flex items-center`} />
+          </div>
         </div>
       </header>
 

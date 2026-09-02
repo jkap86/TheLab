@@ -8,6 +8,7 @@ import {
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   matchesFilters,
+  ThemeToggle,
   useLineupColumns,
 } from "@/features/shared";
 
@@ -113,6 +114,7 @@ export function LeaguesHome({
             leagues={leagues}
           />
           <LineupColumnsDialog columns={columns} />
+          <ThemeToggle />
         </div>
       </header>
 

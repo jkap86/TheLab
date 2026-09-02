@@ -2,6 +2,8 @@ import type { UserInfo } from "@/shared/contract";
 
 import { Avatar } from "@/features/shared";
 
+import { CONSOLE_HOUSING, CONSOLE_KEY } from "./console-chrome";
+
 /**
  * The resolved account, as a lit readout in a machined housing: window, milled
  * groove, key. One housing rather than three floating chips, so the row reads
@@ -20,7 +22,7 @@ export function AccountReadout({
   onChange: () => void;
 }) {
   return (
-    <div className="inline-flex items-center rounded-full border border-foreground/8 bg-[image:var(--key-bg)] p-1.5 shadow-[var(--plate-shadow)]">
+    <div className={CONSOLE_HOUSING}>
       <div className="relative flex items-center gap-[0.5625rem] overflow-hidden rounded-full border border-black/85 bg-[image:var(--readout-bg)] px-4 py-2 shadow-[var(--readout-shadow)]">
         {/* Scanlines. The one thing that makes the window read as emitting
             light rather than being painted. */}
@@ -55,13 +57,7 @@ export function AccountReadout({
         className="mx-2 my-[0.1875rem] w-px self-stretch bg-[image:var(--groove)] shadow-[var(--groove-highlight)]"
       />
 
-      {/* A key, so it travels down when pressed: the resting shadow carries a
-          3px riser under it and the active shadow drops to 1px. */}
-      <button
-        type="button"
-        onClick={onChange}
-        className="rounded-full border border-foreground/10 bg-[image:var(--key-bg)] px-4 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/80 shadow-[var(--key-shadow)] transition-[transform,box-shadow,color] duration-150 hover:text-readout active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
-      >
+      <button type="button" onClick={onChange} className={CONSOLE_KEY}>
         Change
       </button>
     </div>

@@ -648,6 +648,16 @@ it). It was checked at 1280 and 390 in both schemes after the port, which is
 what turned up the ghost wordmark and the smeared engraving, but it has had no
 designer's pass.
 
+The console's three keys — Find, Change and the theme toggle — take their class
+string from `CONSOLE_KEY` in `console-chrome.ts`, with `CONSOLE_HOUSING` for the
+machined pill they sit in. A key is a physically raised object (a 3px riser in
+the resting shadow, 1px pressed, so it travels), and three hand-copied spellings
+of that is three chances for one of them to stop travelling. The theme key gets
+its own housing beside the account's rather than joining it: below `sm` the
+cluster wraps within itself, so the lookup keeps a full row and the key follows
+onto its own, still right-aligned. Sharing one row there leaves an input too
+narrow to read a username in.
+
 **Only `LabWordmark` joined the barrel.** The page passes it in as `ToolsHome`'s
 heading, which is what keeps the one piece of static copy on the server side of
 the client boundary. `tools`, `toolHref` and `Tool` stay out on the folder rule:
@@ -661,9 +671,18 @@ copy is `aria-hidden`), the readout's live state announced by `sr-only`
 
 ## Theme
 
-Two schemes, one set of markup, and `globals.css` is the whole of it: tokens on
-`:root`, a `prefers-color-scheme: dark` block that moves them, and `@theme
-inline` mapping them into Tailwind's namespace.
+Two schemes, one set of markup, and `globals.css` is nearly the whole of it:
+the dark tokens on `:root`, a `:root[data-theme="light"]` block that moves them,
+and `@theme inline` mapping them into Tailwind's namespace.
+
+**Dark is the default and light is the opt-out**, which is a choice rather than
+an accident of ordering: the console is a dark-first design whose light half is
+derived from it, so dark is what the app *is* rather than what a given machine
+prefers. `prefers-color-scheme` selected between them until the toggle landed
+and now selects nothing — with a persisted choice in the header, an OS query is
+a second answer to a question that has an owner, and the two disagree the moment
+anyone presses the button. Dark needs no selector of its own; the absence of the
+attribute is the default, so only light is ever written.
 
 **`inline` is load-bearing.** A plain `@theme` bakes its value into every
 generated utility, so `text-foreground` would resolve once at build time and no
@@ -686,12 +705,47 @@ Two rules for adding to it:
 - **A bevel is a stack, and the inverse is a different stack — not a different
   alpha.** The tools console's chrome (plate, bezel, key, readout, groove, card,
   panel) is therefore a token *per surface* holding a whole gradient or
-  shadow list, with a light counterpart in the media query, rather than the
-  alphas the rest of the app is written in. The same goes for depth on
+  shadow list, with a light counterpart in the `[data-theme="light"]` block,
+  rather than the alphas the rest of the app is written in. The same goes for depth on
   *engraved* type: `--wordmark-depth` and `--card-title-depth` sink the glyphs
   with black on the dark ground and lift them with white on the light one, and
   the hover glow is a second token (`--card-title-depth-hover`) because `filter`
   does not compose across two declarations the way `box-shadow` lists do.
+
+### The toggle
+
+`ThemeToggle` (in `features/shared`) writes `data-theme` onto `<html>` and
+persists the choice through `local-store`, on `account.ts`'s terms. Three things
+about it are load-bearing, and two were learned from Next's own
+`preventing-flash-before-hydration` guide rather than from first principles:
+
+- **The stored theme is applied by an inline script in `<head>`, not by
+  React.** `THEME_BOOT_SCRIPT` in `shared/theme.ts` runs while the HTML is still
+  parsing, which is the only moment early enough: an effect — even a layout
+  effect — runs after hydration, and on a slow connection the browser has
+  painted the server's markup in the default scheme long before React loads. A
+  reader who chose light would watch the dark console flash on every hard load.
+  The key is a *string in a module with no imports and no `"use client"`*, so
+  the server layout and the client toggle spell it once. It is `localStorage`
+  and not a cookie deliberately: reading a cookie in the root layout opts the
+  whole app out of static prerendering, and `/tools` is prerendered.
+- **`<html>` carries `suppressHydrationWarning`.** React would otherwise treat
+  the attribute it did not render as a mismatch, and its recovery —
+  client-rendering from the nearest boundary — discards the script's work along
+  with the theme.
+- **The toggle re-applies the attribute in a `useLayoutEffect`.** React's
+  dev-only Strict Mode remount resets `<html>` to the attributes it manages from
+  JSX, clearing the one the script set: the stored theme silently reverts to the
+  default under `next dev` and nowhere else. The effect is a no-op in
+  production, and deleting it as dead code makes development lie.
+
+**The button holds no state, and that is what keeps its glyph right.** It
+renders both faces — sun while dark, moon while light — and `globals.css`
+(`.theme-when-dark` / `.theme-when-light`) shows one. State would have to wait
+for hydration to learn what the document already knows, which is one frame of
+the wrong glyph on every load. Each face carries its own `sr-only` label, so the
+accessible name follows the same cascade: a `display: none` face is out of the
+tree entirely, where a single `aria-label` would need the state we just avoided.
 
 **The accent is two colours, deliberately.** `#00ffe5` is ~15:1 on the dark
 ground and ~1.3:1 on white, and it is used as *text*. Light mode gets a teal

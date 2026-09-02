@@ -7,6 +7,7 @@ import type { UserInfo } from "@/shared/contract";
 import { apiFetch, errorMessage, isAbortError } from "@/features/shared";
 
 import { AccountReadout } from "./account-readout";
+import { CONSOLE_HOUSING, CONSOLE_KEY } from "./console-chrome";
 
 export function UserLookup({
   user,
@@ -75,7 +76,7 @@ export function UserLookup({
     <div className="flex flex-col items-stretch gap-2 sm:items-end">
       <form
         onSubmit={handleSubmit}
-        className="flex w-full items-center rounded-full border border-foreground/8 bg-[image:var(--key-bg)] p-1.5 shadow-[var(--plate-shadow)] sm:w-auto"
+        className={`${CONSOLE_HOUSING} flex w-full sm:w-auto`}
       >
         <label htmlFor="tools-username" className="sr-only">
           Sleeper username
@@ -110,7 +111,7 @@ export function UserLookup({
         <button
           type="submit"
           disabled={loading || !username.trim()}
-          className="shrink-0 rounded-full border border-foreground/10 bg-[image:var(--key-bg)] px-4 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/80 shadow-[var(--key-shadow)] transition-[transform,box-shadow,color] duration-150 hover:text-readout active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 disabled:cursor-not-allowed disabled:text-foreground/25 disabled:shadow-[var(--key-shadow-pressed)] disabled:active:translate-y-0"
+          className={`${CONSOLE_KEY} disabled:cursor-not-allowed disabled:text-foreground/25 disabled:shadow-[var(--key-shadow-pressed)] disabled:active:translate-y-0`}
         >
           {loading ? "Finding…" : "Find"}
         </button>

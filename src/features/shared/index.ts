@@ -19,4 +19,6 @@ export {
   storeLineupColumns,
   useLineupColumns,
 } from "./lineup-columns";
+export { THEME_BOOT_SCRIPT } from "./theme";
+export { ThemeToggle } from "./theme-toggle";
 export { PageShell } from "./ui/page-shell";
