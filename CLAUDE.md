@@ -157,6 +157,21 @@ failing upstream turns every request into a fresh fan-out. A row that has never
 had a graph written takes `NEVER_REFRESHED_SQL` rather than `DEFAULT now()`: a
 default is a claim.
 
+**Which leagues are a manager's is one predicate, and a roster row is not a
+team.** `FIELDED_A_TEAM_SQL` in `manager/queries.ts` is the whole rule — it
+holds where the manager holds a rostered team now (`HOLDS_A_ROSTER_SQL`), or was
+chopped out of a chopped league, which is that format's ending rather than an
+exit. Membership is not the test: Sleeper leaves a departed manager in
+`league_users`. Neither is a bare roster row, which is why the roster half reads
+`players` and requires it non-empty — Sleeper keeps the row after the players
+are gone, and ships every roster of an undrafted league empty, so an existence
+test lists leagues with nothing in them to seat, rank or price. **The deliberate
+cost is that a pre-draft league is absent from the page until its draft fills a
+roster**; against the current database that is exactly what the rule removes,
+every empty owned roster stored being a `pre_draft` one. `jsonb_typeof` guards
+the `jsonb_array_length`, since null is Sleeper's own spelling of an empty
+roster and the column is untyped.
+
 **An empty answer from Sleeper is indistinguishable from a failure**, because
 `sleeperGetOptional` folds a 404 and a 200-with-null into the same `[]`. So the
 guards are load-bearing and must not be simplified away:
@@ -287,8 +302,9 @@ lands on the bench — while `capital_total` keeps ranking. Capital ranks are
 invariant to *points*, not to the feed's existence. The query behind it, `getManagerLeagueRosters`, aggregates
 the rosters per league row in one round trip and gates on `HOLDS_A_ROSTER_SQL`
 — the roster half of `FIELDED_A_TEAM_SQL`, extracted so the two spellings
-cannot drift; a league where the manager holds no roster has nothing to rank,
-where `getManagerLeagues` still lists it.
+cannot drift; a league where the manager holds no rostered team — left, chopped
+out, or not yet drafted — has nothing to rank, where `getManagerLeagues` still
+lists the chopped case.
 
 The metric ids are a type-only union in the contract (`LineupMetricId`), and
 the runtime lists live as exhaustive `Record<LineupMetricId, …>`s on each side

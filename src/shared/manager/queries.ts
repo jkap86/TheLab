@@ -91,18 +91,39 @@ const LIVE_LEAGUE_SQL = `l.gone_at IS NULL`;
 
 /**
  * The roster half of {@link FIELDED_A_TEAM_SQL}, on its own because the lineup
- * reads need exactly this much: a league where the manager holds a roster right
- * now. One spelling, so the two questions cannot drift apart. Same
- * interpolation contract — `leagues` aliased `l`, manager id bound as `$1`.
+ * reads need exactly this much: a league where the manager holds a roster with
+ * players on it right now. One spelling, so the two questions cannot drift
+ * apart. Same interpolation contract — `leagues` aliased `l`, manager id bound
+ * as `$1`.
+ *
+ * **A roster row is not a team.** Sleeper keeps the row after the players are
+ * gone — a chopped manager's roster outlives their players going back into the
+ * pool, and a league that has not drafted yet ships every roster empty — so a
+ * bare existence test lists leagues with nothing in them to seat, rank or
+ * price. The players array is what makes it a team, and the deliberate cost is
+ * that a league is absent from the page until its draft fills a roster.
+ *
+ * `jsonb_typeof` before `jsonb_array_length` because the column is nullable and
+ * untyped: null is Sleeper's own spelling of an empty roster, and both it and
+ * anything that is not an array must read as "no players" rather than error the
+ * query mid-scan.
+ *
+ * What it costs is the index-only scan on `rosters_owner_league_idx`, since
+ * `players` is not in that index's INCLUDE and stays out on purpose — carrying
+ * a whole roster's jsonb in the index would cost every sync's write far more
+ * than the one heap fetch per league it saves a read.
  */
 const HOLDS_A_ROSTER_SQL = `EXISTS (
     SELECT 1 FROM rosters r
      WHERE r.league_id = l.league_id AND r.owner_id = $1
+       AND jsonb_typeof(r.players) = 'array'
+       AND jsonb_array_length(r.players) > 0
   )`;
 
 /**
- * True where the manager fielded a team in the league — holds a roster now, or
- * was chopped out of a league whose whole point is chopping people out.
+ * True where the manager fielded a team in the league — holds a rostered team
+ * now ({@link HOLDS_A_ROSTER_SQL}), or was chopped out of a league whose whole
+ * point is chopping people out.
  *
  * Membership alone is not that: Sleeper keeps a manager in `league_users` after
  * they stop holding a team, so a league someone joined and left arrives looking
@@ -259,8 +280,9 @@ export type ManagerLeagueRow = RankLeague & {
  * scoring, and **every stored roster** — ranking the manager means solving the
  * other eleven teams too — plus the traded picks, drafts and member names the
  * pick portfolio is reconstructed from. Gated on {@link HOLDS_A_ROSTER_SQL} on
- * purpose: a league where the manager holds no roster (left, or chopped out)
- * has no lineup to rank, where {@link getManagerLeagues} still lists it.
+ * purpose: a league where the manager holds no rostered team (left, chopped
+ * out, or not yet drafted) has no lineup to rank, where
+ * {@link getManagerLeagues} still lists it for the chopped case.
  *
  * One round trip, with each child collection aggregated per league row — the
  * league set is decided once, in this WHERE, rather than re-derived by a
