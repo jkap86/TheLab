@@ -22,6 +22,7 @@ function row(overrides: Partial<LineupLeagueRow> = {}): LineupLeagueRow {
     scoring_settings: { rec: 1 },
     rosters: ROSTERS,
     league_type: 1,
+    draft_rounds: null,
     previous_league_id: "prev",
     traded_picks: [],
     drafts: [],

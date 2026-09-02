@@ -336,14 +336,26 @@ tests: `dynastyPickGrid` fixes the three-season horizon a dynasty league's
 pick market actually runs (a startup never counts as this year's rookie class,
 and only `complete` rolls the window — both readings fail toward showing a
 pick that exists), while every other format derives its grid from the trades
-because it has no standing horizon to read. `leagueRosterPicks` is this
+because it has no standing horizon to read. A dynasty grid's **depth** is the
+league's own `settings.draft_rounds`, exact — future drafts are created from
+that setting, so a traded pick deeper than it is a relic of a since-shrunk
+draft and falls off the board — with the last rookie draft's rounds and the
+deepest traded round as the two floor readings only where settings say
+nothing. `leagueRosterPicks` is this
 repo's addition to the file (born `managerRosterPicks`; the team browser is
 what made it per-roster): it composes in TypeScript what TheLabX's
 `getDraftSlots` does in SQL-plus-cache (one manager's leagues per request
 don't need a tier), keeping its four decisions — the season's latest draft
 wins and is chosen *before* its order is read, an auction's order is not a
 pick order, and the slot comes off `draft_order` through the **original**
-roster's owner, because that slot is where the pick actually falls. `from` is
+roster's owner, because that slot is where the pick actually falls — and
+adding a fifth: the shipped `slot` is the *pick-in-round*, so a snake draft
+flips it on reversed rounds (`snakePickInRound`, third-round reversal
+included, where round 3 repeats round 2's direction). The flip pivots on the
+board's width — `settings.teams`, else the deepest slot in the raw
+`draft_order` blob, scanned whole because a departed user's slot still proves
+the board runs that wide — and a snake draft with no width evidence names no
+slot rather than an unflipped guess. `from` is
 relative to the owning roster — the same asset is "from Slim" in one portfolio
 and origin-less in the one it came out of — and it names the *person*
 (display name), where the teams pane prefers the team name: "from" points at

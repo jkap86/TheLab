@@ -247,6 +247,7 @@ function toRecord(r: LeagueRow): LeagueRecord | null {
  */
 export type ManagerLeagueRow = RankLeague & {
   league_type: number;
+  draft_rounds: number | null;
   previous_league_id: string | null;
   traded_picks: TradedPick[];
   drafts: LeagueDraftRow[];
@@ -265,11 +266,12 @@ export type ManagerLeagueRow = RankLeague & {
  * league set is decided once, in this WHERE, rather than re-derived by a
  * second query that could disagree with it.
  *
- * Two casts inside the drafts blob, for the two reasons TheLabX's own draft
- * read casts: `rounds` is regex-guarded before the `::int` like every numeric
- * read off a Sleeper blob (junk must read as "depth unknown", not fail the
- * query), and `start_time` rides through `jsonb_build_object` as a JSON
- * number, which is exact for epoch milliseconds.
+ * The casts inside the drafts blob follow TheLabX's own draft read: every
+ * numeric read off a Sleeper settings blob (`rounds`, `teams`,
+ * `reversal_round`, and the league's `draft_rounds` above) is regex-guarded
+ * before the `::int` — junk must read as "unknown", not fail the query — while
+ * `start_time` rides through `jsonb_build_object` as a JSON number, which is
+ * exact for epoch milliseconds.
  */
 export async function getManagerLeagueRosters(
   userId: string,
@@ -279,6 +281,8 @@ export async function getManagerLeagueRosters(
     `SELECT l.league_id, l.total_rosters, l.roster_positions, l.scoring_settings,
             l.previous_league_id,
             ${LEAGUE_TYPE_SQL} AS league_type,
+            (CASE WHEN l.settings->>'draft_rounds' ~ '^[0-9]+$'
+                  THEN (l.settings->>'draft_rounds')::int END) AS draft_rounds,
             (SELECT COALESCE(jsonb_agg(jsonb_build_object(
                       'roster_id', r.roster_id,
                       'owner_id',  r.owner_id,
@@ -301,6 +305,11 @@ export async function getManagerLeagueRosters(
                       'start_time',  d.start_time,
                       'rounds',      CASE WHEN d.settings->>'rounds' ~ '^[0-9]+$'
                                           THEN (d.settings->>'rounds')::int END,
+                      'teams',       CASE WHEN d.settings->>'teams' ~ '^[0-9]+$'
+                                          THEN (d.settings->>'teams')::int END,
+                      'reversal_round',
+                                     CASE WHEN d.settings->>'reversal_round' ~ '^[0-9]+$'
+                                          THEN (d.settings->>'reversal_round')::int END,
                       'draft_order', d.draft_order)), '[]'::jsonb)
                FROM drafts d
               WHERE d.league_id = l.league_id) AS drafts,

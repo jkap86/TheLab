@@ -86,8 +86,10 @@ export type RosterPick = {
   round: number;
   /**
    * Pick-in-round once that season's draft order is set — the *original*
-   * roster's slot, which is where the pick actually falls. Null before the
-   * order exists, and always for auctions, whose "order" is nomination order.
+   * roster's slot, flipped on the rounds a snake draft reverses, which is
+   * where the pick actually falls. Null before the order exists, always for
+   * auctions (whose "order" is nomination order), and for a snake draft whose
+   * board width is unknown — an unflipped number would be a guess.
    */
   slot: number | null;
   /**

@@ -50,15 +50,19 @@ export type LeagueDraft = {
 };
 
 /**
- * A stored draft with the two columns slot naming reads on top of what the
- * grid needs: the draft's `type` (an auction's "order" is nomination order, not
- * a pick order) and its raw `draft_order` blob (user id → slot, null until the
- * league sets one). {@link dynastyPickGrid} takes the narrower type and ignores
- * both.
+ * A stored draft with the columns slot naming reads on top of what the grid
+ * needs: the draft's `type` (an auction's "order" is nomination order, not a
+ * pick order; a snake's board flips), its raw `draft_order` blob (user id →
+ * slot, null until the league sets one), and the two `settings` numbers the
+ * snake flip pivots on — `teams`, the board's width, and `reversal_round`,
+ * Sleeper's third-round reversal. {@link dynastyPickGrid} takes the narrower
+ * type and ignores all four.
  */
 export type LeagueDraftRow = LeagueDraft & {
   type: string | null;
   draft_order: Record<string, unknown> | null;
+  teams: number | null;
+  reversal_round: number | null;
 };
 
 /**
@@ -70,9 +74,16 @@ export type DraftPickGrid = {
   /** Every season to enumerate, in order. */
   seasons: string[];
   /**
+   * Exactly how deep every future draft runs, from the league's own
+   * `settings.draft_rounds`. When set it wins over both floor readings below:
+   * a traded pick deeper than it is a relic of a deeper era — the league
+   * shrank its drafts after the trade — not evidence of a round that exists.
+   */
+  rounds: number | null;
+  /**
    * A floor on the round count, from the league's own rookie draft. The grid
    * still runs as deep as any traded pick proves it does, so this only matters
-   * where a season's picks have never moved.
+   * where a season's picks have never moved — and not at all under `rounds`.
    */
   minRounds: number | null;
 };
@@ -145,10 +156,13 @@ function startupDraft(
  *     has yet to see keeps the nearer year, which is the reading that fails
  *     toward showing a pick that exists rather than hiding one.
  *
- * `minRounds` is that same startup exclusion read for depth: the most recent
- * rookie draft is how many rounds every future one runs. An inaugural league
- * that has only run its startup has no rookie draft to measure and reports
- * null — its 15-to-25-round startup is not the shape of next May.
+ * Depth is `settingsRounds` where the league states one — `settings.draft_rounds`
+ * is the setting future drafts are actually created from, so it is exact and
+ * current where a measured draft is history. `minRounds` is the fallback, the
+ * startup exclusion read for depth: the most recent rookie draft is how many
+ * rounds every future one runs. An inaugural league that has only run its
+ * startup has no rookie draft to measure and reports null — its 15-to-25-round
+ * startup is not the shape of next May.
  *
  * Returns null for a season that isn't a year, which reads as "no window" and
  * leaves the caller on the derived grid.
@@ -157,6 +171,7 @@ export function dynastyPickGrid(
   leagueSeason: string,
   drafts: readonly LeagueDraft[],
   previousLeagueId: string | null,
+  settingsRounds: number | null = null,
 ): DraftPickGrid | null {
   const year = Number(leagueSeason);
   if (!Number.isInteger(year) || year <= 0) return null;
@@ -175,6 +190,8 @@ export function dynastyPickGrid(
     seasons: Array.from({ length: DYNASTY_PICK_SEASONS }, (_, i) =>
       String(first + i),
     ),
+    // A zero from a junk blob is no depth at all, not a zero-round draft.
+    rounds: settingsRounds !== null && settingsRounds >= 1 ? settingsRounds : null,
     minRounds: latestRookie?.rounds ?? null,
   };
 }
@@ -196,12 +213,15 @@ export function dynastyPickGrid(
  *     standing pick horizon to read, and the reason it was wrong for dynasty is
  *     on {@link dynastyPickGrid}.
  *
- * The **rounds** run 1..the deepest round anyone has traded, or the grid's
- * `minRounds` where that is deeper. Sleeper doesn't publish a round count for a
+ * The **rounds** run 1..the grid's exact `rounds` where it carries one — the
+ * league's own setting, which a traded row can neither deepen nor shrink, so a
+ * pick from a since-shrunk era falls off the board the way it fell out of the
+ * draft. Otherwise 1..the deepest round anyone has traded, or the grid's
+ * `minRounds` where that is deeper: Sleeper doesn't publish a round count for a
  * draft that hasn't been created yet, and every future draft in a league runs
  * the same number, so a traded pick and the last rookie draft are the two lower
- * bounds the data carries. A league offering neither under-reports the tail —
- * better than inventing rounds that may not exist.
+ * bounds the data carries. A league offering none of the three under-reports
+ * the tail — better than inventing rounds that may not exist.
  *
  * Returns a map from owning roster id to that roster's picks, each sorted by
  * season then round, with the roster's own picks ahead of ones it acquired. A
@@ -224,7 +244,7 @@ export function ownedDraftPicks(
   const seasons = grid
     ? grid.seasons
     : [...new Set(relevant.map((p) => p.season))].sort();
-  const maxRound = Math.max(tradedDepth, grid?.minRounds ?? 0);
+  const maxRound = grid?.rounds ?? Math.max(tradedDepth, grid?.minRounds ?? 0);
   if (seasons.length === 0 || maxRound < 1) return new Map();
 
   // (season, round, original roster) -> the roster that holds it now.
@@ -280,6 +300,11 @@ export type LeagueUserName = {
 export type PickLeague = {
   /** `settings.type`, already guarded and cast — see `LEAGUE_TYPE_SQL`. */
   league_type: number;
+  /**
+   * `settings.draft_rounds`, guarded and cast: how deep the league's future
+   * drafts run. Null where Sleeper sent nothing parseable.
+   */
+  draft_rounds: number | null;
   previous_league_id: string | null;
   traded_picks: readonly TradedPick[];
   drafts: readonly LeagueDraftRow[];
@@ -288,11 +313,70 @@ export type PickLeague = {
 };
 
 /**
+ * One draft-order value as a slot, guarded like every numeric read off a
+ * Sleeper blob — junk in one league's order must read as "no slot", not break
+ * the league.
+ */
+const asSlot = (raw: unknown): number | null => {
+  const slot =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && /^[0-9]+$/.test(raw)
+        ? Number(raw)
+        : NaN;
+  return Number.isInteger(slot) && slot >= 1 ? slot : null;
+};
+
+/**
+ * One season's chosen draft as slot naming reads it: each roster's slot in the
+ * order, plus the board shape that turns a slot into a pick-in-round —
+ * {@link snakePickInRound} is that turn.
+ */
+type SeasonDraftBoard = {
+  /** Roster id → its owner's slot in the draft order. */
+  slots: Map<number, number>;
+  /** Whether the board flips on its reversed rounds. */
+  snake: boolean;
+  /**
+   * How many teams the board is wide — what a reversed round flips a slot
+   * around. Null where a snake draft offers no evidence of its width, which
+   * names no pick rather than an unflipped one.
+   */
+  width: number | null;
+  /** Sleeper's `settings.reversal_round` (third-round reversal), if any. */
+  reversalRound: number | null;
+};
+
+/**
+ * The pick-in-round a draft slot lands on in a snake draft's given round.
+ *
+ * Odd rounds run the order forward and even rounds flip it (`teams + 1 − slot`)
+ * — except under Sleeper's reversal setting, where round R repeats round R−1's
+ * direction before the alternation resumes: with third-round reversal, rounds
+ * 2 and 3 both run backward and round 4 is forward again. A slot off the board
+ * entirely names nothing rather than arithmetic on a junk order.
+ */
+export function snakePickInRound(
+  slot: number,
+  round: number,
+  teams: number,
+  reversalRound: number | null,
+): number | null {
+  if (slot < 1 || slot > teams) return null;
+  const reversed =
+    reversalRound !== null && reversalRound >= 2 && round >= reversalRound
+      ? // Same direction as round R−1 while the offset from R is even.
+        ((reversalRound - 1) % 2 === 0) === ((round - reversalRound) % 2 === 0)
+      : round % 2 === 0;
+  return reversed ? teams + 1 - slot : slot;
+}
+
+/**
  * Where each roster picks in one season's draft, or null while there is no
  * order to read. TheLabX answers this in SQL (`getDraftSlots`) because its
  * trades board names picks across a few hundred leagues and wants a cache tier;
- * here the league read already carries the draft rows, so the same four
- * decisions are composed in TypeScript instead:
+ * here the league read already carries the draft rows, so the same decisions
+ * are composed in TypeScript instead:
  *
  * - the order is read through `draft_order` (user → slot) joined back to
  *   rosters by owner — a roster whose owner has left resolves to nothing,
@@ -302,13 +386,17 @@ export type PickLeague = {
  *   startup above it;
  * - an auction has no slots at all — its `draft_order` is not a pick order;
  * - the latest draft in a season wins (an inaugural league runs a startup and
- *   a rookie draft under one label), an undated stray last.
+ *   a rookie draft under one label), an undated stray last;
+ * - a snake board's width is `settings.teams`, or failing that the deepest
+ *   slot anyone holds in the raw order — the whole blob, because a departed
+ *   user's slot still proves the board runs that wide where the roster join
+ *   above would lose it.
  */
 function seasonDraftSlots(
   drafts: readonly LeagueDraftRow[],
   season: string,
   rosters: readonly PickRoster[],
-): Map<number, number> | null {
+): SeasonDraftBoard | null {
   const chosen = drafts
     .filter((d) => d.season === season)
     .sort(
@@ -325,18 +413,35 @@ function seasonDraftSlots(
   const slots = new Map<number, number>();
   for (const roster of rosters) {
     if (roster.owner_id === null) continue;
-    // Guarded like every numeric read off a Sleeper blob — junk in one
-    // league's order must read as "no slot", not break the league.
-    const raw = order[roster.owner_id];
-    const slot =
-      typeof raw === "number"
-        ? raw
-        : typeof raw === "string" && /^[0-9]+$/.test(raw)
-          ? Number(raw)
-          : NaN;
-    if (Number.isInteger(slot) && slot >= 1) slots.set(roster.roster_id, slot);
+    const slot = asSlot(order[roster.owner_id]);
+    if (slot !== null) slots.set(roster.roster_id, slot);
   }
-  return slots;
+
+  let width = chosen.teams !== null && chosen.teams >= 1 ? chosen.teams : null;
+  if (width === null) {
+    for (const raw of Object.values(order)) {
+      const slot = asSlot(raw);
+      if (slot !== null && (width === null || slot > width)) width = slot;
+    }
+  }
+
+  return {
+    slots,
+    snake: chosen.type === "snake",
+    width,
+    reversalRound: chosen.reversal_round,
+  };
+}
+
+/** A board's pick-in-round for one slot — the identity, or the snake flip. */
+function boardPickInRound(
+  board: SeasonDraftBoard,
+  slot: number,
+  round: number,
+): number | null {
+  if (!board.snake) return slot;
+  if (board.width === null) return null;
+  return snakePickInRound(slot, round, board.width, board.reversalRound);
 }
 
 /**
@@ -347,7 +452,8 @@ function seasonDraftSlots(
  * {@link dynastyPickGrid} for a dynasty league, derived from the trades for
  * every other format. Each pick then carries the two facts Sleeper names one
  * by: its `slot`, read off that season's draft order through the *original*
- * roster's owner (that slot is where the pick actually falls), and `from`, the
+ * roster's owner and flipped on the rounds a snake draft reverses (the
+ * pick-in-round is where the pick actually falls), and `from`, the
  * original owner's name — only where the pick was acquired, because a roster's
  * own pick has no origin worth printing. `from` is relative to the owning
  * roster: the same asset is "from Slim" in one portfolio and origin-less in
@@ -363,7 +469,12 @@ export function leagueRosterPicks(
 ): Map<number, RosterPick[]> {
   const grid =
     league.league_type === DYNASTY_LEAGUE_TYPE
-      ? dynastyPickGrid(season, league.drafts, league.previous_league_id)
+      ? dynastyPickGrid(
+          season,
+          league.drafts,
+          league.previous_league_id,
+          league.draft_rounds,
+        )
       : null;
   const owned = ownedDraftPicks(
     league.traded_picks,
@@ -383,29 +494,36 @@ export function leagueRosterPicks(
   };
 
   // One order read per season for the whole league, not per portfolio.
-  const slotsBySeason = new Map<string, Map<number, number> | null>();
-  const slotsFor = (pickSeason: string): Map<number, number> | null => {
-    let slots = slotsBySeason.get(pickSeason);
-    if (slots === undefined) {
-      slots = seasonDraftSlots(league.drafts, pickSeason, league.rosters);
-      slotsBySeason.set(pickSeason, slots);
+  const boardsBySeason = new Map<string, SeasonDraftBoard | null>();
+  const boardFor = (pickSeason: string): SeasonDraftBoard | null => {
+    let board = boardsBySeason.get(pickSeason);
+    if (board === undefined) {
+      board = seasonDraftSlots(league.drafts, pickSeason, league.rosters);
+      boardsBySeason.set(pickSeason, board);
     }
-    return slots;
+    return board;
   };
 
   const named = new Map<number, RosterPick[]>();
   for (const [rosterId, picks] of owned) {
     named.set(
       rosterId,
-      picks.map((pick) => ({
-        season: pick.season,
-        round: pick.round,
-        slot: slotsFor(pick.season)?.get(pick.original_roster_id) ?? null,
-        from:
-          pick.original_roster_id === rosterId
-            ? null
-            : originName(pick.original_roster_id),
-      })),
+      picks.map((pick) => {
+        const board = boardFor(pick.season);
+        const slot = board?.slots.get(pick.original_roster_id);
+        return {
+          season: pick.season,
+          round: pick.round,
+          slot:
+            board && slot !== undefined
+              ? boardPickInRound(board, slot, pick.round)
+              : null,
+          from:
+            pick.original_roster_id === rosterId
+              ? null
+              : originName(pick.original_roster_id),
+        };
+      }),
     );
   }
   return named;
