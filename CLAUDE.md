@@ -62,7 +62,9 @@ upstream, which `shared/season` documents as the thing that made a cold season
 resolve unacceptable in front of a request. The *contract* is kept identical so a
 port back would touch no caller: `http.get<T>(url)` resolves to a `{ data }`
 envelope, and a non-2xx throws with `response.status` — which is all
-`sleeper/missing` reads.
+`sleeper/missing` reads. The KTC scrape added `responseType: "text"` and
+per-call `headers` to the options, spelled exactly as axios spells them, so
+that rule still holds.
 
 The retry ladder is the part of it to distrust: hand-rolled, where axios-retry
 has been wrong in production and fixed. `http.test.ts` pins the decisions that
@@ -424,10 +426,73 @@ have no number and an unprojected vet sorts to the bench bottom with nothing to
 say. That is the fallback degrading honestly, not a bug; the real boards arrive
 with `/api/adp`.
 
-`shared/ktc/` exists as `roster.ts` only — the superflex predicate, trimmed
-from TheLabX's KTC pricing the way `adp-value.ts` was from its board half —
-because ADP boards and lineup pricing both split on it and a second spelling is
-the drift it prevents.
+`shared/ktc/roster.ts` is the superflex predicate, trimmed from TheLabX's KTC
+pricing the way `adp-value.ts` was from its board half — ADP boards and lineup
+pricing both split on it and a second spelling is the drift it prevents. The
+folder's sync half arrived since; see the KeepTradeCut section below.
+
+## KeepTradeCut values
+
+`shared/ktc` scrapes both of KTC's markets — dynasty (`/dynasty-rankings`) and
+redraft (`/fantasy-rankings`) — into `ktc_values` and `ktc_value_history`:
+current values on a 15-minute loop, each entry's full daily series backfilled
+**once, at boot**. `scheduler.ts` runs it, started unawaited from
+`instrumentation.ts` (`KTC_SYNC=off` disables); the boot tick doesn't force, so
+a restart inside the TTL re-scrapes nothing, while interval ticks do, because
+the interval equals the TTL. It is the sync half of TheLabX's `shared/ktc`
+ported — bracket-walking parser, completeness gate, two-timestamp backfill
+queue — plus the redraft dimension that repo never had.
+
+**Format is rows, superflex is columns, and neither is a preference.** One
+scraped page carries *both* `oneQBValues` and `superflexValues` per entry, so
+all four boards are two requests and a row is what one fetch said about one
+entry, the two QB readings side by side. The `page`/`filters`/`format` query
+params the reference repos send are display-only — checked live, `?filters=QB`
+returns the same full array — so the sync fetches the two bare URLs.
+
+**KTC's `playerID` is per-board, and that is why `format` is in every key.**
+Of 280 names on both boards when this landed, 183 carried different ids —
+Bijan Robinson was dynasty `1414` and redraft `1507` — and the same number can
+name different people on the two boards, so `ktc_id` alone would silently mix
+them. The slug embeds the id, so it is per-board too; nothing links an entry
+across formats until the Sleeper matcher ports. `sleeper_id` ships nullable
+and unwritten for that port — deliberately absent from both halves of the
+upsert, so the matcher's backfilled ids survive every refresh — and must never
+go unique: two KTC rows can legitimately resolve to one Sleeper player.
+
+**`validateKtcBoard` runs before the transaction opens, and the floors are
+per-format.** The reconcile that follows the upsert is destructive by design —
+every stored row of that format not in the response is nulled (never deleted;
+history FKs the row), because a churning top-N would otherwise leave a
+fallen-off player priced forever. A half-parsed fragment passing a bare
+non-empty check would null the board and stamp it fresh, so a suspicious
+response writes nothing at all. Dynasty's floor is 300 under a ~500-entry
+board; redraft's is 200, because 300 sits close enough under its ~370 that an
+off-season trim could wedge the sync — and the shrink check judges against the
+*same format's* stored count, or the first sync of the smaller board would
+read as a shrink of the bigger one.
+
+**History is the base series only, dated on KTC's clock.** The daily snapshot
+rides the values transaction (after the upsert — the FK needs the parent
+rows), stamped `America/New_York` because KTC's series roll over on Eastern
+days and a UTC evening lands on tomorrow. The player-page backfill drains the
+`history_synced_at IS NULL` queue at boot — attempt-ordered so a failing page
+rotates to the back, re-acquiring the advisory lock per ~10-player batch so no
+pool connection is parked for the half hour, halting if an entire batch fails
+(KTC saying no is not a thing to hammer) — and is resumable because the queue
+predicate *is* the state. TE-premium variants (`tep`/`tepp`/`teppp`) are not
+stored: the player pages carry no history for them, so the base value is the
+one number today's row and the backfilled series can agree on. The known cost
+of boot-only: a player who joins a board mid-process accrues forward snapshots
+but no back-series until the next boot.
+
+The barrel is **server-only** now — the sync drags `pg` in — on the projections
+barrel's exact terms: a client module needing `isSuperflexLineup` imports
+`./roster` relatively. Deliberately not ported, each with what it arrives with:
+`match.ts` and `values.ts` (the Sleeper matcher, with the `players` table),
+`queries.ts`, `history-stats.ts`, `picks.ts` and `roster.ts`'s pricing half
+(`ktcBoardValue`, `rosterKtcValue`) — readers all, arriving with the surface
+that reads them.
 
 ## Theme
 

@@ -8,9 +8,11 @@ export { jsonb } from "./json";
 export { bulkInsert } from "./bulk";
 export { withTransaction } from "./transaction";
 export {
+  withAdvisoryLock,
   withBlockingAdvisoryLock,
   AdvisoryLockTimeoutError,
   ADVISORY_LOCK_WAIT_MS,
+  LOCK_KEYS,
   managerSyncLockKey,
 } from "./lock";
 export type { AdvisoryLockKey } from "./lock";

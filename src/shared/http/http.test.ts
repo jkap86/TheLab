@@ -73,6 +73,37 @@ describe("http.get — the body", () => {
 
     assert.equal(data, null);
   });
+
+  it("returns a text body verbatim when asked, HTML and all", async () => {
+    // The KTC scrape reads multi-megabyte HTML pages through this client; the
+    // point of `responseType: "text"` is that nothing here tries to parse them
+    // — and that an empty body stays an empty string for the parser to refuse,
+    // rather than becoming the JSON path's null.
+    const page = '<html><script>var playersArray = [{"a":1}];</script></html>';
+    stubFetch(async () => new Response(page, { status: 200 }));
+
+    const { data } = await get<string>("https://example.test/page", {
+      responseType: "text",
+    });
+
+    assert.equal(data, page);
+  });
+
+  it("merges caller headers over the JSON default", async () => {
+    let seen: Record<string, string> | undefined;
+    stubFetch(async (_url, init) => {
+      seen = (init as unknown as { headers: Record<string, string> }).headers;
+      return new Response("ok", { status: 200 });
+    });
+
+    await get<string>("https://example.test/page", {
+      responseType: "text",
+      headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0" },
+    });
+
+    assert.equal(seen?.Accept, "text/html");
+    assert.equal(seen?.["User-Agent"], "Mozilla/5.0");
+  });
 });
 
 describe("http.get — what is worth retrying", () => {

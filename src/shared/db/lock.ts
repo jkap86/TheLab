@@ -10,13 +10,28 @@ export type AdvisoryLockKey = readonly [number, number];
  * manager ahead of time — so what is reserved here is the class id rather than
  * the pair. The ids match TheLabX's, so the two apps pointed at one database
  * contend where they should and nowhere else. Class 8675309 is that app's block
- * of fixed loop locks and 8675311 its per-league class; both arrive with the
- * crawler and the per-league refresh press.
+ * of fixed loop locks — {@link LOCK_KEYS}, where the KTC pair now lives — and
+ * 8675311 its per-league class, which arrives with the per-league refresh
+ * press.
  */
 const HASHED_LOCK_CLASSES = {
   /** {@link managerSyncLockKey} — a manager's whole league graph. */
   managerSync: 8675310,
 } as const;
+
+/**
+ * The fixed lock keys, one per background concern that exists as a singleton
+ * rather than per some id. TheLabX's class-8675309 block, ids kept exactly —
+ * `[8675309, 1]` is its crawler's and arrives with that port. Two separate KTC
+ * keys, deliberately: the 15-minute values refresh and the boot-time history
+ * backfill overlap by design, and one key would serialise them for no reason.
+ */
+export const LOCK_KEYS = {
+  /** KeepTradeCut board refresh (`shared/ktc/sync.ts`). */
+  ktcValues: [8675309, 2],
+  /** KeepTradeCut per-player history backfill (`shared/ktc/history.ts`). */
+  ktcHistory: [8675309, 3],
+} as const satisfies Record<string, AdvisoryLockKey>;
 
 /**
  * FNV-1a folded to a signed int32, which is the width `pg_advisory_lock`'s
@@ -125,6 +140,49 @@ export async function withBlockingAdvisoryLock<T>(
     } finally {
       // Same discipline as above: a session lock outlives release(), so a
       // failed unlock must drop the connection or hold the key forever.
+      try {
+        await client.query(`SELECT pg_advisory_unlock($1::int, $2::int)`, [
+          classId,
+          objId,
+        ]);
+      } catch (error) {
+        unlockFailed = true;
+        console.error("[db] Advisory unlock failed; dropping connection:", error);
+      }
+    }
+  } finally {
+    client.release(unlockFailed);
+  }
+}
+
+/**
+ * Run `fn` while holding a Postgres advisory lock, **skipping** rather than
+ * waiting: `pg_try_advisory_lock`, and a caller that loses gets `null` back at
+ * once. The complement of {@link withBlockingAdvisoryLock}, for the opposite
+ * caller — a background tick needs the work *done*, not this instance's copy of
+ * it, and a loop that queues behind another instance stacks ticks instead of
+ * dropping them.
+ */
+export async function withAdvisoryLock<T>(
+  [classId, objId]: AdvisoryLockKey,
+  fn: () => Promise<T>,
+): Promise<T | null> {
+  const client = await pool.connect();
+  let unlockFailed = false;
+
+  try {
+    const { rows } = await client.query<{ locked: boolean }>(
+      `SELECT pg_try_advisory_lock($1::int, $2::int) AS locked`,
+      [classId, objId],
+    );
+    if (!rows[0].locked) return null;
+
+    try {
+      return await fn();
+    } finally {
+      // Same discipline as the blocking form above: a session lock outlives
+      // release(), so a failed unlock must drop the connection or hold the key
+      // forever — which for a loop's singleton key wedges the loop for good.
       try {
         await client.query(`SELECT pg_advisory_unlock($1::int, $2::int)`, [
           classId,

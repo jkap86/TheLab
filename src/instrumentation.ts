@@ -10,8 +10,9 @@
  * code out of any non-Node bundle entirely.
  *
  * TheLabX starts its background loops here too, once migrations have applied.
- * Nothing to start yet: the league crawler is deferred, and the leagues route
- * syncs on request. That port adds its own block below this one.
+ * The KTC scheduler is the first of them to arrive; the league crawler stays
+ * deferred, and the leagues route syncs on request. Further ports add their own
+ * blocks below the KTC one.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -27,5 +28,17 @@ export async function register(): Promise<void> {
     // schema it can't vouch for.
     console.error("[db] Failed to initialise the database on boot:", error);
     throw error;
+  }
+
+  // Started, not awaited: the boot tick can run half an hour of history
+  // backfill and `register()` gates request serving. And unlike migrations, a
+  // failure here is logged rather than rethrown — a KTC outage is not a reason
+  // to refuse to serve the leagues route. The scheduler guards its own ticks,
+  // so reaching this catch means the module itself failed to load.
+  try {
+    const { startKtcScheduler } = await import("@/shared/ktc");
+    startKtcScheduler();
+  } catch (error) {
+    console.error("[ktc] Failed to start the KTC scheduler:", error);
   }
 }

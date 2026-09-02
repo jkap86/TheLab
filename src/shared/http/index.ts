@@ -68,6 +68,21 @@ export type HttpGetOptions = {
   timeoutMs?: number;
   /** Attempts after the first. Zero disables retrying. */
   retries?: number;
+  /**
+   * Merged over the default `Accept: application/json` — how a caller that
+   * wants HTML says so (the KTC scrape sends a browser `User-Agent` and
+   * `Accept: text/html`).
+   */
+  headers?: Record<string, string>;
+  /**
+   * `"json"` (the default) parses the body, folding an empty one to `null` —
+   * Sleeper's convention. `"text"` hands the raw body back as `data`: a scraped
+   * HTML page is not JSON, but it wants the same retry ladder, timeout and
+   * abort handling as everything else, which is why this is an option here
+   * rather than a second client. Matches the axios `responseType` TheLabX's
+   * call sites already write, per the contract rule above.
+   */
+  responseType?: "json" | "text";
 };
 
 /**
@@ -103,12 +118,12 @@ function attemptSignal(timeoutMs: number, signal?: AbortSignal) {
 async function getOnce<T>(
   url: string,
   timeoutMs: number,
-  signal?: AbortSignal,
+  options: Pick<HttpGetOptions, "signal" | "headers" | "responseType">,
 ): Promise<HttpResponse<T>> {
-  const attempt = attemptSignal(timeoutMs, signal);
+  const attempt = attemptSignal(timeoutMs, options.signal);
   try {
     const response = await fetch(url, {
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...options.headers },
       signal: attempt.signal,
     });
 
@@ -119,10 +134,15 @@ async function getOnce<T>(
     // Read as text first: Sleeper's convention for "no data" is a literal `null`
     // body, and some endpoints answer 200 with nothing at all. Both must parse
     // to null for `sleeperGet` to fold them into its fallback — `response.json()`
-    // throws on the empty one.
+    // throws on the empty one. A `"text"` caller gets the body verbatim, empty
+    // or not — an empty page is its parser's problem to refuse, not a null.
     const body = await response.text();
     return {
-      data: (body ? JSON.parse(body) : null) as T,
+      data: (options.responseType === "text"
+        ? body
+        : body
+          ? JSON.parse(body)
+          : null) as T,
       status: response.status,
     };
   } finally {
@@ -176,11 +196,13 @@ export async function get<T>(
     signal,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     retries = DEFAULT_RETRIES,
+    headers,
+    responseType,
   } = options;
 
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await getOnce<T>(url, timeoutMs, signal);
+      return await getOnce<T>(url, timeoutMs, { signal, headers, responseType });
     } catch (error) {
       // The caller gave up; nothing below is worth doing.
       if (signal?.aborted) throw error;
