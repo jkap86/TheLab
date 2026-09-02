@@ -1,7 +1,19 @@
-import type { LeagueLineup, LeagueRecord, ManagerLeague } from "@/shared/contract";
-import { Avatar } from "@/features/shared";
+import type {
+  LeagueLineupEntry,
+  LeagueRecord,
+  LineupMetricId,
+  ManagerLeague,
+} from "@/shared/contract";
 
+import { formatRank, LINEUP_METRIC_LABELS } from "../helpers/lineup-metrics";
 import { LineupBreakdown } from "./lineup-breakdown";
+
+/**
+ * One league: the name and the chosen rank columns, with everything else — the
+ * season line, the manager's team and record, the solved lineup — behind a
+ * `<details>` disclosure. The card stays hook-free on purpose: the one
+ * interaction it owns is the disclosure, and the platform already ships it.
+ */
 
 /**
  * Sleeper's `status`, as words rather than its own vocabulary.
@@ -23,13 +35,24 @@ function formatRecord(record: LeagueRecord): string {
   return record.ties > 0 ? `${base}–${record.ties}` : base;
 }
 
+// Spelled out per count so Tailwind sees each class it must generate.
+const GRID_COLS: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-2",
+  3: "grid-cols-3",
+  4: "grid-cols-4",
+};
+
 export function LeagueCard({
   league,
-  lineup,
+  columns,
+  entry,
 }: {
   league: ManagerLeague;
-  /** This league's solved lineup, once the batched lineups read lands. */
-  lineup?: LeagueLineup | null;
+  /** The chosen rank columns, in canonical order — see `useLineupColumns`. */
+  columns: readonly LineupMetricId[];
+  /** This league's solve + ranks, once the batched lineups read lands. */
+  entry?: LeagueLineupEntry | null;
 }) {
   const status = STATUS_LABELS[league.status] ?? league.status;
   // Sleeper stores an unset team name as an empty string about as often as it
@@ -39,38 +62,63 @@ export function LeagueCard({
   const teamName = league.team_name?.trim() || null;
 
   return (
-    <li className="@container rounded-2xl border border-foreground/12 bg-foreground/[0.04] p-4 shadow-[0_24px_60px_-34px_var(--surface-shadow)] backdrop-blur-xl">
-      <div className="flex items-center gap-3">
-        <Avatar url={league.avatar_url} name={league.name} size="lg" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-base font-semibold tracking-tight">
-            {league.name}
-          </p>
-          <p className="mt-0.5 truncate text-xs text-foreground/60">
+    <li className="@container rounded-2xl border border-foreground/12 bg-foreground/[0.04] shadow-[0_24px_60px_-34px_var(--surface-shadow)] backdrop-blur-xl">
+      <details className="group">
+        <summary className="block cursor-pointer list-none p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="truncate font-display text-base font-semibold tracking-tight">
+              {league.name}
+            </p>
+            <span className="shrink-0 text-xs text-foreground/50 transition-colors group-hover:text-foreground/80">
+              <span className="group-open:hidden">▸</span>
+              <span className="hidden group-open:inline">▾</span>
+            </span>
+          </div>
+
+          <div
+            className={`mt-3 grid gap-3 ${GRID_COLS[columns.length] ?? "grid-cols-4"}`}
+          >
+            {columns.map((id) => (
+              <div key={id} className="min-w-0">
+                <p className="truncate text-[10px] font-semibold tracking-wide text-foreground/60">
+                  {LINEUP_METRIC_LABELS[id].column}
+                </p>
+                {/* Full opacity on the accent: the light-mode teal is only
+                    ~5:1 against the page, and an alpha drops it below AA. */}
+                <p className="mt-0.5 truncate font-display text-sm font-semibold tabular-nums text-active">
+                  {formatRank(entry?.ranks[id] ?? null)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </summary>
+
+        <div className="border-t border-foreground/10 px-4 pb-4 pt-3">
+          <p className="truncate text-xs text-foreground/60">
             {league.season} · {status} · {league.total_rosters}-team
           </p>
-        </div>
-      </div>
 
-      {/* The manager's own half of the card. A league with neither a team name
-          nor a record — one whose rosters have not been read — renders no row
-          at all rather than an empty one pretending to be a `0–0`. */}
-      {(teamName || league.record) && (
-        <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-foreground/10 pt-3">
-          <span className="truncate text-sm text-foreground/80">
-            {teamName ?? "—"}
-          </span>
-          {league.record && (
-            /* Full opacity: the light-mode accent is only ~5:1 against the
-               page, and an alpha on it drops this below AA. */
-            <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-active">
-              {formatRecord(league.record)}
-            </span>
+          {/* The manager's own half. A league with neither a team name nor a
+              record — one whose rosters have not been read — renders no row at
+              all rather than an empty one pretending to be a `0–0`. */}
+          {(teamName || league.record) && (
+            <div className="mt-2 flex items-baseline justify-between gap-3">
+              <span className="truncate text-sm text-foreground/80">
+                {teamName ?? "—"}
+              </span>
+              {league.record && (
+                <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-active">
+                  {formatRecord(league.record)}
+                </span>
+              )}
+            </div>
+          )}
+
+          {entry && entry.lineup.starters.length > 0 && (
+            <LineupBreakdown lineup={entry.lineup} />
           )}
         </div>
-      )}
-
-      {lineup && lineup.starters.length > 0 && <LineupBreakdown lineup={lineup} />}
+      </details>
     </li>
   );
 }

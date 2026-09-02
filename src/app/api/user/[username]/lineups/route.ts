@@ -5,8 +5,8 @@ import { isSuperflexLineup } from "@/shared/ktc";
 import {
   LAST_REGULAR_WEEK,
   getManagerDraftAdp,
-  getManagerLineupRows,
-  solveLeagueLineup,
+  getManagerLeagueRosters,
+  rankLeagueLineups,
 } from "@/shared/manager";
 import { getRosProjections } from "@/shared/projections";
 import type { RosProjections } from "@/shared/projections";
@@ -18,10 +18,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Every league's roster solved into rest-of-season starters and bench — one
- * request for the whole page, like the leagues stream it rides beside, because
- * the projections span is shared across every league and per-card requests
- * would refetch nothing but re-enter everything.
+ * Every league's rosters solved into rest-of-season lineups and the manager's
+ * rank among them — one request for the whole page, like the leagues stream it
+ * rides beside, because the projections span is shared across every league and
+ * per-card requests would refetch nothing but re-enter everything. Every
+ * stored roster is solved (a rank needs the other eleven), but only the
+ * manager's lineup ships — see `manager/league-ranks`.
  *
  * The solve is projections first, draft capital second — see
  * `manager/ros-lineups` for the arithmetic. What this route decides is only
@@ -65,7 +67,7 @@ export async function GET(
 
   try {
     const [leagues, adp] = await Promise.all([
-      getManagerLineupRows(userId, season),
+      getManagerLeagueRosters(userId, season),
       getManagerDraftAdp(userId, season),
     ]);
 
@@ -97,7 +99,15 @@ export async function GET(
       const board = isSuperflexLineup(league.roster_positions)
         ? adp.superflex
         : adp.standard;
-      solved[league.league_id] = solveLeagueLineup(league, projections, board);
+      const { lineup, ranks } = rankLeagueLineups(
+        league,
+        userId,
+        projections,
+        board,
+      );
+      // A null lineup means the store moved between the query and here — the
+      // league drops out of the payload, as it always has for roster-less ones.
+      if (lineup) solved[league.league_id] = { lineup, ranks };
     }
 
     const payload: ManagerLineupsPayload = {

@@ -31,13 +31,13 @@ import { scoreStatLine } from "../projections/score.ts";
 import type { RosProjections } from "../projections/ros.ts";
 import { adpValue, DEFAULT_STEEPNESS, leagueAdpPool } from "./adp-value.ts";
 
-/** What one league contributes to the solve — a row of `getManagerLineupRows`. */
+/** What one league contributes to the solve, for one of its rosters. */
 export type RosLineupLeague = {
   league_id: string;
   total_rosters: number;
   roster_positions: string[] | null;
   scoring_settings: Record<string, number> | null;
-  /** The manager's rostered ids, Sleeper's padded entries included. */
+  /** The solved roster's ids, Sleeper's padded entries included. */
   players: readonly string[];
 };
 

@@ -2,11 +2,12 @@
 
 import type { ReactNode } from "react";
 
-import { Avatar } from "@/features/shared";
+import { Avatar, useLineupColumns } from "@/features/shared";
 
 import { useManagerLeagues } from "../hooks/use-manager-leagues";
 import { useManagerLineups } from "../hooks/use-manager-lineups";
 import { LeagueCard } from "./league-card";
+import { LineupColumnsDialog } from "./lineup-columns-dialog";
 
 /**
  * A manager's leagues for a season.
@@ -39,6 +40,7 @@ export function LeaguesHome({
     state.season,
     leagues.length > 0 && !refreshing,
   );
+  const columns = useLineupColumns();
 
   return (
     <section className="@container">
@@ -63,6 +65,7 @@ export function LeaguesHome({
             </p>
           )}
         </div>
+        <LineupColumnsDialog columns={columns} />
       </header>
 
       {error ? (
@@ -101,7 +104,8 @@ export function LeaguesHome({
                 <LeagueCard
                   key={league.league_id}
                   league={league}
-                  lineup={lineups?.leagues[league.league_id] ?? null}
+                  columns={columns}
+                  entry={lineups?.leagues[league.league_id] ?? null}
                 />
               ))}
             </ul>

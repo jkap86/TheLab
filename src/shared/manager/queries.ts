@@ -3,7 +3,7 @@ import type { LeagueRecord, ManagerLeague } from "@/shared/contract";
 import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 
-import type { RosLineupLeague } from "./ros-lineups";
+import type { LeagueRosterRow, RankLeague } from "./league-ranks";
 import type { ManagerSyncState } from "./sync-freshness";
 
 /*
@@ -85,6 +85,17 @@ const CHOPPED_LEAGUE_SQL = `(${LEAGUE_TYPE_SQL} = ${CHOPPED_LEAGUE_TYPE})`;
 const LIVE_LEAGUE_SQL = `l.gone_at IS NULL`;
 
 /**
+ * The roster half of {@link FIELDED_A_TEAM_SQL}, on its own because the lineup
+ * reads need exactly this much: a league where the manager holds a roster right
+ * now. One spelling, so the two questions cannot drift apart. Same
+ * interpolation contract — `leagues` aliased `l`, manager id bound as `$1`.
+ */
+const HOLDS_A_ROSTER_SQL = `EXISTS (
+    SELECT 1 FROM rosters r
+     WHERE r.league_id = l.league_id AND r.owner_id = $1
+  )`;
+
+/**
  * True where the manager fielded a team in the league — holds a roster now, or
  * was chopped out of a league whose whole point is chopping people out.
  *
@@ -112,10 +123,7 @@ const LIVE_LEAGUE_SQL = `l.gone_at IS NULL`;
  * Postgres.
  */
 const FIELDED_A_TEAM_SQL = `(
-  EXISTS (
-    SELECT 1 FROM rosters r
-     WHERE r.league_id = l.league_id AND r.owner_id = $1
-  )
+  ${HOLDS_A_ROSTER_SQL}
   OR (
     ${CHOPPED_LEAGUE_SQL}
     AND EXISTS (
@@ -227,29 +235,39 @@ function toRecord(r: LeagueRow): LeagueRecord | null {
 }
 
 /**
- * What the lineups route solves each league from: the slots, the scoring, and
- * the manager's own roster. An inner JOIN on `rosters` on purpose — a league
- * where the manager holds no roster (left, or chopped out) has no lineup to
- * solve, where {@link getManagerLeagues} still lists it.
+ * What the lineups route solves and ranks each league from: the slots, the
+ * scoring, and **every stored roster** — ranking the manager means solving the
+ * other eleven teams too. Gated on {@link HOLDS_A_ROSTER_SQL} on purpose: a
+ * league where the manager holds no roster (left, or chopped out) has no
+ * lineup to rank, where {@link getManagerLeagues} still lists it.
+ *
+ * One round trip, with the rosters aggregated per league row — the league set
+ * is decided once, in this WHERE, rather than re-derived by a second query
+ * that could disagree with it.
  */
-export async function getManagerLineupRows(
+export async function getManagerLeagueRosters(
   userId: string,
   season: string,
-): Promise<RosLineupLeague[]> {
+): Promise<RankLeague[]> {
   const { rows } = await pool.query<{
     league_id: string;
     total_rosters: number;
     roster_positions: string[] | null;
     scoring_settings: Record<string, number> | null;
-    players: string[] | null;
+    rosters: LeagueRosterRow[];
   }>(
-    `SELECT l.league_id, l.total_rosters, l.roster_positions,
-            l.scoring_settings, mr.players
+    `SELECT l.league_id, l.total_rosters, l.roster_positions, l.scoring_settings,
+            (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                      'roster_id', r.roster_id,
+                      'owner_id',  r.owner_id,
+                      'players',   COALESCE(r.players, '[]'::jsonb))
+                    ORDER BY r.roster_id), '[]'::jsonb)
+               FROM rosters r
+              WHERE r.league_id = l.league_id) AS rosters
        FROM leagues l
-       JOIN rosters mr
-         ON mr.league_id = l.league_id AND mr.owner_id = $1
       WHERE l.season = $2
-        AND ${LIVE_LEAGUE_SQL}`,
+        AND ${LIVE_LEAGUE_SQL}
+        AND ${HOLDS_A_ROSTER_SQL}`,
     [userId, season],
   );
 
@@ -258,7 +276,7 @@ export async function getManagerLineupRows(
     total_rosters: r.total_rosters,
     roster_positions: r.roster_positions,
     scoring_settings: r.scoring_settings,
-    players: r.players ?? [],
+    rosters: r.rosters,
   }));
 }
 

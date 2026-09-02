@@ -250,13 +250,54 @@ therefore server-only.
 
 ## Rest-of-season lineups
 
-`GET /api/user/[username]/lineups` solves every league's roster into optimal
-starters and bench — one request for the whole page, because the projections
-span is shared across every league and per-card requests would refetch nothing
-but re-enter everything. The client (`use-manager-lineups`) fetches it after
-the leagues stream settles; `!refreshing` flipping true is also the refetch
-after a cold sync, which is exactly when the rosters it solves from were
-written.
+`GET /api/user/[username]/lineups` solves **every stored roster** in every
+league into optimal starters and bench and ranks the manager's among them —
+one request for the whole page, because the projections span is shared across
+every league and per-card requests would refetch nothing but re-enter
+everything. The client (`use-manager-lineups`) fetches it after the leagues
+stream settles; `!refreshing` flipping true is also the refetch after a cold
+sync, which is exactly when the rosters it solves from were written.
+
+**Only the manager's lineup ships; everyone else is reduced to a rank.** Each
+league's payload entry is `{ lineup, ranks }` (`LeagueLineupEntry`), and
+`manager/league-ranks.ts` is the pure module behind it: one `solveLeagueLineup`
+per roster, all five metric totals read off that one solve
+(`lineupMetricTotals` — the solver already prices `points` *and* `adp_value`
+onto every player, so there is no second valuation pass to drift from the
+first). Ranks are standard competition ranking — ties share the better rank,
+the next distinct total skips — and `of` counts the rosters actually ranked,
+orphans and empty rosters included, not `total_rosters`. **A metric ranks
+`null` when every roster in the league totals zero on it**: one rule that
+covers both `from_week: null` (no projections → both ROS metrics) and an empty
+ADP board (all three capital metrics), because "1st of 12" among all-zero
+totals is a claim. One subtlety the tests pin: player *identity* (positions)
+rides the projections feed, so a wholly absent feed nulls the capital
+starters/bench **split** too — nobody can be seated, the roster's capital all
+lands on the bench — while `capital_total` keeps ranking. Capital ranks are
+invariant to *points*, not to the feed's existence. The query behind it, `getManagerLeagueRosters`, aggregates
+the rosters per league row in one round trip and gates on `HOLDS_A_ROSTER_SQL`
+— the roster half of `FIELDED_A_TEAM_SQL`, extracted so the two spellings
+cannot drift; a league where the manager holds no roster has nothing to rank,
+where `getManagerLeagues` still lists it.
+
+The metric ids are a type-only union in the contract (`LineupMetricId`), and
+the runtime lists live as exhaustive `Record<LineupMetricId, …>`s on each side
+of the seam — the server's ranks literal, the client's `METRIC_ORDER` in
+`features/shared/lineup-columns.ts` — so adding an id breaks both compiles
+until it is placed. A value export from `contract/` would break that folder's
+zero-runtime character, and the client cannot read a list out of
+`shared/manager` without dragging `pg` into the bundle.
+
+On the page, each league card is the league name plus up to four rank columns
+("2nd of 12"), with the season line, team/record and `LineupBreakdown` behind
+a `<details>` disclosure — `league-card.tsx` stays hook-free on purpose. The
+column choice is a *set*, rendered in canonical order and persisted under
+`thelab:lineup-columns` by `lineup-columns.ts`, a wrapper over the internal
+`local-store.ts` on the same terms as `account.ts`. The picker is a native
+`<dialog>`/`showModal()` (focus trap, Esc and backdrop for free — no
+dependency), and it enforces its bounds by disabling rather than correcting:
+the fifth box greys out at four, the last checked box at one, so an invalid
+selection cannot be made rather than being repaired after.
 
 **The ordering is projections first, draft capital second — as arithmetic, not
 as a second code path.** `manager/ros-lineups.ts` hands the solver one number

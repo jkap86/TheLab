@@ -45,11 +45,13 @@ export type { SyncClock } from "./graph-weeks";
 export {
   getManagerDraftAdp,
   getManagerLeagues,
-  getManagerLineupRows,
+  getManagerLeagueRosters,
   getManagerSyncState,
 } from "./queries";
 export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
+export { lineupMetricTotals, rankLeagueLineups } from "./league-ranks";
+export type { LeagueRosterRow, RankLeague } from "./league-ranks";
 export {
   managerSyncAdmission,
   createManagerSyncAdmission,

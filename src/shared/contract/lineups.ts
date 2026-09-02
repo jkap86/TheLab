@@ -45,7 +45,43 @@ export type LeagueLineup = {
   unknown_slots: string[];
 };
 
-/** `GET /api/user/[username]/lineups` — one solve per league, batched. */
+/**
+ * The rankable lenses on a solved roster. A type-only union on purpose: the
+ * runtime lists live as exhaustive `Record<LineupMetricId, …>`s on each side of
+ * the seam — the server's ranks literal, the client's column order — so adding
+ * an id here breaks both compiles until it is placed. A value exported from
+ * this folder would break the folder's own contract instead.
+ */
+export type LineupMetricId =
+  | "ros_starters"
+  | "ros_bench"
+  | "capital_total"
+  | "capital_bench"
+  | "capital_starters";
+
+/**
+ * Standard competition rank among the league's stored rosters: tied totals
+ * share the better rank and the next distinct total skips ("1, 2, 2, 4").
+ * `of` counts the rosters actually ranked — orphan and empty rosters included —
+ * not the league's seat count.
+ */
+export type MetricRank = { rank: number; of: number };
+
+/**
+ * Null where the metric is degenerate league-wide — every roster totals zero,
+ * which is what no projections (both ROS metrics) or no synced drafts (all
+ * three capital metrics) look like. "1st of 12" among all-zero totals would be
+ * a claim; the card renders an em dash instead.
+ */
+export type LineupRanks = Record<LineupMetricId, MetricRank | null>;
+
+/** One league's answer: the manager's own solved lineup, plus their ranks. */
+export type LeagueLineupEntry = {
+  lineup: LeagueLineup;
+  ranks: LineupRanks;
+};
+
+/** `GET /api/user/[username]/lineups` — every roster solved, batched. */
 export type ManagerLineupsPayload = {
   season: string;
   /**
@@ -55,5 +91,5 @@ export type ManagerLineupsPayload = {
    * rather than an error.
    */
   from_week: number | null;
-  leagues: Record<string, LeagueLineup>;
+  leagues: Record<string, LeagueLineupEntry>;
 };
