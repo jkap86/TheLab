@@ -9,10 +9,17 @@ export default async function ManagerPage({
   const { season } = await searchParams;
 
   return (
-    <PageShell width="wide">
+    // `console` rather than `wide`: the grid is three across and every card
+    // carries four lit readouts, which clip to "1st o…" at the narrower shell.
+    <PageShell width="console">
       {/* The heading is passed in rather than owned by `LeaguesHome`, which is a
           client component: this keeps the page's one piece of static copy on
-          the server side of the boundary. */}
+          the server side of the boundary.
+
+          In the console layout the copy is the plate's eyebrow rather than the
+          plate's headline — the headline is the manager's display name, which
+          only exists once the stream has answered. `ManagerPlate` renders this
+          node above the engraved name, so the seam is unchanged. */}
       <LeaguesHome
         username={username}
         // Passed through as given; the route is what validates a season, so a
@@ -21,9 +28,11 @@ export default async function ManagerPage({
         // case is treated as absent.
         season={typeof season === "string" ? season : undefined}
         heading={
-          <h1 className="font-display text-[0.6875rem] font-medium uppercase tracking-[0.28em] text-active">
+          // A `span`, not a heading: the page's one `<h1>` is the engraved
+          // name inside the plate, and this sits above it as an eyebrow.
+          <span className="font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
             Manager
-          </h1>
+          </span>
         }
       />
     </PageShell>

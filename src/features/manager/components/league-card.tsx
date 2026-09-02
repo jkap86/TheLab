@@ -5,15 +5,40 @@ import type {
   ManagerLeague,
 } from "@/shared/contract";
 
-import { formatRank, LINEUP_METRIC_LABELS } from "../helpers/lineup-metrics";
+import {
+  formatRank,
+  LINEUP_METRIC_LABELS,
+  metricFillClass,
+  metricToneClass,
+  rankFill,
+} from "../helpers/lineup-metrics";
 import { LeagueTeams } from "./league-teams";
 
 /**
- * One league: the name and the chosen rank columns, with everything else — the
- * season line, the manager's team and record, the team browser — behind a
- * `<details>` disclosure. The card stays hook-free on purpose: the one
- * interaction it owns is the disclosure, and the state a card does need
- * (which team, which metric) lives in `LeagueTeams` below it.
+ * One league, as a card that rises toward the viewer.
+ *
+ * The rise is real perspective, not a `translateY`: the `<li>` owns the
+ * `perspective`, the card sits at `rotateX(3deg)` at rest and flattens to
+ * `translateZ(30px)` on hover, and the contents carry their own small
+ * `translateZ` so the type separates from the glass as it comes forward. An
+ * **open** card is held flat, because a tilted card with a twelve-team table
+ * inside it is unreadable — opening it is the end of the same motion hovering
+ * starts.
+ *
+ * Two things that look optional are not, and both were found the hard way on
+ * the tools page:
+ *
+ * 1. `transform-style: preserve-3d` cannot coexist with `overflow: hidden`,
+ *    which forces a flat rendering context and silently collapses every child
+ *    `translateZ`. So the decorative layers live inside one absolutely
+ *    positioned wrapper that does the clipping, and the content stays a direct
+ *    child of the card. Do not move the clip onto the card.
+ * 2. The card must be `flex-1` inside a `flex` `<li>`, never `h-full`. A
+ *    percentage height cannot resolve against an auto-sized grid row.
+ *
+ * The card stays hook-free, as before: the one interaction it owns is the
+ * disclosure, and the state a card does need (which team, which metric) lives
+ * in `LeagueTeams` below it.
  */
 
 /**
@@ -40,8 +65,8 @@ function formatRecord(record: LeagueRecord): string {
 const GRID_COLS: Record<number, string> = {
   1: "grid-cols-1",
   2: "grid-cols-2",
-  3: "grid-cols-3",
-  4: "grid-cols-4",
+  3: "grid-cols-2",
+  4: "grid-cols-2",
 };
 
 export function LeagueCard({
@@ -63,61 +88,143 @@ export function LeagueCard({
   const teamName = league.team_name?.trim() || null;
 
   return (
-    <li className="@container rounded-2xl border border-foreground/12 bg-foreground/[0.04] shadow-[0_24px_60px_-34px_var(--surface-shadow)] backdrop-blur-xl">
-      <details className="group">
-        <summary className="block cursor-pointer list-none p-4">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="truncate font-display text-base font-semibold tracking-tight">
-              {league.name}
-            </p>
-            <span className="shrink-0 text-xs text-foreground/50 transition-colors group-hover:text-foreground/80">
-              <span className="group-open:hidden">▸</span>
-              <span className="hidden group-open:inline">▾</span>
-            </span>
-          </div>
+    // The `perspective` makes each `<li>` its own stacking context, so a card
+    // that rises cannot paint over the one after it in DOM order — the raise
+    // has to be ordered here, on the grid item, rather than on the summary
+    // inside it. Without this an open card sits *under* the card to its right,
+    // which is the one moment the raise is most visible.
+    <li className="relative flex [perspective:2400px] hover:z-10 has-[details[open]]:z-10">
+      <details className="group/card flex flex-1 flex-col">
+        <summary
+          className={
+            "lab-card-3d relative flex flex-1 cursor-pointer list-none flex-col rounded-[1.125rem] " +
+            "border border-foreground/12 bg-[image:var(--card-bg)] px-[1.375rem] pb-[1.625rem] pt-7 " +
+            "shadow-[var(--card-bevel),var(--card-lift)] " +
+            "[transform-style:preserve-3d] [transform-origin:center_bottom] " +
+            "[transform:translateZ(0)_rotateX(3deg)] " +
+            "hover:[transform:translateZ(30px)_rotateX(0deg)] " +
+            "group-open/card:[transform:translateZ(20px)_rotateX(0deg)] " +
+            "transition-[transform,box-shadow,border-color] duration-[450ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] " +
+            "hover:border-active/45 group-open/card:border-active/45 " +
+            "hover:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "group-open/card:shadow-[var(--card-bevel),var(--card-lift-hover),var(--card-halo-hover)] " +
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+          }
+        >
+          {/* Everything decorative, in the one layer that clips. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
+          >
+            <span className="absolute inset-x-0 top-0 h-[45%] bg-[image:var(--card-specular)]" />
+            <span className="lab-anim absolute inset-y-0 left-0 w-[55%] -translate-x-[180%] -skew-x-12 bg-[image:var(--card-sheen)] transition-transform duration-[900ms] ease-out group-hover/card:translate-x-[450%]" />
+            <span className="absolute -inset-x-1/4 -bottom-[8%] h-[62%] origin-bottom bg-[image:var(--card-floor)] opacity-40 transition-opacity duration-[450ms] [mask-image:linear-gradient(to_top,#000,transparent_72%)] [transform:perspective(320px)_rotateX(66deg)] group-hover/card:opacity-100 group-open/card:opacity-100" />
+            <span className="absolute -bottom-[45%] left-1/2 h-[85%] w-[120%] -translate-x-1/2 bg-[radial-gradient(closest-side,var(--accent-glow),transparent_75%)] opacity-30 transition-opacity duration-[450ms] group-hover/card:opacity-80 group-open/card:opacity-80" />
+            <span className="absolute inset-x-[18%] top-0 h-px bg-[image:var(--card-edge-light)] opacity-0 transition-opacity duration-[450ms] group-hover/card:opacity-100 group-open/card:opacity-100" />
+          </span>
+
+          {/* The league name, engraved the same way as the plate but a size
+              down. The gradient is clipped to the glyphs, so the depth is a
+              drop-shadow filter rather than a text-shadow — and it comes from
+              `--card-title-depth`, because `filter` does not compose across two
+              declarations the way a `box-shadow` list does, which is why the
+              hover glow is a whole second token rather than an addition. */}
+          <span className="relative text-balance bg-[image:var(--chrome-face)] bg-clip-text font-display text-[1.75rem] font-semibold leading-[1.06] tracking-[-0.04em] text-transparent [filter:var(--card-title-depth)] [transform:translateZ(44px)] transition-[filter] duration-[450ms] group-hover/card:[filter:var(--card-title-depth-hover)]">
+            {league.name}
+          </span>
+
+          {/* The accent rule: a short cyan hairline that extends on hover. */}
+          <span
+            aria-hidden
+            className="relative mt-3.5 block h-px w-9 bg-gradient-to-r from-active/50 to-transparent transition-[width] duration-[450ms] [transform:translateZ(36px)] group-hover/card:w-[5.75rem] group-hover/card:from-active group-open/card:w-[5.75rem] group-open/card:from-active"
+          />
+
+          {/* The manager's own line. A league with neither a team name nor a
+              record — one whose rosters have not been read — says only what it
+              knows, rather than padding the line with a `0–0`. */}
+          <p className="relative mt-[0.9375rem] font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60 [transform:translateZ(14px)]">
+            {teamName ?? "—"}
+            {league.record && (
+              <>
+                {" · "}
+                <span className="tabular-nums text-foreground/[0.78]">
+                  {formatRecord(league.record)}
+                </span>
+              </>
+            )}
+            {` · ${league.total_rosters}-team · ${status}`}
+          </p>
 
           <div
-            className={`mt-3 grid gap-3 ${GRID_COLS[columns.length] ?? "grid-cols-4"}`}
+            className={`relative mt-5 grid gap-2.5 ${GRID_COLS[columns.length] ?? "grid-cols-2"} [transform:translateZ(22px)]`}
           >
             {columns.map((id) => (
-              <div key={id} className="min-w-0">
-                <p className="truncate text-[10px] font-semibold tracking-wide text-foreground/60">
-                  {LINEUP_METRIC_LABELS[id].column}
-                </p>
-                {/* Full opacity on the accent: the light-mode teal is only
-                    ~5:1 against the page, and an alpha drops it below AA. */}
-                <p className="mt-0.5 truncate font-display text-sm font-semibold tabular-nums text-active">
-                  {formatRank(entry?.ranks[id] ?? null)}
-                </p>
-              </div>
+              <MetricTile key={id} id={id} entry={entry} />
             ))}
           </div>
         </summary>
 
-        <div className="border-t border-foreground/10 px-4 pb-4 pt-3">
-          <p className="truncate text-xs text-foreground/60">
-            {league.season} · {status} · {league.total_rosters}-team
-          </p>
-
-          {/* The manager's own half. A league with neither a team name nor a
-              record — one whose rosters have not been read — renders no row at
-              all rather than an empty one pretending to be a `0–0`. */}
-          {(teamName || league.record) && (
-            <div className="mt-2 flex items-baseline justify-between gap-3">
-              <span className="truncate text-sm text-foreground/80">
-                {teamName ?? "—"}
-              </span>
-              {league.record && (
-                <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-active">
-                  {formatRecord(league.record)}
-                </span>
-              )}
-            </div>
+        {/* The expanded half sits *outside* the 3D context on purpose: a table
+            of twelve teams inside a `preserve-3d` subtree pays for a composited
+            layer per row and gains nothing, since none of it is tilted. */}
+        <div className="mt-3 rounded-[1.125rem] border border-foreground/10 bg-[image:var(--card-bg)] px-[1.375rem] pb-[1.375rem] pt-4 shadow-[var(--card-bevel)]">
+          {entry && entry.teams.length > 0 ? (
+            <LeagueTeams entry={entry} />
+          ) : (
+            <p className="m-0 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/60">
+              No rosters read for this league yet
+            </p>
           )}
-
-          {entry && entry.teams.length > 0 && <LeagueTeams entry={entry} />}
         </div>
       </details>
     </li>
+  );
+}
+
+/**
+ * One rank column, as a lit window with a meter under it.
+ *
+ * The window is the same surface as the account readout, which is what ties a
+ * card's numbers back to the console's own instruments — a figure on glass
+ * reads as data, a figure on the card's plate reads as a label. The meter is
+ * what makes "2nd of 12" comparable across cards at a glance; the text is what
+ * makes it exact.
+ */
+function MetricTile({
+  id,
+  entry,
+}: {
+  id: LineupMetricId;
+  entry?: LeagueLineupEntry | null;
+}) {
+  const rank = entry?.ranks[id] ?? null;
+  const fill = rankFill(rank);
+
+  return (
+    <div className="relative min-w-0 overflow-hidden rounded-[0.625rem] border border-black/85 bg-[image:var(--readout-bg)] px-3 py-2.5 shadow-[var(--readout-shadow)]">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
+      />
+      <p className="relative m-0 truncate font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
+        {LINEUP_METRIC_LABELS[id].column}
+      </p>
+      {/* Full opacity on the tone: the light-mode teal is only ~5:1 against
+          the page, and an alpha drops it below AA. */}
+      <p
+        className={`relative m-0 mt-2 truncate font-mono text-base leading-none tabular-nums ${metricToneClass(id)}`}
+      >
+        {formatRank(rank)}
+      </p>
+      <span
+        aria-hidden
+        className="relative mt-2.5 block h-1 rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
+      >
+        <span
+          className={`block h-1 rounded-full ${metricFillClass(id)}`}
+          style={{ width: `${fill}%` }}
+        />
+      </span>
+    </div>
   );
 }

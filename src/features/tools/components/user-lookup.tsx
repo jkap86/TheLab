@@ -4,10 +4,15 @@ import { useEffect, useRef, useState } from "react";
 
 import type { UserInfo } from "@/shared/contract";
 
-import { apiFetch, errorMessage, isAbortError } from "@/features/shared";
+import {
+  apiFetch,
+  CONSOLE_HOUSING,
+  CONSOLE_KEY,
+  errorMessage,
+  isAbortError,
+} from "@/features/shared";
 
 import { AccountReadout } from "./account-readout";
-import { CONSOLE_HOUSING, CONSOLE_KEY } from "./console-chrome";
 
 export function UserLookup({
   user,

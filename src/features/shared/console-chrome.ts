@@ -2,9 +2,10 @@
  * The console's shared surfaces, as class strings.
  *
  * A key is a physically raised object: the resting shadow carries a 3px riser
- * under it and the pressed shadow drops to 1px, so pressing one travels. Three
- * of them exist — Find, Change and the theme toggle — and they have to agree,
- * which is the whole argument for the constant.
+ * under it and the pressed shadow drops to 1px, so pressing one travels. They
+ * have to agree, which is the whole argument for the constant — and it lives in
+ * `shared/` rather than in `features/tools` because the leagues console builds
+ * on it too, which is the line that decides where a client piece goes.
  */
 export const CONSOLE_KEY =
   "shrink-0 rounded-full border border-foreground/10 bg-[image:var(--key-bg)] px-4 py-2 " +

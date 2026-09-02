@@ -1,8 +1,12 @@
 "use client";
 
-import { storeAccount, ThemeToggle, useStoredAccount } from "@/features/shared";
-
-import { CONSOLE_HOUSING, CONSOLE_KEY } from "./console-chrome";
+import {
+  CONSOLE_HOUSING,
+  CONSOLE_KEY,
+  storeAccount,
+  ThemeToggle,
+  useStoredAccount,
+} from "@/features/shared";
 import { UserLookup } from "./user-lookup";
 import { ToolGrid } from "./tools-grid";
 

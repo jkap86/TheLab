@@ -1,8 +1,6 @@
 import type { UserInfo } from "@/shared/contract";
 
-import { Avatar } from "@/features/shared";
-
-import { CONSOLE_HOUSING, CONSOLE_KEY } from "./console-chrome";
+import { Avatar, CONSOLE_HOUSING, CONSOLE_KEY } from "@/features/shared";
 
 /**
  * The resolved account, as a lit readout in a machined housing: window, milled

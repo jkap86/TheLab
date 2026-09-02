@@ -10,6 +10,7 @@
 export { storeAccount, useStoredAccount } from "./account";
 export { apiFetch, isAbortError } from "./api";
 export { Avatar } from "./avatar";
+export { CONSOLE_HOUSING, CONSOLE_KEY } from "./console-chrome";
 export { errorMessage } from "./error-message";
 export * from "./league-filters";
 export {

@@ -323,8 +323,9 @@ On the page, each league card is the league name plus up to four rank columns
 `<details>` disclosure — `league-card.tsx` stays hook-free on purpose, and the
 state a card does need lives in `league-teams.tsx` below it. The browser is
 two panes: every team on the left with one number column, the selected team —
-the manager's by default — solved out on the right as `LineupBreakdown` then
-`DraftPicks`, Sleeper's team-page order. The panes sit side by side at
+the manager's by default — solved out on the right, then `DraftPicks` under
+both panes (see the console section: the picks grid wants the full width, and
+they are the roster's, not the lineup's). The panes sit side by side at
 *every* width, phones included — stacking put the roster below twelve teams —
 so truncation, not wrapping, is what carries a narrow card. The column's metric is a per-card
 `<select>` (default ROS starters) and the list is *sorted* by it, because it
@@ -337,7 +338,12 @@ is one lens at a time, points or capital, flipped by
 a per-card toggle (`useState`, deliberately unpersisted, like the metric
 select): the two figures never
 share a column because they would read as the same unit, and the headline total
-follows the lens so it always agrees with the rows beneath it. The
+follows the lens so it always agrees with the rows beneath it. **The lens is
+owned by `LeagueTeams`, not by `LineupBreakdown`** — the redesign put both
+controls on one row above both panes, because at 390px neither pane can spare
+a header's width, so the state has to be visible to the keys and to the list
+at once. `lineup-breakdown.tsx` exports `Lens`, `LineupLensKeys` and
+`lineupTotal` for that row and renders rows only. The
 column choice is a *set*, rendered in canonical order and persisted under
 `thelab:lineup-columns` by `lineup-columns.ts`, a wrapper over the internal
 `local-store.ts` on the same terms as `account.ts`. The picker is a native
@@ -649,10 +655,14 @@ what turned up the ghost wordmark and the smeared engraving, but it has had no
 designer's pass.
 
 The console's three keys — Find, Change and the theme toggle — take their class
-string from `CONSOLE_KEY` in `console-chrome.ts`, with `CONSOLE_HOUSING` for the
+string from `CONSOLE_KEY`, with `CONSOLE_HOUSING` for the
 machined pill they sit in. A key is a physically raised object (a 3px riser in
 the resting shadow, 1px pressed, so it travels), and three hand-copied spellings
-of that is three chances for one of them to stop travelling. The theme key gets
+of that is three chances for one of them to stop travelling. **The constant
+lives in `features/shared/console-chrome.ts`**, not in this folder: the leagues
+console builds on it too, and "a second feature reads it" is exactly the line
+that moves a client piece into `shared/`. It went there rather than into the
+tools barrel because the barrel rule is about *this folder's own* modules. The theme key gets
 its own housing beside the account's rather than joining it: below `sm` the
 cluster wraps within itself, so the lookup keeps a full row and the key follows
 onto its own, still right-aligned. Sharing one row there leaves an input too
@@ -668,6 +678,102 @@ copy is `aria-hidden`), the readout's live state announced by `sr-only`
 "Connected" rather than by the pulsing dot alone, disabled cards keeping
 `role="link"` + `aria-disabled` + their `sr-only` reason, and nothing below
 `foreground/60` or under 11px — the mono legends sit exactly on that floor.
+
+## The leagues console
+
+`/manager/[username]` is the tools page's instrument language applied to the
+leagues list: one bevelled panel holding an engraved identity plate, a season
+summary housing, and a grid of league cards that tilt and rise. Applied from a
+design handoff. The information architecture, the five stream states, the
+filters and the columns dialog are all unchanged — this was a visual pass —
+and four things about it are structural rather than cosmetic.
+
+**The header is a plate and a housing, not an avatar and two lines.**
+`ManagerPlate` is `LabWordmark` with the manager's `<Avatar size="lg" />` in
+the bezel where the flask sits, and the page's static copy demoted from the
+headline to the plate's mono eyebrow — the headline is the display name, which
+only exists once the stream has answered, so the server/client seam is
+unchanged and the page's one `<h1>` moved inside the plate. The name is a size
+down from the wordmark and *allowed to wrap*, because a display name is
+arbitrary length where "The Lab" was not; both copies wrap, which is what keeps
+the extrusion under the face rather than ghosting beside it. It steps down
+below `sm` for the wordmark's reason: the plate is wider than a phone at the
+full size.
+
+**The summary housing is new information, derived client-side.** Nothing on the
+page aggregated before. `seasonSummary` (in `helpers/`, pure and tested) sums
+`league.record` across the **unfiltered** list — the housing describes the
+account for the season, where the filtered count already has a home in the line
+under the plate. Two decisions carry it, and both are the difference between
+honest and wrong: a league whose rosters have not been read has `record: null`
+and is **skipped rather than counted `0-0`**, so a partly-synced account shows a
+combined record over fewer leagues than the count beside it; and `winPct` is
+**null, never zero**, when no league has a record yet, because a zero-length arc
+parked at the top of the dial claims the manager lost every game they played.
+Null draws an empty track, no pointer, and an em dash. The gauge is a
+`conic-gradient` with the pointer on a rotated wrapper — one angle, no
+trigonometry — and it is decorative: the figure inside it is real text and the
+ledger beside it is a `<dl>`. (The `<dl>` holds only `dt`/`dd` and the `div`s
+grouping them; the footnote sits outside it. And the record figure is
+`whitespace-nowrap`, because the en dash in `8–5` is a break opportunity and a
+record split over two lines reads as two numbers — it wrapped at 390.)
+
+**The rank columns became lit readout tiles with meters.** `rankFill` divides by
+`of - 1`, **not `of`** — on `rank / of`, 1st of 12 sits at 92% and last at 8%,
+so neither end of the scale is ever reached and the bar reads as a broken gauge
+rather than as a position. A null rank or a one-roster league draws empty.
+`metricToneClass` / `metricFillClass` split the five ids into two families,
+points and capital, off an exhaustive `Record<LineupMetricId, …>` like every
+other list on this side of the seam.
+
+**Two CSS constraints are inherited from the tools page and bite again**, plus
+one that is this page's own:
+
+- `preserve-3d` and `overflow: hidden` are mutually exclusive, so every
+  decorative layer lives in one absolutely-positioned clipping wrapper and the
+  content stays a direct child of the `<summary>`.
+- The card is `flex-1` inside a `flex` `<li>`, never `h-full`.
+- **`group/card` is *named*.** The bench disclosure inside the card opens its
+  own `group/bench`, and an unnamed `group-open:` would have the bench toggling
+  the card's transform.
+
+Three things were changed against the handoff, each because a render showed it:
+
+- **`PageShell` gained a `console` width (`max-w-6xl`).** At `wide` a league
+  card lands at ~241px and *every* metric tile clips to "ROS STA…" over
+  "1st o…" — the rank the tile exists to show. The handoff's own note named this
+  as the fix and said the honest answer is a wider shell rather than dropping to
+  two columns, and it is: at `console` the card is 326px and every tile reads
+  whole. `/tools` keeps `wide`.
+- **The raise is z-ordered on the `<li>`, not on the `<summary>`.** The
+  `perspective` makes each grid item its own stacking context, so a card that
+  rises cannot paint over the one after it in DOM order — an open card sat
+  *under* the card to its right, which is the one moment the raise is most
+  visible. `relative hover:z-10 has-[details[open]]:z-10` on the grid item.
+- The engraved league name takes `--card-title-depth` / `-hover` rather than the
+  handoff's inline `drop-shadow()` list, on the token rule above: the handoff
+  predates those tokens and a stack written for a dark plate smears on a light
+  one. Same for the plate's `--wordmark-depth`.
+
+**`globals.css` was merged, not replaced.** The handoff's copy is that file as
+it stood *before* the theme toggle — it still selects light with
+`prefers-color-scheme` and still carries the dead `--header-*` scrim tokens — so
+taking it wholesale would have reverted the toggle. Only its five new tokens,
+the `--color-metric-secondary` mapping and the reduced-motion rule's third
+selector were folded in. A design bundle that supersedes a file is worth
+diffing against the tree rather than copying over it.
+
+**Deliberately still open, all three the handoff's own questions.** The
+footnote under the ledger names the game count but not the league count, so a
+partly-synced account's "over 4 of 6 leagues" goes unsaid. The filters and
+columns dialogs (and their triggers, and the theme key beside them) keep their
+pre-console chrome — bringing them onto the panel tokens touches `filter-rail`,
+`match-rail`, `rule-bay` and `rule-row`, none of which were in the bundle, and
+restyling only the triggers would strand the panels behind them. And light mode
+is derived rather than designed, as on `/tools`; it was checked at 1280/1440 and
+390 in both schemes, and the one number worth knowing is that the gauge's arc
+sits at 4.49:1 against its track in light against 14.6:1 in dark — decorative
+contrast, with the figure itself at 5.2:1.
 
 ## Theme
 
@@ -711,6 +817,14 @@ Two rules for adding to it:
   with black on the dark ground and lift them with white on the light one, and
   the hover glow is a second token (`--card-title-depth-hover`) because `filter`
   does not compose across two declarations the way `box-shadow` lists do.
+- The leagues console added five more on the same terms: `--meter-track` (the
+  cut channel a meter runs in — darker than its plate in both schemes, because
+  a groove is), `--dial-track`, `--progress-fill` (segmented, so a lit bar
+  reads as an instrument counting up rather than a painted rectangle),
+  `--alert-bg`, and `--metric-secondary`, mapped as `--color-metric-secondary`.
+  That last is the chrome band's own mid-stop rather than a new hue, and it is
+  the *second* metric colour: the rank tiles carry two families of number and
+  one colour each is what tells a reader the unit without reading the label.
 
 ### The toggle
 

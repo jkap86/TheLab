@@ -95,6 +95,33 @@
     drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5));
   --card-title-depth-hover: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6))
     drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 22px var(--accent-glow));
+
+  /* ---- Instrument chrome — manager page (dark) ---------------------- */
+
+  /*
+   * The cut channel a meter or a progress bar runs in. Darker than the surface
+   * it sits on in both themes: a track is a groove, and a groove is never
+   * lighter than the plate around it.
+   */
+  --meter-track: rgba(0, 0, 0, 0.72);
+  /* The unfilled part of the win-rate gauge's arc. */
+  --dial-track: #0a1416;
+  /*
+   * The cold-sync bar. Segmented rather than solid — on a lit readout a solid
+   * fill reads as a painted rectangle, while discrete segments read as an
+   * instrument counting up.
+   */
+  --progress-fill: repeating-linear-gradient(to right, #00ffe5 0 7px, rgba(0, 0, 0, 0.55) 7px 10px);
+  /* The housing an error line sits in: a key, tinted by the error colour. */
+  --alert-bg: linear-gradient(180deg, #2a1c1c, #150f0f);
+  /*
+   * The second metric colour. The rank tiles carry two families of number —
+   * projected points and draft capital — and giving them one colour each is
+   * what lets a reader tell the unit without reading the label. It is the
+   * chrome band's own mid-stop rather than a new hue, so it belongs to the
+   * palette the page is already made of.
+   */
+  --metric-secondary: #8fb3b6;
 }
 
 /*
@@ -187,6 +214,17 @@
     drop-shadow(0 2px 4px rgba(15, 23, 42, 0.2));
   --card-title-depth-hover: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.9))
     drop-shadow(0 2px 4px rgba(15, 23, 42, 0.2)) drop-shadow(0 0 18px var(--accent-glow));
+
+  /* ---- Instrument chrome — manager page (light) ---------------------- */
+
+  /* Derived from the dark values above, not measured — see the gauge note in
+     the handoff. A track is still darker than its plate; the fill and the
+     second metric colour step down to hold their contrast on a light ground. */
+  --meter-track: rgba(15, 23, 42, 0.14);
+  --dial-track: #d3dde0;
+  --progress-fill: repeating-linear-gradient(to right, #0b6d63 0 7px, rgba(15, 23, 42, 0.12) 7px 10px);
+  --alert-bg: linear-gradient(180deg, #fbeaea, #f4dcdc);
+  --metric-secondary: #3f6165;
 }
 
 @theme inline {
@@ -195,6 +233,7 @@
   --color-active: var(--accent);
   --color-error: var(--error);
   --color-readout: var(--readout-text);
+  --color-metric-secondary: var(--metric-secondary);
 
   --font-display: var(--font-geist-sans), ui-sans-serif, system-ui,
     "Helvetica Neue", Arial, sans-serif;
@@ -211,7 +250,8 @@ body {
 /*
  * The resolved-account dot: an expanding ring that reads as a live connection.
  * Drawn with a box-shadow rather than a pseudo-element so it can sit on a bare
- * `<span>` inside a flex row.
+ * `<span>` inside a flex row. The manager page reuses it on the refresh pill,
+ * where it means the same thing: a live stream.
  */
 @keyframes tools-pulse {
   0% {
@@ -240,11 +280,14 @@ body {
 /*
  * The cards rise toward the viewer on hover. Under reduced motion the rise and
  * the resting tilt both go — a card that is permanently tilted but never moves
- * reads as a rendering fault rather than a choice.
+ * reads as a rendering fault rather than a choice. The league cards carry the
+ * same class, and the open selector is cleared alongside the hover one so an
+ * open card is flat either way.
  */
 @media (prefers-reduced-motion: reduce) {
   .lab-card-3d,
-  .lab-card-3d:hover {
+  .lab-card-3d:hover,
+  .group\/card[open] > .lab-card-3d {
     transform: none !important;
   }
 }
