@@ -18,6 +18,7 @@ export {
   type LineupMetricId,
   type MetricRank,
   type LineupRanks,
+  type RosterPick,
   type LeagueLineupEntry,
   type ManagerLineupsPayload,
 } from "./lineups";

@@ -3,7 +3,12 @@ import type { LeagueRecord, ManagerLeague } from "@/shared/contract";
 import { QB_ELIGIBLE_STARTING_SLOTS } from "@/shared/ktc";
 import { sleeperAvatarUrl } from "@/shared/sleeper";
 
-import type { LeagueRosterRow, RankLeague } from "./league-ranks";
+import type {
+  LeagueDraftRow,
+  LeagueUserName,
+  TradedPick,
+} from "./draft-picks";
+import type { RankLeague } from "./league-ranks";
 import type { ManagerSyncState } from "./sync-freshness";
 
 /*
@@ -235,35 +240,75 @@ function toRecord(r: LeagueRow): LeagueRecord | null {
 }
 
 /**
+ * One league as the lineups route reads it: {@link RankLeague} for the solve,
+ * plus everything `managerRosterPicks` resolves the pick portfolio from. One
+ * row type rather than two queries, so the ranks and the picks cannot be
+ * answered off different league sets.
+ */
+export type ManagerLeagueRow = RankLeague & {
+  league_type: number;
+  previous_league_id: string | null;
+  traded_picks: TradedPick[];
+  drafts: LeagueDraftRow[];
+  users: LeagueUserName[];
+};
+
+/**
  * What the lineups route solves and ranks each league from: the slots, the
  * scoring, and **every stored roster** — ranking the manager means solving the
- * other eleven teams too. Gated on {@link HOLDS_A_ROSTER_SQL} on purpose: a
- * league where the manager holds no roster (left, or chopped out) has no
- * lineup to rank, where {@link getManagerLeagues} still lists it.
+ * other eleven teams too — plus the traded picks, drafts and member names the
+ * pick portfolio is reconstructed from. Gated on {@link HOLDS_A_ROSTER_SQL} on
+ * purpose: a league where the manager holds no roster (left, or chopped out)
+ * has no lineup to rank, where {@link getManagerLeagues} still lists it.
  *
- * One round trip, with the rosters aggregated per league row — the league set
- * is decided once, in this WHERE, rather than re-derived by a second query
- * that could disagree with it.
+ * One round trip, with each child collection aggregated per league row — the
+ * league set is decided once, in this WHERE, rather than re-derived by a
+ * second query that could disagree with it.
+ *
+ * Two casts inside the drafts blob, for the two reasons TheLabX's own draft
+ * read casts: `rounds` is regex-guarded before the `::int` like every numeric
+ * read off a Sleeper blob (junk must read as "depth unknown", not fail the
+ * query), and `start_time` rides through `jsonb_build_object` as a JSON
+ * number, which is exact for epoch milliseconds.
  */
 export async function getManagerLeagueRosters(
   userId: string,
   season: string,
-): Promise<RankLeague[]> {
-  const { rows } = await pool.query<{
-    league_id: string;
-    total_rosters: number;
-    roster_positions: string[] | null;
-    scoring_settings: Record<string, number> | null;
-    rosters: LeagueRosterRow[];
-  }>(
+): Promise<ManagerLeagueRow[]> {
+  const { rows } = await pool.query<ManagerLeagueRow>(
     `SELECT l.league_id, l.total_rosters, l.roster_positions, l.scoring_settings,
+            l.previous_league_id,
+            ${LEAGUE_TYPE_SQL} AS league_type,
             (SELECT COALESCE(jsonb_agg(jsonb_build_object(
                       'roster_id', r.roster_id,
                       'owner_id',  r.owner_id,
                       'players',   COALESCE(r.players, '[]'::jsonb))
                     ORDER BY r.roster_id), '[]'::jsonb)
                FROM rosters r
-              WHERE r.league_id = l.league_id) AS rosters
+              WHERE r.league_id = l.league_id) AS rosters,
+            (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                      'season',    tp.season,
+                      'round',     tp.round,
+                      'roster_id', tp.roster_id,
+                      'owner_id',  tp.owner_id)), '[]'::jsonb)
+               FROM traded_picks tp
+              WHERE tp.league_id = l.league_id) AS traded_picks,
+            (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                      'draft_id',    d.draft_id,
+                      'season',      d.season,
+                      'status',      d.status,
+                      'type',        d.type,
+                      'start_time',  d.start_time,
+                      'rounds',      CASE WHEN d.settings->>'rounds' ~ '^[0-9]+$'
+                                          THEN (d.settings->>'rounds')::int END,
+                      'draft_order', d.draft_order)), '[]'::jsonb)
+               FROM drafts d
+              WHERE d.league_id = l.league_id) AS drafts,
+            (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                      'user_id',      u.user_id,
+                      'display_name', u.display_name)), '[]'::jsonb)
+               FROM league_users u
+              WHERE u.league_id = l.league_id) AS users
        FROM leagues l
       WHERE l.season = $2
         AND ${LIVE_LEAGUE_SQL}
@@ -271,13 +316,7 @@ export async function getManagerLeagueRosters(
     [userId, season],
   );
 
-  return rows.map((r) => ({
-    league_id: r.league_id,
-    total_rosters: r.total_rosters,
-    roster_positions: r.roster_positions,
-    scoring_settings: r.scoring_settings,
-    rosters: r.rosters,
-  }));
+  return rows;
 }
 
 /**

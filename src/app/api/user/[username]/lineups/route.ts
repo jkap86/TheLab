@@ -6,6 +6,7 @@ import {
   LAST_REGULAR_WEEK,
   getManagerDraftAdp,
   getManagerLeagueRosters,
+  managerRosterPicks,
   rankLeagueLineups,
 } from "@/shared/manager";
 import { getRosProjections } from "@/shared/projections";
@@ -107,7 +108,13 @@ export async function GET(
       );
       // A null lineup means the store moved between the query and here — the
       // league drops out of the payload, as it always has for roster-less ones.
-      if (lineup) solved[league.league_id] = { lineup, ranks };
+      if (lineup) {
+        solved[league.league_id] = {
+          lineup,
+          ranks,
+          picks: managerRosterPicks(league, season, userId),
+        };
+      }
     }
 
     const payload: ManagerLineupsPayload = {

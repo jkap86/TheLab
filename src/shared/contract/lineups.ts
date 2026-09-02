@@ -75,10 +75,35 @@ export type MetricRank = { rank: number; of: number };
  */
 export type LineupRanks = Record<LineupMetricId, MetricRank | null>;
 
+/**
+ * One future draft pick the manager's roster owns, named the way Sleeper names
+ * it. The facts ship and the display rule lives in the card: a pick whose
+ * draft order is set reads by its slot ("1.05"), an unordered one by its round
+ * ("2nd"), with the origin shown only where the slot can't be.
+ */
+export type RosterPick = {
+  season: string;
+  round: number;
+  /**
+   * Pick-in-round once that season's draft order is set — the *original*
+   * roster's slot, which is where the pick actually falls. Null before the
+   * order exists, and always for auctions, whose "order" is nomination order.
+   */
+  slot: number | null;
+  /**
+   * The original owner's name, only when the pick was acquired in a trade —
+   * a roster's own pick carries null, because naming its origin would repeat
+   * the card. Falls back to "Roster N" where the origin roster has no owner.
+   */
+  from: string | null;
+};
+
 /** One league's answer: the manager's own solved lineup, plus their ranks. */
 export type LeagueLineupEntry = {
   lineup: LeagueLineup;
   ranks: LineupRanks;
+  /** The roster's future draft picks, sorted by season, round, own-first. */
+  picks: RosterPick[];
 };
 
 /** `GET /api/user/[username]/lineups` — every roster solved, batched. */

@@ -48,10 +48,28 @@ export {
   getManagerLeagueRosters,
   getManagerSyncState,
 } from "./queries";
+export type { ManagerLeagueRow } from "./queries";
 export { solveLeagueLineup } from "./ros-lineups";
 export type { RosLineupLeague } from "./ros-lineups";
 export { lineupMetricTotals, rankLeagueLineups } from "./league-ranks";
 export type { LeagueRosterRow, RankLeague } from "./league-ranks";
+export {
+  DYNASTY_LEAGUE_TYPE,
+  DYNASTY_PICK_SEASONS,
+  dynastyPickGrid,
+  managerRosterPicks,
+  ownedDraftPicks,
+} from "./draft-picks";
+export type {
+  DraftPickAsset,
+  DraftPickGrid,
+  LeagueDraft,
+  LeagueDraftRow,
+  LeagueUserName,
+  PickLeague,
+  PickRoster,
+  TradedPick,
+} from "./draft-picks";
 export {
   managerSyncAdmission,
   createManagerSyncAdmission,

@@ -303,6 +303,30 @@ dependency), and it enforces its bounds by disabling rather than correcting:
 the fifth box greys out at four, the last checked box at one, so an invalid
 selection cannot be made rather than being repaired after.
 
+**The expanded card also lists the roster's future draft picks**, the way
+Sleeper's own team page does, and the reconstruction is the part that is easy
+to get wrong: Sleeper's `traded_picks` lists only picks that have *changed
+hands*, so a portfolio is the whole enumerated grid — every roster owning its
+own pick per (season, round) — with the traded rows overriding cells.
+`shared/manager/draft-picks.ts` is TheLabX's module ported whole with its
+tests: `dynastyPickGrid` fixes the three-season horizon a dynasty league's
+pick market actually runs (a startup never counts as this year's rookie class,
+and only `complete` rolls the window — both readings fail toward showing a
+pick that exists), while every other format derives its grid from the trades
+because it has no standing horizon to read. `managerRosterPicks` is this
+repo's addition to the file: it composes in TypeScript what TheLabX's
+`getDraftSlots` does in SQL-plus-cache (one manager's leagues per request
+don't need a tier), keeping its four decisions — the season's latest draft
+wins and is chosen *before* its order is read, an auction's order is not a
+pick order, and the slot comes off `draft_order` through the **original**
+roster's owner, because that slot is where the pick actually falls. The card's
+naming rule is Sleeper's: "1.05" once the order is set, "2nd" before, and the
+origin ("from NellyNell86") printed only where there is no slot to say which
+pick this is — the payload ships both facts (`slot`, `from` on `RosterPick`)
+and the rule lives in `draft-picks.tsx`. The pick context rides the same
+`getManagerLeagueRosters` row the ranks are solved from (`ManagerLeagueRow`),
+so the two answers cannot come off different league sets.
+
 **The ordering is projections first, draft capital second — as arithmetic, not
 as a second code path.** `manager/ros-lineups.ts` hands the solver one number
 per player: rest-of-season points plus `adpValue · 1e-7`, the scale chosen so

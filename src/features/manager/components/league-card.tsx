@@ -6,6 +6,7 @@ import type {
 } from "@/shared/contract";
 
 import { formatRank, LINEUP_METRIC_LABELS } from "../helpers/lineup-metrics";
+import { DraftPicks } from "./draft-picks";
 import { LineupBreakdown } from "./lineup-breakdown";
 
 /**
@@ -117,6 +118,10 @@ export function LeagueCard({
           {entry && entry.lineup.starters.length > 0 && (
             <LineupBreakdown lineup={entry.lineup} />
           )}
+
+          {/* After the lineup, the way Sleeper orders a team page: players,
+              then the picks. Renders nothing where the roster owns none. */}
+          {entry && <DraftPicks picks={entry.picks} />}
         </div>
       </details>
     </li>
