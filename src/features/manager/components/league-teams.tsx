@@ -47,17 +47,21 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
   const anyNonZero = entry.teams.some((t) => t.totals[metric] !== 0);
 
   return (
-    <div className="mt-3 flex flex-col gap-3 @lg:flex-row @lg:gap-4">
-      <div className="min-w-0 border-t border-foreground/10 pt-3 @lg:w-[44%] @lg:shrink-0">
+    // Always two columns, whatever the card's width — truncation carries the
+    // narrow case, because a stacked layout put the roster below twelve teams.
+    <div className="mt-3 flex gap-4">
+      <div className="w-[44%] min-w-0 shrink-0 border-t border-foreground/10 pt-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold tracking-wide text-foreground/60">
+          <span className="shrink-0 text-xs font-semibold tracking-wide text-foreground/60">
             Teams
           </span>
+          {/* min-w-0 lets the select give way on a phone-width card, where
+              the pane is what shrinks — the panes never stack. */}
           <select
             value={metric}
             onChange={(e) => setMetric(e.target.value as LineupMetricId)}
             aria-label="Order teams by"
-            className="rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-[10px] font-semibold text-foreground/70"
+            className="min-w-0 rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-[10px] font-semibold text-foreground/70"
           >
             {LINEUP_METRIC_IDS.map((id) => (
               <option key={id} value={id}>

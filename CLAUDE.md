@@ -304,7 +304,9 @@ On the page, each league card is the league name plus up to four rank columns
 state a card does need lives in `league-teams.tsx` below it. The browser is
 two panes: every team on the left with one number column, the selected team —
 the manager's by default — solved out on the right as `LineupBreakdown` then
-`DraftPicks`, Sleeper's team-page order. The column's metric is a per-card
+`DraftPicks`, Sleeper's team-page order. The panes sit side by side at
+*every* width, phones included — stacking put the roster below twelve teams —
+so truncation, not wrapping, is what carries a narrow card. The column's metric is a per-card
 `<select>` (default ROS starters) and the list is *sorted* by it, because it
 is the standings behind the card's "2nd of 12" — the order and the number must
 agree — and when every team totals zero on the metric the column shows dashes,
