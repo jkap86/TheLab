@@ -8,9 +8,9 @@ import type {
 import {
   formatRank,
   LINEUP_METRIC_LABELS,
-  metricFillClass,
-  metricToneClass,
+  rankColor,
   rankFill,
+  rankPercentile,
 } from "../helpers/lineup-metrics";
 import { LeagueTeams } from "./league-teams";
 
@@ -201,6 +201,16 @@ export function LeagueCard({
  * reads as data, a figure on the card's plate reads as a label. The meter is
  * what makes "2nd of 12" comparable across cards at a glance; the text is what
  * makes it exact.
+ *
+ * **The colour is the rank**, on the red -> neutral -> green ramp, and it is
+ * driven by the same percentile as the meter's width so the bar and the hue
+ * cannot disagree. It used to be the metric's *family* — accent for points,
+ * `--metric-secondary` for capital — which told a reader the unit; the label
+ * above the figure is what carries that now.
+ *
+ * The glow under the fill is not decoration: a saturated bar sitting flat on
+ * lit glass reads as paint, where the same bar throwing light reads as part of
+ * the instrument.
  */
 function MetricTile({
   id,
@@ -211,6 +221,9 @@ function MetricTile({
 }) {
   const rank = entry?.ranks[id] ?? null;
   const fill = rankFill(rank);
+  // Not `fill`: that is 0 for last place *and* for nothing-to-rank, and only
+  // the first of those is red. See `rankPercentile`.
+  const tone = rankColor(rankPercentile(rank));
 
   return (
     <div className="relative min-w-0 overflow-hidden rounded-[0.625rem] border border-black/85 bg-[image:var(--readout-bg)] px-3 py-2.5 shadow-[var(--readout-shadow)]">
@@ -221,10 +234,11 @@ function MetricTile({
       <p className="relative m-0 truncate font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
         {LINEUP_METRIC_LABELS[id].column}
       </p>
-      {/* Full opacity on the tone: the light-mode teal is only ~5:1 against
-          the page, and an alpha drops it below AA. */}
+      {/* A computed colour, so it goes through `style` — the ramp is
+          continuous and there is no utility class to generate for it. */}
       <p
-        className={`relative m-0 mt-2 truncate font-mono text-base leading-none tabular-nums ${metricToneClass(id)}`}
+        className="relative m-0 mt-2 truncate font-mono text-base leading-none tabular-nums"
+        style={{ color: tone }}
       >
         {formatRank(rank)}
       </p>
@@ -233,8 +247,12 @@ function MetricTile({
         className="relative mt-2.5 block h-1 rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.95)]"
       >
         <span
-          className={`block h-1 rounded-full ${metricFillClass(id)}`}
-          style={{ width: `${fill}%` }}
+          className="block h-1 rounded-full"
+          style={{
+            width: `${fill}%`,
+            background: tone,
+            boxShadow: `0 0 8px ${rankColor(rankPercentile(rank), 0.55)}`,
+          }}
         />
       </span>
     </div>

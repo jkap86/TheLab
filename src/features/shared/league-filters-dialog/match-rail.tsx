@@ -1,6 +1,7 @@
 "use client";
 
 import type { ManagerLeague } from "@/shared/contract";
+import { CONSOLE_READOUT, CONSOLE_WELL } from "../console-chrome";
 import {
   type ActiveFilter,
   activeFilters,
@@ -40,36 +41,44 @@ export function MatchRail({
     <div
       role="group"
       aria-label="Matching leagues"
-      className="flex flex-col gap-4 rounded-xl border border-foreground/10 bg-foreground/[0.03] p-4"
+      className={`${CONSOLE_WELL} flex flex-col gap-4 p-3.5`}
     >
-      <div role="status" className="flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/45">
+      <div role="status" className="flex flex-col gap-1.5">
+        <span className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45">
           Leagues matching
         </span>
-        <div className="flex items-baseline gap-2">
-          <span className="font-display text-4xl font-bold leading-none tabular-nums text-active [text-shadow:0_0_22px_var(--accent-glow)]">
+        {/* The one figure on the panel that is an *answer* rather than a
+            control, so it is the one on lit glass. */}
+        <span
+          className={`${CONSOLE_READOUT} flex items-baseline gap-2 rounded-[0.625rem] px-3 py-2.5`}
+        >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
+          />
+          <span className="relative font-mono text-[1.75rem] leading-none tabular-nums text-readout [text-shadow:var(--readout-text-glow)] sm:text-4xl">
             {matched.length}
           </span>
-          <span className="text-xs text-foreground/50">
+          <span className="relative font-mono text-[0.6875rem] text-readout/60">
             of {total}
             {share !== null && ` · ${Math.round(share * 100)}%`}
           </span>
-        </div>
+        </span>
       </div>
 
-      <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
+      <div className="h-1.5 overflow-hidden rounded-full bg-[var(--meter-track)] shadow-[inset_0_1px_3px_rgba(0,0,0,0.9)]">
         <div
-          className="h-full rounded-full bg-active transition-[width] duration-200"
+          className="h-full rounded-full bg-active shadow-[0_0_10px_var(--accent-glow)] transition-[width] duration-200"
           style={{ width: `${(share ?? 0) * 100}%` }}
         />
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/45">
+        <span className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45">
           Narrowing
         </span>
         {active.length === 0 ? (
-          <p className="text-xs text-foreground/45">
+          <p className="m-0 font-mono text-[0.6875rem] text-foreground/45">
             Nothing yet — every league is in.
           </p>
         ) : (
@@ -86,16 +95,16 @@ export function MatchRail({
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/45">
+        <span className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45">
           Of these {matched.length}
         </span>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+        <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-0.5">
           {rows.map((row) => (
             <div key={row.key} className="flex items-baseline justify-between">
-              <dt className="truncate text-xs text-foreground/60">
+              <dt className="truncate font-mono text-[0.6875rem] text-foreground/60">
                 {row.label}
               </dt>
-              <dd className="shrink-0 text-xs font-semibold tabular-nums text-foreground/80">
+              <dd className="m-0 shrink-0 font-mono text-[0.6875rem] tabular-nums text-foreground/82">
                 {row.count}
               </dd>
             </div>
@@ -121,13 +130,13 @@ function ActiveChip({
   onRemove: () => void;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-active/25 bg-active/10 py-0.5 pl-2 pr-1 text-[11px] text-foreground/85">
+    <span className="inline-flex items-center gap-1.5 rounded-[0.4375rem] border border-active/28 bg-active/10 py-[0.1875rem] pl-2 pr-[0.3125rem] font-mono text-[0.6875rem] text-foreground/88">
       {entry.label}
       <button
         type="button"
         aria-label={`Stop filtering by ${entry.label}`}
         onClick={onRemove}
-        className="leading-none text-foreground/45 transition-colors hover:text-error"
+        className="leading-none text-foreground/45 transition-colors hover:text-error focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
       >
         ×
       </button>

@@ -49,9 +49,9 @@ export function FilterRail<T extends string>({
     <div
       role="group"
       aria-label={label}
-      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1 py-1"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-1.5"
     >
-      <span className="w-14 shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/45">
+      <span className="w-13 shrink-0 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45">
         {label}
       </span>
       <div className="flex min-w-0 flex-wrap gap-1.5">
@@ -63,20 +63,25 @@ export function FilterRail<T extends string>({
               type="button"
               aria-pressed={selected}
               onClick={() => onPick(option.value)}
-              className={`inline-flex items-baseline gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/50 ${
+              // Every chip is a key — raised, and it travels when pressed.
+              // What picking one changes is its border and its legend, not
+              // whether it is a key: they are one row of the same control.
+              className={`inline-flex items-baseline gap-1.5 whitespace-nowrap rounded-full border bg-[image:var(--key-bg)] px-[0.6875rem] py-[0.3125rem] font-mono text-[0.6875rem] shadow-[var(--key-shadow)] transition-[transform,box-shadow,color] duration-150 active:translate-y-0.5 active:shadow-[var(--key-shadow-pressed)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
                 selected
-                  ? "border-active/40 bg-active/15 text-active"
-                  : "border-foreground/12 bg-foreground/[0.04] text-foreground/70 hover:bg-foreground/[0.08] hover:text-foreground"
+                  ? "border-active/45 text-readout [text-shadow:var(--readout-text-glow)]"
+                  : "border-foreground/10 text-foreground/70 hover:text-readout"
               }`}
             >
               {option.label}
-              {/* The lit chip's count takes the accent at *full* opacity and
-                  is held apart by size alone: light mode's teal is only ~5:1
-                  against the page, so an alpha on it drops below AA — the rule
-                  the account heading is written to as well. */}
+              {/* The lit chip's count takes the readout colour at *full*
+                  opacity and is held apart by size alone: light mode's teal is
+                  only ~5:1 against the page, so an alpha on it drops below AA
+                  — the rule the account heading is written to as well. (The
+                  handoff spells this one at 75%; the rule wins, since it is
+                  the same colour and the same failure.) */}
               <span
-                className={`text-[10px] tabular-nums ${
-                  selected ? "text-active" : "text-foreground/40"
+                className={`font-mono text-[0.625rem] tabular-nums ${
+                  selected ? "text-readout" : "text-foreground/45"
                 }`}
               >
                 {counts[i]}

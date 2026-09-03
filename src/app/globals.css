@@ -56,8 +56,18 @@
   --plate-bg: linear-gradient(180deg, #0a1114 0%, #101d21 55%, #0b1316 100%);
   --plate-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.1),
     inset 0 0 30px rgba(0, 255, 229, 0.06), 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 44px -28px #000;
-  --chrome-face: linear-gradient(180deg, #ffffff 0%, #d8ecec 26%, #8fb3b6 46%, #4d7175 53%, #cfe7e7 62%,
-    #a8c6c7 82%, #6d8f92 100%);
+  /*
+   * The engraved face. Eight stops rather than seven, and the reason is a bug
+   * that only shows at type sizes: the old ramp put `#8fb3b6` at 46% hard
+   * against `#4d7175` at 53%, and across a 1.75rem glyph that 7% is a crisp
+   * dark line through the middle of every letterform — the league titles, the
+   * manager name and the wordmark all read as struck through. The band is
+   * lifted to 50% and widened either side, which keeps the chrome character
+   * (bright top, mid shadow, secondary highlight, darker foot) and loses the
+   * rule.
+   */
+  --chrome-face: linear-gradient(180deg, #ffffff 0%, #e8f6f6 20%, #c2dcde 38%,
+    #9cbcbf 50%, #b6d2d3 58%, #dcefef 70%, #adcacb 86%, #7fa1a4 100%);
   --chrome-extrude: #0a1113;
   --chrome-extrude-shadow: 0 1px 0 #09100f, 0 2px 0 #080e0e, 0 3px 0 #070c0c, 0 4px 0 #060a0a,
     0 5px 1px rgba(0, 0, 0, 0.9), 0 0 34px rgba(0, 255, 229, 0.18);
@@ -71,6 +81,21 @@
   --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 3px 0 rgba(0, 0, 0, 0.7),
     0 7px 14px -7px #000;
   --key-shadow-pressed: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 1px 0 rgba(0, 0, 0, 0.7);
+  /*
+   * The two recesses a key can be mounted in, and they are two because they
+   * hold different things.
+   *
+   * `--track-shadow` is the tight channel a *single* key travels in — the nav
+   * track, the lens toggle, the metric picker. It is cut deep, so the raised
+   * key inside it reads as sitting proud of the surface.
+   *
+   * `--well-shadow` is the shallow tray a *panel* of controls sits in — the
+   * filter rails, the rule bays, a rule's own slots. Deep is wrong there: a
+   * tray holding six chips reads as a hole rather than a surface, so it takes
+   * half the depth and a lit bottom lip to close it off.
+   */
+  --track-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.9);
+  --well-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.06);
 
   --readout-bg: linear-gradient(180deg, #04100f, #061816);
   --readout-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.95), inset 0 0 20px rgba(0, 255, 229, 0.11);
@@ -115,13 +140,24 @@
   /* The housing an error line sits in: a key, tinted by the error colour. */
   --alert-bg: linear-gradient(180deg, #2a1c1c, #150f0f);
   /*
-   * The second metric colour. The rank tiles carry two families of number —
-   * projected points and draft capital — and giving them one colour each is
-   * what lets a reader tell the unit without reading the label. It is the
-   * chrome band's own mid-stop rather than a new hue, so it belongs to the
-   * palette the page is already made of.
+   * The rank ramp: the red -> neutral -> green scale a rank tile's figure and
+   * meter are drawn in. `--rank-l` and `--rank-c` are the *ends* of the ramp,
+   * `--rank-l-mid` is mid-pack — where chroma reaches zero and the colour is
+   * whatever the glass wants a quiet number to be.
+   *
+   * Lightness is a token because the ramp runs on two very different grounds:
+   * near-white on the dark readout, dark grey on the light one. Only the
+   * endpoints differ, so only the endpoints are here — the hues (25 red, 150
+   * green) and the curve live in `rankColor()`, which reads these through
+   * `var()` in a computed `oklch()` string.
+   *
+   * This replaces `--metric-secondary`, which coloured a tile by its metric's
+   * *family* (points or capital). The tile now says what a rank is worth
+   * rather than what unit it is in; the label above it still names the metric.
    */
-  --metric-secondary: #8fb3b6;
+  --rank-l: 0.84;
+  --rank-l-mid: 0.99;
+  --rank-c: 0.18;
 }
 
 /*
@@ -163,8 +199,10 @@
   --plate-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.9),
     0 1px 0 rgba(255, 255, 255, 0.8), 0 24px 44px -28px rgba(15, 23, 42, 0.3);
   /* The engraved face, and the extrusion sunk underneath it. */
-  --chrome-face: linear-gradient(180deg, #6b8a8d 0%, #4e6f73 26%, #38585c 46%, #2b494d 53%, #567b7f 62%,
-    #476b6f 82%, #33555a 100%);
+  /* The same eight stops as the dark ramp, inverted — see the note there for
+     why the band moved off 46/53%. */
+  --chrome-face: linear-gradient(180deg, #7d9c9f 0%, #5f8083 20%, #4a6b6f 38%,
+    #3d5e62 50%, #4c6d71 58%, #628689 70%, #4d7175 86%, #3a5c60 100%);
   --chrome-extrude: #ffffff;
   --chrome-extrude-shadow: 0 1px 0 #f4f8f9, 0 2px 0 #eaf0f1, 0 3px 0 #e0e8ea, 0 4px 0 #d7e0e3,
     0 5px 1px rgba(255, 255, 255, 0.9);
@@ -188,6 +226,10 @@
   --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 0 rgba(15, 23, 42, 0.14),
     0 7px 14px -7px rgba(15, 23, 42, 0.3);
   --key-shadow-pressed: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 0 rgba(15, 23, 42, 0.14);
+  /* Both recesses invert to slate: a cut channel on a light plate is a soft
+     shadow, not the near-black the dark scheme can afford. */
+  --track-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.18);
+  --well-shadow: inset 0 3px 8px rgba(15, 23, 42, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.9);
 
   /* The account readout: a lit window, not a card. */
   --readout-bg: linear-gradient(180deg, #eaf6f4, #dcefeb);
@@ -224,7 +266,13 @@
   --dial-track: #d3dde0;
   --progress-fill: repeating-linear-gradient(to right, #0b6d63 0 7px, rgba(15, 23, 42, 0.12) 7px 10px);
   --alert-bg: linear-gradient(180deg, #fbeaea, #f4dcdc);
-  --metric-secondary: #3f6165;
+  /* Mid-pack goes *darker* than the ends here, which is the one place the
+     light ramp is not simply the dark one dimmed: on light glass the quiet
+     colour has to be the dark one, and a near-white neutral would disappear
+     into the readout rather than reading as "mid-pack". */
+  --rank-l: 0.52;
+  --rank-l-mid: 0.42;
+  --rank-c: 0.16;
 }
 
 @theme inline {
@@ -233,7 +281,6 @@
   --color-active: var(--accent);
   --color-error: var(--error);
   --color-readout: var(--readout-text);
-  --color-metric-secondary: var(--metric-secondary);
 
   --font-display: var(--font-geist-sans), ui-sans-serif, system-ui,
     "Helvetica Neue", Arial, sans-serif;

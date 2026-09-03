@@ -2,15 +2,20 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 
+import type { LineupMetricId, ManagerLeague } from "@/shared/contract";
+
 import {
   activeFilterCount,
   DEFAULT_LEAGUE_FILTERS,
   filterSummary,
   CONSOLE_KEY,
+  CONSOLE_KEY_BLOCK,
+  CONSOLE_READOUT,
+  type LeagueFilters,
   LeagueFiltersDialog,
   ManagerPlate,
   matchesFilters,
-  ThemeToggle,
+  usePublishRackReadout,
   useLineupColumns,
   useManagerLeagues,
 } from "@/features/shared";
@@ -32,10 +37,21 @@ import { SeasonSummary } from "./season-summary";
  * warm one shows its stored leagues immediately and puts the same sync's
  * progress in a pill above them. Both are the same stream.
  *
- * The panel is the one structural change. The header used to be an avatar and
- * two lines of text sitting directly on the page; it is now a plate and a
- * summary housing on a bevelled surface, which is what makes the page read as
- * the same instrument as `/tools`.
+ * The header is a plate, a summary housing and a View housing on one row, and
+ * `items-stretch` rather than `items-center` is what makes that row read as a
+ * rack: three instruments of one height, not three objects floating on a
+ * midline.
+ *
+ * **The panel is gone.** The page used to draw a rounded, bordered panel with
+ * `--background` showing around it; the ground in `layout.tsx` is that surface
+ * now and runs to the viewport edges. With the rack floating above, a second
+ * bounded rectangle inside the viewport read as a panel inside a panel.
+ *
+ * What went with it: the trim rule that carried the two dialog triggers and
+ * the theme key, and the accent line above it that said what the list had been
+ * narrowed to. The triggers moved into the View housing and the sentence
+ * became the readout at the foot of it; the theme key belongs to the rack now,
+ * because a page-level copy would be a second control over one setting.
  */
 export function LeaguesHome({
   username,
@@ -89,20 +105,17 @@ export function LeaguesHome({
   // everywhere this pair is shown.
   const name = user ? user.display_name || user.username : username;
 
-  return (
-    <div className="relative rounded-3xl border border-foreground/9 bg-[image:var(--panel-bg)] px-6 pb-14 pt-10 shadow-[var(--panel-shadow)] sm:px-13 sm:pb-[4.5rem] sm:pt-16">
-      {/* Grain, then the specular hairline along the panel's top edge. Both are
-          what keep a large flat surface from reading as flat. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[image:var(--panel-grain)]"
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-[image:var(--panel-specular)]"
-      />
+  // The rack's lit pill names whoever's page this is. Published rather than
+  // read up there, because the season is the *stream's* answer and the URL
+  // does not carry it — see `usePublishRackReadout`.
+  usePublishRackReadout(username, state.season);
 
-      <header className="relative flex flex-wrap items-center gap-6">
+  return (
+    <div className="relative">
+      {/* Stretch, not centre: the three instruments are one rack, so they take
+          one height and their internal grooves and bezels stretch with it.
+          They stack at a phone's width, where a row of three cannot. */}
+      <header className="relative flex flex-col gap-3.5 sm:flex-row sm:flex-wrap sm:items-stretch sm:gap-5">
         <ManagerPlate
           name={name}
           avatarUrl={user?.avatar_url ?? null}
@@ -120,40 +133,24 @@ export function LeaguesHome({
 
         {/* The summary is about the account, so it only appears once there is
             an account's worth of leagues to summarise. */}
-        {leagues.length > 0 && (
-          <div className="ml-auto">
-            <SeasonSummary leagues={leagues} />
-          </div>
-        )}
-      </header>
+        {leagues.length > 0 && <SeasonSummary leagues={leagues} />}
 
-      {/* A modal hides its own state, so this line is the only thing on the
-          page saying what the list below has been narrowed to. Accent at full
-          opacity, as everywhere it is text. */}
-      {narrowing && (
-        <p className="relative mt-5 truncate font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-active">
-          {filterSummary(filters)} · {visible.length} of {leagues.length}
-        </p>
-      )}
-
-      {/* The rule fills whatever the triggers leave, so the two dialogs read as
-          mounted on the console's own trim rather than floating above the grid.
-          The theme key joins them: the three are the page's chrome, and they
-          keep one vocabulary between them — the dialogs' own panels are a
-          second pass, and restyling only their triggers would strand them. */}
-      <div className="relative my-9 flex flex-wrap items-center gap-3">
-        <div
-          aria-hidden
-          className="h-px flex-1 bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
-        />
-        <LeagueFiltersDialog
+        <ViewHousing
           filters={filters}
           onChange={setFilters}
           leagues={leagues}
+          columns={columns}
+          matched={visible.length}
+          narrowing={narrowing}
         />
-        <LineupColumnsDialog columns={columns} />
-        <ThemeToggle />
-      </div>
+      </header>
+
+      {/* One rule as the boundary before the grid. It used to carry the
+          controls; it is only a boundary now. */}
+      <div
+        aria-hidden
+        className="relative my-9 h-px bg-gradient-to-r from-active/35 via-foreground/5 to-transparent"
+      />
 
       {error ? (
         <p
@@ -251,6 +248,75 @@ export function LeaguesHome({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * The third instrument on the header row: the two dialog triggers, stacked,
+ * over a readout of what they have left.
+ *
+ * It replaces a trim rule with three bordered buttons hanging off it, and the
+ * readout replaces the accent sentence that used to sit above that rule. Both
+ * dialogs hide their own state, so something on the page has to say what the
+ * grid below has been narrowed to — `{matched} / {total}` is that, with the
+ * filter summary under it.
+ *
+ * `mt-auto` on the readout is what makes the row's heights agree: the housing
+ * stretches to the tallest instrument beside it, and the readout takes up the
+ * slack at the bottom rather than leaving a gap under the keys.
+ *
+ * At a phone's width the three go on one line and the summary line drops — the
+ * figure is the half that cannot be got anywhere else.
+ */
+function ViewHousing({
+  filters,
+  onChange,
+  leagues,
+  columns,
+  matched,
+  narrowing,
+}: {
+  filters: LeagueFilters;
+  onChange: (filters: LeagueFilters) => void;
+  leagues: readonly ManagerLeague[];
+  columns: readonly LineupMetricId[];
+  matched: number;
+  narrowing: boolean;
+}) {
+  const key = `${CONSOLE_KEY_BLOCK} justify-between gap-3 sm:w-full`;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-foreground/8 bg-[image:var(--key-bg)] p-2.5 shadow-[var(--plate-shadow)] sm:ml-auto sm:min-w-60">
+      <span className="px-1 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/50">
+        View
+      </span>
+      <div className="flex flex-1 flex-wrap items-center gap-2 sm:flex-col sm:flex-nowrap sm:items-stretch">
+        <LeagueFiltersDialog
+          filters={filters}
+          onChange={onChange}
+          leagues={leagues}
+          triggerClassName={key}
+        />
+        <LineupColumnsDialog columns={columns} triggerClassName={key} />
+
+        <span
+          className={`${CONSOLE_READOUT} ml-auto flex flex-col rounded-[0.625rem] px-3 py-2 sm:ml-0 sm:mt-auto`}
+        >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
+          />
+          <span className="relative font-mono text-[1.0625rem] leading-none tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+            {matched} / {leagues.length}
+          </span>
+          {narrowing && (
+            <span className="relative mt-1.5 hidden truncate font-mono text-[0.625rem] uppercase tracking-[0.14em] text-readout/60 sm:block">
+              {filterSummary(filters)}
+            </span>
+          )}
+        </span>
+      </div>
     </div>
   );
 }

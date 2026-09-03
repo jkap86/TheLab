@@ -3,6 +3,7 @@
 import type { ManagerLeague } from "@/shared/contract";
 import type { FilterRule } from "../league-filters";
 
+import { CONSOLE_WELL } from "../console-chrome";
 import type { RulePreset } from "./league-filters-presets";
 import { RuleRow, type RuleKeyOption } from "./rule-row";
 
@@ -77,16 +78,24 @@ export function RuleBay({
   match: (league: ManagerLeague, rule: FilterRule) => boolean;
 }) {
   return (
-    <section className="@container flex flex-col gap-2.5 rounded-xl border border-foreground/10 bg-foreground/[0.03] p-3">
+    // A shallow tray, not a card: the rows inside it are recessed slots and a
+    // lit number, and those only read as mounted if the thing holding them is
+    // cut into the panel rather than raised off it.
+    <section className={`${CONSOLE_WELL} @container flex flex-col gap-2.5 p-3`}>
       <div className="flex items-center gap-2.5">
         {/* Full opacity on the accent: light mode's teal is only ~5:1 against
             the page, and an alpha drops a label below AA. */}
-        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-active">
+        <span className="font-mono text-[0.625rem] font-bold uppercase tracking-[0.16em] text-active">
           {label}
         </span>
-        <span className="h-px flex-1 bg-foreground/10" />
+        {/* A cut hairline rather than a drawn one: the dark line under it is
+            what makes it read as milled into the tray. */}
+        <span
+          aria-hidden
+          className="h-px flex-1 bg-gradient-to-r from-active/30 via-foreground/[0.06] to-transparent shadow-[0_1px_0_rgba(0,0,0,0.6)]"
+        />
         {rules.length > 0 && (
-          <span className="text-[10px] font-semibold tabular-nums text-foreground/45">
+          <span className="font-mono text-[0.625rem] tabular-nums text-foreground/45">
             {rules.length}
           </span>
         )}
@@ -94,7 +103,9 @@ export function RuleBay({
 
       <div className="flex flex-col gap-1.5">
         {rules.length === 0 && (
-          <p className="text-xs text-foreground/45">{empty}</p>
+          <p className="m-0 font-mono text-[0.6875rem] leading-normal text-foreground/45">
+            {empty}
+          </p>
         )}
         {rules.map((rule, i) => (
           <RuleRow
@@ -120,7 +131,7 @@ export function RuleBay({
           // "Rule" — which says what the control is *about* rather than what
           // pressing it does.
           aria-label={`Add ${label.toLowerCase()} rule`}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-active/35 bg-active/[0.06] py-1.5 text-[11px] font-bold uppercase tracking-wider text-active transition-colors hover:bg-active/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/50"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-active/38 bg-active/[0.07] py-1.5 font-mono text-[0.625rem] font-bold uppercase tracking-[0.16em] text-active transition-colors hover:bg-active/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
         >
           <span aria-hidden="true" className="text-sm leading-none">
             +
@@ -130,7 +141,7 @@ export function RuleBay({
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/45">
+        <span className="font-mono text-[0.625rem] uppercase tracking-[0.14em] text-foreground/45">
           Quick add
         </span>
         {presets.map((preset) => {
@@ -144,10 +155,10 @@ export function RuleBay({
                 if (already) return;
                 onChange([...rules, preset.rule]);
               }}
-              className={`rounded-lg border px-2 py-0.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/50 ${
+              className={`rounded-[0.4375rem] border px-2 py-[0.1875rem] font-mono text-[0.6875rem] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
                 already
-                  ? "cursor-default border-active/40 bg-active/15 text-active"
-                  : "border-foreground/12 bg-foreground/[0.04] text-foreground/65 hover:bg-foreground/[0.08] hover:text-foreground"
+                  ? "cursor-default border-active/45 bg-active/14 text-readout"
+                  : "border-foreground/12 bg-foreground/[0.04] text-foreground/65 hover:text-readout"
               }`}
             >
               {preset.label}

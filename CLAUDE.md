@@ -677,11 +677,12 @@ of that is three chances for one of them to stop travelling. **The constant
 lives in `features/shared/console-chrome.ts`**, not in this folder: the leagues
 console builds on it too, and "a second feature reads it" is exactly the line
 that moves a client piece into `shared/`. It went there rather than into the
-tools barrel because the barrel rule is about *this folder's own* modules. The theme key gets
-its own housing beside the account's rather than joining it: below `sm` the
-cluster wraps within itself, so the lookup keeps a full row and the key follows
-onto its own, still right-aligned. Sharing one row there leaves an input too
-narrow to read a username in.
+tools barrel because the barrel rule is about *this folder's own* modules. **The
+theme key is no longer on this page**: it moved into the app rack (see The app
+rack below), which is the only place it can be and still be one control. It
+used to have a housing beside the account's, so that below `sm` the cluster
+wrapped within itself and the lookup kept a full row; with the key gone the
+lookup has the row outright and the wrap is moot.
 
 **Only `LabWordmark` joined the barrel.** The page passes it in as `ToolsHome`'s
 heading, which is what keeps the one piece of static copy on the server side of
@@ -737,9 +738,30 @@ record split over two lines reads as two numbers — it wrapped at 390.)
 `of - 1`, **not `of`** — on `rank / of`, 1st of 12 sits at 92% and last at 8%,
 so neither end of the scale is ever reached and the bar reads as a broken gauge
 rather than as a position. A null rank or a one-roster league draws empty.
-`metricToneClass` / `metricFillClass` split the five ids into two families,
-points and capital, off an exhaustive `Record<LineupMetricId, …>` like every
-other list on this side of the seam.
+**The tiles are coloured by rank, not by metric family.** `rankColor` in
+`lineup-metrics.ts` runs a red -> neutral -> green ramp off `rankPercentile`,
+the same percentile `rankFill` draws the meter from, so the bar and the hue
+cannot disagree. Chroma rides *distance from mid-pack* rather than the rank
+itself, so a middling rank lands on the theme's neutral and only a real result
+earns colour; the hue only picks the side. `--rank-l`, `--rank-l-mid` and
+`--rank-c` are tokens because the ramp runs on two very different glasses, and
+the value is a computed `oklch()` string through `style` rather than a class
+because it is continuous.
+
+`rankPercentile` exists as a second function for one reason: `rankFill` answers
+**0 to two different questions** — last place, and nothing-to-rank (a null rank
+or a one-roster league). The meter is right to draw both empty; the ramp is
+not, because painting an absent answer full red claims a result. So the
+degenerate cases come back null and land on the neutral.
+
+This replaced `metricToneClass` / `metricFillClass` and the `METRIC_FAMILY`
+record behind them, which gave the two families (accent for points,
+`--metric-secondary` for capital) one colour each so a reader could tell the
+*unit* without reading the label. **That cue was dropped rather than moved**, a
+decision taken deliberately against this file's earlier note arguing for it: a
+tile has one colour to spend, and what a rank is *worth* is the thing a reader
+scans a page of cards for. The unit is still named, in words, in the tile's own
+header. `--metric-secondary` lost its only consumer and was retired with them.
 
 **One card per row, and the ranks are a strip across it.** The grid was three
 across; it is `grid-cols-1` at every width now. The card keeps its stacked
@@ -799,10 +821,9 @@ diffing against the tree rather than copying over it.
 **Deliberately still open, all three the handoff's own questions.** The
 footnote under the ledger names the game count but not the league count, so a
 partly-synced account's "over 4 of 6 leagues" goes unsaid. The filters and
-columns dialogs (and their triggers, and the theme key beside them) keep their
-pre-console chrome — bringing them onto the panel tokens touches `filter-rail`,
-`match-rail`, `rule-bay` and `rule-row`, none of which were in the bundle, and
-restyling only the triggers would strand the panels behind them. And light mode
+columns dialogs kept their pre-console chrome — **closed since**, by the pass in
+The app rack below, which is where `filter-rail`, `match-rail`, `rule-bay` and
+`rule-row` finally moved onto the panel tokens. And light mode
 is derived rather than designed, as on `/tools`; it was checked at 1280/1440 and
 390 in both schemes, and the one number worth knowing is that the gauge's arc
 sits at 4.49:1 against its track in light against 14.6:1 in dark — decorative
@@ -1061,10 +1082,184 @@ selected in the search panel narrows the board to exactly that facet's own count
 (16 of 634), and pick labels read "2026 1.05" where the order is known and
 "2027 1st from <owner>" where the origin is a third party. Light mode is derived
 rather than designed, as everywhere else on the console. **The two filter
-dialogs keep their pre-console chrome**, the same open item the leagues console
-records — the `Filters` trigger visibly does not match the mono keys beside it,
-and bringing it onto the panel tokens touches `filter-rail`, `match-rail`,
-`rule-bay` and `rule-row` for both pages at once.
+dialogs kept their pre-console chrome**, the same open item the leagues console
+recorded — the `Filters` trigger visibly did not match the mono keys beside it.
+**Closed since**: the manager console pass re-housed the shared dialog, so this
+page got it too, and the trigger now takes `CONSOLE_KEY_PILL` like the `Search`
+and `To today` keys it stands beside.
+
+## The app rack
+
+The app had no navigation. `/tools` was the only way to another tool and a
+typed URL was the only way back, so the rack is the one genuinely new object in
+this pass rather than a restyling of an old one: a floating housing carrying
+the wordmark, a recessed track of tool links, a season readout and the theme
+key. Applied from a design handoff scoped to `/manager/[username]`; five things
+about it are structural rather than cosmetic.
+
+**It lives in `features/tools`, not `features/shared`.** Everything it is made
+of is that folder's own — the tool registry, `toolHref`, the flask mark, the
+engraved wordmark treatment — and `features/tools` may read `features/shared`
+where the reverse would invert the layering. Mounting it in `layout.tsx` is
+`app/` reaching for a feature, which is the direction routes already import in.
+The alternative was moving the registry into `features/shared` on the rule that
+moved `CONSOLE_KEY` and `ManagerPlate` there; it was not worth three files of
+churn to avoid a dependency that already points the legal way.
+
+**It renders no `<h1>`.** The wordmark here is two `<span>`s, where
+`LabWordmark` engraves the same string around a heading. A rack on every page
+would otherwise put a second `<h1>` above each page's own — the manager name,
+the tools headline — and the pages are right. `base` (the tool's own href) is
+what lights a key, not the resolved `href`: Manager points at
+`/manager/<username>` once an account is stored, and matching on that would
+leave the rack unlit on somebody else's page.
+
+**Below `md` the brand row becomes `display: contents`.** The rack is two
+stacked objects at a phone's width — a brand pill, then the nav track — and one
+row above it. Rather than render two trees, the wrapper's box stops existing at
+`md`, its children join the rack's flex container directly, and `order` puts
+them back in the wide layout's reading order. That is also why the pill chrome
+is on the rack above `md` and on the row below it: there is only ever one box
+painting it. The nav track scrolls rather than wrapping, because a nav that
+reflows to two lines moves the rack's height with the route.
+
+**The season readout is published by the page, not read by the rack.** It names
+whose page this is, which is manager data in app-level chrome, and three
+answers were possible with only one of them true: the stored account names
+whoever last logged in, which is the wrong person on `/manager/someone-else`;
+the URL names the right person but not the season, which is resolved on the
+server and arrives on the leagues stream. So `RackReadoutProvider` wraps both
+in `layout.tsx`, `LeaguesHome` publishes through `usePublishRackReadout`, and
+**a page that publishes nothing gets no pill** — which is what "only where a
+manager is resolved" has to mean. Read and write are two contexts so a
+publisher takes only the stable setter; the publish is an effect, because it
+writes to an ancestor's state, and its cleanup is the half that matters:
+without it, walking from a manager page to `/trades` leaves the old name lit.
+
+**There is now exactly one theme control, in the rack.** `ThemeToggle` was
+removed from `tools-home`, `leagues-home`, `trades-home` and
+`lineup-checker-home`; it gained an optional `labelClassName`, which renders
+the name of the theme a press switches *to* beside the glyph. That word is
+`aria-hidden` rather than being the button's name — each face already carries a
+full sentence, and a visible "Light" would only prepend a redundant token.
+
+### The ground, and why it is per-route
+
+`ConsoleGround` is the bevelled surface run to the viewport edges. The leagues
+page used to draw it as a rounded, bordered panel inside its own shell with
+`--background` showing around it; with the rack floating above, a second
+bounded rectangle inside the viewport reads as a panel inside a panel.
+
+It is **fixed and viewport-sized**, not painted onto the page's box:
+`--panel-bg` is a radial gradient anchored at `50% -20%` of whatever box
+carries it, so a document-sized box stretches that glow over a hundred-league
+page until it is no longer light falling on a console. And it is `-z-10`, which
+is what lets a *route* opt in — the element is out of flow and behind every
+positioned sibling, so a page can render it and still have it sit under the
+rack that `layout.tsx` mounted above that page.
+
+**Rendering it from `layout.tsx` was tried first and reverted**, which is the
+part worth keeping. App-wide, it put the tools, trades and lineup-checker
+panels — which still draw their own — on a second panel, the exact doubling it
+exists to remove, on three pages this bundle does not design. The handoff
+offers both placements ("the page-level wrapper in `layout.tsx`, or the route's
+own outer element"); the route's own is the one that delivers the manager page
+as designed and leaves the other three untouched. `PageShell` keeps `max-w-6xl`
+and governs content width only now, plus the padding that used to belong to the
+panel.
+
+### The View housing
+
+The trim rule with three bordered buttons hanging off it is gone. `ViewHousing`
+in `leagues-home.tsx` is the third instrument on the header row: the two dialog
+triggers stacked over a readout of what they have left. The accent sentence
+that used to sit above the rule (`{summary} · n of m`) is that readout's two
+lines — both dialogs hide their own state, so something on the page has to say
+what the grid has been narrowed to.
+
+`items-stretch` on the header, not `items-center`, is what makes the row read
+as one rack: three instruments of one height rather than three objects on a
+midline. `mt-auto` on the readout is what makes the heights *agree* — the
+housing stretches to the tallest instrument beside it and the readout takes up
+the slack, rather than leaving a gap under the keys. At a phone's width the
+three stack and the housing's own contents go on one line, dropping the summary
+line: the figure is the half that cannot be got anywhere else.
+
+### The dialogs, and the key-shape rule
+
+Both dialogs, the filter rails, the rule bays and rows, and the expanded card's
+control strip moved onto the console vocabulary. Behaviour is untouched
+throughout — the draft-and-Apply semantics, the cross-tab counts, the
+live-write columns, the disable-rather-than-refuse bounds, the sentinel key,
+the text-only-while-editing number. Only the surfaces moved.
+
+**A key's shape and a key's colour had to be split, and the reason is a
+Tailwind trap.** `CONSOLE_KEY` names `border-foreground/10`; appending
+`border-active/45` for a lit state is a coin flip, because both utilities have
+the same specificity and which wins is decided by the order Tailwind emitted
+them, not by their order in the class attribute. So `CONSOLE_KEY_PILL` and
+`CONSOLE_KEY_BLOCK` carry geometry and travel with **no colour of their own**,
+and `CONSOLE_KEY` is the pill plus the unlit colours. A caller composes
+`shape + state` and cannot lose the flip. `LeagueFiltersDialog` and
+`LineupColumnsDialog` take a `triggerClassName` for exactly this: the trades
+board stands the trigger in a row of pill keys and the manager page stacks it
+in the View housing as a slab, while the two *states* stay in the dialog, since
+only it knows which is true.
+
+The other two constants are recesses, and they are two because they hold
+different things. `--track-shadow` is the tight channel a *single* key travels
+in — the nav track, the lens toggle, the metric picker — cut deep so the key
+reads proud of it. `--well-shadow` is the shallow tray a *panel* of controls
+sits in — the filter rails, the rule bays, a rule's own slots — which at the
+same depth would read as a hole rather than a surface.
+
+Three smaller decisions in the dialogs:
+
+- **A rule's two menus are recessed slots and its number is lit glass.** The
+  value is what the rule is about and everything beside it only selects it; a
+  reader scanning three bays for the rule that emptied their list is looking
+  for numbers, and the numbers are the only things that glow. `text-[16px]`
+  stays on the input — anything smaller makes iOS Safari zoom on focus — and
+  steps down only above `@md`.
+- **The filters panel gained a title bar.** It relied on `aria-label` alone;
+  the bar makes it legible as an instrument and gives Esc a visible home, an
+  affordance that was always there with nothing on screen saying so. The
+  `aria-label` stays.
+- **The columns dialog's checkbox is an indicator lamp with a real `<input>`
+  underneath**, visually hidden and drawn from `peer-checked`, so the keyboard
+  behaviour, the label association and the disabled semantics stay the
+  browser's rather than being re-implemented on a `role="checkbox"`.
+
+**One value was taken against the handoff.** It specifies a selected rail
+chip's trailing count at `color-mix(var(--readout-text) 75%)` and, in the next
+sentence, says to keep the full-opacity-accent rule. Those contradict — in
+light mode `--readout-text` *is* the teal — so the count is drawn at full
+opacity and held apart by size alone, which is what the rest of the app does.
+
+### The chrome gradient
+
+`--chrome-face` had a hard band at `#8fb3b6 46%` -> `#4d7175 53%`. Across a
+1.75rem glyph that 7% is a crisp dark line through the middle of every
+letterform, and the league titles, the manager name and the wordmark all read
+as struck through. The band is lifted to 50% and widened either side, in both
+themes; nothing else about the engraving changed, and one token edit fixes all
+three places because they all name it.
+
+### Verified, and still open
+
+Checked at 1280 and 390 in both schemes against the live database, with headless
+Chrome over CDP: the rack, the ground, the View housing, the rank ramp, both
+dialogs and the expanded card's strip. The DOM checks that matter also hold —
+exactly one `<h1>` per page (the rack's wordmark is spans), one
+`aria-current="page"` matching the route, one `<nav>`, one theme control.
+
+Two things are deliberately left. **`/picktracker` and `/comps` are in the rack
+and are 404s**, because they are in `constants/tools.ts` and the handoff names
+that list as the rack's source; the tool grid has always linked to them the same
+way, so the rack is not a new claim. And **the tools, trades and lineup-checker
+pages still draw their own panel** on `--background` rather than on the ground —
+they are unchanged apart from losing their theme key, and giving them the
+full-bleed treatment is a redesign of three pages this bundle does not cover.
 
 ## Theme
 
@@ -1112,10 +1307,11 @@ Two rules for adding to it:
   cut channel a meter runs in — darker than its plate in both schemes, because
   a groove is), `--dial-track`, `--progress-fill` (segmented, so a lit bar
   reads as an instrument counting up rather than a painted rectangle),
-  `--alert-bg`, and `--metric-secondary`, mapped as `--color-metric-secondary`.
-  That last is the chrome band's own mid-stop rather than a new hue, and it is
-  the *second* metric colour: the rank tiles carry two families of number and
-  one colour each is what tells a reader the unit without reading the label.
+  `--alert-bg`, and `--metric-secondary` (mapped as `--color-metric-secondary`).
+  **That last one is gone**: it was the *second* metric colour, and the rank
+  ramp took its only consumer — see the leagues console. The console pass added
+  `--track-shadow` and `--well-shadow` in its place, plus the ramp's own
+  `--rank-l` / `--rank-l-mid` / `--rank-c`.
 
 ### The toggle
 

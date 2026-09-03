@@ -61,6 +61,12 @@ function parseRuleValue(text: string, fallback: number): number {
  * The trailing count is what this rule *alone* leaves, not what the draft leaves
  * — the rail states that. Per rule it is the answer to "is this the rule that
  * emptied my list", which a running total can't give once there are three.
+ *
+ * **The two menus are recessed slots and the number is lit glass**, which is
+ * the one thing the console pass changed here. It is not decoration: the value
+ * is what the rule is *about*, and everything else on the row selects it. A
+ * reader scanning three bays for the rule that emptied their list is looking
+ * for numbers, and the numbers are the only things that glow.
  */
 export function RuleRow({
   rule,
@@ -102,84 +108,114 @@ export function RuleRow({
   const onSentinel = isSentinelRule(rule);
   const ops = named || onSentinel ? NAMED_OPS : COMPARE_OPS;
 
-  // One string for all three inset controls, so the row cannot drift into two
-  // heights. 16px on the input specifically: anything smaller makes iOS Safari
-  // zoom the page on focus.
-  const inset =
-    "min-w-0 rounded-md border border-foreground/12 bg-foreground/[0.06] px-1.5 py-1 text-[16px] font-semibold text-foreground outline-none focus-visible:border-active/60 @md:text-xs";
+  // One string for both menus, so the row cannot drift into two heights. 16px
+  // specifically: anything smaller makes iOS Safari zoom the page on focus, so
+  // the visual size only steps down once there is room for it to.
+  const slot =
+    "min-w-0 cursor-pointer appearance-none rounded-lg bg-[image:var(--key-bg)] py-1.5 pl-2 pr-5 " +
+    "font-mono text-[16px] text-foreground/88 shadow-[var(--well-shadow)] outline-none " +
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 @md:text-[0.6875rem]";
+  /** `appearance-none` takes the native caret with it; this draws one back. */
+  const caret = (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute right-2 text-[0.5rem] leading-none text-foreground/45"
+    >
+      ▼
+    </span>
+  );
 
   return (
     <div className="flex items-center gap-1.5">
-      <select
-        value={rule.key}
-        aria-label="Measure"
-        onChange={(e) => {
-          // The op may not survive the new key — a named or sentinel key admits
-          // only is / is not, and carrying a `≥` over would build a rule the row
-          // cannot draw.
-          const key = e.target.value;
-          const keeps =
-            settingValueOptions(key) === null
-              ? true
-              : rule.op === "eq" || rule.op === "ne";
-          onChange({ ...rule, key, op: keeps ? rule.op : "eq" });
-        }}
-        className={`${inset} max-w-[15rem] flex-1 truncate`}
-      >
-        {extraKey !== null && <option value={extraKey}>{extraKey}</option>}
-        {keyOptions.map((option) => (
-          <option key={option.value} value={option.value} title={option.hint}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-
-      <select
-        value={rule.op}
-        aria-label="Comparison"
-        onChange={(e) =>
-          onChange({ ...rule, op: e.target.value as FilterRule["op"] })
-        }
-        className={`${inset} shrink-0`}
-      >
-        {ops.map((op) => (
-          <option key={op.value} value={op.value} aria-label={op.label}>
-            {op.symbol}
-          </option>
-        ))}
-      </select>
-
-      {named ? (
+      <span className="relative inline-flex min-w-0 max-w-56 flex-1 items-center">
         <select
-          value={String(rule.value)}
-          aria-label="Value"
-          onChange={(e) => onChange({ ...rule, value: Number(e.target.value) })}
-          className={`${inset} shrink-0`}
+          value={rule.key}
+          aria-label="Measure"
+          onChange={(e) => {
+            // The op may not survive the new key — a named or sentinel key
+            // admits only is / is not, and carrying a `≥` over would build a
+            // rule the row cannot draw.
+            const key = e.target.value;
+            const keeps =
+              settingValueOptions(key) === null
+                ? true
+                : rule.op === "eq" || rule.op === "ne";
+            onChange({ ...rule, key, op: keeps ? rule.op : "eq" });
+          }}
+          className={`${slot} w-full truncate`}
         >
-          {named.map((option) => (
-            <option key={option.value} value={option.value}>
+          {extraKey !== null && <option value={extraKey}>{extraKey}</option>}
+          {keyOptions.map((option) => (
+            <option key={option.value} value={option.value} title={option.hint}>
               {option.label}
             </option>
           ))}
         </select>
+        {caret}
+      </span>
+
+      <span className="relative inline-flex shrink-0 items-center">
+        <select
+          value={rule.op}
+          aria-label="Comparison"
+          onChange={(e) =>
+            onChange({ ...rule, op: e.target.value as FilterRule["op"] })
+          }
+          className={slot}
+        >
+          {ops.map((op) => (
+            <option key={op.value} value={op.value} aria-label={op.label}>
+              {op.symbol}
+            </option>
+          ))}
+        </select>
+        {caret}
+      </span>
+
+      {named ? (
+        <span className="relative inline-flex shrink-0 items-center">
+          <select
+            value={String(rule.value)}
+            aria-label="Value"
+            onChange={(e) =>
+              onChange({ ...rule, value: Number(e.target.value) })
+            }
+            className={slot}
+          >
+            {named.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {caret}
+        </span>
       ) : (
-        <input
-          type="number"
-          inputMode="decimal"
-          step={step}
-          value={onSentinel ? "" : text}
-          disabled={onSentinel}
-          aria-label="Value"
-          onChange={(e) => {
-            setEdit(e.target.value);
-            onChange({
-              ...rule,
-              value: parseRuleValue(e.target.value, rule.value),
-            });
-          }}
-          onBlur={() => setEdit(null)}
-          className={`${inset} w-16 shrink-0 tabular-nums disabled:opacity-40`}
-        />
+        // Lit glass rather than a slot: this is the number, and the two menus
+        // beside it only say which number it is.
+        <span className="relative inline-flex w-14 shrink-0 items-center overflow-hidden rounded-lg border border-black/85 bg-[image:var(--readout-bg)] shadow-[var(--readout-shadow)] focus-within:border-active/60">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
+          />
+          <input
+            type="number"
+            inputMode="decimal"
+            step={step}
+            value={onSentinel ? "" : text}
+            disabled={onSentinel}
+            aria-label="Value"
+            onChange={(e) => {
+              setEdit(e.target.value);
+              onChange({
+                ...rule,
+                value: parseRuleValue(e.target.value, rule.value),
+              });
+            }}
+            onBlur={() => setEdit(null)}
+            className="relative w-full min-w-0 bg-transparent px-2 py-1.5 text-right font-mono text-[16px] tabular-nums text-readout outline-none [text-shadow:var(--readout-text-glow)] disabled:opacity-40 @md:text-[0.6875rem]"
+          />
+        </span>
       )}
 
       {sentinel && (
@@ -194,10 +230,10 @@ export function RuleRow({
                 : { ...rule, op: "eq", value: sentinel.value },
             )
           }
-          className={`shrink-0 whitespace-nowrap rounded-md border px-1.5 py-1 text-[11px] font-semibold transition-colors ${
+          className={`shrink-0 whitespace-nowrap rounded-lg border px-2 py-1.5 font-mono text-[0.6875rem] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
             onSentinel
-              ? "border-active/40 bg-active/15 text-active"
-              : "border-foreground/12 text-foreground/55 hover:bg-foreground/[0.08]"
+              ? "border-active/45 bg-active/14 text-readout"
+              : "border-foreground/12 text-foreground/55 hover:text-readout"
           }`}
         >
           {sentinel.label}
@@ -206,7 +242,7 @@ export function RuleRow({
 
       <span
         title="Leagues matching this rule on its own"
-        className="ml-auto shrink-0 text-[11px] tabular-nums text-foreground/45"
+        className="ml-auto shrink-0 font-mono text-[0.6875rem] tabular-nums text-foreground/45"
       >
         {count}
       </span>
@@ -215,7 +251,7 @@ export function RuleRow({
         type="button"
         aria-label="Remove rule"
         onClick={onRemove}
-        className="shrink-0 rounded-md px-1.5 py-1 text-sm leading-none text-foreground/40 transition-colors hover:bg-foreground/[0.08] hover:text-error"
+        className="shrink-0 rounded-md px-1.5 py-1 font-mono text-sm leading-none text-foreground/45 transition-colors hover:bg-foreground/[0.06] hover:text-error focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
       >
         ×
       </button>

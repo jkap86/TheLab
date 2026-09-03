@@ -14,11 +14,26 @@ import { THEME_STORAGE_KEY, type Theme } from "./theme";
  * the answer before React exists, so state here could only ever repeat it a
  * frame late, and on the first paint it would be wrong.
  *
- * `className` is the chrome, because the two call sites do not share one: the
- * tools console draws it as a key and the manager page as an ordinary button.
+ * `className` is the chrome, because the call sites do not share one: the app
+ * rack draws it as a key with a legend and the tools console as a bare key.
  * What is shared is everything below the paint.
  */
-export function ThemeToggle({ className = DEFAULT_CHROME }: { className?: string }) {
+export function ThemeToggle({
+  className = DEFAULT_CHROME,
+  labelClassName,
+}: {
+  className?: string;
+  /**
+   * Set to render the name of the theme a press switches *to* beside the
+   * glyph — the rack's "Light" / "Dark" legend, which it hides again below
+   * `md`. Absent means the icon alone.
+   *
+   * The word is `aria-hidden` rather than being the button's name: each face
+   * already carries a full sentence, and a visible "Light" would only prepend
+   * a redundant token to it.
+   */
+  labelClassName?: string;
+}) {
   // React's dev-only Strict Mode remount resets `<html>` to the attributes it
   // manages from JSX, which clears the one the boot script set — the stored
   // theme would silently revert to the default in `next dev` and nowhere else.
@@ -43,12 +58,22 @@ export function ThemeToggle({ className = DEFAULT_CHROME }: { className?: string
       {/* Each face carries its own label, so the accessible name follows the
           cascade too: a `display: none` face is out of the tree entirely,
           where a single `aria-label` would have to be set from state. */}
-      <span className="theme-when-dark items-center">
+      <span className="theme-when-dark items-center gap-2">
         <SunMark />
+        {labelClassName !== undefined && (
+          <span aria-hidden className={labelClassName}>
+            Light
+          </span>
+        )}
         <span className="sr-only">Switch to the light theme</span>
       </span>
-      <span className="theme-when-light items-center">
+      <span className="theme-when-light items-center gap-2">
         <MoonMark />
+        {labelClassName !== undefined && (
+          <span aria-hidden className={labelClassName}>
+            Dark
+          </span>
+        )}
         <span className="sr-only">Switch to the dark theme</span>
       </span>
     </button>

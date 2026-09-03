@@ -9,7 +9,6 @@ import {
   CONSOLE_KEY,
   ManagerPlate,
   matchesFilters,
-  ThemeToggle,
   useManagerLeagues,
   useStoredAccount,
 } from "@/features/shared";
@@ -159,7 +158,6 @@ function Checker({
             Clear filters
           </button>
         )}
-        <ThemeToggle />
       </div>
 
       {error ? (

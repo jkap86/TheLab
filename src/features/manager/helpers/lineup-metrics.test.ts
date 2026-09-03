@@ -3,9 +3,9 @@ import { describe, test } from "node:test";
 
 import {
   formatRank,
-  metricFillClass,
-  metricToneClass,
+  rankColor,
   rankFill,
+  rankPercentile,
 } from "./lineup-metrics.ts";
 
 describe("formatRank", () => {
@@ -38,11 +38,55 @@ describe("rankFill", () => {
   });
 });
 
-describe("metric tone", () => {
-  test("the two families take two colours, and the pair agree", () => {
-    assert.equal(metricToneClass("ros_starters"), "text-active");
-    assert.equal(metricFillClass("ros_starters"), "bg-active");
-    assert.equal(metricToneClass("capital_total"), "text-metric-secondary");
-    assert.equal(metricFillClass("capital_total"), "bg-metric-secondary");
+describe("rankPercentile", () => {
+  test("a real position is the meter's own number", () => {
+    // Same value the bar is drawn from: the two must never disagree.
+    assert.equal(rankPercentile({ rank: 1, of: 12 }), 100);
+    assert.equal(rankPercentile({ rank: 12, of: 12 }), 0);
+  });
+
+  test("nothing to rank is null, where the meter says 0", () => {
+    // The whole reason this is not just `rankFill`. Both of these come back
+    // as 0 from the meter and are right to draw empty; neither is last place,
+    // and the ramp would paint them full red.
+    assert.equal(rankPercentile(null), null);
+    assert.equal(rankPercentile({ rank: 1, of: 1 }), null);
+  });
+});
+
+describe("rankColor", () => {
+  /** The `t` multiplier out of a generated `oklch()` string. */
+  function chroma(color: string): number {
+    const match = /calc\(var\(--rank-c\) \* ([\d.]+)\)/.exec(color);
+    assert.ok(match, `no chroma term in ${color}`);
+    return Number(match[1]);
+  }
+
+  test("mid-pack spends no colour, and the ends spend all of it", () => {
+    assert.equal(chroma(rankColor(50)), 0);
+    assert.equal(chroma(rankColor(100)), 1);
+    assert.equal(chroma(rankColor(0)), 1);
+  });
+
+  test("the hue only picks the side", () => {
+    assert.match(rankColor(100), /150\)$/);
+    assert.match(rankColor(0), /25\)$/);
+  });
+
+  test("an absent rank is the neutral, not last place", () => {
+    // `rankPercentile` answers null for both degenerate cases, and this is
+    // what that null has to mean: no chroma, so the tile says nothing rather
+    // than claiming a bad result.
+    assert.equal(chroma(rankColor(null)), 0);
+  });
+
+  test("the ramp reads its ends from tokens, so it inverts with the theme", () => {
+    assert.match(rankColor(100), /var\(--rank-l-mid\)/);
+    assert.match(rankColor(100), /var\(--rank-l\)/);
+  });
+
+  test("alpha is opt-in, for the meter's glow", () => {
+    assert.doesNotMatch(rankColor(100), / \/ /);
+    assert.match(rankColor(100, 0.55), / \/ 0\.55\)$/);
   });
 });

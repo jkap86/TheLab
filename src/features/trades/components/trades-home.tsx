@@ -5,7 +5,6 @@ import { type ReactNode, useMemo, useState } from "react";
 import {
   DEFAULT_LEAGUE_FILTERS,
   LeagueFiltersDialog,
-  ThemeToggle,
   activeFilterCount,
   filterSummary,
   useStoredAccount,
@@ -183,7 +182,6 @@ export function TradesHome({
             </span>
           )}
         </button>
-        <ThemeToggle />
       </div>
 
       {/* What the two hidden filter sets have narrowed to. Both dialogs hide

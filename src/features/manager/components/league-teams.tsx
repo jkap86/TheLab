@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import type { LeagueLineupEntry, LineupMetricId } from "@/shared/contract";
-import { LINEUP_METRIC_IDS } from "@/features/shared";
+import { CONSOLE_READOUT, LINEUP_METRIC_IDS } from "@/features/shared";
 
 import { LINEUP_METRIC_LABELS } from "../helpers/lineup-metrics";
 import { DraftPicks } from "./draft-picks";
@@ -65,27 +65,55 @@ export function LeagueTeams({ entry }: { entry: LeagueLineupEntry }) {
   return (
     <div>
       <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
-        <label className="inline-flex items-center rounded-full border border-foreground/10 bg-[image:var(--key-bg)] shadow-[var(--key-shadow)]">
-          <span className="sr-only">Order teams by</span>
-          <select
-            value={metric}
-            onChange={(e) => setMetric(e.target.value as LineupMetricId)}
-            className="min-w-0 cursor-pointer appearance-none rounded-full bg-transparent px-4 py-2 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-foreground/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+        {/* A labelled recess with the menu raised out of it. The label is the
+            control's name, so the `<select>` needs none of its own — but it
+            keeps an `sr-only` one, because a screen reader reaches the select
+            without the text beside it. */}
+        <label className="inline-flex min-w-0 items-center gap-2 rounded-full border border-foreground/8 py-1.5 pl-3.5 pr-1.5 shadow-[var(--track-shadow)]">
+          <span
+            aria-hidden
+            className="shrink-0 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-foreground/45"
           >
-            {LINEUP_METRIC_IDS.map((id) => (
-              <option key={id} value={id}>
-                {LINEUP_METRIC_LABELS[id].column}
-              </option>
-            ))}
-          </select>
+            Rank by
+          </span>
+          <span className="sr-only">Order teams by</span>
+          <span className="relative inline-flex min-w-0 items-center">
+            <select
+              value={metric}
+              onChange={(e) => setMetric(e.target.value as LineupMetricId)}
+              className="min-w-0 cursor-pointer appearance-none rounded-full bg-[image:var(--key-bg)] py-1.5 pl-3 pr-7 font-mono text-[0.6875rem] uppercase tracking-[0.16em] text-readout shadow-[var(--key-shadow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60"
+            >
+              {LINEUP_METRIC_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {LINEUP_METRIC_LABELS[id].column}
+                </option>
+              ))}
+            </select>
+            {/* `appearance-none` takes the native caret with it, so the key
+                gets one drawn back in the accent. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute right-3 text-[0.5rem] leading-none text-active"
+            >
+              ▼
+            </span>
+          </span>
         </label>
 
         <div className="flex items-center gap-2.5">
           <LineupLensKeys lens={lens} onChange={setLens} />
           {total && (
-            <span className="font-mono text-[0.875rem] tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
-              {total}
-              <span className="ml-1 text-[0.6875rem] uppercase tracking-[0.14em] text-foreground/60">
+            <span
+              className={`${CONSOLE_READOUT} inline-flex items-baseline gap-1.5 rounded-[0.625rem] px-3.5 py-[0.4375rem]`}
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 bg-[image:var(--readout-scanlines)]"
+              />
+              <span className="relative font-mono text-base tabular-nums text-readout [text-shadow:var(--readout-text-glow)]">
+                {total}
+              </span>
+              <span className="relative font-mono text-[0.625rem] uppercase tracking-[0.16em] text-readout/60">
                 {lens === "points" ? "pts" : "cap"}
               </span>
             </span>

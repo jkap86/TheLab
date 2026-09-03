@@ -1,6 +1,7 @@
 "use client";
 
 import type { LeagueLineup, LineupPlayer } from "@/shared/contract";
+import { CONSOLE_TRACK } from "@/features/shared";
 
 /**
  * A league card's rest-of-season lineup: the optimal starters in slot order,
@@ -80,7 +81,7 @@ export function LineupLensKeys({
     <div
       role="group"
       aria-label="Value lens"
-      className="inline-flex rounded-full bg-[image:var(--key-bg)] p-1 shadow-[inset_0_3px_8px_rgba(0,0,0,0.9)]"
+      className={`${CONSOLE_TRACK} inline-flex gap-1 p-1`}
     >
       {(["points", "capital"] as const).map((option) => (
         <button
@@ -88,10 +89,13 @@ export function LineupLensKeys({
           type="button"
           onClick={() => onChange(option)}
           aria-pressed={lens === option}
-          className={`rounded-full px-3 py-1.5 font-mono text-[0.6875rem] uppercase tracking-[0.14em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
+          // The unselected option is bare text *on the track*, not a second
+          // key: two raised faces in one channel is a pair of buttons, where
+          // one raised and one flush is a switch showing its position.
+          className={`rounded-full border px-3.5 py-1.5 font-mono text-[0.625rem] uppercase tracking-[0.16em] transition-[color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-active/60 ${
             lens === option
-              ? "bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)]"
-              : "text-foreground/60 hover:text-foreground/80"
+              ? "border-active/45 bg-[image:var(--key-bg)] text-readout shadow-[var(--key-shadow)] [text-shadow:var(--readout-text-glow)]"
+              : "border-transparent text-foreground/58 hover:text-readout"
           }`}
         >
           {option === "points" ? "Points" : "Capital"}
