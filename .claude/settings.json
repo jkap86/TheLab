@@ -4,7 +4,14 @@
       "Bash(npx tsc *)",
       "Bash(echo \"===TSC_EXIT_$?===\")",
       "Bash(npx eslint *)",
-      "Bash(echo \"===LINT_EXIT_$?===\")"
+      "Bash(echo \"===LINT_EXIT_$?===\")",
+      "Bash(npm run *)",
+      "Read(//Users/jaykapoor/Documents/Dev/TheLabX/src/shared/projections/**)",
+      "Bash(npm test *)",
+      "Bash(cat /Users/jaykapoor/Documents/Dev/TheLabX/src/shared/ktc/types.ts /Users/jaykapoor/Documents/Dev/TheLabX/src/shared/ktc/parse.ts)",
+      "Read(//Users/jaykapoor/Documents/Dev/TheLabX/src/shared/ktc/**)",
+      "Bash(cat /Users/jaykapoor/Documents/Dev/TheLabX/src/shared/ktc/parse.test.ts /Users/jaykapoor/Documents/Dev/TheLabX/src/shared/ktc/validate.ts)",
+      "Bash(node --experimental-strip-types --test \"src/features/shared/league-filters/league-filters.test.ts\")"
     ]
   }
 }
